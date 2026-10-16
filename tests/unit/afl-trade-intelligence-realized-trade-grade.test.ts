@@ -511,6 +511,83 @@ describe('MVP realized trade grader', () => {
       });
     });
 
+    describe('rule v11: a sole asset takes its return, an all-excluded return is unallocated', () => {
+      const nominee: Partial<Outcome> = {
+        disposition: 'not_used',
+        nominationBasis: 'club_took_nominated_player',
+        receivingClubNominatedSelections: 1,
+      };
+      // St Kilda also sends Hawthorn pick Q in tx-B, which Hawthorn spent matching a nominee bid.
+      const withExcludedReturn = (candidate: Candidate, keepQ: boolean): Candidate => ({
+        ...candidate,
+        transfers: [
+          ...candidate.transfers.filter(({ transferId }) => keepQ || transferId !== 'tr-B3'),
+          pick('tr-B4', 'tx-B', 'st-kilda', 'hawthorn', 'pick-Q', 2021, 30),
+        ],
+        pickOutcomes: [...(candidate.pickOutcomes ?? []), outcome('tr-B4', nominee)],
+      });
+
+      it('values a sole asset at its whole return when the next holder spent it on a nominee', () => {
+        const batch = gradeAflTradesOnRealizedValue(inputs(chain(false, nominee), chainData));
+        expect(legOf(batch, 'tr-B1')).toMatchObject({
+          state: 'excluded',
+          basis: 'pick_not_used_nominee_excluded',
+        });
+        expect(legOf(batch, 'tr-A1')).toMatchObject({
+          state: 'valued',
+          basis: 'pick_traded_on_return',
+          realizedValue: 40,
+          onward: { allocation: 'sole_asset', returnValue: 40, givenAssetCount: 1, share: 1 },
+          reasons: ['single_source_pick_outcome', 'traded_on_return_provisional'],
+        });
+        expect(gradeOf(batch, 'tx-A').clubs).toEqual([
+          { clubId: 'hawthorn', received: 40, givenUp: 0, net: 40 },
+          { clubId: 'melbourne', received: 0, givenUp: 40, net: -40 },
+        ]);
+      });
+
+      it('still leaves a bundle’s excluded pick unallocated', () => {
+        expect(
+          legOf(gradeAflTradesOnRealizedValue(inputs(chain(true, nominee), chainData)), 'tr-A1')
+        ).toMatchObject({ state: 'excluded', basis: 'pick_traded_on_return_unallocated' });
+      });
+
+      it('leaves a hop unallocated, not 0, when everything its club got back is excluded', () => {
+        const batch = gradeAflTradesOnRealizedValue(
+          inputs(withExcludedReturn(chain(false), false), chainData)
+        );
+        expect(gradeOf(batch, 'tx-B').clubs).toContainEqual({
+          clubId: 'hawthorn',
+          received: 0,
+          givenUp: 12,
+          net: -12,
+        });
+        expect(legOf(batch, 'tr-A1')).toMatchObject({
+          state: 'excluded',
+          basis: 'pick_traded_on_return_unallocated',
+          onwardTransactionId: 'tx-B',
+          reasons: ['single_source_pick_outcome', 'traded_on_return_unallocated'],
+        });
+        expect(gradeOf(batch, 'tx-A').clubs).toEqual([
+          { clubId: 'hawthorn', received: 0, givenUp: 0, net: 0 },
+          { clubId: 'melbourne', received: 0, givenUp: 0, net: 0 },
+        ]);
+      });
+
+      it('allocates as before when only part of the return is excluded', () => {
+        const leg = legOf(
+          gradeAflTradesOnRealizedValue(inputs(withExcludedReturn(chain(false), true), chainData)),
+          'tr-A1'
+        );
+        expect(leg).toMatchObject({
+          state: 'valued',
+          realizedValue: 40,
+          onward: { allocation: 'sole_asset', returnValue: 40, share: 1 },
+          reasons: ['single_source_pick_outcome', 'traded_on_return_provisional'],
+        });
+      });
+    });
+
     describe('rule v3: only the holding club’s side of the onward trade counts', () => {
       // Carlton sends St Kilda an unidentified player in tx-B: blocked, but not Hawthorn's.
       const elsewhere = (candidate: Candidate): Candidate => ({
@@ -1140,14 +1217,17 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v9 and its limitation', () => {
+  it('seals rule v11 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v10');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v11');
+    expect(batch.content.limitation).toContain(
+      "a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0"
+    );
     expect(batch.content.limitation).toContain(
       "a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used"
     );

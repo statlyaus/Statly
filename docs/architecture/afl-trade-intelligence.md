@@ -4403,7 +4403,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v10` (v1 to v9 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v11` (v1 to v10 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4469,7 +4469,7 @@ The remaining work proceeds through these independently verifiable gates:
        onward trade is unblocked: a capture missing the holder's return side would value the pick at
        0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
      - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
-       allocation would need is known. A blocked side takes precedence, so it is
+       allocation would need is known (from rule v11, only in a bundle; see below). A blocked side takes precedence, so it is
        `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
        since it has no onward return.
      - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
@@ -4639,6 +4639,32 @@ The remaining work proceeds through these independently verifiable gates:
      whose batches still parse, never do. The v10 limitation adds that a receiving club's selection
      a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when
      Draftguru marks it open.
+
+   - **Traded-on allocation past an excluded leg (rule v11, issue 789, 2026-10-16).** An audit of the
+     v10 dry run on genuine found two defects in how a traded-on hop reads its onward trade:
+     - **Sole asset.** Through v10 a traded-on pick was `pick_traded_on_return_unallocated` whenever
+       its own leg in the onward trade was excluded (for example the next holder spent it matching a
+       bid, `pick_not_used_nominee_excluded`), even when it was the only asset its club gave. A sole
+       asset takes its club's whole return (share 1), so that later fate is irrelevant: from v11 it
+       is valued at what its club received (`sole_asset`). The audit counted 16 such legs in the dry
+       run, 11 with a known positive return. Only a bundle's excluded pick, which has no
+       realized weight to share the return by, stays unallocated. The rule v3 order is unchanged: a
+       blocked side still blocks first.
+     - **All-excluded return.** Club totals sum only valued legs, so a club whose every received leg
+       in the onward trade is excluded has a `received` of 0, and through v10 the hop was valued 0
+       with no reason naming the exclusion (Petracca's 2026 second-rounder, Melbourne to Gold Coast,
+       whose only return in the onward trade is a nominee-excluded pick; Fiorini's 2026 third-rounder
+       the same). From v11, when the club received at least one leg there and every one is excluded,
+       the hop is `pick_traded_on_return_unallocated` (`traded_on_return_unallocated`). A side with
+       any valued leg allocates as before.
+
+     The contract checks both under v11: an unallocated leg names an onward trade in which its club
+     gave a bundle with an excluded leg, or received only excluded legs; a valued traded-on leg whose
+     club received only excluded legs is refused. Rules v1 to v10, whose batches still parse, keep
+     their own check, and refuse a valued sole asset whose onward leg is excluded. The v11 limitation
+     adds that a sole asset traded on is valued at its club's whole return in the onward trade,
+     whatever became of the pick there, and that a traded-on pick whose club's every return leg in
+     the onward trade is excluded is unallocated, not worth 0.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
