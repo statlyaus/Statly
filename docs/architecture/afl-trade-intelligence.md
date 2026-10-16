@@ -4432,7 +4432,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v14` (v1 to v13 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v15` (v1 to v14 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4498,7 +4498,7 @@ The remaining work proceeds through these independently verifiable gates:
        onward trade is unblocked: a capture missing the holder's return side would value the pick at
        0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
      - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
-       allocation would need is known (from rule v11, only in a bundle; from rule v13, also when another asset of the bundle is excluded, and from rule v14 only when some asset of that bundle has no projection; see below). A blocked side takes precedence, so it is
+       allocation would need is known (from rule v11, only in a bundle; from rule v13, also when another asset of the bundle is excluded, from rule v14 only when some asset of that bundle has no projection, and from rule v15 only when an excluded asset of that bundle has no projection; see below). A blocked side takes precedence, so it is
        `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
        since it has no onward return.
      - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
@@ -4756,6 +4756,42 @@ The remaining work proceeds through these independently verifiable gates:
      reason. The v14 limitation adds that such a bundle whose every asset has an HPN DPVC v3
      at-trade projection is split by those projections instead, provisionally, realized value
      staying the primary split.
+
+   - **Hybrid split of a bundle with an excluded asset (rule v15, issue 789, 2026-10-16; owner
+     decision).** Rule v14 still left 53 traded-on legs unallocated, by the coordinator's count,
+     because their onward bundle held a player (no DPVC projection) beside an excluded asset. The
+     owner's answer: "of course I want them valued". Rule v15 supersedes v14's projection-only split.
+     When a club's onward bundle (more than one asset given) holds an excluded asset, each asset it
+     gave there is weighted by its realized value when its leg is `valued` (a player's first-stint
+     PAV, a selected pick, a traded-on return or a pick projected from an order), and by its HPN DPVC
+     v3 at-trade projection when it is excluded: a current pick's `pick_projection`, or a future
+     pick's rule v8 `pick_projection_eventual_slot`. A special entitlement is weighted through its
+     successor pick. The traded-on pick is valued at `returnValue × w_self / Σ w`, with allocation
+     `hybrid_weighted`: `weight` and `weightTotal` are its own weight and the total (summed in
+     transfer order), and `hybridWeights` records the pinned benchmark, the pick's own transfer in the
+     onward trade, and each asset's transfer, source (`realized` or `projection`) and value. The leg
+     is provisional and says so (`bundle_split_estimated_weights`), since an excluded asset's
+     projection stands in for a realized value nobody can know.
+
+     An excluded asset with no projection (an excluded player, a pick outside 1 to 90, a pick whose
+     slot is unknown) leaves the bundle's traded-on picks unallocated. Every excluded asset that is
+     weighted weighs more than 0 and the bundle holds at least one, so the total is always positive
+     and no equal split is needed. A return whose every leg is excluded stays unallocated (rule v11),
+     a sole asset still takes the whole return, a bundle whose every asset is valued keeps its
+     realized split, and a blocked side still blocks first (rule v3).
+
+     The contract checks the split under v15: `hybrid_weighted` records the weights, its share is the
+     pick's weight over their positive total, the weights are exactly each given asset's realized
+     value or, when excluded, its at-trade projection (shared helper
+     `aflTradeRealizedOnwardHybridWeights`, so the grader and the contract cannot drift), they cite
+     the batch's pinned benchmark, the bundle holds an excluded asset, a special entitlement's weights
+     name its successor, and the reason is stated exactly then. Under v15 it refuses an unallocated
+     leg a hybrid split would value, a realized share past an excluded asset, and v14's
+     `projection_weighted` split. Rules v1 to v14, whose batches still parse (v14 keeping
+     `projection_weighted`), refuse the new allocation and reason. The v15 limitation adds that a
+     bundle with an excluded asset is split by each asset's realized value where known and its HPN
+     DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no
+     projection.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain

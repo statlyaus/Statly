@@ -3440,6 +3440,14 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   changed, so regrade the current candidate; no re-reconcile is needed. Of the 115 legs (about 1,802
   PAV) v13 left unallocated, count how many are now projection-split and how many stay unallocated,
   and spot-check that each split leg's weights match its onward bundle's at-trade projections.
+- Under rule v15 such a bundle is split by hybrid weights instead (`hybrid_weighted`, provisional
+  `bundle_split_estimated_weights`): each valued asset weighs its realized value and each excluded
+  one its HPN DPVC v3 at-trade projection, so a bundle holding a player is now valued too. A bundle
+  stays unallocated only when an excluded asset has no projection. Only the grader changed, so
+  regrade the current candidate; no re-reconcile is needed. Of the 53 legs v14 left unallocated
+  (player beside an excluded asset), count how many are now split and how many stay unallocated,
+  and spot-check that each split leg's weights match its onward bundle's realized values and
+  projections.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
