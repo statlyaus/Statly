@@ -588,14 +588,14 @@ describe('MVP realized trade grader', () => {
       });
     });
 
-    describe('rule v13: a bundle with an excluded asset leaves its traded-on shares unknown', () => {
+    describe('rules v13 and v14: a bundle with an excluded asset', () => {
       // Hawthorn also gives St Kilda pick S in tx-B, which St Kilda spent matching a nominee bid: its
-      // realized weight is unknown, so pick P's share of the 40 Hawthorn got back is too.
-      const withExcludedSibling = (candidate: Candidate): Candidate => ({
+      // realized weight is unknown, so pick P's realized share of the 40 Hawthorn got back is too.
+      const withExcludedSibling = (candidate: Candidate, slot: number = 25): Candidate => ({
         ...candidate,
         transfers: [
           ...candidate.transfers,
-          pick('tr-B5', 'tx-B', 'hawthorn', 'st-kilda', 'pick-S', 2021, 25),
+          pick('tr-B5', 'tx-B', 'hawthorn', 'st-kilda', 'pick-S', 2021, slot),
         ],
         pickOutcomes: [
           ...(candidate.pickOutcomes ?? []),
@@ -613,7 +613,7 @@ describe('MVP realized trade grader', () => {
         reasons: ['single_source_pick_outcome', 'traded_on_return_unallocated'],
       };
 
-      it('leaves a valued pick unallocated when its bundle sibling is excluded', () => {
+      it('rule v14: splits the return by projected pick value when every asset has one', () => {
         const batch = gradeAflTradesOnRealizedValue(
           inputs(withExcludedSibling(chain(false)), chainData)
         );
@@ -621,8 +621,68 @@ describe('MVP realized trade grader', () => {
         expect(legOf(batch, 'tr-B5')).toMatchObject({
           state: 'excluded',
           basis: 'pick_not_used_nominee_excluded',
+          atTrade: { kind: 'pick_projection', selectionNumber: 25 },
         });
-        // Through v12 pick P took share 1 (12 of a 12 total), absorbing pick S's unknown share.
+        // Through v12 pick P took share 1 (12 of a 12 total), absorbing pick S's unknown share;
+        // under v13 it was unallocated. Under v14 picks 20 and 25 weight it by their DPVC values.
+        const p20 = hpnDpv3ValueForPick(20);
+        const total = p20 + hpnDpv3ValueForPick(25);
+        expect(legOf(batch, 'tr-A1')).toEqual({
+          transferId: 'tr-A1',
+          assetKind: 'pick',
+          sendingClubId: 'melbourne',
+          receivingClubId: 'hawthorn',
+          atTrade: expect.objectContaining({ kind: 'pick_projection', selectionNumber: 20 }),
+          state: 'valued',
+          basis: 'pick_traded_on_return',
+          realizedValue: (p20 / total) * 40,
+          onward: {
+            transactionId: 'tx-B',
+            allocation: 'projection_weighted',
+            returnValue: 40,
+            givenAssetCount: 2,
+            weight: p20,
+            weightTotal: total,
+            share: p20 / total,
+            projectionWeights: {
+              benchmarkId: batch.content.inputs.pickProjectionBenchmarkId,
+              onwardTransferId: 'tr-B1',
+              assets: [
+                { transferId: 'tr-B1', source: 'pick_projection', value: p20 },
+                {
+                  transferId: 'tr-B5',
+                  source: 'pick_projection',
+                  value: hpnDpv3ValueForPick(25),
+                },
+              ],
+            },
+          },
+          reasons: [
+            'bundle_split_by_projection',
+            'single_source_pick_outcome',
+            'traded_on_return_provisional',
+          ],
+        });
+        expect(gradeOf(batch, 'tx-A').clubs).toEqual([
+          { clubId: 'hawthorn', received: (p20 / total) * 40, givenUp: 0, net: (p20 / total) * 40 },
+          {
+            clubId: 'melbourne',
+            received: 0,
+            givenUp: (p20 / total) * 40,
+            net: -(p20 / total) * 40,
+          },
+        ]);
+      });
+
+      it('keeps v13’s unallocated when an asset given has no projection', () => {
+        // Pick S at 95 is outside HPN's 1 to 90, so it has no weight to split by.
+        const batch = gradeAflTradesOnRealizedValue(
+          inputs(withExcludedSibling(chain(false), 95), chainData)
+        );
+        expect(legOf(batch, 'tr-B5').atTrade).toEqual({
+          kind: 'unavailable',
+          reason: 'pick_outside_projection_domain',
+        });
         expect(legOf(batch, 'tr-A1')).toMatchObject(unallocatedP);
         expect(gradeOf(batch, 'tx-A').clubs).toEqual([
           { clubId: 'hawthorn', received: 0, givenUp: 0, net: 0 },
@@ -630,7 +690,7 @@ describe('MVP realized trade grader', () => {
         ]);
       });
 
-      it('leaves an even split unknown too when the bundle holds an excluded asset', () => {
+      it('keeps a bundle holding a player unallocated, even when its valued assets total 0', () => {
         // Draftee d5 and player r are worth 0 to St Kilda, so the valued assets total 0.
         const batch = gradeAflTradesOnRealizedValue(
           inputs(withExcludedSibling(chain(true)), {
@@ -1294,14 +1354,17 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v13 and its limitation', () => {
+  it('seals rule v14 and its limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v13');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v14');
+    expect(batch.content.limitation).toContain(
+      'from rule v14 such a bundle whose every asset has an HPN DPVC v3 at-trade projection is split by those projections instead, provisionally, realized value staying the primary split'
+    );
     expect(batch.content.limitation).toContain(
       "a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return"
     );
