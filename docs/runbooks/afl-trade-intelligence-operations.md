@@ -3412,6 +3412,13 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   Collingwood, with Reef McInnes). The reconciler records it (`matchedBidBoardPickIds`), so
   re-reconcile before regrading; every board candidate gets a new id, since its board picks now
   state any matched bid's basis.
+- Under rule v11 a traded-on pick that was the only asset its club gave in the onward trade is valued
+  at that club's whole return there, even when the next holder spent the pick on a nominee (it was
+  `pick_traded_on_return_unallocated` through v10). A hop whose club got back only excluded legs in
+  the onward trade is now unallocated instead of worth 0 (the 2026 picks in the Petracca and Fiorini
+  trades). Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
+  Compare the excluded and 0-valued traded-on counts against the v10 dry run's audit (16 sole-asset
+  legs revalued).
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".

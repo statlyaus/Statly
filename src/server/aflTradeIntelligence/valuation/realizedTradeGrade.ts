@@ -699,7 +699,14 @@ export function gradeAflTradesOnRealizedValue(
     const single: AflTradeRealizedGradeReason[] = specialEntitlement
       ? [...singleSource, 'special_entitlement_custody_linked']
       : singleSource;
-    if (pickLeg.state === 'excluded')
+    const received = onward.legs.filter((leg) => leg.receivingClubId === receiving);
+    // Rule v11: a bundle's excluded pick has no realized weight to share the return by, so it stays
+    // unallocated; a sole asset takes the whole return, whatever became of the pick afterwards. A
+    // return whose every leg is excluded is unknown, not a known 0.
+    if (
+      (given.length > 1 && pickLeg.state === 'excluded') ||
+      (received.length > 0 && received.every((leg) => leg.state === 'excluded'))
+    )
       return {
         ...base,
         ...source,
@@ -710,7 +717,7 @@ export function gradeAflTradesOnRealizedValue(
         reasons: sorted([...single, 'traded_on_return_unallocated']),
       };
     const returnValue = club.received;
-    // A sole asset's pick leg may itself be blocked there, leaving givenUp unknown and unused.
+    // A sole asset's pick leg may itself be blocked or excluded there, leaving givenUp unused.
     const weight = pickLeg.state === 'valued' ? pickLeg.realizedValue : 0;
     const allocated = allocateOnwardReturn(given.length, club.givenUp ?? 0, weight);
     const reasons: AflTradeRealizedGradeReason[] = [...single];
