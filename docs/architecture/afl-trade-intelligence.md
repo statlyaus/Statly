@@ -4843,33 +4843,41 @@ The remaining work proceeds through these independently verifiable gates:
 
      - **A used pick takes its selection's slot.** Rule v8 read the eventual slot from the pick's own
        selected outcome only when that selection's status was usable, and never followed a traded-on
-       pick to the hop that used it. A selection whose custody alone is unresolved (no capture names
-       the pick's original club, so the order lookup fails too) still states its number, player and
-       club, and the selected outcome already rests on it: from v17 it counts, unless disputed. A
-       traded-on pick follows its trail of stated traded-on hops (the same unique onward trail its
-       value follows) to the hop that was not traded on; when that hop was selected, its selection
-       gives the slot, `slotSource: 'onward_selection'` (2024 R1 used at 27 on Matt Whitlock two hops
-       later). The selection comes before the order slot, as rule v8 states. A selection beyond 90
-       still leaves the slot unknown. A special entitlement reports the selection its rule v7 custody
-       successor's trail ends in (the 2020 Gold Coast concession `2020MIDR1`, traded on as pick 13 and
-       used at 15), and stays `pick_outside_projection_domain` without one.
+       pick to the hop that used it. The reconciler records a stated selected outcome against any
+       selection of that player, club and draft that is not disputed, so it may rest on an
+       `unresolved` one (in practice a selection whose slot no custody capture identifies, which is
+       also why the label has no original club and the order lookup fails). From v17 such a selection
+       counts when it is not disputed and names its player and club. A traded-on pick follows its
+       trail of stated traded-on hops (the same unique onward trail its value follows) to the hop that
+       was not traded on; when that hop was selected, its selection gives the slot,
+       `slotSource: 'onward_selection'` (2024 R1 used at 27 on Matt Whitlock two hops later). An
+       unresolved or unlinked hop ends the trail, and the pick falls back to its own order slot. The
+       selection comes before the order slot, as rule v8 states. A selection beyond 90 still leaves
+       the slot unknown. A special entitlement reports the selection its rule v7 custody successor's
+       trail ends in (the 2020 Gold Coast concession `2020MIDR1`, traded on as pick 13 and used at
+       15), and stays `pick_outside_projection_domain` without one. That is hindsight even where the
+       successor's own leg reports its slot at its own trade (13).
      - **A pick with no slot in its draft's final order takes a round-position proxy.** A future pick
        whose trail ended unused (spent matching a bid, passed, or never used), whose own draft's
        latest capture of it names no slot or which was never captured, is projected at
-       `pick_projection_round_position_proxy`: its original club's position is its rank by its own
-       first-round slot among the clubs whose first-round slot that order names (rule v6's lookup by
-       draft, round and original club, from the latest usable observation), and the proxy slot is that
-       position plus 18 for each later round, capped at 90. The view records the round, the position,
-       the slot and the first-round custody row it ranked by. It is an estimate of where the pick would
-       have fallen, not a slot it held. A pick with no original club or round, a club with no usable
-       first-round slot, a pick whose latest capture names a slot (usable or not), a pending pick, or a
-       draft with no order keeps `future_pick_slot_unknown`. The rule v6 prior-order proxy is a
-       different case (a pending pick of a draft with no order yet) and is unchanged.
+       `pick_projection_round_position_proxy`. Its original club's position is its rank by its own
+       first-round slot (rule v6's lookup by draft, round and original club, from the latest usable
+       observation), and the proxy slot is that position plus 18 for each later round, capped at 90.
+       The ranking needs every club: when the order names fewer than 18 clubs' usable first-round
+       slots, a missing club would move every club below it up a place, so no proxy is given. The view
+       records the round, the position, the slot and the first-round custody row it ranked by. It is
+       an estimate of where the pick would have fallen, not a slot it held. These keep
+       `future_pick_slot_unknown`: a pick with no original club or round, an order without all 18
+       usable first-round slots, a pick whose latest capture names a slot (usable or not) or whose
+       captures are too close in time to tell which is latest, a pending pick, and a draft with no
+       order. The rule v6 prior-order proxy is a different case (a pending pick of a draft with no
+       order yet) and is unchanged.
      - **A pick beyond HPN's 1 to 90 is capped.** The benchmark is a formula,
        `DPVC(p) = -30.36 * ln(p) + 146.95`, but HPN states it for selections 1 to 90 only and the
-       pinned benchmark's curve has exactly those 90 points, so v17 does not extrapolate it. A national pick numbered beyond 90
-       is projected at `pick_projection_domain_capped`, recording its number and `cappedAt: 90`, at
-       DPVC(90): an upper bound, the curve falling with the slot. A pick of another draft stays
+       pinned benchmark's curve has exactly those 90 points, so v17 does not extrapolate it. A
+       national pick numbered beyond 90 (up to the contract's bound of 500) is projected at
+       `pick_projection_domain_capped`, recording its number and `cappedAt: 90`, at DPVC(90): an
+       upper bound, the curve falling with the slot. A pick of another draft stays
        `pick_outside_projection_domain`.
 
      Each view still enters no total by itself, so a leg valued without it keeps its value and
@@ -4878,14 +4886,15 @@ The remaining work proceeds through these independently verifiable gates:
      says so (`projection_round_position_proxy`, `projection_domain_capped`, provisional; shared helper
      `aflTradeRealizedOnwardEstimateReasons`). The contract checks the proxy slot against its position
      and round, every value against the benchmark (the cap against slot 90), the benchmark against the
-     batch's, `onward_selection` only on a traded-on or blocked leg, and the estimate reasons exactly.
-     Rules v1 to v16, whose batches still parse, refuse the new kinds, slot source and reasons. The v17
-     limitation adds that a future pick's at-trade view also takes the selection its traded-on trail,
-     or a special entitlement's custody successor, ends in, and its own selection when only that
-     selection's custody is unresolved; that a future pick that held no slot in its draft's final
-     order is projected at an estimated round-position proxy, not a slot it held; that a pick numbered
-     beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound; and that a traded-on pick whose
-     weights or return rest on the proxy or the cap says so.
+     batch's, `onward_selection` only on a traded-on or blocked leg, no proxy on a selected or
+     projected leg, and the estimate reasons exactly. Rules v1 to v16, whose batches still parse,
+     refuse the new kinds, slot source and reasons. The v17 limitation adds that a future pick's
+     at-trade view also takes the selection its traded-on trail, or a special entitlement's custody
+     successor, ends in, and its own selection when that selection is unresolved but not disputed and
+     names its player and club; that a future pick that held no slot in its draft's final order is
+     projected at an estimated round-position proxy, ranked among all 18 clubs, not a slot it held;
+     that a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound; and that a
+     traded-on pick whose weights or return rest on the proxy or the cap says so.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain

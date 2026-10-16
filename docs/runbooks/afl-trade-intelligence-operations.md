@@ -3457,8 +3457,9 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   most of the 30 whose return is matched-bid picks) and how many stay unallocated, and spot-check
   that each valued leg's `returnProjection` lists exactly its club's return legs in the onward trade.
 - Under rule v17 a used future pick takes its selection's slot (on a later hop of its trail too,
-  `onward_selection`, and when only the selection's custody is unresolved), a future pick with no
-  slot in its draft's final order takes a round-position proxy, and a pick numbered beyond 90 is
+  `onward_selection`, and when the selection is unresolved but not disputed), a future pick with no
+  slot in its draft's final order takes a round-position proxy (only when the order names all 18
+  clubs' first-round slots), and a pick numbered beyond 90 is
   capped at DPVC(90); a traded-on pick whose weights or return rest on the proxy or the cap states
   `projection_round_position_proxy` or `projection_domain_capped`. Only the grader changed, so
   regrade the current candidate; no re-reconcile is needed. Of the 25 pick legs v16 left with no

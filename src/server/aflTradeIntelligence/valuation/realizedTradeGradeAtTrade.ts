@@ -7,11 +7,16 @@ import {
 } from '../modeling/hpnPickValueBenchmark';
 import {
   AFL_TRADE_REALIZED_CLUBS_PER_ROUND,
+  AFL_TRADE_REALIZED_MAX_CAPPED_PICK,
+  AFL_TRADE_REALIZED_MAX_PROXY_ROUND,
   type AflTradeRealizedTradeGradeLeg,
 } from './realizedTradeGradeContracts';
 
 type CandidateContent = AflTradeExternalReconciliationCandidateRecord['content'];
 type Transfer = CandidateContent['transfers'][number];
+type Transaction = CandidateContent['transactions'][number];
+type PickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
+type Selection = NonNullable<CandidateContent['draftSelections']>[number];
 export type AflTradeGradeCustody = CandidateContent['pickCustody'][number];
 export type AflTradeGradePickAsset = Extract<Transfer['asset'], { kind: 'pick_entitlement' }>;
 type Custody = AflTradeGradeCustody;
@@ -122,27 +127,32 @@ export interface AflTradeGradeRoundPositionProxy {
 /**
  * Rule v17 (issue 789, 2026-10-16): a round-position proxy for a pick that held no slot in its own
  * draft's final order (spent matching a bid, passed, or never used). Its original club's position is
- * its rank by its own first-round slot among the clubs whose first-round slot that order names (rule
- * v6's lookup by draft, round and original club); the proxy slot is that position plus 18 for each
- * later round, capped at 90. A pick with no round or original club, a club with no usable first-round
- * slot, or a pick that did hold a slot, gets none.
+ * its rank by its own first-round slot (rule v6's lookup by draft, round and original club). The
+ * ranking needs every club's usable first-round slot: one missing club would move every club below
+ * it up a place, so an order naming fewer than 18 gives none. The proxy slot is that position plus 18
+ * for each later round, capped at 90. A pick with no round or original club, a round beyond the
+ * contract's bound, or a pick that held a slot (or whose latest capture cannot be told), gets none.
  */
 export function aflTradeGradeRoundPositionProxyOf(
   custody: readonly Custody[],
   asset: PickAsset
 ): AflTradeGradeRoundPositionProxy | undefined {
   const round = asset.nominalRound;
-  if (asset.draftType !== 'national' || round === null || asset.originalClubId === null)
+  if (
+    asset.draftType !== 'national' ||
+    round === null ||
+    round > AFL_TRADE_REALIZED_MAX_PROXY_ROUND ||
+    asset.originalClubId === null
+  )
     return undefined;
   const rows = nationalRows(custody, asset.draftYear);
   if (heldOrderSlot(rows, asset)) return undefined;
   const slots = firstRoundSlots(rows);
   const own = slots.get(asset.originalClubId);
-  if (!own) return undefined;
+  if (!own || slots.size !== AFL_TRADE_REALIZED_CLUBS_PER_ROUND) return undefined;
   const clubPosition =
     1 +
     [...slots.values()].filter((row) => row.recordedPickNumber! < own.recordedPickNumber!).length;
-  if (clubPosition > AFL_TRADE_REALIZED_CLUBS_PER_ROUND) return undefined;
   return {
     roundNumber: round,
     clubPosition,
@@ -187,6 +197,8 @@ export function aflTradeRoundPositionProxyView(
  * rule v17 a later slot is valued at DPVC(90), an upper bound since the curve falls with the slot.
  */
 export function aflTradeNominalPickView(benchmarkId: string, nominalPick: number): AtTrade {
+  if (nominalPick > AFL_TRADE_REALIZED_MAX_CAPPED_PICK)
+    return AFL_TRADE_PICK_OUTSIDE_PROJECTION_DOMAIN;
   if (nominalPick <= LAST)
     return {
       kind: 'pick_projection',
@@ -200,5 +212,154 @@ export function aflTradeNominalPickView(benchmarkId: string, nominalPick: number
     selectionNumber: nominalPick,
     cappedAt: LAST,
     value: hpnDpv3ValueForPick(LAST),
+  };
+}
+
+/**
+ * Rule v8 (owner direction 2026-10-16, issue 789): a future pick's order slot as its eventual slot.
+ * A pending pick takes its rule v6 projected slot, proxy included, as its leg is valued; any other
+ * pick only its own draft's slot, never the previous draft's.
+ */
+function orderSlotView(
+  benchmarkId: string,
+  slot: AflTradeGradeOrderSlot,
+  outcome: PickOutcome | undefined
+): AtTrade {
+  if (outcome?.outcomeStatus === 'pending')
+    return aflTradeEventualSlotView(benchmarkId, slot.selectionNumber, 'projected_order');
+  return slot.proxy
+    ? AFL_TRADE_FUTURE_PICK_SLOT_UNKNOWN
+    : aflTradeEventualSlotView(benchmarkId, slot.selectionNumber, 'order');
+}
+
+/** What the at-trade views read from the grader: its indexes and its trail and custody links. */
+export interface AflTradeAtTradeViewSources {
+  benchmarkId: string;
+  pickCustody: readonly Custody[];
+  outcomes: ReadonlyMap<string, PickOutcome>;
+  selections: ReadonlyMap<string, Selection>;
+  /** The pick's unique onward transfer among the graded trades, if any. */
+  onwardTransferOf: (transfer: Transfer) => Transfer | undefined;
+  /** Rule v7: the transfer a special entitlement was traded on as, if its custody chain links it. */
+  specialSuccessorOf: (transfer: Transfer, transaction: Transaction) => Transfer | undefined;
+  /** A player's at-trade view. */
+  playerView: (transfer: Transfer, tradeYear: number) => AtTrade;
+}
+
+type TrailEnd = { hop: Transfer; outcome: PickOutcome } | undefined;
+
+/**
+ * Rule v17: where a pick's trail of stated traded-on hops ends: the first hop, from `start`, whose
+ * outcome is not traded on (selected, not used, or pending). An unresolved, missing or unlinked hop,
+ * or a trail that cycles, ends nowhere.
+ */
+function trailEnd(sources: AflTradeAtTradeViewSources, start: Transfer): TrailEnd {
+  const seen = new Set<string>();
+  for (let hop: Transfer | undefined = start; hop && !seen.has(hop.transferId);) {
+    seen.add(hop.transferId);
+    const outcome = sources.outcomes.get(hop.transferId);
+    if (!outcome || outcome.outcomeStatus === 'unresolved') return undefined;
+    if (outcome.outcomeStatus !== 'stated' || outcome.disposition !== 'traded_on')
+      return { hop, outcome };
+    hop = sources.onwardTransferOf(hop);
+  }
+  return undefined;
+}
+
+/**
+ * Rules v8 and v17: the selection a trail ended in, when it is of the pick's own draft, not disputed,
+ * and names its player and club. Rule v8 also required a usable status; from v17 an `unresolved`
+ * selection (in practice one whose slot no custody capture identifies) counts, its selected outcome
+ * already resting on it.
+ */
+function trailSelection(
+  sources: AflTradeAtTradeViewSources,
+  end: TrailEnd,
+  asset: PickAsset
+): Selection | undefined {
+  const selectionId = end?.outcome.disposition === 'selected' ? end.outcome.selectionId : null;
+  const selection = selectionId === null ? undefined : sources.selections.get(selectionId);
+  return selection &&
+    selection.status !== 'disputed' &&
+    selection.playerId !== null &&
+    selection.clubId !== null &&
+    selection.draftYear === asset.draftYear &&
+    selection.draftType === asset.draftType
+    ? selection
+    : undefined;
+}
+
+/**
+ * Rules v8 and v17: a future national pick's at-trade view, the slot it eventually took, which no
+ * club knew at the trade. The selection its trail ended in comes first (rule v17: on a later hop
+ * too, `onward_selection`); one beyond HPN's 1 to 90 leaves the slot unknown. Otherwise its order
+ * slot (`orderSlotView`). From rule v17 a pick whose trail ended unused, with no slot in its draft's
+ * final order, takes its round-position proxy; anything else stays unknown.
+ */
+function futurePickView(
+  sources: AflTradeAtTradeViewSources,
+  transfer: Transfer,
+  asset: PickAsset
+): AtTrade {
+  const { benchmarkId, pickCustody } = sources;
+  const end = trailEnd(sources, transfer);
+  const selection = trailSelection(sources, end, asset);
+  if (selection) {
+    if (selection.selectionNumber > LAST) return AFL_TRADE_FUTURE_PICK_SLOT_UNKNOWN;
+    const source = end!.hop === transfer ? 'selection' : 'onward_selection';
+    return aflTradeEventualSlotView(benchmarkId, selection.selectionNumber, source);
+  }
+  const slot = aflTradeGradeOrderSlotOf(pickCustody, asset);
+  if (slot) return orderSlotView(benchmarkId, slot, sources.outcomes.get(transfer.transferId));
+  const unused = end?.outcome.outcomeStatus === 'stated' && end.outcome.disposition === 'not_used';
+  const proxy = unused ? aflTradeGradeRoundPositionProxyOf(pickCustody, asset) : undefined;
+  return proxy
+    ? aflTradeRoundPositionProxyView(benchmarkId, proxy)
+    : AFL_TRADE_FUTURE_PICK_SLOT_UNKNOWN;
+}
+
+/**
+ * Rule v17: a special entitlement's at-trade view is the selection its rule v7 custody successor's
+ * trail ended in, the real slot it eventually took (hindsight, even where the successor's own view
+ * is its slot at its own trade); without one it stays outside the domain.
+ */
+function specialEntitlementView(
+  sources: AflTradeAtTradeViewSources,
+  transfer: Transfer,
+  transaction: Transaction
+): AtTrade {
+  const successor = sources.specialSuccessorOf(transfer, transaction);
+  const asset = successor?.asset;
+  if (
+    !successor ||
+    asset?.kind !== 'pick_entitlement' ||
+    asset.draftType !== 'national' ||
+    asset.draftYear < transaction.seasonYear
+  )
+    return AFL_TRADE_PICK_OUTSIDE_PROJECTION_DOMAIN;
+  const selection = trailSelection(sources, trailEnd(sources, successor), asset);
+  return selection && selection.selectionNumber <= LAST
+    ? aflTradeEventualSlotView(sources.benchmarkId, selection.selectionNumber, 'onward_selection')
+    : AFL_TRADE_PICK_OUTSIDE_PROJECTION_DOMAIN;
+}
+
+/**
+ * Each leg's at-trade view, reported beside it; none ever enters a total. A player's is his
+ * trade-season PAV; a current pick's its slot at the trade (capped from rule v17); a future pick's
+ * the slot it eventually took (rules v8 and v17); a special entitlement's its successor's selection.
+ */
+export function createAflTradeAtTradeView(sources: AflTradeAtTradeViewSources) {
+  return (transfer: Transfer, transaction: Transaction): AtTrade => {
+    const asset = transfer.asset;
+    if (asset.kind === 'player') return sources.playerView(transfer, transaction.seasonYear);
+    if (asset.kind !== 'pick_entitlement')
+      return specialEntitlementView(sources, transfer, transaction);
+    if (asset.draftType !== 'national') return AFL_TRADE_PICK_OUTSIDE_PROJECTION_DOMAIN;
+    if (asset.nominalPick !== null)
+      return aflTradeNominalPickView(sources.benchmarkId, asset.nominalPick);
+    // A pick is drafted at or after the trade; an earlier draft cannot be this pick's.
+    return asset.draftYear < transaction.seasonYear
+      ? AFL_TRADE_FUTURE_PICK_SLOT_UNKNOWN
+      : futurePickView(sources, transfer, asset);
   };
 }

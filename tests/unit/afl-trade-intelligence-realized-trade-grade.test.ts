@@ -2702,11 +2702,34 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
       evidenceIds: [],
       ...fields,
     }) as unknown as Custody;
-  // The 2024 first round: Geelong 3, Collingwood 9, Richmond 14, so Collingwood ranks second.
+  // The 2024 first round names all 18 clubs: Geelong 3, Collingwood 9, then 16 more from 10 on
+  // (Hawthorn's own first-round pick is not among them), so Collingwood ranks second.
+  const others = [
+    'adelaide',
+    'brisbane',
+    'carlton',
+    'essendon',
+    'fremantle',
+    'gold-coast',
+    'gws',
+    'melbourne',
+    'north-melbourne',
+    'port-adelaide',
+    'richmond',
+    'st-kilda',
+    'sydney',
+    'tasmania',
+    'west-coast',
+    'western-bulldogs',
+  ];
   const firstRound = [
     order('1', 'geelong', 1, 3),
     order('2', 'collingwood', 1, 9),
-    order('3', 'richmond', 1, 14),
+    ...others.map((club, at) =>
+      order('0', club, 1, 10 + at, {
+        custodyId: `external-pick-custody:${(at + 16).toString(16).padStart(64, '0')}`,
+      })
+    ),
   ];
   const proxy = (clubPosition: number, roundNumber: number, selectionNumber: number) => ({
     kind: 'pick_projection_round_position_proxy',
@@ -2773,8 +2796,10 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
     it('values a selected pick with no original club (Ned Bowman, 26) at its unresolved selection', () => {
       const candidate = single(1, null, drafted(26), { draftSelections: [selection(26)] });
       expect(atTradeOf(candidate)).toEqual(eventual(26, 'selection'));
-      // A disputed selection still settles nothing, as under rule v8.
+      // A disputed selection, or one naming no player, still settles nothing.
       candidate.draftSelections = [selection(26, { status: 'disputed' })];
+      expect(atTradeOf(candidate)).toEqual(UNKNOWN);
+      candidate.draftSelections = [selection(26, { playerId: null })];
       expect(atTradeOf(candidate)).toEqual(UNKNOWN);
     });
 
@@ -2796,6 +2821,16 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
       expect(atTradeOf(whitlock({ pickCustody: [own] }), 'tr-A1')).toEqual(
         eventual(27, 'onward_selection')
       );
+    });
+
+    it('falls back to the pick’s own order slot when a later hop is unresolved', () => {
+      const own = order('4', 'port-adelaide', 1, 25, { pickId: 'pick-F' });
+      const candidate = whitlock({ pickCustody: [own] });
+      candidate.pickOutcomes![1] = outcome('tr-B1', {
+        disposition: 'selected',
+        outcomeStatus: 'unresolved',
+      });
+      expect(atTradeOf(candidate, 'tr-A1')).toEqual(eventual(25, 'order'));
     });
 
     it('keeps the slot unknown when the trail’s selection is beyond 90', () => {
@@ -2860,7 +2895,26 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
           ],
         }),
       ],
+      [
+        'another club’s first-round slot disputed, which would move Collingwood up a place',
+        single(4, 'collingwood', noNominee, {
+          pickCustody: [
+            order('1', 'geelong', 1, 3, { status: 'disputed' }),
+            ...firstRound.slice(1),
+          ],
+        }),
+      ],
       ['no order for its draft', single(4, 'collingwood', noNominee)],
+      [
+        'captures of the pick too close in time to tell which is latest',
+        single(4, 'collingwood', noNominee, {
+          pickCustody: [
+            ...firstRound,
+            order('5', 'collingwood', 4, null, { pickId: 'pick-F' }),
+            order('6', 'collingwood', 4, null, { pickId: 'pick-F' }),
+          ],
+        }),
+      ],
       [
         'a slot it held beyond 90',
         single(4, 'collingwood', noNominee, {
@@ -2905,6 +2959,15 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
       });
       // HPN's curve falls with the slot, so its formula at 94 would be lower still.
       expect(hpnDpv3ValueForPick(90)).toBeGreaterThan(-30.36 * Math.log(94) + 146.95);
+    });
+
+    it('keeps a pick beyond the contract’s bound of 500 outside the domain', () => {
+      const late = (transfer: Transfer) =>
+        ({ ...transfer, asset: { ...transfer.asset, nominalPick: 501 } }) as Transfer;
+      expect(atTradeOf(numbered(late))).toEqual({
+        kind: 'unavailable',
+        reason: 'pick_outside_projection_domain',
+      });
     });
 
     it('keeps a pick of another draft outside the domain', () => {
@@ -3029,10 +3092,10 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
     );
     expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v17');
     expect(batch.content.limitation).toContain(
-      "from rule v17 a future pick's at-trade view also takes the selection its traded-on trail, or a special entitlement's custody successor, ends in, and its own selection when only that selection's custody is unresolved"
+      "from rule v17 a future pick's at-trade view also takes the selection its traded-on trail, or a special entitlement's custody successor, ends in, and its own selection when that selection is unresolved but not disputed and names its player and club"
     );
     expect(batch.content.limitation).toContain(
-      "a future pick that held no slot in its draft's final order is projected at an estimated round-position proxy, its original club's first-round rank in that order plus 18 per later round, capped at 90, not a slot it held"
+      "a future pick that held no slot in its draft's final order is projected at an estimated round-position proxy, its original club's first-round rank among all 18 clubs in that order plus 18 per later round, capped at 90, not a slot it held"
     );
     expect(batch.content.limitation).toContain(
       "a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound"
