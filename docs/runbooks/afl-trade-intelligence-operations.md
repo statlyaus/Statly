@@ -3434,6 +3434,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   652.7 PAV, among them 2019 pick 32, Western Bulldogs, at 102.9). Only the grader changed, so
   regrade the current candidate; no re-reconcile is needed. Check that those 25 legs are now
   unallocated and that no valued traded-on leg's onward bundle holds an excluded asset.
+- Under rule v14 such a bundle is split by each given asset's HPN DPVC v3 at-trade projection
+  (`projection_weighted`, provisional `bundle_split_by_projection`) when every asset the club gave
+  there has one; a bundle with a player or an unprojected pick stays unallocated. Only the grader
+  changed, so regrade the current candidate; no re-reconcile is needed. Of the 115 legs (about 1,802
+  PAV) v13 left unallocated, count how many are now projection-split and how many stay unallocated,
+  and spot-check that each split leg's weights match its onward bundle's at-trade projections.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
