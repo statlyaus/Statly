@@ -7,6 +7,7 @@ import type { AflTradeExternalPageCapture } from './externalDraftTradeIngestion'
 import { GWS_MINI_GRANT_URL } from './officialAflIssuingAwardAdapter';
 import { OFFICIAL_AFL_MINI_2011_SOURCES } from './officialAflMiniDraft2011SessionFacts';
 import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
+import { isReviewedOfficialAflDraft2025SessionUrl } from './officialAflDraft2025Sessions';
 
 async function readBounded(response: Response, maximumBytes: number): Promise<Uint8Array> {
   if (!response.body) throw new Error('External source response body is absent.');
@@ -53,6 +54,8 @@ export async function captureOfficialAflPage(input: {
     !isReviewedOfficialAflPlayerContinuitySource(input.url) &&
     // The reviewed pre-draft orders include three Internet Archive snapshots (issue 853).
     reviewedOfficialAflDraftOrderPage(input.url) === null &&
+    // So do the two reviewed 2025 night reports (parser v20, issue 853).
+    !isReviewedOfficialAflDraft2025SessionUrl(input.url) &&
     (url.protocol !== 'https:' ||
       (url.hostname !== 'www.afl.com.au' &&
         url.href !== GWS_MINI_GRANT_URL &&

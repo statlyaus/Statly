@@ -1,14 +1,25 @@
 import type { AflTradeExternalReconciliationCandidateRecord } from '../source/externalReconciliationCandidateContracts';
+import { latestPickCustodyObservation } from '../source/pickCustodyDate';
 import { isAflTradeUsableCustodyStatus } from '../source/pickLineageDeferral';
+import {
+  aflTradePickCustodyHolders,
+  aflTradeTransactionNotBefore,
+  createAflTradePickOnwardTransfers,
+} from '../source/pickOnwardTransfer';
 import { hpnDpv3ValueForPick } from '../modeling/hpnPickValueBenchmark';
 import {
   AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION,
+  aflTradeRealizedOnwardBundleExcluded,
+  aflTradeRealizedOnwardProjectionWeights,
+  aflTradeRealizedOnwardReturnExcluded,
   aflTradeRealizedOnwardSideProjected,
+  aflTradeRealizedProjectionWeightTotal,
   createAflTradeRealizedTradeGradeBatch,
   expectedAflTradeRealizedTradeGradeClubs,
   type AflTradeRealizedGradeReason,
+  type AflTradeRealizedProjectionWeight,
   type AflTradeRealizedTradeGrade,
   type AflTradeRealizedTradeGradeBatch,
   type AflTradeRealizedTradeGradeBatchContent,
@@ -25,7 +36,10 @@ type PickAsset = Extract<Transfer['asset'], { kind: 'pick_entitlement' }>;
 /** Everything the MVP grader reads, already loaded; the grader itself does no I/O. */
 export interface AflTradeRealizedTradeGradeInputs {
   candidateId: string;
-  /** Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick. */
+  /**
+   * Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick; rule v8
+   * also reads it, and `draftSelections`, for the slot a future pick eventually took.
+   */
   candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
     Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks' | 'pickCustody'>>;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */
@@ -193,11 +207,24 @@ function arrivalReviewed(
   );
 }
 
+/**
+ * Rule v8 (owner direction 2026-10-16, issue 789): the slot a future national pick eventually took,
+ * which no club knew at the trade. A stated selected outcome gives the selection number of its usable
+ * selection; otherwise the latest usable slot in the pick's own draft order (rule v6's lookup, never a
+ * proxy) gives it, and for a pending pick the rule v6 projected slot, proxy included, as its leg is
+ * valued. A selection beyond HPN's 1 to 90, or no slot at all, leaves the slot unknown.
+ */
+interface EventualSlot {
+  selectionNumber: number;
+  slotSource: 'selection' | 'order' | 'projected_order';
+}
+
 function atTradeView(
   inputs: AflTradeRealizedTradeGradeInputs,
   index: Index,
   transfer: Transfer,
-  tradeYear: number
+  tradeYear: number,
+  eventualSlot: (asset: PickAsset) => EventualSlot | undefined
 ): Leg['atTrade'] {
   const asset = transfer.asset;
   if (asset.kind === 'player') {
@@ -211,8 +238,18 @@ function atTradeView(
   }
   if (asset.kind !== 'pick_entitlement' || asset.draftType !== 'national')
     return { kind: 'unavailable', reason: 'pick_outside_projection_domain' };
-  if (asset.nominalPick === null)
-    return { kind: 'unavailable', reason: 'future_pick_slot_unknown' };
+  if (asset.nominalPick === null) {
+    // Rule v8: hindsight, never what the clubs knew; like every at-trade view it enters no total.
+    const slot = eventualSlot(asset);
+    if (!slot) return { kind: 'unavailable', reason: 'future_pick_slot_unknown' };
+    return {
+      kind: 'pick_projection_eventual_slot',
+      benchmarkId: inputs.pickProjectionBenchmarkId,
+      selectionNumber: slot.selectionNumber,
+      slotSource: slot.slotSource,
+      value: hpnDpv3ValueForPick(slot.selectionNumber),
+    };
+  }
   if (asset.nominalPick > 90)
     return { kind: 'unavailable', reason: 'pick_outside_projection_domain' };
   return {
@@ -221,28 +258,6 @@ function atTradeView(
     selectionNumber: asset.nominalPick,
     value: hpnDpv3ValueForPick(asset.nominalPick),
   };
-}
-
-/** The span an observation covers, in ms: an instant, or the whole of a recorded day or year. */
-function observedSpan(observedAt: Custody['observedAt']): readonly [number, number] {
-  if (typeof observedAt === 'string') {
-    const at = Date.parse(observedAt);
-    return [at, at];
-  }
-  if (observedAt.precision === 'day') {
-    const start = Date.parse(`${observedAt.date}T00:00:00.000Z`);
-    return [start, start + 86_400_000 - 1];
-  }
-  return [Date.UTC(observedAt.year, 0, 1), Date.UTC(observedAt.year + 1, 0, 1) - 1];
-}
-
-/** The one row observed strictly after every other; none when the latest observations overlap. */
-function latestObservation(rows: readonly Custody[]): Custody | undefined {
-  const spans = rows.map((row) => [row, observedSpan(row.observedAt)] as const);
-  const latest = spans.filter(([row, [start]]) =>
-    spans.every(([other, [, end]]) => other === row || start > end)
-  );
-  return latest.length === 1 ? latest[0]![0] : undefined;
 }
 
 interface OrderSlot {
@@ -274,12 +289,12 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
   let proxy = false;
   if (own.length > 0) {
     // Every capture of the pick: under its `pickId`, or re-keyed under another for the same entitlement.
-    found = latestObservation(
+    found = latestPickCustodyObservation(
       own.filter((row) => row.pickId === asset.pickId || sameEntitlement(row))
     );
   } else {
     proxy = true;
-    found = latestObservation(national(asset.draftYear - 1).filter(sameEntitlement));
+    found = latestPickCustodyObservation(national(asset.draftYear - 1).filter(sameEntitlement));
   }
   const selectionNumber = found?.recordedPickNumber;
   if (
@@ -296,11 +311,60 @@ function orderSlotOf(custody: readonly Custody[], asset: PickAsset): OrderSlot |
 const representableClub = (clubId: string | null): clubId is string =>
   !!clubId && clubId.length <= 160 && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(clubId);
 
-/** True when `later` cannot have happened before `earlier`. */
-function notBefore(later: Transaction, earlier: Transaction) {
-  if (later.seasonYear !== earlier.seasonYear) return later.seasonYear > earlier.seasonYear;
-  if (later.occurredOn && earlier.occurredOn) return later.occurredOn > earlier.occurredOn;
-  return true;
+/**
+ * Rules v11, v13 and v14: how a traded-on pick's onward return is allocated when realized weights may
+ * not be: `unallocated`, the projection weights to split the bundle by, or null for the realized split.
+ * A return whose every leg is excluded is unknown, not a known 0. In a bundle with any excluded asset
+ * (the pick itself or a sibling), that asset's realized weight is unknown, so no share by weight, nor
+ * an even split, is known; through v12 an excluded sibling dropped out of the total and its valued
+ * siblings absorbed its share. From v14 the bundle is split by every asset's at-trade HPN DPVC v3
+ * projection when each has one, and stays unallocated otherwise (a player, or a pick with no
+ * projection). A sole asset takes the whole return, whatever became of the pick afterwards.
+ */
+function onwardProjectionSplit(
+  onwardLegs: readonly Leg[],
+  clubId: string
+): 'unallocated' | AflTradeRealizedProjectionWeight[] | null {
+  if (aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)) return 'unallocated';
+  if (!aflTradeRealizedOnwardBundleExcluded(onwardLegs, clubId)) return null;
+  return aflTradeRealizedOnwardProjectionWeights(onwardLegs, clubId) ?? 'unallocated';
+}
+
+/** The reasons a valued traded-on pick states about how it shares its club's onward return. */
+function onwardReturnReasons(
+  single: readonly AflTradeRealizedGradeReason[],
+  allocation: 'sole_asset' | 'relative_value' | 'equal_split' | 'projection_weighted',
+  onward: AflTradeRealizedTradeGrade,
+  clubId: string
+): AflTradeRealizedGradeReason[] {
+  const reasons: AflTradeRealizedGradeReason[] = [...single];
+  if (allocation === 'equal_split') reasons.push('equal_split_tiebreak');
+  // Rule v14: realized weights are unknown, so the split rests on at-trade projections.
+  if (allocation === 'projection_weighted') reasons.push('bundle_split_by_projection');
+  if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
+  // Rule v3: exact on the club's side, but the onward trade is blocked elsewhere.
+  if (onward.state === 'blocked') reasons.push('traded_on_return_partial');
+  // Rule v6: the club's side of the onward trade rests on a pick projected from an order.
+  if (aflTradeRealizedOnwardSideProjected(onward.legs, clubId))
+    reasons.push('traded_on_return_projected');
+  return reasons;
+}
+
+/** Rule v14: a traded-on pick's share of a bundle's return by its projection over every asset's. */
+function allocateByProjection(
+  assets: AflTradeRealizedProjectionWeight[],
+  onwardTransferId: string,
+  benchmarkId: string
+) {
+  const weight = assets.find(({ transferId }) => transferId === onwardTransferId)!.value;
+  const weightTotal = aflTradeRealizedProjectionWeightTotal(assets);
+  return {
+    allocation: 'projection_weighted' as const,
+    share: weight / weightTotal,
+    weight,
+    weightTotal,
+    projectionWeights: { benchmarkId, onwardTransferId, assets },
+  };
 }
 
 /**
@@ -353,46 +417,14 @@ export function gradeAflTradesOnRealizedValue(
       ungraded.push({ transactionId: transaction.transactionId, reason: 'club_unresolved' });
     else transactions.set(transaction.transactionId, transaction);
   }
-  const transfersByPick = new Map<string, Transfer[]>();
-  for (const transfer of inputs.candidate.transfers)
-    if (transactions.has(transfer.transactionId) && transfer.asset.kind === 'pick_entitlement')
-      transfersByPick.set(transfer.asset.pickId, [
-        ...(transfersByPick.get(transfer.asset.pickId) ?? []),
-        transfer,
-      ]);
-  // A pick's transfers form a directed trail, each handing it from sender to receiver. When exactly one
-  // ordering uses every transfer once, chains club to club, and keeps consecutive trades in time order,
-  // a transfer's onward hop is the next edge (none after the last). `undefined`: the trail is not unique.
-  const trails = new Map<string, Map<string, Transfer[]> | undefined>();
-  function onwardByTrail(pickId: string, transfer: Transfer): Transfer[] | undefined {
-    if (!trails.has(pickId)) {
-      const edges = transfersByPick.get(pickId) ?? [];
-      const found: Transfer[][] = [];
-      const walk = (trail: Transfer[], used: Set<string>) => {
-        if (found.length > 1) return;
-        if (trail.length === edges.length) return void found.push([...trail]);
-        const last = trail.at(-1)!;
-        for (const next of edges)
-          if (
-            !used.has(next.transferId) &&
-            next.fromClubId === last.toClubId &&
-            notBefore(transactions.get(next.transactionId)!, transactions.get(last.transactionId)!)
-          ) {
-            used.add(next.transferId);
-            walk([...trail, next], used);
-            used.delete(next.transferId);
-          }
-      };
-      for (const first of edges) walk([first], new Set([first.transferId]));
-      trails.set(
-        pickId,
-        found.length === 1
-          ? new Map(found[0]!.map((edge, at) => [edge.transferId, found[0]!.slice(at + 1, at + 2)]))
-          : undefined
-      );
-    }
-    return trails.get(pickId)?.get(transfer.transferId);
-  }
+  // A pick's onward transfers among the graded trades (`createAflTradePickOnwardTransfers`). Rule v12
+  // orders a season's undated pick trades by their Draftguru sequence and breaks a tie between trails
+  // by the pick's latest Official AFL custody holder.
+  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+    transactions,
+    inputs.candidate.transfers,
+    { custodyHolders: aflTradePickCustodyHolders(inputs.candidate.pickCustody ?? []) }
+  );
   // Rule v7: a special entitlement's reviewed custody chain, keyed by transfer and by predecessor.
   const custodyRows = inputs.specialEntitlementCustody ?? [];
   const specialCustody = new Map(custodyRows.map((row) => [row.transferId, row]));
@@ -427,7 +459,7 @@ export function gradeAflTradesOnRealizedValue(
       !transactions.has(onward.transactionId) ||
       onward.transactionId === transfer.transactionId ||
       onward.fromClubId !== transfer.toClubId ||
-      !notBefore(transactions.get(onward.transactionId)!, transaction)
+      !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
     )
       return undefined;
     return { transfer: onward, entitlementId: own.entitlementId };
@@ -437,16 +469,8 @@ export function gradeAflTradesOnRealizedValue(
   );
   // A traded-on pick follows its unique trail, else into the one later trade where its club gave it
   // away. More than one, or none, leaves it unlinked.
-  function onwardTransferOf(transfer: Transfer, transaction: Transaction): Transfer | undefined {
-    if (transfer.asset.kind !== 'pick_entitlement') return undefined;
-    const onwardTransfers =
-      onwardByTrail(transfer.asset.pickId, transfer) ??
-      (transfersByPick.get(transfer.asset.pickId) ?? []).filter(
-        (candidate) =>
-          candidate.fromClubId === transfer.toClubId &&
-          candidate.transactionId !== transfer.transactionId &&
-          notBefore(transactions.get(candidate.transactionId)!, transaction)
-      );
+  function onwardTransferOf(transfer: Transfer): Transfer | undefined {
+    const onwardTransfers = onwardTransfersOf(transfer);
     return onwardTransfers.length === 1 ? onwardTransfers[0] : undefined;
   }
   // Rule v3: the onward trades each trade's traded-on legs read. A leg whose onward trade leads back to
@@ -460,7 +484,7 @@ export function gradeAflTradesOnRealizedValue(
         if (special) return [special.transfer.transactionId];
         const outcome = outcomes.get(transfer.transferId);
         const tradedOn = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'traded_on';
-        const onward = tradedOn ? onwardTransferOf(transfer, transaction) : undefined;
+        const onward = tradedOn ? onwardTransferOf(transfer) : undefined;
         return onward ? [onward.transactionId] : [];
       })
     );
@@ -490,6 +514,37 @@ export function gradeAflTradesOnRealizedValue(
       selection.supportingProviders.includes('footyinfo')
     );
   };
+  /** Rule v8: the slot a future pick eventually took (`EventualSlot`). */
+  const eventualSlotOf =
+    (transfer: Transfer, tradeYear: number) =>
+    (asset: PickAsset): EventualSlot | undefined => {
+      // A pick is drafted at or after the trade; an earlier draft cannot be this pick's.
+      if (asset.draftYear < tradeYear) return undefined;
+      const outcome = outcomes.get(transfer.transferId);
+      const selection =
+        outcome?.outcomeStatus === 'stated' &&
+        outcome.disposition === 'selected' &&
+        outcome.selectionId !== null
+          ? selections.get(outcome.selectionId)
+          : undefined;
+      if (
+        selection &&
+        isAflTradeUsableCustodyStatus(selection.status) &&
+        selection.draftYear === asset.draftYear &&
+        selection.draftType === asset.draftType
+      )
+        return selection.selectionNumber > 90
+          ? undefined
+          : { selectionNumber: selection.selectionNumber, slotSource: 'selection' };
+      const slot = orderSlotOf(inputs.candidate.pickCustody ?? [], asset);
+      if (!slot) return undefined;
+      if (outcome?.outcomeStatus === 'pending')
+        return { selectionNumber: slot.selectionNumber, slotSource: 'projected_order' };
+      // Only a pick still waiting on its draft reads the previous draft's order as a proxy.
+      return slot.proxy
+        ? undefined
+        : { selectionNumber: slot.selectionNumber, slotSource: 'order' };
+    };
   // Rule v2: a traded-on outcome is corroborated when exactly one board pick in its draft routes it
   // sender → receiver → onward receiver, with that hop pair once in its route.
   const routeCorroborated = (transfer: Transfer, onward: Transfer) => {
@@ -526,7 +581,7 @@ export function gradeAflTradesOnRealizedValue(
       assetKind: asset.kind === 'player' ? ('player' as const) : ('pick' as const),
       sendingClubId: transfer.fromClubId!,
       receivingClubId: receiving,
-      atTrade: atTradeView(inputs, index, transfer, tradeYear),
+      atTrade: atTradeView(inputs, index, transfer, tradeYear, eventualSlotOf(transfer, tradeYear)),
     };
     if (asset.kind === 'player') {
       if (!asset.playerId) return blocked(base, ['player_identity_unresolved']);
@@ -634,20 +689,29 @@ export function gradeAflTradesOnRealizedValue(
         return {
           ...base,
           ...proven,
+          // Rule v10: a nominee only a Footyinfo board's matched bid records says so.
+          ...(outcome.matchedBidBoardPickIds === undefined
+            ? {}
+            : { nomineeMatchedBidBy: 'footyinfo' as const }),
           state: 'excluded',
           basis: 'pick_not_used_nominee_excluded',
           reasons: sorted([SINGLE, 'not_used_nominee_excluded']),
         };
       return blocked(base, ['not_used_no_access_evidence']);
     }
-    const onwardTransfer = onwardTransferOf(transfer, transaction);
-    if (!onwardTransfer) return blocked(base, ['traded_on_return_unlinked']);
-    return tradedOnReturnLeg(
-      base,
-      transaction,
-      onwardTransfer,
-      routeCorroborated(transfer, onwardTransfer)
-    );
+    const onwardTransfer = onwardTransferOf(transfer);
+    const leg = onwardTransfer
+      ? tradedOnReturnLeg(
+          base,
+          transaction,
+          onwardTransfer,
+          routeCorroborated(transfer, onwardTransfer)
+        )
+      : blocked(base, ['traded_on_return_unlinked']);
+    // Rule v9: a hop Draftguru stated "not used" that its club traded on in the candidate says so.
+    return outcome.statedDisposition === 'not_used'
+      ? ({ ...leg, reasons: sorted([...leg.reasons, 'stated_not_used_traded_on']) } as Leg)
+      : leg;
   }
 
   /**
@@ -679,7 +743,8 @@ export function gradeAflTradesOnRealizedValue(
     const single: AflTradeRealizedGradeReason[] = specialEntitlement
       ? [...singleSource, 'special_entitlement_custody_linked']
       : singleSource;
-    if (pickLeg.state === 'excluded')
+    const projectionSplit = onwardProjectionSplit(onward.legs, receiving);
+    if (projectionSplit === 'unallocated')
       return {
         ...base,
         ...source,
@@ -690,17 +755,16 @@ export function gradeAflTradesOnRealizedValue(
         reasons: sorted([...single, 'traded_on_return_unallocated']),
       };
     const returnValue = club.received;
-    // A sole asset's pick leg may itself be blocked there, leaving givenUp unknown and unused.
+    // A sole asset's pick leg may itself be blocked or excluded there, leaving givenUp unused.
     const weight = pickLeg.state === 'valued' ? pickLeg.realizedValue : 0;
-    const allocated = allocateOnwardReturn(given.length, club.givenUp ?? 0, weight);
-    const reasons: AflTradeRealizedGradeReason[] = [...single];
-    if (allocated.allocation === 'equal_split') reasons.push('equal_split_tiebreak');
-    if (onward.state === 'provisional') reasons.push('traded_on_return_provisional');
-    // Rule v3: exact on the club's side, but the onward trade is blocked elsewhere.
-    if (onward.state === 'blocked') reasons.push('traded_on_return_partial');
-    // Rule v6: the club's side of the onward trade rests on a pick projected from an order.
-    if (aflTradeRealizedOnwardSideProjected(onward.legs, receiving))
-      reasons.push('traded_on_return_projected');
+    const allocated = projectionSplit
+      ? allocateByProjection(
+          projectionSplit,
+          onwardTransfer.transferId,
+          inputs.pickProjectionBenchmarkId
+        )
+      : allocateOnwardReturn(given.length, club.givenUp ?? 0, weight);
+    const reasons = onwardReturnReasons(single, allocated.allocation, onward, receiving);
     return {
       ...base,
       ...source,
@@ -716,6 +780,9 @@ export function gradeAflTradesOnRealizedValue(
         weight: allocated.weight,
         weightTotal: allocated.weightTotal,
         share: allocated.share,
+        ...('projectionWeights' in allocated
+          ? { projectionWeights: allocated.projectionWeights }
+          : {}),
       },
       reasons: sorted(reasons),
     };
