@@ -4432,7 +4432,7 @@ The remaining work proceeds through these independently verifiable gates:
 
    **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
    private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v12` (v1 to v11 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
+   `afl-trade-realized-grade-rule/v13` (v1 to v12 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
    pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
    season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
    `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
@@ -4498,7 +4498,7 @@ The remaining work proceeds through these independently verifiable gates:
        onward trade is unblocked: a capture missing the holder's return side would value the pick at
        0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
      - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
-       allocation would need is known (from rule v11, only in a bundle; see below). A blocked side takes precedence, so it is
+       allocation would need is known (from rule v11, only in a bundle; from rule v13, also when another asset of the bundle is excluded; see below). A blocked side takes precedence, so it is
        `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
        since it has no onward return.
      - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
@@ -4705,6 +4705,26 @@ The remaining work proceeds through these independently verifiable gates:
      pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a
      stated date, and that a pick with more than one possible trail follows the one ending at its
      latest Official AFL custody holder.
+
+   - **Excluded asset in a traded-on bundle (rule v13, issue 789, 2026-10-16).** A Fable audit of
+     stored batch twenty-three found that a bundle's allocation silently dropped an excluded sibling.
+     A traded-on pick in a bundle shares its club's onward return by its realized weight over what
+     the club gave up, and `givenUp` sums only valued legs. So when another asset the club gave in
+     the onward trade was excluded (for example a pick the next holder spent matching a bid), its
+     unknown weight fell out of the total and the valued siblings absorbed its share: 2019 pick 32
+     (Western Bulldogs) took share 1, 102.9, because its sibling, Fremantle's 2020 third-rounder,
+     was excluded. The audit counted 25 legs taking share 1 this way, 652.7 PAV. From v13, a
+     traded-on pick whose club gave more than one asset in the onward trade, any of them excluded,
+     is `pick_traded_on_return_unallocated` (`traded_on_return_unallocated`), on the weighted path
+     and on the even split alike: no traded-on asset's share of that return is known. A sole asset
+     still takes the whole return (rule v11), a bundle whose every asset is valued allocates as
+     before, and a blocked side still blocks first (rule v3).
+
+     The contract refuses, under v13, a valued traded-on pick whose club's onward bundle holds an
+     excluded asset. Rules v1 to v12, whose batches still parse, accept the shared value they
+     recorded; their unallocated grounds are unchanged. The v13 limitation adds that a traded-on
+     pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the
+     return being unknown, and that a sole asset still takes the whole return.
 
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain

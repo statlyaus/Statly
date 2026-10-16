@@ -11,6 +11,7 @@ import {
   AFL_TRADE_REALIZED_TRADE_GRADE_BATCH_SCHEMA_VERSION,
   AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   AFL_TRADE_REALIZED_TRADE_GRADE_RULE_VERSION,
+  aflTradeRealizedOnwardBundleExcluded,
   aflTradeRealizedOnwardReturnExcluded,
   aflTradeRealizedOnwardSideProjected,
   createAflTradeRealizedTradeGradeBatch,
@@ -308,18 +309,15 @@ const representableClub = (clubId: string | null): clubId is string =>
   !!clubId && clubId.length <= 160 && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(clubId);
 
 /**
- * Rule v11: whether a traded-on pick's onward return cannot be allocated to it. A bundle's excluded pick
- * has no realized weight to share the return by; a sole asset takes the whole return, whatever became
- * of the pick afterwards. A return whose every leg is excluded is unknown, not a known 0.
+ * Rules v11 and v13: whether a traded-on pick's onward return cannot be allocated to it. In a bundle
+ * with any excluded asset (the pick itself or a sibling), that asset's realized weight is unknown, so
+ * no share by weight, nor an even split, is known; through v12 an excluded sibling dropped out of the
+ * total and its valued siblings absorbed its share. A sole asset takes the whole return, whatever
+ * became of the pick afterwards. A return whose every leg is excluded is unknown, not a known 0.
  */
-function onwardReturnUnallocated(
-  onwardLegs: readonly Leg[],
-  clubId: string,
-  pickLeg: Leg
-): boolean {
-  const bundle = onwardLegs.filter((leg) => leg.sendingClubId === clubId).length > 1;
+function onwardReturnUnallocated(onwardLegs: readonly Leg[], clubId: string): boolean {
   return (
-    (bundle && pickLeg.state === 'excluded') ||
+    aflTradeRealizedOnwardBundleExcluded(onwardLegs, clubId) ||
     aflTradeRealizedOnwardReturnExcluded(onwardLegs, clubId)
   );
 }
@@ -700,7 +698,7 @@ export function gradeAflTradesOnRealizedValue(
     const single: AflTradeRealizedGradeReason[] = specialEntitlement
       ? [...singleSource, 'special_entitlement_custody_linked']
       : singleSource;
-    if (onwardReturnUnallocated(onward.legs, receiving, pickLeg))
+    if (onwardReturnUnallocated(onward.legs, receiving))
       return {
         ...base,
         ...source,
