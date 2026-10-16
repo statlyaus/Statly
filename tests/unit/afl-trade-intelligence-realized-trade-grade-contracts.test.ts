@@ -39,6 +39,7 @@ const V13 = 'afl-trade-realized-grade-rule/v13' as const;
 const V14 = 'afl-trade-realized-grade-rule/v14' as const;
 const V15 = 'afl-trade-realized-grade-rule/v15' as const;
 const V16 = 'afl-trade-realized-grade-rule/v16' as const;
+const V17 = 'afl-trade-realized-grade-rule/v17' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -64,6 +65,8 @@ const LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v15 a bundle with an excluded asset is split by each asset's realized value where known and its HPN DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no projection; not public factual, publication, production or activation authority.",
   [V16]:
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v15 a bundle with an excluded asset is split by each asset's realized value where known and its HPN DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no projection; from rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is valued, provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its club spent matching a bid), and stays unallocated when one has none; not public factual, publication, production or activation authority.",
+  [V17]:
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v15 a bundle with an excluded asset is split by each asset's realized value where known and its HPN DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no projection; from rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is valued, provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its club spent matching a bid), and stays unallocated when one has none; from rule v17 a future pick's at-trade view also takes the selection its traded-on trail, or a special entitlement's custody successor, ends in, and its own selection when only that selection's custody is unresolved; a future pick that held no slot in its draft's final order is projected at an estimated round-position proxy, its original club's first-round rank in that order plus 18 per later round, capped at 90, not a slot it held; a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound; and a traded-on pick whose weights or return rest on the proxy or the cap says so; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -2412,6 +2415,191 @@ describe('realized trade grade batch contract', () => {
                 /A projected return applies only when every leg its club received there is excluded/,
               ],
             ])('refuses %s under v16', (_label, build, message) => refuses(build(), message));
+
+            describe('rule v17 onward selections, round-position proxies and capped projections', () => {
+              const p90 = hpnDpv3ValueForPick(90);
+              const eventual = (selectionNumber: number, slotSource: string) => ({
+                kind: 'pick_projection_eventual_slot',
+                benchmarkId,
+                selectionNumber,
+                slotSource,
+                value: hpnDpv3ValueForPick(selectionNumber),
+              });
+              const proxyView = (clubPosition = 2, roundNumber = 4, selectionNumber = 56) => ({
+                kind: 'pick_projection_round_position_proxy',
+                benchmarkId,
+                roundNumber,
+                clubPosition,
+                selectionNumber,
+                orderCustodyId: `external-pick-custody:${hex('c')}`,
+                value: hpnDpv3ValueForPick(selectionNumber),
+              });
+              const capped = (selectionNumber = 94) => ({
+                kind: 'pick_projection_domain_capped',
+                benchmarkId,
+                selectionNumber,
+                cappedAt: 90,
+                value: p90,
+              });
+              const atTrade =
+                (view: Record<string, unknown>) =>
+                (leg: Leg): Leg =>
+                  ({ ...leg, atTrade: view }) as Leg;
+              // tx-1's not-used pick held no slot in its draft's final order (a round-position
+              // proxy), and tx-5's traded-on pick was used at 20 on a later hop.
+              const views = (ruleVersion: AflTradeRealizedGradeRuleVersion) =>
+                withLeg(
+                  withLeg(signed(ruleVersion), 'tx-1', 2, atTrade(proxyView())),
+                  'tx-5',
+                  0,
+                  atTrade(eventual(20, 'onward_selection'))
+                );
+              const CAPPED_REASONS: Leg['reasons'] = [
+                'projection_domain_capped',
+                ...PROJECTED_REASONS,
+              ];
+              // Hawthorn's only return in tx-6 is pick 94 (tr-6d), spent matching a bid: from v17
+              // it is projected at DPVC(90), so the tx-5 pick is worth that.
+              const cappedReturn = (
+                ruleVersion: AflTradeRealizedGradeRuleVersion,
+                reasons: Leg['reasons'] = CAPPED_REASONS
+              ) =>
+                withLeg(
+                  projectedReturn(
+                    ruleVersion,
+                    (onward) => ({
+                      ...onward,
+                      returnValue: p90,
+                      returnProjection: {
+                        benchmarkId,
+                        legs: [
+                          {
+                            transferId: 'tr-6d',
+                            source: 'pick_projection_domain_capped',
+                            value: p90,
+                          },
+                        ],
+                      },
+                    }),
+                    reasons
+                  ),
+                  'tx-6',
+                  1,
+                  atTrade(capped())
+                );
+
+              it('seals v17 with its limitation and values a pick on a capped return', () => {
+                const batch = createAflTradeRealizedTradeGradeBatch(cappedReturn(V17));
+                expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+                expect(batch.content.limitation).toBe(LIMITATIONS[V17]);
+                expect(tradeOf(batch.content as Content, 'tx-5').clubs).toEqual([
+                  { clubId: 'hawthorn', received: p90, givenUp: 0, net: p90 },
+                  { clubId: 'melbourne', received: 0, givenUp: p90, net: -p90 },
+                ]);
+                const viewed = createAflTradeRealizedTradeGradeBatch(views(V17));
+                expect(tradeOf(viewed.content as Content, 'tx-1').clubs).toEqual(
+                  tradeOf(signed(V17), 'tx-1').clubs
+                );
+                refuses({ ...cappedReturn(V17), limitation: LIMITATIONS[V16] }, /limitation/i);
+              });
+
+              it('accepts a late round’s proxy at 90 and keeps everything v16 accepted', () => {
+                for (const build of [
+                  () => withLeg(signed(V17), 'tx-1', 2, atTrade(proxyView(2, 6, 90))),
+                  () => signed(V17),
+                  () => projectedReturn(V17),
+                  () => unprojectedReturn(V17),
+                  () => hybrid(V17, 'pick'),
+                ])
+                  expect(() => createAflTradeRealizedTradeGradeBatch(build())).not.toThrow();
+              });
+
+              it('still parses v16 batches and refuses every v17 view under them', () => {
+                expect(() =>
+                  createAflTradeRealizedTradeGradeBatch(projectedReturn(V16))
+                ).not.toThrow();
+                for (const build of [
+                  () => views(V16),
+                  () => cappedReturn(V16),
+                  () => withLeg(signed(V16), 'tx-1', 2, atTrade(proxyView())),
+                ])
+                  refuses(build(), /Only rule v17 and later take an onward selection/);
+              });
+
+              it.each<[string, () => Content, RegExp]>([
+                [
+                  'a proxy slot that is not its club’s position plus 18 per later round',
+                  () => withLeg(signed(V17), 'tx-1', 2, atTrade(proxyView(2, 4, 57))),
+                  /A round-position proxy is its club’s position plus 18 per later round/,
+                ],
+                [
+                  'a proxy valued at another slot',
+                  () => withLeg(signed(V17), 'tx-1', 2, atTrade({ ...proxyView(), value: p90 })),
+                  /A round-position proxy is its club’s position plus 18 per later round/,
+                ],
+                [
+                  'a proxy on a player leg',
+                  () => withLeg(signed(V17), 'tx-4', 0, atTrade(proxyView())),
+                  /A round-position proxy is .* on a pick leg/,
+                ],
+                [
+                  'a proxy citing another benchmark',
+                  () =>
+                    withLeg(
+                      signed(V17),
+                      'tx-1',
+                      2,
+                      atTrade({ ...proxyView(), benchmarkId: `hpn-pick-benchmark:${hex('d')}` })
+                    ),
+                  /Every pick projection must cite the batch’s pinned benchmark/,
+                ],
+                [
+                  'a capped pick not valued at slot 90',
+                  () =>
+                    withLeg(
+                      signed(V17),
+                      'tx-1',
+                      2,
+                      atTrade({ ...capped(), value: hpnDpv3ValueForPick(89) })
+                    ),
+                  /valued at the HPN DPVC v3 value of slot 90/,
+                ],
+                [
+                  'a capped pick inside 1 to 90',
+                  () => withLeg(signed(V17), 'tx-1', 2, atTrade(capped(90))),
+                  />=91/,
+                ],
+                [
+                  'an onward selection on a selected pick',
+                  () => withLeg(signed(V17), 'tx-1', 1, atTrade(eventual(12, 'onward_selection'))),
+                  /Only a traded-on pick takes its eventual slot from a later hop’s selection/,
+                ],
+                [
+                  'a capped return without its reason',
+                  () => cappedReturn(V17, PROJECTED_REASONS),
+                  /states a proxy or capped projection exactly when its weights or return rest on one/,
+                ],
+                [
+                  'the reason on a return that rests on no estimate',
+                  () => projectedReturn(V17, undefined, CAPPED_REASONS),
+                  /states a proxy or capped projection exactly when its weights or return rest on one/,
+                ],
+                [
+                  'the reason on a leg with no onward trade',
+                  () =>
+                    withLeg(signed(V17), 'tx-1', 2, (leg) => ({
+                      ...leg,
+                      reasons: ['projection_round_position_proxy', SINGLE],
+                    })),
+                  /Only a traded-on pick carries onward-trade reasons/,
+                ],
+                [
+                  'an unallocated pick whose return has a capped projection',
+                  () => withLeg(excludedReturn(V17, 'unallocated'), 'tx-6', 1, atTrade(capped())),
+                  /From rule v16 a return whose every leg is excluded and projected is valued/,
+                ],
+              ])('refuses %s under v17', (_label, build, message) => refuses(build(), message));
+            });
           });
         });
       });

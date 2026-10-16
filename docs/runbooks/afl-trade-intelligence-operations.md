@@ -3456,6 +3456,19 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   unallocated on an all-excluded return, count how many are now valued (the coordinator expects
   most of the 30 whose return is matched-bid picks) and how many stay unallocated, and spot-check
   that each valued leg's `returnProjection` lists exactly its club's return legs in the onward trade.
+- Under rule v17 a used future pick takes its selection's slot (on a later hop of its trail too,
+  `onward_selection`, and when only the selection's custody is unresolved), a future pick with no
+  slot in its draft's final order takes a round-position proxy, and a pick numbered beyond 90 is
+  capped at DPVC(90); a traded-on pick whose weights or return rest on the proxy or the cap states
+  `projection_round_position_proxy` or `projection_domain_capped`. Only the grader changed, so
+  regrade the current candidate; no re-reconcile is needed. Of the 25 pick legs v16 left with no
+  at-trade view, count how many now have one by kind (expected: the three used picks by selection,
+  most of the 17 unused round-3 and round-4 picks by proxy, the four picks numbered 91 to 103 capped,
+  and the Gold Coast concession by its successor's selection), list those still unavailable (a pick
+  with no original club stays so), and count how many of the three legs v16 left unallocated are
+  now valued. Expect some existing traded-on at-trade views to move from `order` to
+  `onward_selection` where the trail ends in a selection at another number, and their bundle weights
+  and returns with them.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
