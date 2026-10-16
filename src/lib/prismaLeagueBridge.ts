@@ -452,7 +452,7 @@ async function upsertPrismaMember(
     teamLogoZoom: member.teamLogoZoom,
     draftSlot: member.draftSlot,
     isActive: true,
-    status: 'ACTIVE',
+    status: 'ACTIVE' as const,
     leftAt: null,
   };
 

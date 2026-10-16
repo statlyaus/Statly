@@ -133,6 +133,69 @@ describe('external identity review work builder', () => {
     ).toEqual([['Gold Coast'], ['Jez McLennan']]);
   });
 
+  it('creates identity work for the holder and route clubs of a Footyinfo board pick', () => {
+    const club = (nativeId: string, recordedName: string) => ({ nativeId, recordedName });
+    const footyinfo = batch('footyinfo', 'e', [
+      {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 11,
+        status: 'selected',
+        club: club('GCS', 'Gold Coast'),
+        player: { nativeId: 'player-11', recordedName: 'Example Player' },
+        route: [club('PAD', 'Port Adelaide'), club('GCS', 'Gold Coast')],
+        routeLabel: null,
+        bid: null,
+        points: null,
+        note: null,
+      },
+      {
+        kind: 'draft_board_pick',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 3,
+        recordedPickNumber: null,
+        status: 'removed',
+        club: club('WCE', 'West Coast'),
+        route: [],
+        routeLabel: null,
+        bid: null,
+        points: null,
+        note: null,
+      },
+    ]);
+
+    const reviewPackage = buildAflTradeExternalIdentityReviewPackage({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      sourceAuthority: sourceAuthority([footyinfo]),
+      sourceBatches: [footyinfo],
+    });
+
+    const items = reviewPackage.content.items.map(({ workItem }) => workItem.content);
+    const nativeIds = (entityKind: 'club' | 'player') =>
+      items
+        .filter(({ subject }) => subject.content.entityKind === entityKind)
+        .map(({ subject }) =>
+          subject.content.identityScope.kind === 'provider_native_id'
+            ? subject.content.identityScope.nativeId
+            : null
+        )
+        .sort();
+    // Port Adelaide only routes a pick and West Coast only holds a removed one.
+    expect(nativeIds('club')).toEqual(['GCS', 'PAD', 'WCE']);
+    expect(nativeIds('player')).toEqual(['player-11']);
+    expect(
+      items.find(
+        ({ subject }) =>
+          subject.content.identityScope.kind === 'provider_native_id' &&
+          subject.content.identityScope.nativeId === 'PAD'
+      )?.observedNames
+    ).toEqual(['Port Adelaide']);
+  });
+
   it('enumerates the exact provider identities without merging distinct source scopes', () => {
     const reviewPackage = buildAflTradeExternalIdentityReviewPackage({
       environment: 'test_fixture',

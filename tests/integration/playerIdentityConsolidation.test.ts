@@ -40,7 +40,7 @@ const fixturePlayerIds = [
 ];
 
 async function deleteFixtures() {
-  await prisma.queueItem.deleteMany({ where: { memberId: 'queue-member' } });
+  await prisma.queueItem.deleteMany({ where: { memberId: 'member-c' } });
   await deleteLeagueFixtures(prisma, {
     leagueIds: fixtureLeagueIds,
     playerIds: fixturePlayerIds,
@@ -198,8 +198,8 @@ describe.sequential('player identity consolidation', () => {
 
     await prisma.queueItem.createMany({
       data: [
-        { id: 'canonical-queue', memberId: 'queue-member', playerId: canonicalPlayerId, rank: 2 },
-        { id: 'alias-queue', memberId: 'queue-member', playerId: aliasPlayerId, rank: 1 },
+        { id: 'canonical-queue', memberId: 'member-c', playerId: canonicalPlayerId, rank: 2 },
+        { id: 'alias-queue', memberId: 'member-c', playerId: aliasPlayerId, rank: 1 },
       ],
     });
     await prisma.teamAction.create({
@@ -248,7 +248,7 @@ describe.sequential('player identity consolidation', () => {
     await expect(
       prisma.queueItem.findUnique({
         where: {
-          memberId_playerId: { memberId: 'queue-member', playerId: canonicalPlayerId },
+          memberId_playerId: { memberId: 'member-c', playerId: canonicalPlayerId },
         },
         select: { rank: true },
       })
