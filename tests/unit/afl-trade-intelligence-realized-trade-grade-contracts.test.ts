@@ -37,6 +37,7 @@ const V11 = 'afl-trade-realized-grade-rule/v11' as const;
 const V12 = 'afl-trade-realized-grade-rule/v12' as const;
 const V13 = 'afl-trade-realized-grade-rule/v13' as const;
 const V14 = 'afl-trade-realized-grade-rule/v14' as const;
+const V15 = 'afl-trade-realized-grade-rule/v15' as const;
 const LIMITATIONS = {
   [V1]: 'Private local non-production realized trade grade in career_pav; single-source pick outcomes; not public factual, publication, production or activation authority.',
   'afl-trade-realized-grade-rule/v2':
@@ -58,6 +59,8 @@ const LIMITATIONS = {
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; not public factual, publication, production or activation authority.",
   [V14]:
     "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v14 such a bundle whose every asset has an HPN DPVC v3 at-trade projection is split by those projections instead, provisionally, realized value staying the primary split; not public factual, publication, production or activation authority.",
+  [V15]:
+    "Private local non-production realized trade grade in career_pav; pick outcomes are single-source unless a Footyinfo draft board corroborates them; a blocked leg leaves unknown only the club totals it enters; a first stint is worth its signed HPN PAV sum floored at 0; the membership of the 2025 national draft is proven by a reviewed Footyinfo board, no official session being reviewed; a pick whose draft is not yet in evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not first-stint) of its slot in the live Official AFL indicative order; a pick of a draft with no order yet uses its original club's slot in the latest order; a special draft entitlement is followed through its reviewed canonical custody chain to the ordinary pick it was traded on as, and valued as that pick's traded-on return; a future pick's at-trade view is valued at the slot it eventually took, known only after the trade (hindsight, not what the clubs knew), and enters no total; a pick stated not used that its club traded on in a later trade is valued by its traded-on return, and only the final holder's stays not used; a receiving club's selection a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when Draftguru marks it open; a sole asset traded on is valued at its club's whole return in the onward trade, whatever became of the pick there; a traded-on pick whose club's every return leg in the onward trade is excluded is unallocated, not worth 0; undated pick trades of one season are ordered by the Draftguru pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a stated date, and a pick with more than one possible trail follows the one ending at its latest Official AFL custody holder; a traded-on pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the return being unknown, and a sole asset still takes the whole return; from rule v15 a bundle with an excluded asset is split by each asset's realized value where known and its HPN DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no projection; not public factual, publication, production or activation authority.",
 } as const;
 
 type Leg = AflTradeRealizedTradeGradeLeg;
@@ -2015,6 +2018,216 @@ describe('realized trade grade batch contract', () => {
             withLeg(value, 'tx-5', 0, (leg) => leg),
             /A projection split applies only to a bundle with an excluded asset/
           );
+        });
+
+        describe('rule v15 a bundle with an excluded asset is split by realized value where known, projection otherwise', () => {
+          type Weight = NonNullable<Onward['hybridWeights']>['assets'][number];
+          // Case 'player' (the owner's 53 legs): St Kilda spent pick 20 (tr-6a) on a nominee, and
+          // Hawthorn's player tr-6b realized 28 there. Case 'pick': tr-6b is instead pick 30 spent
+          // on a nominee, and pick 20's draftee realized 12.
+          const hybridAssets = (bundle: 'player' | 'pick'): Weight[] =>
+            bundle === 'player'
+              ? [
+                  { transferId: 'tr-6a', source: 'projection', value: p20 },
+                  { transferId: 'tr-6b', source: 'realized', value: 28 },
+                ]
+              : [
+                  { transferId: 'tr-6a', source: 'realized', value: 12 },
+                  { transferId: 'tr-6b', source: 'projection', value: p30 },
+                ];
+          const excludedBundle = (
+            ruleVersion: AflTradeRealizedGradeRuleVersion,
+            bundle: 'player' | 'pick'
+          ) =>
+            bundle === 'player'
+              ? withLeg(signed(ruleVersion), 'tx-6', 0, nominee)
+              : withLeg(signed(ruleVersion), 'tx-6', 1, (leg) => ({
+                  ...nominee(leg),
+                  atTrade: projection(30),
+                }));
+          const hybrid = (
+            ruleVersion: AflTradeRealizedGradeRuleVersion,
+            bundle: 'player' | 'pick' = 'player',
+            change: (onward: Onward) => Onward = (onward) => onward,
+            reasons: Leg['reasons'] = [
+              'bundle_split_estimated_weights',
+              SINGLE,
+              'traded_on_return_provisional',
+            ]
+          ) => {
+            const assets = hybridAssets(bundle);
+            const weight = assets[0]!.value;
+            const weightTotal = assets[0]!.value + assets[1]!.value;
+            const onward = change({
+              transactionId: 'tx-6',
+              allocation: 'hybrid_weighted',
+              returnValue: 40,
+              givenAssetCount: 2,
+              weight,
+              weightTotal,
+              share: weight / weightTotal,
+              hybridWeights: { benchmarkId, onwardTransferId: 'tr-6a', assets },
+            });
+            return withLeg(
+              excludedBundle(ruleVersion, bundle),
+              'tx-5',
+              0,
+              (leg) =>
+                ({
+                  ...soleAsset(leg, 40),
+                  realizedValue: onward.share * 40,
+                  onward,
+                  reasons,
+                }) as Leg
+            );
+          };
+
+          it.each(['player', 'pick'] as const)(
+            'seals v15 with its limitation and splits a %s bundle by hybrid weights',
+            (bundle) => {
+              const batch = createAflTradeRealizedTradeGradeBatch(hybrid(V15, bundle));
+              expect(parseAflTradeRealizedTradeGradeBatch(batch)).toEqual(batch);
+              expect(batch.content.ruleVersion).toBe(V15);
+              expect(batch.content.limitation).toBe(LIMITATIONS[V15]);
+              const [own, other] = hybridAssets(bundle);
+              const share = (own!.value / (own!.value + other!.value)) * 40;
+              expect(tradeOf(batch.content as Content, 'tx-5').clubs).toEqual([
+                { clubId: 'hawthorn', received: share, givenUp: 0, net: share },
+                { clubId: 'melbourne', received: 0, givenUp: share, net: -share },
+              ]);
+              refuses({ ...hybrid(V15, bundle), limitation: LIMITATIONS[V14] }, /limitation/i);
+            }
+          );
+
+          it('keeps the realized split, the sole asset and the unallocated returns v15 cannot weigh', () => {
+            for (const build of [
+              () => signed(V15),
+              () => spentOnward(V15, 'valued'),
+              () => excludedReturn(V15, 'unallocated'),
+              () => unprojectedSibling(V15),
+            ])
+              expect(() => createAflTradeRealizedTradeGradeBatch(build())).not.toThrow();
+          });
+
+          it('still parses v14 batches and refuses the hybrid split under them', () => {
+            expect(() => createAflTradeRealizedTradeGradeBatch(projected(V14))).not.toThrow();
+            expect(() =>
+              createAflTradeRealizedTradeGradeBatch(unprojectedSibling(V14))
+            ).not.toThrow();
+            refuses(
+              hybrid(V14),
+              /Only rule v15 and later split a bundle by realized value where known/
+            );
+          });
+
+          it.each<[string, () => Content, RegExp]>([
+            [
+              'an unallocated pick its bundle’s player and projected pick would weigh',
+              () => withLeg(excludedBundle(V15, 'player'), 'tx-5', 0, (leg) => unallocatedLeg(leg)),
+              /From rule v15 a bundle whose excluded assets have projections is split by hybrid weights/,
+            ],
+            [
+              'an unallocated pick in a pick-only bundle',
+              () => excludedSibling(V15, 'unallocated'),
+              /From rule v15 a bundle whose excluded assets have projections is split by hybrid weights/,
+            ],
+            [
+              'a projection split',
+              () => projected(V15),
+              /From rule v15 a bundle is split by realized value where known, never by projection alone/,
+            ],
+            [
+              'a realized share past an excluded sibling',
+              () => excludedSibling(V15, 'shared'),
+              /From rule v13 a bundle with an excluded asset/,
+            ],
+            [
+              'a weight that is another asset’s',
+              () =>
+                hybrid(V15, 'player', (onward) => ({
+                  ...onward,
+                  weight: 28,
+                  share: 28 / (p20 + 28),
+                })),
+              /A hybrid split, and only that, shares by every given asset’s realized value or projection/,
+            ],
+            [
+              'a valued player weighted by a projection',
+              () =>
+                hybrid(V15, 'player', (onward) => {
+                  const assets: Weight[] = [
+                    { transferId: 'tr-6a', source: 'projection', value: p20 },
+                    { transferId: 'tr-6b', source: 'projection', value: 28 },
+                  ];
+                  return { ...onward, hybridWeights: { ...onward.hybridWeights!, assets } };
+                }),
+              /Hybrid weights are each given asset’s realized value, or its at-trade projection when excluded/,
+            ],
+            [
+              'a valued pick weighted by its projection, not its realized value',
+              () =>
+                hybrid(V15, 'pick', (onward) => {
+                  const assets: Weight[] = [
+                    { transferId: 'tr-6a', source: 'realized', value: p20 },
+                    { transferId: 'tr-6b', source: 'projection', value: p30 },
+                  ];
+                  return {
+                    ...onward,
+                    weight: p20,
+                    weightTotal: p20 + p30,
+                    share: p20 / (p20 + p30),
+                    hybridWeights: { ...onward.hybridWeights!, assets },
+                  };
+                }),
+              /Hybrid weights are each given asset’s realized value, or its at-trade projection when excluded/,
+            ],
+            [
+              'weights citing another benchmark',
+              () =>
+                hybrid(V15, 'player', (onward) => ({
+                  ...onward,
+                  hybridWeights: {
+                    ...onward.hybridWeights!,
+                    benchmarkId: `hpn-pick-benchmark:${hex('d')}`,
+                  },
+                })),
+              /A hybrid split must cite the batch’s pinned benchmark/,
+            ],
+            [
+              'a hybrid split without its reason',
+              () => hybrid(V15, 'player', undefined, [SINGLE, 'traded_on_return_provisional']),
+              /A hybrid split, and only a hybrid split, is stated as a reason/,
+            ],
+            [
+              'hybrid weights on a realized split',
+              () =>
+                withLeg(signed(V15), 'tx-5', 0, (leg) =>
+                  'onward' in leg
+                    ? {
+                        ...leg,
+                        onward: {
+                          ...leg.onward,
+                          hybridWeights: {
+                            benchmarkId,
+                            onwardTransferId: 'tr-6a',
+                            assets: hybridAssets('pick'),
+                          },
+                        },
+                      }
+                    : leg
+                ),
+              /A hybrid split, and only that, shares by every given asset’s realized value or projection/,
+            ],
+          ])('refuses %s under v15', (_label, build, message) => refuses(build(), message));
+
+          it('refuses a hybrid split of a bundle with no excluded asset', () => {
+            const value = signed(V15);
+            tradeOf(value, 'tx-5').legs[0] = tradeOf(hybrid(V15, 'pick'), 'tx-5').legs[0]!;
+            refuses(
+              withLeg(value, 'tx-5', 0, (leg) => leg),
+              /A hybrid split applies only to a bundle with an excluded asset/
+            );
+          });
         });
       });
     });
