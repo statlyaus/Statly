@@ -379,8 +379,10 @@ function toApiLeagueMember(member: Awaited<ReturnType<typeof listActiveLeagueMem
 function toLeagueStatus(status: unknown): League['status'] {
   if (typeof status !== 'string') return 'preseason';
 
+  // LIVE and PAUSED are both a draft under way; the league is only preseason before the draft starts.
   const normalized = status.toLowerCase();
-  if (normalized === 'active' || normalized === 'completed') return normalized;
+  if (normalized === 'live' || normalized === 'paused' || normalized === 'active') return 'active';
+  if (normalized === 'completed') return 'completed';
   return 'preseason';
 }
 

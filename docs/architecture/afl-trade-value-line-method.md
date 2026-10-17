@@ -130,13 +130,13 @@ asset's value at the same checkpoint.
 
 ## Data needed
 
-| Input                                              | Source                                                                                                                                                                      | Status                     |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                                                              | In the outcomes database   |
-| Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs                                                                                                                            | Stored; needs a read model |
-| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only) | Being calculated           |
-| Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                                                                 | In place                   |
-| AFL draft points table, bid points, matching picks | Official AFL bid-matching records                                                                                                                                           | To source                  |
+| Input                                              | Source                                                                                                                                                                                                                          | Status                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                                                                                                                  | In the outcomes database   |
+| Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs                                                                                                                                                                                | Stored; needs a read model |
+| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only)                                                     | Being calculated           |
+| Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                                                                                                                     | In place                   |
+| AFL draft points table, bid points, matching picks | Bid points and spent picks from the reviewed Footyinfo boards, 2019 to 2025 (parser v2, **Owner:** approved 2026-10-17); the price from each draft year's AFL rule (`matchedBidPriceRules.ts`), never the board's `points_used` | In the outcomes database   |
 
 ## Fitting and validation
 
@@ -182,7 +182,8 @@ asset's value at the same checkpoint.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
-4. **Matched bids:** load the AFL points table and calculate each spent pick's share.
+4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
+   ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
    bundle split, then regrade on intrinsic value lines.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.

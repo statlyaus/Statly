@@ -62,9 +62,16 @@ export async function createRetainedExternalCaptureFixture(
   rookieExclusion = false,
   sessionWindow = false,
   miniCapacity = false,
-  options: { playerDeparture?: boolean; draftOrder?: boolean; footyinfoBoard?: boolean } = {}
+  options: {
+    playerDeparture?: boolean;
+    draftOrder?: boolean;
+    footyinfoBoard?: boolean;
+    /** With `footyinfoBoard`: pick 1 is a matched father-son bid, stated as parser v2 states it. */
+    footyinfoBidMatch?: boolean;
+  } = {}
 ) {
-  const { playerDeparture = false, draftOrder = false, footyinfoBoard = false } = options;
+  const { playerDeparture = false, draftOrder = false, footyinfoBidMatch = false } = options;
+  const footyinfoBoard = options.footyinfoBoard === true || footyinfoBidMatch;
   // The exact reviewed 2024 pre-draft order page (issue 853); its claims are observed at its as-of date.
   const orderPage = reviewedOfficialAflDraftOrderPages(2024)[0]!;
   const orderEffectiveAt = `${orderPage.asOf}T00:00:00.000Z`;
@@ -577,6 +584,36 @@ export async function createRetainedExternalCaptureFixture(
       bid: null,
       note: null,
     };
+    // A bid-match board (issue 789): another club bid on pick 1 and the holder matched it with its
+    // pick 30 from the origin club. The bidding club appears nowhere else on the board.
+    const bid = {
+      club: { nativeId: 'BID', recordedName: 'Bidding Club' },
+      basis: 'father_son' as const,
+    };
+    const bidMatch = {
+      kind: 'draft_board_bid_match' as const,
+      draftYear: 2024,
+      draftType: 'national' as const,
+      nativePickId: '101',
+      selectionNumber: 1,
+      roundNumber: 1,
+      club,
+      player,
+      bid,
+      points: 2000,
+      pointsUsed: 400,
+      consumedPicks: [
+        {
+          nativePickId: '130',
+          label: 'R2 (ORG) - Pick 30',
+          originalNumber: 30,
+          originalClubCode: 'ORG',
+          holdingClubCode: 'SYN',
+          pointsUsed: 400,
+        },
+      ],
+      leftoverPicks: [],
+    };
     return [
       {
         kind: 'draft_selection',
@@ -587,7 +624,14 @@ export async function createRetainedExternalCaptureFixture(
         player,
         selectedByClub: club,
       },
-      { ...boardPick, recordedPickNumber: 1, status: 'selected', player, points: 2000 },
+      {
+        ...boardPick,
+        recordedPickNumber: 1,
+        status: 'selected',
+        player,
+        points: 2000,
+        ...(footyinfoBidMatch ? { routeLabel: 'matched_bid' as const, bid } : {}),
+      },
       {
         ...boardPick,
         recordedPickNumber: null,
@@ -596,6 +640,7 @@ export async function createRetainedExternalCaptureFixture(
         points: 1500,
       },
       { ...boardPick, recordedPickNumber: null, status: 'removed', club: holder, points: null },
+      ...(footyinfoBidMatch ? [bidMatch] : []),
     ];
   }
   const sourceArtifact = createAflTradeByteArtifactRef(bytes, 'text/html', request.capturedAt);
