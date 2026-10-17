@@ -63,11 +63,11 @@ export class DraftRoomStore {
   }
 
   private partDataKey(draftId: string) {
-    return `draftroom:${draftId}:participants:data`;
+    return `${prefix()}:${draftId}:participants:data`;
   }
 
   private readyKey(draftId: string) {
-    return `draftroom:${draftId}:ready`;
+    return `${prefix()}:${draftId}:ready`;
   }
 
   async getRoom(draftId: string): Promise<DraftRoomState | null> {
