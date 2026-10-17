@@ -1,9 +1,9 @@
 # AFL trade value-line method
 
 Status: proposed 2026-10-17 for owner approval (statlyaus/Statly#789). It replaces the realized grade as a single
-number. Grade rules v14 to v18, which add pick projections into realized value, are retired once this is
-built. Every decision marked **Owner** was given by the owner on 2026-10-17. Every one marked
-**Proposed** is a recommendation that this document asks the owner to approve.
+number and the traded-on-return valuation. Grade rules v11 and v13 to v18 are retired once this is built.
+Every decision marked **Owner** was given by the owner on 2026-10-17; merging this document approves it as a
+whole.
 
 ## What the product answers
 
@@ -76,15 +76,48 @@ to 1 and the slot or age prior fades.
     nominee's line from the bid onward.
   - **The nominee pick:** it is valued at the slot where the bid landed. That is the inherent value of the
     father-son or academy pick.
-- **Pick traded on before use (Proposed):** realized at the onward trade, the same way. The pick takes its
-  share of what its club got back, and follows those assets' value lines from then on.
+- **Compensation and concession picks (Owner):** valued like any pick, at the slot where it was used, then
+  following the player. A free-agency compensation pick is also linked to the player whose departure earned
+  it, so the chain view shows "lost player P, compensated with pick N, which became player Q". A concession
+  pick (for example Gold Coast's 2020 mid-first-round pick) is linked to its concession. Grade rule v7's
+  custody chain finds the slot.
+- **Rookie and mid-season drafts (Owner):** out of scope, because their picks cannot be traded. Checked against
+  batch twenty-nine: none of its 879 traded picks is a rookie or mid-season pick. Its one "MID" label is Gold
+  Coast's national-draft concession.
 
-## Bundles (Proposed)
+## Each trade is zero-sum; chains are linked (Owner)
 
-When a club gives several assets for one return, each given asset's share of the return is split at each
-checkpoint by the given assets' own values at that checkpoint. Once those values are known, this is the same
-split by realized value as today. Before then it uses their expected values, which are now in the same unit,
-so no projection is mixed into a measured figure.
+Each trade is assessed on its own. Every asset has **one intrinsic value line**, and it is the same in every
+trade it passes through:
+
+- **A player:** his first stint at the club that receives him in that trade.
+- **A pick:** what the pick itself became. That is its slot expectation, then the drafted player's first
+  stint at the club that used it (or its share of a nominee, for a matched bid), whoever ends up holding it.
+
+So in any one trade, what one club gives is exactly what the other receives. The trade is zero-sum, and a
+later trade never changes an earlier one's assessment.
+
+**Chains.** When a club trades an asset on, the trades that share it are linked into a **chain view**:
+
+- **Example.** Club B gets an orange from Club A for an apple, then trades the orange to Club C for seven
+  pears.
+- **Trade 1** (A and B): orange against apple. A's result stands on its own, whatever B later does with the
+  orange.
+- **Trade 2** (B and C): seven pears against orange.
+- **Chain view for B:** trade 1 plus trade 2. The orange appears once received and once given, so it
+  cancels, and the chain shows B turned the apple into seven pears.
+- **What the chain does not do:** it does not take anything away from A's result.
+
+This replaces "a traded-on pick is worth its club's return", and with it the bundle splits that rule needed
+(rules v1, v3, v11, and v13 to v18). Chain totals are now simply additive. Each club's chain view lists its
+linked trades, with each trade's own result and the chain's sum.
+
+## Bundles (Owner)
+
+Because every asset carries its own value line, a trade's result for a club is just the sum of the value
+lines it received minus those it gave up. No return has to be split among the given assets. Where a split is
+still shown (for example a chain view that attributes a return to the assets that bought it), it uses each
+asset's value at the same checkpoint.
 
 ## Data needed
 
@@ -116,18 +149,20 @@ so no projection is mixed into a measured figure.
   - v16 and v18 value matched-bid picks at their projection inside the realized return.
   - v17's round-position proxy feeds v18.
   - Both break the 2026-10-08 rule that a projection never feeds the realized value or the bundle split.
+- **A traded-on pick valued at its club's return** (rules v1, v3, v11, v13): replaced by intrinsic value lines
+  and the chain view.
 - **The realized grade as a single number:** replaced by the value line at the latest checkpoint.
 - **Whole-career DPVC as the pick prior:** replaced by the first-stint pick curve. DPVC can still be shown for
   reference.
 
-## Open questions for the owner
+## Owner answers, 2026-10-17
 
-1. **Pick traded on before use:** realize it at the onward trade, as matched bids are (Proposed above)?
-2. **Bundles:** split by each given asset's value at the same checkpoint (Proposed above)?
-3. **Rookie and mid-season drafts:** same method on their own pick curves, or out of scope for the first
-   release?
-4. **Compensation and concession picks** (free agency, the Gold Coast and GWS concessions): value at the slot
-   they were used at, like any pick?
+1. **Pick traded on before use:** each trade is zero-sum on intrinsic value lines, and linked trades are
+   shown as a chain ([above](#each-trade-is-zero-sum-chains-are-linked-owner)).
+2. **Bundles:** by value at each checkpoint, where a split is still shown at all.
+3. **Rookie and mid-season drafts:** their picks cannot be traded, so they are out of scope (the data check
+   agrees).
+4. **Compensation picks:** linked to the slot and to the player whose departure earned them.
 
 ## Implementation order
 
@@ -137,5 +172,7 @@ so no projection is mixed into a measured figure.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share.
-5. **Retire the old rules:** retire grade rules v14 to v18 and regrade.
-6. **Preview:** a value line per club per trade over time.
+5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
+   bundle split, then regrade on intrinsic value lines.
+6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
+7. **Preview:** a value line per club per trade over time, with each club's chains.
