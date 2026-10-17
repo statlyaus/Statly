@@ -130,13 +130,13 @@ asset's value at the same checkpoint.
 
 ## Data needed
 
-| Input                                              | Source                                                                                                                               | Status                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                       | In the outcomes database   |
-| Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs                                                                                     | Stored; needs a read model |
-| Season PAV and games before 2019                   | HPN's published PAV (**Owner:** fetched on the grading VM only, stored as immutable evidence, reviewed before use, as for Footyinfo) | To import                  |
-| Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                          | In place                   |
-| AFL draft points table, bid points, matching picks | Official AFL bid-matching records                                                                                                    | To source                  |
+| Input                                              | Source                                                                                                                                                                      | Status                     |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                                                              | In the outcomes database   |
+| Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs                                                                                                                            | Stored; needs a read model |
+| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only) | Being calculated           |
+| Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                                                                 | In place                   |
+| AFL draft points table, bid points, matching picks | Official AFL bid-matching records                                                                                                                                           | To source                  |
 
 ## Fitting and validation
 
@@ -175,8 +175,10 @@ asset's value at the same checkpoint.
 
 ## Implementation order
 
-1. **Pre-2019 data:** import HPN PAV and games from before 2019 on the VM, and add the games read model for
-   2019 onward.
+1. **Pre-2019 data:** calculate HPN PAV and games for 2011 to 2018 on the VM with the same governed season
+   pipeline as 2019 to 2026, cross-checked against HPN's published values, and add the games read model
+   for 2019 onward. Seasons before 2011 have no second statistics source, so they fail closed and stay
+   out of the fit window.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
