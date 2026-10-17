@@ -76,11 +76,27 @@ export const DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION = 'draftguru-national
 export const DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION =
   'draftguru-national-year-page/v3';
 
+/**
+ * v4 reads the 2011 to 2016 pages only (issue 789). On top of v3 it reviews three older forms: the
+ * `Mini-Draft` pathway label (counted and dropped, never a national pick), `Zone(<club>)` naming the
+ * selecting club (the Gold Coast, GWS and Brisbane zone selections, read as `academy`), and
+ * `Academy(<club>)` naming another club without ` - Not Matched` (read as `open`: the selecting club
+ * used an ordinary pick, so the academy club did not match).
+ */
+export const DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION =
+  'draftguru-national-year-page/v4';
+
+/** The page years parser v4 is reviewed for; every other year stays on v3. */
+export const DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS: readonly number[] = [
+  2011, 2012, 2013, 2014, 2015, 2016,
+];
+
 /** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
 export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
   return (
     parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
-    parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION
   );
 }
 

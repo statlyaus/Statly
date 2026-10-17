@@ -231,6 +231,117 @@ describe('Draftguru event year provenance', () => {
     });
   });
 
+  describe('national-year parser v4 legacy forms (2011 to 2016 pages)', () => {
+    const V4 = 'draftguru-national-year-page/v4';
+    // The reduced 2020 table read as a 2016 page: v4 is reviewed for page years 2011 to 2016 only.
+    const parseNational = (body = html, parserVersion = V4, draftYear = 2016) =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: {
+          ...capture,
+          sourceUrl: `https://www.draftguru.com.au/years/${draftYear}`,
+          parserVersion,
+        },
+        draftYear,
+      });
+    // Pick 1 is Jamarra Ugle-Hagan, selected by the Western Bulldogs.
+    const firstAcademyCell = /<td class="category">Academy \(NG\)\n<\/td>/;
+    const withPickOneCell = (label: string) => {
+      const body = html.replace(firstAcademyCell, `<td class="category">${label}</td>`);
+      expect(body).not.toBe(html);
+      return body;
+    };
+    const pickOne = (result: ReturnType<typeof parseNational>) =>
+      result.evidence.find(
+        ({ content }) =>
+          content.claim.kind === 'draft_selection' && content.claim.selectionNumber === 1
+      )?.content.claim;
+    // A Gold Coast mini-draft row as the 2011 and 2012 pages list it.
+    const withMiniDraftRow = () => {
+      const $ = load(html);
+      const national = $('tbody tr')
+        .filter((_i, tr) => $(tr).find('td.draft').text().trim() === 'National')
+        .first();
+      const mini = national.clone();
+      mini.find('td.draft').text('Mini-Draft');
+      mini.find('td.category').eq(1).text('');
+      national.before(mini);
+      return $.html();
+    };
+
+    it('emits exactly the v3 claims on a page with only the v3 forms', () => {
+      const v3 = parseNational(html, 'draftguru-national-year-page/v3');
+      const v4 = parseNational();
+      expect(v4.issues).toEqual([]);
+      expect(v4.evidence.map(({ content }) => content.claim)).toEqual(
+        v3.evidence.map(({ content }) => content.claim)
+      );
+    });
+
+    it.each([
+      // A zone selection by the zone club (Gold Coast, GWS and Brisbane, 2011 to 2013).
+      ['Zone(Western Bulldogs)', 'academy'],
+      // Another club's academy player taken with an ordinary pick, unannotated on these pages.
+      ['Academy(Brisbane)', 'open'],
+      ['Academy (NG)(St Kilda)', 'open'],
+      // The v3 forms keep their reading.
+      ['Academy(Western Bulldogs)', 'academy'],
+      ['Academy(Gold Coast - Not Matched)', 'open'],
+      ['Father-Son(Chris Waterman)', 'father_son'],
+    ])('reads %s on a Western Bulldogs selection as %s', (label, expected) => {
+      const result = parseNational(withPickOneCell(label));
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(pickOne(result)).toMatchObject({ accessCategory: expected, draftYear: 2016 });
+    });
+
+    it.each([
+      // A zone naming another club is not a reviewed form.
+      'Zone(Brisbane)',
+      'Zone()',
+      'Zone(western bulldogs)',
+      'Zone (Western Bulldogs)',
+      // The selecting club declining its own academy bid stays contradictory.
+      'Academy(Western Bulldogs - Not Matched)',
+      'Academy(Brisbane - Matched)',
+    ])('quarantines %s on a Western Bulldogs selection', (label) => {
+      expect(parseNational(withPickOneCell(label)).issues).toContainEqual(
+        expect.objectContaining({ code: 'unsupported_row', detail: expect.stringContaining(label) })
+      );
+    });
+
+    it('counts and drops mini-draft rows instead of reading them as national picks', () => {
+      const result = parseNational(withMiniDraftRow());
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(result.scopeSummary.excludedByPathway).toMatchObject({ 'Mini-Draft': 1 });
+    });
+
+    it('keeps v3 refusing the legacy forms and the mini-draft label', () => {
+      const v3 = 'draftguru-national-year-page/v3';
+      for (const label of ['Zone(Western Bulldogs)', 'Academy(Brisbane)']) {
+        expect(parseNational(withPickOneCell(label), v3).issues).toContainEqual(
+          expect.objectContaining({ code: 'unsupported_row' })
+        );
+      }
+      const mini = parseNational(withMiniDraftRow(), v3);
+      expect(mini.evidence).toEqual([]);
+      expect(mini.issues).toContainEqual(
+        expect.objectContaining({ detail: 'Unreviewed pathway label in national-only capture.' })
+      );
+    });
+
+    it.each([2010, 2017, 2020])('refuses a %s page under v4', (year) => {
+      const result = parseNational(html, V4, year);
+      expect(result.evidence).toEqual([]);
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('2011 to 2016 pages only'),
+        })
+      );
+    });
+  });
+
   it.each([
     [2020, 'https://example.com/years/2020'],
     [2020, 'https://www.draftguru.com.au/years/2021'],
