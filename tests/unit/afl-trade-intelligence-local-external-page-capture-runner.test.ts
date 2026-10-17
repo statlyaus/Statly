@@ -330,6 +330,50 @@ function recordedNational(season: number, clientVersion?: string): RecordedAutho
 }
 
 describe('recorded Draftguru national-year authority', () => {
+  it.each([2011, 2013, 2016])(
+    'loads %s from its parser-v4 decision and builds a v4 capture request',
+    async (season) => {
+      const record = recordedNational(season);
+      expect(record.proposal.content.decisionKey).toBe(
+        `draftguru-national-year-page-issue579-private-${season}-parser-v4`
+      );
+      const loaded = await loadRecordedLocalCaptureAuthority(
+        ledgerOf(record),
+        'draftguru-national-year-page',
+        season,
+        evaluatedAt
+      );
+      expect(loaded.decisionId).toBe(record.decision.decisionId);
+      const [target] = createLocalDraftguruNationalYearTargets([season]);
+      const command = createDraftguruNationalYearCaptureCommand(record, {
+        target: target!,
+        capturedAt: evaluatedAt,
+        maximumBytes: 1024,
+      });
+      expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+      expect(command.request.parserVersion).toBe('draftguru-national-year-page/v4');
+      expect(
+        evaluateAflTradeGate0AAgainstDecision(
+          record.decision,
+          record.sourceRights,
+          command.gateRequest
+        )
+      ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+    }
+  );
+
+  it('never falls back from a 2011 to 2016 season to its parser-v3 decision', async () => {
+    const record = recordedNational(2015, 'draftguru-national-year-page/v3');
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledgerOf(record),
+        'draftguru-national-year-page',
+        2015,
+        evaluatedAt
+      )
+    ).rejects.toThrow();
+  });
+
   it('loads the per-season decision recorded under the issue579 key', async () => {
     const record = recordedNational(2024);
     expect(record.proposal.content.decisionKey).toBe(

@@ -1,4 +1,8 @@
-import { DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION } from '../source/externalDraftTradeEvidenceContracts';
+import {
+  DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS,
+  DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
+} from '../source/externalDraftTradeEvidenceContracts';
 import { sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type { AflTradeExternalProviderIngestionCommand } from '../source/externalDraftTradeProviderIngestion';
 import {
@@ -17,10 +21,22 @@ export const DRAFTGURU_NATIONAL_YEAR_V1_PARSER_VERSION = 'draftguru-national-yea
 
 /**
  * v2 added each selection's access category (open, academy or father-son) from the year page; v3 also
- * reads the 2019 club-qualified academy forms. New captures use v3; v2 captures stay valid.
+ * reads the 2019 club-qualified academy forms. New captures use v3 for 2017 onward; v2 captures stay
+ * valid.
  */
 export const DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION =
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION;
+
+/**
+ * The parser a new capture of one season uses: v4 for the 2011 to 2016 pages, whose older forms
+ * (mini-draft rows, zone selections, unannotated academy players taken by another club) v3 refuses
+ * (issue 789); v3 for every other season. A season's v3 capture stays valid as recorded.
+ */
+export function draftguruNationalYearParserVersion(season: number): string {
+  return DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(season)
+    ? DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION
+    : DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION;
+}
 
 /** The recorded v1 field boundary for Draftguru national-year selections. */
 export const DRAFTGURU_NATIONAL_YEAR_V1_FIELDS = [
@@ -42,12 +58,12 @@ export const DRAFTGURU_NATIONAL_YEAR_FIELDS = [
 /**
  * The owner records one narrow decision per season for this capability. v1 used
  * `draftguru-national-year-page-issue579-private-<season>`; each later parser has its own per-season
- * decision with a `-parser-v<n>` suffix (v2: `-parser-v2`, v3: `-parser-v3`), so earlier decisions and
- * their captures stay valid as recorded. The runner never falls back to an earlier parser or to a
+ * decision with a `-parser-v<n>` suffix (v2: `-parser-v2`, v3: `-parser-v3`, v4: `-parser-v4`, 2011 to
+ * 2016 only), so earlier decisions and their captures stay valid as recorded. The runner never falls back to an earlier parser or to a
  * combined or neighbouring season's decision.
  */
 export function draftguruNationalYearDecisionKey(season: number): string {
-  const parser = /\/(v[1-9]\d*)$/.exec(DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION)![1]!;
+  const parser = /\/(v[1-9]\d*)$/.exec(draftguruNationalYearParserVersion(season))![1]!;
   return `${DRAFTGURU_NATIONAL_YEAR_CAPABILITY}-issue579-private-${season}-parser-${parser}`;
 }
 
@@ -112,7 +128,7 @@ export function createDraftguruNationalYearCaptureCommand(
       capturedAt: input.capturedAt,
       // Draftguru records no selection instant, so each claim is effective as observed.
       effectiveAt: input.capturedAt,
-      parserVersion: DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+      parserVersion: draftguruNationalYearParserVersion(input.target.season),
       fieldManifestSha256: sha256AflTradeCanonicalJson(rights.fields),
       maximumBytes: input.maximumBytes,
     },
