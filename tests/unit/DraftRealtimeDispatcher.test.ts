@@ -155,6 +155,18 @@ describe('DraftRealtimeDispatcher canonical clock deltas', () => {
     });
   });
 
+  it('sends a draft event to both draft rooms in one broadcast', async () => {
+    const dispatcher = new DraftRealtimeDispatcher();
+    const { to, emit } = attachSocketRecorder(dispatcher);
+
+    await dispatcher.publishDraftEvent('draft-1', 'draft:paused');
+
+    expect(to).toHaveBeenCalledWith(['draft-1', 'draft:draft-1']);
+    expect(to).not.toHaveBeenCalledWith('draft-1');
+    expect(to).not.toHaveBeenCalledWith('draft:draft-1');
+    expect(emit).toHaveBeenCalled();
+  });
+
   it('retries subscription startup after a transient Redis failure', async () => {
     const dispatcher = new DraftRealtimeDispatcher();
     draftPubSub.start

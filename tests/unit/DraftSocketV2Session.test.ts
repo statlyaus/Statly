@@ -210,6 +210,26 @@ describe('DraftSocketV2Session', () => {
     expect(harness.session.getActive()).toMatchObject({ draftId, generation: 2 });
   });
 
+  it('releases a reservation that a join made after it was superseded', async () => {
+    const harness = makeHarness();
+    const reservation = deferred<{ accepted: boolean; count: number }>();
+    harness.rooms.addParticipantIfUnderLimit.mockImplementationOnce(() => reservation.promise);
+    const acknowledgements: DraftRealtimeJoinAck[] = [];
+
+    const joining = harness.session.join({ draftId, generation: 1 }, (ack) =>
+      acknowledgements.push(ack)
+    );
+    await vi.waitFor(() => {
+      expect(harness.rooms.addParticipantIfUnderLimit).toHaveBeenCalledTimes(1);
+    });
+    const leaving = harness.session.leave({ draftId, generation: 1 });
+    reservation.resolve({ accepted: true, count: 1 });
+    await Promise.all([joining, leaving]);
+
+    expect(acknowledgements).toMatchObject([{ ok: false, code: 'SUPERSEDED', generation: 1 }]);
+    expect(harness.rooms.removeParticipant).toHaveBeenCalledWith(draftId, 'socket-1');
+  });
+
   it('never removes a shared same-draft reservation when a generation is superseded', async () => {
     const harness = makeHarness();
     await harness.session.join({ draftId, generation: 1 }, () => undefined);
