@@ -17,6 +17,7 @@ import {
   ingestAuthorizedAflTradeExternalPage,
   type AflTradeExternalProviderIngestionDependencies,
   validateAflTradeExternalCaptureScope,
+  validateAflTradeRetainedCaptureScope,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { PostgresAflTradeExternalCaptureRegistry } from '@/server/aflTradeIntelligence/source/postgresExternalCaptureRegistry';
@@ -798,7 +799,7 @@ describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
       capabilityId: 'footyinfo-national-draft-board',
       anchorSeasonYear: 2024,
       sourceUrl: 'https://www.footyinfo.com/draft/2024',
-      parserVersion: 'footyinfo-draft-board-parser/v1',
+      parserVersion: 'footyinfo-draft-board-parser/v2',
       effectiveAt: request.capturedAt,
       ...overrides,
     }) as Parameters<typeof validateAflTradeExternalCaptureScope>[0];
@@ -817,12 +818,24 @@ describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
     ['a query', { sourceUrl: 'https://www.footyinfo.com/draft/2024?hide=0' }],
     ['another provider', { provider: 'draftguru' as const }],
     ['another pathway', { draftPathway: 'rookie' as const }],
-    ['another parser', { parserVersion: 'footyinfo-draft-board-parser/v2' }],
+    ['the retired v1 parser', { parserVersion: 'footyinfo-draft-board-parser/v1' }],
+    ['another parser', { parserVersion: 'footyinfo-draft-board-parser/v3' }],
     ['an effective instant other than capture', { effectiveAt: '2024-11-20T00:00:00.000Z' }],
   ])('refuses %s', (_label, overrides) => {
     expect(() => validateAflTradeExternalCaptureScope(board(overrides))).toThrow(
       /do not exactly match/
     );
+  });
+
+  it('keeps a retained v1 board capture valid as recorded, but no other parser', () => {
+    const v1 = board({ parserVersion: 'footyinfo-draft-board-parser/v1' });
+    expect(() => validateAflTradeRetainedCaptureScope(v1)).not.toThrow();
+    expect(() => validateAflTradeRetainedCaptureScope(board({}))).not.toThrow();
+    expect(() =>
+      validateAflTradeRetainedCaptureScope(
+        board({ parserVersion: 'footyinfo-draft-board-parser/v3' })
+      )
+    ).toThrow(/do not exactly match/);
   });
 
   it('refuses a Footyinfo provider under another capability', () => {

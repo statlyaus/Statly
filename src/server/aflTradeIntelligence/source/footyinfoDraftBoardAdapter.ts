@@ -10,9 +10,25 @@ import {
   type AflTradeExternalEvidenceContent,
   type AflTradeExternalEvidenceEnvelope,
 } from './externalDraftTradeEvidenceContracts';
+import { FOOTYINFO_BID_BASIS, readFootyinfoBoardBidMatches } from './footyinfoDraftBoardBidMatches';
 import { reviewedFootyinfoDraftBoardSeason } from './footyinfoDraftBoardSourceScope';
 
-export const FOOTYINFO_DRAFT_BOARD_PARSER_VERSION = 'footyinfo-draft-board-parser/v1';
+/** v1 (issue 853): the board picks and selections. Its captures replay exactly as recorded. */
+export const FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION = 'footyinfo-draft-board-parser/v1';
+
+/**
+ * v2 (issue 789) emits, on a page it accepts, exactly v1's claims and rows (ordinals and keys), then
+ * one `draft_board_bid_match` per matched bid: its points and the picks spent matching it. It checks
+ * every pick's bid fields, so it can refuse a page v1 accepted. The version every new capture names.
+ */
+export const FOOTYINFO_DRAFT_BOARD_PARSER_VERSION = 'footyinfo-draft-board-parser/v2';
+
+/** v2 adds the matched bids; v1 replays as recorded; any other version is refused, not read as v1. */
+function recordsBidMatches(parserVersion: string): boolean {
+  if (parserVersion === FOOTYINFO_DRAFT_BOARD_PARSER_VERSION) return true;
+  if (parserVersion === FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION) return false;
+  throw new TypeError('Footyinfo board capture names no reviewed parser version.');
+}
 
 type SourceCapture = AflTradeExternalEvidenceContent['capture'];
 type Claim = AflTradeExternalEvidenceContent['claim'];
@@ -94,76 +110,84 @@ export function readFootyinfoSerializedLiteral(
     }
     return fail('Unterminated string');
   };
+  const readKey = (): string => {
+    if (text[index] === '"') return readString();
+    const key =
+      /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(index, index + 80))?.[0] ?? fail('Expected a key');
+    index += key.length;
+    return key;
+  };
+  const readObject = (): Record<string, unknown> => {
+    index += 1;
+    const object: Record<string, unknown> = {};
+    while (text[index] !== '}') {
+      const key = readKey();
+      if (Object.hasOwn(object, key)) fail(`Duplicate key ${key}`);
+      expect(':');
+      object[key] = readValue();
+      if (text[index] === ',') index += 1;
+      else if (text[index] !== '}') fail('Expected , or }');
+    }
+    index += 1;
+    return object;
+  };
+  const readArray = (): unknown[] => {
+    index += 1;
+    const array: unknown[] = [];
+    while (text[index] !== ']') {
+      array.push(readValue());
+      if (text[index] === ',') index += 1;
+      else if (text[index] !== ']') fail('Expected , or ]');
+    }
+    index += 1;
+    return array;
+  };
+  const KEYWORDS: ReadonlyArray<[string, unknown]> = [
+    ['!0', true],
+    ['!1', false],
+    ['null', null],
+    ['void 0', undefined],
+  ];
+  const readScalar = (): unknown => {
+    if (text[index] === '"') return readString();
+    const keyword = KEYWORDS.find(([token]) => text.startsWith(token, index));
+    if (keyword !== undefined) {
+      index += keyword[0].length;
+      return keyword[1];
+    }
+    const number = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?/.exec(text.slice(index, index + 40));
+    if (!number) fail('Unsupported value');
+    index += number![0].length;
+    return Number(number![0]);
+  };
+  /**
+   * A `$R[n]` prefix: a back-reference to a completed slot (`{ reference }`), an assignment to a new
+   * slot (`{ assigns }`), or neither (`null`).
+   */
+  const readSlot = (): { reference: unknown } | { assigns: number } | null => {
+    const slot = /^\$R\[(\d{1,7})\]/.exec(text.slice(index, index + 12));
+    if (!slot) return null;
+    const slotNumber = Number(slot[1]);
+    index += slot[0].length;
+    if (text[index] !== '=') {
+      if (!slots.has(slotNumber)) fail('Unsupported back-reference');
+      return { reference: slots.get(slotNumber) };
+    }
+    if (slots.has(slotNumber)) fail(`Slot ${slotNumber} reassigned`);
+    index += 1;
+    return { assigns: slotNumber };
+  };
   const readValue = (): unknown => {
     depth += 1;
     if (depth > 64) fail('Nesting too deep');
-    const slot = /^\$R\[(\d{1,7})\]/.exec(text.slice(index, index + 12));
-    let assigns: number | null = null;
-    if (slot) {
-      const slotNumber = Number(slot[1]);
-      index += slot[0].length;
-      if (text[index] !== '=') {
-        if (!slots.has(slotNumber)) fail('Unsupported back-reference');
-        depth -= 1;
-        return slots.get(slotNumber);
-      }
-      if (slots.has(slotNumber)) fail(`Slot ${slotNumber} reassigned`);
-      assigns = slotNumber;
-      index += 1;
+    const slot = readSlot();
+    if (slot !== null && 'reference' in slot) {
+      depth -= 1;
+      return slot.reference;
     }
-    let value: unknown;
     const char = text[index];
-    if (char === '{') {
-      index += 1;
-      const object: Record<string, unknown> = {};
-      while (text[index] !== '}') {
-        let key: string;
-        if (text[index] === '"') {
-          key = readString();
-        } else {
-          key =
-            /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(index, index + 80))?.[0] ??
-            fail('Expected a key');
-          index += key.length;
-        }
-        if (Object.hasOwn(object, key)) fail(`Duplicate key ${key}`);
-        expect(':');
-        object[key] = readValue();
-        if (text[index] === ',') index += 1;
-        else if (text[index] !== '}') fail('Expected , or }');
-      }
-      index += 1;
-      value = object;
-    } else if (char === '[') {
-      index += 1;
-      const array: unknown[] = [];
-      while (text[index] !== ']') {
-        array.push(readValue());
-        if (text[index] === ',') index += 1;
-        else if (text[index] !== ']') fail('Expected , or ]');
-      }
-      index += 1;
-      value = array;
-    } else if (char === '"') {
-      value = readString();
-    } else if (text.startsWith('!0', index) || text.startsWith('!1', index)) {
-      value = text[index + 1] === '0';
-      index += 2;
-    } else if (text.startsWith('null', index)) {
-      value = null;
-      index += 4;
-    } else if (text.startsWith('void 0', index)) {
-      value = undefined;
-      index += 6;
-    } else {
-      const number = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?/.exec(
-        text.slice(index, index + 40)
-      );
-      if (!number) fail('Unsupported value');
-      value = Number(number![0]);
-      index += number![0].length;
-    }
-    if (assigns !== null) slots.set(assigns, value);
+    const value = char === '{' ? readObject() : char === '[' ? readArray() : readScalar();
+    if (slot !== null) slots.set(slot.assigns, value);
     depth -= 1;
     return value;
   };
@@ -219,11 +243,7 @@ const ROUTE_LABEL_TEXT = {
   special_assistance: 'Special assistance',
   leftover_points: 'Leftover points',
 } as const;
-const BID_BASIS = {
-  father_son: 'father_son',
-  academy_club: 'academy',
-  academy_nga: 'next_generation_academy',
-} as const;
+const BID_BASIS = FOOTYINFO_BID_BASIS;
 const HEADERS = ['Pick', 'Club', 'Player', 'Rtg', 'Age', 'Ht', 'From', 'Route', 'Pts', 'Note'];
 
 function normalize(value: string): string {
@@ -243,7 +263,8 @@ function club(value: z.infer<typeof team>) {
  * selection must also appear in the page's rendered table with the same number, club, player,
  * route, points and note, or nothing is emitted. Each selected, passed or removed pick is one
  * `draft_board_pick`; each selection is also a `draft_selection`. Picks the board lists as points
- * used to match a bid are not board rows and are not emitted.
+ * used to match a bid are not board rows and are not emitted as board picks; a v2 capture states
+ * them on the matched bid they were spent on (`draft_board_bid_match`, after every v1 claim).
  */
 export function parseFootyinfoDraftBoard(
   html: string,
@@ -252,6 +273,7 @@ export function parseFootyinfoDraftBoard(
   if (reviewedFootyinfoDraftBoardSeason(input.capture.sourceUrl) !== input.draftYear) {
     throw new TypeError('Footyinfo board URL is not the reviewed page of this draft year.');
   }
+  const withBidMatches = recordsBidMatches(input.capture.parserVersion);
   const invalid = (detail: string): FootyinfoDraftBoardResult => ({
     evidence: [],
     issues: [{ code: 'invalid_page', sourceKey: String(input.draftYear), detail }],
@@ -442,6 +464,12 @@ export function parseFootyinfoDraftBoard(
   }
   if (selected.size !== tableRows.size || selected.size === 0) {
     return invalid('The board table and the board data do not list the same selections.');
+  }
+  // Only a v2 capture's recorded rights admit the bid fields, so a v1 capture replays exactly.
+  if (withBidMatches) {
+    const bidMatches = readFootyinfoBoardBidMatches(loader.content.picks, input.draftYear);
+    if ('error' in bidMatches) return invalid(bidMatches.error);
+    claims.push(...bidMatches.claims);
   }
   try {
     return {
