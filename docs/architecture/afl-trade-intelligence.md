@@ -3953,6 +3953,120 @@ release, registered-reader availability, hosted operation, or publication readin
 user-facing private screen an unavailable package grade is `—`; detailed blocker and retry causes stay
 in backend evidence.
 
+### Realized trade story read model
+
+`valuation/realizedTradeStory.ts` builds the data for the private realized trade page
+(statlyaus/Statly#789) from a realized-trade-grade batch. `buildAflTradeStory(batch, tradeId, names)`
+is pure: player, club, pick and transfer names are injected, and a missing name or onward leg fails the
+build rather than being guessed. It serves only the local private valuation reader. Realized grades are
+publication-prohibited, so public pages stay on the publication runtime and never read this model.
+
+It returns, for one trade:
+
+- **Trade and sides:** the trade's year and clubs, and for each club what it gave and received, with
+  each asset's label, what it became (player, club and draft slot, not used, or pending) and its value.
+- **Nets:** each club's net on the trade alone, and with its next moves. The linked trades are the
+  trade and, repeatedly, each later trade a club of the trade passed a pick it received into. A club's
+  chain is the linked trades it is a party to. Its chain net is the sum of its nets on those trades, so
+  a pick received and passed on cancels out.
+- **Players:** what each club of the trade ended up with along its chain, then the ones that got away:
+  assets those clubs gave that none of them kept. Each has its club, how it was acquired, its value and
+  whether the stint is still open.
+- **Lineage:** the linked trades plus each later trade an asset of the trade passed through, with
+  per-trade nets, and each asset's hops from its first hop in the batch to its final leg. An earlier hop
+  can name a trade that is not listed.
+- **Events:** always empty for now. An event (for example a premiership) needs a `sourceId` naming a
+  reviewed source record; an unsourced event is never shown.
+
+**Intrinsic value.** Every asset has one value in every trade it passes through. A player is worth his
+first stint at the receiving club. A pick is worth what it became: the drafted player's first-stint PAV
+at the club that used it, whoever ended up holding it. The model follows a traded-on pick through its
+onward trades to its final leg, and a rule v7 special entitlement to its successor pick. It never reads
+the batch's traded-on return value, which belongs to the old return rule. Each trade is therefore
+zero-sum on its known values. A player traded on has a value per receiving club, so unlike a pick he
+does not cancel out along a chain.
+
+**Pending.** A pick spent matching a bid (`pick_not_used_nominee_excluded`) has its value pending: never
+0 and never estimated. A pick with no outcome in evidence yet (`pick_projected_from_order`, whose
+projection the story never uses) and a blocked leg are pending too. Nets leave pending assets out and
+list them instead, each as received or given.
+
+### Asset ledger read model
+
+`valuation/assetLedger.ts` builds one joined-up, private view of every player and every pick
+(statlyaus/Statly#789), so a value such as Sam Darcy's first stint at the Western Bulldogs (father-son
+nominee, 2021) has one home. Matched-bid shares and the private trade pages read from it. Like
+realized grades it is `non_production`, `publicationEligible: false` and `publicationProhibited: true`:
+public pages stay on the publication runtime and never read it.
+
+**Sources.** It invents no authority. Its facts are exactly the realized grader's inputs, loaded by
+the grader's own `loadAflTradeRealizedTradeGradeInputs` ("Realized trade grade (MVP) contract",
+**Inputs**): the finalized non-production candidate (transactions, transfers, draft selections,
+Official AFL pick custody and pick outcomes, which cite Footyinfo board picks by id), the current HPN PAV calculation
+per season from `outcome_hpn_pav_calculation_head` (so a season with duplicate calculations reads only
+its governed head), those calculations' player rows, and the current v3 season spells and v4 reviewed
+arrivals. `development/postgresAssetLedgerLabels.ts` adds labels only: approved `outcome_player`
+display names and `outcome_club` current names. A player with no approved row is listed with a null
+name, never a guessed one. The labels' approved players are also listed, so a registered player with
+no stint in the covered seasons appears with no stints. `createAflTradeAssetLedger(inputs, labels)` is
+pure. The labels are read in a second read-only transaction; they carry no facts.
+
+**Players.** Every approved player and every player the inputs name, each with `stints[]`. A stint is
+the grader's own first stint (`firstStint` in `valuation/realizedTradeGrade.ts`, exported for the
+ledger so the two cannot drift): it starts at the first season in evidence (a season spell or reviewed
+arrival), ends in the first covered season the player appears for another club (that season still
+counts there) or before a later reviewed arrival at the same club, and is open when it never ends inside
+the covered seasons. A season at two clubs therefore ends the stint at each, as it would for the
+grader. Each stint names its club, start and end season (null while open), whether its arrival is
+reviewed, whether it starts in the first covered season with no reviewed arrival, its PAV per season (0
+for a valued season with no PAV row, flagged when the season is not official), the seasons with no
+pinned calculation, its signed `total` and its `value` (the total floored at 0, as a grade leg realizes
+it). A stint with no reviewed arrival may have begun before its first season in evidence. A return to a
+former club is a stint of its own.
+
+**Picks.** Every draft-pick id the candidate records, with its draft year and type, round and
+original club (from the custody rows, then the traded entitlement, then the selection, with any field
+those sources state differently listed in `identityDisagreements`), its custody hops (each trade it
+moved in, with the trade id and the club that held it after, null where the candidate could not resolve
+a club) and its outcome. Ids are never merged: pick-identity repairs are reviewed operations. Hops
+follow the grader's onward trail (`createAflTradePickOnwardTransfers` over the grader's own graded
+trades, with the latest custody holder as tie-break) when that gives one trail through every hop
+(`hopOrder: 'trail'`). Otherwise, including when a hop's trade is one the grader does not grade, they
+are `unordered`: sorted by season, Draftguru pick-trade sequence, date and transfer id. The outcome is
+one of:
+
+- `selected`: the selection, player, drafting club and number, and `firstStint`, the draftee's first
+  stint at the drafting club from the season after the draft.
+- `not_used`: stated not used by a club that took no nominee.
+- `matched_bid`: `status: 'pending'` until bid evidence lands. Never 0 and never estimated. Its
+  `basis` is `board_matched_bid` when Footyinfo board picks record the club's matched bid (listed), or
+  `nominee_count` when the evidence says only that the club took a nominee in that draft, so the pick
+  may have been spent matching the bid.
+- `passed`: a board-stated passed or removed pick.
+- `future`: a pick not yet drafted, with its projected slot in the live Official AFL order (rule v6's
+  lookup over the hop's own entitlement, including the previous draft's order as a proxy), or null
+  when it has none.
+- `unresolved`: with a reason, when the evidence does not say. A not-used pick without access evidence
+  is unresolved, since it may have matched a bid.
+
+A hop's stated outcome decides, as it does for the grader; hops traded on say nothing of the end. On an
+ordered trail only the last hop may state an end, and two terminal hop outcomes are an
+`outcome_conflict`. A stated selection in a draft before the hop's trade is unresolved, as the grader
+refuses it. Without a terminal hop, the pick's usable selection decides. With none, a pick of a draft
+after the latest draft year the candidate holds a selection in is a future pick, and any other is
+unresolved: its draft has been run.
+
+**Lookups.** `stintValue(playerId, clubId, fromSeason)` returns any player's first stint at any club
+from a season, by the same rule and arrival check as the grader (a reviewed arrival in the season
+before `fromSeason` or in it), so a player traded in year Y is `stintValue(player, club, Y + 1)`.
+`pickOutcome(pickId)` returns a ledger pick's outcome, or undefined for an id the ledger does not hold.
+
+**Export.** `npm run outcomes:grading:asset-ledger` (`Scripts/export-asset-ledger.ts`) takes the realized
+grader's arguments and reads the genuine database through `AFL_OUTCOMES_DATABASE_URL` (loopback only, so
+it runs on the grading VM). It seals the ledger under a content address (`asset-ledger:<sha256>`) and
+stores it as `derived_private` in repository `asset-ledgers`. See the operations runbook, "Exporting the
+asset ledger".
+
 ## Immutable publication
 
 Model runs and valuation bundles are not public publications. Publication manifest v2 references the
