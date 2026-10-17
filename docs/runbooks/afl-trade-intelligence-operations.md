@@ -3485,6 +3485,38 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   by `artifactId` and `batchId`, never "the latest".
 - It is private and `non_production`. Nothing here is publishable.
 
+## Exporting the asset ledger
+
+`outcomes:grading:asset-ledger` exports the private asset ledger (statlyaus/Statly#789): every player's
+club stints with PAV per season, and every pick's custody hops and outcome. The rules are in the
+architecture doc's "Asset ledger read model" section. It takes the same arguments as
+`outcomes:grading:realized` and reads the same inputs through the same loader in one read-only
+transaction, plus player and club names in a second one. It refuses wherever the grader's loader
+refuses (see above). It seals the ledger, stores it as `derived_private` in repository `asset-ledgers`
+(written and read back in full, then one custody transaction), and then writes `--out`. Nothing else is
+written. `--dry-run` builds and writes `--out` but stores nothing.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:asset-ledger -- \
+  --candidate <external-reconciliation:...> --method <hpn-pav-method:...> \
+  --seasons 2019-2026 --official-seasons <seasons> --benchmark <hpn-pick-benchmark:...> \
+  --store-id <store-id> --out <absolute-path.json> [--dry-run]
+```
+
+- Run it on statly-grading-1, which holds the genuine database. `AFL_OUTCOMES_DATABASE_URL` must name
+  a loopback database.
+- Every season in `--seasons` needs a finalized current HPN PAV head and season spells, or the loader
+  refuses. Before relying on 2019 and 2020, confirm both exist for them; otherwise export from the
+  first season that has them.
+- `--out` must not exist yet; the ledger is never overwritten. If writing it fails after the store, the
+  error names the stored `artifactId`.
+- Read the printed `summary` before citing a ledger: `playersWithoutName` counts players with no
+  approved canonical row, and `outcomes.unresolved` counts picks whose outcome the evidence does not
+  state. Every `matched_bid` outcome is pending until bid evidence lands.
+- Like a grade batch, each run is a different ledger (its build time and spell cutoff are the run's
+  start). Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark
