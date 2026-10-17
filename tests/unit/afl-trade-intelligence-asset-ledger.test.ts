@@ -664,6 +664,31 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     });
   });
 
+  it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {
+    // On the genuine candidate every matched-bid selection is unresolved: the bid created its pick,
+    // so it has no custody slot. Who was drafted is still stated by every provider.
+    const withNomineeStatus = (status: Selection['status']) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [darcyBid()],
+        draftSelections: candidate.draftSelections!.map((row) =>
+          row.selectionId === 'sel-2' ? { ...row, status } : row
+        ),
+        pickCustody: [
+          ...candidate.pickCustody!,
+          { ...custody('cu-3', PICK_MATCHED, 2021, 34), originalClubId: 'essendon' },
+        ],
+      }));
+    expect(withNomineeStatus('unresolved').pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'shared',
+      nomineePlayerId: 'p2',
+    });
+    expect(withNomineeStatus('disputed').pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'pending',
+      pendingReason: 'nominee_unresolved',
+    });
+  });
+
   it('joins no pick when two pick ids share the slot, and flags a pick two bids list', () => {
     const ambiguous = withCandidate((candidate) => ({
       ...candidate,

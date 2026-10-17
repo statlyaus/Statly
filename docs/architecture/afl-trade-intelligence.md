@@ -4102,9 +4102,12 @@ trade story read model does not read the shares yet; it still shows a matched-bi
   pick with no number (a leftover pick an earlier bid created), an unresolved original club, no such
   row or two pick ids does not join, and a pick no bid lists stays pending. Only a pending matched-bid
   outcome takes a share; every other outcome is unchanged.
-- **The nominee.** The one usable candidate selection at the bid's number in its draft, held by the
+- **The nominee.** The one candidate selection at the bid's number in its draft, held by the
   matching club and naming the player the board's nominee resolves to. A nominee with no reviewed
-  resolution names none, and the bid's picks stay pending.
+  resolution names none, and the bid's picks stay pending. The selection need not have a usable
+  status: a matched-bid selection is `unresolved` when its pick has no custody slot (the bid created
+  it), as all 54 are on candidate `984689fa`, and that says nothing of who was drafted. A `disputed`
+  selection, whose providers disagree on the player or club, names no nominee.
 
 **Lookups.** `stintValue(playerId, clubId, fromSeason)` returns any player's first stint at any club
 from a season, by the same rule and arrival check as the grader (a reviewed arrival in the season
