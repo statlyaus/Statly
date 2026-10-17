@@ -53,7 +53,6 @@ model League {
   drafts                  Draft[]
   draftEvents             DraftEvent[]
   rosterPlayers           LeagueRosterPlayer[]
-  legacyRosters           LeagueRoster[]
   matchups                LeagueMatchup[]
   lineups                 LeagueLineup[]
   matchupScores           LeagueMatchupScore[]
@@ -143,7 +142,6 @@ model LeagueMember {
   preDraftQueues  PreDraftQueue[]
   lobbyActivities LobbyActivity[]
   queueItems      QueueItem[]
-  legacyRosters   LeagueRoster[]
 
   @@index([leagueId])
   @@index([userId])
@@ -592,23 +590,6 @@ model QueueItem {
 }
 
 // League Roster Management
-model LeagueRoster {
-  id         String   @id @default(cuid())
-  leagueId   String
-  memberId   String
-  playerIds  String // JSON array of player IDs
-  benchOrder String? // JSON array for bench ordering
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
-
-  @@unique([leagueId, memberId])
-  @@index([leagueId])
-  @@index([memberId])
-}
-
 model LeagueRosterPlayer {
   id            String   @id @default(cuid())
   leagueId      String
