@@ -114,17 +114,6 @@ function getMembershipMemberId(membership: LeagueMembershipListItem): string {
   return membership.id || `${membership.leagueId}:${membership.userId}`;
 }
 
-function parsePlayerIds(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
 async function loadUserLeagueContexts(userId: string): Promise<UserLeagueContext[]> {
   const contexts = new Map<string, UserLeagueContext>();
   const prismaMemberships = await prisma.leagueMember
@@ -460,22 +449,7 @@ async function loadPrismaOwnerships(input: {
   const missingLeagueIds = input.leagueIds.filter((leagueId) => !ownerByLeagueId.has(leagueId));
   if (missingLeagueIds.length === 0) return ownerByLeagueId;
 
-  const rosterRows = await prisma.leagueRoster
-    .findMany({
-      where: { leagueId: { in: missingLeagueIds } },
-      select: { leagueId: true, memberId: true, playerIds: true },
-    })
-    .catch((error) => {
-      logger.warn('Prisma JSON rosters unavailable for player availability', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    });
-  const playerIdSet = new Set(input.playerIds);
-  const matchingRosterRows = rosterRows.filter((row) =>
-    parsePlayerIds(row.playerIds).some((playerId) => playerIdSet.has(playerId))
-  );
-
+  // Fallback to draft picks for leagues without roster entries
   const draftPicks = await prisma.pick
     .findMany({
       where: {
@@ -495,30 +469,6 @@ async function loadPrismaOwnerships(input: {
       });
       return [];
     });
-
-  const rosterMemberIds = matchingRosterRows.map((row) => row.memberId);
-  const rosterMembers =
-    rosterMemberIds.length > 0
-      ? await prisma.leagueMember
-          .findMany({
-            where: { id: { in: rosterMemberIds } },
-            select: { id: true, userId: true, teamName: true },
-          })
-          .catch(() => [])
-      : [];
-  const memberById = new Map(rosterMembers.map((member) => [member.id, member]));
-
-  for (const row of matchingRosterRows) {
-    if (ownerByLeagueId.has(row.leagueId)) continue;
-    const member = memberById.get(row.memberId);
-    if (!member) continue;
-    ownerByLeagueId.set(row.leagueId, {
-      memberId: row.memberId,
-      userId: member.userId,
-      teamName: member.teamName,
-      isCurrentUser: member.userId === input.userId,
-    });
-  }
 
   for (const pick of draftPicks) {
     const leagueId = pick.draft.leagueId;
