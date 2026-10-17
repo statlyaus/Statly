@@ -804,7 +804,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('draft:backfill', async ({ draftId, since }) => {
+  socket.on('draft:backfill', async (payload?: { draftId?: unknown; since?: unknown }) => {
+    // Read the payload inside the guard: a client that sends nothing must not reject this handler.
+    const draftId = payload?.draftId;
+    const since = payload?.since;
     try {
       if (!draftId || typeof draftId !== 'string') {
         throw new Error('Invalid draftId');
@@ -826,7 +829,9 @@ io.on('connection', (socket) => {
   });
 
   // Leave draft room with cleanup
-  const leaveDraftRoom = async ({ draftId }: { draftId: string }) => {
+  const leaveDraftRoom = async (payload?: { draftId?: unknown }) => {
+    const draftId = payload?.draftId;
+    if (typeof draftId !== 'string' || !draftId) return;
     try {
       logger.info('👋 User leaving draft', { socketId: socket.id, draftId });
 
@@ -916,10 +921,10 @@ io.on('connection', (socket) => {
   });
 
   // The durable draft command boundary and BullMQ worker exclusively own clock progression.
-  socket.on('draft:timer:start', ({ draftId }) => {
+  socket.on('draft:timer:start', (payload?: { draftId?: unknown }) => {
     logger.warn('Rejected client-started draft timer to avoid split-brain state', {
       socketId: socket.id,
-      draftId,
+      draftId: payload?.draftId,
     });
     socket.emit('draft:error', {
       error: 'Direct socket timers are disabled. Use the Prisma-backed draft commands.',
@@ -928,20 +933,20 @@ io.on('connection', (socket) => {
   });
 
   // Handle draft pause/resume
-  socket.on('draft:pause', async ({ draftId }) => {
+  socket.on('draft:pause', async (payload?: { draftId?: unknown }) => {
     logger.warn('Rejected socket-driven draft pause to avoid split-brain state', {
       socketId: socket.id,
-      draftId,
+      draftId: payload?.draftId,
     });
     socket.emit('draft:error', {
       error: 'Direct socket pause is disabled. Use the Prisma-backed draft API.',
     });
   });
 
-  socket.on('draft:resume', async ({ draftId }) => {
+  socket.on('draft:resume', async (payload?: { draftId?: unknown }) => {
     logger.warn('Rejected socket-driven draft resume to avoid split-brain state', {
       socketId: socket.id,
-      draftId,
+      draftId: payload?.draftId,
     });
     socket.emit('draft:error', {
       error: 'Direct socket resume is disabled. Use the Prisma-backed draft API.',
