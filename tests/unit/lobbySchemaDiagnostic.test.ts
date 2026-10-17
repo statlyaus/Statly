@@ -5,7 +5,6 @@ const prismaMocks = vi.hoisted(() => ({
     count: vi.fn(),
     findFirst: vi.fn(),
   },
-  leagueRoster: { count: vi.fn() },
   teamAction: { count: vi.fn() },
   leagueRosterPlayer: { count: vi.fn() },
 }));
@@ -18,7 +17,6 @@ describe('lobby schema diagnostic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMocks.draft.count.mockResolvedValue(4);
-    prismaMocks.leagueRoster.count.mockResolvedValue(3);
     prismaMocks.teamAction.count.mockResolvedValue(2);
     prismaMocks.leagueRosterPlayer.count.mockResolvedValue(66);
     prismaMocks.draft.findFirst.mockResolvedValue({
@@ -37,7 +35,6 @@ describe('lobby schema diagnostic', () => {
       tablesReady: true,
       draftCount: 4,
       tableChecks: {
-        leagueRoster: { ready: true, count: 3 },
         teamAction: { ready: true, count: 2 },
         leagueRosterPlayer: { ready: true, count: 66 },
       },
@@ -58,7 +55,6 @@ describe('lobby schema diagnostic', () => {
       draftCount: 4,
       tableChecks: {
         draft: { ready: true, count: 4 },
-        leagueRoster: { ready: true, count: 3 },
         teamAction: { ready: true, count: 2 },
         leagueRosterPlayer: {
           ready: false,

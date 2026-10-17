@@ -53,24 +53,6 @@ export async function loadAuthorizedLeagueTeamRoster({
   if (!member) return { ok: false, status: 'not-found' };
 
   const players = member.rosterPlayers.map(({ player }) => player);
-  if (players.length > 0) {
-    return {
-      ok: true,
-      roster: {
-        memberId: member.id,
-        teamName: member.teamName,
-        teamLogoUrl: member.teamLogoUrl,
-        players,
-      },
-    };
-  }
-
-  const legacyRoster = await prisma.leagueRoster.findUnique({
-    where: { leagueId_memberId: { leagueId, memberId } },
-    select: { playerIds: true },
-  });
-  const legacyPlayerIds = parseLegacyPlayerIds(legacyRoster?.playerIds);
-  const legacyPlayers = await loadPlayersByIds(legacyPlayerIds);
 
   return {
     ok: true,
@@ -78,43 +60,7 @@ export async function loadAuthorizedLeagueTeamRoster({
       memberId: member.id,
       teamName: member.teamName,
       teamLogoUrl: member.teamLogoUrl,
-      players: legacyPlayers,
+      players,
     },
   };
-}
-
-export function parseLegacyPlayerIds(playerIdsJson: string | undefined): string[] {
-  if (!playerIdsJson) return [];
-
-  try {
-    const parsed = JSON.parse(playerIdsJson);
-    return Array.isArray(parsed)
-      ? [
-          ...new Set(
-            parsed.flatMap((playerId) => {
-              if (typeof playerId !== 'string') return [];
-              const normalizedPlayerId = playerId.trim();
-              return normalizedPlayerId ? [normalizedPlayerId] : [];
-            })
-          ),
-        ]
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-async function loadPlayersByIds(playerIds: readonly string[]): Promise<LeagueTeamRosterPlayer[]> {
-  if (playerIds.length === 0) return [];
-
-  const players = await prisma.player.findMany({
-    where: { id: { in: [...playerIds] } },
-    select: { id: true, name: true, club: true, position: true },
-  });
-  const playersById = new Map(players.map((player) => [player.id, player]));
-
-  return playerIds.flatMap((playerId) => {
-    const player = playersById.get(playerId);
-    return player ? [player] : [];
-  });
 }

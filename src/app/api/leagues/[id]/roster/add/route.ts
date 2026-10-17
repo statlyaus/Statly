@@ -13,18 +13,6 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
-function parsePlayerIds(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
-  if (typeof value !== 'string') return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
@@ -70,30 +58,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (existingOwnership) return errorResponse('Player already owned in this league', 409);
     if (activeWaiverHold) return errorResponse('Player is on waivers', 409);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const roster = await tx.leagueRoster.upsert({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-        create: { leagueId, memberId: member.id, playerIds: JSON.stringify([playerId]) },
-        update: {},
-      });
+    const rosterPlayer = await prisma.leagueRosterPlayer.create({
+      data: {
+        leagueId,
+        memberId: member.id,
+        playerId,
+        acquiredBy: 'FREE_AGENT',
+      },
+    });
 
-      const nextPlayerIds = Array.from(new Set([...parsePlayerIds(roster.playerIds), playerId]));
-
-      await tx.leagueRoster.update({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-        data: { playerIds: JSON.stringify(nextPlayerIds) },
-      });
-
-      await tx.leagueRosterPlayer.create({
-        data: {
-          leagueId,
-          memberId: member.id,
-          playerId,
-          acquiredBy: 'FREE_AGENT',
-        },
-      });
-
-      return { rosterId: roster.id, playerIds: nextPlayerIds };
+    const playerIds = await prisma.leagueRosterPlayer.findMany({
+      where: { leagueId, memberId: member.id },
+      select: { playerId: true },
+      orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
     });
 
     await Promise.allSettled([
@@ -105,8 +82,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return successResponse({
       leagueId,
       playerId,
-      rosterId: result.rosterId,
-      playerIds: result.playerIds,
+      rosterId: rosterPlayer.id,
+      playerIds: playerIds.map((p) => p.playerId),
     });
   } catch (error) {
     logger.error('Failed to add player to roster', {

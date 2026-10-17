@@ -610,17 +610,18 @@ model LeagueRoster {
 }
 
 model LeagueRosterPlayer {
-  id         String   @id @default(cuid())
-  leagueId   String
-  memberId   String
-  draftId    String?
-  pickId     String?
-  playerId   String
-  slot       String?
-  acquiredBy String   @default("DRAFT")
-  acquiredAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  leagueId      String
+  memberId      String
+  draftId       String?
+  pickId        String?
+  playerId      String
+  slot          String?
+  benchPosition Int?
+  acquiredBy    String   @default("DRAFT")
+  acquiredAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
