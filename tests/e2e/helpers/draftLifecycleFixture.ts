@@ -73,11 +73,6 @@ async function deleteExistingFixture(tx: TxClient) {
       ],
     },
   });
-  await tx.leagueRoster.deleteMany({
-    where: {
-      OR: [{ leagueId: DRAFT_LIFECYCLE_FIXTURE.leagueId }, { memberId: { in: MEMBER_IDS } }],
-    },
-  });
   await tx.teamAction.deleteMany({
     where: {
       OR: [

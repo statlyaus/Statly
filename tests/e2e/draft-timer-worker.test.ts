@@ -91,9 +91,6 @@ async function seedLiveTimerFixture() {
           ],
         },
       });
-      await tx.leagueRoster.deleteMany({
-        where: { OR: [{ leagueId: FIXTURE.leagueId }, { memberId: { in: memberIds } }] },
-      });
       await tx.teamAction.deleteMany({
         where: {
           OR: [
