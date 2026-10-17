@@ -187,25 +187,6 @@ async function mergeRosterOwnership(
   }
 }
 
-async function rewriteLegacyRosterDocuments(tx: Prisma.TransactionClient, aliases: AliasMap) {
-  const rows = await tx.leagueRoster.findMany();
-  for (const row of rows) {
-    try {
-      const playerIds = rewriteJsonIdArray(row.playerIds, aliases)!;
-      const benchOrder = rewriteJsonIdArray(row.benchOrder, aliases);
-      if (playerIds !== row.playerIds || benchOrder !== row.benchOrder) {
-        await tx.leagueRoster.update({
-          where: { id: row.id },
-          data: { playerIds, benchOrder },
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to rewrite legacy roster ${row.id}: ${message}`, { cause: error });
-    }
-  }
-}
-
 async function assertNoRelationalReferences(tx: Prisma.TransactionClient, aliasId: string) {
   const counts = await Promise.all([
     tx.pick.count({ where: { playerId: aliasId } }),
@@ -268,14 +249,9 @@ export async function consolidatePlayerIdentities(
         throw new PlayerIdentityConsolidationBlockedError(plan);
       }
 
-      const aliasMap = new Map(
-        plan.mappings.map((mapping) => [mapping.aliasId, mapping.canonicalPlayerId])
-      );
       for (const mapping of plan.mappings) {
         await applyMapping(tx, mapping);
       }
-
-      await rewriteLegacyRosterDocuments(tx, aliasMap);
 
       for (const mapping of plan.mappings) {
         await assertNoRelationalReferences(tx, mapping.aliasId);

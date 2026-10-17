@@ -325,25 +325,8 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
 
     const { leagueId, memberId } = action;
 
-    await prisma.$transaction(async (tx) => {
-      const roster = await tx.leagueRoster.findUnique({
-        where: { leagueId_memberId: { leagueId, memberId } },
-        select: { playerIds: true },
-      });
-
-      const playerIds = parsePlayerIds(roster?.playerIds);
-      const nextPlayerIds = playerIds.filter((id) => id !== playerId);
-
-      await tx.leagueRosterPlayer.deleteMany({
-        where: { leagueId, memberId, playerId },
-      });
-
-      if (roster) {
-        await tx.leagueRoster.update({
-          where: { leagueId_memberId: { leagueId, memberId } },
-          data: { playerIds: JSON.stringify(nextPlayerIds) },
-        });
-      }
+    await prisma.leagueRosterPlayer.deleteMany({
+      where: { leagueId, memberId, playerId },
     });
 
     await new WaiverAvailabilityProjectionService().projectLeague({ leagueId });
@@ -369,14 +352,5 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
       where: { id: actionId },
       data: { status: 'REJECTED', processedAt: new Date() },
     });
-  }
-}
-
-function parsePlayerIds(raw: unknown): string[] {
-  try {
-    const parsed = JSON.parse(String(raw || '[]'));
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
   }
 }
