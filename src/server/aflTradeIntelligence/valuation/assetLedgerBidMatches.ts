@@ -43,13 +43,16 @@ function linkSpentPick(
 }
 
 /**
- * The nominee: the one usable candidate selection at the bid's number, held by the matching club and
- * naming the player the board's nominee resolves to. An unresolved board player names no nominee.
+ * The nominee: the one candidate selection at the bid's number, held by the matching club and naming
+ * the player the board's nominee resolves to. An unresolved board player names no nominee. The
+ * selection's status is not required to be usable: a matched-bid selection is usually `unresolved`
+ * because its pick has no custody slot (the bid created it), which says nothing of who was drafted.
+ * Only a `disputed` selection, whose providers disagree on the player or club, names no nominee.
  */
 function nomineeOf(candidate: Candidate, bid: BidMatchRecord) {
   const selections = (candidate.draftSelections ?? []).filter(
     (selection) =>
-      isAflTradeUsableCustodyStatus(selection.status) &&
+      selection.status !== 'disputed' &&
       selection.draftYear === bid.draftYear &&
       selection.draftType === bid.draftType &&
       selection.selectionNumber === bid.selectionNumber
