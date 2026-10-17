@@ -172,6 +172,32 @@ describe('authoritative lineup timing', () => {
     }
   );
 
+  it('locks a Monday to Wednesday round at its own start, not the previous Thursday', async () => {
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      settings: {
+        ...settings,
+        competitionRulesJson: JSON.stringify({
+          lockPolicy: 'THURSDAY_7PM_AEST',
+          leagueTimeZone: 'Australia/Sydney',
+        }),
+      },
+    });
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2026-04-22T09:30:00.000Z'),
+    });
+    mocks.prisma.leagueMatchup.findFirst.mockResolvedValue(null);
+
+    const context = await loadMemberLineupRoundContext({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      now: new Date('2026-04-01T00:00:00.000Z'),
+    });
+
+    expect(context?.lockAt?.toISOString()).toBe('2026-04-22T09:30:00.000Z');
+  });
+
   it('maps official round match starts to players by canonical club aliases', async () => {
     mocks.getRoundMatchesResult.mockResolvedValue({
       ok: true,

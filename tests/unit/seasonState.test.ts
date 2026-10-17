@@ -198,7 +198,7 @@ describe('getAuthorizedLeagueSeasonState', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.schedule).toMatchObject([
-      { id: 'old-locked-round', status: 'scheduled', current: false },
+      { id: 'old-locked-round', status: 'in_progress', current: false },
       { id: 'current-timed-round', status: 'in_progress', current: true },
     ]);
   });

@@ -45,7 +45,8 @@ function toRoundStatus(
 ): LeagueSeasonStateRoundStatus {
   if (round.status === 'FINAL') return 'final';
   if (round.status === 'NO_MATCHUP') return 'no_matchup';
-  if (current) return 'in_progress';
+  // A locked round has started, even when another round is the current one.
+  if (current || round.status === 'LOCKED') return 'in_progress';
   return 'scheduled';
 }
 
