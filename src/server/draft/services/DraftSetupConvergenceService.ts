@@ -2,12 +2,31 @@ import { DraftDirection, DraftStatus, type Prisma, type PrismaClient } from '@pr
 
 import { normalizeDraftPositionLimits } from '@/lib/draftSettings';
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 
 import { getLeagueDraftOperationalReadiness } from './DraftReadinessService';
 
 type ConvergenceClient = PrismaClient;
+
+// Explicit draft slots are kept, unless an earlier member already holds one. Members without a slot
+// take the lowest slot nobody holds, so the result is always unique (DraftOrder @@unique([draftId, slot])).
+function assignDraftSlots(draftSlots: Array<number | null>): number[] {
+  const used = new Set<number>();
+  const explicit = draftSlots.map((slot) => {
+    if (slot === null || used.has(slot)) return null;
+    used.add(slot);
+    return slot;
+  });
+  let next = 1;
+  return explicit.map((slot) => {
+    if (slot !== null) return slot;
+    while (used.has(next)) next += 1;
+    used.add(next);
+    return next;
+  });
+}
 export type DraftSetupRecommendedAction = 'AWAIT_EXPLICIT_START' | 'NONE';
 
 export type DraftSetupConvergenceResult = DraftOperationalReadiness & {
@@ -38,10 +57,13 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
       return null;
     }
 
+    // A member is in the draft only if its membership is active, not just its isActive flag.
+    const members = league.members.filter(isActivePrismaMembership);
+    const slots = assignDraftSlots(members.map((member) => member.draftSlot));
     const existingDraft = league.drafts[0] ?? null;
     const activePlayerCount = await tx.player.count({ where: { active: true } });
     const capacity = calculateDraftCapacity({
-      teamCount: league.members.length,
+      teamCount: members.length,
       positionLimits: normalizeDraftPositionLimits(league.settings.positionLimitsJson),
       activePlayerCount,
       existingPickCount: existingDraft?.picks.length ?? 0,
@@ -51,7 +73,7 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
     const totalPicks = capacity.totalPicks;
 
     if (existingDraft) {
-      if (existingDraft.orders.length === league.members.length) {
+      if (existingDraft.orders.length === members.length) {
         if (existingDraft.totalPicks !== totalPicks) {
           await tx.draft.update({
             where: { id: existingDraft.id },
@@ -62,14 +84,19 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
         return existingDraft.id;
       }
 
+      // Once a draft has started or finished, its order is part of the record: never rewrite it.
+      if (existingDraft.status !== DraftStatus.SCHEDULED) {
+        return existingDraft.id;
+      }
+
       await tx.draftOrder.deleteMany({ where: { draftId: existingDraft.id } });
       await Promise.all(
-        league.members.map((member, index) =>
+        members.map((member, index) =>
           tx.draftOrder.create({
             data: {
               draftId: existingDraft.id,
               memberId: member.id,
-              slot: member.draftSlot ?? index + 1,
+              slot: slots[index],
             },
           })
         )
@@ -83,7 +110,7 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
       return existingDraft.id;
     }
 
-    if (league.members.length < 2 || rosterSpots <= 0) {
+    if (members.length < 2 || rosterSpots <= 0) {
       return null;
     }
 
@@ -101,12 +128,12 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
     });
 
     await Promise.all(
-      league.members.map((member, index) =>
+      members.map((member, index) =>
         tx.draftOrder.create({
           data: {
             draftId: draft.id,
             memberId: member.id,
-            slot: member.draftSlot ?? index + 1,
+            slot: slots[index],
           },
         })
       )

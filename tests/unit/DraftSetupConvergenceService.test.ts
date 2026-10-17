@@ -40,6 +40,8 @@ function buildMembers() {
     role: LeagueRole.MANAGER,
     teamName: `Team ${slot}`,
     draftSlot: slot,
+    isActive: true,
+    status: 'ACTIVE',
     joinedAt: new Date('2026-05-01T00:00:00.000Z'),
   }));
 }
@@ -240,4 +242,111 @@ describe('ensureLeagueDraftSetupConverged', () => {
     expect(tx.draftOrder.deleteMany).not.toHaveBeenCalled();
     expect(readiness.totalPicks).toBe(4);
   });
+
+  it('does not rewrite the draft order of a live draft when the member count drifts', async () => {
+    const startAt = new Date('2026-05-02T00:00:00.000Z');
+    const league = buildLeagueWithDraft(startAt);
+    const liveDraft = {
+      ...league.drafts[0],
+      status: DraftStatus.LIVE,
+      currentPick: 5,
+      startedAt: new Date('2026-05-02T00:00:00.000Z'),
+      orders: [
+        ...league.drafts[0].orders,
+        { id: 'order-left', draftId: 'draft-1', slot: 3, memberId: 'member-left' },
+      ],
+    };
+    const { tx, client } = buildConvergenceMocks({ ...league, drafts: [liveDraft] });
+
+    await ensureLeagueDraftSetupConverged({
+      prismaClient: client as never,
+      leagueId: 'league-1',
+      now: new Date('2026-05-02T00:05:00.000Z'),
+    });
+
+    expect(tx.draftOrder.deleteMany).not.toHaveBeenCalled();
+    expect(tx.draftOrder.create).not.toHaveBeenCalled();
+    expect(tx.draft.update).not.toHaveBeenCalled();
+  });
+
+  it('leaves a declined member with an active flag out of the draft order', async () => {
+    const startAt = new Date('2026-05-02T00:00:00.000Z');
+    const league = buildLeagueWithDraft(startAt);
+    const members = [
+      ...buildMembers(),
+      {
+        ...buildMembers()[0],
+        id: 'member-declined',
+        userId: 'user-declined',
+        draftSlot: 3,
+        status: 'declined',
+      },
+    ];
+    const { tx, client } = buildConvergenceMocks({ ...league, members, drafts: [] });
+
+    await ensureLeagueDraftSetupConverged({
+      prismaClient: client as never,
+      leagueId: 'league-1',
+      now: new Date('2026-05-02T00:05:00.000Z'),
+    });
+
+    const memberIds = tx.draftOrder.create.mock.calls.map((call) => call[0].data.memberId);
+    expect(memberIds).toEqual(['member-1', 'member-2']);
+  });
+
+  it('gives a member without a draft slot a slot no other member holds', async () => {
+    const startAt = new Date('2026-05-02T00:00:00.000Z');
+    const league = buildLeagueWithDraft(startAt);
+    // Postgres sorts NULL draftSlot last, so the owner comes after the joiners, as in the real query.
+    const members = [
+      { ...buildMembers()[0], id: 'member-joiner-2', draftSlot: 2 },
+      { ...buildMembers()[0], id: 'member-joiner-3', draftSlot: 3 },
+      { ...buildMembers()[0], id: 'member-owner', draftSlot: null },
+    ];
+    const { tx, client } = buildConvergenceMocks({ ...league, members, drafts: [] });
+
+    await ensureLeagueDraftSetupConverged({
+      prismaClient: client as never,
+      leagueId: 'league-1',
+      now: new Date('2026-05-02T00:05:00.000Z'),
+    });
+
+    const slots = tx.draftOrder.create.mock.calls.map((call) => call[0].data.slot);
+    expect(slots).toEqual([2, 3, 1]);
+  });
 });
+
+function buildConvergenceMocks(league: Record<string, unknown>) {
+  const positionCounts = [
+    { position: 'DEF', _count: { _all: 50 } },
+    { position: 'MID', _count: { _all: 50 } },
+    { position: 'RUC', _count: { _all: 50 } },
+    { position: 'FWD', _count: { _all: 50 } },
+  ];
+  const tx = {
+    league: { findUnique: vi.fn().mockResolvedValue(league) },
+    draft: {
+      create: vi
+        .fn()
+        .mockResolvedValue({ ...buildLeagueWithDraft(new Date()).drafts[0], id: 'draft-new' }),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    draftOrder: {
+      create: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    player: {
+      count: vi.fn().mockResolvedValue(100),
+      groupBy: vi.fn().mockResolvedValue(positionCounts),
+    },
+  };
+  const client = {
+    $transaction: vi.fn((work) => work(tx)),
+    league: { findUnique: vi.fn().mockResolvedValue(league) },
+    player: {
+      count: vi.fn().mockResolvedValue(100),
+      groupBy: vi.fn().mockResolvedValue(positionCounts),
+    },
+  };
+  return { tx, client };
+}
