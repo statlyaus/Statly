@@ -85,4 +85,39 @@ describe('calculateStandingsRows', () => {
       categoryLosses: 4,
     });
   });
+
+  it('returns rows in member order; display ordering belongs to the standings read model', () => {
+    const rows = calculateStandingsRows({
+      scoringMode: 'H2H_MOST_CATEGORIES',
+      memberIds: ['loser', 'winner'],
+      finalizedScores: [
+        {
+          matchupId: 'm1',
+          memberId: 'winner',
+          categoryWins: 5,
+          categoryLosses: 4,
+          categoryDraws: 0,
+          matchupWin: true,
+          matchupLoss: false,
+          matchupDraw: false,
+          pointsFor: 120,
+          pointsAgainst: 100,
+        },
+        {
+          matchupId: 'm1',
+          memberId: 'loser',
+          categoryWins: 4,
+          categoryLosses: 5,
+          categoryDraws: 0,
+          matchupWin: false,
+          matchupLoss: true,
+          matchupDraw: false,
+          pointsFor: 100,
+          pointsAgainst: 120,
+        },
+      ],
+    });
+
+    expect(rows.map((row) => row.memberId)).toEqual(['loser', 'winner']);
+  });
 });

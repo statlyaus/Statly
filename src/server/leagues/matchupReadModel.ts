@@ -415,6 +415,23 @@ export function toMatchupStatusFromRoundStatus(
   return 'SCHEDULED' as const;
 }
 
+/**
+ * A round is final only when every matchup with two teams has been scored. A matchup left unscored
+ * (an empty lineup) keeps the round open, so it cannot drop out of the standings for good.
+ */
+export function resolveRecalculatedMatchupStatus({
+  finalize,
+  unresolvedMatchups,
+  roundStatus,
+}: {
+  finalize: boolean;
+  unresolvedMatchups: number;
+  roundStatus: Pick<NormalizedRoundMatchStatus, 'anyLive' | 'allFinal'>;
+}) {
+  if (unresolvedMatchups === 0 && (finalize || roundStatus.allFinal)) return 'FINAL' as const;
+  return toMatchupStatusFromRoundStatus({ anyLive: roundStatus.anyLive, allFinal: false });
+}
+
 export function resolveAflRoundForScoring({
   fixtureVersion,
   fantasyRound,
@@ -617,6 +634,7 @@ export async function loadLeagueMatchupReadModel({
             fixtureVersion: settings.league.settings.competitionRulesVersion,
           },
           orderBy: { round: 'asc' },
+          include: { season: { select: { year: true } } },
         });
   const availableRounds = competitionRounds.map((competitionRound) => competitionRound.round);
   const resolvedRound = resolveCurrentCompetitionRound(competitionRounds);
@@ -656,7 +674,10 @@ export async function loadLeagueMatchupReadModel({
     }),
   ]);
   const liveTotals = activeCompetitionRound?.aflRound
-    ? await loadLivePlayerTotalsForRound(new Date().getFullYear(), activeCompetitionRound.aflRound)
+    ? await loadLivePlayerTotalsForRound(
+        activeCompetitionRound.season?.year ?? new Date().getFullYear(),
+        activeCompetitionRound.aflRound
+      )
     : {
         available: false,
         totalsByPlayerId: new Map<string, CategoryTotals>(),
@@ -754,7 +775,7 @@ export async function recalculateLeagueRoundMatchups({
     fixtureVersion > 0
       ? prisma.leagueCompetitionRound.findUnique({
           where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
-          select: { aflRound: true },
+          select: { aflRound: true, season: { select: { year: true } } },
         })
       : Promise.resolve(null),
     prisma.leagueMatchup.findMany({ where: { leagueId, round, fixtureVersion } }),
@@ -778,6 +799,37 @@ export async function recalculateLeagueRoundMatchups({
       status: 'SCHEDULED' as const,
       recalculated: 0,
       scores: [],
+      roundStatus: {
+        earliestStartAt: null,
+        latestEndAt: null,
+        anyLive: false,
+        allFinal: false,
+        hasUnavailableStatus: true,
+        matches: [],
+      },
+    };
+  }
+  // A finalized round with an unscored matchup is left as it is. Recalculating it would demote the
+  // FINAL scores of its other matchups, and filling the missing lineup would score that matchup silently.
+  const hasPlayers = (memberId: string) =>
+    (initialLineups.find((lineup) => lineup.memberId === memberId)?.players.length ?? 0) > 0;
+  const unscoredMatchupIds = matchups
+    .filter(
+      (matchup) =>
+        matchup.homeMemberId &&
+        matchup.awayMemberId &&
+        matchup.status !== 'FINAL' &&
+        !(hasPlayers(matchup.homeMemberId) && hasPlayers(matchup.awayMemberId))
+    )
+    .map((matchup) => matchup.id);
+  if (unscoredMatchupIds.length > 0 && matchups.some((matchup) => matchup.status === 'FINAL')) {
+    return {
+      round,
+      status: 'FINAL' as const,
+      recalculated: 0,
+      scores: [],
+      blocked: 'UNSCORED_MATCHUP_IN_FINAL_ROUND' as const,
+      unscoredMatchupIds,
       roundStatus: {
         earliestStartAt: null,
         latestEndAt: null,
@@ -837,7 +889,7 @@ export async function recalculateLeagueRoundMatchups({
   }
   const { available, totalsByPlayerId, nonPlayingReasonByPlayerId, roundStatus } =
     await loadLivePlayerTotalsForRound(
-      new Date().getFullYear(),
+      competitionRound?.season?.year ?? new Date().getFullYear(),
       aflRound,
       scorableLineups.flatMap((lineup) =>
         lineup.players.map((assignment) => ({
@@ -855,8 +907,14 @@ export async function recalculateLeagueRoundMatchups({
       roundStatus: { ...roundStatus, hasUnavailableStatus: true },
     };
   }
-  const status =
-    finalize || roundStatus.allFinal ? 'FINAL' : toMatchupStatusFromRoundStatus(roundStatus);
+  const unresolvedMatchups = matchups.filter(
+    (matchup) => matchup.homeMemberId && matchup.awayMemberId && !scorableMatchups.includes(matchup)
+  ).length;
+  const status = resolveRecalculatedMatchupStatus({
+    finalize: Boolean(finalize),
+    unresolvedMatchups,
+    roundStatus,
+  });
   const resolvedLineups =
     roundStatus.allFinal && nonPlayingReasonByPlayerId.size > 0
       ? await Promise.all(

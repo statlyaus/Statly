@@ -30,6 +30,9 @@ export async function POST(
     finalize: body.finalize === true,
   });
   if (!data) return NextResponse.json({ error: 'League not found' }, { status: 404 });
+  if ('blocked' in data) {
+    return NextResponse.json({ success: false, error: data.blocked, data }, { status: 409 });
+  }
 
   return NextResponse.json({ success: true, data });
 }
