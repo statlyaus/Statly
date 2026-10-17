@@ -1010,10 +1010,10 @@ function recordedBoard(season: number, clientVersion?: string): RecordedAuthorit
 }
 
 describe('recorded Footyinfo draft-board authority (issues 853 and 789)', () => {
-  it('loads the per-season decision recorded under the issue853 board-v1 key', async () => {
+  it('loads the per-season decision recorded under the issue853 board-v2 key', async () => {
     const record = recordedBoard(2024);
     expect(record.decision.content.decisionKey).toBe(
-      'footyinfo-national-draft-board-issue853-private-2024-board-v1'
+      'footyinfo-national-draft-board-issue853-private-2024-board-v2'
     );
     const loaded = await loadRecordedLocalCaptureAuthority(
       ledgerOf(record),
@@ -1032,7 +1032,7 @@ describe('recorded Footyinfo draft-board authority (issues 853 and 789)', () => 
         2024,
         evaluatedAt
       )
-    ).rejects.toThrow(/footyinfo-draft-board-parser\/v1/);
+    ).rejects.toThrow(/footyinfo-draft-board-parser\/v2/);
     const record = recordedBoard(2024);
     const hourly = {
       ...record.sourceRights,
@@ -1068,7 +1068,7 @@ describe('recorded Footyinfo draft-board authority (issues 853 and 789)', () => 
         provider: 'footyinfo',
         draftPathway: 'national',
         sourceUrl: `https://www.footyinfo.com/draft/${season}`,
-        parserVersion: 'footyinfo-draft-board-parser/v1',
+        parserVersion: 'footyinfo-draft-board-parser/v2',
         effectiveAt: evaluatedAt,
       });
       expect(
@@ -1096,7 +1096,8 @@ describe('recorded Footyinfo draft-board authority (issues 853 and 789)', () => 
         }
       );
       expect(issues).toEqual([]);
-      expect(evidence).toHaveLength(13);
+      // Eight board picks, five selections and one matched bid (parser v2).
+      expect(evidence).toHaveLength(14);
       const receipt = createAflTradeGate0AReceipt(
         { proposals: [record.proposal], decisions: [record.decision] },
         record.sourceRights,
