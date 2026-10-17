@@ -13,6 +13,7 @@ import type {
   AflTradeCurrentCanonicalPickCustody,
   AflTradeCurrentCanonicalTransaction,
   AflTradePickLineageDeferral,
+  AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
 import type {
   PersistAflTradeExternalReconciliationInput,
@@ -85,6 +86,14 @@ export interface AflTradePromotedDraftSelectionReader {
   loadCurrentCanonicalPickCustody(
     competition: string
   ): Promise<readonly AflTradeCurrentCanonicalPickCustody[]>;
+  /**
+   * Each current canonical selection with its stored pick, club, root and version, and every
+   * recorded slot of those roots (migration 0284), so a selection promoted under a number-only pick
+   * id is re-keyed to the candidate's custody pick (#853). Without it nothing is re-keyed.
+   */
+  loadCurrentCanonicalSelectionPicks?(
+    competition: string
+  ): Promise<AflTradePromotedSelectionPickState>;
 }
 
 export interface PrepareAflTradeHistoricalReconciliationDependencies {
@@ -106,7 +115,10 @@ export interface PreparedAflTradeHistoricalReconciliation extends PersistedAflTr
   requiresReview: boolean;
   promotionEligible: false;
   publicationEligible: false;
-  /** The deferral the candidate carries, or null when nothing was deferred. */
+  /**
+   * The deferral the candidate carries, or null when it deferred nothing and has nothing to re-sync
+   * or leave to an earlier promotion, or would write a draft whole (`aflTradeIssuelessDeferralKept`).
+   */
   pickLineageDeferral: AflTradePickLineageDeferral | null;
 }
 
@@ -209,6 +221,11 @@ export async function prepareAflTradeHistoricalReconciliation(
       : await dependencies.promotedSelectionRepository!.loadCurrentCanonicalPickCustody(
           source.competition
         );
+  const reader = dependencies.promotedSelectionRepository;
+  const promotedSelectionPicks =
+    deferralDecision === null || reader?.loadCurrentCanonicalSelectionPicks === undefined
+      ? undefined
+      : await reader.loadCurrentCanonicalSelectionPicks(source.competition);
   const candidate = parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
       environment: source.environment,
@@ -225,6 +242,7 @@ export async function prepareAflTradeHistoricalReconciliation(
             promotedDraftSelections,
             promotedTransactions,
             promotedCustody,
+            ...(promotedSelectionPicks === undefined ? {} : { promotedSelectionPicks }),
           }),
     })
   );

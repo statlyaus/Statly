@@ -13,7 +13,7 @@ import {
 } from './officialAflCompensationPdfFacts';
 import { reviewedOfficialAflDraft2010Source } from './officialAflDraft2010SourceScope';
 import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from './officialAflDraftSessionAdapter';
-import { OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION } from './draftCorroborationAdapter';
+import { isOfficialAflDraftOrderTableParserVersion } from './draftCorroborationAdapter';
 import { reviewedOfficialAflDraftOrderPage } from './officialAflDraftOrderSourceScope';
 import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from './officialAflTradePeriodAdapter';
 import { reviewedOfficialAflTradePeriodPage } from './officialAflTradePeriodSourceScope';
@@ -38,7 +38,10 @@ import type { AflTradeResolvedGateAuthorization } from '../governance/postgresGa
 import type { AflTradeGate0ARequest } from './gate0aEvaluation';
 import { evaluateAflTradeGate0A } from './gate0aEvaluation';
 import { createAflTradeGate0AReceipt } from './gate0aReceipt';
-import { isReviewedOfficialAflDraftSessionUrl } from './officialAflDraftSessionAdapter';
+import {
+  isReviewedOfficialAflDraftSessionUrl,
+  officialAflDraftSessionParserVersion,
+} from './officialAflDraftSessionAdapter';
 import { reviewedOfficialAflDraft2016EffectiveYear } from './officialAflDraft2016SessionFacts';
 import type {
   AflTradeExternalCaptureAdmission,
@@ -168,18 +171,19 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'official-afl-indicative-draft-order') {
-    // The table parser reads only the exact reviewed pre-draft order pages, three of which are
-    // Internet Archive snapshots; v1 keeps the general afl.com.au article path.
+    // The table parsers read only the exact reviewed pre-draft order pages, each under the parser
+    // its scope entry names; four are Internet Archive snapshots. v1 keeps the general afl.com.au
+    // article path.
     const reviewedOrder = reviewedOfficialAflDraftOrderPage(request.sourceUrl);
-    const reviewedPage =
-      request.parserVersion === OFFICIAL_AFL_DRAFT_ORDER_TABLE_PARSER_VERSION
-        ? reviewedOrder !== null &&
-          reviewedOrder.season === request.anchorSeasonYear &&
-          request.effectiveAt === `${reviewedOrder.asOf}T00:00:00.000Z`
-        : url.hostname === 'www.afl.com.au' &&
-          /^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) &&
-          !url.search &&
-          !url.hash;
+    const reviewedPage = isOfficialAflDraftOrderTableParserVersion(request.parserVersion)
+      ? reviewedOrder !== null &&
+        reviewedOrder.parserVersion === request.parserVersion &&
+        reviewedOrder.season === request.anchorSeasonYear &&
+        request.effectiveAt === `${reviewedOrder.asOf}T00:00:00.000Z`
+      : url.hostname === 'www.afl.com.au' &&
+        /^\/news\/\d+\/[a-z0-9-]+(?:\/amp)?$/.test(url.pathname) &&
+        !url.search &&
+        !url.hash;
     if (
       request.provider !== 'official_afl' ||
       request.draftPathway !== 'national' ||
@@ -327,7 +331,8 @@ export function validateAflTradeExternalCaptureScope(
           ? 'mini_draft'
           : 'national') ||
       request.discoveryFromSeasonYear != null ||
-      request.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION ||
+      // Each season is pinned to its own reviewed parser: v20 for 2025, v19 otherwise.
+      request.parserVersion !== officialAflDraftSessionParserVersion(request.anchorSeasonYear) ||
       !isReviewedOfficialAflDraftSessionUrl(request.sourceUrl, request.anchorSeasonYear) ||
       new Date(request.effectiveAt).getUTCFullYear() !==
         (reviewedMini2012EffectiveYear ??
@@ -346,6 +351,8 @@ export function validateAflTradeExternalCaptureScope(
 }
 
 const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
+  // v19 stands in for an earlier session parser. 2025 is pinned to v20 by its season, and a v20
+  // capture is never earlier than v19, so it is checked as recorded.
   'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   'official-afl-trade-period-dates': OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
   'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,

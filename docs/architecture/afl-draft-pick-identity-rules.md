@@ -112,6 +112,10 @@ pick id, and 12 are excluded because the selection's club differs or only Footyi
 Recording a rule 5 conflict under a `pick-custody:` key defers that pick: under the pick-side deferral its
 custody and lineage rows are left out of promotion (`pickLineageDeferral.ts`). For a number-only id the
 key is `pick-custody:<pick id>` with no observation time, which the deferral parses as the whole pick id.
+A board pick whose route did not resolve (`routeClubIds` null, with a `board-pick:club:` identity issue)
+is not checked. Migration 0286 reads its length only once the route is an array: 0273 guarded the length
+in the same `AND` list, which fixes no evaluation order. Finalizing a 2025 candidate with null routes then
+failed with 22023.
 
 How rule 6 is checked: eventual-selection ids legitimately span transactions, so the check must know an
 id's kind. The database can work it out: `outcome_afl_trade_canonical_json` with `sha256` recomputes the
@@ -306,8 +310,9 @@ club can contradict the pick a walk settles on.
   club change. So a changed selection needs its player and club resolved and must not be `disputed`,
   but it may be `unresolved` on the pick side, where its pick custody is not uniquely resolved. In the
   first rehearsal, 38 of 73 re-synced selections were in that state, and the candidate's pick id
-  differed from the promoted one for 45 of them. Re-keying a promoted selection's pick is left to the
-  pick identity repair, exactly as for the unchanged selections of the same night. Whole nights are never
+  differed from the promoted one for 45 of them. Re-keying a promoted selection's pick is a separate
+  rule (migration 0284, below): a slot that is both re-targeted and re-keyed takes the new player and
+  the candidate's pick in the same version. Whole nights are never
   re-listed: under asset-scoped supersession (migration 0256) a version carrying fewer than half of the
   other slots is additive, so every other draftee's selection, asset and the spells that start at them
   stay current. This holds when the changed slot sits on version 1 of a night whose current version is a
@@ -317,7 +322,39 @@ club can contradict the pick a walk settles on.
   this way; an ordinary draft write must still carry every recorded slot of its predecessor (#721). A
   re-review that keeps the same player changes nothing.
 
+  A completion with no pick-side issue re-syncs the same way (migration 0282). The 2018 completion is
+  one: its candidate deferred nothing, so the reconciler used to drop the deferral decision with the
+  `resyncedSelectionIds` it carries, and the 2018 draftees re-targeted to their AFL Tables twins had
+  no path back. A candidate that deferred no issue now keeps the decision when it lists something
+  under it and writes no draft whole: every draft it holds is recorded as already promoted or holds
+  a re-synced selection (`aflTradeIssuelessDeferralKept`, and
+  `outcome_external_candidate_issueless_deferral_kept` on insert). Its review needs no draft events
+  and its receipt records `deferredIssueCount: 0`. A candidate that would write a draft whole drops
+  the decision as before, because a draft written under it gets the metadata-only proposal and loses
+  its session proof. The database now chooses the deferred branch of
+  `outcome_external_draft_sessions_exact` by `lineage_deferral_decision_id`, not by
+  `deferred_issue_count`. Before 0282 the two picked out the same candidates, so every existing
+  promotion keeps the branch its insert guard took. For a decision with no deferred issue the branch
+  also refuses while a promotable selection exists. 0280's stored-coverage skip follows the same
+  column, so its soundness argument is unchanged.
+
   What the re-sync leaves behind:
+  - **Combined-session nights (2016 to 2018).** A promotion proved by `combined_session_facts` (the v3
+    proposal) is re-checked on every arrival by `outcome_external_combined_draft_sessions_exact`. That
+    check joins each session boundary claim to the candidate selection at that number through the
+    candidate's identity resolutions. Until migration 0283 it also required each boundary decision
+    to have no successor, so re-targeting one boundary draftee made the proof false for the whole
+    draft and every v4 spell on that promotion stopped being current. On the grading database the
+    official AFL re-target of Will Hayes (the last pick of 2018 session 2, 2026-10-14) did this to all
+    20 v4 spells on the two 2018 nights, and a re-sync could not restore them. Since 0283 a boundary
+    decision may lead, through approved revisions of the same subject and entity kind, to the
+    subject's approved current head, even when a revision names another canonical player
+    (`outcome_external_boundary_identity_decision_current`). A re-target changes neither the boundary
+    claim nor the candidate selection at its number, so which selections bound each session is
+    unchanged. A rejection, a withdrawal or any other successor still voids the proof. The same rule
+    applies to the other session-proof functions with boundary checks and to
+    `outcome_session_identity_observation_current`. Measured on the repair copy of the grading
+    database (2026-10-14), 0283 brings all 20 of those spells back to registration-current.
   - **The old draftee's selection** at that number is retired (0256 judges a selection by number). **The
     old draftee's asset** is not: 0256 retires an asset only when a later version carries an asset for
     the same player, and the re-sync carries the twin's. So the old asset stays current. It is excluded
@@ -332,7 +369,70 @@ club can contradict the pick a walk settles on.
     session's date bounds (`outcome_acquisition_arrival_event_current` accepts a re-sync version through
     `outcome_external_promoted_session_resync_version`). The v1 to v3 check
     (`outcome_acquisition_promoted_event_current`) has no such clause: a v1 to v3 spell cannot start at
-    a re-sync version.
+    a re-sync version. Since migration 0280 the arrival check does not re-run
+    `outcome_external_draft_sessions_exact` for a deferred candidate. It reads the re-sync version's
+    stored coverage entry instead. The promotion insert guard already proved the exact coverage, and the
+    candidate facts and proposal it read cannot change once the promotion exists. On the grading
+    database one such check took 9 min 38 s before 0280. A migration that tightens the deferred branch
+    of `outcome_external_draft_sessions_exact` must re-check existing deferred promotions explicitly.
+
+- **Re-keying promoted selections (migration 0284).** Selections promoted before these rules carry
+  their slot's number-only pick id (draft year, type and pick number, no round). Measured read-only on
+  the grading database on 2026-10-15, 239 of 383 current 2019 to 2024 national selections carry
+  another pick id than candidate `external-reconciliation:24d83046…`, and every one of the 239 is
+  that number-only address. For 182 the candidate names a pick with a usable custody observation
+  (2020 #13 Tom Powell carries `draft-pick:93490e63…`; the pick is Melbourne's 2020 round-1
+  entitlement held by North Melbourne, `draft-pick:ce2122fa…`, which already has canonical custody
+  and a canonical trade asset but no selection). The other 57 are unresolved on the pick side and keep
+  their promoted id. None of the earlier paths could change a promoted selection's pick: a draft
+  whose selections are all current under the candidate's players is left whole (`promotedDrafts`
+  compares players), a re-sync kept the promoted pick (0279), a reviewed session correction conserves
+  every selection fact except evidence (0177), and the trade repair (0274) re-keys trades only.
+
+  A deferred candidate now records such a slot as `pickLineageDeferral.rekeyedSelectionIds`, and the
+  promotion re-promotes it exactly as it re-syncs a re-targeted draftee: in the same
+  `promoted_session_resync` version of its session root, which carries only changed slots, under the
+  candidate's pick and the same player and club. A slot is re-keyed only when all of these hold
+  (`aflTradePromotedDraftState`, checked on candidate insert by
+  `outcome_external_candidate_rekeyed_selections_current` and again by the promoter):
+  - the candidate selection is `single_source` or `corroborated`, with a player and club;
+  - its source selection is current canonical exactly once, at its number, under its club and its own
+    player (or another player, when it is also re-synced);
+  - that row's pick id is the slot's number-only address (with the selection's round or none), never
+    an entitlement, custody, eventual-selection or reviewed id, and differs from the candidate's;
+  - the candidate's pick has a usable custody row and no deferred issue defers it;
+  - no other current canonical selection carries the candidate's pick (rule 4);
+  - no special-entitlement exercise or selection claim cites the current row, since re-versioning the
+    row would void that reviewed record;
+  - the draft is otherwise current canonical: already promoted, or holding re-synced slots.
+
+  The re-sync version must still retire no slot it does not carry (0256). A re-keyed slot keeps its
+  player, so the version re-versions that player's asset as well as the selection: the asset is
+  retired, unlike a re-targeted draftee's. Preparation therefore plans each session root: it takes the
+  eligible slots in selection-number order, each alone or else together with every other eligible
+  slot on its version (a small scoped version can change only whole), and keeps a slot only while
+  the version stays additive. The root's re-synced slots are always carried. The rest stay on their
+  number-only ids for the next preparation, once this promotion lands. Simulated on the 2026-10-15
+  state with the planner and an exact emulation of `outcome_event_version_superseded_for`, the 182
+  re-key in three passes, 161, 16 and 1, with no other slot retired. Four never fit: 2019 #16, 2020
+  #18 and #25, and 2024 #3. Each sits on a two- or three-slot scoped version (the Cameron shape) whose
+  other slot is not re-keyed, so re-keying it alone would retire that sibling. Carrying an unchanged
+  sibling is not expressible today.
+
+  What a re-key leaves behind:
+  - **Draft-start spells.** The re-keyed slot's draftee asset is re-versioned, so a reviewed spell
+    that starts at the old asset stops being current, and the arrival check accepts the new asset
+    (`outcome_external_promoted_session_resync_version`, with the session's date bounds). Every such
+    spell must be re-registered as a superseding v4 version citing the new event version and asset.
+    On 2026-10-15 that is 174 approved v4 heads for the 178 slots the passes re-key. The trade
+    re-registration driver of the Phase E repair (`reregister-arrivals-853.ts`) reads only trade
+    events (`record_kind='transfer'`, `kind='trade'`), so it does not cover them: a draft-start
+    variant must read the promotion's `draft_player_asset` members and supersede the current v4 spell
+    citing the same player's asset on the superseded session version.
+  - **Pick realizations.** The candidate's lineage rows into a re-keyed draft stay skipped, as for any
+    draft the promotion leaves: the transfers they bind are not assets of this promotion.
+  - **Releases and PAV observation sets** that cite the old selection row keep citing it; they are
+    immutable snapshots.
 
 - **Expected effect.** Splitting the 22 merged ids should let the 4 merged unlinked legs link if evidence
   allows, and may change the 20 route-confirmed links and 24 blocked legs on those ids. The net is measured

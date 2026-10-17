@@ -1,4 +1,5 @@
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
+import { OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION } from './officialAflDraft2025Sessions';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
@@ -27,6 +28,8 @@ import {
 } from './combinedDraftSessionEvidence';
 import {
   aflTradeDeferredCustodyIds,
+  aflTradeDeferredPicks,
+  aflTradeIssuelessDeferralKept,
   aflTradePromotedCustodyIds,
   aflTradePromotedDraftState,
   aflTradePromotedTransactions,
@@ -35,7 +38,12 @@ import {
   type AflTradeCurrentCanonicalPickCustody,
   type AflTradeCurrentCanonicalTransaction,
   type AflTradePickLineageDeferral,
+  type AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
+import {
+  aflTradePickCustodyHolders,
+  createAflTradePickOnwardTransfers,
+} from './pickOnwardTransfer';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
 function projectCombinedSessionSourceFact(
@@ -351,8 +359,10 @@ interface CanonicalPickCustody {
 /**
  * The provider's stated outcome for one received pick. It is single-source evidence kept apart from
  * governed lineage, which needs a proven custody chain: a `selected` outcome names the selection by
- * the stated player and the receiving club, never by pick number. `pending` is a pick whose draft
- * lies after the candidate's anchor season.
+ * the stated player and the receiving club, never by pick number. `pending` is a "not used" pick
+ * whose draft the candidate holds no selection or board pick in, at or after its anchor season. A
+ * stated "not used" pick the receiving club later traded on in the candidate is `traded_on`, and says
+ * what was stated (`statedDisposition`).
  */
 interface CanonicalPickOutcome {
   outcomeId: string;
@@ -385,6 +395,23 @@ interface CanonicalPickOutcome {
    * 789). Absent, an official session proved it, so earlier outcomes and candidate ids are unchanged.
    */
   draftProvenBy?: 'footyinfo';
+  /**
+   * With `club_took_nominated_player` only (issue 789, 2026-10-16): the reviewed Footyinfo board
+   * picks that record a receiving-club selection Draftguru's year page marks open as that club's
+   * matched bid, each counted as a nominee. The board states the bid and who matched it; Draftguru's
+   * access category can omit it (2020 Reef McInnes, Collingwood matching GWS's academy bid). Absent
+   * when Draftguru's categories alone give the count, so those outcomes are unchanged.
+   */
+  matchedBidBoardPickIds?: string[];
+  /**
+   * Issue 789: Draftguru stated this hop "not used", but the candidate holds a transfer of the same
+   * pick from the receiving club in a later trade (`createAflTradePickOnwardTransfers`). Draftguru
+   * reports a pick's final fate (such as "removed - not enough list spots") on every page the pick
+   * passed through; the onward transfer is direct evidence that this club traded it on, so the
+   * outcome is `traded_on` and only the final holder's stays "not used". Kept so the contradiction
+   * stays auditable; it blocks nothing.
+   */
+  statedDisposition?: 'not_used';
   evidenceIds: string[];
 }
 
@@ -404,6 +431,12 @@ interface CanonicalDraftBoardPick {
   status: 'selected' | 'passed' | 'removed';
   clubId: string | null;
   routeClubIds: string[] | null;
+  /**
+   * Present only when the board states the holder matched a bid for this pick (`routeLabel:
+   * 'matched_bid'`): the basis of the bid, as the board states it. The holder is the club that
+   * matched; the bidding club is another club.
+   */
+  matchedBidBasis?: 'father_son' | 'academy' | 'next_generation_academy';
   evidenceIds: string[];
 }
 
@@ -1407,6 +1440,9 @@ function reconcileDraftBoardPicks(input: {
         status: claim.status,
         clubId,
         routeClubIds: route.every((club): club is string => club !== null) ? route : null,
+        ...(claim.routeLabel === 'matched_bid' && claim.bid !== null
+          ? { matchedBidBasis: claim.bid.basis }
+          : {}),
         evidenceIds: [row.evidenceId],
       };
     });
@@ -1982,7 +2018,11 @@ type PickDispositionEvidence = Evidence & {
 
 type NominationFacts = Pick<
   CanonicalPickOutcome,
-  'nominationBasis' | 'receivingClubNominatedSelections' | 'boardPickId' | 'draftProvenBy'
+  | 'nominationBasis'
+  | 'receivingClubNominatedSelections'
+  | 'boardPickId'
+  | 'draftProvenBy'
+  | 'matchedBidBoardPickIds'
 >;
 
 type NominatedSelectionCount = {
@@ -1990,12 +2030,15 @@ type NominatedSelectionCount = {
   evidenceIds: string[];
   /** The source that proved the draft's membership. */
   provenBy: 'official_afl' | 'footyinfo';
+  /** The board picks that alone make a counted selection a nominee; see `CanonicalPickOutcome`. */
+  matchedBidBoardPickIds: string[];
 };
 
 /**
  * Drafts whose membership a reviewed Footyinfo board may prove when no official AFL completed
- * session is reviewed for them. Owner decision 2026-10-14 (issue 789): the 2025 national draft has no
- * official session page. Another draft needs a new owner decision, never just a new entry here.
+ * session lists their selections. Owner decision 2026-10-14 (issue 789): no official page enumerates
+ * the 2025 national draft's selections; its night reports state only session boundaries (parser
+ * v20). Another draft needs a new owner decision, never just a new entry here.
  */
 const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|national']);
 
@@ -2005,9 +2048,13 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  * null unless the draft's membership is proven independently of that page, by either:
  *
  * - the reviewed official AFL completed-session claims, which must list selections 1 to N with no gap;
- * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no official session claim at all, a
+ * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no such official session claim, a
  *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
  *   club.
+ *
+ * A session claim read from a night report's boundary sentences (parser v20, the 2025 national
+ * draft) states a number range, not a list of selections, so it proves the session and never the
+ * membership: it is not counted here, and the board still proves that draft (decision 2026-10-16).
  *
  * The candidate's selections in the draft must be exactly those numbers, and every one must carry
  * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
@@ -2015,6 +2062,12 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  * resolved club and each of the receiving club's carry exactly one. A board makes no completeness
  * claim of its own: only the 1-to-N run and the equality with the candidate's selections guard it.
  * A partial or disputed year page therefore proves nothing about a club whose rows it omits.
+ *
+ * A selection is a nominee when its stated category is academy or father-son, or (issue 789,
+ * 2026-10-16) when it is open but a reviewed Footyinfo board records that selection, by the same
+ * club at the same number in the same draft, as a matched bid: the board states the bid and that
+ * this club matched it. Only the count changes; membership and access completeness are decided as
+ * above.
  */
 function createNominatedSelectionCounter(
   evidence: readonly Evidence[],
@@ -2027,7 +2080,11 @@ function createNominatedSelectionCounter(
   const boardSelectionEvidence = new Set<string>();
   for (const row of evidence) {
     const claim = row.content.claim;
-    if (row.content.provider === 'official_afl' && claim.kind === 'draft_session') {
+    if (
+      row.content.provider === 'official_afl' &&
+      claim.kind === 'draft_session' &&
+      row.content.capture.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION
+    ) {
       const key = `${claim.draftYear}|${claim.draftType}`;
       const numbers = sessionNumbers.get(key) ?? new Set<number>();
       claim.selectionNumbers.forEach((number) => numbers.add(number));
@@ -2107,34 +2164,78 @@ function createNominatedSelectionCounter(
     if (provenBy === null || !accessComplete) return null;
     const membershipEvidence =
       provenBy === 'official_afl' ? sessionEvidence : boardSelectionEvidence;
+    // The board pick recording an open selection as this club's matched bid, when there is one.
+    const matchedBidOf = (selection: CanonicalDraftSelection) => {
+      if (accessOf(selection) !== 'open') return null;
+      const matches = boardPicks.filter(
+        (board) =>
+          board.matchedBidBasis !== undefined &&
+          board.status === 'selected' &&
+          board.draftYear === draftYear &&
+          board.draftType === draftType &&
+          board.recordedPickNumber === selection.selectionNumber &&
+          board.clubId === clubId
+      );
+      return matches.length === 1 ? matches[0]! : null;
+    };
+    const matchedBids = clubs.flatMap((selection) => matchedBidOf(selection) ?? []);
     return {
-      count: clubs.filter((selection) => accessOf(selection) !== 'open').length,
-      evidenceIds: sortedUnique(
-        clubs.flatMap(({ evidenceIds }) =>
+      count:
+        clubs.filter((selection) => accessOf(selection) !== 'open').length + matchedBids.length,
+      evidenceIds: sortedUnique([
+        ...clubs.flatMap(({ evidenceIds }) =>
           evidenceIds.filter((id) => accessByEvidence.has(id) || membershipEvidence.has(id))
-        )
-      ),
+        ),
+        ...matchedBids.flatMap(({ evidenceIds }) => evidenceIds),
+      ]),
       provenBy,
+      matchedBidBoardPickIds: sortedUnique(matchedBids.map(({ boardPickId }) => boardPickId)),
     };
   };
 }
 
 /**
- * A "not used" pick in a draft after the anchor season is pending. Otherwise it is stated, and a
- * national pick also records whether the receiving club took a nominated player in that draft: the
- * only sourceable fact about a pick spent matching a bid or passed. Without complete access
- * evidence the count is left unknown.
+ * Whether a pick's draft is still to be held, judged by the evidence (owner direction 2026-10-14,
+ * issue 789): the candidate holds no selection, and no Footyinfo board pick, in that draft year and
+ * type. A board prints a pick only as selected, passed or removed, all outcomes of a held draft. The
+ * anchor season alone cannot say, since a capture of the next draft's indicative order raises the
+ * anchor to that draft's year before anyone is selected. A draft before the anchor season has been
+ * held, so a draft there with no selections stays a gap in the evidence, never pending.
+ */
+export function isAflTradeDraftPending(
+  held: {
+    draftSelections: readonly DraftKey[];
+    draftBoardPicks?: readonly DraftKey[] | undefined;
+  },
+  anchorSeasonYear: number,
+  draft: DraftKey
+): boolean {
+  const inDraft = (record: DraftKey) =>
+    record.draftYear === draft.draftYear && record.draftType === draft.draftType;
+  return (
+    draft.draftYear >= anchorSeasonYear &&
+    !held.draftSelections.some(inDraft) &&
+    !(held.draftBoardPicks ?? []).some(inDraft)
+  );
+}
+type DraftKey = { draftYear: number; draftType: string };
+
+/**
+ * A "not used" pick whose draft is pending (see `isAflTradeDraftPending`) is pending. Otherwise it
+ * is stated, and a national pick also records whether the receiving club took a nominated player in
+ * that draft: the only sourceable fact about a pick spent matching a bid or passed. Without complete
+ * access evidence the count is left unknown.
  */
 function classifyNotUsedPick(
   asset: { draftYear: number; draftType: string },
-  anchorSeasonYear: number,
+  draftPending: boolean,
   countNominated: () => NominatedSelectionCount | null
 ): {
   status: CanonicalPickOutcome['outcomeStatus'];
   nomination: NominationFacts;
   evidenceIds: string[];
 } {
-  if (asset.draftYear > anchorSeasonYear) {
+  if (draftPending) {
     return { status: 'pending', nomination: {}, evidenceIds: [] };
   }
   if (asset.draftType !== 'national') return { status: 'stated', nomination: {}, evidenceIds: [] };
@@ -2153,6 +2254,9 @@ function classifyNotUsedPick(
         counted.count > 0 ? 'club_took_nominated_player' : 'club_took_no_nominated_player',
       receivingClubNominatedSelections: counted.count,
       ...(counted.provenBy === 'footyinfo' ? { draftProvenBy: 'footyinfo' as const } : {}),
+      ...(counted.matchedBidBoardPickIds.length > 0
+        ? { matchedBidBoardPickIds: counted.matchedBidBoardPickIds }
+        : {}),
     },
     evidenceIds: counted.evidenceIds,
   };
@@ -2193,8 +2297,10 @@ function notUsedBoardPick(
  */
 function reconcilePickDispositions(input: {
   evidence: readonly Evidence[];
+  transactions: readonly CanonicalTransaction[];
   transfers: CanonicalTransfer[];
   draftSelections: readonly CanonicalDraftSelection[];
+  pickCustody: readonly CanonicalPickCustody[];
   anchorSeasonYear: number;
   boardPicks: readonly CanonicalDraftBoardPick[];
   resolve: IdentityResolver;
@@ -2206,6 +2312,17 @@ function reconcilePickDispositions(input: {
       row.content.claim.kind === 'pick_disposition'
   );
   const transfersById = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
+  // Undated hops of one season are ordered by their Draftguru pick-trade sequence, and a tie between
+  // trails is broken by the pick's latest custody holder (issue 789).
+  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+    new Map(
+      input.transactions
+        .filter(({ transactionType }) => transactionType === 'trade')
+        .map((transaction) => [transaction.transactionId, transaction])
+    ),
+    input.transfers,
+    { custodyHolders: aflTradePickCustodyHolders(input.pickCustody) }
+  );
   const nominatedSelections = createNominatedSelectionCounter(
     input.evidence,
     input.draftSelections,
@@ -2247,7 +2364,7 @@ function reconcilePickDispositions(input: {
       outcomeStatus: CanonicalPickOutcome['outcomeStatus'],
       selection: CanonicalDraftSelection | null,
       playerId: string | null,
-      nomination: NominationFacts = {},
+      facts: NominationFacts | Pick<CanonicalPickOutcome, 'disposition' | 'statedDisposition'> = {},
       supportingEvidenceIds: readonly string[] = []
     ) =>
       outcomes.push({
@@ -2260,7 +2377,7 @@ function reconcilePickDispositions(input: {
         outcomeStatus,
         selectionId: selection?.selectionId ?? null,
         playerId,
-        ...nomination,
+        ...facts,
         evidenceIds: sortedUnique([
           row.evidenceId,
           ...(selection?.evidenceIds ?? []),
@@ -2279,8 +2396,18 @@ function reconcilePickDispositions(input: {
       record('stated', null, null);
       continue;
     }
+    if (claim.disposition === 'not_used' && onwardTransfersOf(transfer).length > 0) {
+      // The receiving club traded this pick on: the stated "not used" is the pick's final fate.
+      record('stated', null, null, { disposition: 'traded_on', statedDisposition: 'not_used' });
+      continue;
+    }
     if (claim.disposition === 'not_used') {
-      const outcome = classifyNotUsedPick(asset, input.anchorSeasonYear, () =>
+      const draftPending = isAflTradeDraftPending(
+        { draftSelections: input.draftSelections, draftBoardPicks: input.boardPicks },
+        input.anchorSeasonYear,
+        asset
+      );
+      const outcome = classifyNotUsedPick(asset, draftPending, () =>
         nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
       );
       // The board's own passed or removed pick comes before a count the board's membership proved,
@@ -2373,6 +2500,14 @@ export function reconcileAflTradeExternalEvidence(input: {
    * whose id and facts match one is recorded as already promoted and left unwritten (#853).
    */
   promotedCustody?: readonly AflTradeCurrentCanonicalPickCustody[];
+  /**
+   * Current canonical selections with their stored pick, club, root and version, and the recorded
+   * slots of every version of those roots, as the repository resolved them at preparation (migration
+   * 0284). Only with the deferral: a selection whose current row carries the slot's number-only pick
+   * id while this candidate names a pick with usable custody is recorded as re-keyed (#853), as many
+   * per session root as keep its re-sync version additive.
+   */
+  promotedSelectionPicks?: AflTradePromotedSelectionPickState;
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -2453,6 +2588,41 @@ export function reconcileAflTradeExternalEvidence(input: {
       .parse(input.promotedCustody) ?? [];
   if (currentCustody.length > 0 && pickLineageDeferral === undefined) {
     throw new TypeError('Already-promoted custody is recorded only under a pick-side deferral.');
+  }
+  const currentSelectionPicks = z
+    .object({
+      selections: z.array(
+        z
+          .object({
+            selectionId: z.string().min(1),
+            selectionNumber: z.number().int().positive(),
+            playerId: z.string().min(1).nullable(),
+            pickId: z.string().min(1).nullable(),
+            clubId: z.string().min(1),
+            eventId: z.string().min(1),
+            eventVersionId: z.string().min(1),
+            specialEntitlementCited: z.boolean(),
+          })
+          .strict()
+      ),
+      rootSlots: z.array(
+        z
+          .object({
+            eventId: z.string().min(1),
+            eventVersionId: z.string().min(1),
+            kind: z.enum(['selection', 'asset']),
+            selectionNumber: z.number().int().positive().nullable(),
+            playerId: z.string().min(1).nullable(),
+            current: z.boolean(),
+          })
+          .strict()
+      ),
+    })
+    .strict()
+    .optional()
+    .parse(input.promotedSelectionPicks);
+  if (currentSelectionPicks !== undefined && pickLineageDeferral === undefined) {
+    throw new TypeError('Re-keyed selections are recorded only under a pick-side deferral.');
   }
   const competition = z.string().trim().min(1).max(40).parse(input.competition);
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
@@ -3283,7 +3453,15 @@ export function reconcileAflTradeExternalEvidence(input: {
       (value) => value.pickId === transferredPick.pickId
     );
     if (matchingSelections.length !== 1) {
-      if (matchingSelections.length === 0 && transferredPick.draftYear > anchorSeasonYear) {
+      // A pick in a draft still to be held has no selection yet, so it has no lineage to resolve.
+      if (
+        matchingSelections.length === 0 &&
+        isAflTradeDraftPending(
+          { draftSelections, draftBoardPicks: draftBoard.records },
+          anchorSeasonYear,
+          transferredPick
+        )
+      ) {
         return;
       }
       issues.push({
@@ -3324,8 +3502,10 @@ export function reconcileAflTradeExternalEvidence(input: {
 
   const pickOutcomes = reconcilePickDispositions({
     evidence,
+    transactions,
     transfers,
     draftSelections,
+    pickCustody,
     anchorSeasonYear,
     boardPicks: draftBoard.records,
     resolve,
@@ -3344,9 +3524,16 @@ export function reconcileAflTradeExternalEvidence(input: {
       : issue
   );
   const deferredIssueCount = severed.filter(({ severity }) => severity === 'deferred').length;
-  const { promotedDrafts, resyncedSelectionIds } = aflTradePromotedDraftState(
+  const { promotedDrafts, resyncedSelectionIds, rekeyedSelectionIds } = aflTradePromotedDraftState(
     draftSelections,
-    currentDraftSelections
+    currentDraftSelections,
+    currentSelectionPicks === undefined
+      ? undefined
+      : {
+          pickCustody,
+          deferredPickIds: aflTradeDeferredPicks(severed, transfers).deferredPickIds,
+          state: currentSelectionPicks,
+        }
   );
   const promotedTransactions = aflTradePromotedTransactions(
     transactions,
@@ -3364,6 +3551,7 @@ export function reconcileAflTradeExternalEvidence(input: {
           ...pickLineageDeferral,
           ...(promotedDrafts.length === 0 ? {} : { promotedDrafts }),
           ...(resyncedSelectionIds.length === 0 ? {} : { resyncedSelectionIds }),
+          ...(rekeyedSelectionIds.length === 0 ? {} : { rekeyedSelectionIds }),
           ...(promotedTransactions.length === 0 ? {} : { promotedTransactions }),
           ...(deferredCustodyIds.length === 0 ? {} : { deferredCustodyIds }),
           ...(promotedCustodyIds.length === 0 ? {} : { promotedCustodyIds }),
@@ -3390,9 +3578,12 @@ export function reconcileAflTradeExternalEvidence(input: {
     // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
-    // Only a candidate that actually deferred something carries the decision, so a candidate prepared
-    // with the option but no pick-side issue is byte-identical to one prepared without it.
-    ...(deferredIssueCount === 0 || recordedDeferral === undefined
+    // A candidate carries the decision when it deferred something, or when it deferred nothing but
+    // lists records left to an earlier promotion or re-synced and writes no draft whole (#853, a
+    // re-targeted draftee in a completion with no pick-side issue). Otherwise a candidate prepared
+    // with the option is byte-identical to one prepared without it.
+    ...(recordedDeferral === undefined ||
+    (deferredIssueCount === 0 && !aflTradeIssuelessDeferralKept(recordedDeferral, draftSelections))
       ? {}
       : { pickLineageDeferral: recordedDeferral }),
     issues: severed

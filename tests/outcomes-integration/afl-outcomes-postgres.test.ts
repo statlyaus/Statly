@@ -1349,6 +1349,13 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0277_deferred_candidate_promoted_players',
       '0278_deferred_candidate_resynced_draft_players',
       '0279_resync_repairs_player_only',
+      '0280_resync_arrival_stored_coverage',
+      '0281_undated_lineage_trade_arrival_window',
+      '0282_issueless_deferral_resync',
+      '0283_boundary_identity_reviewed_successors',
+      '0284_rekey_promoted_selection_picks',
+      '0285_board_pick_identity_observations',
+      '0286_board_route_null_safe_finalization',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

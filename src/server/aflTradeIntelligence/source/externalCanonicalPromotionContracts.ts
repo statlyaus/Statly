@@ -83,7 +83,9 @@ const draftEventCoverageSchema = z
  * that root. Only a deferred-lineage (v1 or v4) proposal carries it. The version it supersedes and
  * the session metadata it repeats are read from canonical state when the proposal is derived, so
  * the reviewer approves exactly which version is superseded; the promoter refuses if that version is
- * no longer current or its metadata differs. It carries only the candidate's re-synced selections.
+ * no longer current or its metadata differs. It carries only the candidate's re-synced selections
+ * and, since migration 0284, its re-keyed ones (a number-only promoted pick replaced by the
+ * candidate's custody pick).
  */
 export const AFL_TRADE_PROMOTED_SESSION_RESYNC_KIND = 'promoted_session_resync' as const;
 
@@ -541,15 +543,24 @@ export type AflTradeExternalCanonicalPromotionApprovalEvidence = z.infer<
   typeof aflTradeExternalCanonicalPromotionApprovalEvidenceSchema
 >;
 
-/** Recorded on the receipt of a promotion whose candidate deferred pick-side issues (#869). */
+/**
+ * Recorded on the receipt of a promotion whose candidate carries a pick-side deferral (#869): one
+ * that deferred pick-side issues, or since migration 0282 one that deferred none but re-syncs or
+ * leaves records to an earlier promotion (#853, `deferredIssueCount` 0).
+ */
 const requestPickLineageDeferralSchema = z
   .object({
     decisionId: reviewDecisionIdSchema,
-    deferredIssueCount: z.number().int().positive(),
+    deferredIssueCount: z.number().int().nonnegative(),
     /** Drafts left to their existing current promotion; present only when any. */
     promotedDraftCount: z.number().int().positive().optional(),
     /** Selections re-promoted alone under a re-targeted draftee (#853); present only when any. */
     resyncedSelectionCount: z.number().int().positive().optional(),
+    /**
+     * Selections re-promoted under the candidate's pick in place of a number-only one (#853,
+     * migration 0284); present only when any.
+     */
+    rekeyedSelectionCount: z.number().int().positive().optional(),
     /** Resolved lineages into those drafts whose realization is not written; present only when any. */
     skippedRealizationCount: z.number().int().positive().optional(),
     /** Custody observations without a usable status, left unwritten; present only when any. */
@@ -651,7 +662,7 @@ export interface AuthenticatedAflTradeExternalCanonicalPromotion {
   readonly transferCount: number;
   /**
    * Selections the promotion writes: none of a draft holding a deferred selection, and only the
-   * re-synced slots of a draft whose draftee an identity repair re-targeted.
+   * re-synced and re-keyed slots of a draft otherwise current canonical.
    */
   readonly draftSelectionCount: number;
   /** Custody observations the promotion writes: none for a deferred pick. */
@@ -1324,8 +1335,10 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   assertPromotionDraftCoverage(content, expectedCoverage);
   assertPromotionResyncCoverage(content, proposal);
   const scope = aflTradePromotionWriteScope(content);
+  // Any deferral, even one that deferred no issue (#853), promotes through the metadata-only proposal:
+  // the database takes its deferred draft-coverage branch for every candidate with the decision.
   if (
-    scope.deferral.deferredIssueCount > 0 &&
+    scope.deferral.deferral !== null &&
     proposal.content.schemaVersion !==
       AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION &&
     proposal.content.schemaVersion !== 'afl-trade-external-canonical-promotion-proposal/v4'
@@ -1356,6 +1369,9 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
             ...(scope.resyncedSelectionCount === 0
               ? {}
               : { resyncedSelectionCount: scope.resyncedSelectionCount }),
+            ...(scope.rekeyedSelectionCount === 0
+              ? {}
+              : { rekeyedSelectionCount: scope.rekeyedSelectionCount }),
             ...(scope.skippedRealizationCount === 0
               ? {}
               : { skippedRealizationCount: scope.skippedRealizationCount }),
