@@ -218,7 +218,7 @@ describe('Footyinfo board matched-bid points (parser v2, issue 789)', () => {
     expect(refusal(label)).toMatch(/lists spent pick 7449/);
   });
 
-  it('refuses a points-used pick no matched bid lists, or one two bids list', () => {
+  it('refuses a points-used pick no matched bid lists, or one a bid lists twice or another bid lists', () => {
     const unlisted = edit(FOOTYINFO_2021_MATCHED_BIDS, 5733, (pick) => ({
       ...pick,
       spent: pick.spent!.filter(({ id }) => id !== 5727),
@@ -229,7 +229,28 @@ describe('Footyinfo board matched-bid points (parser v2, issue 789)', () => {
       ...pick,
       spent: [...pick.spent!, FOOTYINFO_2021_MATCHED_BIDS[0]!.spent![0]!],
     }));
-    expect(refusal(twice)).toMatch(/spent pick 7449/);
+    // Another bid's pick is not recorded as spent on Daicos.
+    expect(refusal(twice)).toMatch(
+      /Matched bid 5735 lists spent pick 7449, which the board does not/
+    );
+    const repeated = edit(FOOTYINFO_2021_MATCHED_BIDS, 5733, (pick) => ({
+      ...pick,
+      spent: [...pick.spent!, pick.spent![0]!],
+    }));
+    expect(refusal(repeated)).toMatch(/Matched bid 5733 lists spent pick 7449 twice/);
+  });
+
+  it('refuses a spent pick held by a club other than the one that matched', () => {
+    const held = edit(FOOTYINFO_2021_MATCHED_BIDS, 7449, (pick) => ({ ...pick, club: 'GEE' }));
+    expect(refusal(held)).toMatch(
+      /Matched bid 5733 lists spent pick 7449, which the board does not/
+    );
+  });
+
+  it('refuses a capture that names an unreviewed parser version rather than reading it as v1', () => {
+    expect(() =>
+      parse(FOOTYINFO_2021_MATCHED_BIDS, { parserVersion: 'footyinfo-draft-board-parser/v3' })
+    ).toThrow(/no reviewed parser version/);
   });
 
   it('refuses a leftover pick that does not carry exactly the excess, or names no matched bid', () => {

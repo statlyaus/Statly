@@ -5040,8 +5040,11 @@ The remaining work proceeds through these independently verifiable gates:
        If its player or club has no reviewed resolution, the row is cited on the selection but not
        counted. It can then neither make the selection unresolved nor null its player. A Footyinfo-only
        selection resolves like any provider's.
-     - **Matched-bid points (parser v2, issue 789).** v2 emits exactly v1's rows (ordinals and keys)
-       and issues, then one `draft_board_bid_match` per matched bid
+     - **Matched-bid points (parser v2, issue 789).** On a page it accepts, v2 emits exactly v1's
+       rows (ordinals and keys), then one `draft_board_bid_match` per matched bid. It also checks
+       every pick's bid fields, so it can refuse a page v1 accepted (no reviewed board does). A
+       retained v1 capture stays valid as recorded (`PINNED_PARSER_VERSIONS`), and a capture naming
+       any other parser version is refused rather than read as v1
        (`source/footyinfoDraftBoardBidMatches.ts`; migration 0287 admits the kind). It feeds the
        matched-bid shares of the value-line method (`afl-trade-value-line-method.md`: each spent pick
        takes a share of the nominee's value line in proportion to the draft points it covered). Each
@@ -5068,7 +5071,10 @@ The remaining work proceeds through these independently verifiable gates:
        - **Not yet read.** Nothing reconciles or grades these rows. A candidate must conserve every
          staged row, so a candidate over a v2 board batch is refused (by the repository's membership
          check and the finalize trigger) until reconciliation carries a record per bid match and the
-         trigger cites it. How a leftover pick's points enter the shares (which spent pick covered
+         trigger cites it. That change must also observe the bid-match identities (at least the
+         bidding club) in the identity-review package and its two database mirrors (migration 0285),
+         or a club named only there never loads its reviewed decision. How a leftover pick's points
+         enter the shares (which spent pick covered
          less) is open for the share step. The fields and the share use need an owner decision
          before any v2 capture (source-rights assessment).
      - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row

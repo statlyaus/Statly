@@ -17,6 +17,7 @@ import {
   ingestAuthorizedAflTradeExternalPage,
   type AflTradeExternalProviderIngestionDependencies,
   validateAflTradeExternalCaptureScope,
+  validateAflTradeRetainedCaptureScope,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeProviderIngestion';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 import { PostgresAflTradeExternalCaptureRegistry } from '@/server/aflTradeIntelligence/source/postgresExternalCaptureRegistry';
@@ -824,6 +825,17 @@ describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
     expect(() => validateAflTradeExternalCaptureScope(board(overrides))).toThrow(
       /do not exactly match/
     );
+  });
+
+  it('keeps a retained v1 board capture valid as recorded, but no other parser', () => {
+    const v1 = board({ parserVersion: 'footyinfo-draft-board-parser/v1' });
+    expect(() => validateAflTradeRetainedCaptureScope(v1)).not.toThrow();
+    expect(() => validateAflTradeRetainedCaptureScope(board({}))).not.toThrow();
+    expect(() =>
+      validateAflTradeRetainedCaptureScope(
+        board({ parserVersion: 'footyinfo-draft-board-parser/v3' })
+      )
+    ).toThrow(/do not exactly match/);
   });
 
   it('refuses a Footyinfo provider under another capability', () => {

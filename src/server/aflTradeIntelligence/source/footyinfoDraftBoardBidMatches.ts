@@ -63,39 +63,62 @@ function spentPickLabel(round: number, entry: z.infer<typeof spentPickSchema>): 
   return `R${round} (${entry.original_team.abbrev})${number}`;
 }
 
+type SpentEntry = z.infer<typeof spentPickSchema>;
+
+/** The board records this pick as spent on the nominee, and held by the club that matched. */
+function spentOnNominee(board: BidPick | undefined, nominee: BidPick): board is BidPick {
+  return (
+    board !== undefined &&
+    board.status.id === 'points_used' &&
+    board.purchased_from?.pick_id === nominee.id &&
+    board.team.abbrev === nominee.team.abbrev
+  );
+}
+
+/** The bid's entry repeats the board's record: points, holder, original club, number and label. */
+function entryMatchesBoard(entry: SpentEntry, board: BidPick): boolean {
+  const sameOrigin =
+    board.original?.team?.abbrev === entry.original_team.abbrev &&
+    (board.original_number ?? null) === entry.original_number;
+  const sameLabel = board.round !== undefined && entry.label === spentPickLabel(board.round, entry);
+  return (
+    board.points_used === entry.points_used &&
+    board.team.abbrev === entry.team.abbrev &&
+    sameOrigin &&
+    sameLabel
+  );
+}
+
 /**
- * One spent pick as the matched bid lists it, checked against the board's own record of that pick:
- * spent on this nominee, with the same points, holder, original club, original number and label.
+ * The picks a matched bid lists as spent, each checked against the board's own record of that pick:
+ * spent on this nominee, held by its club, with the same points, original club, original number
+ * and label. A pick listed twice refuses.
  */
-function readSpentPick(
-  entry: z.infer<typeof spentPickSchema>,
+function readSpentPicks(
   nominee: BidPick,
   picks: ReadonlyMap<number, BidPick>
-): SpentPick | Failure {
-  const board = picks.get(entry.id);
-  if (
-    board === undefined ||
-    board.status.id !== 'points_used' ||
-    board.purchased_from?.pick_id !== nominee.id ||
-    board.points_used !== entry.points_used ||
-    board.team.abbrev !== entry.team.abbrev ||
-    board.original?.team?.abbrev !== entry.original_team.abbrev ||
-    (board.original_number ?? null) !== entry.original_number ||
-    board.round === undefined ||
-    entry.label !== spentPickLabel(board.round, entry)
-  ) {
-    return {
-      error: `Matched bid ${nominee.id} lists spent pick ${entry.id}, which the board does not record as spent on it.`,
-    };
+): SpentPick[] | Failure {
+  const spent: SpentPick[] = [];
+  for (const entry of nominee.consumed_picks ?? []) {
+    const board = picks.get(entry.id);
+    if (spent.some(({ nativePickId }) => nativePickId === String(entry.id))) {
+      return { error: `Matched bid ${nominee.id} lists spent pick ${entry.id} twice.` };
+    }
+    if (!spentOnNominee(board, nominee) || !entryMatchesBoard(entry, board)) {
+      return {
+        error: `Matched bid ${nominee.id} lists spent pick ${entry.id}, which the board does not record as spent on it.`,
+      };
+    }
+    spent.push({
+      nativePickId: String(entry.id),
+      label: entry.label,
+      originalNumber: entry.original_number,
+      originalClubCode: entry.original_team.abbrev,
+      holdingClubCode: entry.team.abbrev,
+      pointsUsed: entry.points_used,
+    });
   }
-  return {
-    nativePickId: String(entry.id),
-    label: entry.label,
-    originalNumber: entry.original_number,
-    originalClubCode: entry.original_team.abbrev,
-    holdingClubCode: entry.team.abbrev,
-    pointsUsed: entry.points_used,
-  };
+  return spent;
 }
 
 /**
@@ -143,67 +166,111 @@ function leftoverMatchesExcess(
   return carried.length <= 1 && (carried[0] ?? 0) === excess;
 }
 
+/** The points rules, in the order a reader checks them: presence, shortfall, then the excess. */
+function pointsFailure(
+  nominee: BidPick,
+  spent: readonly SpentPick[],
+  leftovers: readonly LeftoverPick[]
+): Failure | null {
+  const pointsUsed = nominee.points_used ?? null;
+  const spentPoints = spent.reduce((total, pick) => total + pick.pointsUsed, 0);
+  if ((pointsUsed === null) !== (spent.length === 0)) {
+    return {
+      error: `Matched bid ${nominee.id} states points used without spent picks, or the reverse.`,
+    };
+  }
+  if (pointsUsed !== null && spentPoints < pointsUsed) {
+    return { error: `Matched bid ${nominee.id} used more points than its spent picks hold.` };
+  }
+  if (!leftoverMatchesExcess(pointsUsed, spentPoints, leftovers)) {
+    return {
+      error: `Matched bid ${nominee.id} has spent points its leftover pick does not account for.`,
+    };
+  }
+  return null;
+}
+
+type Nominee = BidPick & {
+  number: number;
+  player: NonNullable<BidPick['player']>;
+  points: number;
+  bid: { team: z.infer<typeof team>; match_reason: keyof typeof FOOTYINFO_BID_BASIS };
+};
+
+/** A selection the board calls a matched bid: a bidding club, a number, a player and points. */
+function asNominee(pick: BidPick): Nominee | Failure | null {
+  if (pick.status.id === 'points_used') return null;
+  if (pick.bid?.team === undefined) {
+    return pick.consumed_picks === undefined && pick.points_used === undefined
+      ? null
+      : { error: `Board pick ${pick.id} states points used without a matched bid.` };
+  }
+  const complete =
+    pick.number !== undefined && pick.player !== undefined && pick.points !== undefined;
+  return complete && Object.hasOwn(FOOTYINFO_BID_BASIS, pick.bid.match_reason)
+    ? (pick as Nominee)
+    : { error: `Matched bid ${pick.id} has no selection, points or reviewed basis.` };
+}
+
 function readBidMatch(
   pick: BidPick,
   picks: ReadonlyMap<number, BidPick>,
   leftovers: ReadonlyMap<number, LeftoverPick[]>,
   draftYear: number
 ): FootyinfoBoardBidMatchClaim | Failure | null {
-  if (pick.status.id === 'points_used') return null;
-  const bidTeam = pick.bid?.team;
-  if (bidTeam === undefined) {
-    return pick.consumed_picks === undefined && pick.points_used === undefined
-      ? null
-      : { error: `Board pick ${pick.id} states points used without a matched bid.` };
-  }
-  const reason = pick.bid!.match_reason;
-  if (
-    pick.number === undefined ||
-    pick.player === undefined ||
-    pick.points === undefined ||
-    !Object.hasOwn(FOOTYINFO_BID_BASIS, reason)
-  ) {
-    return { error: `Matched bid ${pick.id} has no selection, points or reviewed basis.` };
-  }
-  const spent: SpentPick[] = [];
-  for (const entry of pick.consumed_picks ?? []) {
-    const read = readSpentPick(entry, pick, picks);
-    if ('error' in read) return read;
-    spent.push(read);
-  }
-  const spentPoints = spent.reduce((total, { pointsUsed }) => total + pointsUsed, 0);
-  if ((pick.points_used === undefined) !== (spent.length === 0)) {
-    return {
-      error: `Matched bid ${pick.id} states points used without spent picks, or the reverse.`,
-    };
-  }
-  if (pick.points_used !== undefined && spentPoints < pick.points_used) {
-    return { error: `Matched bid ${pick.id} used more points than its spent picks hold.` };
-  }
-  const leftoverPicks = leftovers.get(pick.id) ?? [];
-  if (!leftoverMatchesExcess(pick.points_used ?? null, spentPoints, leftoverPicks)) {
-    return {
-      error: `Matched bid ${pick.id} has spent points its leftover pick does not account for.`,
-    };
-  }
+  const nominee = asNominee(pick);
+  if (nominee === null || 'error' in nominee) return nominee;
+  const spent = readSpentPicks(nominee, picks);
+  if ('error' in spent) return spent;
+  const leftoverPicks = leftovers.get(nominee.id) ?? [];
+  const failure = pointsFailure(nominee, spent, leftoverPicks);
+  if (failure !== null) return failure;
   return {
     kind: 'draft_board_bid_match',
     draftYear,
     draftType: 'national',
-    nativePickId: String(pick.id),
-    selectionNumber: pick.number,
-    roundNumber: pick.round ?? null,
-    club: entity(pick.team),
-    player: { nativeId: pick.player.slug, recordedName: pick.player.known_as },
-    bid: {
-      club: entity(bidTeam),
-      basis: FOOTYINFO_BID_BASIS[reason as keyof typeof FOOTYINFO_BID_BASIS],
-    },
-    points: pick.points,
-    pointsUsed: pick.points_used ?? null,
+    nativePickId: String(nominee.id),
+    selectionNumber: nominee.number,
+    roundNumber: nominee.round ?? null,
+    club: entity(nominee.team),
+    player: { nativeId: nominee.player.slug, recordedName: nominee.player.known_as },
+    bid: { club: entity(nominee.bid.team), basis: FOOTYINFO_BID_BASIS[nominee.bid.match_reason] },
+    points: nominee.points,
+    pointsUsed: nominee.points_used ?? null,
     consumedPicks: spent,
     leftoverPicks,
   };
+}
+
+function parseBidPicks(rawPicks: readonly unknown[]): BidPick[] | Failure {
+  const picks: BidPick[] = [];
+  for (const raw of rawPicks) {
+    const parsed = bidPickSchema.safeParse(raw);
+    if (!parsed.success)
+      return { error: 'A board pick’s bid points do not have the reviewed shape.' };
+    picks.push(parsed.data);
+  }
+  return picks;
+}
+
+/** Every pick the board records as spent is listed by exactly one matched bid. */
+function unaccountedSpentPick(
+  picks: readonly BidPick[],
+  claims: ReadonlyArray<{ claim: FootyinfoBoardBidMatchClaim }>
+): Failure | null {
+  const listed = claims.flatMap(({ claim }) =>
+    claim.consumedPicks.map(({ nativePickId }) => nativePickId)
+  );
+  const spentOn = new Set(listed);
+  if (spentOn.size !== listed.length) {
+    return { error: 'A spent pick is listed by more than one matched bid.' };
+  }
+  const unlisted = picks.find(
+    ({ id, status }) => status.id === 'points_used' && !spentOn.has(String(id))
+  );
+  return unlisted === undefined
+    ? null
+    : { error: `Board pick ${unlisted.id} used points for no matched bid on the board.` };
 }
 
 /**
@@ -217,35 +284,17 @@ export function readFootyinfoBoardBidMatches(
   rawPicks: readonly unknown[],
   draftYear: number
 ): { claims: Array<{ sourceKey: string; claim: FootyinfoBoardBidMatchClaim }> } | Failure {
-  const picks: BidPick[] = [];
-  for (const raw of rawPicks) {
-    const parsed = bidPickSchema.safeParse(raw);
-    if (!parsed.success)
-      return { error: 'A board pick’s bid points do not have the reviewed shape.' };
-    picks.push(parsed.data);
-  }
+  const picks = parseBidPicks(rawPicks);
+  if ('error' in picks) return picks;
   const byId = new Map(picks.map((pick) => [pick.id, pick]));
   const leftovers = leftoversByBid(picks);
   if ('error' in leftovers) return leftovers;
-  const spentOn = new Set<string>();
   const claims: Array<{ sourceKey: string; claim: FootyinfoBoardBidMatchClaim }> = [];
   for (const pick of picks) {
     const claim = readBidMatch(pick, byId, leftovers, draftYear);
     if (claim === null) continue;
     if ('error' in claim) return claim;
-    for (const { nativePickId } of claim.consumedPicks) {
-      if (spentOn.has(nativePickId)) {
-        return { error: `Spent pick ${nativePickId} is listed by more than one matched bid.` };
-      }
-      spentOn.add(nativePickId);
-    }
     claims.push({ sourceKey: `${draftYear}:national:pick:${pick.id}:bid_match`, claim });
   }
-  const unlisted = picks.find(
-    ({ id, status }) => status.id === 'points_used' && !spentOn.has(String(id))
-  );
-  if (unlisted !== undefined) {
-    return { error: `Board pick ${unlisted.id} used points for no matched bid on the board.` };
-  }
-  return { claims };
+  return unaccountedSpentPick(picks, claims) ?? { claims };
 }

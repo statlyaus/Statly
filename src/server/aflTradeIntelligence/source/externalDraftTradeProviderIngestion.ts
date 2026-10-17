@@ -359,6 +359,8 @@ const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
   'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
   'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,
   'official-afl-issuing-award': OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
+  // A retained v1 board capture (issue 853) stays valid as recorded under v2 (issue 789).
+  'footyinfo-national-draft-board': FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
 };
 
 function isEarlierParserVersion(recorded: string, current: string): boolean {
