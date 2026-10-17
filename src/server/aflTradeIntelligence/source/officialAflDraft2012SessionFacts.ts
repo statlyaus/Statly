@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_ARTICLE_DATE } from './officialAflArticleDate';
 import { createHash } from 'node:crypto';
 import { load } from 'cheerio';
 import {
@@ -56,7 +57,7 @@ export function parseOfficialAflDraft2012SessionFacts(
   if (!key) return fail();
   const $ = load(html),
     body = $('.article-body'),
-    date = $('.article__date > time');
+    date = $(OFFICIAL_AFL_ARTICLE_DATE);
   // Pin the reviewed article text, never navigation or related-story text. Structural
   // checks below also reject changed club headings and moved/duplicated labels.
   if (
@@ -186,4 +187,18 @@ export function parseOfficialAflDraft2012SessionFacts(
     ),
     issues: [],
   };
+}
+
+/**
+ * The reviewed 2012 completed-session pages with each page's own reviewed date, which the capture
+ * records as its effective instant (a retrospective page keeps its later publication year).
+ */
+export function reviewedOfficialAflDraft2012SessionPages(): readonly {
+  url: string;
+  effectiveAt: string;
+}[] {
+  return (Object.keys(reviewed) as (keyof typeof reviewed)[]).map((key) => ({
+    url: OFFICIAL_AFL_2012_SESSION_URLS[key],
+    effectiveAt: reviewed[key].time,
+  }));
 }

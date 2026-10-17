@@ -1074,7 +1074,9 @@ Prerequisites:
      before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
      date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
      values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
-     and still requires exactly one. The v18 decisions and their captures stay valid. The 2025
+     and still requires exactly one; the 2011 to 2016 national-draft parsers read either wrapper
+     too (issue 789, `source/officialAflArticleDate.ts`). The v18 decisions and their captures
+     stay valid. The 2025
      national draft alone is read by parser v20, so its decision is
      `official-afl-completed-draft-session-issue579-private-2025-session-v20` and its rights name
      `official-afl-completed-draft-session/v20`; every other season stays on v19 (coordinator
@@ -1162,9 +1164,24 @@ npm run outcomes:sources:capture-local-external -- \
 ```
 
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
-(2010-2018) are not enumerable here and are refused. `--season 2025` expands to its two night-report
-snapshots and needs the `-2025-session-v20` decision; a 2025 season in a run with other seasons
-still needs each season's own decision.
+(2010, 2017 and 2018, and the 2011 and 2012 mini-drafts) are not enumerable here and are refused.
+`--season 2025` expands to its two night-report snapshots and needs the `-2025-session-v20`
+decision; a 2025 season in a run with other seasons still needs each season's own decision.
+
+The 2011 to 2016 national drafts (issue 789) are enumerable at parser v19, each needing its own
+`-<season>-session-v19` decision. Each season held one night (2011-11-24, 2012-11-22, 2013-11-21,
+2014-11-27, 2015-11-24, 2016-11-25), and its facts combine across the reviewed pages of
+`source/officialAflDraft<season>SessionFacts.ts`: a membership list or inventory, a dated wrap, first
+and last selections, and a total, some from retrospective articles (4, 3, 3, 5, 2 and 3 pages). Each
+target is effective at the page's own reviewed date, not the draft night, because ingestion pins a
+page's effective year to its reviewed publication year (2011's total is a 2013 article; the 2013 and
+2016 totals are the same 2019 article, captured once per season). These parsers pin each page's
+date and article text, and v19 now reads the renamed `article__byline-date` wrapper there too; a
+changed page is an `invalid_draft_session` issue. Their facts emit claim kinds the 2019 to 2025
+decisions do not name (membership rosters, member numbers, an inventory, rookie-elevation
+exclusions and two dated `draft_selection` rows), so each season's rights must name the leaves its
+pages emit. The selections themselves come from the Draftguru year pages; these pages prove the
+session that lets a selection without pick custody be promoted.
 
 To capture only some of a season's pages, add `--url` with each exact reviewed page, for example to
 recapture one night without fetching the other again.

@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_ARTICLE_DATE } from './officialAflArticleDate';
 import { load } from 'cheerio';
 
 import {
@@ -141,7 +142,7 @@ export function parseOfficialAflDraft2016SessionFacts(
   if (!report) return fail('No reviewed 2016 partial-session report matches this exact URL.');
   const $ = load(html);
   const body = $('.article-body');
-  const dates = $('.article__date > time');
+  const dates = $(OFFICIAL_AFL_ARTICLE_DATE);
   const paragraphs = body
     .children('p')
     .map((_, element) => $(element).text().replace(/\s+/g, ' ').trim())
@@ -175,4 +176,15 @@ export function parseOfficialAflDraft2016SessionFacts(
     ),
     issues: [],
   };
+}
+
+/**
+ * The reviewed 2016 completed-session pages with each page's own reviewed date, which the capture
+ * records as its effective instant (a retrospective page keeps its later publication year).
+ */
+export function reviewedOfficialAflDraft2016SessionPages(): readonly {
+  url: string;
+  effectiveAt: string;
+}[] {
+  return [...reports].map(([url, report]) => ({ url, effectiveAt: report.displayedDate }));
 }
