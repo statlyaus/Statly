@@ -253,12 +253,6 @@ describe.sequential('league trade service transactions', () => {
     expect(replay).toEqual(accepted);
     await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.secondMember);
     await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.firstMember);
-    await expect(legacyRoster(ids.firstMember)).resolves.toMatchObject({
-      playerIds: [ids.secondPlayer],
-    });
-    await expect(legacyRoster(ids.secondMember)).resolves.toMatchObject({
-      playerIds: [ids.firstPlayer],
-    });
 
     await expect(
       service.executeLeagueTradeAction(
@@ -794,22 +788,6 @@ async function seedLeague(): Promise<void> {
       },
     ],
   });
-  await prisma.leagueRoster.createMany({
-    data: [
-      {
-        id: 'trade-test-legacy-roster-first',
-        leagueId: ids.league,
-        memberId: ids.firstMember,
-        playerIds: JSON.stringify([ids.firstPlayer]),
-      },
-      {
-        id: 'trade-test-legacy-roster-second',
-        leagueId: ids.league,
-        memberId: ids.secondMember,
-        playerIds: JSON.stringify([ids.secondPlayer]),
-      },
-    ],
-  });
 }
 
 async function deleteFixtures(): Promise<void> {
@@ -854,14 +832,6 @@ async function resetTradeState(): Promise<void> {
     where: { leagueId_playerId: { leagueId: ids.league, playerId: ids.secondPlayer } },
     data: { memberId: ids.secondMember, acquiredBy: 'DRAFT' },
   });
-  await prisma.leagueRoster.update({
-    where: { leagueId_memberId: { leagueId: ids.league, memberId: ids.firstMember } },
-    data: { playerIds: JSON.stringify([ids.firstPlayer]) },
-  });
-  await prisma.leagueRoster.update({
-    where: { leagueId_memberId: { leagueId: ids.league, memberId: ids.secondMember } },
-    data: { playerIds: JSON.stringify([ids.secondPlayer]) },
-  });
   await setReviewMode('NONE');
 }
 
@@ -903,14 +873,6 @@ async function ownerOf(playerId: string): Promise<string | undefined> {
       select: { memberId: true },
     })
   )?.memberId;
-}
-
-async function legacyRoster(memberId: string) {
-  const roster = await prisma.leagueRoster.findUniqueOrThrow({
-    where: { leagueId_memberId: { leagueId: ids.league, memberId } },
-    select: { playerIds: true },
-  });
-  return { ...roster, playerIds: JSON.parse(roster.playerIds) as string[] };
 }
 
 function user(id: string, name: string) {

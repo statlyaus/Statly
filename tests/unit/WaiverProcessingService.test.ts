@@ -52,13 +52,6 @@ function createDbMock() {
         userId: 'user-1',
       }),
     },
-    leagueRoster: {
-      findUnique: vi.fn().mockResolvedValue({
-        id: 'roster-1',
-        playerIds: JSON.stringify(['old-player', 'keep-player']),
-      }),
-      upsert: vi.fn().mockResolvedValue({ id: 'roster-1' }),
-    },
     leagueRosterPlayer: {
       count: vi.fn().mockResolvedValue(2),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -170,15 +163,6 @@ describe('WaiverProcessingService', () => {
         playerId: 'free-player',
         acquiredBy: 'WAIVER',
       }),
-    });
-    expect(tx.leagueRoster.upsert).toHaveBeenCalledWith({
-      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
-      update: { playerIds: JSON.stringify(['keep-player', 'free-player']) },
-      create: {
-        leagueId: 'league-1',
-        memberId: 'member-1',
-        playerIds: JSON.stringify(['keep-player', 'free-player']),
-      },
     });
     expect(claimStore.claimPending).toHaveBeenCalledWith(
       tx,
@@ -454,7 +438,6 @@ describe('WaiverProcessingService', () => {
     const { db, tx } = createDbMock();
     tx.league.findUnique.mockResolvedValue({ id: 'league-1', settings: { rosterSize: 10 } });
     tx.leagueRosterPlayer.count.mockResolvedValue(0);
-    tx.leagueRoster.findUnique.mockResolvedValue({ id: 'roster-1', playerIds: '[]' });
     tx.player.findMany.mockResolvedValue([
       { id: 'player-1', name: 'Player One', club: 'Test Club', position: 'MID' },
       { id: 'player-2', name: 'Player Two', club: 'Test Club', position: 'FWD' },

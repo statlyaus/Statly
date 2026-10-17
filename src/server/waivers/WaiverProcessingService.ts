@@ -161,24 +161,8 @@ type CanonicalRosterPlan =
       memberId: string;
       playerId: string;
       dropPlayerId?: string;
-      nextPlayerIds: string;
     }
   | { status: 'FAILED'; reason: string };
-
-function parsePlayerIds(raw?: string | null): string[] {
-  if (!raw) return [];
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
-function stringifyPlayerIds(playerIds: string[]): string {
-  return JSON.stringify(Array.from(new Set(playerIds)));
-}
 
 function normalizeDate(value: unknown): Date {
   if (value instanceof Date) return value;
@@ -452,11 +436,6 @@ export class WaiverProcessingService {
       });
     }
 
-    await tx.leagueRoster.upsert({
-      where: { leagueId_memberId: { leagueId, memberId: plan.memberId } },
-      update: { playerIds: plan.nextPlayerIds },
-      create: { leagueId, memberId: plan.memberId, playerIds: plan.nextPlayerIds },
-    });
     await tx.leagueRosterPlayer.upsert({
       where: { leagueId_playerId: { leagueId, playerId: plan.playerId } },
       update: {
@@ -561,21 +540,11 @@ export class WaiverProcessingService {
       return { status: 'FAILED', reason: 'Roster limit reached' };
     }
 
-    const roster = await tx.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId } },
-      select: { playerIds: true },
-    });
-    const playerIds = parsePlayerIds(roster?.playerIds)
-      .filter((playerId) => playerId !== claim.dropPlayerId && playerId !== canonicalDropPlayerId)
-      .filter((playerId) => !playerAliasIds.includes(playerId));
-    playerIds.push(canonicalPlayerId);
-
     return {
       status: 'READY',
       memberId,
       playerId: canonicalPlayerId,
       ...(canonicalDropPlayerId ? { dropPlayerId: canonicalDropPlayerId } : {}),
-      nextPlayerIds: stringifyPlayerIds(playerIds),
     };
   }
 }

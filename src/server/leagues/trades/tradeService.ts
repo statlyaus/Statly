@@ -623,26 +623,6 @@ async function moveRosterPlayers(
     },
   });
 
-  await syncLegacyRoster(tx, leagueId, firstMemberId);
-  await syncLegacyRoster(tx, leagueId, secondMemberId);
-}
-
-async function syncLegacyRoster(
-  tx: Transaction,
-  leagueId: string,
-  memberId: string
-): Promise<void> {
-  const players = await tx.leagueRosterPlayer.findMany({
-    where: { leagueId, memberId },
-    select: { playerId: true },
-    orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
-  });
-  const data = { playerIds: JSON.stringify(players.map((player) => player.playerId)) };
-  await tx.leagueRoster.upsert({
-    where: { leagueId_memberId: { leagueId, memberId } },
-    update: data,
-    create: { leagueId, memberId, ...data },
-  });
 }
 
 async function invalidateConflictingTrades(
