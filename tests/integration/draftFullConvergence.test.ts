@@ -40,7 +40,6 @@ async function removeFixture(): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.leagueRosterPlayer.deleteMany({ where: { leagueId: FIXTURE.leagueId } });
     await tx.waiverPriority.deleteMany({ where: { leagueId: FIXTURE.leagueId } });
-    await tx.leagueRoster.deleteMany({ where: { leagueId: FIXTURE.leagueId } });
     await tx.preDraftQueue.deleteMany({ where: { draftId: FIXTURE.draftId } });
     await tx.draftEvent.deleteMany({ where: { draftId: FIXTURE.draftId } });
     await tx.pick.deleteMany({ where: { draftId: FIXTURE.draftId } });
