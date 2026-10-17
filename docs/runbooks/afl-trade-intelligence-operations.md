@@ -1124,13 +1124,14 @@ Prerequisites:
      `draft_board_bid_match` per matched bid. The rights must name exactly
      `FOOTYINFO_DRAFT_BOARD_FIELDS` from `development/localFootyinfoDraftBoardCapture.ts` (v1's
      fields plus `FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS`), with provider `footyinfo` and an
-     86,400 s cache. The bid-match fields and their use for matched-bid shares are outside the
-     owner's 2026-10-12 decision, so no v2 decision exists until the owner records one (source
-     policy). The v1 decisions and captures stay valid as recorded. Staging admits
-     `draft_board_pick` from migration 0271 and `draft_board_bid_match` from migration 0287; an
-     earlier database refuses the capture's evidence rows. Do not reconcile a v2 board batch until
-     reconciliation carries the bid-match rows (#789): until then the candidate is refused as
-     unconserved.
+     86,400 s cache. The owner recorded the seven `-board-v2` decisions on 2026-10-17 (ledger
+     revision 103; receipt `receipts/footyinfo-board-v2-bid-match-decision-2026-10-17.json`): the
+     price of a bid comes from the draft year's AFL rule, and Footyinfo's bid points and spent picks
+     may be used, privately, on the grading VM only. The v1 decisions and captures stay valid as
+     recorded. Staging admits `draft_board_pick` from migration 0271 and `draft_board_bid_match` from
+     migration 0287; an earlier database refuses the capture's evidence rows. Reconcile a v2 board
+     batch only on a database at migration 0288 or later and with code that carries
+     `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
    `draftguru-national-year-page/v4`),
@@ -1243,8 +1244,8 @@ but are not the AFL's; adding either, or any other substitute, is an owner decis
 source policy before the scope file changes. A reviewed window is consumed by the promotion review
 command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
 
-Capture the Footyinfo national draft boards (issues 853 and 789) once the owner's per-season
-`-board-v2` decisions are recorded. The owner approved egress only from `statly-grading-1` through
+Capture the Footyinfo national draft boards (issues 853 and 789) under the owner's per-season
+`-board-v2` decisions (recorded 2026-10-17). The owner approved egress only from `statly-grading-1` through
 the genuine-database wrapper, so this runs there and nowhere else. Each `--season` is the one board
 `https://www.footyinfo.com/draft/<season>`; there is no `--url`:
 
@@ -3566,7 +3567,11 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   error names the stored `artifactId`.
 - Read the printed `summary` before citing a ledger: `playersWithoutName` counts players with no
   approved canonical row, and `outcomes.unresolved` counts picks whose outcome the evidence does not
-  state. Every `matched_bid` outcome is pending until bid evidence lands.
+  state. `matchedBidPicksShared` counts the matched-bid picks that took a share of their nominee;
+  every other `matched_bid` outcome is pending with its `pendingReason`. `bidMatches` lists each
+  board matched bid with its price by the year's AFL rule, leftover and deficit, and each spent pick's
+  custody join (`link`). A candidate reconciled before migration 0288, or over v1 boards only, holds
+  no bid matches, so all its matched-bid picks stay `no_bid_spend`.
 - Like a grade batch, each run is a different ledger (its build time and spell cutoff are the run's
   start). Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
 

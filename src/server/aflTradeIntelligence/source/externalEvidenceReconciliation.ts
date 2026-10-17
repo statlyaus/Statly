@@ -44,6 +44,10 @@ import {
   aflTradePickCustodyHolders,
   createAflTradePickOnwardTransfers,
 } from './pickOnwardTransfer';
+import {
+  reconcileFootyinfoBoardBidMatches,
+  type AflTradeCanonicalDraftBoardBidMatch,
+} from './footyinfoBoardBidMatchReconciliation';
 
 /** Project source facts without resolving boundary identities or changing retained attribution. */
 function projectCombinedSessionSourceFact(
@@ -467,6 +471,11 @@ export interface AflTradeExternalReconciliationContent {
   pickOutcomes?: CanonicalPickOutcome[];
   /** Present only when a Footyinfo board was reconciled, so earlier candidate ids are unchanged. */
   draftBoardPicks?: CanonicalDraftBoardPick[];
+  /**
+   * Present only when a Footyinfo v2 board states a matched bid (issue 789), so candidates without
+   * one keep their ids.
+   */
+  draftBoardBidMatches?: AflTradeCanonicalDraftBoardBidMatch[];
   /**
    * The approved `reconciliation_scope` decision under which pick-side issues are `deferred`. Present
    * only when at least one issue was deferred, so a candidate without deferral keeps its id.
@@ -1397,16 +1406,30 @@ type DraftBoardPickEvidence = Evidence & {
 };
 
 /**
- * One record per Footyinfo `draft_board_pick` row, its holder and route resolved club by club. A
- * club with no reviewed resolution leaves the record unusable and is reported once, as one pick-side
- * `board-pick:` identity issue citing every row that names it.
+ * One record per Footyinfo `draft_board_pick` row, its holder and route resolved club by club, and
+ * one per `draft_board_bid_match` row (parser v2, issue 789). A club with no reviewed resolution
+ * leaves the record unusable and is reported once, as one pick-side `board-pick:` identity issue
+ * citing every row that names it.
  */
 function reconcileDraftBoardPicks(input: {
   evidence: readonly Evidence[];
   lookup: IdentityLookup;
   issues: ReconciliationIssue[];
-}): { records: CanonicalDraftBoardPick[]; rows: ReadonlyMap<string, DraftBoardPickEvidence> } {
-  const unresolved = new Map<string, { club: RecordedEntity; evidenceIds: string[] }>();
+}): {
+  records: CanonicalDraftBoardPick[];
+  bidMatches: AflTradeCanonicalDraftBoardBidMatch[];
+  rows: ReadonlyMap<string, DraftBoardPickEvidence>;
+} {
+  const unresolved = new Map<
+    string,
+    { club: RecordedEntity; evidenceIds: string[]; detail?: string }
+  >();
+  const noteUnresolved = (club: RecordedEntity, evidenceId: string, detail?: string) => {
+    const key = `${identityKey('footyinfo', 'club', club)}${detail === undefined ? '' : '|conflict'}`;
+    const entry = unresolved.get(key) ?? { club, evidenceIds: [], detail };
+    entry.evidenceIds.push(evidenceId);
+    unresolved.set(key, entry);
+  };
   const rows = new Map<string, DraftBoardPickEvidence>();
   const records = input.evidence
     .filter(
@@ -1417,12 +1440,7 @@ function reconcileDraftBoardPicks(input: {
       const claim = row.content.claim;
       const clubOf = (club: RecordedEntity) => {
         const clubId = input.lookup('footyinfo', 'club', club);
-        if (clubId === null) {
-          const key = identityKey('footyinfo', 'club', club);
-          const entry = unresolved.get(key) ?? { club, evidenceIds: [] };
-          entry.evidenceIds.push(row.evidenceId);
-          unresolved.set(key, entry);
-        }
+        if (clubId === null) noteUnresolved(club, row.evidenceId);
         return clubId;
       };
       const clubId = clubOf(claim.club);
@@ -1446,17 +1464,25 @@ function reconcileDraftBoardPicks(input: {
         evidenceIds: [row.evidenceId],
       };
     });
-  unresolved.forEach(({ club, evidenceIds }) =>
+  const bidMatches = reconcileFootyinfoBoardBidMatches({
+    evidence: input.evidence,
+    lookup: (entityKind, sourceIdentity) => input.lookup('footyinfo', entityKind, sourceIdentity),
+    noteUnresolved,
+  });
+  unresolved.forEach(({ club, evidenceIds, detail }) =>
     input.issues.push({
       code: 'identity_unresolved',
       severity: 'blocking',
       subjectKey: `board-pick:club:${club.nativeId ?? club.recordedName}`,
-      detail: `No current reviewed club resolution exists for footyinfo identity ${club.recordedName}.`,
+      detail:
+        detail ??
+        `No current reviewed club resolution exists for footyinfo identity ${club.recordedName}.`,
       evidenceIds: sortedUnique(evidenceIds),
     })
   );
   return {
     records: records.sort((left, right) => left.boardPickId.localeCompare(right.boardPickId)),
+    bidMatches,
     rows,
   };
 }
@@ -3578,6 +3604,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     // Only candidates with dispositions carry the key, so earlier candidate ids are unchanged.
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
+    ...(draftBoard.bidMatches.length === 0 ? {} : { draftBoardBidMatches: draftBoard.bidMatches }),
     // A candidate carries the decision when it deferred something, or when it deferred nothing but
     // lists records left to an earlier promotion or re-synced and writes no draft whole (#853, a
     // re-targeted draftee in a completion with no pick-side issue). Otherwise a candidate prepared
