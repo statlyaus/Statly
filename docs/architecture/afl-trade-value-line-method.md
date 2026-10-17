@@ -94,19 +94,28 @@ trade it passes through:
 - **A pick:** what the pick itself became. That is its slot expectation, then the drafted player's first
   stint at the club that used it (or its share of a nominee, for a matched bid), whoever ends up holding it.
 
-So in any one trade, what one club gives is exactly what the other receives. The trade is zero-sum, and a
-later trade never changes an earlier one's assessment.
+So in any one trade, what one club gives is exactly what the other receives, and the trade is zero-sum.
+
+**Every trade the asset passed through moves with its line (Owner).**
+
+- **Example.** Pick 19 is valued at 100 on trade day, and the player drafted with it delivers 190. Its line
+  rises to 190, and so does the net of every trade the pick passed through, including a trade before the one
+  in which it was used.
+- **What stays fixed:** the 100 remains the at-trade view, shown beside the result.
+- **What a later trade cannot change:** what the holder got for the asset when it traded it on. That belongs
+  to the later trade.
 
 **Chains.** When a club trades an asset on, the trades that share it are linked into a **chain view**:
 
 - **Example.** Club B gets an orange from Club A for an apple, then trades the orange to Club C for seven
   pears.
-- **Trade 1** (A and B): orange against apple. A's result stands on its own, whatever B later does with the
-  orange.
+- **Trade 1** (A and B): orange against apple. The orange's own line (what it turned out to be worth) moves
+  trade 1's result. What B got for it from C does not.
 - **Trade 2** (B and C): seven pears against orange.
 - **Chain view for B:** trade 1 plus trade 2. The orange appears once received and once given, so it
   cancels, and the chain shows B turned the apple into seven pears.
-- **What the chain does not do:** it does not take anything away from A's result.
+- **What the chain does not do:** it does not move A's result. B's good onward trade is B's, and the chain
+  shows it.
 
 This replaces "a traded-on pick is worth its club's return", and with it the bundle splits that rule needed
 (rules v1, v3, v11, and v13 to v18). Chain totals are now simply additive. Each club's chain view lists its
