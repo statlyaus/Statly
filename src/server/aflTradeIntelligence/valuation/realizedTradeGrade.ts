@@ -804,3 +804,14 @@ export function gradeAflTradesOnRealizedValue(
     limitation: AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   });
 }
+
+/**
+ * The grader's own stint rules, shared with the asset ledger (`assetLedger.ts`, issue 789) so a ledger
+ * stint is always the stint a grade leg values. Exported, not copied, so the two cannot drift.
+ */
+export {
+  arrivalReviewed as aflTradeRealizedArrivalReviewed,
+  firstStint as aflTradeRealizedFirstStint,
+  indexInputs as indexAflTradeRealizedStintInputs,
+};
+export type { Index as AflTradeRealizedStintIndex, Stint as AflTradeRealizedStint };
