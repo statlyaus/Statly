@@ -218,6 +218,15 @@ drift. The site serves bot-detection scripts; a challenge is a stop, never somet
 The repository keeps no provider bytes: its tests use synthetic pages in the reviewed markup. Other
 Footyinfo paths, years, fields or uses need a new decision.
 
+Parser `footyinfo-draft-board-parser/v2` (issue 789, 2026-10-17) adds the board's matched-bid
+points: the bid's points, the points used, each pick spent matching it with its points, and the
+leftover-points picks it created (`FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS`), for a fifth use, the
+matched-bid shares of the value-line method. That method's data table names official AFL
+bid-matching records as the source. Both the fields and the use need the owner's decision; none is
+recorded, so no `-board-v2` decision exists and no v2 capture may run until the owner records one.
+The test fixture of two 2021 matched bids states their values in the synthetic markup; it retains
+no provider bytes.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five

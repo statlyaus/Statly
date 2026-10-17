@@ -76,11 +76,27 @@ export const DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION = 'draftguru-national
 export const DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION =
   'draftguru-national-year-page/v3';
 
+/**
+ * v4 reads the 2011 to 2016 pages only (issue 789). On top of v3 it reviews three older forms: the
+ * `Mini-Draft` pathway label (counted and dropped, never a national pick), `Zone(<club>)` naming the
+ * selecting club (the Gold Coast, GWS and Brisbane zone selections, read as `academy`), and
+ * `Academy(<club>)` naming another club without ` - Not Matched` (read as `open`: the selecting club
+ * used an ordinary pick, so the academy club did not match).
+ */
+export const DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION =
+  'draftguru-national-year-page/v4';
+
+/** The page years parser v4 is reviewed for; every other year stays on v3. */
+export const DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS: readonly number[] = [
+  2011, 2012, 2013, 2014, 2015, 2016,
+];
+
 /** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
 export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
   return (
     parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
-    parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION
   );
 }
 
@@ -324,8 +340,8 @@ const pickCustodyClaimSchema = z
   .strict();
 
 /**
- * One pick on a Footyinfo national draft board (`footyinfo-draft-board-parser/v1`, issues 853 and
- * 789) as the board shows it with passed and removed picks included: the holder at the draft, the
+ * One pick on a Footyinfo national draft board (`footyinfo-draft-board-parser/v1` and v2, issues
+ * 853 and 789) as the board shows it with passed and removed picks included: the holder at the draft, the
  * pick number and player when it was selected, and the route the board states. `route` is the club
  * chain the board prints, original club first and holder last; it is empty when the board prints
  * none, which never means the pick did not move. `routeLabel`, `bid` and `note` are what the board
@@ -385,6 +401,110 @@ const draftBoardPickClaimSchema = z
         code: 'custom',
         path: ['bid'],
         message: 'A board pick names a bid exactly when its route says the bid was matched.',
+      });
+    }
+  });
+
+const boardPointsSchema = z.number().int().min(0).max(10_000);
+const boardNativePickIdSchema = z.string().regex(/^[1-9]\d{0,9}$/);
+const boardClubCodeSchema = z.string().regex(/^[A-Z]{2,4}$/);
+
+/**
+ * One matched bid on a Footyinfo national draft board (`footyinfo-draft-board-parser/v2`, issue
+ * 789): the nominee's selection, the bidding club and basis, the bid's points (`points`), the points
+ * the board says the matching club used (`pointsUsed`), and each pick the board lists as spent on the
+ * match with the points it used, and the leftover-points picks the board says the match created.
+ * The spent picks' points never fall short of `pointsUsed`; any excess is exactly the points of the
+ * one leftover pick that carries points (the rule on every reviewed board, 2019 to 2025). No spent
+ * pick and no `pointsUsed` is a match the club paid with no pick it held (a deficit). A provider
+ * statement, never an inference.
+ */
+const draftBoardBidMatchClaimSchema = z
+  .object({
+    kind: z.literal('draft_board_bid_match'),
+    draftYear: yearSchema,
+    draftType: draftTypeSchema,
+    nativePickId: boardNativePickIdSchema,
+    selectionNumber: positiveOrdinalSchema,
+    roundNumber: positiveOrdinalSchema.nullable(),
+    club: recordedEntitySchema,
+    player: recordedEntitySchema,
+    bid: z
+      .object({
+        club: recordedEntitySchema,
+        basis: z.enum(['father_son', 'academy', 'next_generation_academy']),
+      })
+      .strict(),
+    points: boardPointsSchema,
+    pointsUsed: boardPointsSchema.nullable(),
+    consumedPicks: z
+      .array(
+        z
+          .object({
+            nativePickId: boardNativePickIdSchema,
+            label: boundedText,
+            originalNumber: positiveOrdinalSchema.nullable(),
+            originalClubCode: boardClubCodeSchema,
+            holdingClubCode: boardClubCodeSchema,
+            pointsUsed: boardPointsSchema,
+          })
+          .strict()
+      )
+      .max(16),
+    leftoverPicks: z
+      .array(
+        z
+          .object({
+            nativePickId: boardNativePickIdSchema,
+            holdingClubCode: boardClubCodeSchema,
+            points: boardPointsSchema.nullable(),
+          })
+          .strict()
+      )
+      .max(8),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    const spent = claim.consumedPicks.reduce((total, pick) => total + pick.pointsUsed, 0);
+    const carried = claim.leftoverPicks.flatMap(({ points }) => (points === null ? [] : [points]));
+    const excess = claim.pointsUsed === null ? 0 : spent - claim.pointsUsed;
+    if (carried.length > 1 || (carried[0] ?? 0) !== excess) {
+      context.addIssue({
+        code: 'custom',
+        path: ['leftoverPicks'],
+        message: 'Spent points beyond those used are exactly one leftover pick’s points.',
+      });
+    }
+    if ((claim.pointsUsed === null) !== (claim.consumedPicks.length === 0)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pointsUsed'],
+        message: 'A matched bid states the points used exactly when it lists spent picks.',
+      });
+    } else if (claim.pointsUsed !== null && spent < claim.pointsUsed) {
+      context.addIssue({
+        code: 'custom',
+        path: ['consumedPicks'],
+        message: 'The spent picks cannot use fewer points than the matched bid used.',
+      });
+    }
+    const ids = [...claim.consumedPicks, ...claim.leftoverPicks].map(
+      ({ nativePickId }) => nativePickId
+    );
+    if (new Set([claim.nativePickId, ...ids]).size !== ids.length + 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['consumedPicks'],
+        message: 'A matched bid lists each spent and leftover pick once, never the nominee pick.',
+      });
+    }
+    if (
+      claim.consumedPicks.some(({ holdingClubCode }) => holdingClubCode !== claim.club.nativeId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['consumedPicks'],
+        message: 'Every spent pick is held by the club that matched the bid.',
       });
     }
   });
@@ -757,6 +877,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   draftSelectionClaimSchema,
   pickCustodyClaimSchema,
   draftBoardPickClaimSchema,
+  draftBoardBidMatchClaimSchema,
   playerDraftDetailClaimSchema,
 ]);
 
@@ -821,7 +942,7 @@ const allowedKindsByProvider = {
     'draft_completed_member_exclusion',
   ]),
   fitzroy_official_afl_player_details: new Set(['player_draft_detail']),
-  footyinfo: new Set(['draft_selection', 'draft_board_pick']),
+  footyinfo: new Set(['draft_selection', 'draft_board_pick', 'draft_board_bid_match']),
 } as const;
 
 const evidenceContentSchema = z

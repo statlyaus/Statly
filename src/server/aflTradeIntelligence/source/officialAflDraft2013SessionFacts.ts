@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_ARTICLE_DATE } from './officialAflArticleDate';
 import { createHash } from 'node:crypto';
 import { load } from 'cheerio';
 import {
@@ -85,7 +86,7 @@ export function parseOfficialAflDraft2013SessionFacts(
   });
   const $ = load(html),
     body = $('.article-body'),
-    dates = $('.article__date > time');
+    dates = $(OFFICIAL_AFL_ARTICLE_DATE);
   if (body.length !== 1 || dates.length !== 1) return fail();
   const url = input.capture.sourceUrl;
   const common = { draftYear: 2013, draftType: 'national' as const };
@@ -173,4 +174,19 @@ export function parseOfficialAflDraft2013SessionFacts(
     ),
     issues: [],
   };
+}
+
+/**
+ * The reviewed 2013 completed-session pages with each page's own reviewed date, which the capture
+ * records as its effective instant (a retrospective page keeps its later publication year).
+ */
+export function reviewedOfficialAflDraft2013SessionPages(): readonly {
+  url: string;
+  effectiveAt: string;
+}[] {
+  return [
+    { url: OFFICIAL_AFL_2013_SESSION_URLS.membership, effectiveAt: '2018-10-26T22:00:00Z' },
+    { url: OFFICIAL_AFL_2013_SESSION_URLS.event, effectiveAt: '2013-11-21T09:53:31Z' },
+    { url: OFFICIAL_AFL_2013_SESSION_URLS.total, effectiveAt: '2019-11-28T11:30:00Z' },
+  ];
 }

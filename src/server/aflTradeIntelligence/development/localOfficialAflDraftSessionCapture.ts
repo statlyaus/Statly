@@ -27,7 +27,10 @@ export interface LocalOfficialAflDraftSessionTarget {
   capabilityId: typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY;
   season: number;
   sourceUrl: string;
-  /** The completed date the reviewed page reports; the claims are effective from that day. */
+  /**
+   * The completed date the reviewed page reports, from which its claims are effective; for a 2011 to
+   * 2016 page, the page's own reviewed date (see `reviewedOfficialAflDraftSessionPages`).
+   */
   effectiveAt: string;
 }
 
@@ -75,11 +78,13 @@ function enumerateSeasonTargets(seasons: readonly number[]): LocalOfficialAflDra
           `No reviewed Official AFL completed-session page is enumerable for ${season}.`
         );
       }
-      return pages.map(({ url, completedOn }) => ({
+      return pages.map(({ url, completedOn, effectiveAt }) => ({
         capabilityId: OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY,
         season,
         sourceUrl: url,
-        effectiveAt: `${completedOn}T00:00:00.000Z`,
+        effectiveAt: effectiveAt
+          ? new Date(effectiveAt).toISOString()
+          : `${completedOn}T00:00:00.000Z`,
       }));
     });
 }
