@@ -135,7 +135,6 @@ type PrismaLike = Pick<
   | '$transaction'
   | 'league'
   | 'leagueMember'
-  | 'leagueRoster'
   | 'leagueRosterPlayer'
   | 'player'
   | 'teamAction'

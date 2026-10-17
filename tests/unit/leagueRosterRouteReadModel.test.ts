@@ -8,7 +8,6 @@ const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn(),
   leagueMember: { findFirst: vi.fn() },
   league: { findUnique: vi.fn() },
-  leagueRoster: { findUnique: vi.fn(), upsert: vi.fn() },
   leagueRosterPlayer: { findMany: vi.fn() },
 }));
 
@@ -41,11 +40,6 @@ describe('league roster route read model', () => {
       settings: {
         categoryDirectionsJson: JSON.stringify({ tackles: 'LOW_WINS' }),
       },
-    });
-    prismaMocks.leagueRoster.findUnique.mockResolvedValue({
-      id: 'roster-1',
-      benchOrder: JSON.stringify([]),
-      updatedAt: new Date('2025-07-19T10:00:00.000Z'),
     });
     prismaMocks.leagueRosterPlayer.findMany.mockResolvedValue([
       {
@@ -113,7 +107,6 @@ describe('league roster route read model', () => {
     expect(player).not.toHaveProperty('projectedScore');
     expect(body.data.roster).not.toHaveProperty('totalValue');
     expect(body.data.roster).not.toHaveProperty('averageScore');
-    expect(prismaMocks.leagueRoster.upsert).not.toHaveBeenCalled();
   });
 
   it('rejects a stale client roster instead of changing canonical ownership', async () => {
@@ -129,7 +122,6 @@ describe('league roster route read model', () => {
 
     expect(response.status).toBe(409);
     expect(body.error.message).toBe('The roster changed. Refresh before saving team preferences.');
-    expect(prismaMocks.leagueRoster.upsert).not.toHaveBeenCalled();
   });
 });
 
