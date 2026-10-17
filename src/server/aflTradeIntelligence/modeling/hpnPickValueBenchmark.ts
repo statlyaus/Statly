@@ -11,6 +11,8 @@ export const HPN_DPVC_V3_PICK_VALUE_BENCHMARK_SCHEMA_VERSION =
   'hpn-dpvc-v3-pick-value-benchmark/v1' as const;
 const FIRST_SUPPORTED_PICK = 1;
 const LAST_SUPPORTED_PICK = 90;
+/** The last selection HPN states DPVC v3 for; the curve is defined, not extrapolated, through it. */
+export const HPN_DPVC_V3_LAST_SUPPORTED_PICK = LAST_SUPPORTED_PICK;
 
 export function hpnDpv3ValueForPick(selectionNumber: number): number {
   if (
