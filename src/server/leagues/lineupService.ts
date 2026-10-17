@@ -193,6 +193,9 @@ function resolveThursdayLock(startsAt: Date | null, timeZone: string): Date | nu
   const localStart = getZonedDateTimeParts(startsAt, timeZone);
   const anchor = new Date(Date.UTC(localStart.year, localStart.month - 1, localStart.day));
   const daysSinceThursday = (anchor.getUTCDay() + 3) % 7;
+  // A Monday to Wednesday round starts before the Thursday that would lock it, so it locks at its own start
+  // rather than on the previous week's Thursday, while the previous round is still being played.
+  if (daysSinceThursday >= 4) return startsAt;
   anchor.setUTCDate(anchor.getUTCDate() - daysSinceThursday);
 
   return zonedDateTimeToUtc(

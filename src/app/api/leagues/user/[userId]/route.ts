@@ -84,7 +84,7 @@ export async function GET(
           status:
             draft?.status === 'COMPLETED'
               ? 'completed'
-              : draft?.status === 'LIVE'
+              : draft?.status === 'LIVE' || draft?.status === 'PAUSED'
                 ? 'active'
                 : 'preseason',
           draftCompleted: draft?.status === 'COMPLETED',
