@@ -13,6 +13,10 @@ export interface SocketRedisAdapterLifecycle {
 type RedisAdapterClient = Redis | Cluster;
 
 function readNonNegativeInteger(value: string | undefined, fallback: number): number {
+  // Number('') and Number('  ') are 0, which would silently disable retries.
+  if (value === undefined || value.trim() === '') {
+    return fallback;
+  }
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }

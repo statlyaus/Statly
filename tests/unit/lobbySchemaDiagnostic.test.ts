@@ -27,6 +27,21 @@ describe('lobby schema diagnostic', () => {
     });
   });
 
+  it('reports tables as not ready when only the draft table probe fails', async () => {
+    prismaMocks.draft.count.mockRejectedValue(new Error('The table `Draft` does not exist'));
+
+    const result = await loadLobbySchemaDiagnostic();
+
+    expect(result).toMatchObject({
+      tablesReady: false,
+      tableChecks: {
+        draft: { ready: false },
+        teamAction: { ready: true },
+        leagueRosterPlayer: { ready: true },
+      },
+    });
+  });
+
   it('reports migrated tables and lobby columns as ready', async () => {
     const result = await loadLobbySchemaDiagnostic();
 

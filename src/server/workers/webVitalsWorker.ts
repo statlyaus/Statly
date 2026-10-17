@@ -96,7 +96,7 @@ export function createWebVitalsWorker({
   });
 
   logger.info('WebVitals worker started', { concurrency });
-  return { worker, events };
+  return { worker, events, batcher };
 }
 
 export default createWebVitalsWorker;
@@ -107,15 +107,22 @@ function isDirectWorkerEntrypoint(): boolean {
 }
 
 if (isDirectWorkerEntrypoint()) {
-  const { worker, events } = createWebVitalsWorker();
+  const { worker, events, batcher } = createWebVitalsWorker();
 
   const shutdown = async (signal: string) => {
     logger.info('WebVitals worker shutting down', { signal });
-    await Promise.allSettled([
-      worker.close(),
-      events.close(),
-      ScalableRedisConnection.shutdownInstance(),
-    ]);
+    // Jobs complete once their records are buffered, so write what is still buffered before exit.
+    await worker.close().catch((error: unknown) => {
+      logger.error('WebVitals worker close failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    await batcher.flush().catch((error: unknown) => {
+      logger.error('WebVitals batch flush failed on shutdown', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    await Promise.allSettled([events.close(), ScalableRedisConnection.shutdownInstance()]);
     process.exit(0);
   };
 
