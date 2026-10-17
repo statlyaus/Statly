@@ -5136,8 +5136,8 @@ The remaining work proceeds through these independently verifiable gates:
      that number.
    - **Footyinfo national draft boards (issues 853 and 789).** The owner approved Footyinfo as a
      provider on 2026-10-12, as a source rights record shows. The capability is
-     `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v1` reads
-     `source/footyinfoDraftBoardAdapter.ts`. It covers one page per draft year, 2019 to 2025,
+     `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v2` (v1 until
+     2026-10-17; v1 captures replay exactly) reads `source/footyinfoDraftBoardAdapter.ts`. It covers one page per draft year, 2019 to 2025,
      captured only by the local runner on the grading VM; the deployed runtime refuses the provider.
      - **Where the picks come from.** The board's rendered table lists only selections. Every pick,
        including passed and removed ones, is in the board data the page embeds as serialized router
@@ -5154,6 +5154,43 @@ The remaining work proceeds through these independently verifiable gates:
        If its player or club has no reviewed resolution, the row is cited on the selection but not
        counted. It can then neither make the selection unresolved nor null its player. A Footyinfo-only
        selection resolves like any provider's.
+     - **Matched-bid points (parser v2, issue 789).** On a page it accepts, v2 emits exactly v1's
+       rows (ordinals and keys), then one `draft_board_bid_match` per matched bid. It also checks
+       every pick's bid fields, so it can refuse a page v1 accepted (no reviewed board does). A
+       retained v1 capture stays valid as recorded (`PINNED_PARSER_VERSIONS`), and a capture naming
+       any other parser version is refused rather than read as v1
+       (`source/footyinfoDraftBoardBidMatches.ts`; migration 0287 admits the kind). It feeds the
+       matched-bid shares of the value-line method (`afl-trade-value-line-method.md`: each spent pick
+       takes a share of the nominee's value line in proportion to the draft points it covered). Each
+       record states the nominee's board id, number, round, club and player; the bidding club and
+       basis; the bid's `points` and the board's `pointsUsed`; every spent pick (`consumedPicks`:
+       board id, label, original number and club, holder, points used); and every leftover-points
+       pick the board says the match created (`leftoverPicks`: board id, holder, points or null).
+       The spent picks were points-used board picks, which v1 drops; v2 accounts for every one.
+       - **Observed rule (all seven boards, 54 bids, 2026-10-17).** The spent picks' points are
+         never fewer than `pointsUsed`. In 28 bids they are equal. In 21 the excess is exactly the
+         points of the one leftover pick of that bid that carries points (2021 Sam Darcy: 2,024
+         spent, 1,889 used, 135 in Western Bulldogs pick 61). A leftover pick with no points (passed,
+         or created to fill list spots) carries none of it. Five 2025 bids state no `pointsUsed` and
+         no spent pick: the club held no pick to spend. A leftover pick links to its bid through its
+         one `created_from_points` hop (`related_pick`); it may since have moved club or been spent
+         on a later bid.
+       - **Validation (fail closed, one `invalid_page` issue and no claims).** Every spent pick must
+         be the board's own record of a pick spent on that nominee (status `points_used`,
+         `purchased_from`) with the same points, holder, original club, original number and label;
+         every points-used pick is spent by exactly one bid; `pointsUsed` is present exactly when
+         spent picks are; the excess rule above holds; every leftover-points pick names one matched
+         bid; and every number is a non-negative integer. The claim schema repeats the excess,
+         presence, holder and uniqueness rules.
+       - **Not yet read.** Nothing reconciles or grades these rows. A candidate must conserve every
+         staged row, so a candidate over a v2 board batch is refused (by the repository's membership
+         check and the finalize trigger) until reconciliation carries a record per bid match and the
+         trigger cites it. That change must also observe the bid-match identities (at least the
+         bidding club) in the identity-review package and its two database mirrors (migration 0285),
+         or a club named only there never loads its reviewed decision. How a leftover pick's points
+         enter the shares (which spent pick covered
+         less) is open for the share step. The fields and the share use need an owner decision
+         before any v2 capture (source-rights assessment).
      - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row
        is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`
