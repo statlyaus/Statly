@@ -128,23 +128,24 @@ export function storeRealizedTradeGradeBatch(
   });
 }
 
-/** Refuses an existing `--out` before any work, since the batch file is never overwritten. */
-async function requireOutAbsent(out: string): Promise<void> {
+/** Refuses an existing `--out` before any work, since an output file is never overwritten. */
+export async function requireOutAbsent(out: string, noun = 'batch'): Promise<void> {
   const exists = await access(out).then(
     () => true,
     () => false
   );
-  if (exists) throw new Error(`--out ${out} already exists; a batch is never overwritten.`);
+  if (exists) throw new Error(`--out ${out} already exists; a ${noun} is never overwritten.`);
 }
 
 /**
- * Writes `--out` after the batch is stored, so a refused store never leaves a batch file that has
- * no custody. A failure here names the stored artifact, which is then the batch's only copy.
+ * Writes `--out` after the output is stored, so a refused store never leaves a file that has no
+ * custody. A failure here names the stored artifact, which is then the output's only copy.
  */
-async function writeBatchFile(
+export async function writeStoredOutputFile(
   out: string,
   bytes: Uint8Array,
-  stored: AflTradeStoredEvidence | null
+  stored: AflTradeStoredEvidence | null,
+  noun = 'batch'
 ): Promise<void> {
   try {
     await writeFile(out, bytes, { flag: 'wx' });
@@ -152,7 +153,7 @@ async function writeBatchFile(
     if (stored === null) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `The batch was stored as ${stored.reference.artifactId}, but --out was not written: ${reason}`
+      `The ${noun} was stored as ${stored.reference.artifactId}, but --out was not written: ${reason}`
     );
   }
 }
@@ -191,7 +192,7 @@ export async function runGradeRealizedTradesCommand(input: {
     const stored = parsed.dryRun
       ? null
       : await storeRealizedTradeGradeBatch(client, parsed.storeId!, bytes);
-    await writeBatchFile(parsed.out, bytes, stored);
+    await writeStoredOutputFile(parsed.out, bytes, stored);
     const result = {
       batchId: batch.batchId,
       summary: batch.content.summary,

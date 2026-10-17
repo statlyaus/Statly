@@ -109,7 +109,7 @@ async function seedFixture(): Promise<void> {
           joinedAt: now,
           leftAt: now,
           isActive: false,
-          status: 'removed',
+          status: 'REMOVED',
         },
       ],
     });
