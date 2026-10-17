@@ -123,7 +123,7 @@ export async function removeLeagueMember(
 
     await tx.leagueMember.update({
       where: { id: target.id },
-      data: { isActive: false, status: 'removed', leftAt: new Date(), draftSlot: null },
+      data: { isActive: false, status: 'REMOVED', leftAt: new Date(), draftSlot: null },
     });
 
     const remaining = activeMembers.filter((member) => member.id !== target.id);
@@ -406,7 +406,7 @@ export async function joinLeague(
       draftSlot,
       joinedAt,
       isActive: true,
-      status: 'ACTIVE',
+      status: 'ACTIVE' as const,
       leftAt: null,
     };
     // A manager who was removed rejoins on their retained history row.

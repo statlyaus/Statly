@@ -11,6 +11,7 @@ const FIXTURE = {
   leagueId: 'integration-clock-convergence-league',
   draftId: 'integration-clock-convergence-draft',
   settingsId: 'integration-clock-convergence-settings',
+  ownerId: 'integration-clock-owner',
 } as const;
 
 const startedAt = new Date('2026-06-09T10:00:00.000Z');
@@ -20,11 +21,20 @@ async function removeFixture(): Promise<void> {
     await tx.draft.deleteMany({ where: { id: FIXTURE.draftId } });
     await tx.league.deleteMany({ where: { id: FIXTURE.leagueId } });
     await tx.leagueSettings.deleteMany({ where: { id: FIXTURE.settingsId } });
+    await tx.user.deleteMany({ where: { id: FIXTURE.ownerId } });
   });
 }
 
 async function seedMalformedLiveDraft(): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    await tx.user.create({
+      data: {
+        id: FIXTURE.ownerId,
+        email: 'integration-clock-owner@example.test',
+        passwordHash: 'test',
+        displayName: 'Clock Owner',
+      },
+    });
     await tx.leagueSettings.create({
       data: {
         id: FIXTURE.settingsId,
@@ -41,7 +51,7 @@ async function seedMalformedLiveDraft(): Promise<void> {
         id: FIXTURE.leagueId,
         name: 'Integration Clock Convergence League',
         inviteCode: 'INTCLK01',
-        ownerId: 'integration-clock-owner',
+        ownerId: FIXTURE.ownerId,
         settingsId: FIXTURE.settingsId,
       },
     });

@@ -4,6 +4,7 @@ import type {
   AflTradeCurrentCanonicalDraftSelection,
   AflTradeCurrentCanonicalPickCustody,
   AflTradeCurrentCanonicalTransaction,
+  AflTradePromotedSelectionPickState,
 } from './pickLineageDeferral';
 
 /**
@@ -41,6 +42,84 @@ export class PostgresAflTradePromotedDraftSelectionReader implements AflTradePro
       selectionNumber: Number(row.selection_number),
       playerId: row.player_id,
     }));
+  }
+
+  /**
+   * Each current canonical selection row with its stored pick, club, root and version, and whether a
+   * special-entitlement exercise or selection claim cites it (migration 0284), a row with no player
+   * included: rule 4 must see every current holder of a pick, as the 0284 guard does; and every recorded
+   * selection and player asset on every version of the roots those rows sit on, with whether it is
+   * current under asset-scoped supersession (0256), as the promoter's additive check reads them.
+   */
+  async loadCurrentCanonicalSelectionPicks(
+    competition: string
+  ): Promise<AflTradePromotedSelectionPickState> {
+    const selections = await this.client.query<{
+      selection_id: string;
+      selection_number: number;
+      player_id: string | null;
+      pick_id: string | null;
+      club_id: string;
+      event_id: string;
+      event_version_id: string;
+      special_entitlement_cited: boolean;
+    }>(
+      `SELECT current.selection_id,current.selection_number,current.player_id,current.pick_id,
+              current.club_id,current.event_id,current.event_version_id,
+              (EXISTS (SELECT 1 FROM outcome_special_entitlement_lifecycle lifecycle
+                        WHERE lifecycle.selection_id=current.canonical_selection_id)
+               OR EXISTS (SELECT 1 FROM outcome_special_entitlement_selection_claim claim
+                           WHERE claim.selection_id=current.canonical_selection_id))
+                AS special_entitlement_cited
+         FROM outcome_current_canonical_draft_selection_picks($1) current
+        ORDER BY current.selection_id,current.event_version_id`,
+      [competition]
+    );
+    const eventIds = [...new Set(selections.rows.map(({ event_id }) => event_id))].sort();
+    const slots = await this.client.query<{
+      event_id: string;
+      event_version_id: string;
+      kind: 'selection' | 'asset';
+      selection_number: number | null;
+      player_id: string | null;
+      current: boolean;
+    }>(
+      `SELECT version.event_id,version.event_version_id,'selection' AS kind,
+              selection.selection_number,selection.player_id,
+              NOT outcome_event_version_superseded_for(
+                version.event_version_id,selection.player_id,selection.selection_number) AS current
+         FROM outcome_event_version version
+         JOIN outcome_draft_selection selection ON selection.event_version_id=version.event_version_id
+        WHERE version.event_id=ANY($1::text[])
+       UNION ALL
+       SELECT version.event_id,version.event_version_id,'asset',NULL,asset.player_id,
+              NOT outcome_event_version_superseded_for(version.event_version_id,asset.player_id,NULL)
+         FROM outcome_event_version version
+         JOIN outcome_event_asset asset ON asset.event_version_id=version.event_version_id
+        WHERE version.event_id=ANY($1::text[]) AND asset.player_id IS NOT NULL
+        ORDER BY 1,2,3,4,5`,
+      [eventIds]
+    );
+    return {
+      selections: selections.rows.map((row) => ({
+        selectionId: row.selection_id,
+        selectionNumber: Number(row.selection_number),
+        playerId: row.player_id,
+        pickId: row.pick_id,
+        clubId: row.club_id,
+        eventId: row.event_id,
+        eventVersionId: row.event_version_id,
+        specialEntitlementCited: row.special_entitlement_cited,
+      })),
+      rootSlots: slots.rows.map((row) => ({
+        eventId: row.event_id,
+        eventVersionId: row.event_version_id,
+        kind: row.kind,
+        selectionNumber: row.selection_number === null ? null : Number(row.selection_number),
+        playerId: row.player_id,
+        current: row.current,
+      })),
+    };
   }
 
   async loadCurrentCanonicalTransactions(
