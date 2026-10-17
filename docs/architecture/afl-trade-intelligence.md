@@ -4038,10 +4038,14 @@ one of:
 - `selected`: the selection, player, drafting club and number, and `firstStint`, the draftee's first
   stint at the drafting club from the season after the draft.
 - `not_used`: stated not used by a club that took no nominee.
-- `matched_bid`: `status: 'pending'` until bid evidence lands. Never 0 and never estimated. Its
-  `basis` is `board_matched_bid` when Footyinfo board picks record the club's matched bid (listed), or
-  `nominee_count` when the evidence says only that the club took a nominee in that draft, so the pick
-  may have been spent matching the bid.
+- `matched_bid`: a not-used pick of a club that took a nominee. Its `basis` is `board_matched_bid`
+  when Footyinfo board picks record the club's matched bid (listed), or `nominee_count` when the
+  evidence says only that the club took a nominee in that draft, so the pick may have been spent
+  matching the bid. It is `status: 'shared'` when exactly one board bid match lists it as spent, the
+  year's rule prices the bid and its nominee is one candidate selection ("Matched-bid shares" below):
+  it then carries the bid, the nominee, its counted points, its share and its `value`. Otherwise it is
+  `status: 'pending'` with a `pendingReason` (`no_bid_spend`, `bid_unpriced`, `nominee_unresolved` or
+  `spent_twice`). Never 0 and never estimated.
 - `passed`: a board-stated passed or removed pick.
 - `future`: a pick not yet drafted, with its projected slot in the live Official AFL order (rule v6's
   lookup over the hop's own entitlement, including the previous draft's order as a proxy), or null
@@ -4055,6 +4059,55 @@ ordered trail only the last hop may state an end, and two terminal hop outcomes 
 refuses it. Without a terminal hop, the pick's usable selection decides. With none, a pick of a draft
 after the latest draft year the candidate holds a selection in is a future pick, and any other is
 unresolved: its draft has been run.
+
+**Matched-bid shares (issue 789, owner-approved 2026-10-17).** The value-line method gives each pick
+a club spent matching a father-son, academy or next-generation-academy bid a share of the nominee, in
+proportion to the points it covered (`afl-trade-value-line-method.md`). The owner chose a swap in the
+trade story, not a grade rule: the grader never reads bid matches, and the ledger's `bidMatches[]`
+lists every board matched bid the candidate carries with its price and every spent pick's share. The
+trade story read model does not read the shares yet; it still shows a matched-bid pick as pending
+(the next step of #789).
+
+- **Price, by the draft year's AFL rule** (`valuation/matchedBidPriceRules.ts`). The bid's own `points`
+  is the DVI of the bid slot (audited for every year against the AFL's figures). The board's bid-level
+  `pointsUsed` is never the price: it nets the leftover pick at its final slot (2021 Sam Darcy: 1,889
+  against a price of 2,013.6).
+
+  | Draft        | Rule                                                                                                         |
+  | ------------ | ------------------------------------------------------------------------------------------------------------ |
+  | 2019 to 2024 | 2015 DVI. A first-round bid (the whole round) is 20% off; a later bid 197 points off; after pick 56, refused |
+  | 2025         | 2025 DVI. 10% off selections 1 to 18, 84 points off 19 to 36, and from 37 the club's next selection          |
+  | 2026 on      | Ladder bands (AFL 1508308) kept as data; refused until the 19-club values are published                      |
+
+  A year with no rule, a band the rule does not state, a missing round or ladder position, or a price
+  that is not positive is a refusal, never a guess. Arithmetic is in tenths of a point, so every price
+  and share is exact.
+
+- **Order and shares** (`valuation/matchedBidShares.ts`). The club spends its next pick first, so the
+  board's spent picks must never rise in points. Each counts at its points when spent (the board's
+  per-pick `pointsUsed`, its live slot), in full, until the price is met; the last counts only for what
+  was still owed. Its remainder is the leftover pick, an asset of its own valued by its own outcome,
+  listed with the board's leftover-points picks for that match. A spent pick listed after the price is
+  met is refused, and so is a board leftover pick that carries points when the rule leaves none over
+  (its points would count twice). A shortfall is a deficit against the club's first pick of the next draft, recorded
+  and never valued; under the 2025 next-selection rule a club that spent no pick owes its next
+  selection. A spent pick's share is its counted points over the price; its `value` is the share times
+  the nominee's first-stint `value` at the matching club from the season after the draft. On the seven
+  boards captured with parser v2 on 2026-10-17 every one of the 54 bids is priced: three 2019 bids fall short (Liam Henry by 265.2,
+  the AFL's 265), five 2025 bids owe a next selection, and the rest leave a remainder (Jamarra
+  Ugle-Hagan 89, the AFL's pick 61).
+- **Which ledger pick a spent pick was.** By its custody slot only: the board label's pre-draft number
+  and the original club, on a usable Official AFL custody row of the same draft, naming exactly one pick
+  id. The holder is not compared, because a club may acquire a pick on draft night to spend it. A spent
+  pick with no number (a leftover pick an earlier bid created), an unresolved original club, no such
+  row or two pick ids does not join, and a pick no bid lists stays pending. Only a pending matched-bid
+  outcome takes a share; every other outcome is unchanged.
+- **The nominee.** The one candidate selection at the bid's number in its draft, held by the
+  matching club and naming the player the board's nominee resolves to. A nominee with no reviewed
+  resolution names none, and the bid's picks stay pending. The selection need not have a usable
+  status: a matched-bid selection is `unresolved` when its pick has no custody slot (the bid created
+  it), as all 54 are on candidate `984689fa`, and that says nothing of who was drafted. A `disputed`
+  selection, whose providers disagree on the player or club, names no nominee.
 
 **Lookups.** `stintValue(playerId, clubId, fromSeason)` returns any player's first stint at any club
 from a season, by the same rule and arrival check as the grader (a reviewed arrival in the season
@@ -5182,15 +5235,24 @@ The remaining work proceeds through these independently verifiable gates:
          spent picks are; the excess rule above holds; every leftover-points pick names one matched
          bid; and every number is a non-negative integer. The claim schema repeats the excess,
          presence, holder and uniqueness rules.
-       - **Not yet read.** Nothing reconciles or grades these rows. A candidate must conserve every
-         staged row, so a candidate over a v2 board batch is refused (by the repository's membership
-         check and the finalize trigger) until reconciliation carries a record per bid match and the
-         trigger cites it. That change must also observe the bid-match identities (at least the
-         bidding club) in the identity-review package and its two database mirrors (migration 0285),
-         or a club named only there never loads its reviewed decision. How a leftover pick's points
-         enter the shares (which spent pick covered
-         less) is open for the share step. The fields and the share use need an owner decision
-         before any v2 capture (source-rights assessment).
+       - **Reconciled (migration 0288, 2026-10-17).** Each bid-match row is one
+         `draftBoardBidMatches` record of the candidate (`source/footyinfoBoardBidMatchReconciliation.ts`),
+         present only when a board states a matched bid, so earlier candidate ids are unchanged. It
+         states the nominee's board id, number and round; the matching club, the bidding club and the
+         nominee through their own `footyinfo` resolutions; the basis, `points` and `pointsUsed`;
+         and each spent and leftover pick with its clubs. A spent or leftover pick names its clubs by
+         board code only. A code resolves to the one club that every `footyinfo` club entity with
+         that code on the same board resolves to. An entity with no resolution, two entities
+         resolving apart, or a code no entity carries leaves the club null and is a
+         `board-pick:club:<code>` identity issue, pick-side as for the board picks. Finalization
+         counts the evidence the records cite (0288's clause, beside 0272's), and the repository's
+         membership check reads them, so a v2 batch is conserved. The identity-review package
+         observes each bid match's matching club, bidding club and nominee, and 0288 teaches the
+         insert guard and canonical-target registration the same identities: a bidding club can
+         appear nowhere else on a board. Nothing in reconciliation reads the records; the asset
+         ledger computes the shares from them ("Matched-bid shares" under the asset ledger).
+         The owner recorded the `-board-v2` decisions on 2026-10-17 (ledger revision 103), and the
+         seven boards were captured under them the same day.
      - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row
        is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`

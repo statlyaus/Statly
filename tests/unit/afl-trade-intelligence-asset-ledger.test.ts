@@ -353,6 +353,7 @@ describe('asset ledger picks', () => {
       status: 'pending',
       basis: 'board_matched_bid',
       matchedBidBoardPickIds: [BOARD_MATCHED],
+      pendingReason: 'no_bid_spend',
     });
   });
 
@@ -372,6 +373,7 @@ describe('asset ledger picks', () => {
       status: 'pending',
       basis: 'nominee_count',
       matchedBidBoardPickIds: [],
+      pendingReason: 'no_bid_spend',
     });
   });
 
@@ -540,7 +542,189 @@ describe('asset ledger seal', () => {
       summary: {
         picks: 7,
         outcomes: { selected: 2, not_used: 1, matched_bid: 1, passed: 1, future: 1, unresolved: 1 },
+        matchedBidPicksShared: 0,
       },
     });
+  });
+});
+
+describe('asset ledger matched-bid shares (issue 789)', () => {
+  type BidMatch = NonNullable<Candidate['draftBoardBidMatches']>[number];
+  const spent = (
+    nativePickId: string,
+    originalNumber: number | null,
+    originalClubId: string | null,
+    pointsUsed: number
+  ) => ({
+    nativePickId,
+    label: `R3 - Pick ${originalNumber ?? '?'}`,
+    originalNumber,
+    originalClubId,
+    holdingClubId: 'western_bulldogs',
+    pointsUsed,
+  });
+  /** Sam Darcy's 2021 match: the Bulldogs' five spent picks, Essendon's 34 the pick they traded for. */
+  const darcyBid = (fields: Partial<BidMatch> = {}): BidMatch => ({
+    bidMatchId: `external-draft-board-bid-match:${hex('c')}`,
+    draftYear: 2021,
+    draftType: 'national',
+    nativePickId: '5733',
+    selectionNumber: 2,
+    roundNumber: 1,
+    clubId: 'western_bulldogs',
+    playerId: 'p2',
+    bidClubId: 'gws',
+    basis: 'father_son',
+    points: 2517,
+    pointsUsed: 1889,
+    consumedPicks: [
+      spent('7449', 34, 'essendon', 542),
+      spent('6042', 42, 'gold_coast', 395),
+      spent('6057', 43, 'adelaide', 378),
+      spent('7451', 44, null, 362),
+      spent('5727', null, 'hawthorn', 347),
+    ],
+    leftoverPicks: [{ nativePickId: '5792', holdingClubId: 'western_bulldogs', points: 135 }],
+    evidenceIds: [`external-evidence:${hex('d')}`],
+    ...fields,
+  });
+  const withBid = (bid: BidMatch = darcyBid()) =>
+    withCandidate((candidate) => ({
+      ...candidate,
+      draftBoardBidMatches: [bid],
+      pickCustody: [
+        ...candidate.pickCustody!,
+        // The 2021 order's pick 34, originally Essendon's, which the Bulldogs held at the bid.
+        { ...custody('cu-3', PICK_MATCHED, 2021, 34), originalClubId: 'essendon' },
+      ],
+    }));
+
+  it('gives the spent pick its share of Darcy by the points it covered of the AFL price', () => {
+    const ledger = withBid();
+    // 542 of the 2,013.6 the 2015 rule prices pick 2 at, of Darcy's 47 at the Bulldogs.
+    expect(ledger.pickOutcome(PICK_MATCHED)).toEqual({
+      kind: 'matched_bid',
+      status: 'shared',
+      basis: 'board_matched_bid',
+      matchedBidBoardPickIds: [BOARD_MATCHED],
+      bidMatchId: `external-draft-board-bid-match:${hex('c')}`,
+      nomineePlayerId: 'p2',
+      countedPoints: 542,
+      share: 542 / 2013.6,
+      use: 'full',
+      value: (542 / 2013.6) * 47,
+    });
+    expect(ledger.ledger.content.summary.matchedBidPicksShared).toBe(1);
+  });
+
+  it('lists the bid with its price, leftover and every spent pick’s slot join', () => {
+    const [bid] = withBid().ledger.content.bidMatches;
+    expect(bid).toMatchObject({
+      nominee: { selectionId: 'sel-2', playerId: 'p2', firstStint: { value: 47 } },
+      pricing: {
+        status: 'shared',
+        ruleId: 'afl-bid-price-2015-dvi',
+        pricePoints: 2013.6,
+        leftover: {
+          spentNativePickId: '5727',
+          remainderPoints: 10.4,
+          boardLeftoverPickIds: ['5792'],
+        },
+        deficit: null,
+      },
+    });
+    // Only Essendon's 34 has a custody slot; a pick with no number or no club never joins by number.
+    expect(bid!.spentPicks.map(({ link, pickId }) => [link, pickId])).toEqual([
+      ['custody', PICK_MATCHED],
+      ['no_custody', null],
+      ['no_custody', null],
+      ['club_unresolved', null],
+      ['unnumbered', null],
+    ]);
+    expect(bid!.spentPicks.at(-1)).toMatchObject({ countedPoints: 336.6, use: 'partial' });
+  });
+
+  it('stays pending, with the reason, when the bid cannot be priced or its nominee is not one selection', () => {
+    expect(withBid(darcyBid({ roundNumber: null })).pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'pending',
+      pendingReason: 'bid_unpriced',
+    });
+    expect(withBid(darcyBid({ playerId: 'p3' })).pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'pending',
+      pendingReason: 'nominee_unresolved',
+    });
+    expect(withBid(darcyBid({ playerId: null })).pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'pending',
+      pendingReason: 'nominee_unresolved',
+    });
+    const unlisted = darcyBid({ consumedPicks: darcyBid().consumedPicks.slice(1) });
+    expect(withBid(unlisted).pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'pending',
+      pendingReason: 'no_bid_spend',
+    });
+  });
+
+  it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {
+    // On the genuine candidate every matched-bid selection is unresolved: the bid created its pick,
+    // so it has no custody slot. Who was drafted is still stated by every provider.
+    const withNomineeStatus = (status: Selection['status']) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [darcyBid()],
+        draftSelections: candidate.draftSelections!.map((row) =>
+          row.selectionId === 'sel-2' ? { ...row, status } : row
+        ),
+        pickCustody: [
+          ...candidate.pickCustody!,
+          { ...custody('cu-3', PICK_MATCHED, 2021, 34), originalClubId: 'essendon' },
+        ],
+      }));
+    expect(withNomineeStatus('unresolved').pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'shared',
+      nomineePlayerId: 'p2',
+    });
+    expect(withNomineeStatus('disputed').pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'pending',
+      pendingReason: 'nominee_unresolved',
+    });
+  });
+
+  it('joins no pick when two pick ids share the slot, and flags a pick two bids list', () => {
+    const ambiguous = withCandidate((candidate) => ({
+      ...candidate,
+      draftBoardBidMatches: [darcyBid()],
+      pickCustody: [
+        ...candidate.pickCustody!,
+        { ...custody('cu-3', PICK_MATCHED, 2021, 34), originalClubId: 'essendon' },
+        { ...custody('cu-4', PICK_NOT_USED, 2021, 34), originalClubId: 'essendon' },
+      ],
+    }));
+    expect(ambiguous.ledger.content.bidMatches[0]!.spentPicks[0]).toMatchObject({
+      link: 'ambiguous_custody',
+      pickId: null,
+    });
+    expect(ambiguous.pickOutcome(PICK_MATCHED)).toMatchObject({ pendingReason: 'no_bid_spend' });
+    const twice = withCandidate((candidate) => ({
+      ...candidate,
+      draftBoardBidMatches: [
+        darcyBid(),
+        darcyBid({ bidMatchId: `external-draft-board-bid-match:${hex('e')}` }),
+      ],
+      pickCustody: [
+        ...candidate.pickCustody!,
+        { ...custody('cu-3', PICK_MATCHED, 2021, 34), originalClubId: 'essendon' },
+      ],
+    }));
+    expect(twice.pickOutcome(PICK_MATCHED)).toMatchObject({ pendingReason: 'spent_twice' });
+  });
+
+  it('never changes a grade: the grader does not read bid matches', () => {
+    const base = inputs();
+    const plain = gradeAflTradesOnRealizedValue(base).content.trades;
+    const withBids = gradeAflTradesOnRealizedValue({
+      ...base,
+      candidate: { ...base.candidate, draftBoardBidMatches: [darcyBid()] },
+    }).content.trades;
+    expect(withBids).toEqual(plain);
   });
 });

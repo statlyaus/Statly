@@ -5,7 +5,7 @@
  * from it; public pages never do.
  */
 
-export const AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION = 'afl-trade-asset-ledger/v1' as const;
+export const AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION = 'afl-trade-asset-ledger/v2' as const;
 
 export const AFL_TRADE_ASSET_LEDGER_LIMITATION: string =
   'Private, non-production asset ledger. Stints follow the realized grader: a stint ends in the first ' +
@@ -14,8 +14,10 @@ export const AFL_TRADE_ASSET_LEDGER_LIMITATION: string =
   'clubs ends the stint at each. A stint starts at its first season in evidence; without a reviewed ' +
   'arrival it may have begun earlier. PAV is HPN PAV from the current calculation per season and is ' +
   'signed. Picks are keyed by the draft-pick id the candidate records; ids are never merged. A ' +
-  'not-used pick of a club that took a nominee may have been spent matching a bid and stays pending ' +
-  'until bid evidence lands. Not for publication.';
+  'not-used pick of a club that took a nominee may have been spent matching a bid: it takes its share ' +
+  "of the nominee's first stint by the points it covered of the year's AFL price when a Footyinfo " +
+  'board lists it as spent and joins it to its custody slot, and stays pending otherwise. Not for ' +
+  'publication.';
 
 /** One season of a stint: the player's HPN PAV at the club, 0 when he has no row there. */
 export interface AflTradeAssetLedgerStintSeason {
@@ -79,6 +81,106 @@ export type AflTradeAssetLedgerUnresolvedReason =
   | 'selection_conflict'
   | 'traded_on_unlinked';
 
+/**
+ * Why a pick a club may have spent matching a bid has no share. `no_bid_spend`: no board bid match
+ * lists it as spent (or its slot does not join). `bid_unpriced`: the year's rule cannot price the bid.
+ * `nominee_unresolved`: the bid's nominee is not one candidate selection. `spent_twice`: two bid
+ * matches list it.
+ */
+export type AflTradeAssetLedgerBidPendingReason =
+  'no_bid_spend' | 'bid_unpriced' | 'nominee_unresolved' | 'spent_twice';
+
+interface MatchedBidOutcomeBase {
+  readonly kind: 'matched_bid';
+  /**
+   * `board_matched_bid`: a Footyinfo board records the receiving club's matched bid.
+   * `nominee_count`: only that the club took a nominee in the draft, so the pick may have been spent
+   * matching the bid.
+   */
+  readonly basis: 'board_matched_bid' | 'nominee_count';
+  readonly matchedBidBoardPickIds: readonly string[];
+}
+
+/** A pick spent matching a bid: its share of the nominee, or pending (never 0, never estimated). */
+export type AflTradeAssetLedgerMatchedBidOutcome =
+  | (MatchedBidOutcomeBase & {
+      readonly status: 'pending';
+      readonly pendingReason: AflTradeAssetLedgerBidPendingReason;
+    })
+  | (MatchedBidOutcomeBase & {
+      readonly status: 'shared';
+      readonly bidMatchId: string;
+      readonly nomineePlayerId: string;
+      /** The points the pick covered of the price, and that over the price. */
+      readonly countedPoints: number;
+      readonly share: number;
+      readonly use: 'full' | 'partial';
+      /** `share` × the nominee's first-stint value at the matching club; null with no stint. */
+      readonly value: number | null;
+    });
+
+/** How a board's spent pick joins a candidate pick: by its custody slot only. */
+export type AflTradeAssetLedgerBidSpendLink =
+  /** One pick id has a usable custody row with the spent pick's number and original club. */
+  | 'custody'
+  /** The board gives no number: a leftover-points pick an earlier bid created. */
+  | 'unnumbered'
+  | 'club_unresolved'
+  | 'no_custody'
+  | 'ambiguous_custody';
+
+export interface AflTradeAssetLedgerBidSpentPick {
+  readonly nativePickId: string;
+  readonly label: string;
+  readonly originalNumber: number | null;
+  readonly originalClubId: string | null;
+  readonly pointsUsed: number;
+  readonly pickId: string | null;
+  readonly link: AflTradeAssetLedgerBidSpendLink;
+  /** Null when the bid is unpriced. */
+  readonly countedPoints: number | null;
+  readonly share: number | null;
+  readonly use: 'full' | 'partial' | null;
+  /** `share` × the nominee's first-stint value; null when either is missing. */
+  readonly value: number | null;
+}
+
+/** One board matched bid: its price by the year's AFL rule and each spent pick's share. */
+export interface AflTradeAssetLedgerBidMatch {
+  readonly bidMatchId: string;
+  readonly draftYear: number;
+  readonly draftType: string;
+  readonly selectionNumber: number;
+  /** The matching club. */
+  readonly clubId: string | null;
+  readonly bidClubId: string | null;
+  readonly basis: 'father_son' | 'academy' | 'next_generation_academy';
+  /** The candidate selection of the nominee, and his first stint at the matching club. */
+  readonly nominee: {
+    readonly selectionId: string;
+    readonly playerId: string;
+    readonly firstStint: AflTradeAssetLedgerStint | null;
+  } | null;
+  readonly pricing:
+    | {
+        readonly status: 'shared';
+        readonly ruleId: string;
+        /** Null when the club's next selection paid in full. */
+        readonly pricePoints: number | null;
+        readonly leftover: {
+          readonly spentNativePickId: string;
+          readonly remainderPoints: number;
+          readonly boardLeftoverPickIds: readonly string[];
+        } | null;
+        readonly deficit: {
+          readonly points: number | null;
+          readonly against: 'next_draft_first_pick' | 'next_selection';
+        } | null;
+      }
+    | { readonly status: 'refused'; readonly reason: string; readonly detail: string };
+  readonly spentPicks: readonly AflTradeAssetLedgerBidSpentPick[];
+}
+
 /** What became of a pick. Nothing is guessed: missing or conflicting evidence is `unresolved`. */
 export type AflTradeAssetLedgerPickOutcome =
   | {
@@ -92,18 +194,7 @@ export type AflTradeAssetLedgerPickOutcome =
       readonly firstStint: AflTradeAssetLedgerStint | null;
     }
   | { readonly kind: 'not_used' }
-  | {
-      readonly kind: 'matched_bid';
-      /** Pending until bid evidence lands: never 0 and never estimated. */
-      readonly status: 'pending';
-      /**
-       * `board_matched_bid`: a Footyinfo board records the receiving club's matched bid.
-       * `nominee_count`: only that the club took a nominee in the draft, so the pick may have been
-       * spent matching the bid.
-       */
-      readonly basis: 'board_matched_bid' | 'nominee_count';
-      readonly matchedBidBoardPickIds: readonly string[];
-    }
+  | AflTradeAssetLedgerMatchedBidOutcome
   | { readonly kind: 'passed'; readonly boardPickId: string }
   | { readonly kind: 'future'; readonly projectedSlot: AflTradeAssetLedgerProjectedSlot | null }
   | { readonly kind: 'unresolved'; readonly reason: AflTradeAssetLedgerUnresolvedReason };
@@ -153,6 +244,8 @@ export interface AflTradeAssetLedgerContent {
   readonly clubs: readonly AflTradeAssetLedgerClub[];
   readonly players: readonly AflTradeAssetLedgerPlayer[];
   readonly picks: readonly AflTradeAssetLedgerPick[];
+  /** Every Footyinfo board matched bid the candidate carries (issue 789). */
+  readonly bidMatches: readonly AflTradeAssetLedgerBidMatch[];
   readonly summary: {
     readonly players: number;
     readonly playersWithoutName: number;
@@ -160,6 +253,8 @@ export interface AflTradeAssetLedgerContent {
     readonly openStints: number;
     readonly picks: number;
     readonly outcomes: Readonly<Record<AflTradeAssetLedgerOutcomeKind, number>>;
+    /** Matched-bid picks that took a share of their nominee. */
+    readonly matchedBidPicksShared: number;
   };
   readonly publicationEligible: false;
   readonly publicationProhibited: true;
