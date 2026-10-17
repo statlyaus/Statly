@@ -41,9 +41,15 @@ export interface AflTradeRealizedTradeGradeInputs {
    * Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick; rule v8
    * also reads it, and `draftSelections`, for the slot a future pick eventually took; rule v17 for
    * the selection a traded-on trail ends in and for a round-position proxy's first-round order.
+   * The grader never reads `draftBoardBidMatches`; the asset ledger shares matched bids from them.
    */
   candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
-    Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks' | 'pickCustody'>>;
+    Partial<
+      Pick<
+        CandidateContent,
+        'draftSelections' | 'draftBoardPicks' | 'draftBoardBidMatches' | 'pickCustody'
+      >
+    >;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */
   pavCalculations: readonly { season: number; calculationId: string; official: boolean }[];
   /** HPN PAV per player per season at one club, from the pinned calculations. */

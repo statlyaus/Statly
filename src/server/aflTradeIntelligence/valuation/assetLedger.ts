@@ -5,12 +5,17 @@ import {
   type AflTradeAssetLedger,
   type AflTradeAssetLedgerClub,
   type AflTradeAssetLedgerContent,
+  type AflTradeAssetLedgerBidMatch,
   type AflTradeAssetLedgerLabels,
   type AflTradeAssetLedgerOutcomeKind,
   type AflTradeAssetLedgerPick,
   type AflTradeAssetLedgerPickOutcome,
   type AflTradeAssetLedgerPlayer,
 } from './assetLedgerContracts';
+import {
+  aflTradeAssetLedgerBidMatches,
+  aflTradeAssetLedgerShareMatchedBid,
+} from './assetLedgerBidMatches';
 import {
   aflTradeAssetLedgerPickIdentities,
   aflTradeAssetLedgerPickTrails,
@@ -98,7 +103,8 @@ function playersOf(
 
 function picksOf(
   inputs: AflTradeRealizedTradeGradeInputs,
-  stintValue: AflTradeAssetLedgerStintValue
+  stintValue: AflTradeAssetLedgerStintValue,
+  bidMatches: readonly AflTradeAssetLedgerBidMatch[]
 ): AflTradeAssetLedgerPick[] {
   const trails = aflTradeAssetLedgerPickTrails(inputs);
   const sources = createAflTradeAssetLedgerOutcomeSources(inputs.candidate, stintValue);
@@ -106,11 +112,16 @@ function picksOf(
     .sort((left, right) => byCodeUnit(left.pickId, right.pickId))
     .map((pick) => {
       const trail = trails.get(pick.pickId) ?? { hopOrder: 'trail' as const, hops: [] };
+      const outcome = aflTradeAssetLedgerPickOutcome(sources, pick, trail);
       return {
         ...pick,
         hopOrder: trail.hopOrder,
         hops: trail.hops,
-        outcome: aflTradeAssetLedgerPickOutcome(sources, pick, trail),
+        // A pick a board lists as spent on a bid takes its share of the nominee (issue 789).
+        outcome:
+          outcome.kind === 'matched_bid' && outcome.status === 'pending'
+            ? aflTradeAssetLedgerShareMatchedBid(outcome, pick.pickId, bidMatches)
+            : outcome,
       };
     });
 }
@@ -136,6 +147,9 @@ function summaryOf(
     openStints: stints.filter(({ status }) => status === 'open').length,
     picks: picks.length,
     outcomes,
+    matchedBidPicksShared: picks.filter(
+      ({ outcome }) => outcome.kind === 'matched_bid' && outcome.status === 'shared'
+    ).length,
   };
 }
 
@@ -146,7 +160,8 @@ export function createAflTradeAssetLedger(
 ): AflTradeAssetLedgerReadModel {
   const stintValue = createAflTradeAssetLedgerStintValue(inputs);
   const players = playersOf(inputs, labels, stintValue);
-  const picks = picksOf(inputs, stintValue);
+  const bidMatches = aflTradeAssetLedgerBidMatches(inputs.candidate, stintValue);
+  const picks = picksOf(inputs, stintValue, bidMatches);
   const content: AflTradeAssetLedgerContent = {
     schemaVersion: AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION,
     environment: 'non_production',
@@ -163,6 +178,7 @@ export function createAflTradeAssetLedger(
     clubs: clubsOf(inputs, labels),
     players,
     picks,
+    bidMatches,
     summary: summaryOf(players, picks),
     publicationEligible: false,
     publicationProhibited: true,

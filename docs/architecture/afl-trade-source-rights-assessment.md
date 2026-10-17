@@ -222,10 +222,13 @@ Parser `footyinfo-draft-board-parser/v2` (issue 789, 2026-10-17) adds the board'
 points: the bid's points, the points used, each pick spent matching it with its points, and the
 leftover-points picks it created (`FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS`), for a fifth use, the
 matched-bid shares of the value-line method. That method's data table names official AFL
-bid-matching records as the source. Both the fields and the use need the owner's decision; none is
-recorded, so no `-board-v2` decision exists and no v2 capture may run until the owner records one.
-The test fixture of two 2021 matched bids states their values in the synthetic markup; it retains
-no provider bytes.
+bid-matching records as the source. The owner approved both on 2026-10-17 ("sure", to: price each
+bid from the draft year's AFL rules and use Footyinfo's bid value and list of spent picks, privately,
+on the grading VM only, nothing published). The seven `-board-v2` decisions are recorded (ledger
+revision 103), for example `footyinfo-national-draft-board-issue853-private-2021-board-v2`, each from
+that season's v1 record with parser v2 and its 48 fields; the v1 decisions are untouched. Footyinfo's bid-level
+`points_used` is recorded but never used as the price. The test fixture of two 2021 matched bids
+states their values in the synthetic markup; it retains no provider bytes.
 
 ### Issue 574 admitted evidence boundary
 
