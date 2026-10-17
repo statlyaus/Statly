@@ -71,23 +71,15 @@ export class AflTradeStoryIndex {
     const onwardId = onwardTradeIdOf(ref.leg);
     if (onwardId === undefined) return undefined;
     const trade = this.trade(onwardId);
-    const assetId = this.assetId(ref.leg);
-    const leg = trade.legs.find(
-      (onward) =>
-        onward.sendingClubId === ref.leg.receivingClubId && this.movesAsset(onward, assetId)
-    );
+    const leg = trade.legs.find((onward) => this.continues(ref.leg, onward));
     return { trade, leg: required(leg, `onward leg for transfer ${ref.leg.transferId}`) };
   }
 
   /** The hop that brought the asset into this trade's sending club, if the batch holds one. */
   priorHop(ref: AflTradeStoryHopRef): AflTradeStoryHopRef | undefined {
-    const assetId = this.assetId(ref.leg);
     return this.inbound
       .get(ref.trade.transactionId)
-      ?.find(
-        (prior) =>
-          prior.leg.receivingClubId === ref.leg.sendingClubId && this.movesAsset(prior.leg, assetId)
-      );
+      ?.find((prior) => this.continues(prior.leg, ref.leg));
   }
 
   /** This hop and every later one, to the asset's final leg. */
@@ -98,6 +90,12 @@ export class AflTradeStoryIndex {
   /** The asset's final leg: where it ended up. */
   finalHop(ref: AflTradeStoryHopRef): AflTradeStoryHopRef {
     return this.forward(ref).reduce((_, hop) => hop);
+  }
+
+  /** What the asset became, the same for every hop: its final trade and transfer. */
+  identity(ref: AflTradeStoryHopRef): string {
+    const final = this.finalHop(ref);
+    return `${final.trade.transactionId}|${final.leg.transferId}`;
   }
 
   /** Every earlier hop the batch holds, oldest first, without this one. */
@@ -151,11 +149,16 @@ export class AflTradeStoryIndex {
     );
   }
 
-  private movesAsset(leg: AflTradeStoryLeg, assetId: string): boolean {
-    const asset = this.names.transfers.get(leg.transferId);
-    return (
-      asset !== undefined && (asset.kind === 'player' ? asset.playerId : asset.pickId) === assetId
-    );
+  /**
+   * Whether `onward` is the next hop of `leg`: given on by the club that received it, and either the
+   * same asset or, for a special entitlement, its successor transfer (an ordinary pick).
+   */
+  private continues(leg: AflTradeStoryLeg, onward: AflTradeStoryLeg): boolean {
+    if (onward.sendingClubId !== leg.receivingClubId) return false;
+    const successorId = leg.specialEntitlement?.successorTransferId;
+    return successorId === undefined
+      ? this.assetId(onward) === this.assetId(leg)
+      : onward.transferId === successorId;
   }
 
   private label(leg: AflTradeStoryLeg): string {
@@ -178,7 +181,7 @@ export class AflTradeStoryIndex {
       case 'pick_not_used_nominee_excluded':
         return pending('matched_bid');
       case 'pick_projected_from_order':
-        return pending('not_yet_drafted');
+        return pending('draft_not_in_evidence');
       case 'unavailable':
         return pending('unavailable');
       case 'pick_traded_on_return':

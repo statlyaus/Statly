@@ -15,7 +15,7 @@ import type {
 
 export type * from './realizedTradeStoryContracts';
 
-/** A club's chain: the story's trade, then each trade it passed an asset it received into. */
+/** A club's chain: the linked trades it is a party to, oldest first. */
 interface ClubChain {
   readonly clubId: string;
   readonly trades: readonly AflTradeStoryTrade[];
@@ -39,23 +39,36 @@ const byValueDescending = (
   right: { value: AflTradeStoryAsset['value'] }
 ) => sortValue(right) - sortValue(left);
 
-function clubChain(
-  index: AflTradeStoryIndex,
-  trade: AflTradeStoryTrade,
-  clubId: string
-): ClubChain {
+/**
+ * The story's trade and, repeatedly, each later trade a club of the story's trade passed a pick it
+ * received into, oldest first.
+ */
+function linkedTrades(index: AflTradeStoryIndex, trade: AflTradeStoryTrade): AflTradeStoryTrade[] {
+  const clubIds = new Set(trade.clubs.map(({ clubId }) => clubId));
   const trades = [trade];
   for (let at = 0; at < trades.length; at++)
     for (const ref of refsOf(trades[at]!)) {
-      const next = ref.leg.receivingClubId === clubId ? index.nextHop(ref) : undefined;
+      const next = clubIds.has(ref.leg.receivingClubId) ? index.nextHop(ref) : undefined;
       if (next && !trades.includes(next.trade)) trades.push(next.trade);
     }
-  return { clubId, trades };
+  return trades.sort((left, right) => left.tradeYear - right.tradeYear);
+}
+
+const clubChain = (linked: readonly AflTradeStoryTrade[], clubId: string): ClubChain => ({
+  clubId,
+  trades: linked.filter((trade) => trade.clubs.some((club) => club.clubId === clubId)),
+});
+
+type PendingBalance = Map<string, { assetId: string; count: number }>;
+
+function addPending(balance: PendingBalance, identity: string, assetId: string, sign: number) {
+  const current = balance.get(identity) ?? { assetId, count: 0 };
+  balance.set(identity, { ...current, count: current.count + sign });
 }
 
 /**
  * Known values received minus known values given, over the trades. A pending asset is counted
- * instead, and one received then passed on cancels out, as its value does.
+ * instead, by what it became, so a pick received then passed on cancels out, as its value does.
  */
 function clubNet(
   index: AflTradeStoryIndex,
@@ -63,17 +76,22 @@ function clubNet(
   clubId: string
 ): AflTradeStoryNet {
   let net = 0;
-  const pendingBalance = new Map<string, number>();
+  const balance: PendingBalance = new Map();
   for (const ref of trades.flatMap(refsOf)) {
     const sign =
       (ref.leg.receivingClubId === clubId ? 1 : 0) - (ref.leg.sendingClubId === clubId ? 1 : 0);
     if (sign === 0) continue;
     const asset = index.resolve(ref);
     if (asset.value.kind === 'known') net += sign * asset.value.pav;
-    else pendingBalance.set(asset.assetId, (pendingBalance.get(asset.assetId) ?? 0) + sign);
+    else addPending(balance, index.identity(ref), asset.assetId, sign);
   }
-  const pendingAssetIds = [...pendingBalance].filter(([, count]) => count !== 0).map(([id]) => id);
-  return { ...index.club(clubId), net, pendingCount: pendingAssetIds.length, pendingAssetIds };
+  const pending = [...balance.values()]
+    .filter(({ count }) => count !== 0)
+    .map(({ assetId, count }) => ({
+      assetId,
+      direction: count > 0 ? ('received' as const) : ('given' as const),
+    }));
+  return { ...index.club(clubId), net, pendingCount: pending.length, pending };
 }
 
 function storySide(
@@ -113,26 +131,42 @@ function storyPlayer(
   };
 }
 
+const chainLegs = (chain: ClubChain, side: 'receivingClubId' | 'sendingClubId') =>
+  chain.trades.flatMap(refsOf).filter((ref) => ref.leg[side] === chain.clubId);
+
+/** A player has no onward link: he is passed on if the club gives him in a later chain trade. */
+function playerPassedOn(index: AflTradeStoryIndex, chain: ClubChain, ref: AflTradeStoryHopRef) {
+  if (ref.leg.assetKind !== 'player') return false;
+  const assetId = index.assetId(ref.leg);
+  return chainLegs(
+    { ...chain, trades: chain.trades.slice(chain.trades.indexOf(ref.trade) + 1) },
+    'sendingClubId'
+  ).some((later) => index.assetId(later.leg) === assetId);
+}
+
 /**
  * What each club of the trade ended up with (assets it received along its chain and kept), then
  * the ones that got away (assets those clubs gave along their chains that none of them kept).
  */
 function storyPlayers(index: AflTradeStoryIndex, chains: readonly ClubChain[]) {
-  const legsOf = (chain: ClubChain, side: 'receivingClubId' | 'sendingClubId') =>
-    chain.trades.flatMap(refsOf).filter((ref) => ref.leg[side] === chain.clubId);
-  const endedWith = chains.flatMap((chain) =>
-    legsOf(chain, 'receivingClubId')
-      .filter((ref) => !index.nextHop(ref))
-      .map((ref) => storyPlayer(index, ref, 'ended_with'))
-      .sort(byValueDescending)
+  // A pick is one holding by what it became; a player, who has no onward link, by who he is.
+  const holding = (ref: AflTradeStoryHopRef) =>
+    ref.leg.assetKind === 'player' ? `player|${index.assetId(ref.leg)}` : index.identity(ref);
+  const kept = chains.flatMap((chain) =>
+    chainLegs(chain, 'receivingClubId')
+      .filter((ref) => !index.nextHop(ref) && !playerPassedOn(index, chain, ref))
+      .sort((left, right) => byValueDescending(index.resolve(left), index.resolve(right)))
   );
-  const kept = new Set(endedWith.map(({ assetId }) => assetId));
-  const given = chains.flatMap((chain) => legsOf(chain, 'sendingClubId'));
-  const gotAway = uniqueBy(given, (ref) => index.assetId(ref.leg))
-    .filter((ref) => !kept.has(index.assetId(ref.leg)))
+  const keptHoldings = new Set(kept.map(holding));
+  // Latest first, so a player given more than once is shown where he went last.
+  const given = chains
+    .flatMap((chain) => chainLegs(chain, 'sendingClubId'))
+    .sort((left, right) => right.trade.tradeYear - left.trade.tradeYear);
+  const gotAway = uniqueBy(given, holding)
+    .filter((ref) => !keptHoldings.has(holding(ref)))
     .map((ref) => storyPlayer(index, index.finalHop(ref), 'got_away'))
     .sort(byValueDescending);
-  return [...endedWith, ...gotAway];
+  return [...kept.map((ref) => storyPlayer(index, ref, 'ended_with')), ...gotAway];
 }
 
 function storyHop(
@@ -179,20 +213,17 @@ function lineageTrade(
 }
 
 /**
- * The linked trades: the story's trade, every trade one of its assets passed through, and each of
- * its clubs' chains. A trade an asset of a linked trade later passed through is not linked.
+ * The linked trades and each later trade an asset of the story's trade passed through. A trade that
+ * only an asset of another linked trade later passed through is not listed.
  */
 function storyLineage(
   index: AflTradeStoryIndex,
   trade: AflTradeStoryTrade,
-  chains: readonly ClubChain[]
+  linked: readonly AflTradeStoryTrade[]
 ) {
   const own = refsOf(trade);
-  const linked = [
-    ...chains.flatMap((chain) => chain.trades),
-    ...own.flatMap((ref) => index.forward(ref).map((hop) => hop.trade)),
-  ];
-  const trades = uniqueBy(linked, (linkedTrade) => linkedTrade.transactionId).sort(
+  const withHops = [...linked, ...own.flatMap((ref) => index.forward(ref).map((hop) => hop.trade))];
+  const trades = uniqueBy(withHops, (linkedTrade) => linkedTrade.transactionId).sort(
     (left, right) => left.tradeYear - right.tradeYear
   );
   return {
@@ -207,7 +238,8 @@ function storyLineage(
  *
  * Every asset has one intrinsic value in every trade it passes through: a player's first stint at
  * the receiving club, and a pick's final selection's first stint at the club that used it, whoever
- * held it. Each trade is zero-sum on those values. A pick spent matching a bid is pending.
+ * held it. Each trade is zero-sum on those values. A pick spent matching a bid is pending. A player
+ * traded on has a value per receiving club, so unlike a pick he does not cancel out along a chain.
  */
 export function buildAflTradeStory(
   batch: AflTradeStoryBatch,
@@ -217,7 +249,8 @@ export function buildAflTradeStory(
   const index = new AflTradeStoryIndex(batch, names);
   const trade = index.trade(tradeId);
   const clubIds = trade.clubs.map(({ clubId }) => clubId);
-  const chains = clubIds.map((clubId) => clubChain(index, trade, clubId));
+  const linked = linkedTrades(index, trade);
+  const chains = clubIds.map((clubId) => clubChain(linked, clubId));
   return {
     trade: {
       id: trade.transactionId,
@@ -233,7 +266,7 @@ export function buildAflTradeStory(
       })),
     },
     players: storyPlayers(index, chains),
-    lineage: storyLineage(index, trade, chains),
+    lineage: storyLineage(index, trade, linked),
     events: [],
   };
 }

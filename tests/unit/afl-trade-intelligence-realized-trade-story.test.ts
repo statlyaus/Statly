@@ -78,7 +78,7 @@ describe('realized trade story: the Cameron trade', () => {
   it('follows each club’s next moves: Geelong +7.7 with pick 34 pending, GWS −57.6', () => {
     const geelong = netOf(cameron.nets.withNextMoves, CLUB.gee);
     expect(geelong.net).toBeCloseTo(7.7, 9);
-    expect(geelong.pendingAssetIds).toEqual(['pick:2021-34-gee']);
+    expect(geelong.pending).toEqual([{ assetId: 'pick:2021-34-gee', direction: 'given' }]);
     expect(geelong).toMatchObject({ pendingCount: 1, tradeIds: [TRADE.cameron, TRADE.geeWbd] });
     const gws = netOf(cameron.nets.withNextMoves, CLUB.gws);
     expect(gws.net).toBeCloseTo(-57.6, 9);
@@ -170,7 +170,9 @@ describe('realized trade story: the Cameron trade', () => {
     expect(new Set(trades.flatMap(({ clubs }) => clubs.map(({ clubId }) => clubId))).size).toBe(7);
     const colAde = trades.find(({ tradeId }) => tradeId === TRADE.colAde)!;
     expect(netOf(colAde.nets, CLUB.col).net).toBeCloseTo(1.3, 9);
-    expect(netOf(colAde.nets, CLUB.ade)).toMatchObject({ pendingAssetIds: ['pick:2021-r3-ade'] });
+    expect(netOf(colAde.nets, CLUB.ade)).toMatchObject({
+      pending: [{ assetId: 'pick:2021-r3-ade', direction: 'given' }],
+    });
   });
 
   it('follows each asset hop by hop to its final selection', () => {
@@ -197,10 +199,10 @@ describe('realized trade story: the 2021 Geelong ⇄ Bulldogs trade', () => {
     expect(netOf(swap.nets.tradeAlone, CLUB.wbd).net).toBeCloseTo(43.2, 9);
     const bulldogs = netOf(swap.nets.withNextMoves, CLUB.wbd);
     expect(bulldogs.net).toBeCloseTo(15.8, 9);
-    expect(bulldogs.pendingAssetIds).toEqual([
-      'pick:2021-34-gee',
-      'pick:2022-r3-wbd',
-      'pick:2021-42-nth',
+    expect(bulldogs.pending).toEqual([
+      { assetId: 'pick:2021-34-gee', direction: 'received' },
+      { assetId: 'pick:2022-r3-wbd', direction: 'given' },
+      { assetId: 'pick:2021-42-nth', direction: 'received' },
     ]);
     expect(bulldogs.tradeIds).toEqual([TRADE.geeWbd, TRADE.wbdNth]);
     expect(netOf(swap.nets.withNextMoves, CLUB.gee).net).toBeCloseTo(-43.2, 9);
@@ -225,8 +227,14 @@ describe('realized trade story invariants', () => {
     for (const { transactionId } of cameronChainBatch.content.trades) {
       const { tradeAlone } = story(transactionId).nets;
       expect(tradeAlone.reduce((total, { net }) => total + net, 0)).toBeCloseTo(0, 9);
-      const pending = tradeAlone.flatMap(({ pendingAssetIds }) => pendingAssetIds);
-      expect(pending.length).toBe(2 * new Set(pending).size);
+      const pending = tradeAlone.flatMap(({ pending: assets }) => assets);
+      const received = pending.filter(({ direction }) => direction === 'received');
+      expect(received.map(({ assetId }) => assetId).sort()).toEqual(
+        pending
+          .filter(({ direction }) => direction === 'given')
+          .map(({ assetId }) => assetId)
+          .sort()
+      );
     }
   });
 

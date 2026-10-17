@@ -20,6 +20,8 @@ export interface AflTradeStoryLeg {
   readonly stint?: { readonly status: 'closed' | 'open' };
   readonly onward?: { readonly transactionId: string };
   readonly onwardTransactionId?: string;
+  /** Rule v7: a special entitlement's next hop is its successor transfer, an ordinary pick. */
+  readonly specialEntitlement?: { readonly successorTransferId: string };
 }
 
 export interface AflTradeStoryTrade {
@@ -62,10 +64,11 @@ export interface AflTradeStoryNames {
 
 /**
  * Why an asset has no value yet. `matched_bid`: the pick was spent matching a bid, so its value is
- * pending, never 0 and never estimated. `not_yet_drafted`: its draft has not happened.
+ * pending, never 0 and never estimated. `draft_not_in_evidence`: no outcome is in evidence yet
+ * (the grader projected it from the draft order, which the story never uses).
  * `unavailable`: the grader blocked the leg its value rests on.
  */
-export type AflTradeStoryPendingReason = 'matched_bid' | 'not_yet_drafted' | 'unavailable';
+export type AflTradeStoryPendingReason = 'matched_bid' | 'draft_not_in_evidence' | 'unavailable';
 
 /** An asset's one intrinsic value, in first-stint PAV, the same in every trade it passes through. */
 export type AflTradeStoryValue =
@@ -113,12 +116,21 @@ export interface AflTradeStorySide extends AflTradeStoryClub {
 export interface AflTradeStoryNet extends AflTradeStoryClub {
   /** Known values received minus known values given. */
   readonly net: number;
-  /** Pending assets the net leaves out. An asset received and passed on cancels out. */
+  /**
+   * Pending assets the net leaves out, each as this hop's asset id and whether the club received or
+   * gave it. A pick received and passed on cancels out.
+   */
   readonly pendingCount: number;
-  readonly pendingAssetIds: readonly string[];
+  readonly pending: readonly {
+    readonly assetId: string;
+    readonly direction: 'received' | 'given';
+  }[];
 }
 
-/** A club's net over its chain: this trade plus each later trade it passed a received asset into. */
+/**
+ * A club's net over its chain: the linked trades it is a party to. The linked trades are the story's
+ * trade and, repeatedly, each later trade a club of the story's trade passed a received pick into.
+ */
 export interface AflTradeStoryChainNet extends AflTradeStoryNet {
   readonly tradeIds: readonly string[];
 }
@@ -189,7 +201,10 @@ export interface AflTradeStory {
   };
   readonly players: readonly AflTradeStoryPlayer[];
   readonly lineage: {
-    /** The story's trade and every trade linked to it by a shared asset, oldest first. */
+    /**
+     * The linked trades and each later trade an asset of the story's trade passed through, oldest
+     * first. A `before` hop of an asset can name a trade not listed here.
+     */
     readonly trades: readonly AflTradeStoryLineageTrade[];
     /** Each asset of the story's trade, hop by hop, to its final selection or pending value. */
     readonly assets: readonly AflTradeStoryLineageAsset[];

@@ -3965,27 +3965,31 @@ It returns, for one trade:
 
 - **Trade and sides:** the trade's year and clubs, and for each club what it gave and received, with
   each asset's label, what it became (player, club and draft slot, not used, or pending) and its value.
-- **Nets:** each club's net on the trade alone, and with its next moves. A club's chain is the trade
-  plus each later trade it passed a received asset into, recursively. Its chain net is the sum of its
-  nets on those trades, so an asset received and passed on cancels out.
+- **Nets:** each club's net on the trade alone, and with its next moves. The linked trades are the
+  trade and, repeatedly, each later trade a club of the trade passed a pick it received into. A club's
+  chain is the linked trades it is a party to. Its chain net is the sum of its nets on those trades, so
+  a pick received and passed on cancels out.
 - **Players:** what each club of the trade ended up with along its chain, then the ones that got away:
   assets those clubs gave that none of them kept. Each has its club, how it was acquired, its value and
   whether the stint is still open.
-- **Lineage:** the linked trades (the trade, every trade one of its assets passed through, and each
-  club's chain), with per-trade nets, and each asset's hops from its first hop in the batch to its final
-  leg.
+- **Lineage:** the linked trades plus each later trade an asset of the trade passed through, with
+  per-trade nets, and each asset's hops from its first hop in the batch to its final leg. An earlier hop
+  can name a trade that is not listed.
 - **Events:** always empty for now. An event (for example a premiership) needs a `sourceId` naming a
   reviewed source record; an unsourced event is never shown.
 
 **Intrinsic value.** Every asset has one value in every trade it passes through. A player is worth his
 first stint at the receiving club. A pick is worth what it became: the drafted player's first-stint PAV
 at the club that used it, whoever ended up holding it. The model follows a traded-on pick through its
-onward trades to its final leg and never reads the batch's traded-on return value, which belongs to
-the old return rule. Each trade is therefore zero-sum on its known values.
+onward trades to its final leg, and a rule v7 special entitlement to its successor pick. It never reads
+the batch's traded-on return value, which belongs to the old return rule. Each trade is therefore
+zero-sum on its known values. A player traded on has a value per receiving club, so unlike a pick he
+does not cancel out along a chain.
 
 **Pending.** A pick spent matching a bid (`pick_not_used_nominee_excluded`) has its value pending: never
-0 and never estimated. A pick not yet drafted or a blocked leg is pending too. Nets leave pending assets
-out and count them instead.
+0 and never estimated. A pick with no outcome in evidence yet (`pick_projected_from_order`, whose
+projection the story never uses) and a blocked leg are pending too. Nets leave pending assets out and
+list them instead, each as received or given.
 
 ## Immutable publication
 
