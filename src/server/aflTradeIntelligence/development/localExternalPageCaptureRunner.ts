@@ -55,8 +55,8 @@ import {
 import {
   createDraftguruNationalYearCaptureCommand,
   DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
-  DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
   draftguruNationalYearDecisionKey,
+  draftguruNationalYearParserVersion,
   type LocalDraftguruNationalYearTarget,
 } from './localDraftguruNationalYearCapture';
 import { createLocalFileCaptureAdmissionStore } from './localFileCaptureAdmissionStore';
@@ -185,7 +185,7 @@ const CAPABILITY_PROFILES: Record<
   },
   [DRAFTGURU_NATIONAL_YEAR_CAPABILITY]: {
     provider: 'draftguru',
-    parserVersion: () => DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+    parserVersion: draftguruNationalYearParserVersion,
     policy: LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-national-raw',
     decisionKey: draftguruNationalYearDecisionKey,
