@@ -3506,6 +3506,9 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 
 - Run it on statly-grading-1, which holds the genuine database. `AFL_OUTCOMES_DATABASE_URL` must name
   a loopback database.
+- Every season in `--seasons` needs a finalized current HPN PAV head and season spells, or the loader
+  refuses. Before relying on 2019 and 2020, confirm both exist for them; otherwise export from the
+  first season that has them.
 - `--out` must not exist yet; the ledger is never overwritten. If writing it fails after the store, the
   error names the stored `artifactId`.
 - Read the printed `summary` before citing a ledger: `playersWithoutName` counts players with no

@@ -233,6 +233,12 @@ const labels: AflTradeAssetLedgerLabels = {
 };
 
 const build = () => createAflTradeAssetLedger(inputs(), labels);
+const withCandidate = (change: (candidate: Candidate) => Candidate) => {
+  const base = inputs();
+  return createAflTradeAssetLedger({ ...base, candidate: change(base.candidate) }, labels);
+};
+const withOutcomes = (change: (rows: Outcome[]) => Outcome[]) =>
+  withCandidate((candidate) => ({ ...candidate, pickOutcomes: change(candidate.pickOutcomes!) }));
 const playerOf = (playerId: string) =>
   build().ledger.content.players.find((row) => row.playerId === playerId)!;
 const pickOf = (pickId: string) =>
@@ -345,8 +351,38 @@ describe('asset ledger picks', () => {
     expect(ledger.pickOutcome(PICK_MATCHED)).toEqual({
       kind: 'matched_bid',
       status: 'pending',
+      basis: 'board_matched_bid',
       matchedBidBoardPickIds: [BOARD_MATCHED],
     });
+  });
+
+  it('says when a matched bid rests only on a nominee count', () => {
+    const ledger = withOutcomes((rows) =>
+      rows.map((row) =>
+        row.transferId === 'tr-4'
+          ? outcome('tr-4', {
+              nominationBasis: 'club_took_nominated_player',
+              receivingClubNominatedSelections: 1,
+            })
+          : row
+      )
+    );
+    expect(ledger.pickOutcome(PICK_MATCHED)).toEqual({
+      kind: 'matched_bid',
+      status: 'pending',
+      basis: 'nominee_count',
+      matchedBidBoardPickIds: [],
+    });
+  });
+
+  it('values a traded pick’s draftee exactly as the grader values its last leg', () => {
+    const leg = gradeAflTradesOnRealizedValue(inputs())
+      .content.trades.flatMap(({ legs }) => legs)
+      .find(({ transferId }) => transferId === 'tr-2')!;
+    const outcome = build().pickOutcome(PICK_TRADED);
+    expect(outcome?.kind === 'selected' && outcome.firstStint?.value).toBe(
+      leg.state === 'valued' ? leg.realizedValue : 'not valued'
+    );
   });
 
   it('projects a pick of a draft not yet in evidence and leaves a drafted-year gap unresolved', () => {
@@ -374,6 +410,121 @@ describe('asset ledger picks', () => {
     expect(ledger.pickOutcome(PICK_NOT_USED)).toEqual({
       kind: 'unresolved',
       reason: 'not_used_no_access_evidence',
+    });
+  });
+});
+
+describe('asset ledger picks without a clear outcome', () => {
+  const PICK_ROOKIE = `draft-pick:${hex('c')}`;
+
+  it('leaves a traded pick of a draft already run unresolved when no hop states an outcome', () => {
+    const ledger = withCandidate((candidate) => ({
+      ...candidate,
+      transfers: [
+        ...candidate.transfers,
+        pick('tr-6', 'tx-3', 'gws', 'carlton', PICK_ROOKIE, 2020),
+      ],
+    }));
+    expect(ledger.pickOutcome(PICK_ROOKIE)).toEqual({
+      kind: 'unresolved',
+      reason: 'no_outcome_evidence',
+    });
+  });
+
+  it('refuses a selection in a draft before the trade, as the grader does', () => {
+    const ledger = withCandidate((candidate) => ({
+      ...candidate,
+      transfers: [
+        ...candidate.transfers,
+        pick('tr-6', 'tx-4', 'gws', 'carlton', PICK_ROOKIE, 2021),
+      ],
+      transactions: [...candidate.transactions, trade('tx-4', 2022)],
+      pickOutcomes: [
+        ...candidate.pickOutcomes!,
+        outcome('tr-6', { disposition: 'selected', playerId: 'p1' }),
+      ],
+    }));
+    expect(ledger.pickOutcome(PICK_ROOKIE)).toEqual({
+      kind: 'unresolved',
+      reason: 'pick_outcome_unresolved',
+    });
+  });
+
+  it('lists a hop whose club is unresolved, and never puts it on a trail', () => {
+    const ledger = withCandidate((candidate) => ({
+      ...candidate,
+      transfers: candidate.transfers.map((transfer) =>
+        transfer.transferId === 'tr-1' ? ({ ...transfer, fromClubId: null } as Transfer) : transfer
+      ),
+    }));
+    expect(ledger.ledger.content.picks.find(({ pickId }) => pickId === PICK_TRADED)).toMatchObject({
+      hopOrder: 'unordered',
+      hops: [
+        { transferId: 'tr-1', fromClubId: null, toClubId: 'carlton' },
+        { transferId: 'tr-2', fromClubId: 'carlton', toClubId: 'collingwood' },
+      ],
+    });
+  });
+
+  it('refuses a used pick its club traded on, and two hops that both state an end', () => {
+    const usedThenTraded = withOutcomes((rows) =>
+      rows.map((row) =>
+        row.transferId === 'tr-1'
+          ? outcome('tr-1', { nominationBasis: 'club_took_no_nominated_player' })
+          : row.transferId === 'tr-2'
+            ? outcome('tr-2', { disposition: 'traded_on' })
+            : row
+      )
+    );
+    expect(usedThenTraded.pickOutcome(PICK_TRADED)).toEqual({
+      kind: 'unresolved',
+      reason: 'outcome_conflict',
+    });
+    const twoEnds = withOutcomes((rows) =>
+      rows.map((row) =>
+        row.transferId === 'tr-1'
+          ? outcome('tr-1', { nominationBasis: 'club_took_no_nominated_player' })
+          : row
+      )
+    );
+    expect(twoEnds.pickOutcome(PICK_TRADED)).toEqual({
+      kind: 'unresolved',
+      reason: 'outcome_conflict',
+    });
+  });
+
+  it('follows a pending hop to a future slot, and a lone traded-on hop to unlinked', () => {
+    const pending = withOutcomes((rows) =>
+      rows.map((row) =>
+        row.transferId === 'tr-3' ? outcome('tr-3', { outcomeStatus: 'pending' }) : row
+      )
+    );
+    expect(pending.pickOutcome(PICK_PASSED)).toEqual({ kind: 'future', projectedSlot: null });
+    const unlinked = withOutcomes((rows) =>
+      rows.map((row) =>
+        row.transferId === 'tr-5' ? outcome('tr-5', { disposition: 'traded_on' }) : row
+      )
+    );
+    expect(unlinked.pickOutcome(PICK_NOT_USED)).toEqual({
+      kind: 'unresolved',
+      reason: 'traded_on_unlinked',
+    });
+  });
+
+  it('refuses two usable selections of one pick, and lists identity fields its sources disagree on', () => {
+    const ledger = withCandidate((candidate) => ({
+      ...candidate,
+      draftSelections: [
+        ...candidate.draftSelections!,
+        { ...selection('sel-4', PICK_DARCY, 'p3', 'western_bulldogs', 3), roundNumber: 2 },
+      ],
+    }));
+    expect(ledger.pickOutcome(PICK_DARCY)).toEqual({
+      kind: 'unresolved',
+      reason: 'selection_conflict',
+    });
+    expect(ledger.ledger.content.picks.find(({ pickId }) => pickId === PICK_DARCY)).toMatchObject({
+      identityDisagreements: ['round'],
     });
   });
 });

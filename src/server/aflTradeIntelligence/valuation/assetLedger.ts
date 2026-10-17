@@ -72,6 +72,12 @@ function clubsOf(
       [fromClubId, toClubId].filter((id): id is string => id !== null)
     ),
     ...(candidate.draftSelections ?? []).flatMap(({ clubId }) => (clubId ? [clubId] : [])),
+    ...(candidate.pickCustody ?? []).flatMap(({ originalClubId, currentClubId }) =>
+      [originalClubId, currentClubId].filter((id): id is string => id !== null)
+    ),
+    ...candidate.transfers.flatMap(({ asset }) =>
+      asset.kind === 'pick_entitlement' && asset.originalClubId ? [asset.originalClubId] : []
+    ),
   ]);
   return [...ids].sort(byCodeUnit).map((clubId) => ({ clubId, name: names.get(clubId) ?? null }));
 }
@@ -94,7 +100,7 @@ function picksOf(
   inputs: AflTradeRealizedTradeGradeInputs,
   stintValue: AflTradeAssetLedgerStintValue
 ): AflTradeAssetLedgerPick[] {
-  const trails = aflTradeAssetLedgerPickTrails(inputs.candidate);
+  const trails = aflTradeAssetLedgerPickTrails(inputs);
   const sources = createAflTradeAssetLedgerOutcomeSources(inputs.candidate, stintValue);
   return [...aflTradeAssetLedgerPickIdentities(inputs.candidate).values()]
     .sort((left, right) => byCodeUnit(left.pickId, right.pickId))
@@ -104,7 +110,7 @@ function picksOf(
         ...pick,
         hopOrder: trail.hopOrder,
         hops: trail.hops,
-        outcome: aflTradeAssetLedgerPickOutcome(sources, pick, trail.hops),
+        outcome: aflTradeAssetLedgerPickOutcome(sources, pick, trail),
       };
     });
 }

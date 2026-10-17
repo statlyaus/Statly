@@ -3,8 +3,14 @@ import {
   aflTradePickTradeSequence,
   createAflTradePickOnwardTransfers,
 } from '../source/pickOnwardTransfer';
-import type { AflTradeAssetLedgerPickHop } from './assetLedgerContracts';
-import type { AflTradeRealizedTradeGradeInputs } from './realizedTradeGrade';
+import type {
+  AflTradeAssetLedgerPickHop,
+  AflTradeAssetLedgerPickIdentityField,
+} from './assetLedgerContracts';
+import {
+  partitionAflTradeRealizedTrades,
+  type AflTradeRealizedTradeGradeInputs,
+} from './realizedTradeGrade';
 
 type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
 type Transaction = Candidate['transactions'][number];
@@ -17,17 +23,19 @@ export interface AflTradeAssetLedgerPickIdentity {
   draftType: string;
   round: number | null;
   originalClubId: string | null;
+  identityDisagreements: AflTradeAssetLedgerPickIdentityField[];
 }
 
-/**
- * Every draft-pick id the candidate records, with its identity fields. Each field comes from the first
- * source that states it: the Official AFL custody rows, then the traded entitlement, then the
- * selection. Ids are never merged: pick-identity repairs are reviewed operations, not read-path ones.
- */
-export function aflTradeAssetLedgerPickIdentities(
-  candidate: Candidate
-): Map<string, AflTradeAssetLedgerPickIdentity> {
-  const sources: AflTradeAssetLedgerPickIdentity[] = [
+type IdentitySource = Omit<AflTradeAssetLedgerPickIdentity, 'identityDisagreements'>;
+const IDENTITY_FIELDS: AflTradeAssetLedgerPickIdentityField[] = [
+  'draftYear',
+  'draftType',
+  'round',
+  'originalClubId',
+];
+
+function identitySources(candidate: Candidate): IdentitySource[] {
+  return [
     ...(candidate.pickCustody ?? []).map((row) => ({
       pickId: row.pickId,
       draftYear: row.draftYear,
@@ -56,15 +64,38 @@ export function aflTradeAssetLedgerPickIdentities(
       originalClubId: null,
     })),
   ];
-  const identities = new Map<string, AflTradeAssetLedgerPickIdentity>();
-  for (const source of sources) {
-    const known = identities.get(source.pickId);
-    if (!known) identities.set(source.pickId, { ...source });
-    else {
-      known.round ??= source.round;
-      known.originalClubId ??= source.originalClubId;
-    }
+}
+
+/** Takes each field the known identity lacks, and records each field two sources state differently. */
+function mergeIdentity(known: AflTradeAssetLedgerPickIdentity, source: IdentitySource) {
+  for (const field of IDENTITY_FIELDS) {
+    const value = source[field];
+    if (value === null) continue;
+    if (known[field] === null) (known as unknown as Record<string, unknown>)[field] = value;
+    else if (known[field] !== value && !known.identityDisagreements.includes(field))
+      known.identityDisagreements.push(field);
   }
+}
+
+/**
+ * Every draft-pick id the candidate records, with its identity fields. Each field comes from the first
+ * source that states it: the Official AFL custody rows, then the traded entitlement, then the
+ * selection; a field the sources state differently is listed, never silently resolved. Ids are never
+ * merged: pick-identity repairs are reviewed operations, not read-path ones.
+ */
+export function aflTradeAssetLedgerPickIdentities(
+  candidate: Candidate
+): Map<string, AflTradeAssetLedgerPickIdentity> {
+  const identities = new Map<string, AflTradeAssetLedgerPickIdentity>();
+  for (const source of identitySources(candidate)) {
+    const known = identities.get(source.pickId);
+    if (!known) identities.set(source.pickId, { ...source, identityDisagreements: [] });
+    else mergeIdentity(known, source);
+  }
+  for (const identity of identities.values())
+    identity.identityDisagreements.sort(
+      (left, right) => IDENTITY_FIELDS.indexOf(left) - IDENTITY_FIELDS.indexOf(right)
+    );
   return identities;
 }
 
@@ -72,11 +103,13 @@ const toHop = (transfer: Transfer, transaction: Transaction): AflTradeAssetLedge
   transactionId: transfer.transactionId,
   transferId: transfer.transferId,
   seasonYear: transaction.seasonYear,
-  fromClubId: transfer.fromClubId!,
-  toClubId: transfer.toClubId!,
+  fromClubId: transfer.fromClubId,
+  toClubId: transfer.toClubId,
 });
 
-/** Season, then Draftguru pick-trade sequence, then date, then trade id: a stable fallback order. */
+const byCodeUnit = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+
+/** Season, then Draftguru pick-trade sequence, then date, then transfer id: a stable fallback order. */
 function compareUnordered(
   left: AflTradeAssetLedgerPickHop,
   right: AflTradeAssetLedgerPickHop,
@@ -85,12 +118,12 @@ function compareUnordered(
   const a = trades.get(left.transactionId)!;
   const b = trades.get(right.transactionId)!;
   if (a.seasonYear !== b.seasonYear) return a.seasonYear - b.seasonYear;
-  const sequence =
-    (aflTradePickTradeSequence(a) ?? Infinity) - (aflTradePickTradeSequence(b) ?? Infinity);
-  if (sequence) return sequence;
-  const date = (a.occurredOn ?? '').localeCompare(b.occurredOn ?? '');
-  if (date) return date;
-  return left.transferId < right.transferId ? -1 : left.transferId > right.transferId ? 1 : 0;
+  const sequenceA = aflTradePickTradeSequence(a);
+  const sequenceB = aflTradePickTradeSequence(b);
+  if (sequenceA !== sequenceB)
+    return sequenceA === null ? 1 : sequenceB === null ? -1 : sequenceA - sequenceB;
+  const date = byCodeUnit(a.occurredOn ?? '', b.occurredOn ?? '');
+  return date || byCodeUnit(left.transferId, right.transferId);
 }
 
 /** The pick's transfers as one trail, when each hop's onward transfer is unique and they chain. */
@@ -118,36 +151,44 @@ export interface AflTradeAssetLedgerPickTrail {
   hops: AflTradeAssetLedgerPickHop[];
 }
 
+/** The pick transfers of every trade, by pick id, including any with an unresolved club. */
+function pickTransfersByPick(candidate: Candidate, trades: ReadonlyMap<string, Transaction>) {
+  const byPick = new Map<string, Transfer[]>();
+  for (const transfer of candidate.transfers) {
+    if (transfer.asset.kind !== 'pick_entitlement' || !trades.has(transfer.transactionId)) continue;
+    const pickId = transfer.asset.pickId;
+    byPick.set(pickId, [...(byPick.get(pickId) ?? []), transfer]);
+  }
+  return byPick;
+}
+
 /**
- * Each pick's trades, by pick id. Only trades with both clubs known count, as for the grader. The
- * order is the grader's onward-transfer trail (`createAflTradePickOnwardTransfers`, with the latest
- * custody holder as tie-break) when that gives one trail through every hop.
+ * Each pick's trades, by pick id. Every trade hop is listed, even one whose club the candidate could
+ * not resolve. The order is the grader's onward-transfer trail (`createAflTradePickOnwardTransfers`
+ * over the grader's own graded trades, with the latest custody holder as tie-break) when that gives
+ * one trail through every hop; a hop in a trade the grader does not grade never joins one.
  */
 export function aflTradeAssetLedgerPickTrails(
-  candidate: Candidate
+  inputs: AflTradeRealizedTradeGradeInputs
 ): Map<string, AflTradeAssetLedgerPickTrail> {
+  const { candidate } = inputs;
   const trades = new Map(
     candidate.transactions
       .filter(({ transactionType }) => transactionType === 'trade')
       .map((transaction) => [transaction.transactionId, transaction])
   );
-  const pickTransfers = candidate.transfers.filter(
-    (transfer) =>
-      transfer.asset.kind === 'pick_entitlement' &&
-      trades.has(transfer.transactionId) &&
-      transfer.fromClubId !== null &&
-      transfer.toClubId !== null
-  );
-  const onwardOf = createAflTradePickOnwardTransfers(trades, pickTransfers, {
+  const transfersByTransaction = new Map<string, Transfer[]>();
+  for (const transfer of candidate.transfers)
+    transfersByTransaction.set(transfer.transactionId, [
+      ...(transfersByTransaction.get(transfer.transactionId) ?? []),
+      transfer,
+    ]);
+  const graded = partitionAflTradeRealizedTrades(inputs, transfersByTransaction).transactions;
+  const onwardOf = createAflTradePickOnwardTransfers(graded, candidate.transfers, {
     custodyHolders: aflTradePickCustodyHolders(candidate.pickCustody ?? []),
   });
-  const byPick = new Map<string, Transfer[]>();
-  for (const transfer of pickTransfers) {
-    const pickId = (transfer.asset as { pickId: string }).pickId;
-    byPick.set(pickId, [...(byPick.get(pickId) ?? []), transfer]);
-  }
   const trails = new Map<string, AflTradeAssetLedgerPickTrail>();
-  for (const [pickId, transfers] of byPick) {
+  for (const [pickId, transfers] of pickTransfersByPick(candidate, trades)) {
     const trail = trailOf(transfers, onwardOf);
     const hops = (trail ?? transfers).map((transfer) =>
       toHop(transfer, trades.get(transfer.transactionId)!)

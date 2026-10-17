@@ -10,11 +10,12 @@ export const AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION = 'afl-trade-asset-ledger/v1'
 export const AFL_TRADE_ASSET_LEDGER_LIMITATION: string =
   'Private, non-production asset ledger. Stints follow the realized grader: a stint ends in the first ' +
   'covered season the player appears for another club (that season still counts) or before a later ' +
-  'reviewed arrival at the same club, and runs on through seasons with no spells. A stint starting in ' +
-  'the first covered season without a reviewed arrival may have begun earlier. PAV is HPN PAV from ' +
-  'the current calculation per season and is signed. Picks are keyed by the draft-pick id the ' +
-  'candidate records; ids are never merged. A pick spent matching a bid stays pending until bid ' +
-  'evidence lands. Not for publication.';
+  'reviewed arrival at the same club, and runs on through seasons with no spells, so a season at two ' +
+  'clubs ends the stint at each. A stint starts at its first season in evidence; without a reviewed ' +
+  'arrival it may have begun earlier. PAV is HPN PAV from the current calculation per season and is ' +
+  'signed. Picks are keyed by the draft-pick id the candidate records; ids are never merged. A ' +
+  'not-used pick of a club that took a nominee may have been spent matching a bid and stays pending ' +
+  'until bid evidence lands. Not for publication.';
 
 /** One season of a stint: the player's HPN PAV at the club, 0 when he has no row there. */
 export interface AflTradeAssetLedgerStintSeason {
@@ -56,8 +57,9 @@ export interface AflTradeAssetLedgerPickHop {
   readonly transactionId: string;
   readonly transferId: string;
   readonly seasonYear: number;
-  readonly fromClubId: string;
-  readonly toClubId: string;
+  /** Null when the candidate could not resolve the club; such a hop never joins a trail. */
+  readonly fromClubId: string | null;
+  readonly toClubId: string | null;
 }
 
 /** The order slot a pick not yet drafted is projected to (rule v6's live-order lookup). */
@@ -94,11 +96,20 @@ export type AflTradeAssetLedgerPickOutcome =
       readonly kind: 'matched_bid';
       /** Pending until bid evidence lands: never 0 and never estimated. */
       readonly status: 'pending';
+      /**
+       * `board_matched_bid`: a Footyinfo board records the receiving club's matched bid.
+       * `nominee_count`: only that the club took a nominee in the draft, so the pick may have been
+       * spent matching the bid.
+       */
+      readonly basis: 'board_matched_bid' | 'nominee_count';
       readonly matchedBidBoardPickIds: readonly string[];
     }
   | { readonly kind: 'passed'; readonly boardPickId: string }
   | { readonly kind: 'future'; readonly projectedSlot: AflTradeAssetLedgerProjectedSlot | null }
   | { readonly kind: 'unresolved'; readonly reason: AflTradeAssetLedgerUnresolvedReason };
+
+export type AflTradeAssetLedgerPickIdentityField =
+  'draftYear' | 'draftType' | 'round' | 'originalClubId';
 
 export interface AflTradeAssetLedgerPick {
   readonly pickId: string;
@@ -106,7 +117,12 @@ export interface AflTradeAssetLedgerPick {
   readonly draftType: string;
   readonly round: number | null;
   readonly originalClubId: string | null;
-  /** `trail` when the trades form one unique trail; otherwise sorted by season and trade id. */
+  /** Identity fields on which the custody rows, traded entitlements and selections disagree. */
+  readonly identityDisagreements: readonly AflTradeAssetLedgerPickIdentityField[];
+  /**
+   * `trail` when the trades form one unique trail through the grader's graded trades; otherwise
+   * sorted by season, Draftguru pick-trade sequence, date and transfer id.
+   */
   readonly hopOrder: 'trail' | 'unordered';
   readonly hops: readonly AflTradeAssetLedgerPickHop[];
   readonly outcome: AflTradeAssetLedgerPickOutcome;

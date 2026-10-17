@@ -4002,47 +4002,59 @@ public pages stay on the publication runtime and never read it.
 **Sources.** It invents no authority. Its facts are exactly the realized grader's inputs, loaded by
 the grader's own `loadAflTradeRealizedTradeGradeInputs` ("Realized trade grade (MVP) contract",
 **Inputs**): the finalized non-production candidate (transactions, transfers, draft selections,
-Official AFL pick custody, pick outcomes and Footyinfo board picks), the current HPN PAV calculation
+Official AFL pick custody and pick outcomes, which cite Footyinfo board picks by id), the current HPN PAV calculation
 per season from `outcome_hpn_pav_calculation_head` (so a season with duplicate calculations reads only
 its governed head), those calculations' player rows, and the current v3 season spells and v4 reviewed
 arrivals. `development/postgresAssetLedgerLabels.ts` adds labels only: approved `outcome_player`
 display names and `outcome_club` current names. A player with no approved row is listed with a null
-name, never a guessed one. `createAflTradeAssetLedger(inputs, labels)` is pure.
+name, never a guessed one. The labels' approved players are also listed, so a registered player with
+no stint in the covered seasons appears with no stints. `createAflTradeAssetLedger(inputs, labels)` is
+pure. The labels are read in a second read-only transaction; they carry no facts.
 
 **Players.** Every approved player and every player the inputs name, each with `stints[]`. A stint is
 the grader's own first stint (`firstStint` in `valuation/realizedTradeGrade.ts`, exported for the
-ledger so the two cannot drift): it starts at a season spell or reviewed arrival, ends in the first
-covered season the player appears for another club (that season still counts there) or before a later
-reviewed arrival at the same club, and is open when it never ends inside the covered seasons. Each
-stint names its club, start and end season (null while open), whether its arrival is reviewed, whether
-it starts in the first covered season with no reviewed arrival (so it may have begun earlier), its PAV
-per season (0 for a valued season with no PAV row, flagged when the season is not official), the seasons
-with no pinned calculation, its signed `total` and its `value` (the total floored at 0, as a grade leg
-realizes it). A return to a former club is a stint of its own.
+ledger so the two cannot drift): it starts at the first season in evidence (a season spell or reviewed
+arrival), ends in the first covered season the player appears for another club (that season still
+counts there) or before a later reviewed arrival at the same club, and is open when it never ends inside
+the covered seasons. A season at two clubs therefore ends the stint at each, as it would for the
+grader. Each stint names its club, start and end season (null while open), whether its arrival is
+reviewed, whether it starts in the first covered season with no reviewed arrival, its PAV per season (0
+for a valued season with no PAV row, flagged when the season is not official), the seasons with no
+pinned calculation, its signed `total` and its `value` (the total floored at 0, as a grade leg realizes
+it). A stint with no reviewed arrival may have begun before its first season in evidence. A return to a
+former club is a stint of its own.
 
 **Picks.** Every draft-pick id the candidate records, with its draft year and type, round and
-original club (from the custody rows, then the traded entitlement, then the selection), its custody
-hops (each trade it moved in, with the trade id and the club that held it after) and its outcome. Ids
-are never merged: pick-identity repairs are reviewed operations. Hops follow the grader's onward
-trail (`createAflTradePickOnwardTransfers`, with the latest custody holder as tie-break) when that
-gives one trail through every hop (`hopOrder: 'trail'`), and are sorted by season and trade otherwise
-(`unordered`). The outcome is one of:
+original club (from the custody rows, then the traded entitlement, then the selection, with any field
+those sources state differently listed in `identityDisagreements`), its custody hops (each trade it
+moved in, with the trade id and the club that held it after, null where the candidate could not resolve
+a club) and its outcome. Ids are never merged: pick-identity repairs are reviewed operations. Hops
+follow the grader's onward trail (`createAflTradePickOnwardTransfers` over the grader's own graded
+trades, with the latest custody holder as tie-break) when that gives one trail through every hop
+(`hopOrder: 'trail'`). Otherwise, including when a hop's trade is one the grader does not grade, they
+are `unordered`: sorted by season, Draftguru pick-trade sequence, date and transfer id. The outcome is
+one of:
 
 - `selected`: the selection, player, drafting club and number, and `firstStint`, the draftee's first
   stint at the drafting club from the season after the draft.
 - `not_used`: stated not used by a club that took no nominee.
-- `matched_bid`: spent matching a bid, `status: 'pending'` until bid evidence lands, with any
-  Footyinfo board picks recording the matched bid. Never 0 and never estimated.
+- `matched_bid`: `status: 'pending'` until bid evidence lands. Never 0 and never estimated. Its
+  `basis` is `board_matched_bid` when Footyinfo board picks record the club's matched bid (listed), or
+  `nominee_count` when the evidence says only that the club took a nominee in that draft, so the pick
+  may have been spent matching the bid.
 - `passed`: a board-stated passed or removed pick.
 - `future`: a pick not yet drafted, with its projected slot in the live Official AFL order (rule v6's
-  lookup, including the previous draft's order as a proxy), or null when it has none.
+  lookup over the hop's own entitlement, including the previous draft's order as a proxy), or null
+  when it has none.
 - `unresolved`: with a reason, when the evidence does not say. A not-used pick without access evidence
   is unresolved, since it may have matched a bid.
 
-A hop's stated outcome decides, as it does for the grader; hops traded on say nothing of the end. Two
-terminal hop outcomes are an `outcome_conflict`. Without one, the pick's usable selection decides; with
-none, a pick of a draft already in evidence is unresolved and one of a draft not yet in evidence is a
-future pick.
+A hop's stated outcome decides, as it does for the grader; hops traded on say nothing of the end. On an
+ordered trail only the last hop may state an end, and two terminal hop outcomes are an
+`outcome_conflict`. A stated selection in a draft before the hop's trade is unresolved, as the grader
+refuses it. Without a terminal hop, the pick's usable selection decides. With none, a pick of a draft
+after the latest draft year the candidate holds a selection in is a future pick, and any other is
+unresolved: its draft has been run.
 
 **Lookups.** `stintValue(playerId, clubId, fromSeason)` returns any player's first stint at any club
 from a season, by the same rule and arrival check as the grader (a reviewed arrival in the season

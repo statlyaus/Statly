@@ -806,12 +806,14 @@ export function gradeAflTradesOnRealizedValue(
 }
 
 /**
- * The grader's own stint rules, shared with the asset ledger (`assetLedger.ts`, issue 789) so a ledger
- * stint is always the stint a grade leg values. Exported, not copied, so the two cannot drift.
+ * The grader's own stint rules and graded-trade partition, shared with the asset ledger
+ * (`assetLedger.ts`, issue 789) so a ledger stint is always the stint a grade leg values and a pick's
+ * trail runs over the same trades. Exported, not copied, so the two cannot drift.
  */
 export {
   arrivalReviewed as aflTradeRealizedArrivalReviewed,
   firstStint as aflTradeRealizedFirstStint,
   indexInputs as indexAflTradeRealizedStintInputs,
+  partitionTrades as partitionAflTradeRealizedTrades,
 };
 export type { Index as AflTradeRealizedStintIndex, Stint as AflTradeRealizedStint };
