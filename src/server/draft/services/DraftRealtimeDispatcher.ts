@@ -135,8 +135,8 @@ export class DraftRealtimeDispatcher {
   }
 
   private emitToDraftRooms(draftId: string, event: string, payload: unknown): void {
-    this.io?.local.to(draftId).emit(event, payload);
-    this.io?.local.to(`draft:${draftId}`).emit(event, payload);
+    // One broadcast to both rooms: Socket.IO delivers once per socket, so a socket in both gets each event once.
+    this.io?.local.to([draftId, `draft:${draftId}`]).emit(event, payload);
   }
 
   private emitCompatDelta(draftId: string, delta: DraftRealtimeDelta): void {
