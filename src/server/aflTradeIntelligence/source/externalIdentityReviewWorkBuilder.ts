@@ -187,6 +187,14 @@ function addClaimIdentities(
     add('club', claim.selectedByClub, claim.draftYear);
     return;
   }
+  if (claim.kind === 'draft_board_pick') {
+    // Every identity the reconciler resolves from a board row: the holder and each route club (a
+    // club may appear only here, e.g. as the holder of a removed pick), and the selected player.
+    add('club', claim.club, claim.draftYear);
+    claim.route.forEach((club) => add('club', club, claim.draftYear));
+    if (claim.player !== undefined) add('player', claim.player, claim.draftYear);
+    return;
+  }
   if (claim.kind === 'pick_custody') {
     if (claim.originalClub !== null) add('club', claim.originalClub, claim.draftYear);
     add('club', claim.currentClub, claim.draftYear);

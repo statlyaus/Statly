@@ -8,6 +8,8 @@ authority when a document and implementation disagree; fix the document in the s
 - [Public AFL Draft & Trade Outcomes](architecture/afl-trade-intelligence.md) — separate
   public/non-fantasy boundary, immutable source evidence, isolated PostgreSQL target, reviewed factual
   releases, optional valuation publication, and rollback.
+- [AFL trade value-line method](architecture/afl-trade-value-line-method.md) — proposed: each traded
+  asset's value over time, pick-to-player credibility blend, matched-bid shares; retires grade rules v14–v18.
 - [AFL trade source-rights assessment](architecture/afl-trade-source-rights-assessment.md) — Gate 0A
   candidate findings, rejection reasons, provider evidence request, and minimum approval criteria.
 - [Runtime and data platform](architecture/data-platform.md) — current ownership boundaries and the

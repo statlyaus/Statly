@@ -68,12 +68,7 @@ export function calculateStandingsRows(input: CalculateStandingsInput): Standing
     }
   }
 
-  return [...rows.values()].sort(
-    (a, b) =>
-      b.wins - a.wins ||
-      a.losses - b.losses ||
-      b.categoryWins - a.categoryWins ||
-      b.pointsFor - a.pointsFor ||
-      a.memberId.localeCompare(b.memberId)
-  );
+  // Rows are persisted as unordered aggregates; buildLeagueStandings in
+  // standingsReadModel.ts is the single ordering authority for display.
+  return [...rows.values()];
 }
