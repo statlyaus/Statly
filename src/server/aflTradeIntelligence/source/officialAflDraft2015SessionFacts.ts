@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_ARTICLE_DATE } from './officialAflArticleDate';
 import { createHash } from 'node:crypto';
 import { load } from 'cheerio';
 
@@ -124,7 +125,7 @@ export function parseOfficialAflDraft2015SessionFacts(
   if (!report) return fail('No reviewed 2015 partial-session report matches this exact URL.');
   const $ = load(html);
   const body = $('.article-body');
-  const dates = $('.article__date > time');
+  const dates = $(OFFICIAL_AFL_ARTICLE_DATE);
   const paragraphs = body
     .children('p')
     .map((_, element) => $(element).text().replace(/\s+/g, ' ').trim())
@@ -160,4 +161,15 @@ export function parseOfficialAflDraft2015SessionFacts(
     ),
     issues: [],
   };
+}
+
+/**
+ * The reviewed 2015 completed-session pages with each page's own reviewed date, which the capture
+ * records as its effective instant (a retrospective page keeps its later publication year).
+ */
+export function reviewedOfficialAflDraft2015SessionPages(): readonly {
+  url: string;
+  effectiveAt: string;
+}[] {
+  return [...reports].map(([url, report]) => ({ url, effectiveAt: report.displayedDate }));
 }

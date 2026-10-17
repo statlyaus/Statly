@@ -493,9 +493,47 @@ describe('local Official AFL completed-session targets', () => {
     ]);
   });
 
-  it.each([[[]], [[2020, 2020]], [[2015]], [[2031]]])('rejects seasons %j', (seasons) => {
+  it.each([[[]], [[2020, 2020]], [[2010]], [[2017]], [[2031]]])('rejects seasons %j', (seasons) => {
     expect(() => createLocalOfficialAflDraftSessionTargets(seasons)).toThrow();
   });
+
+  it.each([
+    [2011, ['2011', '2011', '2011', '2013']],
+    [2012, ['2012', '2012', '2014']],
+    [2013, ['2013', '2018', '2019']],
+    [2014, ['2014', '2016', '2016', '2018', '2019']],
+    [2015, ['2015', '2015']],
+    [2016, ['2016', '2016', '2019']],
+  ])(
+    'enumerates the reviewed %s pages at their own reviewed dates, which ingestion admits',
+    (season, years) => {
+      const targets = createLocalOfficialAflDraftSessionTargets([season]);
+      expect(targets.map(({ effectiveAt }) => effectiveAt.slice(0, 4))).toEqual(years);
+      const record = recordedOfficial(season);
+      for (const target of targets) {
+        expect(target.effectiveAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$/);
+        const command = createOfficialAflDraftSessionCaptureCommand(record, {
+          target,
+          capturedAt: evaluatedAt,
+          maximumBytes: 1024,
+        });
+        expect(() => validateAflTradeExternalCaptureScope(command.request)).not.toThrow();
+        expect(command.request).toMatchObject({
+          anchorSeasonYear: season,
+          draftPathway: 'national',
+          effectiveAt: target.effectiveAt,
+          parserVersion: 'official-afl-completed-draft-session/v19',
+        });
+        expect(
+          evaluateAflTradeGate0AAgainstDecision(
+            record.decision,
+            record.sourceRights,
+            command.gateRequest
+          )
+        ).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+      }
+    }
+  );
 
   it('narrows a season to the named reviewed pages', () => {
     const nightTwo =
