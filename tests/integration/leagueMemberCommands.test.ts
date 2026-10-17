@@ -146,7 +146,7 @@ describe('league member commands', () => {
     const removed = await prisma.leagueMember.findUniqueOrThrow({
       where: { id: memberIds[2] },
     });
-    expect(removed).toMatchObject({ isActive: false, status: 'removed', draftSlot: null });
+    expect(removed).toMatchObject({ isActive: false, status: 'REMOVED', draftSlot: null });
     expect(removed.leftAt).toBeInstanceOf(Date);
 
     expect(await draftOrder()).toEqual([
