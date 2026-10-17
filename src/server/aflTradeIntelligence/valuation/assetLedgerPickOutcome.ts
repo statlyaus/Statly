@@ -121,11 +121,13 @@ function future(
 function notUsed(outcome: PickOutcome): AflTradeAssetLedgerPickOutcome {
   switch (outcome.nominationBasis) {
     case 'club_took_nominated_player':
+      // Pending until a board bid match shares it (`assetLedgerBidMatches.ts`).
       return {
         kind: 'matched_bid',
         status: 'pending',
         basis: outcome.matchedBidBoardPickIds ? 'board_matched_bid' : 'nominee_count',
         matchedBidBoardPickIds: outcome.matchedBidBoardPickIds ?? [],
+        pendingReason: 'no_bid_spend',
       };
     case 'board_pick_passed_or_removed':
       return { kind: 'passed', boardPickId: outcome.boardPickId! };
