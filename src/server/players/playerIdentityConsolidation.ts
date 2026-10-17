@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { assertPlayerIdentitySourceFingerprint } from './playerIdentityConsolidationCli';
-import { containsPlayerIdentityReference } from './playerIdentityJsonReferences';
 import {
   planPlayerIdentityConsolidation,
   type PlayerAliasMapping,
@@ -15,53 +14,11 @@ export class PlayerIdentityConsolidationBlockedError extends Error {
   }
 }
 
-type AliasMap = ReadonlyMap<string, string>;
-
 export type PlayerIdentityConsolidationOptions = {
   expectedSourceFingerprint?: string;
   maxWaitMs?: number;
   timeoutMs?: number;
 };
-
-function replacePlayerIds(value: unknown, aliases: AliasMap): unknown {
-  if (typeof value === 'string') {
-    return aliases.get(value) ?? value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((entry) => replacePlayerIds(entry, aliases));
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, replacePlayerIds(entry, aliases)])
-    );
-  }
-
-  return value;
-}
-
-function rewriteJson(value: string | null, aliases: AliasMap): string | null {
-  if (!value) return value;
-  if (!containsPlayerIdentityReference(value, new Set(aliases.keys()))) return value;
-
-  try {
-    return JSON.stringify(replacePlayerIds(JSON.parse(value), aliases));
-  } catch {
-    throw new Error('Player alias appears in a value that is not valid JSON');
-  }
-}
-
-function rewriteJsonIdArray(value: string | null, aliases: AliasMap): string | null {
-  if (!value || !containsPlayerIdentityReference(value, new Set(aliases.keys()))) return value;
-  const rewritten = rewriteJson(value, aliases);
-  if (!rewritten) return rewritten;
-  const parsed = JSON.parse(rewritten) as unknown;
-  if (!Array.isArray(parsed)) {
-    throw new Error('Expected a JSON player ID array during identity consolidation');
-  }
-  return JSON.stringify([...new Set(parsed.map((entry) => String(entry)))]);
-}
 
 async function mergeWatchlists(
   tx: Prisma.TransactionClient,
