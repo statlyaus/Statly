@@ -195,7 +195,7 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'footyinfo-national-draft-board') {
-    // Parser v1 reads only the exact reviewed national draft boards (issues 853 and 789). A board
+    // Parser v2 reads only the exact reviewed national draft boards (issues 853 and 789). A board
     // states no as-of date, so its claims are effective when captured.
     if (
       request.provider !== 'footyinfo' ||

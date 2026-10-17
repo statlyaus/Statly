@@ -1103,21 +1103,27 @@ Prerequisites:
      the parser must reproduce it. The window is a traded arrival's date precision, never a day.
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
      refuses the capture's evidence rows; and
-   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v1` decision per captured
-     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v1`
-     (issues 853 and 789; owner decision of 2026-10-12 in the source policy). Parser
-     `footyinfo-draft-board-parser/v1` reads `https://www.footyinfo.com/draft/<season>` as
-     `draft_board_pick` claims for every selected, passed and removed pick, and a `draft_selection`
-     for each selection. The rights must name exactly `FOOTYINFO_DRAFT_BOARD_FIELDS` from
-     `development/localFootyinfoDraftBoardCapture.ts`, with provider `footyinfo` and an 86,400 s
-     cache. Staging admits the claim kind from migration 0271; an earlier database refuses the
-     capture's evidence rows.
+   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v2` decision per captured
+     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v2`
+     (issues 853 and 789). Parser `footyinfo-draft-board-parser/v2` reads
+     `https://www.footyinfo.com/draft/<season>` as `draft_board_pick` claims for every selected,
+     passed and removed pick, a `draft_selection` for each selection, and (new in v2) one
+     `draft_board_bid_match` per matched bid. The rights must name exactly
+     `FOOTYINFO_DRAFT_BOARD_FIELDS` from `development/localFootyinfoDraftBoardCapture.ts` (v1's
+     fields plus `FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS`), with provider `footyinfo` and an
+     86,400 s cache. The bid-match fields and their use for matched-bid shares are outside the
+     owner's 2026-10-12 decision, so no v2 decision exists until the owner records one (source
+     policy). The v1 decisions and captures stay valid as recorded. Staging admits
+     `draft_board_pick` from migration 0271 and `draft_board_bid_match` from migration 0287; an
+     earlier database refuses the capture's evidence rows. Do not reconcile a v2 board batch until
+     reconciliation carries the bid-match rows (#789): until then the candidate is refused as
+     unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
    `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
-   `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
+   `footyinfo-draft-board-parser/v2`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
@@ -1209,7 +1215,7 @@ source policy before the scope file changes. A reviewed window is consumed by th
 command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
 
 Capture the Footyinfo national draft boards (issues 853 and 789) once the owner's per-season
-`-board-v1` decisions are recorded. The owner approved egress only from `statly-grading-1` through
+`-board-v2` decisions are recorded. The owner approved egress only from `statly-grading-1` through
 the genuine-database wrapper, so this runs there and nowhere else. Each `--season` is the one board
 `https://www.footyinfo.com/draft/<season>`; there is no `--url`:
 
@@ -1230,7 +1236,7 @@ the page is one `invalid_page` issue with no claims. Each response is capped at 
 egress decision. Expect `issueCount` 0. A 403, a 429, any
 other non-200 status or a bot challenge fails the capture. Stop there: the decision does not allow
 retrying around it. Picks the board lists as points used to match a bid are not board rows and are
-not emitted.
+not emitted as board picks; v2 states each on the matched bid it was spent on (below).
 
 Each `draft_board_pick` states:
 
@@ -1242,6 +1248,24 @@ Each `draft_board_pick` states:
 - the route label (`matched_bid`, `compensation`, `special_assistance` or `leftover_points`), and
   for a matched bid the bidding club and basis;
 - the points and the note.
+
+Each `draft_board_bid_match` (v2, after every v1 row, source key
+`<season>:national:pick:<board id>:bid_match`) states the nominee's board id, number, round, club
+and player; the bidding club and basis; the bid's `points` and the `pointsUsed` the board gives;
+each spent pick (`consumedPicks`: board id, label such as `R2 (GEE) - Pick 34`, original number and
+club, holder, points used); and each leftover-points pick the board says the match created
+(`leftoverPicks`: board id, holder, points or null). Expect, on every reviewed board, 2019 to 2025:
+54 matched bids, 124 spent picks and 48 leftover picks. The parser refuses the whole page when:
+
+- a spent pick is not the board's own record of a pick spent on that nominee with the same points,
+  holder, original club, original number and label;
+- a points-used pick is listed by no matched bid, or by two;
+- `pointsUsed` is stated without spent picks, or the reverse (five 2025 bids state neither: the
+  club held no pick to spend);
+- the spent picks hold fewer points than `pointsUsed`, or their excess is not exactly the points of
+  the one leftover pick of that bid that carries points (2021 Sam Darcy: 2,024 spent, 1,889 used,
+  135 in the Bulldogs' leftover pick 61); or
+- a leftover-points pick does not name exactly one matched bid it was created from.
 
 An empty route means the board prints none, never that the pick did not move. A leftover-points
 pick's route is not printed. Footyinfo club and player names need their own `footyinfo` identity

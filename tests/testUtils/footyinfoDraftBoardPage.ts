@@ -20,6 +20,8 @@ const CLUB_NAMES: Readonly<Record<string, string>> = {
   NTH: 'North Melbourne',
   RCH: 'Richmond',
   STK: 'St Kilda',
+  WBD: 'Western Bulldogs',
+  GWS: 'GWS',
 };
 
 export interface SyntheticBoardPick {
@@ -44,6 +46,26 @@ export interface SyntheticBoardPick {
   lineage?: Array<[string, string | null, string | null]>;
   /** Overrides the rendered table's route cell spans. */
   tableRoute?: string[];
+  /** `points_used`: a matched bid's total, or the points a spent (`points_used`) pick covered. */
+  pointsUsed?: number;
+  /** A matched bid's `consumed_picks`, held by the bid's club. */
+  spent?: SyntheticSpentPick[];
+  /** A spent pick's `purchased_from`: the board id of the matched bid it was spent on. */
+  purchasedFrom?: number;
+  /** The club the pick originally belonged to (`original.team`); defaults to the holder. */
+  originalClub?: string;
+  /** The pick's `original_number`. */
+  originalNumber?: number;
+  /** A leftover-points pick's `created_from_points` hop names this matched bid (`related_pick`). */
+  leftoverOf?: number;
+}
+
+export interface SyntheticSpentPick {
+  id: number;
+  label: string;
+  originalNumber: number | null;
+  pointsUsed: number;
+  originalClub: string;
 }
 
 function team(abbrev: string): string {
@@ -70,6 +92,10 @@ function slotted(literal: string, first: number): string {
   return out;
 }
 
+function spentRecord(spent: SyntheticSpentPick, holder: string): string {
+  return `{id:${spent.id},label:"${spent.label}",number:null,original_number:${spent.originalNumber ?? 'null'},points_used:${spent.pointsUsed},team:${team(holder)},original_team:${team(spent.originalClub)}}`;
+}
+
 export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
   const fields = [
     `id:${pick.id}`,
@@ -87,21 +113,30 @@ export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
     `origin:{id:"${pick.origin ?? 'standard'}",label:"origin"}`,
     ...(pick.note === undefined ? [] : [`note:"${pick.note}"`]),
     ...(pick.points === undefined ? [] : [`points:${pick.points}`]),
+    ...(pick.pointsUsed === undefined ? [] : [`points_used:${pick.pointsUsed}`]),
+    ...(pick.spent === undefined
+      ? []
+      : [`consumed_picks:[${pick.spent.map((spent) => spentRecord(spent, pick.club)).join(',')}]`]),
+    ...(pick.purchasedFrom === undefined
+      ? []
+      : [
+          `purchased_from:{pick_id:${pick.purchasedFrom},number:1,team:${team(pick.club)},player:{id:1,known_as:"Nominee",slug:"nominee"}}`,
+        ]),
     ...(pick.bid === undefined
       ? []
       : [
-          `points_used:100,consumed_picks:[{id:1,label:"R2 - Pick 40",number:null,original_number:40}]`,
           `bid:{team:${team(pick.bid.club)},match_reason:"${pick.bid.reason}",match_player:{id:1,known_as:"Parent Player",slug:"parent-player"}}`,
         ]),
     ...(pick.unbidReason === undefined ? [] : [`bid:{match_reason:"${pick.unbidReason}"}`]),
-    `original:{team:${team(pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
+    ...(pick.originalNumber === undefined ? [] : [`original_number:${pick.originalNumber}`]),
+    `original:{team:${team(pick.originalClub ?? pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
     ...(pick.lineage === undefined
       ? []
       : [
           `lineage:[${pick.lineage
             .map(
               ([kind, from, to], index) =>
-                `{ordinal:${index + 1},type:{id:"${kind}",label:"${kind}"},${from === null ? '' : `from:${team(from)},`}${to === null ? '' : `to:${team(to)},`}year:${year},summary:"Moved"}`
+                `{ordinal:${index + 1},type:{id:"${kind}",label:"${kind}"},${from === null ? '' : `from:${team(from)},`}${to === null ? '' : `to:${team(to)},`}${kind === 'created_from_points' && pick.leftoverOf !== undefined ? `related_pick:{id:${pick.leftoverOf},number:1,team:${team(pick.club)}},` : ''}year:${year},summary:"Moved"}`
             )
             .join(',')}]`,
         ]),
@@ -197,7 +232,7 @@ export function footyinfoBoardPage(
 }
 
 /** One board with each reviewed case: plain, matched bid, compensation, assistance with a route,
- * leftover points, passed, removed, a passed pick with no round, and points used for a bid. */
+ * leftover points, passed, removed, a passed pick with no round, and a pick spent on the bid. */
 export const SYNTHETIC_BOARD_PICKS: readonly SyntheticBoardPick[] = [
   {
     id: 1,
@@ -217,6 +252,17 @@ export const SYNTHETIC_BOARD_PICKS: readonly SyntheticBoardPick[] = [
     player: { name: "Blake O'Example", slug: 'blake-oexample' },
     origin: 'points_purchase',
     points: 1878,
+    // 563 spent, 393 used: the 170 left over is the leftover-points pick 58 below.
+    pointsUsed: 393,
+    spent: [
+      {
+        id: 9,
+        label: 'R2 (ESS) - Pick 23',
+        originalNumber: 23,
+        pointsUsed: 563,
+        originalClub: 'ESS',
+      },
+    ],
     bid: { club: 'MEL', reason: 'father_son' },
   },
   {
@@ -255,9 +301,10 @@ export const SYNTHETIC_BOARD_PICKS: readonly SyntheticBoardPick[] = [
     player: { name: 'Ellis Example', slug: 'ellis-example' },
     origin: 'points_remainder',
     points: 170,
+    leftoverOf: 2,
     lineage: [
-      ['created_from_points', null, 'GCS'],
-      ['live_pick_swap', 'GCS', 'RCH'],
+      ['created_from_points', null, 'BRL'],
+      ['live_pick_swap', 'BRL', 'RCH'],
     ],
   },
   {
@@ -289,9 +336,16 @@ export const SYNTHETIC_BOARD_PICKS: readonly SyntheticBoardPick[] = [
   {
     id: 9,
     status: 'points_used',
-    club: 'ESS',
+    club: 'BRL',
     round: 2,
     points: 563,
-    lineage: [['bid_match', 'ESS', 'ESS']],
+    pointsUsed: 563,
+    purchasedFrom: 2,
+    originalClub: 'ESS',
+    originalNumber: 23,
+    lineage: [
+      ['trade', 'ESS', 'BRL'],
+      ['bid_match', 'BRL', 'BRL'],
+    ],
   },
 ];

@@ -10,9 +10,18 @@ import {
   type AflTradeExternalEvidenceContent,
   type AflTradeExternalEvidenceEnvelope,
 } from './externalDraftTradeEvidenceContracts';
+import { FOOTYINFO_BID_BASIS, readFootyinfoBoardBidMatches } from './footyinfoDraftBoardBidMatches';
 import { reviewedFootyinfoDraftBoardSeason } from './footyinfoDraftBoardSourceScope';
 
-export const FOOTYINFO_DRAFT_BOARD_PARSER_VERSION = 'footyinfo-draft-board-parser/v1';
+/** v1 (issue 853): the board picks and selections. Its captures replay exactly as recorded. */
+export const FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION = 'footyinfo-draft-board-parser/v1';
+
+/**
+ * v2 (issue 789) emits exactly v1's claims, rows (ordinals and keys) and issues, then one
+ * `draft_board_bid_match` per matched bid: its points and the picks spent matching it. The reviewed
+ * version every new capture names.
+ */
+export const FOOTYINFO_DRAFT_BOARD_PARSER_VERSION = 'footyinfo-draft-board-parser/v2';
 
 type SourceCapture = AflTradeExternalEvidenceContent['capture'];
 type Claim = AflTradeExternalEvidenceContent['claim'];
@@ -219,11 +228,7 @@ const ROUTE_LABEL_TEXT = {
   special_assistance: 'Special assistance',
   leftover_points: 'Leftover points',
 } as const;
-const BID_BASIS = {
-  father_son: 'father_son',
-  academy_club: 'academy',
-  academy_nga: 'next_generation_academy',
-} as const;
+const BID_BASIS = FOOTYINFO_BID_BASIS;
 const HEADERS = ['Pick', 'Club', 'Player', 'Rtg', 'Age', 'Ht', 'From', 'Route', 'Pts', 'Note'];
 
 function normalize(value: string): string {
@@ -243,7 +248,8 @@ function club(value: z.infer<typeof team>) {
  * selection must also appear in the page's rendered table with the same number, club, player,
  * route, points and note, or nothing is emitted. Each selected, passed or removed pick is one
  * `draft_board_pick`; each selection is also a `draft_selection`. Picks the board lists as points
- * used to match a bid are not board rows and are not emitted.
+ * used to match a bid are not board rows and are not emitted as board picks; a v2 capture states
+ * them on the matched bid they were spent on (`draft_board_bid_match`, after every v1 claim).
  */
 export function parseFootyinfoDraftBoard(
   html: string,
@@ -442,6 +448,12 @@ export function parseFootyinfoDraftBoard(
   }
   if (selected.size !== tableRows.size || selected.size === 0) {
     return invalid('The board table and the board data do not list the same selections.');
+  }
+  // Only a v2 capture's recorded rights admit the bid fields, so a v1 capture replays exactly.
+  if (input.capture.parserVersion === FOOTYINFO_DRAFT_BOARD_PARSER_VERSION) {
+    const bidMatches = readFootyinfoBoardBidMatches(loader.content.picks, input.draftYear);
+    if ('error' in bidMatches) return invalid(bidMatches.error);
+    claims.push(...bidMatches.claims);
   }
   try {
     return {
