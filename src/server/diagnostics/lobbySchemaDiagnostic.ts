@@ -56,7 +56,10 @@ export async function loadLobbySchemaDiagnostic() {
 
   return {
     columnsReady: lobbyTest.success,
-    tablesReady: tableChecks.teamAction.ready && tableChecks.leagueRosterPlayer.ready,
+    tablesReady:
+      tableChecks.draft.ready &&
+      tableChecks.teamAction.ready &&
+      tableChecks.leagueRosterPlayer.ready,
     draftCount: tableChecks.draft.count,
     tableChecks,
     lobbyTest,
