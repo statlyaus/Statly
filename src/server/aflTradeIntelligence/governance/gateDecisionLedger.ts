@@ -443,27 +443,27 @@ export function createAflTradeGateEligibilityResolver(
   ledger: AflTradeGateDecisionLedger
 ): AflTradeGateEligibilityResolver {
   let validated: {
-    proposals: unknown[];
-    decisions: unknown[];
+    proposals: AflTradeGateDecisionLedger['proposals'];
+    decisions: AflTradeGateDecisionLedger['decisions'];
     length: string;
     valid: boolean;
   } | null = null;
   return (request) => {
     const length = `${ledger.proposals.length}|${ledger.decisions.length}`;
-    if (
-      validated === null ||
-      validated.proposals !== ledger.proposals ||
-      validated.decisions !== ledger.decisions ||
-      validated.length !== length
-    ) {
-      validated = {
-        proposals: ledger.proposals,
-        decisions: ledger.decisions,
-        length,
-        valid: validateAflTradeGateDecisionLedger(ledger).valid,
-      };
-    }
-    if (!validated.valid) {
+    const current =
+      validated !== null &&
+      validated.proposals === ledger.proposals &&
+      validated.decisions === ledger.decisions &&
+      validated.length === length
+        ? validated
+        : {
+            proposals: ledger.proposals,
+            decisions: ledger.decisions,
+            length,
+            valid: validateAflTradeGateDecisionLedger(ledger).valid,
+          };
+    validated = current;
+    if (!current.valid) {
       return {
         status: 'blocked',
         decision: null,
