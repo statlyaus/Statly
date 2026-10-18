@@ -9,6 +9,7 @@ import {
   bidShareOf,
   bidShareValue,
   formatPav,
+  inSentence,
   knownPav,
   PENDING_TEXT,
   type AflTradePageBidShare,
@@ -22,7 +23,7 @@ export function acquiredText(
 ): string {
   const from = clubNames.get(player.acquired.fromClubId) ?? player.acquired.fromClubId;
   const { outcome } = player;
-  const pick = player.acquired.pickLabel;
+  const pick = player.acquired.pickLabel && inSentence(player.acquired.pickLabel);
   if (outcome.kind === 'not_used') return `From ${from}. Not used at the draft.`;
   if (outcome.kind === 'pending') {
     const reason = PENDING_TEXT[outcome.pending];

@@ -4195,7 +4195,7 @@ labels and footers. Badges, icons and SVG chart labels are exempt, and the scarf
 **Copy.** Every number, name, pick, club, year and net on the page comes from the model, and every
 sentence is a template over it. A sentence the data cannot support is left out, never written by hand:
 no hometowns, no "best player", no dramatised labels. Pick numbers are written "pick N", draft slots
-included ("taken with pick 18"). The mockups set layout, visual design and phrasing patterns only.
+included ("taken with pick 18"), and a pick label is capitalised only where it starts a line. The mockups set layout, visual design and phrasing patterns only.
 
 **Boundary.** `development/privateTradeStoryReads.ts` is the only way in. It answers only when
 `NODE_ENV` is not `production`, `STATLY_ENABLE_DEV_TOOLS=true` and `AFL_TRADE_STORY_READER_ENABLED=true`,

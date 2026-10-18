@@ -8,6 +8,7 @@ import {
   clubStyle,
   formatPav,
   formatSigned,
+  inSentence,
   inkOn,
   tradeHash,
   tradeIdFromHash,
@@ -77,6 +78,13 @@ describe('trade page model helpers', () => {
     expect(tradeStoryHref('trade:2021-gee-wbd')).toBe(
       '/dev/afl-trade-stories/trade%3A2021-gee-wbd'
     );
+  });
+
+  it('writes a pick label in lower case inside a sentence', () => {
+    expect(inSentence('Pick 15 (WCE)')).toBe('pick 15 (WCE)');
+    expect(inSentence('Pick 20 → pick 25')).toBe('pick 20 → pick 25');
+    expect(inSentence('2021 4th round')).toBe('2021 4th round');
+    expect(inSentence('Pickett')).toBe('Pickett');
   });
 
   it('wraps scarf callouts and marks cut text with an ellipsis', () => {

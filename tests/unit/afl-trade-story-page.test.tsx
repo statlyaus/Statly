@@ -52,7 +52,7 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     // The deal strip: what each club gave, from the trade's sides.
     const deal = screen.getByRole('list', { name: 'What each club gave' });
     expect(within(deal).getAllByRole('listitem').map(textOf)).toEqual([
-      'Geelong gave Pick 13, Pick 15 (WCE), Pick 20 → pick 25, 2021 4th round',
+      'Geelong gave pick 13, pick 15 (WCE), pick 20 → pick 25, 2021 4th round',
       'GWS gave Jeremy Cameron, 2021 2nd round (GWS), 2021 2nd round (ESS)',
     ]);
     expect(textOf(container)).not.toContain('on this trade, then');
@@ -91,7 +91,7 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     expect(textOf(cameron)).toContain('Still at Geelong · value will move');
     const curtis = within(players).getByRole('heading', { name: /Paul Curtis/u }).parentElement!;
     expect(textOf(curtis)).toContain(
-      'Taken with pick 35 in 2021 by North Melbourne, with Pick 32.'
+      'Taken with pick 35 in 2021 by North Melbourne, with pick 32.'
     );
     expect(
       within(players).getByRole('heading', { name: 'Now at other clubs' })
@@ -121,6 +121,9 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     ]);
     expect(textOf(figure)).toContain('6 trades in the chain');
     expect(textOf(figure)).toContain('Biggest values');
+    expect(textOf(figure)).toContain(
+      'Geelong get Jeremy Cameron and 2 more. GWS get pick 13 and 3 more.'
+    );
     expect(textOf(figure)).toContain('Value now (2026) Geelong +7.7* GWS −57.6');
     expect(textOf(figure)).toContain(
       '2020. Draft. Cook (pick 25), Angwin (pick 18), Stone (pick 15) and'
@@ -151,7 +154,7 @@ describe('private trade page: Geelong ⇄ Western Bulldogs, 2021', () => {
       ['Pick 44', '362', '6.24'],
       ['Pick 45 · part used', '336.6', '5.80'],
     ]);
-    expect(textOf(card)).toContain('Pick 45 had 10.4 points left over. They became Pick 61.');
+    expect(textOf(card)).toContain('Pick 45 had 10.4 points left over. They became pick 61.');
     expect(textOf(card)).toContain('Shares are not in the totals yet.');
   });
 

@@ -9,6 +9,7 @@ import { TradePlayerCards } from './TradePlayerCards';
 import { TradeScarf } from './TradeScarf';
 import {
   bidSharesByPickId,
+  inSentence,
   netText,
   storyClubNames,
   tradeName,
@@ -76,7 +77,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
               <li key={side.clubId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <ClubBadge clubName={side.clubName} named />
                 <b className="font-semibold">{side.clubName} gave</b>
-                <span>{side.gave.map(({ label }) => label).join(', ')}</span>
+                <span>{side.gave.map(({ label }) => inSentence(label)).join(', ')}</span>
               </li>
             ))}
           </ul>

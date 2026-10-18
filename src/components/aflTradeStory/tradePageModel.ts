@@ -128,6 +128,9 @@ export function bidShareOf(
 export const bidShareValue = (share: AflTradePageBidShare | null) =>
   share?.bid.match.spentPicks[share.spentIndex]?.value ?? null;
 
+/** A pick label inside a sentence: "pick 13", capitalised only where a label starts a line. */
+export const inSentence = (label: string) => label.replace(/^Pick\b/u, 'pick');
+
 /** "Geelong ⇄ GWS". */
 export const tradeName = (clubs: readonly { clubName: string }[]) =>
   clubs.map(({ clubName }) => clubName).join(' ⇄ ');

@@ -2,6 +2,7 @@ import {
   formatPav,
   formatPercent,
   formatPoints,
+  inSentence,
   type AflTradePageBidShare,
 } from './tradePageModel';
 
@@ -119,7 +120,9 @@ export function BidMatchShareCard({
           {match.spentPicks.find(({ nativePickId }) => nativePickId === leftover.spentNativePickId)
             ?.label ?? 'The last pick'}{' '}
           had {formatPoints(leftover.remainderPoints)} points left over.
-          {leftoverLabels.length > 0 ? ` They became ${leftoverLabels.join(' and ')}.` : ''}
+          {leftoverLabels.length > 0
+            ? ` They became ${leftoverLabels.map(inSentence).join(' and ')}.`
+            : ''}
         </p>
       ) : null}
       <p className="mt-2 ts-body text-(--ts-ink2)">Shares are not in the totals yet.</p>
