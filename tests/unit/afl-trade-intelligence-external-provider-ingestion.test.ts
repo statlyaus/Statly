@@ -799,7 +799,7 @@ describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
       capabilityId: 'footyinfo-national-draft-board',
       anchorSeasonYear: 2024,
       sourceUrl: 'https://www.footyinfo.com/draft/2024',
-      parserVersion: 'footyinfo-draft-board-parser/v2',
+      parserVersion: 'footyinfo-draft-board-parser/v3',
       effectiveAt: request.capturedAt,
       ...overrides,
     }) as Parameters<typeof validateAflTradeExternalCaptureScope>[0];
@@ -819,7 +819,8 @@ describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
     ['another provider', { provider: 'draftguru' as const }],
     ['another pathway', { draftPathway: 'rookie' as const }],
     ['the retired v1 parser', { parserVersion: 'footyinfo-draft-board-parser/v1' }],
-    ['another parser', { parserVersion: 'footyinfo-draft-board-parser/v3' }],
+    ['the retired v2 parser', { parserVersion: 'footyinfo-draft-board-parser/v2' }],
+    ['another parser', { parserVersion: 'footyinfo-draft-board-parser/v4' }],
     ['an effective instant other than capture', { effectiveAt: '2024-11-20T00:00:00.000Z' }],
   ])('refuses %s', (_label, overrides) => {
     expect(() => validateAflTradeExternalCaptureScope(board(overrides))).toThrow(
@@ -827,13 +828,16 @@ describe('Footyinfo draft-board scope (issues 853 and 789)', () => {
     );
   });
 
-  it('keeps a retained v1 board capture valid as recorded, but no other parser', () => {
-    const v1 = board({ parserVersion: 'footyinfo-draft-board-parser/v1' });
-    expect(() => validateAflTradeRetainedCaptureScope(v1)).not.toThrow();
+  it('keeps a retained v1 or v2 board capture valid as recorded, but no other parser', () => {
+    for (const parserVersion of [
+      'footyinfo-draft-board-parser/v1',
+      'footyinfo-draft-board-parser/v2',
+    ])
+      expect(() => validateAflTradeRetainedCaptureScope(board({ parserVersion }))).not.toThrow();
     expect(() => validateAflTradeRetainedCaptureScope(board({}))).not.toThrow();
     expect(() =>
       validateAflTradeRetainedCaptureScope(
-        board({ parserVersion: 'footyinfo-draft-board-parser/v3' })
+        board({ parserVersion: 'footyinfo-draft-board-parser/v4' })
       )
     ).toThrow(/do not exactly match/);
   });

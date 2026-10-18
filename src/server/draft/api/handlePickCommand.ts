@@ -11,6 +11,13 @@ import { draftApplicationService } from '@/server/draft/services/DraftApplicatio
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 
+// Errors are "kind: detail". Split at the first colon only, so a detail that itself contains ':' survives.
+export function splitDraftCommandError(message: string): [kind: string, detail: string] {
+  const separator = message.indexOf(':');
+  if (separator < 0) return ['internal', message];
+  return [message.slice(0, separator), message.slice(separator + 1)];
+}
+
 export async function handlePickCommand(
   request: NextRequest,
   params: Promise<{ id: string }>
@@ -102,7 +109,7 @@ export async function handlePickCommand(
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    const [kind, detail] = msg.includes(':') ? msg.split(':', 2) : ['internal', msg];
+    const [kind, detail] = splitDraftCommandError(msg);
 
     const logBase = {
       method: request.method,
