@@ -108,6 +108,17 @@ Native GitHub auto-merge is the only automatic merger. Enable squash auto-merge 
 
 Auto-merge waits for branch protection; it is not permission to bypass it.
 
+## Shipping with `/ship`
+
+Agents commit, push the feature branch, open the pull request and turn on auto-merge without waiting
+to be asked; `/ship` (gstack) is the standard route. It owns `VERSION`, `CHANGELOG.md`, the
+`package.json` version and the `v<version>` title prefix, so never edit those by hand. Its pre-landing
+review reads `.claude/skills/review/checklist.md`, a symlink to the local gstack install.
+
+Parallel pull requests each bump `VERSION`, so the second one conflicts once the first merges.
+`CHANGELOG.md` merges as a union (`.gitattributes`), which leaves only the one-line `VERSION`: re-run
+`/ship` on the branch, or resolve it to the higher version, and push.
+
 ## Re-running CI
 
 Re-run only the jobs that failed. A full re-run repeats every passing job, including the outcomes suite,
