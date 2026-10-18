@@ -552,7 +552,7 @@ describe('local Footyinfo draft-board capture through the governed ingestion bou
     const options = { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl };
     const targets = createLocalFootyinfoDraftBoardTargets([2020]);
     await expect(runLocalExternalCapture(options, targets)).rejects.toThrow(
-      /footyinfo-national-draft-board-issue853-private-2020-board-v2/
+      /footyinfo-national-draft-board-issue853-private-2020-board-v3/
     );
     expect(calls).toEqual([]);
 

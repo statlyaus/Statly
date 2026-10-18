@@ -64,7 +64,9 @@ to 1 and the slot or age prior fades.
 - **Trade date, pick not yet used:** the value is the expected first-stint PAV of its slot, from the fitted
   **first-stint pick curve**. That curve replaces HPN's whole-career DPVC, which measures a different unit.
   The slot comes from the live Official AFL order, as grade rule v6 already does. A draft with no order yet
-  uses the original club's slot in the latest order. The proxy is flagged.
+  uses the original club's slot in the latest order. The proxy is flagged. A pick of a held draft that no
+  captured order places takes the number a reviewed Footyinfo board states it held before the draft
+  (parser v3, owner decision 2026-10-18), as grade rule v19's at-trade view does.
 - **At the draft:** the pick becomes the player, valued at the same slot expectation. From then on it
   follows the player's value line.
 - **Pick not used (no player taken):** 0 from the draft onward.
