@@ -28,7 +28,7 @@ export function TradeButton({
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
-      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 text-sm font-semibold ${
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
         open
           ? 'border-(--ts-accent) text-(--ts-accent)'
           : 'border-(--ts-line) hover:border-(--ts-muted)'
@@ -63,8 +63,8 @@ export function Outcome({
   const { outcome } = asset;
   if (outcome.kind === 'pending' && outcome.pending === 'matched_bid')
     return (
-      <span className="inline-flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded-md bg-(--ts-bid-soft) px-2 py-0.5 text-xs font-bold tracking-wide text-(--ts-bid)">
+      <span className="inline-flex flex-wrap items-center gap-2 ts-body">
+        <span className="rounded-md bg-(--ts-bid-soft) px-2 py-0.5 ts-small font-bold tracking-wide text-(--ts-bid)">
           BID MATCH
         </span>
         {share && share.bid.match.spentPicks[share.spentIndex]?.value != null ? (
@@ -82,17 +82,17 @@ export function Outcome({
     );
   if (outcome.kind === 'pending')
     return (
-      <span className="text-sm text-(--ts-ink2)">
+      <span className="ts-body text-(--ts-ink2)">
         Value pending: {PENDING_TEXT[outcome.pending]}
       </span>
     );
   if (outcome.kind === 'not_used')
-    return <span className="text-sm text-(--ts-ink2)">Not used · 0.0</span>;
+    return <span className="ts-body text-(--ts-ink2)">Not used · 0.0</span>;
   const value = knownPav(asset.value) ?? 0;
   const away = outcome.clubId !== groupClubId;
   return (
     <span className="inline-flex min-w-0 flex-col gap-1">
-      <span className="text-sm">
+      <span className="ts-body">
         <span className="font-semibold">{outcome.playerName}</span>
         {outcome.selection ? (
           <span className="text-(--ts-ink2)">
