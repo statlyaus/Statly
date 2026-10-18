@@ -58,7 +58,8 @@ export async function loadAflTradeValueLineFitInputs(
   const missing = options.draftYears.filter(
     (year) => !selections.some(({ draftYear }) => draftYear === year)
   );
-  if (missing.length > 0) throw new Error(`No national draft selections for ${missing.join(', ')}.`);
+  if (missing.length > 0)
+    throw new Error(`No national draft selections for ${missing.join(', ')}.`);
   const games = await loadAflTradePlayerSeasonGames(sql, {
     methodId: options.methodId,
     seasons: Array.from({ length: options.lastSeason - first }, (_, index) => first + 1 + index),
