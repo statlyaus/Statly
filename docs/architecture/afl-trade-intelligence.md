@@ -4168,9 +4168,12 @@ season the values count to, a source label, and the asset ledger's matched bids 
 story. The page computes no value of its own, so a refitted pick curve or a new season changes it with no
 code change. Top to bottom:
 
-- **Scarf timeline:** the trade's highest-value players as club-coloured panels in the order they
-  arrived, each trade, other clubs' deals and draft of the chain pinned along it, and each club's net at
-  the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
+- **Header:** a headline from the nets, each club's net with its next moves as the biggest text above
+  the timeline, and a deal strip: one line per club of what it gave, from the trade's sides.
+- **Scarf timeline:** a sidebar with each club's value now (as of the model's season), the chain's
+  trade and club counts and its biggest values; then the trade's highest-value players as club-coloured
+  panels in the order they arrived, each trade, other clubs' deals and draft of the chain pinned along
+  it, and each club's net at the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
   events slot shows the story's sourced events, which are empty for now.
 - **Trade details:** what each club gave, what every asset became, each club's net on the trade alone
   and with its next moves. A net that leaves out a pending asset is starred.
@@ -4183,6 +4186,11 @@ code change. Top to bottom:
 - **Lineage:** each asset of the trade followed through every later trade to what it became, with a
   `BID MATCH` node for a matched-bid pick. Any trade opens inside the map with a `#trade=<id>` hash
   and a link to its own page. Escape or Close returns focus to the button that opened it.
+
+**Type scale.** Four sizes only (owner, 2026-10-18): 32px for the header nets; 24px for the headline,
+section headings and card and net-box values; 15px for body text and list rows; 13px for captions,
+labels and footers. Badges, icons and SVG chart labels are exempt, and the scarf sidebar's nets are
+20px. `tradeStory.css` defines the sizes and a unit test rejects any other text size in the page.
 
 **Copy.** Every number, name, pick, club, year and net on the page comes from the model, and every
 sentence is a template over it. A sentence the data cannot support is left out, never written by hand:

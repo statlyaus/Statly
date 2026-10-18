@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { clampLines, wrapText } from '@/components/aflTradeStory/scarfTimeline';
@@ -83,5 +86,28 @@ describe('trade page model helpers', () => {
     ]);
     expect(clampLines(['one', 'two,', 'three'], 2)).toEqual(['one', 'two…']);
     expect(clampLines(['one'], 2)).toEqual(['one']);
+  });
+});
+
+describe('trade page type scale', () => {
+  const directory = join(__dirname, '../../src/components/aflTradeStory');
+  /** Text sizes outside the four (32, 24, 15, 13), as file: class. */
+  const offScale = readdirSync(directory)
+    .filter((file) => file.endsWith('.tsx') && file !== 'ClubBadge.tsx')
+    .flatMap((file) =>
+      [
+        ...readFileSync(join(directory, file), 'utf8').matchAll(
+          /\btext-(?:xs|sm|base|lg|[2-9]?xl|\[\d+px\])/gu
+        ),
+      ].map(([match]) => `${file}: ${match}`)
+    );
+
+  it('uses only the four approved sizes (badges and SVG labels exempt)', () => {
+    // The scarf sidebar's nets are 20px by owner decision, 2026-10-18.
+    expect(offScale).toEqual(['TradeScarf.tsx: text-[20px]']);
+    const css = readFileSync(join(directory, 'tradeStory.css'), 'utf8');
+    expect([...css.matchAll(/font-size: (\d+)px/gu)].map(([, size]) => Number(size))).toEqual([
+      15, 32, 24, 15, 13,
+    ]);
   });
 });

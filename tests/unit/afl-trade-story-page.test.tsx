@@ -49,10 +49,13 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     const chips = screen.getByRole('list', { name: 'Each club’s value so far' });
     expect(textOf(chips)).toContain('+7.7* Geelong');
     expect(textOf(chips)).toContain('−57.6 GWS');
-    expect(textOf(container)).toContain(
-      'Geelong: +50.9 on this trade, then −43.2 from later trades.'
-    );
-    expect(textOf(container)).toContain('GWS: −50.9 on this trade, then −6.7 from later trades.');
+    // The deal strip: what each club gave, from the trade's sides.
+    const deal = screen.getByRole('list', { name: 'What each club gave' });
+    expect(within(deal).getAllByRole('listitem').map(textOf)).toEqual([
+      'Geelong gave Pick 13, Pick 15 (WCE), Pick 20 → pick 25, 2021 4th round',
+      'GWS gave Jeremy Cameron, 2021 2nd round (GWS), 2021 2nd round (ESS)',
+    ]);
+    expect(textOf(container)).not.toContain('on this trade, then');
     expect(textOf(container)).not.toMatch(/\bgrade\b/iu);
     // No claim the data does not hold, and no dramatised labels.
     expect(textOf(container)).not.toMatch(/got away|came home|goes home|best player|backfired/iu);
@@ -99,7 +102,9 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
 
   it('pins every trade and draft on the scarf, with no events until sourced ones exist', () => {
     renderPage(TRADE.cameron);
-    const figure = screen.getByRole('figure', { name: 'Geelong ⇄ GWS, 2020' });
+    const figure = screen.getByRole('figure', {
+      name: 'Timeline of the Geelong ⇄ GWS trade, 2020',
+    });
     const steps = within(figure)
       .getAllByRole('listitem')
       .map(textOf)
@@ -116,6 +121,7 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     ]);
     expect(textOf(figure)).toContain('6 trades in the chain');
     expect(textOf(figure)).toContain('Biggest values');
+    expect(textOf(figure)).toContain('Value now (2026) Geelong +7.7* GWS −57.6');
     expect(textOf(figure)).toContain(
       '2020. Draft. Cook (pick 25), Angwin (pick 18), Stone (pick 15) and'
     );
