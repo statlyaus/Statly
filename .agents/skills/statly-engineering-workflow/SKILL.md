@@ -65,9 +65,10 @@ specialist method only for the phase it covers; this workflow remains the routin
   checks listed in root `AGENTS.md`; CI remains the deterministic authority.
 - Do not create competing domain glossaries, context files, ADR trees, plans, or status archives.
 - Commit, push a feature branch, open a pull request, and merge it once required checks pass, without
-  waiting to be asked. `/ship` and `/land-and-deploy` are the standard route. Never push `main`
-  directly or force-push. `/ship` owns `VERSION`, `CHANGELOG.md`, the `package.json` version and the
-  `v<version>` pull request title prefix; do not edit them by hand.
+  waiting to be asked. `/ship` opens the pull request and the app's auto-merge lands it. Never push
+  `main` directly or force-push. `/ship` owns `VERSION`, `CHANGELOG.md`, the `package.json` version
+  and the `v<version>` pull request title prefix; do not edit them by hand, and answer "Skip" when it
+  offers to create `TODOS.md`. See `docs/development/delivery.md`.
 - Never create issues, provision infrastructure, or run go-live checklist steps unless the owner
   explicitly requests it.
 - Never include protected environment files, credentials, local databases, generated output, or
