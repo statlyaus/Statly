@@ -430,13 +430,24 @@ schemas of one database produce identical lock keys. A four-worker run on one da
 seven tests this way: lock waits past the test budget, a try-lock raising `changed concurrently` for a
 row in another schema, and a cancelled statement landing on the wrong finalizer.
 
-CI splits the suite across three matrix jobs with `vitest --shard=<n>/3`. Each shard has its own
-runner and PostgreSQL service, so shards share no database, role or CPU. Vitest assigns files by a
-hash of their path, not by duration, so the split is uneven and shifts as files are added. On
-PR #976 one shard held the four heaviest files (166 to 247 seconds each) and took 13m20s; the other
-two took about 5 minutes. The unit tests job, about 15 minutes, is still the longest, so balancing
-the shards would not shorten CI. Locally, `npm run test:outcomes:int` runs the whole suite and does
-not forward `--shard`.
+CI splits the suite across four matrix jobs with `vitest --shard=<n>/4`. Each shard has its own
+runner and PostgreSQL service, so shards share no database, role or CPU. Vitest's own sharding
+assigns files by a hash of their path, and with three shards it put the four heaviest files in one
+shard: on PR #977's run that shard took 9m45s and the other two 6m28s and 4m44s.
+`tests/testUtils/outcomesShardSequencer.ts` replaces the hash. It reads per-file seconds from
+`tests/testUtils/outcomesFileDurations.json`, places files longest first on the shard with the least
+total so far, and within a shard starts the longest files first so the two workers finish together.
+Every shard job computes the same assignment from the same file list, and
+`tests/unit/outcomesShardSequencer.test.ts` checks that each file lands in exactly one shard. Three
+balanced shards would each still run about 7 minutes, so the suite uses four. A file missing from
+the list is costed as the median file, so adding a test file needs no list change. When the shard
+times drift apart, rewrite the list from a green run's log:
+
+```sh
+gh run view <run-id> --repo statlyaus/Statly --log | node Scripts/dev/outcomes-shard-durations.mjs
+```
+
+Locally, `npm run test:outcomes:int` runs the whole suite and does not forward `--shard`.
 
 `tests/testUtils/outcomesDatabasePerFile.setup.ts` runs before each file: it creates
 `statly_outcomes_test_<pid>_<n>` on the server named by `AFL_OUTCOMES_TEST_DATABASE_URL`, points that
