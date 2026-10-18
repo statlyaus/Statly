@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -119,7 +119,9 @@ function listGitFiles(root, args) {
   return output.toString('utf8').split('\0').filter(Boolean).sort();
 }
 
-function listMarkdownFiles(root) {
+// Symlinks are skipped: `.claude/skills` links back to `.agents/skills`, which is checked at its
+// real path, and a link into a local tool install has no target in CI.
+export function listMarkdownFiles(root) {
   return listGitFiles(root, [
     'ls-files',
     '--cached',
@@ -127,7 +129,9 @@ function listMarkdownFiles(root) {
     '--exclude-standard',
     '*.md',
     '*.MD',
-  ]).filter((file) => extname(file).toLowerCase() === '.md');
+  ]).filter(
+    (file) => extname(file).toLowerCase() === '.md' && !lstatSync(join(root, file)).isSymbolicLink()
+  );
 }
 
 function listLockedSkillPrefixes(root) {
