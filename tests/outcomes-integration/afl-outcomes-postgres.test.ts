@@ -1358,6 +1358,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0286_board_route_null_safe_finalization',
       '0287_footyinfo_board_bid_match_claim_kind',
       '0288_footyinfo_board_bid_match_reconciliation',
+      '0289_public_archive_record_supersedes_index',
     ]);
 
     const factualRefreshReads = await query<{ permitted: boolean }>(

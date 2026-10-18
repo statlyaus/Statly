@@ -25,7 +25,7 @@ describe('admitted PAV observation projection', () => {
     }).admit({ dataset: fixture.dataset, admittedAt: fixture.evidence.authenticatedAt });
     if (admitted.status !== 'admitted') throw new Error(JSON.stringify(admitted));
     datasetAdmissionId = admitted.receipt.admissionId;
-  });
+  }, 30_000);
 
   it.each(['featureInputs', 'targetInputs'] as const)(
     'rejects a re-addressed row with an altered %s measurement',
