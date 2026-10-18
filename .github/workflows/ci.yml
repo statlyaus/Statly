@@ -196,8 +196,14 @@ jobs:
   # Unit, integration and browser tests are separate jobs so that "Re-run failed jobs" repeats only
   # the tier that failed. See docs/development/delivery.md, "Re-running CI".
   unit-tests:
-    name: Unit tests
+    name: Unit tests (shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
+    # Vitest assigns files to shards by a hash of their path, not by duration. Three shards put all
+    # three native-PAV files in one shard and were no faster than two. See docs/development/testing.md.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:16-alpine
@@ -246,7 +252,7 @@ jobs:
       - name: Migrate disposable test database
         run: npx prisma migrate deploy
       - name: Unit tests
-        run: npm run test:unit
+        run: npm run test:unit -- --shard=${{ matrix.shard }}/2
 
   integration-tests:
     name: Integration tests

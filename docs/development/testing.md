@@ -434,9 +434,9 @@ CI splits the suite across three matrix jobs with `vitest --shard=<n>/3`. Each s
 runner and PostgreSQL service, so shards share no database, role or CPU. Vitest assigns files by a
 hash of their path, not by duration, so the split is uneven and shifts as files are added. On
 PR #976 one shard held the four heaviest files (166 to 247 seconds each) and took 13m20s; the other
-two took about 5 minutes. The unit tests job, about 15 minutes, is still the longest, so balancing
-the shards would not shorten CI. Locally, `npm run test:outcomes:int` runs the whole suite and does
-not forward `--shard`.
+two took about 5 minutes. Since the unit tests were sharded (see below), that outcomes shard is the
+longest CI job, so a duration-aware outcomes split is the next CI saving. Locally,
+`npm run test:outcomes:int` runs the whole suite and does not forward `--shard`.
 
 `tests/testUtils/outcomesDatabasePerFile.setup.ts` runs before each file: it creates
 `statly_outcomes_test_<pid>_<n>` on the server named by `AFL_OUTCOMES_TEST_DATABASE_URL`, points that
@@ -472,6 +472,19 @@ down rather than producing a wrong schema.
 Unit tests run on four workers, and V8 coverage is off by default because it slowed the heavy
 native-PAV files by about two thirds and no gate reads the report. Pass `--coverage.enabled=true` to
 collect it locally.
+
+CI splits the unit tests across two matrix jobs with `vitest --shard=<n>/2`. Before the split the job
+took 14m32s on `main`, and its Vitest run (805 seconds) was close to the summed per-file time divided
+by four workers, so it was limited by total work rather than by one file. Three native-PAV files
+(`native-pav-candidate-checkpoint`, `native-pav-final-test-checkpoint` and
+`native-pav-final-execution`) took 366, 314 and 269 seconds, 47% of the summed test time. They build
+an in-memory SQL fixture and refit the model in every test, and they use no database. Vitest assigns
+files by a hash of their path, so the shard count was chosen by replaying that assignment against the
+measured per-file times: two shards split the three files 2 to 1 and came out at about 400 seconds
+each, three shards put all three in one shard and were no faster than two, and four saved under half
+a minute more than two. On PR #977 the two shards took 4m58s and 6m58s, and outcomes shard 2 took
+9m45s in the same run. The candidate-checkpoint file (5 to 6 minutes) is the floor for any shard
+count. Locally, `npm run test:unit` runs every file and does not shard.
 
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
