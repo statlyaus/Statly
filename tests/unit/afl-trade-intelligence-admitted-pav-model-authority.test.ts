@@ -11,7 +11,7 @@ describe('native PAV admitted run-start authority', () => {
   let fixture: Awaited<ReturnType<typeof admittedPavModelRunFixture>>;
   beforeAll(async () => {
     fixture = await admittedPavModelRunFixture();
-  });
+  }, 30_000);
   async function authorize(evidence: AflTradeNativePavModelRunEvidence) {
     const issueOnceForIntent = vi.fn(async () => true);
     const service = new AflTradeAdmittedModelRunAuthorityService({

@@ -544,6 +544,12 @@ is signalling that its work is reducible, and should be profiled rather than giv
 Do not drop a heavy test back to 60 seconds to make the suite look tidier: at that setting the family
 times out whenever the suite is under load.
 
+The shared native-PAV fixtures built in `beforeAll` (`nativePavModelRunSqlFixture`, the admitted-run and
+dataset-admission fixtures) take about 7 to 21 seconds on a typical runner and twice that on a slow one,
+so their hooks declare 30 or 60 seconds instead of the 10 second hook default. The outcomes PostgreSQL
+budgets follow the same rule: about three times the typical CI duration, which is about 1.5 times the
+slowest observed run.
+
 Lock-space failures are not budget failures. A suite that reports `out of shared memory` while dropping
 its temporary schema, or that times out only when other suites run beside it, is hitting the disposable
 cluster's lock ceiling rather than its own budget: see the setting described with the local integration
