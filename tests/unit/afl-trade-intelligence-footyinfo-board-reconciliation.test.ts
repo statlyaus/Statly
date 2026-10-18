@@ -608,6 +608,27 @@ describe('Footyinfo passed and removed picks as not-used evidence (issue 853)', 
     );
   });
 
+  it('carries a v3 board pick’s original club and pre-draft number, and adds no key before v3', () => {
+    const v3 = claim(passed({ originalClub: footyinfoClub('Carlton'), originalNumber: 30 }));
+    const v2 = claim(passed({ roundNumber: 4 }));
+    const records = reconcile([futureTrade()], { board: [v3, v2] }).draftBoardPicks!;
+    const byRound = (round: number) => records.find(({ roundNumber }) => roundNumber === round)!;
+    expect(byRound(2)).toMatchObject({ originalClubId: clubId('Carlton'), originalNumber: 30 });
+    expect(byRound(4)).not.toHaveProperty('originalClubId');
+    expect(byRound(4)).not.toHaveProperty('originalNumber');
+  });
+
+  it('refuses a board claim stating an original club without its number, or a route from elsewhere', () => {
+    expect(() =>
+      batch('footyinfo', '7', [claim(passed({ originalClub: footyinfoClub('Carlton') }))])
+    ).toThrow(/original club and pre-draft number together or neither/);
+    expect(() =>
+      batch('footyinfo', '7', [
+        claim(passed({ originalClub: footyinfoClub('Essendon'), originalNumber: 30 })),
+      ])
+    ).toThrow(/A board route starts with the pick’s original club/);
+  });
+
   it('adds no draftBoardPicks key without a board, so candidate ids are unchanged', () => {
     expect(reconcile([futureTrade()])).not.toHaveProperty('draftBoardPicks');
   });

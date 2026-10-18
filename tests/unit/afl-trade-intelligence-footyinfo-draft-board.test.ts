@@ -289,6 +289,36 @@ describe('parseFootyinfoDraftBoard', () => {
     expect(withLineage([['trade', null, 'STK']])).toMatch(/without both clubs/);
   });
 
+  it('states each board pick’s original club and pre-draft number from parser v3', () => {
+    const board = parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS)).evidence.flatMap(
+      ({ content: { claim } }) => (claim.kind === 'draft_board_pick' ? [claim] : [])
+    );
+    expect(
+      board.map(({ status, club, originalClub, originalNumber }) => [
+        status,
+        club.nativeId,
+        originalClub?.nativeId,
+        originalNumber,
+      ])
+    ).toEqual([
+      ['selected', 'RCH', 'RCH', null],
+      ['selected', 'BRL', 'BRL', null],
+      ['selected', 'STK', 'STK', null],
+      ['selected', 'NTH', 'NTH', null],
+      ['selected', 'RCH', 'BRL', null],
+      ['passed', 'CAR', 'FRE', 66],
+      ['removed', 'GCS', 'COL', null],
+      ['passed', 'GEE', 'GEE', null],
+    ]);
+  });
+
+  it('refuses a v3 board pick with no original club, or whose route starts elsewhere', () => {
+    const refusal = (change: Partial<SyntheticBoardPick>) =>
+      parse(footyinfoBoardPage(withPick(6, change))).issues[0]?.detail;
+    expect(refusal({ noOriginal: true })).toMatch(/Board pick 6 states no original club/);
+    expect(refusal({ originalClub: 'STK' })).toMatch(/or a route from another club/);
+  });
+
   it('emits exactly the reviewed field boundary', () => {
     const paths = new Set(
       parse(footyinfoBoardPage(SYNTHETIC_BOARD_PICKS)).evidence.flatMap(({ content: { claim } }) =>

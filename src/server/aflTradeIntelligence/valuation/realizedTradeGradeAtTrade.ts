@@ -17,6 +17,7 @@ type Transfer = CandidateContent['transfers'][number];
 type Transaction = CandidateContent['transactions'][number];
 type PickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
 type Selection = NonNullable<CandidateContent['draftSelections']>[number];
+type BoardPick = NonNullable<CandidateContent['draftBoardPicks']>[number];
 export type AflTradeGradeCustody = CandidateContent['pickCustody'][number];
 export type AflTradeGradePickAsset = Extract<Transfer['asset'], { kind: 'pick_entitlement' }>;
 type Custody = AflTradeGradeCustody;
@@ -168,7 +169,7 @@ export function aflTradeGradeRoundPositionProxyOf(
 export function aflTradeEventualSlotView(
   benchmarkId: string,
   selectionNumber: number,
-  slotSource: EventualSlotSource
+  slotSource: Exclude<EventualSlotSource, 'board_pre_draft_slot'>
 ): AtTrade {
   return {
     kind: 'pick_projection_eventual_slot',
@@ -177,6 +178,33 @@ export function aflTradeEventualSlotView(
     slotSource,
     value: hpnDpv3ValueForPick(selectionNumber),
   };
+}
+
+/**
+ * Rule v19 (issue 789, owner decision 2026-10-18): the number a reviewed Footyinfo board states an
+ * unused pick held before the draft. The board pick is the one passed or removed pick of the pick's
+ * entitlement (national draft, round and original club, as the board states them from parser v3);
+ * none, several, or a slot beyond HPN's 1 to 90 gives none. Nothing is matched by holder: the board
+ * may record a later holder than the graded trail reaches.
+ */
+export function aflTradeBoardPreDraftSlotOf(
+  boardPicks: readonly BoardPick[],
+  asset: PickAsset
+): { boardPickId: string; selectionNumber: number } | undefined {
+  if (asset.draftType !== 'national' || asset.nominalRound === null || !asset.originalClubId)
+    return undefined;
+  const matches = boardPicks.filter(
+    (board) =>
+      board.draftYear === asset.draftYear &&
+      board.draftType === 'national' &&
+      board.roundNumber === asset.nominalRound &&
+      board.originalClubId === asset.originalClubId
+  );
+  const board = matches.length === 1 ? matches[0]! : undefined;
+  const selectionNumber = board?.originalNumber;
+  if (board?.status === 'selected' || selectionNumber == null || selectionNumber > LAST)
+    return undefined;
+  return { boardPickId: board!.boardPickId, selectionNumber };
 }
 
 /** Rule v17: a future pick's at-trade view at its round-position proxy, an estimate. */
@@ -238,6 +266,8 @@ export interface AflTradeAtTradeViewSources {
   pickCustody: readonly Custody[];
   outcomes: ReadonlyMap<string, PickOutcome>;
   selections: ReadonlyMap<string, Selection>;
+  /** Rule v19: the candidate's reconciled Footyinfo board picks. */
+  boardPicks: readonly BoardPick[];
   /** The pick's unique onward transfer among the graded trades, if any. */
   onwardTransferOf: (transfer: Transfer) => Transfer | undefined;
   /** Rule v7: the transfer a special entitlement was traded on as, if its custody chain links it. */
@@ -293,8 +323,9 @@ function trailSelection(
  * Rules v8 and v17: a future national pick's at-trade view, the slot it eventually took, which no
  * club knew at the trade. The selection its trail ended in comes first (rule v17: on a later hop
  * too, `onward_selection`); one beyond HPN's 1 to 90 leaves the slot unknown. Otherwise its order
- * slot (`orderSlotView`). From rule v17 a pick whose trail ended unused, with no slot in its draft's
- * final order, takes its round-position proxy; anything else stays unknown.
+ * slot (`orderSlotView`). A pick whose trail ended unused, with no slot in its draft's final order,
+ * takes the pre-draft slot a reviewed board states (rule v19), else its round-position proxy (rule
+ * v17); anything else stays unknown.
  */
 function futurePickView(
   sources: AflTradeAtTradeViewSources,
@@ -312,6 +343,16 @@ function futurePickView(
   const slot = aflTradeGradeOrderSlotOf(pickCustody, asset);
   if (slot) return orderSlotView(benchmarkId, slot, sources.outcomes.get(transfer.transferId));
   const unused = end?.outcome.outcomeStatus === 'stated' && end.outcome.disposition === 'not_used';
+  const board = unused ? aflTradeBoardPreDraftSlotOf(sources.boardPicks, asset) : undefined;
+  if (board)
+    return {
+      kind: 'pick_projection_eventual_slot',
+      benchmarkId,
+      selectionNumber: board.selectionNumber,
+      slotSource: 'board_pre_draft_slot',
+      boardPickId: board.boardPickId,
+      value: hpnDpv3ValueForPick(board.selectionNumber),
+    };
   const proxy = unused ? aflTradeGradeRoundPositionProxyOf(pickCustody, asset) : undefined;
   return proxy
     ? aflTradeRoundPositionProxyView(benchmarkId, proxy)

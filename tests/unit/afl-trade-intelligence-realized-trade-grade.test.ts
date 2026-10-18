@@ -1675,14 +1675,14 @@ describe('rule v2: pick outcomes a Footyinfo board corroborates (owner decision 
     }
   });
 
-  it('seals rule v18 and keeps rule v16’s limitation', () => {
+  it('seals rule v19 and keeps rule v16’s limitation', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v18');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v19');
     expect(batch.content.limitation).toContain(
       "from rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is valued, provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its club spent matching a bid), and stays unallocated when one has none"
     );
@@ -2960,6 +2960,108 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
     });
   });
 
+  describe('rule v19: a board’s stated pre-draft slot comes before the proxy (owner decision 2026-10-18)', () => {
+    type Board = NonNullable<Candidate['draftBoardPicks']>[number];
+    const boardPickId = `external-draft-board-pick:${hex('9')}`;
+    // The 2024 board's Collingwood round-4 pick, held at the draft by Gold Coast: the board names a
+    // later holder than the graded trail reaches, which does not stop the entitlement joining.
+    const board = (fields: Partial<Board> = {}): Board =>
+      ({
+        boardPickId,
+        draftYear: 2024,
+        draftType: 'national',
+        roundNumber: 4,
+        recordedPickNumber: null,
+        status: 'removed',
+        clubId: 'gold-coast',
+        routeClubIds: ['collingwood', 'richmond', 'gold-coast'],
+        originalClubId: 'collingwood',
+        originalNumber: 70,
+        evidenceIds: [],
+        ...fields,
+      }) as Board;
+    const stated = (selectionNumber: number) => ({
+      kind: 'pick_projection_eventual_slot',
+      benchmarkId,
+      selectionNumber,
+      slotSource: 'board_pre_draft_slot',
+      boardPickId,
+      value: hpnDpv3ValueForPick(selectionNumber),
+    });
+
+    it('values an unused pick at the number the board states it held, not its proxy', () => {
+      const candidate = single(4, 'collingwood', noNominee, {
+        pickCustody: firstRound,
+        draftBoardPicks: [board()],
+      });
+      expect(atTradeOf(candidate)).toEqual(stated(70));
+      // A passed pick states its slot the same way.
+      candidate.draftBoardPicks = [board({ status: 'passed', clubId: 'richmond' })];
+      expect(atTradeOf(candidate)).toEqual(stated(70));
+    });
+
+    it('takes the board slot for a traded-on pick whose trail ended unused, with no order at all', () => {
+      const candidate = trail(['collingwood', 'essendon'], 4, 'collingwood', noNominee, {
+        draftBoardPicks: [board()],
+      });
+      expect(atTradeOf(candidate, 'tr-A1')).toEqual(stated(70));
+    });
+
+    it.each<[string, Partial<Board>[]]>([
+      ['no pre-draft number', [{ originalNumber: null }]],
+      ['a pre-draft number beyond 90', [{ originalNumber: 96 }]],
+      ['another original club', [{ originalClubId: 'essendon' }]],
+      ['another round', [{ roundNumber: 5 }]],
+      ['a board read before parser v3', [{ originalClubId: undefined, originalNumber: undefined }]],
+      [
+        'two board picks of the entitlement',
+        [{}, { boardPickId: `external-draft-board-pick:${hex('a')}` }],
+      ],
+      ['a selected board pick', [{ status: 'selected', recordedPickNumber: 70 }]],
+    ])('falls back to the proxy with %s', (_label, boards) => {
+      const candidate = single(4, 'collingwood', noNominee, {
+        pickCustody: firstRound,
+        draftBoardPicks: boards.map((fields) => board(fields)),
+      });
+      expect(atTradeOf(candidate)).toEqual(proxy(2, 4, 56));
+    });
+
+    it('never applies to a pick with no original club, a pending pick or a used one', () => {
+      const boards = { draftBoardPicks: [board()] };
+      expect(atTradeOf(single(4, null, noNominee, { pickCustody: firstRound, ...boards }))).toEqual(
+        UNKNOWN
+      );
+      expect(
+        atTradeOf(
+          single(4, 'collingwood', { disposition: 'not_used', outcomeStatus: 'pending' }, boards)
+        )
+      ).toEqual(UNKNOWN);
+      expect(
+        atTradeOf(single(4, 'collingwood', drafted(60), { pickCustody: firstRound, ...boards }))
+      ).toEqual(UNKNOWN);
+    });
+
+    it('changes no total', () => {
+      const batch = gradeAflTradesOnRealizedValue(
+        inputs(
+          single(4, 'collingwood', noNominee, {
+            pickCustody: firstRound,
+            draftBoardPicks: [board()],
+          })
+        )
+      );
+      expect(legOf(batch, 'tr-1a')).toMatchObject({
+        basis: 'pick_not_used_no_nominee',
+        realizedValue: 0,
+        atTrade: stated(70),
+      });
+      expect(gradeOf(batch, 'tx-1').clubs).toEqual([
+        { clubId: 'collingwood', received: 0, givenUp: 0, net: 0 },
+        { clubId: 'richmond', received: 0, givenUp: 0, net: 0 },
+      ]);
+    });
+  });
+
   describe('case 3: a pick beyond HPN’s 1 to 90', () => {
     const numbered = (transform: (transfer: Transfer) => Transfer = (transfer) => transfer) => ({
       transactions: [trade('tx-1', 2023)],
@@ -3104,14 +3206,14 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
     });
   });
 
-  it('keeps rule v17’s limitation under rule v18', () => {
+  it('keeps rule v17’s limitation under rule v19', () => {
     const batch = gradeAflTradesOnRealizedValue(
       inputs({
         transactions: [trade('tx-1', 2021)],
         transfers: [player('tr-1a', 'tx-1', 'collingwood', 'carlton', 'p1')],
       })
     );
-    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v18');
+    expect(batch.content.ruleVersion).toBe('afl-trade-realized-grade-rule/v19');
     expect(batch.content.limitation).toContain(
       "from rule v17 a future pick's at-trade view also takes the selection its traded-on trail, or a special entitlement's custody successor, ends in, and its own selection when that selection is unresolved but not disputed and names its player and club"
     );

@@ -52,10 +52,15 @@ export interface SyntheticBoardPick {
   spent?: SyntheticSpentPick[];
   /** A spent pick's `purchased_from`: the board id of the matched bid it was spent on. */
   purchasedFrom?: number;
-  /** The club the pick originally belonged to (`original.team`); defaults to the holder. */
+  /**
+   * The club the pick originally belonged to (`original.team`); defaults, as on every live board, to
+   * the first club its route hands on, else the holder.
+   */
   originalClub?: string;
   /** The pick's `original_number`. */
   originalNumber?: number;
+  /** Omit `original`, which no live board does. */
+  noOriginal?: boolean;
   /** A leftover-points pick's `created_from_points` hop names this matched bid (`related_pick`). */
   leftoverOf?: number;
 }
@@ -96,6 +101,16 @@ function spentRecord(spent: SyntheticSpentPick, holder: string): string {
   return `{id:${spent.id},label:"${spent.label}",number:null,original_number:${spent.originalNumber ?? 'null'},points_used:${spent.pointsUsed},team:${team(holder)},original_team:${team(spent.originalClub)}}`;
 }
 
+/** The first club a pick's route hands it on from, as the board's `original.team` states it. */
+function routeOrigin(pick: SyntheticBoardPick): string | undefined {
+  return (
+    (pick.lineage ?? []).find(
+      ([kind, from, to]) =>
+        ['trade', 'pick_swap', 'live_pick_swap'].includes(kind) && from !== null && from !== to
+    )?.[1] ?? undefined
+  );
+}
+
 export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
   const fields = [
     `id:${pick.id}`,
@@ -129,7 +144,11 @@ export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
         ]),
     ...(pick.unbidReason === undefined ? [] : [`bid:{match_reason:"${pick.unbidReason}"}`]),
     ...(pick.originalNumber === undefined ? [] : [`original_number:${pick.originalNumber}`]),
-    `original:{team:${team(pick.originalClub ?? pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
+    ...(pick.noOriginal
+      ? []
+      : [
+          `original:{team:${team(pick.originalClub ?? routeOrigin(pick) ?? pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
+        ]),
     ...(pick.lineage === undefined
       ? []
       : [
@@ -313,6 +332,7 @@ export const SYNTHETIC_BOARD_PICKS: readonly SyntheticBoardPick[] = [
     club: 'CAR',
     round: 4,
     points: 49,
+    originalNumber: 66,
     lineage: [
       ['trade', 'FRE', 'STK'],
       ['trade', 'STK', 'CAR'],

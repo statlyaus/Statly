@@ -230,6 +230,21 @@ that season's v1 record with parser v2 and its 48 fields; the v1 decisions are u
 `points_used` is recorded but never used as the price. The test fixture of two 2021 matched bids
 states their values in the synthetic markup; it retains no provider bytes.
 
+Parser `footyinfo-draft-board-parser/v3` (issue 789, 2026-10-18) adds two fields of the same page to
+every board pick: its original club (`original.team`) and its number before the draft
+(`original_number`) (`FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS`), for a sixth use: the at-trade slot of
+a pick that went unused with no slot in the captured draft order (grade rule v19), and the slot a
+value line needs for such a pick before its draft. The owner approved, on 2026-10-18, recording the
+original club, round, round ordinal, pre-draft number, number-settled flag, hop kind, hop year and
+trade name. v3 reads only the first and the pre-draft number: a read-only measurement of the seven
+stored v2 captures that day showed the round ordinal is the club's rank in the round's order (it
+restates the round-position proxy), the number-settled flag is true on all 1,019 picks, and the three
+hop fields have no consumer yet. The others stay approved for a later change that uses them. The
+original club equals the route's first club on all 432 routed picks; on 5 unrouted picks it is the
+only statement of a late-pick trade. The seven `-board-v3` decisions are recorded from each season's
+v2 record with parser v3 and its 51 fields; the v1 and v2 decisions and captures stay valid as
+recorded. The egress, cache and stop rules are unchanged.
+
 ### Issue 574 admitted evidence boundary
 
 The finalized issue 574 dataset binds 13 exact captures: five AFL Tables season captures, five
