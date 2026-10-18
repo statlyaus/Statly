@@ -40,13 +40,13 @@
 DO $migration$
 BEGIN
   IF to_regprocedure('outcome_provider_assignment_continuity_current_uncached(text)') IS NOT NULL THEN
-    RAISE EXCEPTION 'outcome_provider_assignment_continuity_current_uncached already exists before 0289';
+    RAISE EXCEPTION 'outcome_provider_assignment_continuity_current_uncached already exists before 0290';
   END IF;
   -- The per-origin function exactly as migration 0128 created it.
   IF (SELECT md5(prosrc) FROM pg_proc
        WHERE oid=to_regprocedure('outcome_provider_assignment_continuity_current(text)'))
      IS DISTINCT FROM '8a4236e38d08cb21323080035578971a' THEN
-    RAISE EXCEPTION 'Expected the 0128 per-origin assignment continuity function before 0289';
+    RAISE EXCEPTION 'Expected the 0128 per-origin assignment continuity function before 0290';
   END IF;
 END $migration$;
 
@@ -54,7 +54,7 @@ ALTER FUNCTION outcome_provider_assignment_continuity_current(TEXT)
   RENAME TO outcome_provider_assignment_continuity_current_uncached;
 
 COMMENT ON FUNCTION outcome_provider_assignment_continuity_current_uncached(TEXT) IS
-  'The per-origin assignment continuity walk of migration 0128, without the 0289 transaction memo.';
+  'The per-origin assignment continuity walk of migration 0128, without the 0290 transaction memo.';
 
 CREATE FUNCTION outcome_provider_assignment_continuity_current(origin_decision_id TEXT)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY INVOKER AS $$
@@ -172,7 +172,7 @@ BEGIN
 END $$;
 
 COMMENT ON FUNCTION outcome_provider_assignment_continuity_current(TEXT) IS
-  'Per-origin assignment continuity (migration 0128 rules), walked once per assignment case per transaction (0289).';
+  'Per-origin assignment continuity (migration 0128 rules), walked once per assignment case per transaction (0290).';
 
 CREATE FUNCTION outcome_assignment_continuity_memo_invalidate() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER AS $$
@@ -184,7 +184,7 @@ BEGIN
 END $$;
 
 COMMENT ON FUNCTION outcome_assignment_continuity_memo_invalidate() IS
-  'Retires every assignment continuity verdict remembered earlier in the transaction (0289).';
+  'Retires every assignment continuity verdict remembered earlier in the transaction (0290).';
 
 DO $migration$
 DECLARE
@@ -200,7 +200,7 @@ BEGIN
     -- The invalidation must be the last BEFORE ROW trigger of each table.
     IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid=watched_table::regclass AND NOT tgisinternal
         AND tgname COLLATE "C">=trigger_name COLLATE "C") THEN
-      RAISE EXCEPTION 'A trigger on % sorts after % before 0289',watched_table,trigger_name;
+      RAISE EXCEPTION 'A trigger on % sorts after % before 0290',watched_table,trigger_name;
     END IF;
     EXECUTE format('CREATE TRIGGER %I BEFORE INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW
       EXECUTE FUNCTION outcome_assignment_continuity_memo_invalidate()',trigger_name,watched_table);

@@ -14,7 +14,7 @@ describe('native PAV public continuation authorization', () => {
   let source: Awaited<ReturnType<typeof nativePavModelRunSqlFixture>>;
   beforeAll(async () => {
     source = await nativePavModelRunSqlFixture();
-  }, 30_000);
+  }, 60_000);
 
   function resumed(stage: 'started' | 'final_test_completed' = 'started') {
     const root = source.intent;

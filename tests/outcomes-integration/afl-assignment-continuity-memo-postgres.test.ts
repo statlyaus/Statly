@@ -11,7 +11,7 @@ import {
 } from '../testUtils/assignmentContinuityChains';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
-// Migration 0289 lets outcome_provider_assignment_continuity_current remember, for the rest of a
+// Migration 0290 lets outcome_provider_assignment_continuity_current remember, for the rest of a
 // transaction, what one chain walk proved about an assignment case. This suite proves the
 // remembered answers equal the unchanged 0128 walk (outcome_provider_assignment_continuity_current_uncached)
 // for every origin in every chain state and in every evaluation order, that a write inside the

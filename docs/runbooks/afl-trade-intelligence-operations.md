@@ -4457,7 +4457,7 @@ At `max_locks_per_transaction=1024` it overflowed with "out of shared memory". C
 harness use 2048. Size the setting to the season before a genuine build, then restart PostgreSQL.
 Reducing the lock count would need a different writer protocol, such as one lock per assignment case.
 
-Migration 0289 makes the per-origin function itself walk each assignment case once per transaction.
+Migration 0290 makes the per-origin function itself walk each assignment case once per transaction.
 Every factual row insert asks `outcome_provider_assignment_continuity_current` for its player, match
 and club assignment decisions, so a season's fact batch (about 9,100 rows in one transaction over
 about 70 club cases whose heads sit about 1,000 revisions above their origins) repeated the same

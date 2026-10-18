@@ -17,7 +17,7 @@ import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 // assignment chains in every continuity state, including review subjects and heads locked by
 // another session, and proves the set evaluation equals the unchanged per-origin function for
 // every origin. It also measures per-row cost and advisory locks at season-like chain lengths.
-// The per-origin reference is the 0128 walk, renamed _uncached when migration 0289 added a
+// The per-origin reference is the 0128 walk, renamed _uncached when migration 0290 added a
 // transaction memo to outcome_provider_assignment_continuity_current.
 const databaseUrl = process.env.AFL_OUTCOMES_TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error('An explicitly disposable PostgreSQL database is required.');

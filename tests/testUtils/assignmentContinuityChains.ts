@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 
 // Synthetic provider identity-assignment chains in every continuity state, shared by the
-// assignment continuity suites (migrations 0242 and 0289).
+// assignment continuity suites (migrations 0242 and 0290).
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 export const caseId = (key: string) => `provider-identity-assignment-case:${sha256(key)}`;
 export const decision = (key: string, index: number) => `continuity:${key}:${index}`;
