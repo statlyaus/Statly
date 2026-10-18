@@ -126,14 +126,14 @@ jobs:
           --vanilla /opt/statly/capture/test_decode_contract.R
 
   outcomes-postgres:
-    name: AFL outcomes PostgreSQL (shard ${{ matrix.shard }}/3)
+    name: AFL outcomes PostgreSQL (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # Vitest assigns files to shards by a hash of their path, not by duration, so the shards are
-    # uneven. See docs/development/testing.md before changing the count.
+    # tests/testUtils/outcomesShardSequencer.ts splits the files by measured duration. See
+    # docs/development/testing.md before changing the count.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:16-alpine
@@ -191,7 +191,7 @@ jobs:
           fi
           echo "AFL_OUTCOMES_TEST_CONTAINER_ID=${container_ids[0]}" >> "$GITHUB_ENV"
       - name: PostgreSQL integration tests
-        run: npm run test:outcomes:int:provisioned -- --shard=${{ matrix.shard }}/3
+        run: npm run test:outcomes:int:provisioned -- --shard=${{ matrix.shard }}/4
 
   # Unit, integration and browser tests are separate jobs so that "Re-run failed jobs" repeats only
   # the tier that failed. See docs/development/delivery.md, "Re-running CI".
