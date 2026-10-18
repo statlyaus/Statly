@@ -34,6 +34,20 @@ exceptions for validation, security, and accessibility always apply.
 The mandatory `statly-engineering-workflow` remains the routing authority for repository changes and
 may narrow these routes further.
 
+## Claude Code registration
+
+Claude Code loads skills only from `.claude/skills/`, which holds one symlink per registered skill
+into `.agents/skills/`. Registered: `statly-engineering-workflow`, `grilling`, `to-spec`,
+`to-tickets`, `ponytail`, `tdd`, `diagnosing-bugs`, `resolving-merge-conflicts`, `codebase-design`,
+`prototype`, `docs-sweep-loop`, `draft-reliability-loop`, `product-design-review`, and
+`unslop-design`.
+
+The rest stay installed and locked but unregistered. `code-review` would shadow Claude Code's
+built-in `/code-review`, so load it by path at completion as the workflow says. `ask-matt`,
+`implement`, `setup-matt-pocock-skills`, `grill-with-docs`, `domain-modeling`, and `research` either
+duplicate a registered route or write files this policy forbids. To register another skill, add its
+symlink: `ln -s ../../.agents/skills/<name> .claude/skills/<name>`.
+
 ## Repository-owned persistence
 
 Do not follow upstream instructions to create `CONTEXT.md`, `CONTEXT-MAP.md`, or `docs/adr/`. Record
