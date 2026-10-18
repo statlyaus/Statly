@@ -4120,6 +4120,43 @@ it runs on the grading VM). It seals the ledger under a content address (`asset-
 stores it as `derived_private` in repository `asset-ledgers`. See the operations runbook, "Exporting the
 asset ledger".
 
+### Player-season games read model
+
+`modeling/playerSeasonGames.ts` gives games played and PAV per canonical player, season and club for
+the value-line method ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation
+order step 1; statlyaus/Statly#789). It reads no candidate, no grade rule and nothing of the realized
+grader, and it is private like the grader's inputs.
+
+**Source.** No new storage: each finalized HPN PAV calculation (`afl-trade-hpn-pav-season-calculation/v3`)
+already states, per v3 season spell, `source.gamesPlayed` (the distinct matches the player has a primary
+match row for at that club) beside the spell's `total_pav`. `modeling/postgresPlayerSeasonGames.ts`
+reads, in one read-only repeatable-read transaction, the current non-production AFLM head per season for
+one HPN PAV method, the finalized calculations' player rows, and each calculation's own factual appearance
+universe (`outcome_hpn_pav_input_factual_appearance_member`, measured facts with `appeared = true`,
+distinct matches). Player and club ids are the canonical ids the acquisition spells and the asset ledger
+use. 2011 to 2018 come from the same governed season pipeline, so a season is read the same way once its
+calculation is finalized.
+
+**Rows and refusals.** One row per player, season and club with `games`, `pav` and the spell id. A season
+is `available`, `no_head` or `not_finalized`; only available seasons have rows. The builder refuses a
+non-consecutive season list, two rows for one player-season-club, a row with no game count and a row
+outside the available seasons. `discrepancies` lists each player-season-club where the calculation's
+games differ from its factual appearances, including PAV with no appearance and an appearance with no
+PAV. It is empty on a sound calculation, and a fit must refuse otherwise.
+
+**First stint.** `aflTradeFirstStintGames(model, playerId, clubId, fromSeason)` walks the available
+seasons from `fromSeason`: a season counts with its games and PAV (0 and 0 when the player did not play
+anywhere, as a season lost to injury does), and the stint closes in the first available season the
+player appears for another club (that season still counts here if he also played here). This is the
+grader's boundary without its reviewed-arrival input. Seasons with no finalized calculation are listed in
+`seasonsUnavailable`, not counted. Appearances cannot show a delisting or retirement (the stint stays
+open with 0-game seasons) or a re-arrival at the same club with no game elsewhere in between (read as
+one stint).
+
+**Report.** `npm run outcomes:grading:season-games` (`Scripts/report-player-season-games.ts`) prints the
+per-season coverage as one JSON line and writes nothing. See the operations runbook, "Reporting
+player-season games".
+
 ## Immutable publication
 
 Model runs and valuation bundles are not public publications. Publication manifest v2 references the
