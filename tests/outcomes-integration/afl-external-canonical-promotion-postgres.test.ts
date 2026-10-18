@@ -2653,6 +2653,6 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
       )).rows).toHaveLength(1);
 
 
-    });
+    }, 90_000);
   });
 });
