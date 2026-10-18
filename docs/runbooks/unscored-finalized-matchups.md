@@ -71,9 +71,8 @@ For a `LATE_SET` side, each player set after their game started scores zero. Eve
 normally. The other side of the matchup is unchanged. Each repaired matchup is then scored, its round
 standings are rebuilt, and each change is recorded in an audit row.
 
-Do not re-run recalculation on an affected round before its repair. The current code keeps the round open
-while a matchup is unscored. Re-running recalculation could therefore lower scores that are already
-recorded for that round.
+Recalculation refuses a finalized round that still has an unscored matchup. The route returns 409 with the
+unscored matchup ids and writes nothing. Clear the unscored side by the repair first, then recalculate.
 
 The write step runs per league in batches, is idempotent (a matchup already scored is skipped), and runs
 against a dry-run report of the proposed scores first.
