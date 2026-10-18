@@ -243,6 +243,14 @@ projections and exports retain their prior local release identity. This removes 
 access; it does not activate, roll back or alter a factual release. Unsetting variables alone is not a
 withdrawal proof because Next development environment files may supply a configured value.
 
+The private trade page (statlyaus/Statly#789) has its own switch. Set `STATLY_ENABLE_DEV_TOOLS=true`
+and `AFL_TRADE_STORY_READER_ENABLED=true` for the web process, sign in through the Firebase Auth
+emulator as `admin@statly.dev`, and open `http://localhost:3000/dev/afl-trade-stories`. It lists the
+sample stories (the Jeremy Cameron chain and the Geelong ⇄ Western Bulldogs 2021 swap with Sam Darcy's
+matched bid). Check each page in light and dark mode and at 390 pixels: the scarf scrolls sideways,
+nothing else does, and every lineage trade button opens its trade in the map. The route is not found in
+production, with either switch off, or for any other user.
+
 After `npm run dev:full:all` reports that the web process is ready, open
 `http://localhost:3000/draft/trades`. Verify the 38 year filters, the 783-trade archive, the 21 trades
 in 2025, and the 20 trades in 1988. Then compare the governed 2025 trade detail page with:

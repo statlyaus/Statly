@@ -78,6 +78,7 @@
     "outcomes:artifacts:store-evidence": "tsx Scripts/store-artifact-evidence.ts",
     "outcomes:grading:realized": "tsx Scripts/grade-realized-trades.ts",
     "outcomes:grading:asset-ledger": "tsx Scripts/export-asset-ledger.ts",
+    "outcomes:grading:season-games": "tsx Scripts/report-player-season-games.ts",
     "outcomes:spells:register-reviewed": "tsx Scripts/register-reviewed-acquisition-spell.ts",
     "outcomes:sources:register-capture-successor": "tsx Scripts/register-capture-successor.ts",
     "outcomes:sources:discover-external-history": "tsx Scripts/discover-external-draft-trade-history.ts",
@@ -274,7 +275,10 @@
     "jsonwebtoken": {
       "jws": "3.2.3"
     },
-    "@grpc/grpc-js": "^1.14.5"
+    "@grpc/grpc-js": "^1.14.5",
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "7.1.6"
+    }
   },
   "engines": {
     "node": ">=22 <23"

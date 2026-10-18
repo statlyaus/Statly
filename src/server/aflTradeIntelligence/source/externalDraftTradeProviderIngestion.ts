@@ -195,7 +195,7 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'footyinfo-national-draft-board') {
-    // Parser v2 reads only the exact reviewed national draft boards (issues 853 and 789). A board
+    // Parser v3 reads only the exact reviewed national draft boards (issues 853 and 789). A board
     // states no as-of date, so its claims are effective when captured.
     if (
       request.provider !== 'footyinfo' ||
@@ -359,7 +359,7 @@ const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
   'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
   'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,
   'official-afl-issuing-award': OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
-  // A retained v1 board capture (issue 853) stays valid as recorded under v2 (issue 789).
+  // A retained v1 (issue 853) or v2 board capture stays valid as recorded under v3 (issue 789).
   'footyinfo-national-draft-board': FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
 };
 

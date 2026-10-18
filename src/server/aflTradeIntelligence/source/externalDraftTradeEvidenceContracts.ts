@@ -340,12 +340,15 @@ const pickCustodyClaimSchema = z
   .strict();
 
 /**
- * One pick on a Footyinfo national draft board (`footyinfo-draft-board-parser/v1` and v2, issues
+ * One pick on a Footyinfo national draft board (`footyinfo-draft-board-parser/v1` to v3, issues
  * 853 and 789) as the board shows it with passed and removed picks included: the holder at the draft, the
  * pick number and player when it was selected, and the route the board states. `route` is the club
  * chain the board prints, original club first and holder last; it is empty when the board prints
  * none, which never means the pick did not move. `routeLabel`, `bid` and `note` are what the board
- * says about bids, compensation and assistance. A provider statement, never an inference.
+ * says about bids, compensation and assistance. From parser v3 (issue 789) `originalClub` and
+ * `originalNumber` state the entitlement the pick was and its number before the draft (absent from a
+ * v1 or v2 claim, so their evidence is unchanged); a route the board prints starts with that club. A
+ * provider statement, never an inference.
  */
 const draftBoardPickClaimSchema = z
   .object({
@@ -370,9 +373,27 @@ const draftBoardPickClaimSchema = z
       .nullable(),
     points: z.number().int().min(0).max(10_000).nullable(),
     note: nullableBoundedText,
+    originalClub: recordedEntitySchema.optional(),
+    originalNumber: positiveOrdinalSchema.nullable().optional(),
   })
   .strict()
   .superRefine((claim, context) => {
+    if ((claim.originalClub === undefined) !== (claim.originalNumber === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['originalNumber'],
+        message: 'A board pick states its original club and pre-draft number together or neither.',
+      });
+    }
+    const originalCode = claim.originalClub?.nativeId ?? claim.originalClub?.recordedName;
+    const firstCode = claim.route[0]?.nativeId ?? claim.route[0]?.recordedName;
+    if (originalCode !== undefined && firstCode !== undefined && firstCode !== originalCode) {
+      context.addIssue({
+        code: 'custom',
+        path: ['originalClub'],
+        message: 'A board route starts with the pick’s original club.',
+      });
+    }
     const selected = claim.status === 'selected';
     if (
       selected !== (claim.player !== undefined) ||
