@@ -25,6 +25,8 @@
   --ts-group-b: #fbefeb;
   background: var(--ts-bg);
   color: var(--ts-ink);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,6 +54,27 @@
     --ts-group-a: #18212b;
     --ts-group-b: #2a1d19;
   }
+}
+
+/* The page's four text sizes (owner, 2026-10-18). Badges, icons and SVG chart labels are exempt. */
+.afl-trade-story .ts-net {
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.afl-trade-story .ts-head {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.afl-trade-story .ts-body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.afl-trade-story .ts-small {
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .afl-trade-story :focus-visible {
