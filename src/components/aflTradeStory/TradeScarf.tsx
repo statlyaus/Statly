@@ -1,6 +1,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- A wide timeline needs a named keyboard-scroll target. */
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
+import { ClubBadge } from './ClubBadge';
 import {
   BAND,
   bandPath,
@@ -51,26 +52,34 @@ export function TradeScarf({
 
   return (
     <figure
-      aria-labelledby="scarf-title"
+      aria-label={`Timeline of the ${tradeName(story.trade.clubs)} trade, ${story.trade.year}`}
       className="overflow-hidden rounded-2xl lg:grid lg:grid-cols-[220px_1fr]"
     >
       <div className="bg-(--ts-scarf-side) p-5 text-(--ts-scarf-side-ink)">
-        <p id="scarf-title" className="text-xl font-bold leading-tight">
-          {tradeName(story.trade.clubs)}, {story.trade.year}
-        </p>
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-1">
+        <p className="ts-small text-(--ts-scarf-side-muted)">{`Value now (${throughSeason})`}</p>
+        <ul className="mt-1 grid gap-1">
+          {story.nets.withNextMoves.map((net) => (
+            <li key={net.clubId} className="flex items-center gap-2">
+              <ClubBadge clubName={net.clubName} />
+              <span className="text-[20px] leading-tight font-bold tabular-nums">
+                {netText(net)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-1">
           <p className="flex flex-col">
-            <span className="text-3xl font-bold tabular-nums">{story.lineage.trades.length}</span>
-            <span className="text-sm text-(--ts-scarf-side-muted)">trades in the chain</span>
+            <span className="ts-head font-bold tabular-nums">{story.lineage.trades.length}</span>
+            <span className="ts-small text-(--ts-scarf-side-muted)">trades in the chain</span>
           </p>
           <p className="flex flex-col">
-            <span className="text-3xl font-bold tabular-nums">{clubs.size}</span>
-            <span className="text-sm text-(--ts-scarf-side-muted)">clubs involved</span>
+            <span className="ts-head font-bold tabular-nums">{clubs.size}</span>
+            <span className="ts-small text-(--ts-scarf-side-muted)">clubs involved</span>
           </p>
         </div>
         {players.length > 0 ? (
           <>
-            <p className="mt-5 text-sm font-semibold">Biggest values</p>
+            <p className="mt-5 ts-body font-semibold">Biggest values</p>
             <ul className="mt-2 space-y-2">
               {[...players]
                 .sort((left, right) => right.value - left.value)
@@ -80,7 +89,7 @@ export function TradeScarf({
                     <li key={player.key} className="flex items-center gap-3">
                       <span
                         aria-hidden="true"
-                        className="flex size-9 flex-none items-center justify-center rounded-full border-2 text-xs font-bold"
+                        className="flex size-9 flex-none items-center justify-center rounded-full border-2 ts-small font-bold"
                         style={{
                           background: style.fill,
                           color: style.ink,
@@ -93,9 +102,9 @@ export function TradeScarf({
                           .join('')
                           .slice(0, 2)}
                       </span>
-                      <span className="text-sm leading-tight">
+                      <span className="ts-body leading-tight">
                         <span className="block font-semibold">{player.name}</span>
-                        <span className="text-(--ts-scarf-side-muted)">
+                        <span className="ts-small text-(--ts-scarf-side-muted)">
                           {formatPav(player.value)} · {player.clubName}
                         </span>
                       </span>
@@ -106,14 +115,14 @@ export function TradeScarf({
           </>
         ) : null}
         {pending ? (
-          <p className="mt-5 text-xs text-(--ts-scarf-side-muted)">
+          <p className="mt-5 ts-small text-(--ts-scarf-side-muted)">
             * Totals leave out bid-match shares and values not in yet.
           </p>
         ) : null}
       </div>
 
       <div className="bg-(--ts-scarf-bg)">
-        <p className="px-4 pt-3 text-sm text-(--ts-ink2) lg:hidden">
+        <p className="px-4 pt-3 ts-small text-(--ts-ink2) lg:hidden">
           Swipe sideways to follow the timeline.
         </p>
         <div

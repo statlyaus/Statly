@@ -23,7 +23,11 @@ import {
 } from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
-import { loadWaiverOutcomes } from '@/server/waivers/waiverActivity';
+import {
+  encodeWaiverActivityCursor,
+  loadWaiverOutcomes,
+  parseWaiverActivityCursor,
+} from '@/server/waivers/waiverActivity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -271,6 +275,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     );
     const playersCursor = url.searchParams.get('playersCursor') || undefined;
     const activityCursor = url.searchParams.get('activityCursor') || undefined;
+    const activityBefore = activityCursor ? parseWaiverActivityCursor(activityCursor) : null;
     const [selectedCategories, statsLookup] = await Promise.all([
       loadSelectedCategories(leagueId),
       loadStatsLookup(leagueId),
@@ -330,7 +335,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // Activity is the league's published waiver outcomes, from Prisma.
         loadWaiverOutcomes(leagueId, {
           limit: activityLimit,
-          ...(activityCursor ? { before: new Date(activityCursor) } : {}),
+          ...(activityBefore ?? {}),
         }),
         waiverStore.loadWaiverSettings(leagueId),
         loadCurrentRoster(leagueId, userId),
@@ -417,7 +422,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         availablePlayers: availablePlayersResult.items,
         playersIndex,
         nextPlayersCursor: availablePlayersResult.nextCursor,
-        activityNextCursor: lastActivity?.timestamp ?? null,
+        activityNextCursor: lastActivity ? encodeWaiverActivityCursor(lastActivity) : null,
         activityHasMore: activity.length === activityLimit,
       },
       { status: 200, headers: NO_STORE }

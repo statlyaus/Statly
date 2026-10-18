@@ -5,7 +5,7 @@ import type {
   AflTradeStoryPlayer,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
-import { formatPav, knownPav, tradeShortName } from './tradePageModel';
+import { formatPav, inSentence, knownPav, tradeShortName } from './tradePageModel';
 
 /**
  * The scarf timeline's content, from the story alone: the biggest values, each trade and
@@ -82,7 +82,7 @@ function tradeStep(story: AflTradeStory, trade: AflTradeStoryLineageTrade): Scar
   const got = trade.clubs.map((club) => {
     const received = trade.assets
       .filter((asset) => asset.toClubId === club.clubId)
-      .map((asset) => asset.label);
+      .map((asset) => inSentence(asset.label));
     return `${club.clubName} get ${listText(received, 1)}.`;
   });
   return {

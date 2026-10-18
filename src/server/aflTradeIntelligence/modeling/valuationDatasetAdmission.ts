@@ -24,7 +24,10 @@ import {
   resolveAflTradeGateEligibility,
   type AflTradeGateDecisionLedger,
 } from '../governance/gateDecisionLedger';
-import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
+import {
+  createAflTradeGate0AEvaluator,
+  type AflTradeGate0AEvaluator,
+} from '../source/gate0aEvaluation';
 import { aflTradeGate0AReceiptSchema, type AflTradeGate0AReceipt } from '../source/gate0aReceipt';
 import {
   aflTradeSourceRightsProposalSchema,
@@ -1582,6 +1585,16 @@ function validateSourceRights(
     fieldSets.size !== expected.size ||
     lineageMappings.size !== expected.size;
   let expired = false;
+  // Proofs usually share one ledger object; validate each distinct ledger once.
+  const evaluators = new Map<AflTradeGateDecisionLedger, AflTradeGate0AEvaluator>();
+  const evaluatorFor = (ledger: AflTradeGateDecisionLedger) => {
+    let evaluator = evaluators.get(ledger);
+    if (!evaluator) {
+      evaluator = createAflTradeGate0AEvaluator(ledger);
+      evaluators.set(ledger, evaluator);
+    }
+    return evaluator;
+  };
   for (const [captureId, source] of expected) {
     const proof = actual.get(captureId);
     if (!proof) {
@@ -1593,17 +1606,10 @@ function validateSourceRights(
     const sourceSnapshot = proof.sourceSnapshotManifest;
     const derivation = proof.derivationReceipt.content;
     const admission = proof.admissionReceipt.content;
-    const derivationResult = evaluateAflTradeGate0A(
-      proof.gateLedger,
-      proof.rightsProposal,
-      derivation.request
-    );
+    const evaluateGate0A = evaluatorFor(proof.gateLedger);
+    const derivationResult = evaluateGate0A(proof.rightsProposal, derivation.request);
     const admissionRequest = { ...admission.request, evaluatedAt: admittedAt };
-    const admissionResult = evaluateAflTradeGate0A(
-      proof.gateLedger,
-      proof.rightsProposal,
-      admissionRequest
-    );
+    const admissionResult = evaluateGate0A(proof.rightsProposal, admissionRequest);
     const expectedUses = fieldSet?.content.fields
       .flatMap(({ sourceField, uses }) => uses.map((use) => ({ sourceField, use })))
       .sort((left, right) =>
