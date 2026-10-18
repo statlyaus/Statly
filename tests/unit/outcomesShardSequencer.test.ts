@@ -35,7 +35,7 @@ async function shards(files: string[], count: number) {
 }
 
 describe('OutcomesShardSequencer', () => {
-  it.each([2, 3, 4])('puts every file in exactly one of %i shards', async (count) => {
+  it.each([2, 3, 4, 5])('puts every file in exactly one of %i shards', async (count) => {
     const files = [...outcomesFiles, 'tests/outcomes-integration/not-yet-measured.test.ts'];
     const split = await shards(files, count);
     expect(split.flat().sort()).toEqual([...files].sort());
