@@ -158,9 +158,33 @@ afterAll(async () => {
   }
 });
 
+// Phase timings for the CI log: `[timing] <test> <phase> <ms>`. Measurement only; no assertion depends on it.
+function createPhaseTimer(testName: string) {
+  let phase: string | null = null;
+  let started = 0;
+  const flush = () => {
+    if (phase !== null) {
+      console.info(`[timing] ${testName} ${phase} ${Math.round(performance.now() - started)}ms`);
+    }
+  };
+  return {
+    mark(next: string) {
+      flush();
+      phase = next;
+      started = performance.now();
+    },
+    done() {
+      flush();
+      phase = null;
+    },
+  };
+}
+
 describe('local AFL valuation-publication rehearsal', () => {
   it('serves and restores one archive-bound release and proves rollback and withdrawal', async () => {
+    const timings = createPhaseTimer('archive-release');
     let client = createPgAflOutcomeSqlClient(currentOutcomesPool());
+    timings.mark('seed-archive');
     const factual = await seedLocalAflTradeOutcomeArchive(client);
     const derivedRepository = localArtifactRepository(
       'derived_private',
@@ -170,6 +194,7 @@ describe('local AFL valuation-publication rehearsal', () => {
       'public_projection',
       'local-synthetic-valuation-public'
     );
+    timings.mark('rehearse-first');
     const { lifecycle, replacement } = await prepareAndRehearseLocalAflTradeValuationPublication({
       client,
       factual,
@@ -186,6 +211,7 @@ describe('local AFL valuation-publication rehearsal', () => {
     expect(lifecycle.idempotentReplay).toBe(false);
     expect(lifecycle.factualStateAfter).toEqual(lifecycle.factualStateBefore);
 
+    timings.mark('rehearse-replay');
     const { lifecycle: replay } = await prepareAndRehearseLocalAflTradeValuationPublication({
       client,
       factual,
@@ -200,6 +226,7 @@ describe('local AFL valuation-publication rehearsal', () => {
       factualStateAfter: lifecycle.factualStateBefore,
     });
 
+    timings.mark('read-setup');
     const readAt = await postgresNow();
     const listRequest = {
       scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
@@ -295,6 +322,7 @@ describe('local AFL valuation-publication rehearsal', () => {
         tradeId: syntheticTradeId,
         requestedViews: [...AFL_TRADE_VALUATION_VIEWS],
       });
+      timings.mark('api-reads');
       const listResponse = await getValuations(
         new NextRequest(
           `http://localhost/api/draft-trades/valuations?tradeId=${encodeURIComponent(factual.tradeId)}&view=current&limit=1`
@@ -312,6 +340,7 @@ describe('local AFL valuation-publication rehearsal', () => {
         ),
         { params: Promise.resolve({ tradeId: encodeURIComponent(syntheticTradeId) }) }
       );
+      timings.mark('api-methodology');
       const methodologyResponse = await getMethodology();
       const archiveListResponse = await getDraftTrades(
         new NextRequest('http://localhost/api/draft-trades?year=2025')
@@ -332,6 +361,7 @@ describe('local AFL valuation-publication rehearsal', () => {
       const archiveListBody = await archiveListResponse.json();
       const archiveListCsv = await archiveListExportResponse.text();
       const archiveDetailCsv = await archiveDetailExportResponse.text();
+      timings.mark('page-render');
       const page = (await DraftTradeDetailPage({
         params: Promise.resolve({ tradeId: encodeURIComponent(factual.tradeId) }),
       })) as ReactElement<{
@@ -349,10 +379,12 @@ describe('local AFL valuation-publication rehearsal', () => {
           current: { availability: string };
         } | null;
       }>;
+      timings.mark('export');
       const exported = await projectionRepository.exportRows(selection.selection, {
         tradeIds: [factual.tradeId],
         requestedViews: ['at_trade', 'current'],
       });
+      timings.mark('archive-detail');
       const archiveDetail = await archiveReadRepository.getById(factual.tradeId);
       const archiveSelection = await archiveSelector.capture(
         factual.factualReleaseManifest.content.scopeKey
@@ -495,6 +527,7 @@ describe('local AFL valuation-publication rehearsal', () => {
       '--no-owner',
       '--no-privileges',
     ]);
+    timings.mark('restore-setup');
     await currentOutcomesPool().end();
     outcomesPool = undefined;
     publicRuntime.archiveReadRepository = null;
@@ -523,6 +556,7 @@ describe('local AFL valuation-publication rehearsal', () => {
       'public_projection',
       'local-synthetic-valuation-public'
     );
+    timings.mark('restore-snapshot');
     const afterRestore = await readSurfaceSnapshot(client);
     expect(afterRestore.snapshot).toEqual(beforeRestore.snapshot);
 
@@ -540,6 +574,7 @@ describe('local AFL valuation-publication rehearsal', () => {
       evidenceId: `artifact:${'c'.repeat(64)}`,
       reason: 'Verify no-fallback withdrawal without changing the factual release.',
     });
+    timings.mark('post-restore-reads');
     const unavailable = await afterRestore.valueReadService.list(listRequest);
     expect(unavailable.consistency.selection).toBe('none');
     expect(unavailable.items[0]?.valuation.availability).toBe('not_calculated');
@@ -551,5 +586,6 @@ describe('local AFL valuation-publication rehearsal', () => {
         null,
       release: restoredFactualRegistry.releases[factual.releaseId] ?? null,
     }).toEqual(lifecycle.factualStateBefore);
+    timings.done();
   }, 180_000);
 });
