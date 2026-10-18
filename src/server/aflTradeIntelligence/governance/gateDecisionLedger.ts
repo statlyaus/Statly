@@ -421,23 +421,70 @@ export function appendAflTradeGateDecision(
   return candidate;
 }
 
+export interface AflTradeGateEligibilityRequest {
+  gate: AflTradeGateCode;
+  decisionKey: string;
+  environment: AflTradeDecisionEnvironment;
+  evaluatedAt: string;
+}
+
+export type AflTradeGateEligibilityResolver = (
+  request: AflTradeGateEligibilityRequest
+) => AflTradeGateEligibilityResolution;
+
+/**
+ * Validates one ledger at most once, on first use, and resolves any number of requests against it.
+ * Validation re-hashes every proposal and decision, so loops over many source-rights artifacts share
+ * one resolver instead of revalidating the same ledger per artifact. The ledger is revalidated if
+ * its proposal or decision arrays are replaced or change length; callers must not edit entries in
+ * place while the resolver is in use.
+ */
+export function createAflTradeGateEligibilityResolver(
+  ledger: AflTradeGateDecisionLedger
+): AflTradeGateEligibilityResolver {
+  let validated: {
+    proposals: unknown[];
+    decisions: unknown[];
+    length: string;
+    valid: boolean;
+  } | null = null;
+  return (request) => {
+    const length = `${ledger.proposals.length}|${ledger.decisions.length}`;
+    if (
+      validated === null ||
+      validated.proposals !== ledger.proposals ||
+      validated.decisions !== ledger.decisions ||
+      validated.length !== length
+    ) {
+      validated = {
+        proposals: ledger.proposals,
+        decisions: ledger.decisions,
+        length,
+        valid: validateAflTradeGateDecisionLedger(ledger).valid,
+      };
+    }
+    if (!validated.valid) {
+      return {
+        status: 'blocked',
+        decision: null,
+        blockers: [{ code: 'invalid_ledger', message: 'The decision ledger is invalid.' }],
+      };
+    }
+    return resolveAgainstValidatedLedger(ledger, request);
+  };
+}
+
 export function resolveAflTradeGateEligibility(
   ledger: AflTradeGateDecisionLedger,
-  request: {
-    gate: AflTradeGateCode;
-    decisionKey: string;
-    environment: AflTradeDecisionEnvironment;
-    evaluatedAt: string;
-  }
+  request: AflTradeGateEligibilityRequest
 ): AflTradeGateEligibilityResolution {
-  const validation = validateAflTradeGateDecisionLedger(ledger);
-  if (!validation.valid) {
-    return {
-      status: 'blocked',
-      decision: null,
-      blockers: [{ code: 'invalid_ledger', message: 'The decision ledger is invalid.' }],
-    };
-  }
+  return createAflTradeGateEligibilityResolver(ledger)(request);
+}
+
+function resolveAgainstValidatedLedger(
+  ledger: AflTradeGateDecisionLedger,
+  request: AflTradeGateEligibilityRequest
+): AflTradeGateEligibilityResolution {
   const evaluatedAt = Date.parse(request.evaluatedAt);
   if (!Number.isFinite(evaluatedAt)) {
     return {

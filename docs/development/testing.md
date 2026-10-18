@@ -544,6 +544,14 @@ is signalling that its work is reducible, and should be profiled rather than giv
 Do not drop a heavy test back to 60 seconds to make the suite look tidier: at that setting the family
 times out whenever the suite is under load.
 
+The continuation PostgreSQL adapter test is the worked example. It took 55 to 58 seconds on a typical
+runner and up to 118 on a slow one, and a CPU profile put about 40% of that in revalidating the same
+55-entry Gate 0A decision ledger: every `evaluateAflTradeGate0A` call re-hashes every proposal and
+decision, and the run-authority currentness check made one call per source-rights artifact (54) on
+each authentication. Loops that evaluate many artifacts against one ledger now share
+`createAflTradeGate0AEvaluator` (or `createAflTradeGateEligibilityResolver`), which validates the
+ledger once. Look for the same shape first when a heavy test approaches the ceiling.
+
 Lock-space failures are not budget failures. A suite that reports `out of shared memory` while dropping
 its temporary schema, or that times out only when other suites run beside it, is hitting the disposable
 cluster's lock ceiling rather than its own budget: see the setting described with the local integration
