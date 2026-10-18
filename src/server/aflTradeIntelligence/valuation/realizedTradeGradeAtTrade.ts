@@ -343,7 +343,11 @@ function futurePickView(
   const slot = aflTradeGradeOrderSlotOf(pickCustody, asset);
   if (slot) return orderSlotView(benchmarkId, slot, sources.outcomes.get(transfer.transferId));
   const unused = end?.outcome.outcomeStatus === 'stated' && end.outcome.disposition === 'not_used';
-  const board = unused ? aflTradeBoardPreDraftSlotOf(sources.boardPicks, asset) : undefined;
+  // Like the proxy, only a pick that held no slot in its own draft's final order (rule v19).
+  const board =
+    unused && !heldOrderSlot(nationalRows(pickCustody, asset.draftYear), asset)
+      ? aflTradeBoardPreDraftSlotOf(sources.boardPicks, asset)
+      : undefined;
   if (board)
     return {
       kind: 'pick_projection_eventual_slot',

@@ -3026,6 +3026,27 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
       expect(atTradeOf(candidate)).toEqual(proxy(2, 4, 56));
     });
 
+    it.each<[string, Candidate['pickCustody']]>([
+      ['a slot it held beyond 90', [order('5', 'collingwood', 4, 95, { pickId: 'pick-F' })]],
+      [
+        'a disputed slot it held',
+        [order('5', 'collingwood', 4, 60, { pickId: 'pick-F', status: 'disputed' })],
+      ],
+      [
+        'captures of the pick too close in time to tell which is latest',
+        [
+          order('5', 'collingwood', 4, null, { pickId: 'pick-F' }),
+          order('6', 'collingwood', 4, null, { pickId: 'pick-F' }),
+        ],
+      ],
+    ])('never applies to a pick whose final order shows %s', (_label, own) => {
+      const candidate = single(4, 'collingwood', noNominee, {
+        pickCustody: [...firstRound, ...own!],
+        draftBoardPicks: [board()],
+      });
+      expect(atTradeOf(candidate)).toEqual(UNKNOWN);
+    });
+
     it('never applies to a pick with no original club, a pending pick or a used one', () => {
       const boards = { draftBoardPicks: [board()] };
       expect(atTradeOf(single(4, null, noNominee, { pickCustody: firstRound, ...boards }))).toEqual(
@@ -3199,6 +3220,89 @@ describe('rule v17: at-trade projections for selected, consumed and out-of-domai
       });
       // Without the first-round order the sibling has no projection, so the pick stays unallocated.
       candidate.pickCustody = [];
+      expect(legOf(gradeAflTradesOnRealizedValue(inputs(candidate, data)), 'tr-A1')).toMatchObject({
+        state: 'excluded',
+        basis: 'pick_traded_on_return_unallocated',
+      });
+    });
+
+    it('splits the same bundle by the board’s stated slot from rule v19, with no proxy reason', () => {
+      // Hawthorn also gives St Kilda Collingwood's 2021 R4 (no slot in the final order), which St
+      // Kilda spends matching a bid; pick P's draftee realized 12 and Hawthorn got player q (40).
+      const candidate: Candidate = {
+        transactions: [trade('tx-A', 2020), trade('tx-B', 2020)],
+        transfers: [
+          pick('tr-A1', 'tx-A', 'melbourne', 'hawthorn', 'pick-P', 2021, 20),
+          pick('tr-B1', 'tx-B', 'hawthorn', 'st-kilda', 'pick-P', 2021, 20),
+          future(['tr-B5', 'tx-B', 'hawthorn', 'st-kilda'], 4, 'collingwood', 2021),
+          player('tr-B3', 'tx-B', 'st-kilda', 'hawthorn', 'q'),
+        ],
+        pickOutcomes: [
+          outcome('tr-A1', { disposition: 'traded_on' }),
+          outcome('tr-B1', { disposition: 'selected', playerId: 'd5' }),
+          outcome('tr-B5', nominee),
+        ],
+        pickCustody: firstRound.map((row) => ({ ...row, draftYear: 2021 })),
+        // The 2021 board states Collingwood's R4 was removed after sitting at 66 before the draft.
+        draftBoardPicks: [
+          {
+            boardPickId: `external-draft-board-pick:${hex('9')}`,
+            draftYear: 2021,
+            draftType: 'national',
+            roundNumber: 4,
+            recordedPickNumber: null,
+            status: 'removed',
+            clubId: 'st-kilda',
+            routeClubIds: ['collingwood', 'hawthorn', 'st-kilda'],
+            originalClubId: 'collingwood',
+            originalNumber: 66,
+            evidenceIds: [],
+          },
+        ],
+      };
+      const data = {
+        seasonSpells: [...spells('d5', [[2022, 'st-kilda']]), ...spells('q', [[2021, 'hawthorn']])],
+        pav: [
+          ...pavRows('d5', [[2022, 'st-kilda', 12]]),
+          ...pavRows('q', [[2021, 'hawthorn', 40]]),
+        ],
+        reviewedArrivals: [{ playerId: 'q', clubId: 'hawthorn', season: 2021 }],
+      };
+      const p66 = hpnDpv3ValueForPick(66);
+      const batch = gradeAflTradesOnRealizedValue(inputs(candidate, data));
+      expect(legOf(batch, 'tr-B5').atTrade).toEqual({
+        kind: 'pick_projection_eventual_slot',
+        benchmarkId,
+        selectionNumber: 66,
+        slotSource: 'board_pre_draft_slot',
+        boardPickId: `external-draft-board-pick:${hex('9')}`,
+        value: p66,
+      });
+      expect(legOf(batch, 'tr-A1')).toMatchObject({
+        state: 'valued',
+        realizedValue: (12 / (12 + p66)) * 40,
+        onward: {
+          allocation: 'hybrid_weighted',
+          hybridWeights: {
+            assets: [
+              { transferId: 'tr-B1', source: 'realized', value: 12 },
+              { transferId: 'tr-B5', source: 'projection', value: p66 },
+            ],
+          },
+        },
+        reasons: [
+          'bundle_split_estimated_weights',
+          'single_source_pick_outcome',
+          'traded_on_return_provisional',
+        ],
+      });
+      // The board's slot needs no draft order; without the board as well, the pick is unallocated.
+      candidate.pickCustody = [];
+      expect(legOf(gradeAflTradesOnRealizedValue(inputs(candidate, data)), 'tr-A1')).toMatchObject({
+        state: 'valued',
+        realizedValue: (12 / (12 + p66)) * 40,
+      });
+      candidate.draftBoardPicks = undefined;
       expect(legOf(gradeAflTradesOnRealizedValue(inputs(candidate, data)), 'tr-A1')).toMatchObject({
         state: 'excluded',
         basis: 'pick_traded_on_return_unallocated',

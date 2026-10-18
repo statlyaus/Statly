@@ -5119,8 +5119,13 @@ The remaining work proceeds through these independently verifiable gates:
      `boardPickId`; it is a stated slot, so the leg carries no proxy reason. Nothing is matched by
      holder: the board may name a later holder than the graded trail reaches (in batch twenty-nine,
      4 of the 7 legs it changes end at Richmond while the board's holder is Gold Coast). No board
-     pick, several, a selected one, no number, or a number beyond 90 falls through to the proxy. The
-     view enters no total, so no grade moves. The contract refuses the source under rules v1 to v18,
+     pick, several, a selected one, no number, or a number beyond 90 falls through to the proxy, and
+     like the proxy it never applies to a pick whose final order shows a slot, a disputed slot or
+     captures too close to tell apart (`heldOrderSlot`). The view itself enters no total, but like
+     any at-trade projection it is a rule v15 bundle weight and a rule v16 or v18 excluded-return
+     value, so a bundle or onward return holding such a leg (in practice an excluded
+     `pick_not_used_nominee_excluded` leg) moves by the difference between the stated slot's DPVC and
+     the proxy's, with no proxy reason. The contract refuses the source under rules v1 to v18,
      requires `boardPickId` exactly with it, refuses it on a selected or projected leg, and the v19
      limitation adds that such a pick reports the number a reviewed Footyinfo board states it held
      before the draft, before any round-position proxy. Measured on batch twenty-nine: 7 of its 16
@@ -5284,8 +5289,10 @@ The remaining work proceeds through these independently verifiable gates:
        432 routed picks and the holder on 465 of 470 unrouted ones; the other 5 are late-pick trades
        the board prints no route for. A pre-draft number is stated on 377 of 443 selected, 163 of 191
        passed and 13 of 261 removed picks. Reconciliation resolves the original club through the same
-       `footyinfo` club lookup as the holder (every original club also holds a pick on its board, so
-       its decision is loaded and no identity-package or database change is needed) and carries
+       `footyinfo` club lookup as the holder. On all seven boards every original club is also a holder
+       or route club of its own board (checked 2026-10-18), so the identity-review package already
+       observes it and no identity-package or database change is needed; a board where it was not
+       would fail closed with a blocking `board-pick:club:` issue. Reconciliation carries
        `originalClubId` and `originalNumber` on the `draftBoardPicks` record, present only from a v3
        row, so earlier candidate ids are unchanged. Grade rule v19 reads them (below).
      - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row
