@@ -48,6 +48,30 @@ import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/se
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
+/**
+ * Two identical writes started together store the fact once. The loser waits on the custody lock
+ * and then replays, unless it wakes while the winner's commit is still releasing its other advisory
+ * locks: its dependency try-lock then fails with 40001, the contract says "retry the transaction",
+ * and the retry replays (#819). PostgreSQL releases a transaction's locks one partition at a time.
+ */
+async function writeConcurrentlyOnce<T extends { idempotentReplay: boolean }>(
+  write: () => Promise<T>
+): Promise<T[]> {
+  const settled = await Promise.allSettled([write(), write()]);
+  expect(settled.some((outcome) => outcome.status === 'fulfilled')).toBe(true);
+  const results: T[] = [];
+  for (const outcome of settled) {
+    if (outcome.status === 'fulfilled') {
+      results.push(outcome.value);
+    } else {
+      expect(outcome.reason).toMatchObject({ code: '40001' });
+      results.push(await write());
+    }
+  }
+  expect(results.map((item) => item.idempotentReplay).sort()).toEqual([false, true]);
+  return results;
+}
+
 describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual occurrence precision: %s', (precision) => {
   const pickDraftYear = precision === 'future' ? 2026 : 2025;
   const reviewedDate = precision === 'day' ? '2025-10-15' : null;
@@ -1250,14 +1274,22 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
           'SELECT asset_version_id FROM outcome_special_entitlement_custody WHERE entitlement_id=$1 ORDER BY transfer_id LIMIT 1',
           [award.entitlementId]
         )).rows[0]!.asset_version_id;
-        await expect.soft(outcomesPool.query(
-          'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-          [award.entitlementId, baselineAsset, '2026-08-09T11:59:59.999Z', rightCaptureIds]
-        )).rejects.toThrow(/cutoff/);
-        expect((await outcomesPool.query<{ fact: unknown }>(
-          'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
-          [award.entitlementId, baselineAsset, '2026-08-09T12:00:00Z', rightCaptureIds]
-        )).rows[0]!.fact).toMatchObject({ award });
+        // node-pg rejects a statement on its error message, before the server has aborted it and
+        // released its custody lock. A pool.query read would run on a fresh connection and could
+        // find that lock still held (#819), so the rejected read and the next read share one.
+        const historyReader = await outcomesPool.connect();
+        try {
+          await expect.soft(historyReader.query(
+            'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
+            [award.entitlementId, baselineAsset, '2026-08-09T11:59:59.999Z', rightCaptureIds]
+          )).rejects.toThrow(/cutoff/);
+          expect((await historyReader.query<{ fact: unknown }>(
+            'SELECT read_outcome_special_entitlement_revision_for_asset($1,$2,$3,$4::text[]) AS fact',
+            [award.entitlementId, baselineAsset, '2026-08-09T12:00:00Z', rightCaptureIds]
+          )).rows[0]!.fact).toMatchObject({ award });
+        } finally {
+          historyReader.release();
+        }
 
         await expect(
           repository.promote({
@@ -1523,11 +1555,9 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
             await eventWriter.query('ROLLBACK');
             eventWriter.release();
           }
-          const registered = await Promise.all([
-            repository.registerSpecialEntitlementLifecycle(exerciseInput),
-            repository.registerSpecialEntitlementLifecycle(exerciseInput),
-          ]);
-          expect(registered.map((item) => item.idempotentReplay).sort()).toEqual([false, true]);
+          const registered = await writeConcurrentlyOnce(() =>
+            repository.registerSpecialEntitlementLifecycle(exerciseInput)
+          );
           expect(registered[0]).toMatchObject({
             historicalFeatureEligible: false,
             record: exercise,
@@ -1666,11 +1696,9 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
                 approvalDecisionId,
               ]
             );
-            const results = await Promise.all([
-              repository.registerSpecialEntitlementRevision(correctionInput),
-              repository.registerSpecialEntitlementRevision(correctionInput),
-            ]);
-            expect(results.map((item) => item.idempotentReplay).sort()).toEqual([false, true]);
+            await writeConcurrentlyOnce(() =>
+              repository.registerSpecialEntitlementRevision(correctionInput)
+            );
             expect(await repository.loadSpecialEntitlementRevision(award.entitlementId)).toEqual(
               revised
             );
@@ -2623,10 +2651,9 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
         return { replacement, approvalDecisionId };
       }
       const awardOnly = await awardOnlyReplacement(unexercised.entitlementId, 'target');
-      const concurrentlyReplaced = await Promise.all([
-        repository.replaceSpecialEntitlementIdentity(awardOnly), repository.replaceSpecialEntitlementIdentity(awardOnly),
-      ]);
-      expect(concurrentlyReplaced.map((result) => result.idempotentReplay).sort()).toEqual([false, true]);
+      const concurrentlyReplaced = await writeConcurrentlyOnce(() =>
+        repository.replaceSpecialEntitlementIdentity(awardOnly)
+      );
       expect(concurrentlyReplaced.every((result) => result.promotion === null)).toBe(true);
       const unusedTargetId = awardOnly.replacement.content.replacementRevision.content.entitlementId;
       expect((await outcomesPool.query(
