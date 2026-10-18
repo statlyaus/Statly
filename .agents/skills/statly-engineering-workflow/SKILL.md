@@ -61,10 +61,13 @@ specialist method only for the phase it covers; this workflow remains the routin
 
 ## Completion and authority
 
-- Run checks relevant to every changed boundary. Before a requested pull request, run the complete
-  supported checks listed in root `AGENTS.md`; CI remains the deterministic authority.
+- Run checks relevant to every changed boundary. Before a pull request, run the complete supported
+  checks listed in root `AGENTS.md`; CI remains the deterministic authority.
 - Do not create competing domain glossaries, context files, ADR trees, plans, or status archives.
-- Never commit, push, open or merge a pull request, create issues, or deploy unless that external or
-  delivery action is explicitly requested.
+- Commit, push a feature branch, open a pull request, and merge it once required checks pass, without
+  waiting to be asked. `/ship` and `/land-and-deploy` are the standard route. Never push `main`
+  directly or force-push.
+- Never create issues, provision infrastructure, or run go-live checklist steps unless the owner
+  explicitly requests it.
 - Never include protected environment files, credentials, local databases, generated output, or
   unrelated work in the change.
