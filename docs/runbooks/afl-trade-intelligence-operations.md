@@ -3610,6 +3610,33 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   `gameCountMismatches`. `discrepancies` lists each one. All three counts are 0 on a sound calculation.
 - A season still being calculated reads as `no_head` or `not_finalized`, never as zero games.
 
+## Fitting the value line
+
+`outcomes:grading:value-line-fit` fits and back-tests the value-line method (statlyaus/Statly#789,
+implementation order step 2; "Fit and back-test" in `docs/architecture/afl-trade-value-line-method.md`). It reads the current
+canonical AFLM national-draft selections of `--draft-years` and the player-season games read model of
+`--seasons` in read-only transactions, fits every parameter on all the classes, back-tests with the
+`--held-out-draft-years` classes held out, seals the result as a `value-line-fit:` artifact, stores it as
+`derived_private` in repository `value-line-fits` (written and read back in full, then one custody
+transaction), and then writes `--out`. Nothing else is written. `--dry-run` builds and writes `--out`
+but stores nothing.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:value-line-fit -- \
+  --method <hpn-pav-method:...> --seasons 2011-2026 --draft-years 2011-2025 \
+  --held-out-draft-years 2017-2019 --store-id <store-id> --out <absolute-path.json> [--dry-run]
+```
+
+- Run it on statly-grading-1. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database.
+- It refuses unless every season in `--seasons` is `available` with no games discrepancy (check with
+  `outcomes:grading:season-games` first), `--seasons` covers every season after each draft, every draft
+  in `--draft-years` has current canonical selections each naming a player, and at least two classes
+  precede the held-out ones.
+- The same inputs give the same `fitId`: the fit has no clock. Cite it by `artifactId` and `fitId`. It
+  holds realized PAV and is private: every fitted parameter is published in the artifact with its fit
+  window so a value line can be reproduced, but nothing in it is publishable outside the private store.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark

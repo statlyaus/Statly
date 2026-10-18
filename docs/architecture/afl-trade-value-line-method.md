@@ -136,7 +136,7 @@ asset's value at the same checkpoint.
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                                                                                                                  | In the outcomes database |
 | Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs: `source.gamesPlayed` on each finalized HPN PAV calculation's player rows, cross-checked against its factual appearances (`modeling/playerSeasonGames.ts`)                     | Read model in place      |
-| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only)                                                     | Being calculated         |
+| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only)                                                     | In the outcomes database |
 | Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                                                                                                                     | In place                 |
 | AFL draft points table, bid points, matching picks | Bid points and spent picks from the reviewed Footyinfo boards, 2019 to 2025 (parser v2, **Owner:** approved 2026-10-17); the price from each draft year's AFL rule (`matchedBidPriceRules.ts`), never the board's `points_used` | In the outcomes database |
 
@@ -152,6 +152,63 @@ asset's value at the same checkpoint.
 3. **Published:** every fitted parameter is published with its fit window, so a value line can be
    reproduced from the stored inputs.
 4. **No hindsight:** a value line at a checkpoint may use only seasons up to that checkpoint.
+
+## Fit and back-test
+
+Built for implementation order step 2 in `modeling/valueLineFit.ts` (the fit and the value line at a
+checkpoint) and `modeling/valueLineBacktest.ts` (the back-test). Both are pure. The runbook section
+"Fitting the value line" runs them with `npm run outcomes:grading:value-line-fit`, which reads the current
+canonical national drafts and the player-season games read model and stores the result as one private
+`value-line-fit:` artifact. Every fitted parameter is in that artifact with its fit window, together with
+the rules, the draftees and the calculation ids it read. Because it holds realized PAV, it is
+publication-prohibited, and none of its numbers are copied here.
+
+**What is fitted, from drafted players' first stints at the drafting club:**
+
+- **Survival:** P(still at the drafting club) by slot band (1–10, 11–30, 31+) and seasons since the draft.
+- **Expected games:** mean games for the club by band and season, scaled so that the slot's expected
+  first-stint games follow a fitted curve `max(0, c + d ln(slot))`.
+- **Prior rate:** PAV per game by slot, `max(0, a + b ln(slot))`.
+- **First-stint pick curve:** prior rate × expected first-stint games. This is the same value the
+  value line gives the slot at the draft.
+- **Availability:** a single weight `rho` that moves expected games toward the player's own recent games.
+- **k:** the credibility weight in `Z = games / (games + k)`.
+
+**Owner rules applied:** values change only at season ends; form is PAV per game over three seasons, so a
+season without games adds nothing to the rate; the first stint is at the drafting club and is not capped;
+only national drafts are read. Compensation, father-son and academy selections are fitted at the slot
+where they were used. Their links to the departed player or the bid belong to the chain view (step 6),
+not to the fit.
+
+**Back-test:** the latest classes with at least seven seasons are held out whole. At each checkpoint
+(the draft, after year 1, after year 3) the parameters are refitted on the earlier classes, using
+seasons up to that checkpoint only. Each held-out class's value line is cut at the last season read and
+compared with the PAV its first stints produced up to that season. The artifact reports bias, mean
+absolute error and RMSE per selection, by draft range and checkpoint and by class. HPN DPVC v3.0, the
+old at-trade projection, is reported over the same selections at the draft. DPVC is a whole-career value,
+so it is not cut.
+
+**Modelling choices for the owner to confirm.** The spec leaves these open. Each is the simplest
+defensible option, and each is also recorded in the artifact's `decisions`:
+
+1. **Stint end:** appearances cannot show a delisting or retirement. A stint is read as ended after two
+   full seasons with no game for the club, or at the first season the player appears for another club.
+   That season still counts if he also played for the drafting club in it.
+2. **Survival:** Kaplan–Meier by band. A stint still running is censored. A season with fewer than 20
+   draftees at risk uses the pooled hazard of the last three supported seasons.
+3. **Functional forms:** the prior rate and expected first-stint games are log-linear in the slot, the
+   same form as DPVC. The rate has no age or tenure term; seasons since the draft stand in for age.
+4. **Recent seasons weighted more:** weights 1, 2 and 3, oldest to newest. Z counts the unweighted games
+   in the window.
+5. **Expected games:** prior games + `rho` × (own mean games − prior mean games) over the form window.
+   `rho` is fitted by least squares and clamped to [0, 1]. An injury lowers expected games but does not
+   set them to zero.
+6. **k:** the integer from 0 to 2,000 that minimises the games-weighted squared error between the
+   blended rate and the rest of the observed stint's PAV per game. It is fitted on drafted players only.
+   The traded-player prior (age and position) is not fitted yet.
+7. **Horizon:** expectations sum the first 20 seasons after the draft. This is arithmetic, not a cap.
+8. **Fit window and hold-out:** fit on drafts 2011–2025 with seasons 2012–2026. The back-test holds out
+   2017–2019.
 
 ## What this retires
 
@@ -183,6 +240,7 @@ asset's value at the same checkpoint.
    2018 season the same way once its calculation is finalized. Seasons before 2011 have no second
    statistics source, so they fail closed and stay out of the fit window.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
+   Built ([Fit and back-test](#fit-and-back-test)). The fit and its back-test are a private artifact.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
