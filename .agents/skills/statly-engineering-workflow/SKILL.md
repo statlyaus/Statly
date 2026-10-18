@@ -66,7 +66,8 @@ specialist method only for the phase it covers; this workflow remains the routin
 - Do not create competing domain glossaries, context files, ADR trees, plans, or status archives.
 - Commit, push a feature branch, open a pull request, and merge it once required checks pass, without
   waiting to be asked. `/ship` and `/land-and-deploy` are the standard route. Never push `main`
-  directly or force-push.
+  directly or force-push. `/ship` owns `VERSION`, `CHANGELOG.md`, the `package.json` version and the
+  `v<version>` pull request title prefix; do not edit them by hand.
 - Never create issues, provision infrastructure, or run go-live checklist steps unless the owner
   explicitly requests it.
 - Never include protected environment files, credentials, local databases, generated output, or
