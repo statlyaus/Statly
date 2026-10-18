@@ -2,6 +2,7 @@ import {
   formatPav,
   formatPercent,
   formatPoints,
+  inSentence,
   type AflTradePageBidShare,
 } from './tradePageModel';
 
@@ -34,13 +35,13 @@ export function BidMatchShareCard({
       aria-labelledby={headingId}
       className="scroll-mt-6 rounded-xl border border-(--ts-line) bg-(--ts-surface) p-4"
     >
-      <p className="inline-flex rounded-md bg-(--ts-bid-soft) px-2 py-0.5 text-xs font-bold tracking-wide text-(--ts-bid)">
+      <p className="inline-flex rounded-md bg-(--ts-bid-soft) px-2 py-0.5 ts-small font-bold tracking-wide text-(--ts-bid)">
         BID MATCH
       </p>
-      <h4 id={headingId} className="mt-2 text-base font-semibold">
+      <h4 id={headingId} className="mt-2 ts-body font-semibold">
         {label} became a share of {nomineeName}
       </h4>
-      <p className="mt-1 text-sm text-(--ts-ink2)">
+      <p className="mt-1 ts-body text-(--ts-ink2)">
         {clubName} matched a bid for {nomineeName} at pick {match.selectionNumber} in{' '}
         {match.draftYear}.{' '}
         {price === null
@@ -50,14 +51,14 @@ export function BidMatchShareCard({
 
       {spent.share !== null && spent.value !== null ? (
         <p className="mt-3 flex flex-wrap items-baseline gap-x-2">
-          <span className="text-2xl font-semibold tabular-nums">{formatPav(spent.value, 2)}</span>
-          <span className="text-sm text-(--ts-ink2)">
+          <span className="ts-head font-semibold tabular-nums">{formatPav(spent.value, 2)}</span>
+          <span className="ts-body text-(--ts-ink2)">
             {label}&rsquo;s share: {formatPercent(spent.share)} of {nomineeName}
             {nomineeValue === null ? '' : `’s ${formatPav(nomineeValue, 2)}`}
           </span>
         </p>
       ) : (
-        <p className="mt-3 text-sm font-semibold">Value pending: the price is not known yet.</p>
+        <p className="mt-3 ts-body font-semibold">Value pending: the price is not known yet.</p>
       )}
 
       {price !== null ? (
@@ -74,12 +75,12 @@ export function BidMatchShareCard({
         </div>
       ) : null}
 
-      <table className="mt-3 w-full text-sm">
+      <table className="mt-3 w-full ts-body">
         <caption className="sr-only">
           Points each pick covered of the price, and its share of {nomineeName}
         </caption>
         <thead>
-          <tr className="text-left text-xs text-(--ts-muted)">
+          <tr className="text-left ts-small text-(--ts-muted)">
             <th scope="col" className="py-1 font-medium">
               Pick
             </th>
@@ -115,14 +116,16 @@ export function BidMatchShareCard({
       </table>
 
       {leftover !== null ? (
-        <p className="mt-2 text-sm text-(--ts-ink2)">
+        <p className="mt-2 ts-body text-(--ts-ink2)">
           {match.spentPicks.find(({ nativePickId }) => nativePickId === leftover.spentNativePickId)
             ?.label ?? 'The last pick'}{' '}
           had {formatPoints(leftover.remainderPoints)} points left over.
-          {leftoverLabels.length > 0 ? ` They became ${leftoverLabels.join(' and ')}.` : ''}
+          {leftoverLabels.length > 0
+            ? ` They became ${leftoverLabels.map(inSentence).join(' and ')}.`
+            : ''}
         </p>
       ) : null}
-      <p className="mt-2 text-sm text-(--ts-ink2)">Shares are not in the totals yet.</p>
+      <p className="mt-2 ts-body text-(--ts-ink2)">Shares are not in the totals yet.</p>
     </article>
   );
 }

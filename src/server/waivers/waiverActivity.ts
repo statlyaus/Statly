@@ -72,16 +72,44 @@ export interface WaiverActivityItem {
   timestamp: string;
 }
 
+/** Cursor for the item after `item`: its timestamp and id, matching the (createdAt, id) sort. */
+export function encodeWaiverActivityCursor(item: Pick<WaiverActivityItem, 'id' | 'timestamp'>) {
+  return `${item.timestamp}|${item.id}`;
+}
+
+/** Reads a cursor from encodeWaiverActivityCursor, or a bare timestamp from an older client. */
+export function parseWaiverActivityCursor(
+  cursor: string
+): { before: Date; beforeId?: string } | null {
+  const separator = cursor.indexOf('|');
+  const before = new Date(separator >= 0 ? cursor.slice(0, separator) : cursor);
+  if (Number.isNaN(before.getTime())) return null;
+  const beforeId = separator >= 0 ? cursor.slice(separator + 1) : '';
+  return { before, ...(beforeId ? { beforeId } : {}) };
+}
+
 /** The league's published waiver outcomes for its active season, newest first, before a cursor. */
 export async function loadWaiverOutcomes(
   leagueId: string,
-  options: { limit: number; before?: Date }
+  options: { limit: number; before?: Date; beforeId?: string }
 ): Promise<WaiverActivityItem[]> {
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
     select: { activeSeasonId: true },
   });
   if (!league?.activeSeasonId) return [];
+
+  // Rows that share the cursor's timestamp are ordered by id, so the id must page them too.
+  const beforeCursor = options.before
+    ? options.beforeId
+      ? {
+          OR: [
+            { createdAt: { lt: options.before } },
+            { createdAt: options.before, id: { lt: options.beforeId } },
+          ],
+        }
+      : { createdAt: { lt: options.before } }
+    : {};
 
   const messages = await prisma.socialMessage.findMany({
     where: {
@@ -90,7 +118,7 @@ export async function loadWaiverOutcomes(
       type: 'SYSTEM',
       moderationStatus: 'ACTIVE',
       relatedEntityType: { in: Object.values(WAIVER_OUTCOME_EVENT_TYPES) },
-      ...(options.before ? { createdAt: { lt: options.before } } : {}),
+      ...beforeCursor,
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: options.limit,
