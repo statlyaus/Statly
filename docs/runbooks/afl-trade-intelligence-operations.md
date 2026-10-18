@@ -4457,6 +4457,54 @@ At `max_locks_per_transaction=1024` it overflowed with "out of shared memory". C
 harness use 2048. Size the setting to the season before a genuine build, then restart PostgreSQL.
 Reducing the lock count would need a different writer protocol, such as one lock per assignment case.
 
+Migration 0289 makes the per-origin function itself walk each assignment case once per transaction.
+Every factual row insert asks `outcome_provider_assignment_continuity_current` for its player, match
+and club assignment decisions, so a season's fact batch (about 9,100 rows in one transaction over
+about 70 club cases whose heads sit about 1,000 revisions above their origins) repeated the same
+walk thousands of times. The function now remembers, until the transaction ends, what its last walk
+of a case proved: for that head (revision and decision) and the lowest revision it walked, the
+lowest revision from which the suffix to the head passes every per-origin rule (the walk of
+migration 0242's set function). A later origin at or above the walked revision is answered from
+that verdict. A lower origin walks again and replaces it, unless the walk already found a break,
+which lies inside the lower origin's suffix too. The rename keeps the unchanged 0128 walk as
+`outcome_provider_assignment_continuity_current_uncached`. Origins that walk cannot represent (a
+decision in more than one resolution table, or one without an assignment revision) still go to it.
+
+The remembered verdict is the per-origin answer because nothing it read can change while it is used:
+
+- Other transactions cannot change it. The walk holds the head `FOR SHARE` and an advisory lock on
+  every review subject of the walked span until the transaction ends. A new link must advance the
+  head, and every review decision takes its subject's advisory lock first; a successor review must
+  share the superseded review's subject.
+- The same transaction cannot change it unseen. A `BEFORE ROW` trigger named
+  `zzz_outcome_assignment_continuity_memo` on `outcome_review_decision`, the three provider
+  resolution tables and `outcome_provider_identity_assignment_head` bumps a transaction-local
+  generation on every insert, update or delete, and a verdict from an older generation is never
+  used. The trigger is enabled `ALWAYS`, so replica-mode writes bump it too. It must stay the last
+  `BEFORE` trigger on each table, so no trigger can remember a verdict between the bump and the row
+  change; the migration refuses to run if a later-sorting trigger exists. A new trigger on those
+  tables must sort before it.
+- Savepoints roll back the verdict, the generation and the locks together.
+
+Nothing is remembered from a call that fails on a held lock, a missing, moved or inactive head, or a
+kind or identity mismatch, so those calls re-check every time, as before. Each case's verdict lives
+in its own transaction-local setting, `statly_assignment_continuity.c<md5 of the case id>`, with the
+case, generation, `current_user` and head it was proved for. Cases never share a setting: a fact
+batch interleaves hundreds of short player and match cases with the long club cases, and a first
+version with 64 shared slots kept evicting the club verdicts. The rules, the locks
+taken and the fail-closed results are unchanged. `afl-assignment-continuity-memo-postgres.test.ts`
+checks every origin of the 22 chain states against the uncached walk in five evaluation orders,
+twice per transaction, with a subject and a head held by another session. It also checks a lock
+released mid-transaction, a withdrawal and a moved head written inside the transaction, a
+rolled-back savepoint, and that nothing outlives the transaction. With 1,500 shuffled rows over
+twenty 600-revision club chains, both forms take the same 12,000 advisory locks and the memo is
+about 40 times faster per row (76 ms to 1.7 ms on the grading VM).
+On a copy of the genuine database the 2017 AFL Tables fact batch (18,216 facts, rolled back) took
+1,813 s to insert with the per-origin walk and 405 s with the memo; continuity itself fell from 1,471 s
+to 60 s. The spell-currency query of spells-derive fell by about a fifth; it is now dominated by
+`outcome_afl_trade_canonical_json`. Provider resolution runs each decision in its own transaction, so
+the memo does not change it (continuity is about 1.5% of a resolution decision).
+
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,
 retained batch/Gate/custody authority, and an exact review by a currently scoped canonical promoter.
