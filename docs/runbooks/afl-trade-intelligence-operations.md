@@ -3610,6 +3610,30 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   `gameCountMismatches`. `discrepancies` lists each one. All three counts are 0 on a sound calculation.
 - A season still being calculated reads as `no_head` or `not_finalized`, never as zero games.
 
+## Fitting the value-line priors
+
+`outcomes:grading:value-line-fit` fits and back-tests the value-line priors (statlyaus/Statly#789; the
+architecture doc's "Value-line fit" section and the value-line spec's "Fit specification (step 2)"). It
+reads the current canonical national drafts and the player-season games read model, and its one write is
+the fit's evidence record in the registered store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:value-line-fit -- --method <hpn-pav-method:...> \
+  --draft-years 2011-2025 --last-season 2026 --store-id <store-id> --out <absolute-path.json>
+```
+
+- Run it on statly-grading-1 from its own checkout. `AFL_OUTCOMES_DATABASE_URL` must name a loopback
+  database. Never run it in a checkout where a pipeline is running.
+- Run `--dry-run` first: it fits and writes `--out` without `--store-id` and stores nothing.
+- Every season from the first class's next season through `--last-season` must have a finalized
+  calculation with no games discrepancy (check with "Reporting player-season games"), or it refuses.
+- `--out` is never overwritten. The printed line has the fit id, the parameters, the back-test by pick
+  range and checkpoint, and the stored `artifactId`.
+- Check `credibilityObjective.atGridEdge` and the back-test bias before anything reads the fit. A bias
+  in one direction across every pick range at a checkpoint is a finding to report, not a reason to
+  re-tune.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark
