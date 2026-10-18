@@ -1,0 +1,64 @@
+/* Private trade page tokens (statlyaus/Statly#789). The page follows the reader's colour scheme;
+   every text pair meets WCAG AA (4.5:1) in both themes. Club colours come from clubGuernseys.ts. */
+.afl-trade-story {
+  --ts-bg: #fbfaf7;
+  --ts-bg2: #f1efe8;
+  --ts-surface: #ffffff;
+  --ts-line: #d9d7cf;
+  --ts-ink: #0b0b0b;
+  --ts-ink2: #4a4945;
+  --ts-muted: #5c5b56;
+  --ts-accent: #185fa5;
+  --ts-pos: #136b3c;
+  --ts-neg: #b42318;
+  --ts-live: #15803d;
+  --ts-bid: #7a4a06;
+  --ts-bid-soft: #faeeda;
+  --ts-bar: #c9c6bb;
+  --ts-scarf-bg: #f1efe8;
+  --ts-scarf-shadow: #dcd9cf;
+  --ts-scarf-side: #18222d;
+  --ts-scarf-side-ink: #ffffff;
+  --ts-scarf-side-muted: #c3cbd3;
+  --ts-pin: #a33a3a;
+  --ts-group-a: #eef4fb;
+  --ts-group-b: #fbefeb;
+  background: var(--ts-bg);
+  color: var(--ts-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  .afl-trade-story {
+    --ts-bg: #141413;
+    --ts-bg2: #1f1f1d;
+    --ts-surface: #232321;
+    --ts-line: #45453f;
+    --ts-ink: #f0efec;
+    --ts-ink2: #d0cfc6;
+    --ts-muted: #b0afa7;
+    --ts-accent: #8fbdf0;
+    --ts-pos: #6fd99d;
+    --ts-neg: #ff9b8f;
+    --ts-live: #4ade80;
+    --ts-bid: #f2b85b;
+    --ts-bid-soft: #3a2c14;
+    --ts-bar: #5a5a54;
+    --ts-scarf-bg: #1f1f1d;
+    --ts-scarf-shadow: #0d0d0c;
+    --ts-scarf-side: #0d141b;
+    --ts-scarf-side-ink: #f0efec;
+    --ts-scarf-side-muted: #b8c2cc;
+    --ts-pin: #f08a8a;
+    --ts-group-a: #18212b;
+    --ts-group-b: #2a1d19;
+  }
+}
+
+.afl-trade-story :focus-visible {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 2px;
+}
+
+.afl-trade-story svg text {
+  font-family: inherit;
+}

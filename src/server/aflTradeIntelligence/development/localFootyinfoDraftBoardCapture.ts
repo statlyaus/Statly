@@ -11,7 +11,7 @@ import {
   type LocalNarrowCaptureAuthority,
 } from './localNarrowCaptureAuthority';
 
-/** The governed capability id; parser v2 reads the reviewed national draft boards under it. */
+/** The governed capability id; parser v3 reads the reviewed national draft boards under it. */
 export const FOOTYINFO_DRAFT_BOARD_CAPABILITY = 'footyinfo-national-draft-board';
 
 /**
@@ -82,17 +82,29 @@ export const FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS = [
 ] as const;
 
 /**
- * The field boundary parser v2 emits: v1's and the matched-bid leaves. A v2 capture needs its own
- * recorded decision naming exactly these; the v1 decisions and captures stay valid as recorded.
+ * The leaves parser v3 adds (issue 789, owner decision 2026-10-18): each board pick's original club
+ * and its number before the draft.
+ */
+export const FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS = [
+  'draft_board_pick.originalClub.nativeId',
+  'draft_board_pick.originalClub.recordedName',
+  'draft_board_pick.originalNumber',
+] as const;
+
+/**
+ * The field boundary parser v3 emits: v1's, the matched-bid and the pick-origin leaves. A v3 capture
+ * needs its own recorded decision naming exactly these; the v1 and v2 decisions and captures stay
+ * valid as recorded.
  */
 export const FOOTYINFO_DRAFT_BOARD_FIELDS = [
   ...FOOTYINFO_DRAFT_BOARD_V1_FIELDS,
   ...FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS,
+  ...FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS,
 ] as const;
 
 /**
  * The owner records one narrow decision per season and parser version, for example
- * `footyinfo-national-draft-board-issue853-private-2024-board-v2`. The runner never falls back to
+ * `footyinfo-national-draft-board-issue853-private-2024-board-v3`. The runner never falls back to
  * another season or parser version.
  */
 export function footyinfoDraftBoardDecisionKey(season: number): string {

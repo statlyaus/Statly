@@ -220,7 +220,8 @@ export function buildDraftPlayerStatsLookup(
 
     byId.set(player.id, projection);
     byId.set(buildCanonicalPlayerId(player.id), projection);
-    byId.set(buildCanonicalPlayerId(player.name), projection);
+    // No name-derived key here: two players with the same name would overwrite each other. Name lookups go
+    // through byNameAndTeam, then byName, which both account for club and ambiguity.
 
     const normalizedName = normalizeLookupPart(player.name);
     const normalizedTeam = normalizeLookupPart(player.team);
