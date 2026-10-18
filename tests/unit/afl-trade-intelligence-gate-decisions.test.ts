@@ -6,6 +6,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   appendAflTradeGateDecision,
+  createAflTradeGateEligibilityResolver,
   resolveAflTradeGateEligibility,
   validateAflTradeGateDecisionLedger,
   type AflTradeGateDecisionLedger,
@@ -178,6 +179,31 @@ describe('AFL trade-intelligence gate decisions', () => {
         evaluatedAt: '2026-08-03T00:00:00.000Z',
       }).blockers
     ).toEqual([expect.objectContaining({ code: 'invalid_ledger' })]);
+  });
+
+  it('revalidates a shared resolver when the ledger arrays are replaced', () => {
+    const proposed = proposal();
+    const blocked = decision(proposed, { state: 'blocked' });
+    const mutated = {
+      ...blocked,
+      content: { ...blocked.content, state: 'approved' as const },
+    };
+    const sharedLedger: {
+      -readonly [Key in keyof AflTradeGateDecisionLedger]: AflTradeGateDecisionLedger[Key];
+    } = ledger([proposed], [decision(proposed)]);
+    const resolve = createAflTradeGateEligibilityResolver(sharedLedger);
+    const request = {
+      gate: proposed.content.gate,
+      decisionKey: proposed.content.decisionKey,
+      environment: 'test_fixture' as const,
+      evaluatedAt: '2026-08-03T00:00:00.000Z',
+    };
+
+    expect(resolve(request).status).toBe('mechanically_eligible');
+    sharedLedger.decisions = [mutated];
+    expect(resolve(request).blockers).toEqual([
+      expect.objectContaining({ code: 'invalid_ledger' }),
+    ]);
   });
 
   it('requires governed artifact kinds to match their content-address prefixes', () => {
