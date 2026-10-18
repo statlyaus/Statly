@@ -99,6 +99,8 @@ export class DraftRealtimePublisher {
       );
       const pending = await draftRepository.listPendingDraftEvents(tx, draftId);
       const eventIds = pending.map((event) => event.id);
+      // An empty claim means another flush in this process holds the draft's events. Its claims are not ours to publish.
+      if (eventIds.length === 0) return [];
       await draftRepository.claimDraftEvents(tx, {
         eventIds,
         lockerId: this.lockerId,
@@ -107,6 +109,7 @@ export class DraftRealtimePublisher {
       return draftRepository.listClaimedDraftEvents(tx, {
         lockerId: this.lockerId,
         draftId,
+        eventIds,
       });
     });
   }

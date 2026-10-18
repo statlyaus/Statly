@@ -17,12 +17,22 @@ function metricsEnabled(): boolean {
   return true;
 }
 
+// JSON keeps label names and values unambiguous, whatever characters they contain.
 function labelsKey(labels?: Labels): string {
   if (!labels) return '';
-  const parts = Object.entries(labels)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([k, v]) => `${k}=${v}`);
-  return parts.join('|');
+  const entries = Object.entries(labels).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return entries.length ? JSON.stringify(entries) : '';
+}
+
+function parseLabelsKey(key: string): Labels {
+  if (!key) return {};
+  return Object.fromEntries(JSON.parse(key) as Array<[string, string]>);
+}
+
+// Metric names never contain '#', but label values may, so only the first '#' separates them.
+function splitSeriesKey(fullKey: string): { name: string; labelKey: string } {
+  const hash = fullKey.indexOf('#');
+  return { name: fullKey.slice(0, hash), labelKey: fullKey.slice(hash + 1) };
 }
 
 export function incCounter(name: string, value = 1, labels?: Labels): void {
@@ -65,20 +75,14 @@ export function renderPrometheus(
   }
   // include all internal counters too
   for (const [fullKey, value] of counters.entries()) {
-    const [name, raw] = fullKey.split('#');
-    // skip if already explicitly rendered with same labels
-    if (metrics.find((m) => m.name === name)) continue;
-    const labels = raw
+    const { name, labelKey } = splitSeriesKey(fullKey);
+    // skip only the series already rendered explicitly with the same labels
+    if (metrics.some((m) => m.name === name && labelsKey(m.labels) === labelKey)) continue;
+    const parsed = parseLabelsKey(labelKey);
+    const labels = Object.keys(parsed).length
       ? '{' +
-        raw
-          .split('|')
-          .filter(Boolean)
-          .map((p) => {
-            const idx = p.indexOf('=');
-            const k = idx >= 0 ? p.slice(0, idx) : p;
-            const v = idx >= 0 ? p.slice(idx + 1) : '';
-            return `${k}="${(v || '').replace(/"/g, '\\"')}"`;
-          })
+        Object.entries(parsed)
+          .map(([k, v]) => `${k}="${v.replace(/"/g, '\\"')}"`)
           .join(',') +
         '}'
       : '';
@@ -160,17 +164,11 @@ export function renderHistograms(): string {
   for (const [name, seriesMap] of histograms.entries()) {
     lines.push(`# TYPE ${name} histogram`);
     for (const [labelKey, s] of seriesMap.entries()) {
-      const baseLabels = labelKey
+      const parsed = parseLabelsKey(labelKey);
+      const baseLabels = Object.keys(parsed).length
         ? '{' +
-          labelKey
-            .split('|')
-            .filter(Boolean)
-            .map((p) => {
-              const idx = p.indexOf('=');
-              const k = idx >= 0 ? p.slice(0, idx) : p;
-              const v = idx >= 0 ? p.slice(idx + 1) : '';
-              return `${k}="${(v || '').replace(/"/g, '\\"')}"`;
-            })
+          Object.entries(parsed)
+            .map(([k, v]) => `${k}="${v.replace(/"/g, '\\"')}"`)
             .join(',') +
           '}'
         : '';

@@ -40,7 +40,6 @@ async function removeFixture(): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.leagueRosterPlayer.deleteMany({ where: { leagueId: FIXTURE.leagueId } });
     await tx.waiverPriority.deleteMany({ where: { leagueId: FIXTURE.leagueId } });
-    await tx.leagueRoster.deleteMany({ where: { leagueId: FIXTURE.leagueId } });
     await tx.preDraftQueue.deleteMany({ where: { draftId: FIXTURE.draftId } });
     await tx.draftEvent.deleteMany({ where: { draftId: FIXTURE.draftId } });
     await tx.pick.deleteMany({ where: { draftId: FIXTURE.draftId } });
@@ -213,7 +212,7 @@ describe('full draft persistence convergence', () => {
     expect(new Set(selectedPlayerIds)).toHaveLength(FIXTURE.totalPicks);
     expect(selectedPlayerIds.every((playerId) => playerIds.includes(playerId))).toBe(true);
 
-    const [draft, picks, rosterOwnership, rosterShells, waiverPriorities, queueCount, events] =
+    const [draft, picks, rosterOwnership, waiverPriorities, queueCount, events] =
       await Promise.all([
         prisma.draft.findUniqueOrThrow({ where: { id: FIXTURE.draftId } }),
         prisma.pick.findMany({
@@ -224,7 +223,6 @@ describe('full draft persistence convergence', () => {
           where: { leagueId: FIXTURE.leagueId },
           orderBy: [{ memberId: 'asc' }, { acquiredAt: 'asc' }],
         }),
-        prisma.leagueRoster.findMany({ where: { leagueId: FIXTURE.leagueId } }),
         prisma.waiverPriority.findMany({
           where: { leagueId: FIXTURE.leagueId },
           orderBy: { priority: 'asc' },
@@ -255,7 +253,6 @@ describe('full draft persistence convergence', () => {
     }
 
     expect(rosterOwnership).toHaveLength(FIXTURE.totalPicks);
-    expect(rosterShells).toHaveLength(FIXTURE.teamCount);
     expect(rosterOwnership.every((row) => row.acquiredBy === 'DRAFT')).toBe(true);
     expect(rosterOwnership.every((row) => row.draftId === FIXTURE.draftId)).toBe(true);
     expect(rosterOwnership.every((row) => row.pickId !== null)).toBe(true);

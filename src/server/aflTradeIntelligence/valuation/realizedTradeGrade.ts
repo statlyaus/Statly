@@ -41,9 +41,15 @@ export interface AflTradeRealizedTradeGradeInputs {
    * Rule v6 reads `pickCustody`, the Official AFL indicative orders, to project a pending pick; rule v8
    * also reads it, and `draftSelections`, for the slot a future pick eventually took; rule v17 for
    * the selection a traded-on trail ends in and for a round-position proxy's first-round order.
+   * The grader never reads `draftBoardBidMatches`; the asset ledger shares matched bids from them.
    */
   candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
-    Partial<Pick<CandidateContent, 'draftSelections' | 'draftBoardPicks' | 'pickCustody'>>;
+    Partial<
+      Pick<
+        CandidateContent,
+        'draftSelections' | 'draftBoardPicks' | 'draftBoardBidMatches' | 'pickCustody'
+      >
+    >;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */
   pavCalculations: readonly { season: number; calculationId: string; official: boolean }[];
   /** HPN PAV per player per season at one club, from the pinned calculations. */
@@ -509,6 +515,7 @@ export function gradeAflTradesOnRealizedValue(
     pickCustody,
     outcomes,
     selections,
+    boardPicks: inputs.candidate.draftBoardPicks ?? [],
     onwardTransferOf,
     specialSuccessorOf: (transfer, transaction) => onwardOfSpecial(transfer, transaction)?.transfer,
     playerView: (transfer, tradeYear) => playerAtTrade(index, transfer, tradeYear),
@@ -804,3 +811,16 @@ export function gradeAflTradesOnRealizedValue(
     limitation: AFL_TRADE_REALIZED_TRADE_GRADE_LIMITATION,
   });
 }
+
+/**
+ * The grader's own stint rules and graded-trade partition, shared with the asset ledger
+ * (`assetLedger.ts`, issue 789) so a ledger stint is always the stint a grade leg values and a pick's
+ * trail runs over the same trades. Exported, not copied, so the two cannot drift.
+ */
+export {
+  arrivalReviewed as aflTradeRealizedArrivalReviewed,
+  firstStint as aflTradeRealizedFirstStint,
+  indexInputs as indexAflTradeRealizedStintInputs,
+  partitionTrades as partitionAflTradeRealizedTrades,
+};
+export type { Index as AflTradeRealizedStintIndex, Stint as AflTradeRealizedStint };

@@ -10,6 +10,8 @@ import type { AnyNode } from 'domhandler';
 
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS,
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
   createAflTradeExternalEvidenceEnvelope,
   isDraftguruNationalYearAccessParserVersion,
@@ -642,23 +644,45 @@ export function parseDraftguruYearSelections(
  * ` - Not Matched`, the named academy club declined to match the bid, so the selecting club used an
  * ordinary pick: that is an open selection, and the named club must differ from the selecting club.
  * Any other combination is unreviewed and returns null.
+ *
+ * With `legacy` (parser v4, the 2011 to 2016 pages only), two older forms are also reviewed.
+ * `Zone(<club>)` naming the selecting club is a zone selection (Gold Coast, GWS and Brisbane, 2011 to
+ * 2013), the club-specific access that preceded the academies, so it reads as `academy`. On these
+ * pages Draftguru also marks an academy player taken by another club as `Academy(<club>)` without
+ * ` - Not Matched`; the selecting club used an ordinary pick, so a named club that differs from the
+ * selecting club reads as `open`. A zone naming another club stays unreviewed.
  */
 function accessCategoryOf(
   text: string,
   selectingClub: string,
-  qualified: boolean
+  forms: 'plain' | 'qualified' | 'legacy'
 ): 'open' | 'academy' | 'father_son' | null {
   if (text === '') return 'open';
   if (text === 'Academy' || text === 'Academy (NG)') return 'academy';
   if (/^Father-Son ?\([A-Z][A-Za-z'’.-]*(?: [A-Za-z'’.-]+)+\)$/.test(text)) return 'father_son';
-  if (!qualified) return null;
-  const match = /^Academy(?: \(NG\))?\(([A-Z][A-Za-z'’. -]*?[A-Za-z])( - Not Matched)?\)$/.exec(
+  if (forms === 'plain' || !selectingClub) return null;
+  const clubName = "[A-Z][A-Za-z'’. -]*?[A-Za-z]";
+  if (forms === 'legacy') {
+    const zone = new RegExp(`^Zone\\((${clubName})\\)$`).exec(text);
+    if (zone) return zone[1] === selectingClub ? 'academy' : null;
+  }
+  const match = new RegExp(`^Academy(?: \\(NG\\))?\\((${clubName})( - Not Matched)?\\)$`).exec(
     text
   );
-  if (!match || !selectingClub) return null;
+  if (!match) return null;
   const namedClub = match[1]!;
   if (match[2]) return namedClub !== selectingClub ? 'open' : null;
-  return namedClub === selectingClub ? 'academy' : null;
+  if (namedClub === selectingClub) return 'academy';
+  // An unannotated other club only: any ` - ` suffix other than ` - Not Matched` is unreviewed.
+  return forms === 'legacy' && !namedClub.includes(' - ') ? 'open' : null;
+}
+
+/** The access forms a national-year parser version reviews. */
+function accessFormsOf(parserVersion: string): 'plain' | 'qualified' | 'legacy' {
+  if (parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION) return 'legacy';
+  return parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+    ? 'qualified'
+    : 'plain';
 }
 
 function parseDraftguruYearSelectionRows(
@@ -729,7 +753,7 @@ function parseDraftguruYearSelectionRows(
       ? accessCategoryOf(
           normalizeText(categoryCells.eq(1).text()),
           clubName,
-          input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
+          accessFormsOf(input.capture.parserVersion)
         )
       : undefined;
     if (input.readAccessCategory && (categoryCells.length !== 2 || accessCategory === null)) {
@@ -833,6 +857,21 @@ export function parseDraftguruNationalYearSelections(
     excludedByPathway: {} as Record<string, number>,
   };
   const issues: DraftguruParseIssue[] = [];
+  const legacy =
+    input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION;
+  if (legacy && !DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(input.draftYear)) {
+    return {
+      evidence: [],
+      issues: [
+        {
+          code: 'unsupported_row',
+          sourceKey: 'year-table',
+          detail: `Parser ${DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION} is reviewed for the 2011 to 2016 pages only.`,
+        },
+      ],
+      scopeSummary: summary,
+    };
+  }
   const excludedLabels = new Set([
     'Free Agency',
     'Trade',
@@ -841,6 +880,8 @@ export function parseDraftguruNationalYearSelections(
     'Rookie',
     'Post-Draft',
     'Mid-Season',
+    // The 2011 and 2012 pages list the Gold Coast and GWS mini-draft picks; a separate pathway.
+    ...(legacy ? ['Mini-Draft'] : []),
   ]);
   if (tables.length !== 1)
     issues.push({

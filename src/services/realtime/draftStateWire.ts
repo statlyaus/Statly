@@ -1,4 +1,3 @@
-import type { LiveDraftState } from '@/services/liveDraftEngine';
 import { z } from 'zod';
 
 const IsoTimestampSchema = z.iso.datetime();
@@ -191,6 +190,58 @@ export const DraftRealtimeStatePayloadSchema = z.object({
 });
 
 export type DraftRealtimeStatePayload = z.infer<typeof DraftRealtimeStatePayloadSchema>;
+
+/** Full draft state, including each participant's private queue. Shared room state omits the queue (see CanonicalLiveDraftState). */
+export interface LiveDraftState {
+  leagueId: string;
+  draftId: string;
+  status: 'SCHEDULED' | 'LOBBY' | 'COUNTDOWN' | 'LIVE' | 'PAUSED' | 'COMPLETED';
+  currentPick: {
+    userId: string;
+    memberId: string;
+    pickNumber: number;
+    round: number;
+    slot: number;
+    expiresAt: Date;
+    startedAt: Date;
+  };
+  picks: Array<{
+    playerId: string;
+    userId: string;
+    memberId: string;
+    pickNumber: number;
+    round: number;
+    slot: number;
+    auto: boolean;
+    timestamp: Date;
+  }>;
+  participants: Array<{
+    userId: string;
+    memberId: string;
+    displayName: string;
+    draftOrder: number;
+    isOnline: boolean;
+    queue: string[];
+    autoPickEnabled: boolean;
+    lastActivity: Date;
+  }>;
+  timerSettings: {
+    durationSeconds: number;
+    autopickAfterExpiry: boolean;
+    pausedAt?: Date;
+    pausedTimeRemaining?: number;
+  };
+  draftSettings: {
+    totalRounds: number;
+    totalTeams: number;
+    draftType: 'SNAKE' | 'LINEAR';
+    pickTimeLimit: number;
+  };
+  paused: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastActivity: Date;
+}
 
 type PublicDraftParticipant = Omit<LiveDraftState['participants'][number], 'queue'>;
 

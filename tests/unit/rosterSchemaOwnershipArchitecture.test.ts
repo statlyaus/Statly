@@ -44,7 +44,6 @@ describe('roster schema ownership architecture', () => {
     expect(route).toContain('loadLobbySchemaDiagnostic()');
     expect(route).not.toContain("from '@/lib/prisma'");
     expect(diagnostic).toContain('Promise.allSettled');
-    expect(diagnostic).toContain('prisma.leagueRoster.count()');
     expect(diagnostic).toContain('prisma.teamAction.count()');
     expect(diagnostic).toContain('prisma.leagueRosterPlayer.count()');
     expect(diagnostic).not.toContain('$executeRaw');

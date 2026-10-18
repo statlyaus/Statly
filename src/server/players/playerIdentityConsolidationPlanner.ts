@@ -39,7 +39,6 @@ export type PlayerIdentityConsolidationPlan = {
     preDraftQueues: number;
     queueItems: number;
     rosterPlayers: number;
-    legacyRosters: number;
     lineupPlayers: number;
     autosubs: number;
     tradePlayers: number;
@@ -57,7 +56,6 @@ type PlannerClient = Pick<
   | 'preDraftQueue'
   | 'queueItem'
   | 'leagueRosterPlayer'
-  | 'leagueRoster'
   | 'leagueLineupPlayer'
   | 'leagueLineupAutosub'
   | 'leagueTradePlayer'
@@ -157,7 +155,6 @@ export async function planPlayerIdentityConsolidation(
         preDraftQueues: 0,
         queueItems: 0,
         rosterPlayers: 0,
-        legacyRosters: 0,
         lineupPlayers: 0,
         autosubs: 0,
         tradePlayers: 0,
@@ -234,7 +231,6 @@ export async function planPlayerIdentityConsolidation(
     preDraftQueues,
     queueItems,
     rosterPlayers,
-    legacyRosters,
     lineupPlayers,
     autosubs,
     tradePlayers,
@@ -251,19 +247,6 @@ export async function planPlayerIdentityConsolidation(
     client.preDraftQueue.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     client.queueItem.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     client.leagueRosterPlayer.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
-    collectBatchedRows((cursor) =>
-      client.leagueRoster.findMany({
-        where: {
-          OR: [
-            ...referencedPlayerIds.map((playerId) => ({ playerIds: { contains: playerId } })),
-            ...referencedPlayerIds.map((playerId) => ({ benchOrder: { contains: playerId } })),
-          ],
-        },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
-    ),
     client.leagueLineupPlayer.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     client.leagueLineupAutosub.findMany({
       where: {
@@ -381,37 +364,6 @@ export async function planPlayerIdentityConsolidation(
     playerId: row.playerId,
     sourceId: row.id,
   }));
-  for (const roster of legacyRosters) {
-    let playerIds: string[];
-    try {
-      const parsed = JSON.parse(roster.playerIds) as unknown;
-      if (!Array.isArray(parsed) || parsed.some((playerId) => typeof playerId !== 'string')) {
-        throw new Error('not a string array');
-      }
-      playerIds = parsed;
-    } catch {
-      if (containsAnyAlias(roster.playerIds, aliasIds)) {
-        blockers.push({
-          code: 'INVALID_LEGACY_ROSTER',
-          canonicalPlayerId: '',
-          scopeId: roster.id,
-          aliasIds: [...aliasIds].filter((aliasId) => roster.playerIds.includes(aliasId)),
-          message: `Legacy roster ${roster.id} contains player aliases in invalid JSON.`,
-        });
-      }
-      continue;
-    }
-
-    for (const playerId of playerIds) {
-      if (!referencedPlayerIds.includes(playerId)) continue;
-      ownershipEvidence.push({
-        leagueId: roster.leagueId,
-        memberId: roster.memberId,
-        playerId,
-        sourceId: roster.id,
-      });
-    }
-  }
 
   for (const [key, rows] of groupBy(
     ownershipEvidence,
@@ -526,9 +478,6 @@ export async function planPlayerIdentityConsolidation(
       preDraftQueues: preDraftQueues.filter((row) => aliasIds.has(row.playerId)).length,
       queueItems: queueItems.filter((row) => aliasIds.has(row.playerId)).length,
       rosterPlayers: rosterPlayers.filter((row) => aliasIds.has(row.playerId)).length,
-      legacyRosters: legacyRosters.filter((row) =>
-        [row.playerIds, row.benchOrder].some((value) => containsAnyAlias(value, aliasIds))
-      ).length,
       lineupPlayers: lineupPlayers.filter((row) => aliasIds.has(row.playerId)).length,
       autosubs: autosubs.filter(
         (row) => aliasIds.has(row.outgoingPlayerId) || aliasIds.has(row.replacementPlayerId)

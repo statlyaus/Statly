@@ -4,7 +4,7 @@ import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvai
 
 type PrismaLike = Pick<
   typeof prisma,
-  '$transaction' | 'pick' | 'leagueRoster' | 'leagueRosterPlayer' | 'waiverPriority'
+  '$transaction' | 'pick' | 'leagueRosterPlayer' | 'waiverPriority'
 >;
 type WaiverAvailabilityProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
@@ -39,27 +39,7 @@ export class RosterProjectionService {
       select: { id: true, draftId: true, playerId: true, memberId: true, overall: true },
     });
 
-    const rosterShells = new Set<string>();
-
     for (const pick of picks) {
-      if (!rosterShells.has(pick.memberId)) {
-        await this.db.leagueRoster.upsert({
-          where: {
-            leagueId_memberId: {
-              leagueId: input.leagueId,
-              memberId: pick.memberId,
-            },
-          },
-          update: {},
-          create: {
-            leagueId: input.leagueId,
-            memberId: pick.memberId,
-            playerIds: '[]',
-          },
-        });
-        rosterShells.add(pick.memberId);
-      }
-
       await this.db.leagueRosterPlayer.upsert({
         where: {
           leagueId_playerId: {
@@ -172,28 +152,38 @@ export class RosterProjectionService {
         );
       }
 
-      return tx.leagueRoster.upsert({
-        where: {
-          leagueId_memberId: { leagueId: input.leagueId, memberId: input.memberId },
-        },
-        create: {
-          leagueId: input.leagueId,
-          memberId: input.memberId,
-          playerIds: JSON.stringify(playerIds),
-          benchOrder: input.benchOrder ? JSON.stringify(input.benchOrder) : null,
-        },
-        update: {
-          playerIds: JSON.stringify(playerIds),
-          benchOrder: input.benchOrder ? JSON.stringify(input.benchOrder) : null,
-        },
-        select: {
-          id: true,
-          leagueId: true,
-          memberId: true,
-          benchOrder: true,
-          updatedAt: true,
-        },
+      // Clear all bench positions for this member, then set positions for those in benchOrder
+      await tx.leagueRosterPlayer.updateMany({
+        where: { leagueId: input.leagueId, memberId: input.memberId },
+        data: { benchPosition: null },
       });
+
+      for (const [index, playerId] of benchOrder.entries()) {
+        await tx.leagueRosterPlayer.update({
+          where: {
+            leagueId_memberId_playerId: {
+              leagueId: input.leagueId,
+              memberId: input.memberId,
+              playerId,
+            },
+          },
+          data: { benchPosition: index },
+        });
+      }
+
+      // Return a shape compatible with existing callers
+      const updatedPlayer = await tx.leagueRosterPlayer.findFirst({
+        where: { leagueId: input.leagueId, memberId: input.memberId },
+        select: { id: true, leagueId: true, memberId: true, updatedAt: true },
+      });
+
+      return {
+        id: updatedPlayer?.id ?? `${input.leagueId}:${input.memberId}`,
+        leagueId: input.leagueId,
+        memberId: input.memberId,
+        benchOrder: benchOrder.length > 0 ? JSON.stringify(benchOrder) : null,
+        updatedAt: updatedPlayer?.updatedAt ?? new Date(),
+      };
     });
   }
 }

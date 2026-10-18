@@ -1,0 +1,163 @@
+import { guernseyFor } from '@/lib/clubGuernseys';
+import { getTeamAbbreviation } from '@/lib/teamLogos';
+import type { AflTradePageBidMatch } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
+import type {
+  AflTradeStory,
+  AflTradeStoryAsset,
+  AflTradeStoryNet,
+  AflTradeStoryPendingReason,
+  AflTradeStoryValue,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
+
+export type {
+  AflTradePageBidMatch,
+  AflTradePageModel,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
+
+/** One spent pick of a matched bid, joined to the story asset it is. */
+export interface AflTradePageBidShare {
+  readonly bid: AflTradePageBidMatch;
+  readonly spentIndex: number;
+}
+
+/** The private reader's trade page path. Never a public path. */
+export const tradeStoryHref = (tradeId: string) =>
+  `/dev/afl-trade-stories/${encodeURIComponent(tradeId)}`;
+
+/** The lineage hash for one trade, so a trade opens from a link. */
+export const tradeHash = (tradeId: string) => `#trade=${encodeURIComponent(tradeId)}`;
+
+export function tradeIdFromHash(hash: string): string | null {
+  const match = /^#trade=(.+)$/u.exec(hash);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]!);
+  } catch {
+    return null;
+  }
+}
+
+const MINUS = '−';
+
+/** A PAV value, one decimal by default. */
+export function formatPav(value: number, digits = 1): string {
+  const fixed = Math.abs(value).toFixed(digits);
+  return value < 0 && Number(fixed) !== 0 ? `${MINUS}${fixed}` : fixed;
+}
+
+/** A signed PAV value: +50.9, −50.9, 0.0. */
+export function formatSigned(value: number, digits = 1): string {
+  const fixed = Math.abs(value).toFixed(digits);
+  if (Number(fixed) === 0) return fixed;
+  return `${value < 0 ? MINUS : '+'}${fixed}`;
+}
+
+export const formatPoints = (points: number) =>
+  points.toLocaleString('en-AU', { maximumFractionDigits: 1 });
+
+export const formatPercent = (share: number) => `${(share * 100).toFixed(1)}%`;
+
+export const knownPav = (value: AflTradeStoryValue) => (value.kind === 'known' ? value.pav : null);
+
+export const PENDING_TEXT: Record<AflTradeStoryPendingReason, string> = {
+  matched_bid: 'used to match a bid',
+  draft_not_in_evidence: 'draft result not in yet',
+  unavailable: 'value not available yet',
+};
+
+export interface ClubStyle {
+  readonly abbreviation: string;
+  /** The guernsey's main colour, and a text colour that reads on it. */
+  readonly fill: string;
+  readonly ink: string;
+  readonly trim: string;
+}
+
+function luminance(hex: string): number {
+  const channels = [1, 3, 5].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+}
+
+const contrast = (left: number, right: number) =>
+  (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
+
+/** Black or white, whichever has the higher contrast on the fill (never below 4.5:1 on a hex). */
+export function inkOn(fill: string): string {
+  const fillLuminance = luminance(fill);
+  return contrast(fillLuminance, 0) >= contrast(fillLuminance, 1) ? '#000000' : '#ffffff';
+}
+
+/**
+ * A club's colours. A near-white guernsey (Geelong, North Melbourne, Sydney) shows its trim
+ * instead, so the club still reads as a colour on a light page.
+ */
+export function clubStyle(clubName: string): ClubStyle {
+  const guernsey = guernseyFor(clubName);
+  const [fill, trim] =
+    luminance(guernsey.base) > 0.7
+      ? [guernsey.trim, guernsey.base]
+      : [guernsey.base, guernsey.trim];
+  return { abbreviation: getTeamAbbreviation(clubName), fill, ink: inkOn(fill), trim };
+}
+
+/** Each matched-bid share, by the story pick id it was spent as. */
+export function bidSharesByPickId(
+  bidMatches: readonly AflTradePageBidMatch[]
+): ReadonlyMap<string, AflTradePageBidShare> {
+  const shares = new Map<string, AflTradePageBidShare>();
+  for (const bid of bidMatches)
+    bid.match.spentPicks.forEach((spent, spentIndex) => {
+      if (spent.pickId !== null) shares.set(spent.pickId, { bid, spentIndex });
+    });
+  return shares;
+}
+
+/** The share a pick spent matching a bid took, if the ledger joined it. */
+export function bidShareOf(
+  asset: Pick<AflTradeStoryAsset, 'assetId' | 'value'>,
+  shares: ReadonlyMap<string, AflTradePageBidShare>
+): AflTradePageBidShare | null {
+  if (asset.value.kind !== 'pending' || asset.value.pending !== 'matched_bid') return null;
+  return shares.get(asset.assetId) ?? null;
+}
+
+/** The PAV a matched-bid pick's share is worth, from the ledger; null while the bid is unpriced. */
+export const bidShareValue = (share: AflTradePageBidShare | null) =>
+  share?.bid.match.spentPicks[share.spentIndex]?.value ?? null;
+
+/** "Geelong ⇄ GWS". */
+export const tradeName = (clubs: readonly { clubName: string }[]) =>
+  clubs.map(({ clubName }) => clubName).join(' ⇄ ');
+
+/** A net's value, starred when pending assets are left out. */
+export const netText = (net: Pick<AflTradeStoryNet, 'net' | 'pendingCount'>) =>
+  `${formatSigned(net.net)}${net.pendingCount > 0 ? '*' : ''}`;
+
+/** Every club the story names, by id. */
+export function storyClubNames(story: AflTradeStory): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  for (const club of [
+    ...story.trade.clubs,
+    ...story.lineage.trades.flatMap(({ clubs }) => clubs),
+    ...story.players,
+  ])
+    names.set(club.clubId, club.clubName);
+  return names;
+}
+
+/** "GEE ⇄ WBD". */
+export const tradeShortName = (clubs: readonly { clubName: string }[]) =>
+  clubs.map(({ clubName }) => clubStyle(clubName).abbreviation).join(' ⇄ ');
+
+/** What an asset became, in a few words. */
+export function becameText(asset: AflTradeStoryAsset, clubNames: ReadonlyMap<string, string>) {
+  const { outcome } = asset;
+  if (outcome.kind === 'not_used') return 'not used';
+  if (outcome.kind === 'pending') return PENDING_TEXT[outcome.pending];
+  if (asset.assetKind === 'player') return `first stint at ${outcome.clubName}`;
+  const elsewhere = outcome.clubId !== asset.toClubId;
+  return `became ${outcome.playerName}${elsewhere ? ` (at ${clubNames.get(outcome.clubId) ?? outcome.clubName})` : ''}`;
+}

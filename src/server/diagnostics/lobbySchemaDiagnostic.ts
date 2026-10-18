@@ -33,25 +33,22 @@ function lobbyProbe(result: PromiseSettledResult<LobbyDraft>): LobbyProbe {
 
 /** Read schema readiness without creating or altering database objects. */
 export async function loadLobbySchemaDiagnostic() {
-  const [draftResult, rosterResult, actionResult, rosterPlayerResult, lobbyResult] =
-    await Promise.allSettled([
-      prisma.draft.count(),
-      prisma.leagueRoster.count(),
-      prisma.teamAction.count(),
-      prisma.leagueRosterPlayer.count(),
-      prisma.draft.findFirst({
-        select: {
-          id: true,
-          status: true,
-          lobbyStatus: true,
-          lobbyOpenAt: true,
-        },
-      }),
-    ]);
+  const [draftResult, actionResult, rosterPlayerResult, lobbyResult] = await Promise.allSettled([
+    prisma.draft.count(),
+    prisma.teamAction.count(),
+    prisma.leagueRosterPlayer.count(),
+    prisma.draft.findFirst({
+      select: {
+        id: true,
+        status: true,
+        lobbyStatus: true,
+        lobbyOpenAt: true,
+      },
+    }),
+  ]);
 
   const tableChecks = {
     draft: countProbe(draftResult),
-    leagueRoster: countProbe(rosterResult),
     teamAction: countProbe(actionResult),
     leagueRosterPlayer: countProbe(rosterPlayerResult),
   };
@@ -60,7 +57,7 @@ export async function loadLobbySchemaDiagnostic() {
   return {
     columnsReady: lobbyTest.success,
     tablesReady:
-      tableChecks.leagueRoster.ready &&
+      tableChecks.draft.ready &&
       tableChecks.teamAction.ready &&
       tableChecks.leagueRosterPlayer.ready,
     draftCount: tableChecks.draft.count,
