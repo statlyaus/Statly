@@ -4624,7 +4624,9 @@ The remaining work proceeds through these independently verifiable gates:
      pick reports the HPN projection of the slot it eventually took (`pick_projection_eventual_slot`).
      From rule v17 a pick with no slot in its draft's final order reports a round-position proxy
      (`pick_projection_round_position_proxy`) and a pick numbered beyond 90 a capped projection
-     (`pick_projection_domain_capped`); see rule v17 below. None ever enters a total.
+     (`pick_projection_domain_capped`); see rule v17 below. From rule v19 an unused one first takes
+     the pre-draft number a reviewed Footyinfo board states (`slotSource: 'board_pre_draft_slot'`); see
+     rule v19 below. None ever enters a total.
    - **States.** A trade is `blocked` if any leg carries a blocking reason (a pending pick outcome the
      live order cannot place, an unresolved or
      no-access-evidence pick outcome, unresolved identity, a special entitlement with no reviewed
@@ -5107,6 +5109,30 @@ The remaining work proceeds through these independently verifiable gates:
      provisionally, mixing whole-career expected PAV with first-stint PAV, and that the pick stays
      unallocated when an excluded return leg has no projection.
 
+   - **A board's stated pre-draft slot before the proxy (rule v19, issue 789, owner decision
+     2026-10-18).** A future pick whose trail ended unused and which held no slot in its draft's final
+     order took the rule v17 round-position proxy, an estimate. From v19 it first takes the number a
+     reviewed Footyinfo board states it held before the draft: the one passed or removed board pick
+     of its entitlement (national draft, round and original club, as parser v3 states them), with a
+     pre-draft number in HPN's 1 to 90 (`aflTradeBoardPreDraftSlotOf`). The view is
+     `pick_projection_eventual_slot` with `slotSource: 'board_pre_draft_slot'` and the cited
+     `boardPickId`; it is a stated slot, so the leg carries no proxy reason. Nothing is matched by
+     holder: the board may name a later holder than the graded trail reaches (in batch twenty-nine,
+     4 of the 7 legs it changes end at Richmond while the board's holder is Gold Coast). No board
+     pick, several, a selected one, no number, or a number beyond 90 falls through to the proxy, and
+     like the proxy it never applies to a pick whose final order shows a slot, a disputed slot or
+     captures too close to tell apart (`heldOrderSlot`). The view itself enters no total, but like
+     any at-trade projection it is a rule v15 bundle weight and a rule v16 or v18 excluded-return
+     value, so a bundle or onward return holding such a leg (in practice an excluded
+     `pick_not_used_nominee_excluded` leg) moves by the difference between the stated slot's DPVC and
+     the proxy's, with no proxy reason. The contract refuses the source under rules v1 to v18,
+     requires `boardPickId` exactly with it, refuses it on a selected or projected leg, and the v19
+     limitation adds that such a pick reports the number a reviewed Footyinfo board states it held
+     before the draft, before any round-position proxy. Measured on batch twenty-nine: 7 of its 16
+     proxy views (three entitlements) gain a stated slot; the other 9 stay proxied, their board picks
+     stating no number, and the one view left unavailable (a 2023 R3 with no original club, whose
+     board pick was spent on a bid) is unchanged.
+
    - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
      custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
      (rule v7), v3 season
@@ -5189,8 +5215,9 @@ The remaining work proceeds through these independently verifiable gates:
      that number.
    - **Footyinfo national draft boards (issues 853 and 789).** The owner approved Footyinfo as a
      provider on 2026-10-12, as a source rights record shows. The capability is
-     `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v2` (v1 until
-     2026-10-17; v1 captures replay exactly) reads `source/footyinfoDraftBoardAdapter.ts`. It covers one page per draft year, 2019 to 2025,
+     `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v3` (v1 until
+     2026-10-17, v2 until 2026-10-18; v1 and v2 captures replay exactly) reads
+     `source/footyinfoDraftBoardAdapter.ts`. It covers one page per draft year, 2019 to 2025,
      captured only by the local runner on the grading VM; the deployed runtime refuses the provider.
      - **Where the picks come from.** The board's rendered table lists only selections. Every pick,
        including passed and removed ones, is in the board data the page embeds as serialized router
@@ -5253,6 +5280,21 @@ The remaining work proceeds through these independently verifiable gates:
          ledger computes the shares from them ("Matched-bid shares" under the asset ledger).
          The owner recorded the `-board-v2` decisions on 2026-10-17 (ledger revision 103), and the
          seven boards were captured under them the same day.
+     - **Pick origins (parser v3, issue 789, owner decision 2026-10-18).** On a page it accepts, v3
+       emits v2's rows and order, and each `draft_board_pick` also states `originalClub` (the board's
+       `original.team`) and `originalNumber` (`original_number`, null when the board states none). A
+       pick with no original club, or whose route does not start with it, refuses the page; the
+       claim schema repeats the route rule and requires both fields or neither, so v1 and v2 claims
+       are unchanged. On the seven stored boards the original club is the route's first club on all
+       432 routed picks and the holder on 465 of 470 unrouted ones; the other 5 are late-pick trades
+       the board prints no route for. A pre-draft number is stated on 377 of 443 selected, 163 of 191
+       passed and 13 of 261 removed picks. Reconciliation resolves the original club through the same
+       `footyinfo` club lookup as the holder. On all seven boards every original club is also a holder
+       or route club of its own board (checked 2026-10-18), so the identity-review package already
+       observes it and no identity-package or database change is needed; a board where it was not
+       would fail closed with a blocking `board-pick:club:` issue. Reconciliation carries
+       `originalClubId` and `originalNumber` on the `draftBoardPicks` record, present only from a v3
+       row, so earlier candidate ids are unchanged. Grade rule v19 reads them (below).
      - **What reconciliation reads (`source/externalEvidenceReconciliation.ts`).** Every board row
        is one `draftBoardPicks` record of the candidate, so the candidate conserves it whether or
        not it is read. Each record has its holder and route resolved club by club through `footyinfo`
