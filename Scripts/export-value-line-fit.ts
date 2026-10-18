@@ -89,10 +89,8 @@ const VALUED = [
   '--out',
 ];
 
-export function parseExportValueLineFitArguments(
-  argv: readonly string[],
-  env: Readonly<Record<string, string | undefined>>
-): ExportValueLineFitArguments {
+/** Reads `--name value` pairs and the `--dry-run` flag, each at most once. */
+function readArguments(argv: readonly string[]) {
   const values = new Map<string, string>();
   let dryRun = false;
   for (let index = 0; index < argv.length; index++) {
@@ -114,6 +112,36 @@ export function parseExportValueLineFitArguments(
     if (value === undefined) throw new TypeError(`${name} is required.`);
     return value;
   };
+  return { values, dryRun, required };
+}
+
+/** Refuses fit and back-test windows the fit cannot use. */
+function requireUsableWindows(
+  seasons: readonly number[],
+  draftYears: readonly number[],
+  heldOut: readonly number[]
+): void {
+  const last = seasons[seasons.length - 1]!;
+  const lastHeldOut = heldOut[heldOut.length - 1]!;
+  if (draftYears[0]! + 1 < seasons[0]! || draftYears[draftYears.length - 1]! >= last)
+    throw new TypeError('--seasons must cover every season after each draft in --draft-years.');
+  if (heldOut.some((year) => !draftYears.includes(year)))
+    throw new TypeError('--held-out-draft-years must be drafts in --draft-years.');
+  if (draftYears.filter((year) => year < heldOut[0]!).length < 2)
+    throw new TypeError('At least two draft classes must precede the held-out classes.');
+  if (lastHeldOut - heldOut[0]! !== heldOut.length - 1)
+    throw new TypeError('--held-out-draft-years must be consecutive.');
+  if (last - lastHeldOut < MINIMUM_HELD_OUT_SEASONS)
+    throw new TypeError(
+      `Each held-out class needs at least ${MINIMUM_HELD_OUT_SEASONS} seasons in --seasons.`
+    );
+}
+
+export function parseExportValueLineFitArguments(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>
+): ExportValueLineFitArguments {
+  const { values, dryRun, required } = readArguments(argv);
   const out = required('--out');
   if (!isAbsolute(out)) throw new TypeError('--out must be an absolute path.');
   const storeId = values.get('--store-id') ?? null;
@@ -124,22 +152,7 @@ export function parseExportValueLineFitArguments(
     '--held-out-draft-years',
     required('--held-out-draft-years')
   );
-  const last = seasons[seasons.length - 1]!;
-  if (draftYears[0]! + 1 < seasons[0]! || draftYears[draftYears.length - 1]! >= last)
-    throw new TypeError('--seasons must cover every season after each draft in --draft-years.');
-  if (heldOutDraftYears.some((year) => !draftYears.includes(year)))
-    throw new TypeError('--held-out-draft-years must be drafts in --draft-years.');
-  if (draftYears.filter((year) => year < heldOutDraftYears[0]!).length < 2)
-    throw new TypeError('At least two draft classes must precede the held-out classes.');
-  if (
-    heldOutDraftYears[heldOutDraftYears.length - 1]! - heldOutDraftYears[0]! !==
-    heldOutDraftYears.length - 1
-  )
-    throw new TypeError('--held-out-draft-years must be consecutive.');
-  if (last - heldOutDraftYears[heldOutDraftYears.length - 1]! < MINIMUM_HELD_OUT_SEASONS)
-    throw new TypeError(
-      `Each held-out class needs at least ${MINIMUM_HELD_OUT_SEASONS} seasons in --seasons.`
-    );
+  requireUsableWindows(seasons, draftYears, heldOutDraftYears);
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),
     methodId: required('--method'),
