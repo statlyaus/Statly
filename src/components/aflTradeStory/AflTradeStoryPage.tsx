@@ -108,12 +108,9 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
             traded for him, to {throughSeason}.
           </p>
           {pendingCount > 0 ? (
-            <p>
-              * Leaves out picks whose value is pending, such as picks used to match a bid. Totals
-              will move.
-            </p>
+            <p>* Totals leave out bid-match shares and values not in yet, so they will move.</p>
           ) : null}
-          <p>Players still at their club keep adding value. Club colours only, no club marks.</p>
+          <p>Players still at their club: values will move. Club colours only, no club marks.</p>
         </footer>
       </main>
     </div>

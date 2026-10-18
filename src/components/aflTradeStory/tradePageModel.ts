@@ -124,6 +124,10 @@ export function bidShareOf(
   return shares.get(asset.assetId) ?? null;
 }
 
+/** The PAV a matched-bid pick's share is worth, from the ledger; null while the bid is unpriced. */
+export const bidShareValue = (share: AflTradePageBidShare | null) =>
+  share?.bid.match.spentPicks[share.spentIndex]?.value ?? null;
+
 /** "Geelong ⇄ GWS". */
 export const tradeName = (clubs: readonly { clubName: string }[]) =>
   clubs.map(({ clubName }) => clubName).join(' ⇄ ');

@@ -66,7 +66,9 @@ describe('private trade story reader', () => {
   it('serves the verified local development user with the reader switched on', async () => {
     const { reads: admitted } = reads(ENABLED, DEVELOPMENT_AUTH_USER_ID);
     expect((await admitted.loadStory(TRADE.cameron))?.story.trade.id).toBe(TRADE.cameron);
-    expect((await admitted.listStories())?.map(({ tradeId }) => tradeId)).toContain(TRADE.geeWbd);
+    expect((await admitted.listStories())?.stories.map(({ tradeId }) => tradeId)).toContain(
+      TRADE.geeWbd
+    );
     expect(await admitted.loadStory('trade:not-in-the-sample')).toBeNull();
   });
 

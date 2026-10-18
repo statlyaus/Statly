@@ -98,26 +98,38 @@ function darcyBidMatch(): AflTradePageBidMatch {
 
 const BID_MATCHES: readonly AflTradePageBidMatch[] = [darcyBidMatch()];
 
+const SOURCE: AflTradePageModel['source'] = {
+  kind: 'sample',
+  label: 'Sample data from the approved mockups',
+};
+
 export interface AflTradeStorySampleSummary {
   readonly tradeId: string;
   readonly year: number;
   readonly clubNames: readonly string[];
 }
 
+export interface AflTradeStorySampleList {
+  readonly source: AflTradePageModel['source'];
+  readonly stories: readonly AflTradeStorySampleSummary[];
+}
+
 export interface AflTradeStorySampleSource {
-  list(): readonly AflTradeStorySampleSummary[];
+  list(): AflTradeStorySampleList;
   load(tradeId: string): AflTradePageModel | null;
 }
 
 const clubName = (clubId: string) => cameronChainNames.clubs.get(clubId) ?? clubId;
 
 export const aflTradeStorySamples: AflTradeStorySampleSource = {
-  list: () =>
-    cameronChainBatch.content.trades.map((trade) => ({
+  list: () => ({
+    source: SOURCE,
+    stories: cameronChainBatch.content.trades.map((trade) => ({
       tradeId: trade.transactionId,
       year: trade.tradeYear,
       clubNames: trade.clubs.map(({ clubId }) => clubName(clubId)),
     })),
+  }),
   load(tradeId) {
     if (!cameronChainBatch.content.trades.some((trade) => trade.transactionId === tradeId))
       return null;
@@ -127,7 +139,7 @@ export const aflTradeStorySamples: AflTradeStorySampleSource = {
     );
     return {
       story,
-      source: { kind: 'sample', label: 'Sample data from the approved mockups' },
+      source: SOURCE,
       throughSeason: THROUGH_SEASON,
       bidMatches: BID_MATCHES.filter(({ match }) =>
         match.spentPicks.some(({ pickId }) => pickId !== null && pickIds.has(pickId))

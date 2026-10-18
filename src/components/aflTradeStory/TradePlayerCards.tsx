@@ -7,6 +7,7 @@ import { bidShareAnchor } from './BidMatchShareCard';
 import { ClubBadge } from './ClubBadge';
 import {
   bidShareOf,
+  bidShareValue,
   formatPav,
   knownPav,
   PENDING_TEXT,
@@ -31,7 +32,7 @@ export function acquiredText(
     const year = tradeYears.get(player.acquired.tradeId);
     return `From ${from} in the ${year ?? ''} trade.`.replace('  ', ' ');
   }
-  const taken = `Taken at ${outcome.selection.selectionNumber} in ${outcome.selection.draftYear}`;
+  const taken = `Taken with pick ${outcome.selection.selectionNumber} in ${outcome.selection.draftYear}`;
   return player.group === 'got_away'
     ? `${taken} by ${outcome.clubName}, with ${pick}.`
     : `${taken}, with ${pick} from ${from}.`;
@@ -57,6 +58,7 @@ function PlayerCard({
       : (player.acquired.pickLabel ?? 'Pick');
   const away = player.group === 'got_away';
   const share = bidShareOf(player, shares);
+  const shareValue = bidShareValue(share);
   return (
     <li
       className={`rounded-xl border border-(--ts-line) p-4 ${away ? 'bg-(--ts-bg2)' : 'bg-(--ts-surface)'}`}
@@ -68,26 +70,25 @@ function PlayerCard({
       <p className="mt-1.5 text-sm text-(--ts-ink2)">
         {acquiredText(player, clubNames, tradeYears)}
       </p>
-      <p className="mt-2 flex items-baseline gap-1.5">
+      <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5">
         <span className="text-2xl font-semibold tabular-nums">
-          {value === null ? '—' : formatPav(value)}
+          {value !== null ? formatPav(value) : shareValue !== null ? formatPav(shareValue, 2) : '—'}
         </span>
         <span className="text-xs text-(--ts-muted)">
-          {value === null ? 'value pending' : 'PAV to date'}
+          {value !== null ? (
+            'PAV to date'
+          ) : share && shareValue !== null ? (
+            <a
+              href={`#${bidShareAnchor(player.assetId)}`}
+              className="text-(--ts-accent) underline underline-offset-2"
+            >
+              share of {share.bid.nomineeName}, not in the totals yet
+            </a>
+          ) : (
+            'value not in yet'
+          )}
         </span>
       </p>
-      {share && share.bid.match.spentPicks[share.spentIndex]?.value != null ? (
-        <p className="mt-1 text-sm">
-          <a
-            href={`#${bidShareAnchor(player.assetId)}`}
-            className="text-(--ts-accent) underline underline-offset-2"
-          >
-            Share of {share.bid.nomineeName}:{' '}
-            {formatPav(share.bid.match.spentPicks[share.spentIndex]!.value!, 2)}
-          </a>{' '}
-          <span className="text-(--ts-ink2)">(not in the totals yet)</span>
-        </p>
-      ) : null}
       {player.outcome.kind === 'player' ? (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-(--ts-ink2)">
           <span
@@ -111,7 +112,7 @@ function PlayerCard({
   );
 }
 
-/** What each club ended up with along its chain, then the ones that got away. */
+/** What each club ended up with along its chain, then the players now at other clubs. */
 export function TradePlayerCards({
   story,
   clubNames,
@@ -135,7 +136,7 @@ export function TradePlayerCards({
     {
       key: 'got-away',
       club: null,
-      title: 'The ones that got away',
+      title: 'Now at other clubs',
       players: story.players.filter(({ group }) => group === 'got_away'),
     },
   ].filter(({ players }) => players.length > 0);

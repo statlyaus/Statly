@@ -105,6 +105,7 @@ export function TradeLineage({
         trade={trade}
         isThisTrade={trade.tradeId === story.trade.id}
         clubNames={clubNames}
+        shares={shares}
         headingRef={headingRef}
         onClose={() => show(null)}
       />

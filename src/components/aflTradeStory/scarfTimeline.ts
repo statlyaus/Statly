@@ -8,7 +8,7 @@ import type {
 import { formatPav, knownPav, tradeShortName } from './tradePageModel';
 
 /**
- * The scarf timeline's content, from the story alone: who the trade came down to, each trade and
+ * The scarf timeline's content, from the story alone: the biggest values, each trade and
  * draft along the way, and any sourced events. Pure, so the page renders it on the server.
  */
 
@@ -42,7 +42,7 @@ const ORDER: Record<ScarfStepKind, number> = {
 
 const surname = (name: string) => name.split(' ').at(-1) ?? name;
 
-/** The highest-value players the trade came down to, in the order they arrived. */
+/** The highest-value players along the chain, in the order they arrived. */
 export function scarfPlayers(story: AflTradeStory, limit = 3): ScarfPlayer[] {
   const tradeYears = new Map(story.lineage.trades.map(({ tradeId, year }) => [tradeId, year]));
   const arrival = (player: AflTradeStoryPlayer) =>
@@ -154,7 +154,7 @@ function draftSteps(story: AflTradeStory): ScarfStep[] {
             right.value - left.value ||
             left.selection - right.selection
         )
-        .map(({ name, selection }) => `${name} at ${selection}`),
+        .map(({ name, selection }) => `${name} (pick ${selection})`),
       3
     )}.`,
   }));
@@ -205,6 +205,6 @@ export function clampLines(lines: readonly string[], count: number): string[] {
 }
 
 export const scarfPanelLabel = (player: ScarfPlayer) =>
-  `${formatPav(player.value)} · ${player.gotAway ? `${player.clubName}, got away` : player.clubName}`;
+  `${formatPav(player.value)} · ${player.clubName}`;
 
 export const scarfPanelTitle = (player: ScarfPlayer) => surname(player.name).toUpperCase();

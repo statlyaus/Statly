@@ -4,7 +4,15 @@ import { useEffect, useRef, type RefObject } from 'react';
 import type { AflTradeStoryLineageTrade } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 import { ClubBadge } from './ClubBadge';
-import { becameText, formatPav, netText, tradeName, tradeStoryHref } from './tradePageModel';
+import { AssetValue } from './AssetValue';
+import {
+  becameText,
+  bidShareOf,
+  netText,
+  tradeName,
+  tradeStoryHref,
+  type AflTradePageBidShare,
+} from './tradePageModel';
 
 export const panelId = (tradeId: string) =>
   `trade-panel-${tradeId.replace(/[^a-zA-Z0-9_-]/gu, '-')}`;
@@ -17,12 +25,14 @@ export function LineageTradePanel({
   trade,
   isThisTrade,
   clubNames,
+  shares,
   headingRef,
   onClose,
 }: {
   trade: AflTradeStoryLineageTrade;
   isThisTrade: boolean;
   clubNames: ReadonlyMap<string, string>;
+  shares: ReadonlyMap<string, AflTradePageBidShare>;
   headingRef: RefObject<HTMLHeadingElement | null>;
   onClose: () => void;
 }) {
@@ -107,7 +117,7 @@ export function LineageTradePanel({
                       <span className="text-(--ts-ink2)">· {becameText(asset, clubNames)}</span>
                     </span>
                     <span className="font-semibold whitespace-nowrap tabular-nums">
-                      {asset.value.kind === 'known' ? formatPav(asset.value.pav) : 'pending'}
+                      <AssetValue asset={asset} share={bidShareOf(asset, shares)} />
                     </span>
                   </li>
                 ))}

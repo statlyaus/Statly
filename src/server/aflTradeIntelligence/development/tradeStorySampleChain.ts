@@ -155,11 +155,11 @@ export const cameronChainBatch: AflTradeStoryBatch = {
         ),
         selected('2020-13-gee', 'Pick 13', ['gee', 'gws'], [15, 2020], ['Conor Stone', 8.6]),
         selected('2020-15-wce', 'Pick 15 (WCE)', ['gee', 'gws'], [18, 2020], ['Ryan Angwin', 20.7]),
-        onward(PICK_20, 'Pick 20 → 25', ['gee', 'gws'], TRADE.gwsCol),
+        onward(PICK_20, 'Pick 20 → pick 25', ['gee', 'gws'], TRADE.gwsCol),
         onward(R4_GEE, '2021 4th round', ['gee', 'gws'], TRADE.gwsCol),
       ]),
       trade(TRADE.gwsCol, 2020, [
-        onward(PICK_20, 'Pick 20 → 25', ['gws', 'col'], TRADE.colAde),
+        onward(PICK_20, 'Pick 20 → pick 25', ['gws', 'col'], TRADE.colAde),
         onward(R4_GEE, '2021 4th round (GEE)', ['gws', 'col'], TRADE.colPta),
         selected(
           '2020-30-gws',

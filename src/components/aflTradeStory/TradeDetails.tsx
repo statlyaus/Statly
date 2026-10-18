@@ -4,6 +4,7 @@ import type {
   AflTradeStoryNet,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
+import { AssetValue } from './AssetValue';
 import { BidMatchShareCard, bidShareAnchor } from './BidMatchShareCard';
 import { ClubBadge } from './ClubBadge';
 import {
@@ -47,13 +48,13 @@ function AssetRow({
               href={`#${bidShareAnchor(asset.assetId)}`}
               className="text-(--ts-accent) underline underline-offset-2"
             >
-              see its share of {share.bid.nomineeName}
+              share of {share.bid.nomineeName}
             </a>
           </>
         ) : null}
       </span>
       <span className="col-start-2 row-span-2 row-start-1 self-center text-right font-semibold tabular-nums">
-        {asset.value.kind === 'known' ? formatPav(asset.value.pav) : 'pending'}
+        <AssetValue asset={asset} share={share} />
       </span>
     </li>
   );

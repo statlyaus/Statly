@@ -14,16 +14,16 @@ export const metadata: Metadata = {
 
 /** The private trade pages the reader can open. Not found unless the reader admits the request. */
 export default async function PrivateTradeStoriesPage() {
-  const stories = await privateTradeStoryReads.listStories();
-  if (stories === null) notFound();
+  const list = await privateTradeStoryReads.listStories();
+  if (list === null) notFound();
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <p className="mb-4 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
-        <b>Private pages.</b> Not for publication. Sample data from the approved mockups.
+        <b>Private pages.</b> Not for publication. {list.source.label}.
       </p>
       <h1 className="text-3xl font-semibold text-foreground">Private trades</h1>
       <ul className="mt-6 divide-y divide-border rounded-xl border border-border bg-card">
-        {stories.map((story) => (
+        {list.stories.map((story) => (
           <li key={story.tradeId}>
             <Link
               href={tradeStoryHref(story.tradeId)}

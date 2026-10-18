@@ -54,6 +54,8 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     );
     expect(textOf(container)).toContain('GWS: −50.9 on this trade, then −6.7 from later trades.');
     expect(textOf(container)).not.toMatch(/\bgrade\b/iu);
+    // No claim the data does not hold, and no dramatised labels.
+    expect(textOf(container)).not.toMatch(/got away|came home|goes home|best player|backfired/iu);
     expect(screen.getByText(/Private page\./u)).toBeInTheDocument();
   });
 
@@ -85,7 +87,12 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     expect(textOf(cameron)).toContain('95.3 PAV to date');
     expect(textOf(cameron)).toContain('Still at Geelong · value will move');
     const curtis = within(players).getByRole('heading', { name: /Paul Curtis/u }).parentElement!;
-    expect(textOf(curtis)).toContain('Taken at 35 in 2021 by North Melbourne');
+    expect(textOf(curtis)).toContain(
+      'Taken with pick 35 in 2021 by North Melbourne, with Pick 32.'
+    );
+    expect(
+      within(players).getByRole('heading', { name: 'Now at other clubs' })
+    ).toBeInTheDocument();
     const mcmahon = within(players).getByRole('heading', { name: /Liam McMahon/u }).parentElement!;
     expect(textOf(mcmahon)).toContain('Left Collingwood · value is final');
   });
@@ -108,6 +115,10 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
       '2022. Draft',
     ]);
     expect(textOf(figure)).toContain('6 trades in the chain');
+    expect(textOf(figure)).toContain('Biggest values');
+    expect(textOf(figure)).toContain(
+      '2020. Draft. Cook (pick 25), Angwin (pick 18), Stone (pick 15) and'
+    );
     expect(textOf(figure)).toContain('2026: Geelong +7.7*, GWS −57.6.');
   });
 });
@@ -146,6 +157,15 @@ describe('private trade page: Geelong ⇄ Western Bulldogs, 2021', () => {
     const chips = screen.getByRole('list', { name: 'Each club’s value so far' });
     expect(textOf(chips)).toContain('−43.2* Geelong');
     expect(textOf(chips)).toContain('+15.8* Western Bulldogs');
+    // Each matched-bid pick shows its ledger share, starred, instead of "pending".
+    const details = section('Trade details');
+    expect(textOf(details)).toContain(
+      'Pick 34 · 2021 (GEE) used to match a bid · share of Sam Darcy 9.34 (share, not in the totals yet)'
+    );
+    const pick42 = within(section('Who they ended up with')).getByRole('heading', {
+      name: /Pick 42$/u,
+    }).parentElement!;
+    expect(textOf(pick42)).toContain('6.81 share of Sam Darcy, not in the totals yet');
     // Pick 42 came to the Bulldogs in their next trade: its share card is on the page too.
     expect(
       screen.getByRole('article', { name: 'Pick 42 became a share of Sam Darcy' })

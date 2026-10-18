@@ -17,7 +17,7 @@ import { scarfPlayers, scarfSteps } from './scarfTimeline';
 import { clubStyle, formatPav, netText, tradeName } from './tradePageModel';
 
 /**
- * The scarf timeline hero: who the trade came down to, as club-coloured panels in the order they
+ * The scarf timeline hero: the biggest values, as club-coloured panels in the order they
  * arrived, with every trade, draft and sourced event pinned along it. A static SVG, drawn on the
  * server; the same facts are listed for screen readers.
  */
@@ -70,7 +70,7 @@ export function TradeScarf({
         </div>
         {players.length > 0 ? (
           <>
-            <p className="mt-5 text-sm font-semibold">Who it came down to</p>
+            <p className="mt-5 text-sm font-semibold">Biggest values</p>
             <ul className="mt-2 space-y-2">
               {[...players]
                 .sort((left, right) => right.value - left.value)
@@ -96,8 +96,7 @@ export function TradeScarf({
                       <span className="text-sm leading-tight">
                         <span className="block font-semibold">{player.name}</span>
                         <span className="text-(--ts-scarf-side-muted)">
-                          {formatPav(player.value)} ·{' '}
-                          {player.gotAway ? 'got away' : player.clubName}
+                          {formatPav(player.value)} · {player.clubName}
                         </span>
                       </span>
                     </li>
@@ -108,7 +107,7 @@ export function TradeScarf({
         ) : null}
         {pending ? (
           <p className="mt-5 text-xs text-(--ts-scarf-side-muted)">
-            * Leaves out picks with a value pending.
+            * Totals leave out bid-match shares and values not in yet.
           </p>
         ) : null}
       </div>

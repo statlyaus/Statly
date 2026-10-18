@@ -7,7 +7,7 @@ import type { AflTradePageModel } from '../valuation/realizedTradePageContracts'
 import {
   aflTradeStorySamples,
   type AflTradeStorySampleSource,
-  type AflTradeStorySampleSummary,
+  type AflTradeStorySampleList,
 } from './tradeStorySamples';
 
 /**
@@ -31,7 +31,7 @@ export interface PrivateTradeStoryReadDependencies {
 }
 
 export interface PrivateTradeStoryReads {
-  listStories(): Promise<readonly AflTradeStorySampleSummary[] | null>;
+  listStories(): Promise<AflTradeStorySampleList | null>;
   loadStory(tradeId: string): Promise<AflTradePageModel | null>;
 }
 

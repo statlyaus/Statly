@@ -4176,12 +4176,18 @@ code change. Top to bottom:
   and with its next moves. A net that leaves out a pending asset is starred.
 - **Matched bids:** a pick spent matching a bid is shown as a swap. Its card gives the AFL price, a
   points bar and table of the points each spent pick covered, the pick's share of the nominee and any
-  leftover pick. Shares come from the ledger and are not added to the story's nets yet.
+  leftover pick. Wherever the pick appears, its value is its ledger share, starred. The story's nets
+  do not read shares yet, so totals leave them out and say so.
 - **Players:** what each club ended up with, then the ones that got away, each with a still-at-club
   marker.
 - **Lineage:** each asset of the trade followed through every later trade to what it became, with a
   `BID MATCH` node for a matched-bid pick. Any trade opens inside the map with a `#trade=<id>` hash
   and a link to its own page. Escape or Close returns focus to the button that opened it.
+
+**Copy.** Every number, name, pick, club, year and net on the page comes from the model, and every
+sentence is a template over it. A sentence the data cannot support is left out, never written by hand:
+no hometowns, no "best player", no dramatised labels. Pick numbers are written "pick N", draft slots
+included ("taken with pick 18"). The mockups set layout, visual design and phrasing patterns only.
 
 **Boundary.** `development/privateTradeStoryReads.ts` is the only way in. It answers only when
 `NODE_ENV` is not `production`, `STATLY_ENABLE_DEV_TOOLS=true` and `AFL_TRADE_STORY_READER_ENABLED=true`,
