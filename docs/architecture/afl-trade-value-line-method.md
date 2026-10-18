@@ -190,4 +190,6 @@ asset's value at the same checkpoint.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
    bundle split, then regrade on intrinsic value lines.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
-7. **Preview:** a value line per club per trade over time, with each club's chains.
+7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
+   is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence
+   architecture); it shows the story's values until value lines exist.

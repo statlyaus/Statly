@@ -3958,7 +3958,8 @@ in backend evidence.
 `valuation/realizedTradeStory.ts` builds the data for the private realized trade page
 (statlyaus/Statly#789) from a realized-trade-grade batch. `buildAflTradeStory(batch, tradeId, names)`
 is pure: player, club, pick and transfer names are injected, and a missing name or onward leg fails the
-build rather than being guessed. It serves only the local private valuation reader. Realized grades are
+build rather than being guessed. It serves only the local private valuation reader ("Private trade
+page" below). Realized grades are
 publication-prohibited, so public pages stay on the publication runtime and never read this model.
 
 It returns, for one trade:
@@ -4156,6 +4157,48 @@ one stint).
 **Report.** `npm run outcomes:grading:season-games` (`Scripts/report-player-season-games.ts`) prints the
 per-season coverage as one JSON line and writes nothing. See the operations runbook, "Reporting
 player-season games".
+
+### Private trade page
+
+The value-line trade page (statlyaus/Statly#789) renders one trade's realized story for the local
+private reader at `/dev/afl-trade-stories/<tradeId>`. It shows values in PAV, never letter grades.
+
+**What it renders.** `AflTradePageModel` (`valuation/realizedTradePageContracts.ts`) is the story, the
+season the values count to, a source label, and the asset ledger's matched bids that spent a pick of the
+story. The page computes no value of its own, so a refitted pick curve or a new season changes it with no
+code change. Top to bottom:
+
+- **Scarf timeline:** the trade's highest-value players as club-coloured panels in the order they
+  arrived, each trade, other clubs' deals and draft of the chain pinned along it, and each club's net at
+  the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
+  events slot shows the story's sourced events, which are empty for now.
+- **Trade details:** what each club gave, what every asset became, each club's net on the trade alone
+  and with its next moves. A net that leaves out a pending asset is starred.
+- **Matched bids:** a pick spent matching a bid is shown as a swap. Its card gives the AFL price, a
+  points bar and table of the points each spent pick covered, the pick's share of the nominee and any
+  leftover pick. Wherever the pick appears, its value is its ledger share, starred. The story's nets
+  do not read shares yet, so totals leave them out and say so.
+- **Players:** what each club ended up with, then the ones that got away, each with a still-at-club
+  marker.
+- **Lineage:** each asset of the trade followed through every later trade to what it became, with a
+  `BID MATCH` node for a matched-bid pick. Any trade opens inside the map with a `#trade=<id>` hash
+  and a link to its own page. Escape or Close returns focus to the button that opened it.
+
+**Copy.** Every number, name, pick, club, year and net on the page comes from the model, and every
+sentence is a template over it. A sentence the data cannot support is left out, never written by hand:
+no hometowns, no "best player", no dramatised labels. Pick numbers are written "pick N", draft slots
+included ("taken with pick 18"). The mockups set layout, visual design and phrasing patterns only.
+
+**Boundary.** `development/privateTradeStoryReads.ts` is the only way in. It answers only when
+`NODE_ENV` is not `production`, `STATLY_ENABLE_DEV_TOOLS=true` and `AFL_TRADE_STORY_READER_ENABLED=true`,
+for the verified local development user (the development-auth fallback is not accepted). Anything else
+is not found. A unit test fails if any module outside the private route, the page components and the
+story read model imports them, so public pages stay on the publication runtime and keep showing
+`not_calculated` without an active publication.
+
+**Source.** Until the page reads a sealed batch and ledger, `development/tradeStorySamples.ts` serves the
+Jeremy Cameron chain (the story's test fixture) and Sam Darcy's 2021 matched bid, with shares from
+`aflTradeMatchedBidShares`. The page labels it as sample data.
 
 ## Immutable publication
 
