@@ -153,6 +153,9 @@ interface PickRow extends Record<string, unknown> {
   original_club_id: string | null;
 }
 
+/** Records per multi-row INSERT; see the record insert below. */
+const ARCHIVE_RECORD_INSERT_CHUNK = 200;
+
 export interface PersistedAflTradePromotionBackedPublicArchive {
   readonly archive: AflTradePromotionBackedPublicArchive;
   readonly projection: AflTradePromotionBackedFactualProjection;
@@ -564,21 +567,38 @@ async function persistArchive(
     ]
   );
   const recordInputs = content.records.map(({ record }) => record);
-  for (const row of content.records) {
-    const digestPreimage = {
-      schemaVersion: AFL_TRADE_PROMOTION_BACKED_PUBLIC_ARCHIVE_RECORD_SCHEMA_VERSION,
-      recordKind: row.record.recordKind,
-      canonicalRecordSha256: row.canonicalRecordSha256,
-      record: row.record,
-    };
-    const indexed = dimensions(row.record, recordInputs);
-    await transaction.query(
-      `INSERT INTO outcome_public_factual_archive_record
-        (archive_id,ordinal,record_kind,record_id,canonical_record_sha256,record_sha256,
-         season_year,event_version_id,pick_id,club_ids,player_ids,search_text,
-         record_canonical_json,record_digest_canonical_json,record_json)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11::text[],$12,$13,$14,$15::jsonb)`,
-      [
+  // One multi-row INSERT per chunk instead of a round trip per record. Fifteen parameters per record
+  // keep each chunk far below PostgreSQL's 65,535-parameter limit.
+  const recordColumnCasts = [
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '::text[]',
+    '::text[]',
+    '',
+    '',
+    '',
+    '::jsonb',
+  ];
+  for (let start = 0; start < content.records.length; start += ARCHIVE_RECORD_INSERT_CHUNK) {
+    const chunk = content.records.slice(start, start + ARCHIVE_RECORD_INSERT_CHUNK);
+    const parameters: unknown[] = [];
+    const tuples = chunk.map((row) => {
+      const digestPreimage = {
+        schemaVersion: AFL_TRADE_PROMOTION_BACKED_PUBLIC_ARCHIVE_RECORD_SCHEMA_VERSION,
+        recordKind: row.record.recordKind,
+        canonicalRecordSha256: row.canonicalRecordSha256,
+        record: row.record,
+      };
+      const indexed = dimensions(row.record, recordInputs);
+      const base = parameters.length;
+      parameters.push(
         archive.archiveId,
         row.ordinal,
         row.record.recordKind,
@@ -593,8 +613,17 @@ async function persistArchive(
         canonicalizeAflTradeJson(row),
         canonicalizeAflTradeJson(row),
         canonicalizeAflTradeJson(digestPreimage),
-        canonicalizeAflTradeJson(row),
-      ]
+        canonicalizeAflTradeJson(row)
+      );
+      return `(${recordColumnCasts.map((cast, column) => `$${base + column + 1}${cast}`).join(',')})`;
+    });
+    await transaction.query(
+      `INSERT INTO outcome_public_factual_archive_record
+        (archive_id,ordinal,record_kind,record_id,canonical_record_sha256,record_sha256,
+         season_year,event_version_id,pick_id,club_ids,player_ids,search_text,
+         record_canonical_json,record_digest_canonical_json,record_json)
+       VALUES ${tuples.join(',')}`,
+      parameters
     );
   }
   const finalized = await transaction.query(
