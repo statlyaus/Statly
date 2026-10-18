@@ -111,6 +111,13 @@ function routeOrigin(pick: SyntheticBoardPick): string | undefined {
   );
 }
 
+/** The board's `original` entitlement, absent only when a test asks for it to be. */
+function originalField(pick: SyntheticBoardPick): string[] {
+  if (pick.noOriginal) return [];
+  const club = pick.originalClub ?? routeOrigin(pick) ?? pick.club;
+  return [`original:{team:${team(club)},round:${pick.round ?? 1},round_ordinal:1}`];
+}
+
 export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
   const fields = [
     `id:${pick.id}`,
@@ -144,11 +151,7 @@ export function boardRecord(pick: SyntheticBoardPick, year = 2024): string {
         ]),
     ...(pick.unbidReason === undefined ? [] : [`bid:{match_reason:"${pick.unbidReason}"}`]),
     ...(pick.originalNumber === undefined ? [] : [`original_number:${pick.originalNumber}`]),
-    ...(pick.noOriginal
-      ? []
-      : [
-          `original:{team:${team(pick.originalClub ?? routeOrigin(pick) ?? pick.club)},round:${pick.round ?? 1},round_ordinal:1}`,
-        ]),
+    ...originalField(pick),
     ...(pick.lineage === undefined
       ? []
       : [
