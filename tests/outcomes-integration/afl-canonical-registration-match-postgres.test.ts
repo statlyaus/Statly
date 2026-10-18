@@ -83,11 +83,15 @@ afterAll(async () => {
 });
 
 // Synthetic upstream custody/review evidence only; no registration or resolution guard is replaced.
+const retainedEvidence = new Set<string>();
 async function retainEvidence(kind: string, fields: Readonly<Record<string, unknown>>) {
   const payload = { evidenceKind: kind, environment: execution.environment, ...fields };
   const prefix = kind.replaceAll('_', '-');
   const id = createAflTradeContentAddress(prefix, payload);
   const sha256 = sha256AflTradeCanonicalJson(payload);
+  // Content-addressed: retaining the same evidence again reuses it.
+  if (retainedEvidence.has(id)) return { id, sha256 };
+  retainedEvidence.add(id);
   const canonical = canonicalizeAflTradeJson(payload);
   const artifact = createAflTradeContentAddress('governed-evidence-artifact', { id });
   const approval = createAflTradeContentAddress('governed-evidence-approval-decision', { id });
