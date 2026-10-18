@@ -430,6 +430,14 @@ schemas of one database produce identical lock keys. A four-worker run on one da
 seven tests this way: lock waits past the test budget, a try-lock raising `changed concurrently` for a
 row in another schema, and a cancelled statement landing on the wrong finalizer.
 
+CI splits the suite across three matrix jobs with `vitest --shard=<n>/3`. Each shard has its own
+runner and PostgreSQL service, so shards share no database, role or CPU. Vitest assigns files by a
+hash of their path, not by duration, so the split is uneven and shifts as files are added. On
+PR #976 one shard held the four heaviest files (166 to 247 seconds each) and took 13m20s; the other
+two took about 5 minutes. The unit tests job, about 15 minutes, is still the longest, so balancing
+the shards would not shorten CI. Locally, `npm run test:outcomes:int` runs the whole suite and does
+not forward `--shard`.
+
 `tests/testUtils/outcomesDatabasePerFile.setup.ts` runs before each file: it creates
 `statly_outcomes_test_<pid>_<n>` on the server named by `AFL_OUTCOMES_TEST_DATABASE_URL`, points that
 variable (and `AFL_OUTCOMES_DATABASE_URL` when it names the same database) at it, and drops it with
