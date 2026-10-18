@@ -25,6 +25,8 @@
   --ts-group-b: #fbefeb;
   background: var(--ts-bg);
   color: var(--ts-ink);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,11 +54,6 @@
     --ts-group-a: #18212b;
     --ts-group-b: #2a1d19;
   }
-}
-
-.afl-trade-story {
-  font-size: 15px;
-  line-height: 1.5;
 }
 
 /* The page's four text sizes (owner, 2026-10-18). Badges, icons and SVG chart labels are exempt. */
