@@ -482,8 +482,9 @@ an in-memory SQL fixture and refit the model in every test, and they use no data
 files by a hash of their path, so the shard count was chosen by replaying that assignment against the
 measured per-file times: two shards split the three files 2 to 1 and came out at about 400 seconds
 each, three shards put all three in one shard and were no faster than two, and four saved under half
-a minute more than two. The candidate-checkpoint file, about 6 minutes on a loaded runner, is the floor
-for any shard count. Locally, `npm run test:unit` runs every file and does not shard.
+a minute more than two. On PR #977 the two shards took 4m58s and 6m58s, and outcomes shard 2 took
+9m45s in the same run. The candidate-checkpoint file (5 to 6 minutes) is the floor for any shard
+count. Locally, `npm run test:unit` runs every file and does not shard.
 
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
