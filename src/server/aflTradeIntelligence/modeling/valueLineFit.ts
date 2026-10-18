@@ -26,7 +26,11 @@ export const AFL_TRADE_VALUE_LINE_FIT_RULES = {
   minimumAtRisk: 20,
   /** Beyond support, the hazard is the pooled hazard of the last supported tenures. */
   tailTenures: 3,
-  /** Two full seasons without a game for the club are read as a delisting or retirement. */
+  /**
+   * Two full seasons without a game for the club at the end of the record read (as seen at the
+   * checkpoint) are a delisting or retirement. A return to the club after such a gap, with no game
+   * elsewhere, reads as one stint once the return is read.
+   */
   seasonsWithoutGameEndingStint: 2,
   /** Form window (Owner: three seasons) and its weights, oldest to newest. */
   formWeights: [1, 2, 3],
@@ -57,7 +61,7 @@ export interface AflTradeValueLineStintSeason {
  * A draftee's first stint as seen at season `asOfSeason`, with no later season read. `tenure` is the
  * last tenure he counts as at the club: the earlier of the move (the first season he appears for
  * another club, which still counts if he also played here) and two full seasons after his last game
- * here. `ended` is false while neither has happened by `asOfSeason` (censored).
+ * here up to `asOfSeason`. `ended` is false while neither has happened by `asOfSeason` (censored).
  */
 export interface AflTradeValueLineStint {
   draftee: AflTradeValueLineDraftee;
@@ -103,8 +107,9 @@ export function aflTradeValueLineStint(
   if (observed < 0) throw new RangeError(`${draftee.selectionId} is read before its draft.`);
   if (observed === 0) return { draftee, band, asOfSeason, tenure: 0, ended: false, seasons: [] };
   const seasons = model.seasons.filter(({ season }) => season <= asOfSeason);
-  if (!seasons.some(({ season }) => season === asOfSeason))
-    throw new RangeError(`Season ${asOfSeason} is not in the read model.`);
+  for (const needed of [draftee.draftYear + 1, asOfSeason])
+    if (!seasons.some(({ season }) => season === needed))
+      throw new RangeError(`Season ${needed} is not in the read model.`);
   const stint = aflTradeFirstStintGames(
     {
       methodId: model.methodId,
@@ -204,7 +209,8 @@ function weightedLine(points: readonly { x: number; y: number; w: number }[]) {
   return { intercept: my - slope * mx, slope };
 }
 
-function fitBand(
+/** Kaplan-Meier retention and mean games for one band, from stints all read at the same season. */
+export function fitAflTradeValueLineBand(
   band: BandId,
   stints: readonly AflTradeValueLineStint[]
 ): AflTradeValueLineBandFit {
@@ -336,7 +342,7 @@ export function fitAflTradeValueLine(input: {
   if (stints.length === 0) throw new Error('No draft class has a season to fit from.');
   const draftYears = stints.map(({ draftee }) => draftee.draftYear);
   const bands = AFL_TRADE_VALUE_LINE_FIT_RULES.bands.map(({ id }) =>
-    fitBand(
+    fitAflTradeValueLineBand(
       id,
       stints.filter((stint) => stint.band === id)
     )

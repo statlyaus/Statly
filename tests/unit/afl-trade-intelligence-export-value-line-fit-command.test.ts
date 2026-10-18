@@ -63,6 +63,8 @@ describe('export-value-line-fit', () => {
     expect(parse({ '--draft-years': '2011-2026' })).toThrow(/must cover every season/);
     expect(parse({ '--held-out-draft-years': '2024-2026' })).toThrow(/drafts in --draft-years/);
     expect(parse({ '--held-out-draft-years': '2012-2013' })).toThrow(/two draft classes/);
+    expect(parse({ '--held-out-draft-years': '2017,2019' })).toThrow(/consecutive/);
+    expect(parse({ '--held-out-draft-years': '2018-2020' })).toThrow(/at least 7 seasons/);
     expect(() =>
       parseExportValueLineFitArguments(
         argv('/receipts/fit.json').filter(

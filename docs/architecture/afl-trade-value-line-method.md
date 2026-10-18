@@ -191,13 +191,18 @@ so it is not cut.
 **Modelling choices for the owner to confirm.** The spec leaves these open. Each is the simplest
 defensible option, and each is also recorded in the artifact's `decisions`:
 
-1. **Stint end:** appearances cannot show a delisting or retirement. A stint is read as ended after two
-   full seasons with no game for the club, or at the first season the player appears for another club.
-   That season still counts if he also played for the drafting club in it.
-2. **Survival:** Kaplan–Meier by band. A stint still running is censored. A season with fewer than 20
-   draftees at risk uses the pooled hazard of the last three supported seasons.
+1. **Stint end:** appearances cannot show a delisting or retirement. A stint is read as ended at the
+   first season the player appears for another club, or after two full seasons with no game for the
+   club at the end of the record read at the checkpoint. The move season still counts if he also played
+   for the drafting club in it. A return to the club after such a gap, with no game elsewhere, reads as
+   one stint once the return is read.
+2. **Survival and games:** Kaplan–Meier by band. A stint still running is censored. A season with fewer
+   than 20 draftees at risk uses the pooled hazard of the last three supported seasons, and the last
+   supported mean games stand in beyond support. To fit the expected first-stint games curve only, a
+   censored stint is completed with its band's expectation.
 3. **Functional forms:** the prior rate and expected first-stint games are log-linear in the slot, the
-   same form as DPVC. The rate has no age or tenure term; seasons since the draft stand in for age.
+   same form as DPVC. The rate has no age or tenure term. Survival and expected games use seasons since
+   the draft in place of age.
 4. **Recent seasons weighted more:** weights 1, 2 and 3, oldest to newest. Z counts the unweighted games
    in the window.
 5. **Expected games:** prior games + `rho` × (own mean games − prior mean games) over the form window.
@@ -208,7 +213,7 @@ defensible option, and each is also recorded in the artifact's `decisions`:
    The traded-player prior (age and position) is not fitted yet.
 7. **Horizon:** expectations sum the first 20 seasons after the draft. This is arithmetic, not a cap.
 8. **Fit window and hold-out:** fit on drafts 2011–2025 with seasons 2012–2026. The back-test holds out
-   2017–2019.
+   2017–2019, the latest classes with at least seven seasons (the command refuses fewer).
 
 ## What this retires
 

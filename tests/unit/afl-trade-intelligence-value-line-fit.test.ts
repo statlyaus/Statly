@@ -16,8 +16,10 @@ import {
   aflTradeValueLinePoint,
   aflTradeValueLineStint,
   fitAflTradeValueLine,
+  fitAflTradeValueLineBand,
   indexAflTradeValueLineRows,
   type AflTradeValueLineDraftee,
+  type AflTradeValueLineFit,
 } from '@/server/aflTradeIntelligence/modeling/valueLineFit';
 
 const methodId = `hpn-pav-method:${'b'.repeat(64)}`;
@@ -255,6 +257,126 @@ describe('value-line fit', () => {
     expect(() =>
       aflTradeValueLineStint(gap, indexAflTradeValueLineRows(gap), draftee(2015, 3, 'p1'), 2020)
     ).toThrow(/no finalized calculation/);
+  });
+});
+
+describe('value-line survival and checkpoints', () => {
+  it('counts Kaplan-Meier risk sets with censored and ended stints', () => {
+    const rows: Season[] = [];
+    const picks: AflTradeValueLineDraftee[] = [];
+    const add = (year: number, slot: number, plays: (season: number) => string | null) => {
+      const pick = draftee(year, slot);
+      picks.push(pick);
+      for (let season = year + 1; season <= 2026; season++) {
+        const clubId = plays(season);
+        if (clubId) rows.push({ season, playerId: pick.playerId, clubId, games: 10, pav: 5 });
+      }
+    };
+    // 2015: 8 never play (end at 2), 8 play throughout (censored at 11), 4 move in 2018 (end at 2).
+    for (let slot = 31; slot <= 38; slot++) add(2015, slot, () => null);
+    for (let slot = 39; slot <= 46; slot++) add(2015, slot, () => 'club:a');
+    for (let slot = 47; slot <= 50; slot++)
+      add(2015, slot, (season) => (season <= 2017 ? 'club:a' : 'club:b'));
+    // 2023: 6 play throughout, censored at 3, so they are not at risk in tenure 4.
+    for (let slot = 31; slot <= 36; slot++) add(2023, slot, () => 'club:a');
+    const m = model(rows);
+    const index = indexAflTradeValueLineRows(m);
+    const band = fitAflTradeValueLineBand(
+      '31+',
+      picks.map((pick) => aflTradeValueLineStint(m, index, pick, 2026))
+    );
+    const [t1, t2, t3, t4] = band.tenures;
+    expect([t1, t2, t3, t4].map((t) => [t!.atRisk, t!.exits, t!.supported])).toEqual([
+      [26, 0, true],
+      [26, 0, true],
+      [26, 12, true],
+      [8, 0, false],
+    ]);
+    expect(band.tailHazard).toBeCloseTo(12 / 78, 12);
+    expect(t3!.survival).toBeCloseTo(14 / 26, 12);
+    expect(t4!.survival).toBeCloseTo((14 / 26) * (1 - 12 / 78), 12);
+    // Mean games among draftees at the club, 0-game seasons included.
+    expect(t1!.meanGames).toBeCloseTo((18 * 10) / 26, 12);
+  });
+
+  const flatFit = (): AflTradeValueLineFit => ({
+    window: {
+      draftYears: { from: 2011, through: 2020 },
+      seasons: { from: 2012, through: 2026 },
+      draftees: 1,
+    },
+    bands: (['1-10', '11-30', '31+'] as const).map((band) => ({
+      band,
+      draftees: 1,
+      tailHazard: 0,
+      tenures: Array.from({ length: 20 }, (_, index) => ({
+        tenure: index + 1,
+        atRisk: 20,
+        exits: 0,
+        hazard: 0,
+        survival: 1,
+        supported: true,
+        meanGames: 10,
+        gamesSupported: true,
+      })),
+      expectedGames: 200,
+    })),
+    rate: { intercept: 0.5, slope: 0, seasons: 1, games: 1 },
+    games: { intercept: 200, slope: 0, draftees: 1 },
+    availability: { rho: 0.5, pairs: 1 },
+    credibility: {
+      k: 0,
+      pairs: 1,
+      games: 1,
+      weightedSquaredError: 0,
+      priorOnlySquaredError: 0,
+      onBoundary: true,
+    },
+  });
+
+  it('blends form over the window and lowers expected games after an injury season', () => {
+    const pick = draftee(2015, 40, 'p1');
+    const m = model([{ season: 2016, playerId: 'p1', clubId: 'club:a', games: 10, pav: 8 }]);
+    const stint = aflTradeValueLineStint(m, indexAflTradeValueLineRows(m), pick, 2017);
+    // Own rate (2×8 + 3×0) / (2×10 + 3×0) = 0.8: the 0-game season moves neither sum. k = 0, so Z = 1.
+    // Expected games 10 + 0.5 × (5 − 10) = 7.5 a season, 18 seasons to the horizon.
+    expect(aflTradeValueLinePoint(flatFit(), stint)).toEqual({
+      checkpoint: 2,
+      realized: 8,
+      expectedRemaining: expect.closeTo(18 * 7.5 * 0.8, 9),
+      value: expect.closeTo(8 + 18 * 7.5 * 0.8, 9),
+      state: 'open',
+    });
+    expect(aflTradeValueLinePoint(flatFit(), stint, 5).expectedRemaining).toBeCloseTo(
+      3 * 7.5 * 0.8,
+      9
+    );
+  });
+
+  it('values a closed stint at exactly what it produced', () => {
+    const pick = draftee(2015, 40, 'p1');
+    const m = model([
+      { season: 2016, playerId: 'p1', clubId: 'club:a', games: 10, pav: 8 },
+      { season: 2017, playerId: 'p1', clubId: 'club:b', games: 10, pav: 9 },
+    ]);
+    const stint = aflTradeValueLineStint(m, indexAflTradeValueLineRows(m), pick, 2017);
+    expect(aflTradeValueLinePoint(flatFit(), stint)).toEqual({
+      checkpoint: 2,
+      realized: 8,
+      expectedRemaining: 0,
+      value: 8,
+      state: 'closed',
+    });
+  });
+
+  it('refuses a draftee whose first season after the draft is not read', () => {
+    const m = model(
+      [],
+      SEASONS.filter((season) => season >= 2013)
+    );
+    expect(() =>
+      aflTradeValueLineStint(m, indexAflTradeValueLineRows(m), draftee(2011, 3), 2020)
+    ).toThrow(/Season 2012 is not in the read model/);
   });
 });
 

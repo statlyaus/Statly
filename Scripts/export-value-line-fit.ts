@@ -45,11 +45,13 @@ export const AFL_TRADE_VALUE_LINE_FIT_SCHEMA_VERSION = 'afl-trade-value-line-fit
 const REPOSITORY_ID = 'value-line-fits';
 const MAXIMUM_FIT_BYTES = 16 * 1024 * 1024;
 const PICK_CURVE_THROUGH = 100;
+/** A held-out class is compared with at least this many seasons of its first stints. */
+const MINIMUM_HELD_OUT_SEASONS = 7;
 
 /** The modelling choices the spec leaves open, recorded with every fit for the owner to confirm. */
 export const AFL_TRADE_VALUE_LINE_FIT_DECISIONS: readonly string[] = [
   'Fit data: current canonical AFLM national-draft selections (every selection, including father-son, academy and compensation picks, at the slot it was used) and the player-season games read model; busts kept in.',
-  'First stint: from the season after the draft at the drafting club, ended by the first season the player appears for another club, or by two full seasons with no game for the club (read as a delisting or retirement, which appearances alone cannot show).',
+  'First stint: from the season after the draft at the drafting club, ended by the first season the player appears for another club, or by two full seasons with no game for the club at the end of the record read (a delisting or retirement, which appearances alone cannot show); a return to the club after such a gap with no game elsewhere reads as one stint.',
   'Survival: Kaplan-Meier retention by slot band (1-10, 11-30, 31+) and tenure; a stint still running at the last season read is censored; tenures with fewer than 20 draftees at risk use the pooled hazard of the last three supported tenures.',
   'Expected games: the band mean games at the club per tenure (supported tenures only, the last supported mean beyond), scaled so the slot total follows a fitted log curve of expected first-stint games; censored stints are completed with the band expectation for that curve only.',
   'Prior PAV per game by slot: max(0, a + b ln(slot)), games-weighted least squares over every season at the club with a game. The rate has no tenure or age term; tenure since the draft stands in for age.',
@@ -129,6 +131,15 @@ export function parseExportValueLineFitArguments(
     throw new TypeError('--held-out-draft-years must be drafts in --draft-years.');
   if (draftYears.filter((year) => year < heldOutDraftYears[0]!).length < 2)
     throw new TypeError('At least two draft classes must precede the held-out classes.');
+  if (
+    heldOutDraftYears[heldOutDraftYears.length - 1]! - heldOutDraftYears[0]! !==
+    heldOutDraftYears.length - 1
+  )
+    throw new TypeError('--held-out-draft-years must be consecutive.');
+  if (last - heldOutDraftYears[heldOutDraftYears.length - 1]! < MINIMUM_HELD_OUT_SEASONS)
+    throw new TypeError(
+      `Each held-out class needs at least ${MINIMUM_HELD_OUT_SEASONS} seasons in --seasons.`
+    );
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),
     methodId: required('--method'),
