@@ -551,5 +551,6 @@ describe('local AFL valuation-publication rehearsal', () => {
         null,
       release: restoredFactualRegistry.releases[factual.releaseId] ?? null,
     }).toEqual(lifecycle.factualStateBefore);
-  }, 180_000);
+    // Hosted runners vary about 2x: this case took 109-225 s across CI runs on 2026-10-18.
+  }, 300_000);
 });
