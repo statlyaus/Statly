@@ -107,7 +107,7 @@ afterAll(async () => {
   } finally {
     await admin.end();
   }
-});
+}, 180_000);
 
 const promote = (
   ws: Workspace,

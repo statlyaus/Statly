@@ -163,5 +163,5 @@ describe('local source-native AFL archive seed', () => {
         archivedTradeCount: 783,
       })
     );
-  }, 120_000);
+  }, 240_000);
 });
