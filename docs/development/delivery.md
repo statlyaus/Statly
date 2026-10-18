@@ -111,7 +111,8 @@ Auto-merge waits for branch protection; it is not permission to bypass it.
 ## Re-running CI
 
 Re-run only the jobs that failed. A full re-run repeats every passing job, including the outcomes suite,
-for no new information.
+for no new information. The outcomes suite runs as three shard jobs, so `--failed` repeats only the
+shard that failed.
 
 ```sh
 gh run list --repo statlyaus/Statly --branch <branch> --workflow CI --limit 1

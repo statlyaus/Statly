@@ -128,6 +128,8 @@ jobs:
   outcomes-postgres:
     name: AFL outcomes PostgreSQL (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    # Vitest assigns files to shards by a hash of their path, not by duration, so the shards are
+    # uneven. See docs/development/testing.md before changing the count.
     strategy:
       fail-fast: false
       matrix:
