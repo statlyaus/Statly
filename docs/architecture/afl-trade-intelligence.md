@@ -3958,7 +3958,8 @@ in backend evidence.
 `valuation/realizedTradeStory.ts` builds the data for the private realized trade page
 (statlyaus/Statly#789) from a realized-trade-grade batch. `buildAflTradeStory(batch, tradeId, names)`
 is pure: player, club, pick and transfer names are injected, and a missing name or onward leg fails the
-build rather than being guessed. It serves only the local private valuation reader. Realized grades are
+build rather than being guessed. It serves only the local private valuation reader ("Private trade
+page" below). Realized grades are
 publication-prohibited, so public pages stay on the publication runtime and never read this model.
 
 It returns, for one trade:
@@ -4119,6 +4120,85 @@ grader's arguments and reads the genuine database through `AFL_OUTCOMES_DATABASE
 it runs on the grading VM). It seals the ledger under a content address (`asset-ledger:<sha256>`) and
 stores it as `derived_private` in repository `asset-ledgers`. See the operations runbook, "Exporting the
 asset ledger".
+
+### Player-season games read model
+
+`modeling/playerSeasonGames.ts` gives games played and PAV per canonical player, season and club for
+the value-line method ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation
+order step 1; statlyaus/Statly#789). It reads no candidate, no grade rule and nothing of the realized
+grader, and it is private like the grader's inputs.
+
+**Source.** No new storage: each finalized HPN PAV calculation (`afl-trade-hpn-pav-season-calculation/v3`)
+already states, per v3 season spell, `source.gamesPlayed` (the distinct matches the player has a primary
+match row for at that club) beside the spell's `total_pav`. `modeling/postgresPlayerSeasonGames.ts`
+reads, in one read-only repeatable-read transaction, the current non-production AFLM head per season for
+one HPN PAV method, the finalized calculations' player rows, and each calculation's own factual appearance
+universe (`outcome_hpn_pav_input_factual_appearance_member`, measured facts with `appeared = true`,
+distinct matches). Player and club ids are the canonical ids the acquisition spells and the asset ledger
+use. 2011 to 2018 come from the same governed season pipeline, so a season is read the same way once its
+calculation is finalized.
+
+**Rows and refusals.** One row per player, season and club with `games`, `pav` and the spell id. A season
+is `available`, `no_head` or `not_finalized`; only available seasons have rows. The builder refuses a
+non-consecutive season list, two rows for one player-season-club, a row with no game count and a row
+outside the available seasons. `discrepancies` lists each player-season-club where the calculation's
+games differ from its factual appearances, including PAV with no appearance and an appearance with no
+PAV. It is empty on a sound calculation, and a fit must refuse otherwise.
+
+**First stint.** `aflTradeFirstStintGames(model, playerId, clubId, fromSeason)` walks the available
+seasons from `fromSeason`: a season counts with its games and PAV (0 and 0 when the player did not play
+anywhere, as a season lost to injury does), and the stint closes in the first available season the
+player appears for another club (that season still counts here if he also played here). This is the
+grader's boundary without its reviewed-arrival input. Seasons with no finalized calculation are listed in
+`seasonsUnavailable`, not counted. Appearances cannot show a delisting or retirement (the stint stays
+open with 0-game seasons) or a re-arrival at the same club with no game elsewhere in between (read as
+one stint).
+
+**Report.** `npm run outcomes:grading:season-games` (`Scripts/report-player-season-games.ts`) prints the
+per-season coverage as one JSON line and writes nothing. See the operations runbook, "Reporting
+player-season games".
+
+### Private trade page
+
+The value-line trade page (statlyaus/Statly#789) renders one trade's realized story for the local
+private reader at `/dev/afl-trade-stories/<tradeId>`. It shows values in PAV, never letter grades.
+
+**What it renders.** `AflTradePageModel` (`valuation/realizedTradePageContracts.ts`) is the story, the
+season the values count to, a source label, and the asset ledger's matched bids that spent a pick of the
+story. The page computes no value of its own, so a refitted pick curve or a new season changes it with no
+code change. Top to bottom:
+
+- **Scarf timeline:** the trade's highest-value players as club-coloured panels in the order they
+  arrived, each trade, other clubs' deals and draft of the chain pinned along it, and each club's net at
+  the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
+  events slot shows the story's sourced events, which are empty for now.
+- **Trade details:** what each club gave, what every asset became, each club's net on the trade alone
+  and with its next moves. A net that leaves out a pending asset is starred.
+- **Matched bids:** a pick spent matching a bid is shown as a swap. Its card gives the AFL price, a
+  points bar and table of the points each spent pick covered, the pick's share of the nominee and any
+  leftover pick. Wherever the pick appears, its value is its ledger share, starred. The story's nets
+  do not read shares yet, so totals leave them out and say so.
+- **Players:** what each club ended up with, then the ones that got away, each with a still-at-club
+  marker.
+- **Lineage:** each asset of the trade followed through every later trade to what it became, with a
+  `BID MATCH` node for a matched-bid pick. Any trade opens inside the map with a `#trade=<id>` hash
+  and a link to its own page. Escape or Close returns focus to the button that opened it.
+
+**Copy.** Every number, name, pick, club, year and net on the page comes from the model, and every
+sentence is a template over it. A sentence the data cannot support is left out, never written by hand:
+no hometowns, no "best player", no dramatised labels. Pick numbers are written "pick N", draft slots
+included ("taken with pick 18"). The mockups set layout, visual design and phrasing patterns only.
+
+**Boundary.** `development/privateTradeStoryReads.ts` is the only way in. It answers only when
+`NODE_ENV` is not `production`, `STATLY_ENABLE_DEV_TOOLS=true` and `AFL_TRADE_STORY_READER_ENABLED=true`,
+for the verified local development user (the development-auth fallback is not accepted). Anything else
+is not found. A unit test fails if any module outside the private route, the page components and the
+story read model imports them, so public pages stay on the publication runtime and keep showing
+`not_calculated` without an active publication.
+
+**Source.** Until the page reads a sealed batch and ledger, `development/tradeStorySamples.ts` serves the
+Jeremy Cameron chain (the story's test fixture) and Sam Darcy's 2021 matched bid, with shares from
+`aflTradeMatchedBidShares`. The page labels it as sample data.
 
 ## Immutable publication
 

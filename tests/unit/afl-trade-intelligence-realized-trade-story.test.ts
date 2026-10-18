@@ -56,7 +56,7 @@ describe('realized trade story: the Cameron trade', () => {
     expect(gws!.received.map(became)).toEqual([
       'Pick 13 → Conor Stone (club:gws) 8.6',
       'Pick 15 (WCE) → Ryan Angwin (club:gws) 20.7',
-      'Pick 20 → 25 → Brayden Cook (club:ade) 23.5',
+      'Pick 20 → pick 25 → Brayden Cook (club:ade) 23.5',
       '2021 4th round → Jase Burgoyne (club:pta) 43.2',
     ]);
     expect(geelong!.gave).toEqual(gws!.received);

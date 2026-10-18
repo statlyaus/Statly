@@ -3593,6 +3593,23 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 - Like a grade batch, each run is a different ledger (its build time and spell cutoff are the run's
   start). Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
 
+## Reporting player-season games
+
+`outcomes:grading:season-games` reports the player-season games read model (statlyaus/Statly#789; the
+architecture doc's "Player-season games read model" section) for one HPN PAV method and a consecutive run
+of seasons, in one read-only transaction. It writes nothing, so it needs no store and no `--out`.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:season-games -- --method <hpn-pav-method:...> --seasons 2011-2026
+```
+
+- Run it on statly-grading-1. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database.
+- Each season prints its `availability` (`available`, `no_head`, `not_finalized`), its calculation id,
+  rows, distinct players, games, PAV, and its `pavWithoutAppearances`, `appearancesWithoutPav` and
+  `gameCountMismatches`. `discrepancies` lists each one. All three counts are 0 on a sound calculation.
+- A season still being calculated reads as `no_head` or `not_finalized`, never as zero games.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark

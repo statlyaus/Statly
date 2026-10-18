@@ -51,7 +51,7 @@ export interface GradeRealizedTradesArguments {
 }
 
 /** `2021-2026` or `2021,2022`: distinct seasons, ascending. */
-function parseSeasons(name: string, value: string): number[] {
+export function parseSeasons(name: string, value: string): number[] {
   const range = /^(\d{4})-(\d{4})$/.exec(value);
   if (range && Number(range[1]) > Number(range[2]))
     throw new TypeError(`${name} must be an ascending season range like 2021-2026.`);
