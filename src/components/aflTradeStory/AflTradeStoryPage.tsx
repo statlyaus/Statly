@@ -9,7 +9,7 @@ import { TradePlayerCards } from './TradePlayerCards';
 import { TradeScarf } from './TradeScarf';
 import {
   bidSharesByPickId,
-  formatSigned,
+  inSentence,
   netText,
   storyClubNames,
   tradeName,
@@ -33,7 +33,6 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   const { story, throughSeason, bidMatches } = model;
   const clubNames = storyClubNames(story);
   const shares = bidSharesByPickId(bidMatches);
-  const alone = new Map(story.nets.tradeAlone.map((net) => [net.clubId, net]));
   const pendingCount = Math.max(
     0,
     ...story.nets.withNextMoves.map(({ pendingCount }) => pendingCount)
@@ -42,10 +41,10 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   return (
     <div className="afl-trade-story min-h-screen">
       <main className="mx-auto w-full max-w-6xl px-4 pt-5 pb-16 sm:px-6">
-        <p className="mb-4 rounded-lg border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 text-sm">
+        <p className="mb-4 rounded-lg border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 ts-body">
           <b>Private page.</b> Not for publication. {model.source.label}.
         </p>
-        <nav aria-label="Breadcrumb" className="mb-3 text-sm text-(--ts-ink2)">
+        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
           <Link href="/dev/afl-trade-stories" className="underline underline-offset-2">
             Private trades
           </Link>{' '}
@@ -53,10 +52,8 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         </nav>
 
         <header>
-          <h1 className="max-w-[24ch] text-3xl leading-tight font-semibold text-balance sm:text-4xl">
-            {headline(model)}
-          </h1>
-          <p className="mt-1 text-lg text-(--ts-ink2)">
+          <h1 className="ts-head max-w-[24ch] font-semibold text-balance">{headline(model)}</h1>
+          <p className="mt-1 ts-body text-(--ts-ink2)">
             {tradeName(story.trade.clubs)} trade, {story.trade.year}
           </p>
           <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s value so far">
@@ -67,26 +64,22 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
               >
                 <ClubBadge clubName={net.clubName} named />
                 <b
-                  className={`text-2xl font-semibold tabular-nums ${net.net < 0 ? 'text-(--ts-neg)' : 'text-(--ts-pos)'}`}
+                  className={`ts-net font-semibold tabular-nums ${net.net < 0 ? 'text-(--ts-neg)' : 'text-(--ts-pos)'}`}
                 >
                   {netText(net)}
                 </b>
-                <span className="text-sm text-(--ts-ink2)">{net.clubName}</span>
+                <span className="ts-small text-(--ts-ink2)">{net.clubName}</span>
               </li>
             ))}
           </ul>
-          <ul className="mt-3 space-y-1 text-(--ts-ink2)">
-            {story.nets.withNextMoves.map((net) => {
-              const tradeAlone = alone.get(net.clubId)?.net ?? 0;
-              const later = net.tradeIds.length > 1;
-              return (
-                <li key={net.clubId}>
-                  <b className="text-(--ts-ink)">{net.clubName}:</b> {formatSigned(tradeAlone)} on
-                  this trade
-                  {later ? `, then ${formatSigned(net.net - tradeAlone)} from later trades` : ''}.
-                </li>
-              );
-            })}
+          <ul className="mt-3 grid gap-1.5" aria-label="What each club gave">
+            {story.sides.map((side) => (
+              <li key={side.clubId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <ClubBadge clubName={side.clubName} named />
+                <b className="font-semibold">{side.clubName} gave</b>
+                <span>{side.gave.map(({ label }) => inSentence(label)).join(', ')}</span>
+              </li>
+            ))}
           </ul>
           <p className="mt-3 max-w-[68ch] text-(--ts-ink2)">
             Values are PAV (Player Approximate Value) to {throughSeason}: what each player has given
@@ -102,7 +95,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         <TradePlayerCards story={story} clubNames={clubNames} shares={shares} />
         <TradeLineage story={story} bidMatches={bidMatches} />
 
-        <footer className="mt-10 max-w-[80ch] space-y-1 text-sm text-(--ts-ink2)">
+        <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-(--ts-ink2)">
           <p>
             PAV (Player Approximate Value): what each player has given the club that drafted or
             traded for him, to {throughSeason}.

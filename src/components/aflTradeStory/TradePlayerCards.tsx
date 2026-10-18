@@ -9,6 +9,7 @@ import {
   bidShareOf,
   bidShareValue,
   formatPav,
+  inSentence,
   knownPav,
   PENDING_TEXT,
   type AflTradePageBidShare,
@@ -22,7 +23,7 @@ export function acquiredText(
 ): string {
   const from = clubNames.get(player.acquired.fromClubId) ?? player.acquired.fromClubId;
   const { outcome } = player;
-  const pick = player.acquired.pickLabel;
+  const pick = player.acquired.pickLabel && inSentence(player.acquired.pickLabel);
   if (outcome.kind === 'not_used') return `From ${from}. Not used at the draft.`;
   if (outcome.kind === 'pending') {
     const reason = PENDING_TEXT[outcome.pending];
@@ -67,14 +68,14 @@ function PlayerCard({
         <ClubBadge clubName={player.clubName} />
         {name}
       </h4>
-      <p className="mt-1.5 text-sm text-(--ts-ink2)">
+      <p className="mt-1.5 ts-body text-(--ts-ink2)">
         {acquiredText(player, clubNames, tradeYears)}
       </p>
       <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5">
-        <span className="text-2xl font-semibold tabular-nums">
+        <span className="ts-head font-semibold tabular-nums">
           {value !== null ? formatPav(value) : shareValue !== null ? formatPav(shareValue, 2) : '—'}
         </span>
-        <span className="text-xs text-(--ts-muted)">
+        <span className="ts-small text-(--ts-muted)">
           {value !== null ? (
             'PAV to date'
           ) : share && shareValue !== null ? (
@@ -90,7 +91,7 @@ function PlayerCard({
         </span>
       </p>
       {player.outcome.kind === 'player' ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-(--ts-ink2)">
+        <p className="mt-2 flex items-center gap-1.5 ts-small text-(--ts-ink2)">
           <span
             aria-hidden="true"
             className={`inline-block size-2 rounded-full ${player.stillAtClub ? 'bg-(--ts-live)' : 'border border-(--ts-muted)'}`}
@@ -143,7 +144,7 @@ export function TradePlayerCards({
 
   return (
     <section aria-labelledby="players-title" className="mt-12">
-      <h2 id="players-title" className="text-2xl font-semibold">
+      <h2 id="players-title" className="ts-head font-semibold">
         Who they ended up with
       </h2>
       <p className="mt-1 text-(--ts-ink2)">

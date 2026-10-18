@@ -115,7 +115,7 @@ export function TradeLineage({
   /** A trade's button; a trade the lineage does not list (an earlier one) is plain text. */
   const tradeButton = (tradeId: string, anchor: string, label: string) => {
     const trade = trades.get(tradeId);
-    if (!trade) return <span className="text-sm text-(--ts-ink2)">{label}</span>;
+    if (!trade) return <span className="ts-body text-(--ts-ink2)">{label}</span>;
     const key = `${anchor}|${tradeId}`;
     return (
       <TradeButton
@@ -142,7 +142,7 @@ export function TradeLineage({
 
   return (
     <section aria-labelledby="lineage-title" className="mt-12">
-      <h2 id="lineage-title" className="text-2xl font-semibold">
+      <h2 id="lineage-title" className="ts-head font-semibold">
         Lineage
       </h2>
       <p className="mt-1 text-(--ts-ink2)">
@@ -152,7 +152,7 @@ export function TradeLineage({
       </p>
       <div className="mt-4 rounded-2xl border border-(--ts-line) bg-(--ts-surface) p-3 sm:p-4">
         <ul
-          className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-(--ts-ink2)"
+          className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-(--ts-ink2)"
           aria-label="Key"
         >
           <li className="flex items-center gap-1.5">
@@ -171,7 +171,7 @@ export function TradeLineage({
         </ul>
         {groups.map(({ club, tint, assets }) => (
           <div key={club.clubId} className={`mt-3 rounded-xl p-3 sm:p-4 ${tint}`}>
-            <h3 className="flex items-center gap-2 text-lg font-semibold">
+            <h3 className="flex items-center gap-2 ts-body font-semibold">
               <ClubBadge clubName={club.clubName} size="md" named />
               {club.clubName} received
             </h3>
@@ -186,7 +186,7 @@ export function TradeLineage({
                     className="border-t border-(--ts-line) py-3 first:border-t-0"
                   >
                     <div className="grid gap-2 md:grid-cols-[180px_1fr] md:items-center">
-                      <p className="text-sm font-medium">{asset.label}</p>
+                      <p className="ts-body font-medium">{asset.label}</p>
                       <div className="flex flex-wrap items-center gap-y-2">
                         {before.map((hop) => (
                           <Fragment key={`before-${hop.tradeId}`}>
@@ -229,7 +229,7 @@ export function TradeLineage({
           </div>
         ))}
         <div className="mt-4">
-          <h3 className="text-sm font-medium text-(--ts-ink2)">Trades in this lineage</h3>
+          <h3 className="ts-small font-medium text-(--ts-ink2)">Trades in this lineage</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {story.lineage.trades.map((trade) => (
               <li key={trade.tradeId}>

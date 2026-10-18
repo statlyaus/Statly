@@ -62,18 +62,18 @@ export function LineageTradePanel({
           id={`${id}-title`}
           ref={headingRef}
           tabIndex={-1}
-          className="text-base font-semibold focus:outline-none focus-visible:outline-2"
+          className="ts-body font-semibold focus:outline-none focus-visible:outline-2"
         >
           {name}
           {isThisTrade ? (
-            <span className="ml-2 text-sm font-normal text-(--ts-ink2)">(this trade)</span>
+            <span className="ml-2 ts-body font-normal text-(--ts-ink2)">(this trade)</span>
           ) : null}
         </h4>
         <div className="flex items-center gap-2">
           {isThisTrade ? null : (
             <Link
               href={tradeStoryHref(trade.tradeId)}
-              className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-accent) px-3 text-sm font-semibold text-(--ts-accent) hover:bg-(--ts-bg2)"
+              className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-accent) px-3 ts-body font-semibold text-(--ts-accent) hover:bg-(--ts-bg2)"
             >
               Trade page <span aria-hidden="true">&nbsp;→</span>
               <span className="sr-only"> for {name}</span>
@@ -82,7 +82,7 @@ export function LineageTradePanel({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-line) px-3 text-sm hover:border-(--ts-muted)"
+            className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-line) px-3 ts-body hover:border-(--ts-muted)"
           >
             Close<span className="sr-only"> {name}</span>
           </button>
@@ -94,7 +94,7 @@ export function LineageTradePanel({
           const got = trade.assets.filter(({ toClubId }) => toClubId === club.clubId);
           return (
             <div key={club.clubId}>
-              <p className="flex items-center gap-2 text-sm font-medium">
+              <p className="flex items-center gap-2 ts-body font-medium">
                 <ClubBadge clubName={club.clubName} named />
                 {club.clubName} got
                 {net ? (
@@ -110,7 +110,7 @@ export function LineageTradePanel({
                 {got.map((asset) => (
                   <li
                     key={asset.transferId}
-                    className="flex justify-between gap-3 border-t border-(--ts-line) py-1.5 text-sm"
+                    className="flex justify-between gap-3 border-t border-(--ts-line) py-1.5 ts-body"
                   >
                     <span>
                       {asset.label}{' '}
