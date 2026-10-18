@@ -40,7 +40,7 @@ import {
   resolveAflTradeGateEligibility,
   validateAflTradeGateDecisionLedger,
 } from '../governance/gateDecisionLedger';
-import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
+import { createAflTradeGate0AEvaluator } from '../source/gate0aEvaluation';
 import { type AflTradeGate0AReceipt, aflTradeGate0AReceiptSchema } from '../source/gate0aReceipt';
 import {
   type AflTradeSourceRightsProposal,
@@ -1026,6 +1026,7 @@ function rightsCoverageIsCurrent(
   if (!exactIds([...requestedReceiptIds], [...runReceiptById.keys()].sort())) return null;
   if (runReceiptById.size !== requiredProposalIds.length) return null;
   const validityBoundaries: string[] = [];
+  const evaluateGate0A = createAflTradeGate0AEvaluator(evidence.gateDecisionLedger);
 
   for (const evaluation of evidence.admission.content.sourceRightsEvaluations) {
     const rights = rightsById.get(evaluation.proposalId);
@@ -1046,7 +1047,7 @@ function rightsCoverageIsCurrent(
     ) {
       return null;
     }
-    const reevaluated = evaluateAflTradeGate0A(evidence.gateDecisionLedger, rights, {
+    const reevaluated = evaluateGate0A(rights, {
       ...runReceipt.content.request,
       evaluatedAt,
     });

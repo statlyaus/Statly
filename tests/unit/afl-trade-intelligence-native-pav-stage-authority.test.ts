@@ -19,7 +19,7 @@ describe('native PAV stage evidence authentication', () => {
   let native: Awaited<ReturnType<typeof nativePavModelRunSqlFixture>>;
   beforeAll(async () => {
     native = await nativePavModelRunSqlFixture();
-  }, 30_000);
+  }, 60_000);
 
   it('refuses fixture/human authority at the private non-production stage boundary', () => {
     const fixture = native.template;

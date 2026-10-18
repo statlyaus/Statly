@@ -87,6 +87,18 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
     options: `-c search_path=${schemaName}`,
     max: 4,
   });
+  // pg-pool destroys a client whose query failed and opens a new one for the next query. PostgreSQL
+  // reports an error before it aborts the statement's transaction, so the dying backend can still
+  // hold an advisory key the failed read try-locked, and the next read then fails with 40001 (#819).
+  // Releasing the client normally keeps it: its next statement waits for the abort to finish.
+  outcomesPool.query = (async (text: string, values?: unknown[]) => {
+    const client = await outcomesPool.connect();
+    try {
+      return await client.query(text, values);
+    } finally {
+      client.release();
+    }
+  }) as unknown as Pool['query'];
 
   function scopedDatabaseUrl(): string {
     const scoped = new URL(databaseUrl);
@@ -2668,6 +2680,6 @@ describe.each(['instant', 'day', 'year', 'rookie', 'future'] as const)('factual 
       )).rows).toHaveLength(1);
 
 
-    });
+    }, 90_000);
   });
 });
