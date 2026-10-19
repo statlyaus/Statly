@@ -1065,7 +1065,15 @@ Prerequisites:
      read as `open`; the 2015 and 2016 pages do not write ` - Not Matched`). A zone naming another
      club, or any other `-` annotation, stays an `unsupported_row` issue, and v4 refuses any page
      year outside 2011 to 2016. The 2011 to 2016 `-parser-v3` decisions of 2026-10-17 and their
-     captures stay recorded; only 2014's v3 capture was issue-free; and
+     captures stay recorded; only 2014's v3 capture was issue-free. The 2000 to 2010 pages alone are
+     read by `draftguru-national-year-page/v5` (issue 789, owner decision 2026-10-20), so their
+     decisions are `-parser-v5`. These seasons give the traded-player fit a career-stage origin
+     only; they are never promoted to canonical drafts, because no Official AFL completed-session
+     proof dates them. v5 reviews two forms on top of v3: the `Training Squad Selection` pathway
+     label (the 2010 page; counted and dropped) and `Scholarship(NSW)`, read as `academy` on a
+     Sydney selection and `open` on any other club's. Any other scholarship text stays an
+     `unsupported_row` issue, and v5 refuses any page year outside 2000 to 2010. The 2000 to 2010
+     `-parser-v3` decisions of 2026-10-20 and their captures stay recorded; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
@@ -1138,7 +1146,7 @@ Prerequisites:
      `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
-   `draftguru-national-year-page/v4`),
+   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v5`),
    `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
@@ -1310,7 +1318,7 @@ change of its own.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages), which keeps national selections and counts every other pathway
+(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v5 for the 2000 to 2010 pages), which keeps national selections and counts every other pathway
 as excluded, and records each selection's access category from the page's category cell. An
 unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 
