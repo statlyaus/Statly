@@ -282,8 +282,9 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
 - **Stage bands** (curve intercepts): 1, 2-3, 4-5, 6-7, 8-9, 10+. Band 1 holds only pre-trade seasons.
   10+ is pooled because it is exact for every left-censored veteran after a trade: a player first seen in
   2011 is at stage 10 or more in every season from 2020. His pre-trade seasons below that have an unknown
-  band: they are out of the curve fit and the variance components, and scored at their lower-bound band in
-  own form. Position is not used (the outcomes database has none) and neither is birth date
+  band: they are out of the curve fit, the variance components and own form. Scored at the lower bound, a
+  veteran's early seasons read against a far younger expectation: in the first genuine back-test that put the
+  13 left-censored legs 25 PAV high at the trade. Position is not used (the outcomes database has none) and neither is birth date
   (`outcome_player.birth_date` is null for more than half the players).
 - **Phase** of a season, relative to his most recent trade before it (a trade in `Y` comes after season
   `Y`): `pre_trade` (before his first trade in the window), `tenure_1`, `tenure_2`, `tenure_3+`.

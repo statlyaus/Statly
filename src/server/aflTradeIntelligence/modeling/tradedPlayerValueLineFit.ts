@@ -341,19 +341,24 @@ interface Effect {
   gamesPlayed: number;
 }
 
-/** The player's additive effects at checkpoint `c`, each against its own season's stage and phase. */
+/**
+ * The player's additive effects at checkpoint `c`, each against its own season's stage and phase. A
+ * season whose band is unknown (a left-censored stage below 10+) is left out: scored at its lower bound,
+ * a veteran's season reads against a far younger expectation and inflates his effect.
+ */
 function playerEffect(priors: Priors, leg: Valued, checkpoint: number, mode: OwnForm): Effect {
-  const seasons: PhasedSeason[] = [];
-  if (mode === 'full') seasons.push(...leg.history.filter(({ season }) => season <= checkpoint));
+  const candidates: PhasedSeason[] = [];
+  if (mode === 'full') candidates.push(...leg.history.filter(({ season }) => season <= checkpoint));
   if (mode !== 'none')
     for (const season of leg.stint)
       if (season.season <= checkpoint)
-        seasons.push({ ...season, phase: tenurePhase(season.season - leg.tradeSeason) });
+        candidates.push({ ...season, phase: tenurePhase(season.season - leg.tradeSeason) });
+  const seasons = candidates.filter(({ season }) => knownBand(leg.stage, season) !== null);
   let gamesResidual = 0;
   let rateResidual = 0;
   let games = 0;
   for (const season of seasons) {
-    const band = scoringBand(leg.stage, season.season);
+    const band = knownBand(leg.stage, season.season)!;
     gamesResidual += season.games - Math.exp(linear(priors.games, band, season.phase));
     rateResidual += season.pav - season.games * Math.exp(linear(priors.rate, band, season.phase));
     games += season.games;

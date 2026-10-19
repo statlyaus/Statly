@@ -583,6 +583,28 @@ describe('aflTradeTradedPlayerValueAt', () => {
     ).toBeGreaterThan(atTrade.value);
   });
 
+  it('leaves a left-censored veteran’s unknown-band seasons out of his form', () => {
+    // First seen in 2011, so stage >= s - 2010: only 2020 and later are certainly 10+.
+    const veteran: AflTradeTradedPlayerValueInput = {
+      ...base,
+      stage: { basis: 'first_game', originSeason: 2010, leftCensored: true },
+      career: range(2011, 2026).map((season) => ({ season, games: 15, pav: 6 })),
+    };
+    const withCareerSeason = (season: number, pav: number) => ({
+      ...veteran,
+      career: veteran.career.map((row) => (row.season === season ? { ...row, pav } : row)),
+    });
+    const atTrade = aflTradeTradedPlayerValueAt(parameters, veteran, tradeSeason);
+    expect(atTrade.effect.seasons).toBe(2);
+    // A great 2015 (lower bound 5, true band unknown) does not move him; a great 2020 (10+) does.
+    expect(
+      aflTradeTradedPlayerValueAt(parameters, withCareerSeason(2015, 40), tradeSeason).value
+    ).toBe(atTrade.value);
+    expect(
+      aflTradeTradedPlayerValueAt(parameters, withCareerSeason(2020, 40), tradeSeason).value
+    ).toBeGreaterThan(atTrade.value);
+  });
+
   it('gives a player with no history no effect at the trade', () => {
     const youngest = aflTradeTradedPlayerValueAt(
       parameters,
