@@ -364,7 +364,16 @@ export class WaiverProcessingService {
         type: 'waiver-successful',
       });
       priorityEntries = buildAdvancedWaiverPriorityUpdates(priorityEntries, claim.userId);
-      await this.projectionService.projectLeague({ leagueId: input.leagueId });
+      try {
+        await this.projectionService.projectLeague({ leagueId: input.leagueId });
+      } catch (error) {
+        // The claim is already settled in Prisma; a stale availability projection must not stop the run.
+        logger.warn('Failed to refresh the availability projection after a waiver claim', {
+          leagueId: input.leagueId,
+          claimId: claim.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
       results.push({ id: claim.id, status: 'SUCCESSFUL' });
     }
@@ -802,19 +811,13 @@ export class PrismaWaiverClaimStore implements ClaimStore {
         this.recordActivity({ leagueId: input.leagueId, claim, type: 'waiver-submitted' }),
       ]);
     } catch (error) {
-      await this.cancelPendingClaim({
+      // The claim and its reserved bid are already committed in Prisma; the Firestore copy is only a
+      // compatibility projection, so a failed write must not cancel the claim.
+      logger.warn('Failed to write Firestore waiver compatibility projection after submit', {
         leagueId: input.leagueId,
         claimId: action.id,
-        claim,
-        cancelledBy: input.userId,
-      }).catch((cleanupError) => {
-        logger.warn('Failed to clean up canonical waiver claim after projection failure', {
-          leagueId: input.leagueId,
-          claimId: action.id,
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
+        error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
     }
 
     return { id: action.id, processingAt };
