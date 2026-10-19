@@ -9,11 +9,11 @@ import { normalizeFantasyCategoryKeys } from '@/types/fantasyCategories';
 
 import { generateCompetitionSchedule, generateManualCompetitionSchedule } from './fixtureGenerator';
 import {
-  parseCompetitionRulesJson,
+  normalizeCompetitionRules,
   type CompetitionRules,
   validateCompetitionRules,
 } from './competitionRules';
-import { parseLineupSlotsJson } from './lineupSettings';
+import { normalizeLineupSlots } from './lineupSettings';
 import { normalizeRoundMatchStatus, type RawRoundMatch } from './liveStatsAdapter';
 import type { LeagueScoringMode } from './scoringTypes';
 import { calculateStandingsRows } from './standingsService';
@@ -152,12 +152,12 @@ export async function publishCompetition({
   ]);
   const effectiveRules =
     rules ??
-    parseCompetitionRulesJson(league.settings.competitionRulesJson, categories[0] ?? 'goals');
+    normalizeCompetitionRules(league.settings.competitionRulesJson, categories[0] ?? 'goals');
   const validationIssues = validateCompetitionRules({
     rules: effectiveRules,
     teamCount: league.members.length,
     categories,
-    lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
+    lineupSlots: normalizeLineupSlots(league.settings.lineupSlotsJson),
     rosterSize: league.settings.rosterSize,
   });
   if (validationIssues.length) {
@@ -257,7 +257,7 @@ export async function publishCompetition({
         where: { id: league.settingsId },
         data: {
           competitionStatus: 'PENDING',
-          competitionRulesJson: JSON.stringify(effectiveRules),
+          competitionRulesJson: effectiveRules,
           competitionPublishedAt: publishedAt,
         },
       });

@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
-import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import { normalizeCompetitionRules } from '@/server/leagues/competitionRules';
 import { parseLeagueCategories } from '@/server/leagues/defaultLineups';
 import { aggregateFinalizedCategoryTotals } from '@/server/leagues/matchupReadModel';
 import { buildLeagueStandings } from '@/server/leagues/standingsReadModel';
@@ -25,11 +25,11 @@ export async function loadLeagueStandingsHistory(
   if (!league?.settings) return null;
 
   const categories = parseLeagueCategories(league.categoriesJson);
-  const rules = parseCompetitionRulesJson(
+  const rules = normalizeCompetitionRules(
     league.settings.competitionRulesJson,
     categories[0] ?? 'goals'
   );
-  const categoryDirections = parseCategoryDirectionsJson(
+  const categoryDirections = normalizeCategoryDirections(
     categories,
     league.settings.categoryDirectionsJson
   );

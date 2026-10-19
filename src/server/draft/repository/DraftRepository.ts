@@ -129,8 +129,8 @@ function toSettingsSnapshot(settings: {
   benchSize: number;
   pickSeconds: number;
   allowAutoPick: boolean;
-  positionLimitsJson: string | null;
-  autoPickRulesJson: string | null;
+  positionLimitsJson: PrismaNS.JsonValue;
+  autoPickRulesJson: PrismaNS.JsonValue;
   draftType: 'SNAKE' | 'LINEAR';
 }): DraftSettingsSnapshot {
   return {

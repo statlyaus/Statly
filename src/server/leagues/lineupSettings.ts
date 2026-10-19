@@ -37,16 +37,6 @@ export function normalizeLineupSlots(input: unknown): LineupSlotSettings {
   return hasAnyValidValue ? normalized : DEFAULT_ACTIVE_LINEUP_SLOTS;
 }
 
-export function parseLineupSlotsJson(value: string | null | undefined): LineupSlotSettings {
-  if (!value) return DEFAULT_ACTIVE_LINEUP_SLOTS;
-
-  try {
-    return normalizeLineupSlots(JSON.parse(value));
-  } catch {
-    return DEFAULT_ACTIVE_LINEUP_SLOTS;
-  }
-}
-
 export function totalActiveLineupSlots(slots: LineupSlotSettings): number {
   return ACTIVE_LINEUP_SLOTS.reduce((total, slot) => total + slots[slot], 0);
 }

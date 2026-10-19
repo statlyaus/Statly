@@ -16,7 +16,7 @@ describe('draft create route architecture', () => {
     expect(source).toContain('orderMembersForDraft(league.members, body.participants, pickOrder)');
     expect(source).toContain('data: { draftSlot: i + 1 }');
     expect(source).toContain('memberId: orderedMembers[i].id');
-    expect(source).toContain('positionLimitsJson: JSON.stringify(positionLimits)');
-    expect(source).toContain('autoPickRulesJson: JSON.stringify(autoPickRules)');
+    expect(source).toContain('positionLimitsJson: positionLimits');
+    expect(source).toContain('autoPickRulesJson: autoPickRules');
   });
 });

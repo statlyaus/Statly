@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
           maxTeams: teamCount,
           pickSeconds: 120,
           allowAutoPick: true,
-          positionLimitsJson: JSON.stringify(positionLimits),
+          positionLimitsJson: positionLimits,
           draftType: DraftType.SNAKE,
           startAt: draftStartTime,
           timeZone: 'UTC',

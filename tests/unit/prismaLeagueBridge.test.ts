@@ -181,8 +181,8 @@ describe('prismaLeagueBridge', () => {
       draftType: DraftType.LINEAR,
       pickSeconds: 90,
       allowAutoPick: true,
-      positionLimitsJson: JSON.stringify({ DEF: 5, MID: 7, RUC: 2, FWD: 4, BENCH: 4 }),
-      autoPickRulesJson: JSON.stringify({ enabled: true, strategy: 'queue-first' }),
+      positionLimitsJson: { DEF: 5, MID: 7, RUC: 2, FWD: 4, BENCH: 4 },
+      autoPickRulesJson: { enabled: true, strategy: 'queue-first' },
       members: [
         {
           id: 'owner-member',
@@ -211,8 +211,8 @@ describe('prismaLeagueBridge', () => {
       timeZone: 'Australia/Melbourne',
       pickSeconds: 90,
       allowAutoPick: false,
-      positionLimitsJson: JSON.stringify({ DEF: 6, MID: 8, RUC: 2, FWD: 6, BENCH: 4 }),
-      autoPickRulesJson: JSON.stringify({ enabled: false, strategy: 'best-available' }),
+      positionLimitsJson: { DEF: 6, MID: 8, RUC: 2, FWD: 6, BENCH: 4 },
+      autoPickRulesJson: { enabled: false, strategy: 'best-available' },
       members: [
         {
           id: 'owner-member',

@@ -38,7 +38,7 @@ describe('league roster route read model', () => {
       id: 'league-1',
       categoriesJson: JSON.stringify(['goals', 'tackles', 'inside50s']),
       settings: {
-        categoryDirectionsJson: JSON.stringify({ tackles: 'LOW_WINS' }),
+        categoryDirectionsJson: { tackles: 'LOW_WINS' },
       },
     });
     prismaMocks.leagueRosterPlayer.findMany.mockResolvedValue([
