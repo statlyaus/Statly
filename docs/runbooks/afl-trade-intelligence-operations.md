@@ -3668,6 +3668,42 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   (`traded_player_fit_not_stored`) and its trades' nets are provisional. Report the provisional count;
   do not read a provisional net as a result.
 
+## Fitting the traded-player value line
+
+`outcomes:grading:traded-player-value-line-fit` fits and back-tests the traded-player value line
+(statlyaus/Statly#789; owner decision 2026-10-19; the architecture doc's "Traded-player value-line fit"
+section and the value-line spec's "Traded-player fit"). It reads one candidate's player trade legs and
+their ledger stints, the player-season games read model and every canonical draft row, and its one write is
+the fit's evidence record in the registered store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:traded-player-value-line-fit -- \
+  --candidate <external-reconciliation:...> --method <hpn-pav-method:...> \
+  --trade-seasons 2019-2025 --seasons 2011-2026 --official-seasons <seasons> \
+  --store-id <store-id> --out <absolute-path.json>
+```
+
+- Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
+  this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
+  pipeline is running.
+- Use the candidate and official seasons of the current realized batch. `--seasons` starts at or before
+  the first trade season (2011, so pre-trade careers are read) and ends after the last.
+- Run `--dry-run` first: it fits and writes `--out` without `--store-id` and stores nothing.
+- Every season in `--seasons` must have a finalized calculation with no games discrepancy (check with
+  "Reporting player-season games"), every ledger stint season must have PAV that matches the read model,
+  and the grader's calculation ids must equal the read model's, or it refuses.
+- `--out` is never overwritten. The printed line has the fit id, the leg diagnostics, the parameters, the
+  back-test by stage band and checkpoint, and the stored `artifactId`.
+- Check before anything reads the fit: `legs` (reviewed and excluded counts against the #869 record, 173
+  reviewed traded arrivals with Cameron's unreviewed: re-count them here), `fitWindow.legsByTradeSeason`
+  (counts by stage basis per trade season), `parameters.varianceComponents` (both variances positive,
+  `k_games` their ratio, `k_rate` their ratio or the 10-game guard), the back-test against the
+  produced-only, stage-only and post-trade-only baselines, and the calibration bins. Expect 25 to 45 legs
+  per fold: judge every bias against its standard error. A bias in one direction in every band at a
+  checkpoint is a finding to report, not a reason to re-tune. Checkpoint 3 rests on four trade seasons and
+  the tail past tenure 7 cannot be back-tested.
+
 ## Building pick values and complete trade assessments
 
 ### Registering the HPN reference benchmark

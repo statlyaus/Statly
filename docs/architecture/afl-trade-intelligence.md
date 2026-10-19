@@ -4201,7 +4201,7 @@ It is pure and deterministic (trade order does not change the id).
 player-season games read model, the reconciliation candidate (transfers, custody orders, Footyinfo boards
 and draft selections) and a realized-trade-grade batch, read only for its trades, legs and onward links,
 never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`)
-estimates traded players' open stints; the fit behind it is built separately. Inputs that pin different
+estimates traded players' open stints; its fit is `modeling/tradedPlayerValueLineFit.ts` (below), not yet wired into the command. Inputs that pin different
 calculations for a season, a games read model of another method, a checkpoint past the fit's last season
 or a tenure past the curves' horizon are refused.
 
@@ -4212,6 +4212,39 @@ views, and per club the at-trade net and the net at each draft and season end, p
 pending. `npm run outcomes:grading:value-lines` (`Scripts/compute-value-lines.ts`) stores it as
 `derived_private` in repository `value-lines`. See the operations runbook, "Computing the value lines".
 The trade story does not read the value lines yet (implementation order step 5).
+
+### Traded-player value-line fit
+
+`modeling/tradedPlayerValueLineFit.ts` fits and back-tests the traded-player value line
+([afl-trade-value-line-method.md](afl-trade-value-line-method.md), "Traded-player fit"; statlyaus/Statly#789;
+owner decision 2026-10-19: a traded player's open stint is estimated like a pick). The prior is by career
+stage (seasons since the player's first canonical draft, else his first game, else assumed youngest; bands
+1, 2-3, 4-5, 6-7, 8-9, 10+) and phase (pre-trade, tenure 1, 2, 3+ at the receiving club), with three small
+GLMs (survival, games per season, PAV per game), own form by the pick fit's credibility rule over every
+career season through the checkpoint, and `k_games` and `k_rate` from the pick fit's variance components.
+It reuses the pick fit's exported `solve`, `varianceComponents`, `errorRow` and `round`, so the pick fit's
+id is unchanged. It is pure and deterministic. `aflTradeTradedPlayerValueAt` values one leg at a checkpoint
+from the published parameters alone.
+
+**Inputs.** `modeling/postgresTradedPlayerValueLineFitInputs.ts` composes three read-only, repeatable-read
+reads: the realized grader's inputs for one candidate (`loadAflTradeRealizedTradeGradeInputs`; its trade
+legs, v3 season spells, v4 reviewed arrivals and PAV), the player-season games read model from 2011, and
+every canonical AFLM draft row of every draft type and year. Each player leg's stint is the asset ledger's
+(`createAflTradeAssetLedgerStintValue`). Unreviewed legs and legs with no canonical player or receiving club
+are counted, not trained on. The fit refuses an unavailable season, any games discrepancy, a stint with
+seasons missing PAV or PAV that differs from the read model, a grader calculation id that differs from the
+read model's, and a draft origin at or after the trade season.
+
+**Output.** Sealed under `traded-player-value-line-fit:<sha256>` (`afl-trade-traded-player-value-line-fit/v1`).
+It holds the rules, the fit window (trade seasons, read seasons with calculation ids, legs per trade season
+by review state and stage basis), leg diagnostics (open, moved, inactive, exclusions, left-censored and
+unknown-band seasons), every coefficient, a prior table by band and phase, the expected stint PAV by stage
+at trade, `k` with its variance components, and the leave-one-trade-season-out back-test: bias, MAE, RMSE
+and standard error by checkpoint and stage band, stage basis and trade season, against produced-only,
+stage-only and post-trade-only baselines, with calibration bins, an 80% interval and per-season totals.
+`npm run outcomes:grading:traded-player-value-line-fit` (`Scripts/fit-traded-player-value-line.ts`) stores
+it as `derived_private` in repository `traded-player-value-line-fits`. See the operations runbook,
+"Fitting the traded-player value line".
 
 ### Private trade page
 
