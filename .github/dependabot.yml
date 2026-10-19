@@ -4,7 +4,8 @@ updates:
   # Security alerts alone leave advisories unactioned, so dependency updates are requested
   # weekly and grouped to keep the review surface small. Major versions are ignored everywhere:
   # each one is a deliberate ticket, not a pull request that sits failing in the queue. The ignore
-  # rule covers version updates only, so security updates still open for majors.
+  # rule covers version updates only, so security updates still open for majors. All four entries
+  # (root, functions, etl and GitHub Actions) are grouped.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -42,6 +43,16 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+    groups:
+      development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      production-patch:
+        dependency-type: production
+        update-types:
+          - patch
 
   - package-ecosystem: npm
     directory: /etl
@@ -55,6 +66,16 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+    groups:
+      development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      production-patch:
+        dependency-type: production
+        update-types:
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -68,3 +89,8 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
