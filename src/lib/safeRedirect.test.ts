@@ -15,6 +15,18 @@ describe('toSafeRedirect', () => {
   });
 
   it.each([
+    '/..//evil.example',
+    '/.//evil.example',
+    '/a/..//evil.example',
+    '/%2e%2e//evil.example',
+  ])('never yields an off-site target for dot-segment path %s', (input) => {
+    const origin = 'https://statly.example';
+    const target = toSafeRedirect(input);
+    expect(target === undefined || new URL(target, origin).origin === origin).toBe(true);
+    expect(target?.startsWith('//')).not.toBe(true);
+  });
+
+  it.each([
     undefined,
     '',
     '//evil.example',
