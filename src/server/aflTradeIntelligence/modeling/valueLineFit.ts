@@ -33,6 +33,13 @@ export const AFL_TRADE_VALUE_LINE_FIT_RULES = {
    * random-effects analysis of variance (method of moments) on the fitted classes.
    */
   ownFormUpdate: 'development_adjusted_additive_credibility',
+  /**
+   * Owner, 2026-10-19 ("Slow it down", "Yes, both floors"): each fitted k is at least this, so a
+   * player's own record never counts faster than 10 games (rate) or 3 seasons (games) against the
+   * prior. A rate floor alone does not slow the year-1 games effect.
+   */
+  minimumRateCredibilityGames: 10,
+  minimumGamesCredibilitySeasons: 3,
   /** The back-test reports an interval between these quantiles of realized minus predicted. */
   intervalQuantiles: [0.1, 0.9],
   /** Calibration bins by predicted value at each checkpoint. */
@@ -515,7 +522,8 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
     rate: fitGlm('poisson', rate, 'rate'),
   };
   // Each k from variance components: a one-way random-effects ANOVA (method of moments, unbalanced)
-  // on the residuals of every in-stint season against its slot's expectation at that tenure.
+  // on the residuals of every in-stint season against its slot's expectation at that tenure, then
+  // floored at the owner's minimum. The variance components are published unfloored.
   const gamesRows: VarianceRow[][] = [];
   const rateRows: VarianceRow[][] = [];
   for (const stint of stints) {
@@ -539,8 +547,14 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
   const rateComponents = varianceComponents(rateRows, 'PAV per game');
   return {
     ...curvePriors,
-    gamesCredibilitySeasons: gamesComponents.within / gamesComponents.between,
-    rateCredibilityGames: rateComponents.within / rateComponents.between,
+    gamesCredibilitySeasons: Math.max(
+      RULES.minimumGamesCredibilitySeasons,
+      gamesComponents.within / gamesComponents.between
+    ),
+    rateCredibilityGames: Math.max(
+      RULES.minimumRateCredibilityGames,
+      rateComponents.within / rateComponents.between
+    ),
     varianceComponents: { games: gamesComponents, rate: rateComponents },
   };
 }
