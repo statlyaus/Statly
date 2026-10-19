@@ -54,11 +54,11 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
 - **prior:**
   - For a drafted player, the expected games and PAV per game for his draft slot at each tenure.
   - For a traded player, the expected rate for his age and position.
-- **k (Owner: fitted from history, floored 2026-10-19):** `k_games` is the number of seasons, and `k_rate`
-  the number of games, at which a player's own record counts as much as the prior. Each is the ratio of
-  the noise in one season (or one game) to how much players genuinely differ, estimated from past draft
-  classes, not chosen by hand, and never below the owner's floors: `k_rate` ≥ 10 games and `k_games` ≥ 3
-  seasons ([Owner decisions](#owner-decisions-2026-10-19)).
+- **k (Owner: fitted from history):** `k_games` is the number of seasons, and `k_rate` the number of
+  games, at which a player's own record counts as much as the prior. Each is the ratio of the noise in
+  one season (or one game) to how much players genuinely differ, estimated from past draft classes, not
+  chosen by hand. `k_rate` has a 10-game guard against a degenerate fit; `k_games` has no floor
+  ([Owner decisions](#owner-decisions-2026-10-19)).
 - **expected_games(s):** games per season expected from the player's availability history and age. An injury
   lowers this. It does not set it to zero.
 - **P(still at club in s):** a survival curve fitted from history. It runs by draft slot and seasons at the
@@ -215,9 +215,10 @@ none of the owner's rules.
 - **k_games and k_rate.** One-way random-effects analysis of variance (method of moments, unbalanced)
   on the residuals against the slot's expectation at each tenure: games per in-stint season, weight 1;
   PAV per game in each in-stint season with a game, weighted by its games. Each `k` is the within-player
-  variance (of one season, or one game) over the between-player variance, then raised to the owner's floor
-  (`k_rate` ≥ 10 games, `k_games` ≥ 3 seasons). The variance components are published as estimated, so a
-  `k` that sits on its floor shows as a ratio below it. The fit refuses a variance that is not positive.
+  variance (of one season, or one game) over the between-player variance. `k_rate` is raised to a 10-game
+  guard if the ratio falls below it; `k_games` is not floored. The variance components are published as
+  estimated, so a `k_rate` on its guard shows as a ratio below it. The fit refuses a variance that is not
+  positive.
   v1 searched a grid for its two weights against the next three seasons' PAV and landed
   on an edge, because the rate blend's error came from development the blend could not see, not from
   noise.
@@ -278,11 +279,13 @@ none of the owner's rules.
 
 1. **Relative own form:** "Yes, compare to pick average." Own form is read against the pick's average at
    the same tenure ([Fit specification](#fit-specification-step-2)).
-2. **Credibility speed:** "Slow it down." Then "Yes, both floors": `k_rate` ≥ 10 games and `k_games` ≥ 3
-   seasons. A floor on `k_rate` alone does not help, because the year-1 overvaluation came from games
-   credibility. The floors apply to the variance-component estimate of each `k` (#1003), as they did to
-   the v1 grid search (a year-1 player with 16 or more games was 14.8 PAV high with `k_rate` = 0 and
-   `k_games` = 1.5).
+2. **Credibility speed:** "Slow it down" was asked of the v1 grid search, where `k_rate` = 0 and a year-1
+   player with 16 or more games was 14.8 PAV high. The variance-component estimate (#1003) fixed that
+   group (-3.4, SE 5.7) with `k_games` = 1.43 seasons. Floors of 3 seasons and 10 games followed (#1010),
+   but on genuine inputs the 3-season games floor made every year-3 bias more negative (all -1.01 to
+   -1.34) and every post-draft RMSE worse (year 1 37.6 to 38.2, year 3 28.6 to 29.1), with the bias
+   changes inside their standard errors. Owner, after review: "Revert games floor". `k_games` is the
+   estimate; `k_rate` keeps its 10-game guard, which does not bind (13.85).
 
 ## Implementation order
 
