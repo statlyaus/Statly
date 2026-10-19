@@ -3630,7 +3630,8 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   calculation with no games discrepancy (check with "Reporting player-season games"), or it refuses.
 - `--out` is never overwritten. The printed line has the fit id, the parameters, the back-test by pick
   range and checkpoint, and the stored `artifactId`.
-- Check `parameters.varianceComponents` (both variances positive, `k` their ratio), the back-test bias
+- Check `parameters.varianceComponents` (both variances positive, `k` their ratio or the owner's floor of
+  3 seasons for games and 10 games for rate, whichever is larger), the back-test bias
   against the draft-slot-only baseline, and the calibration bins before anything reads the fit. Judge a
   bias against its standard error (RMSE over the square root of the selections): picks 1 to 10 have only
   about 100 held-out selections. A bias in one direction across every pick range at a checkpoint is a
