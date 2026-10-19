@@ -147,10 +147,67 @@ describe('fitAflTradeValueLine', () => {
         '9',
         '10+',
       ]);
-      expect(curve.lnSlotSlopes).toHaveLength(3);
+      // Three ln(slot) slopes in each tenure band, 1-3 and 4+.
+      expect(curve.lnSlotSlopes.map(({ tenures, picks }) => `${tenures}:${picks}`)).toEqual([
+        '1-3:1-10',
+        '1-3:10-30',
+        '1-3:30+',
+        '4+:1-10',
+        '4+:10-30',
+        '4+:30+',
+      ]);
     }
-    expect(content.parameters.rateCredibilityGames).toBeGreaterThanOrEqual(0);
-    expect(content.parameters.gamesCredibilitySeasons).toBeGreaterThanOrEqual(0);
+    // k is the within-player season variance over the between-player variance.
+    // Each k is its within-player variance over its between-player variance.
+    const { gamesCredibilitySeasons, rateCredibilityGames, varianceComponents } =
+      content.parameters;
+    for (const [k, components] of [
+      [gamesCredibilitySeasons, varianceComponents.games],
+      [rateCredibilityGames, varianceComponents.rate],
+    ] as const) {
+      expect(components.within).toBeGreaterThan(0);
+      expect(components.between).toBeGreaterThan(0);
+      expect(k).toBeCloseTo(components.within / components.between, 3);
+      expect(components.observations).toBeGreaterThan(components.stints);
+    }
+    // Rate is weighted by games: its total weight is the games played in stints.
+    expect(varianceComponents.rate.weight).toBeGreaterThan(varianceComponents.rate.observations);
+  });
+
+  it('moves a player’s value with his form against his slot at the same tenure', () => {
+    // A 2011 pick's year-1 season raised by 20 PAV: year 1's value rises by the 20 produced plus a
+    // shrunk effect carried to every remaining season; the value at draft does not move.
+    const better = rows.map((row) =>
+      row.playerId === 'p-2011-3' && row.season === 2012 ? { ...row, pav: row.pav + 20 } : row
+    );
+    expect(better).not.toEqual(rows);
+    const refit = fitAflTradeValueLine({ selections, games: model(better) });
+    const before = fit.content.backTest.classes.find(({ draftYear }) => draftYear === 2011)!;
+    const after = refit.content.backTest.classes.find(({ draftYear }) => draftYear === 2011)!;
+    expect(after.fittedAtDraft).toBe(before.fittedAtDraft);
+    expect(after.fittedAtYear1 - before.fittedAtYear1).toBeGreaterThan(20);
+    expect(fit.content.backTest.slotOnlyByRangeAndCheckpoint).toHaveLength(12);
+  });
+
+  it('reports calibration bins and an interval for each range and checkpoint', () => {
+    const { calibration, intervals } = fit.content.backTest;
+    expect(
+      calibration
+        .filter(({ checkpoint }) => checkpoint === 0)
+        .map(({ predictedFrom }) => predictedFrom)
+    ).toEqual([null, 0, 5, 10, 20, 40, 80, 160]);
+    for (const checkpoint of [0, 1, 3])
+      expect(
+        calibration
+          .filter((row) => row.checkpoint === checkpoint)
+          .reduce((sum, { selections }) => sum + selections, 0)
+      ).toBe(400);
+    for (const row of intervals) expect(row.lower).toBeLessThanOrEqual(row.upper);
+    expect(intervals.map(({ range, checkpoint }) => `${checkpoint}:${range}`)).toEqual(
+      [0, 1, 3].flatMap((checkpoint) =>
+        ['1-10', '11-30', '31+', 'all'].map((label) => `${checkpoint}:${label}`)
+      )
+    );
   });
 
   it('fits a pick curve that falls with the slot, beside DPVC', () => {
@@ -211,21 +268,20 @@ describe('fitAflTradeValueLine', () => {
     expect(after.firstStintPav).toBeCloseTo(before.firstStintPav + 16, 3);
   });
 
-  it('publishes how the games slot slopes change with tenure, and only for games', () => {
-    const { parameters } = fit.content;
-    expect(parameters.gamesWhenInStintLog.lnSlotSlopeChangePerTenureSeason).toHaveLength(3);
-    expect(parameters.survivalHazardLogit).not.toHaveProperty('lnSlotSlopeChangePerTenureSeason');
-    expect(parameters.pavPerGameLog).not.toHaveProperty('lnSlotSlopeChangePerTenureSeason');
-  });
-
   it('reads own form against the prior at the same tenures, so development is kept', () => {
-    // One pick in five, spread over the slots, never plays. Everyone else stays, and plays more and
-    // better each season, the same at every slot. A young player's level carried forward as it is
-    // would undervalue every open stint at year 1 and year 3.
+    // Every pick stays, and plays more and better each season, the same at every slot, each at his own
+    // fixed level. A young player's level carried forward as it is would undervalue every open stint
+    // at year 1 and year 3; own form against the same tenure keeps the development and the level.
+    // (#1001's version also had one pick in five never play: those stints all close at tenure 4, and
+    // slot-only survival then closes playing stints too, about 10% low at year 3 whatever the own-form
+    // rule. That is the survival limitation in the spec, not development.)
     const steady: AflTradeValueLineFitSelection[] = [];
     const steadyRows: Row[] = [];
+    const level = random(11);
     for (let year = 2011; year <= 2024; year++)
       for (let slot = 1; slot <= 40; slot++) {
+        const form = 0.6 + 0.8 * level();
+        const availability = 0.7 + 0.3 * level();
         const playerId = `q-${year}-${slot}`;
         steady.push({
           selectionId: `t-${year}-${slot}`,
@@ -234,25 +290,27 @@ describe('fitAflTradeValueLine', () => {
           clubId: 'adelaide',
           playerId,
         });
-        if ((year + slot) % 5 === 0) continue;
         for (let season = year + 1; season <= LAST_SEASON; season++) {
           const tenure = season - year;
-          const games = Math.min(22, 8 + 2 * tenure);
+          const games = Math.round(Math.min(22, 8 + 2 * tenure) * availability);
           steadyRows.push({
             season,
             playerId,
             clubId: 'adelaide',
             games,
-            pav: games * 0.2 * Math.min(2, 1 + tenure / 5),
+            pav: games * 0.2 * form * Math.min(2, 1 + tenure / 5),
           });
         }
       }
     const steadyFit = fitAflTradeValueLine({ selections: steady, games: model(steadyRows) });
     for (const checkpoint of [1, 3]) {
-      const all = steadyFit.content.backTest.byRangeAndCheckpoint.find(
-        (row) => row.range === 'all' && row.checkpoint === checkpoint
-      )!;
-      expect(Math.abs(all.bias) / all.meanRealized).toBeLessThan(0.03);
+      const row = (rows: typeof steadyFit.content.backTest.byRangeAndCheckpoint) =>
+        rows.find((r) => r.range === 'all' && r.checkpoint === checkpoint)!;
+      const own = row(steadyFit.content.backTest.byRangeAndCheckpoint);
+      const slotOnly = row(steadyFit.content.backTest.slotOnlyByRangeAndCheckpoint);
+      expect(Math.abs(own.bias) / own.meanRealized).toBeLessThan(0.03);
+      // Own form carries each player's level, so it beats the slot alone on error.
+      expect(own.meanAbsoluteError).toBeLessThan(slotOnly.meanAbsoluteError);
     }
   });
 
