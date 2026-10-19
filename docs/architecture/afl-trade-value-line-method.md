@@ -53,7 +53,9 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
     by about 12 PAV after year 1 and 10 after year 3 in every pick range.
 - **prior:**
   - For a drafted player, the expected games and PAV per game for his draft slot at each tenure.
-  - For a traded player, the expected rate for his age and position.
+  - For a traded player, what traded players at the same career stage (seasons since his draft, standing
+    in for age) produce from there, at each tenure at the receiving club
+    ([Traded-player fit](#traded-player-fit); owner decision 2026-10-19). Position waits for a source.
 - **k (Owner: fitted from history):** `k_games` is the number of seasons, and `k_rate` the number of
   games, at which a player's own record counts as much as the prior. Each is the ratio of the noise in
   one season (or one game) to how much players genuinely differ, estimated from past draft classes, not
@@ -62,7 +64,7 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
 - **expected_games(s):** games per season expected from the player's availability history and age. An injury
   lowers this. It does not set it to zero.
 - **P(still at club in s):** a survival curve fitted from history. It runs by draft slot and seasons at the
-  club for a drafted player, and by age and tenure for a traded one.
+  club for a drafted player, and by career stage and tenure for a traded one.
 
 Overperformance and underperformance move the line through the same formula. As seasons accumulate, the
 shrinkage tends to 1 and the slot or age prior fades.
@@ -250,8 +252,112 @@ none of the owner's rules.
   its rate `rate(t, p) + u_rate` is not; the calibration's first bin (below 0) shows how often a value line
   goes negative (never in the 2026-10-19 fit). A hazard term in the effect, or a tenure-varying `k`, is a
   later refinement, not part of step 2.
-- **Out of scope here.** The traded-player prior and survival by age and position. `outcome_player`
-  has a birth date for under half the players and no position, so these wait for that data.
+
+### Traded-player fit
+
+Built in `modeling/tradedPlayerValueLineFit.ts` (pure) and run by
+`npm run outcomes:grading:traded-player-value-line-fit`. Owner decision 2026-10-19: a traded player's open
+stint is **estimated** like a pick, not shown as produced-only or pending. Every choice below is published in
+the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded-player-value-line-fit:<sha256>`).
+
+- **Legs.** Every player leg of a candidate trade in the 2019 to 2025 trade periods
+  (`source/officialAflTradePeriodSourceScope.ts`): a transfer with `asset.kind = 'player'`, a canonical
+  player and a receiving club, its trade season `Y`, and its first stint at the receiving club from `Y + 1`
+  by the grader's own rule (`createAflTradeAssetLedgerStintValue`, the asset ledger's stint). A leg is
+  trained on only when its arrival is reviewed (v4), the grader's check. Unreviewed legs, and legs with no
+  canonical player or receiving club, are counted per trade season and left out of training; the
+  calculator still values them, flagged. The #869 record has 173 reviewed traded arrivals, Cameron's the
+  one unreviewed; re-count on the VM at the next real run.
+- **Career stage.** Stage of season `s` is `s − origin`, the count the pick fit calls tenure for a player
+  who never moves; season 1 is the season after his draft. A player traded in `Y` starts his stint in
+  `Y + 1` at stage `(Y − origin) + 1`; tenure at the receiving club is `t = s − Y`. Origin, in order:
+  1. `draft`: his earliest `draft_year` in `outcome_current_canonical_draft_selection_picks('AFLM')`,
+     read for every draft type and year (a re-drafted player's first draft, since stage stands in for age).
+  2. `first_game`: no canonical draft row, so origin = his first season with a game at any club, up to his
+     first trade, minus 1. When that is the first season read (2011) the stage is a lower bound
+     (`leftCensored`).
+  3. `assumed_youngest`: no draft row and no game up to his first trade, so origin = `Y − 1` and his first
+     stint season is stage 2, the youngest a traded player can be. A player drafted in November `Y`
+     cannot be traded in October `Y`, so stage 1 never follows a trade.
+- **Stage bands** (curve intercepts): 1, 2-3, 4-5, 6-7, 8-9, 10+. Band 1 holds only pre-trade seasons.
+  10+ is pooled because it is exact for every left-censored veteran after a trade: a player first seen in
+  2011 is at stage 10 or more in every season from 2020. His pre-trade seasons below that have an unknown
+  band: they are out of the curve fit and the variance components, and scored at their lower-bound band in
+  own form. Position is not used (the outcomes database has none) and neither is birth date
+  (`outcome_player.birth_date` is null for more than half the players).
+- **Phase** of a season, relative to his most recent trade before it (a trade in `Y` comes after season
+  `Y`): `pre_trade` (before his first trade in the window), `tenure_1`, `tenure_2`, `tenure_3+`.
+  `tenure_1` is the reference (effect 0).
+- **Coverage classes**, published per trade season with counts and carried on every value as
+  `stageBasis`: (a) `draft`, national draftees of 2011 to 2025, exact; (b) drafted 2010 or earlier, first
+  game in 2011: `first_game`, left-censored, exact 10+ after the trade; (c) rookie, pre-season, mid-season
+  and SSP listings, and pre-2011 draftees who first played in 2012 or later: `first_game`, stage understated
+  by the seasons listed before a debut, in the fit; (d) no draft row and no game before the trade:
+  `assumed_youngest`; (e) mature-age draftees: `draft`, stage understating age, accepted under "career
+  stage stands in for age". Invisible, as in the ledger: delisting and re-signing at the same club, and a
+  re-draft through a non-canonical pathway.
+- **Stint.** Seasons and status from the ledger stint (a two-club departure season counts if he played
+  for the receiving club, as the grader counts it), with the pick fit's inactivity closure on top: three
+  consecutive in-stint seasons with no game close it after the third. Closed reasons: `moved` (the ledger
+  closed it) or `inactive`. A ledger closure ending in season `e` is visible at the end of `e` when he also
+  played elsewhere in `e`, and otherwise at the end of `e + 1`, so no checkpoint reads a closure early. An
+  open stint is censored at the last season read.
+- **Curves.** Each is `link = stageIntercept[band(stage of s)] + phaseEffect[phase]`:
+  - survival: the per-season hazard of leaving the stint (logit), on bands 2-3 to 10+ and the tenure
+    phases, with half an event and half a non-event per band and tenure phase. A move is an exit once
+    seen, even when the departure season is the last read; an inactivity closure is an exit only inside the
+    window, as in the pick fit;
+  - games per season (quasi-Poisson, log) and PAV per game (quasi-Poisson, log, offset ln games, seasons
+    with a game), on every band and phase. `pre_trade` is a phase, so his history at the old club informs
+    the prior without being read as a season at the new club.
+    About 9 coefficients per curve on 1,000 to 2,000 player-seasons; the pick fit's 10 tenure intercepts
+    and slot slopes would overfit about 280 legs.
+- **Seasons fitted.** Per player, every career season through his last trade (he was on a list to be
+  traded), then his last reviewed leg's stint. Seasons after a stint with no later trade (a retirement, or
+  a move by free agency) are left out: survival already carries the exit, and counting a retired player's
+  empty seasons as low games would charge it twice.
+- **Prior along a stint.** For tenure `t`, band = band(`(Y − origin) + t`) and phase = `tenure_min(t,3)`.
+  A young player traded moves into band 10+ as he ages, where the veterans' higher hazard applies, so
+  ageing out comes from career stage, not from unobserved tenure past 7.
+- **Own form (owner 2026-10-19, the pick rule).** Every career season through the checkpoint, pre-trade at
+  any club included, so a traded star is not valued as an average player at his stage:
+  `u_games = Σ (games(s) − E_games(band_s, phase_s)) / (n + k_games)` over all `n` seasons, zero-game seasons
+  included; `u_rate = Σ (pav(s) − games(s) × E_rate(band_s, phase_s)) / (G + k_rate)` over his `G` games.
+  Post-trade seasons are the stint's seasons at the receiving club.
+- **k.** From the pick fit's `varianceComponents` (one-way random effects, method of moments, unbalanced),
+  grouped by player, on the residuals of every fitted season with a known band. `k_rate` keeps its 10-game
+  guard; `k_games` has no floor; both components are published as estimated, and a between-player
+  variance that is not positive is refused.
+- **Value at checkpoint `c ≥ Y`,** `τ = c − Y`: a closed stint is worth what it produced. An open one is
+  `produced(stint seasons ≤ c) + Σ_{t=τ+1..20} S(t)/S(τ) × max(0, E_games(t) + u_games) × (E_rate(t) + u_rate)`.
+  `τ = 0` is the at-trade view, its own form from seasons up to the trade only. Only seasons `≤ c` are read.
+  `aflTradeTradedPlayerValueAt` computes it from the published parameters alone
+  (`aflTradeTradedPlayerValueLineParameters` refuses another schema or a fit id that does not match its
+  content), so a value line is reproducible from the stored fit; it takes the player's earlier trade
+  seasons, which set his earlier seasons' phases.
+- **Refusals.** A season that is not available or any games discrepancy; a leg whose ledger stint has
+  seasons missing PAV, or whose stint PAV in a season differs from the games read model; a grader PAV
+  calculation id that differs from the games read model's for the same season; a draft origin at or after
+  the trade season; a trade season with no season, or more than 20 seasons, observed after it.
+- **Back-test.** Leave one trade season out: every trade season with at least two observed seasons (2019 to
+  2024 when the last season is 2026) is held out in turn, and all three curves and both `k` are refitted
+  without it. Every player with any leg in that season is removed from the fold entirely, his career
+  included, because his other legs and pre-trade seasons overlap the held-out stint. Each held-out
+  reviewed leg is valued at checkpoints 0, 1 and 3, counting only seasons up to `Y + checkpoint`; a
+  checkpoint is scored for a trade season only when more seasons than it are observed (checkpoint 3 covers
+  2019 to 2022). Realized: the leg's signed first-stint PAV at the receiving club through the last season
+  read; predicted: the value line's expected PAV summed over the same seasons. Reported: bias (mean
+  predicted minus realized), MAE, RMSE and its standard error (RMSE / √n) per leg, by checkpoint and by
+  stage band at trade, by `stageBasis` (`first_game` split by left-censoring) and by trade season; the
+  baselines produced-only (expected remaining 0: the display the owner rejected), stage-only (own form
+  moves nothing) and post-trade-only own form (tests the at-trade use of history); calibration bins
+  (below 0, then 0, 5, 10, 20, 40, 80, 160); the 10th and 90th percentiles of realized minus predicted;
+  per-season totals and each fold's `k`. Expect 25 to 45 legs per fold, so judge every bias against its
+  standard error. Checkpoint 3 rests on four trade seasons, and the tail past tenure 7 cannot be
+  back-tested; the artifact says so.
+- **Known limitations.** Survival does not read own form, as in the pick fit. The 10+ band pools every
+  veteran. First-game stages are understated for players listed before their debut. Recency is not
+  weighted: a veteran's effect is his career average, so decline shows only through the stage prior.
 
 ## What this retires
 
@@ -286,6 +392,13 @@ none of the owner's rules.
    -1.34) and every post-draft RMSE worse (year 1 37.6 to 38.2, year 3 28.6 to 29.1), with the bias
    changes inside their standard errors. Owner, after review: "Revert games floor". `k_games` is the
    estimate; `k_rate` keeps its 10-game guard, which does not bind (13.85).
+3. **Traded players are estimated:** a traded player's open stint is valued like a pick's, not shown as
+   produced-only or pending (owner: "estimated"). The prior is what traded players at the same career stage
+   (seasons since the draft, standing in for age; owner: "Yes, career stage") produce from there, with no
+   position because there is no position data; his own form is blended in by the same credibility rule
+   (games and PAV per game, `k` from variance components); survival is at the receiving club; all fitted
+   from past trades with a held-out back-test ([Traded-player fit](#traded-player-fit)). Position can be
+   added later if it is sourced.
 
 ## Implementation order
 
