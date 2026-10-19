@@ -34,12 +34,11 @@ export const AFL_TRADE_VALUE_LINE_FIT_RULES = {
    */
   ownFormUpdate: 'development_adjusted_additive_credibility',
   /**
-   * Owner, 2026-10-19 ("Slow it down", "Yes, both floors"): each fitted k is at least this, so a
-   * player's own record never counts faster than 10 games (rate) or 3 seasons (games) against the
-   * prior. A rate floor alone does not slow the year-1 games effect.
+   * Owner, 2026-10-19: k_rate is at least this many games, a guard against a degenerate fold (the
+   * estimate on genuine inputs is about 14, so it does not bind). k_games has no floor: a 3-season
+   * floor made every year-3 bias and every post-draft RMSE worse in the back-test.
    */
   minimumRateCredibilityGames: 10,
-  minimumGamesCredibilitySeasons: 3,
   /** The back-test reports an interval between these quantiles of realized minus predicted. */
   intervalQuantiles: [0.1, 0.9],
   /** Calibration bins by predicted value at each checkpoint. */
@@ -522,8 +521,8 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
     rate: fitGlm('poisson', rate, 'rate'),
   };
   // Each k from variance components: a one-way random-effects ANOVA (method of moments, unbalanced)
-  // on the residuals of every in-stint season against its slot's expectation at that tenure, then
-  // floored at the owner's minimum. The variance components are published unfloored.
+  // on the residuals of every in-stint season against its slot's expectation at that tenure; k_rate is
+  // then floored at the guard. The variance components are published unfloored.
   const gamesRows: VarianceRow[][] = [];
   const rateRows: VarianceRow[][] = [];
   for (const stint of stints) {
@@ -547,10 +546,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
   const rateComponents = varianceComponents(rateRows, 'PAV per game');
   return {
     ...curvePriors,
-    gamesCredibilitySeasons: Math.max(
-      RULES.minimumGamesCredibilitySeasons,
-      gamesComponents.within / gamesComponents.between
-    ),
+    gamesCredibilitySeasons: gamesComponents.within / gamesComponents.between,
     rateCredibilityGames: Math.max(
       RULES.minimumRateCredibilityGames,
       rateComponents.within / rateComponents.between
