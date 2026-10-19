@@ -80,6 +80,7 @@
     "outcomes:grading:asset-ledger": "tsx Scripts/export-asset-ledger.ts",
     "outcomes:grading:season-games": "tsx Scripts/report-player-season-games.ts",
     "outcomes:grading:value-line-fit": "tsx Scripts/fit-value-line.ts",
+    "outcomes:grading:traded-player-value-line-fit": "tsx Scripts/fit-traded-player-value-line.ts",
     "outcomes:spells:register-reviewed": "tsx Scripts/register-reviewed-acquisition-spell.ts",
     "outcomes:sources:register-capture-successor": "tsx Scripts/register-capture-successor.ts",
     "outcomes:sources:discover-external-history": "tsx Scripts/discover-external-draft-trade-history.ts",
