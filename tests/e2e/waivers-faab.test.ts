@@ -16,11 +16,10 @@ test('the higher FAAB bid wins the player, is charged, and the outcome shows in 
   test.setTimeout(90_000);
 
   await seedWaiverScenario();
-  // The league page also polls the Firestore-backed social routes, which 500 without Firebase.
-  const waiverServerErrors: string[] = [];
+  const serverErrors: string[] = [];
   page.on('response', (response) => {
-    if (response.url().includes('/waivers') && response.status() >= 500) {
-      waiverServerErrors.push(`${response.status()} ${response.url()}`);
+    if (response.status() >= 500) {
+      serverErrors.push(`${response.status()} ${response.url()}`);
     }
   });
   await authenticateAsDevelopmentUser(page);
@@ -71,5 +70,5 @@ test('the higher FAAB bid wins the player, is charged, and the outcome shows in 
   expect(await secondRun.json()).toMatchObject({ processed: 0 });
 
   await expectNoAppErrorBoundary(page);
-  expect(waiverServerErrors).toEqual([]);
+  expect(serverErrors).toEqual([]);
 });
