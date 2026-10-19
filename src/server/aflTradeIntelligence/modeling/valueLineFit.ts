@@ -163,6 +163,10 @@ function buildStints(inputs: AflTradeValueLineFitInputs): {
       throw new Error(`Selection ${selection.selectionId} has no positive slot.`);
     if (selection.draftYear >= lastSeason)
       throw new Error(`Draft ${selection.draftYear} has no season observed after it.`);
+    if (lastSeason - selection.draftYear > RULES.horizonSeasons)
+      throw new Error(
+        `Draft ${selection.draftYear} has more than ${RULES.horizonSeasons} seasons observed, past the curves.`
+      );
     const slotKey = `${selection.draftYear}|${selection.slot}`;
     if (ids.has(selection.selectionId) || slots.has(slotKey))
       throw new Error(`Selection ${selection.selectionId} is duplicated.`);

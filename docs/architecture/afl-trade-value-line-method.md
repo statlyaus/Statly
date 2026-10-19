@@ -194,7 +194,7 @@ section fixes how the spec above is fitted. It changes none of the owner's rules
     2011 to 2020 averaged 86.
 - **First-stint pick curve.** `V(p) = Σ_{t=1..20} S(t, p) × games(t, p) × rate(t, p)`, with `S` the
   probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
-  10+ tenure group carries the tail.
+  10+ tenure group carries the tail. A class with more than twenty observed seasons is refused.
 - **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
   `Σ_{t>τ} S(t)/S(τ) × expected_games(t) × expected_rate(t)`. A closed stint is worth what it produced.
   Own form is read against the prior at the same tenures (the **relative own form**), then carried to
@@ -276,7 +276,9 @@ k)`. `own_rate` is the PAV per game over the last three in-stint seasons weighte
    stints too low after year 1 and year 3 in every pick range. v2 (relative own form, games slot
    slopes by tenure) brings the year-3 bias to −0.7 PAV a selection (picks 1–10 −1.0, 11–30 −1.7,
    31+ −0.2) and picks 1–10 at the draft from +9.2 to +6.0. Its fitted `k` is 0 games, the grid's lower
-   edge: per-game form relative to the slot is fully credible once a player has games. The owner
+   edge: per-game form relative to the slot is fully credible once a player has games. Players with 1
+   to 5 games in the window are not overvalued (year 1 −4.1, year 3 −0.7), but at year 1 those with 16
+   or more are (+14.8, 83 stints): a strong first season is carried forward at full weight. The owner
    confirms the relative form and `k` = 0 before step 3 reads them.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.

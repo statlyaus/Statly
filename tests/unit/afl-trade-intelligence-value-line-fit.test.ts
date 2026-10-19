@@ -295,6 +295,12 @@ describe('fitAflTradeValueLine', () => {
     ).toThrow(/no season observed after it/);
     expect(() =>
       fitAflTradeValueLine({
+        selections: [...selections, { ...selections[0]!, selectionId: 'old', draftYear: 2005 }],
+        games: model(rows, range(2006, LAST_SEASON)),
+      })
+    ).toThrow(/more than 20 seasons observed/);
+    expect(() =>
+      fitAflTradeValueLine({
         selections,
         games: {
           ...games,
