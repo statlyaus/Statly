@@ -342,6 +342,117 @@ describe('Draftguru event year provenance', () => {
     });
   });
 
+  describe('national-year parser v5 early forms (2000 to 2010 pages)', () => {
+    const V5 = 'draftguru-national-year-page/v5';
+    // The reduced 2020 table read as a 2008 page: v5 is reviewed for page years 2000 to 2010 only.
+    const parseNational = (body = html, parserVersion = V5, draftYear = 2008) =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: {
+          ...capture,
+          sourceUrl: `https://www.draftguru.com.au/years/${draftYear}`,
+          parserVersion,
+        },
+        draftYear,
+      });
+    const selection = (result: ReturnType<typeof parseNational>, number: number) =>
+      result.evidence.find(
+        ({ content }) =>
+          content.claim.kind === 'draft_selection' && content.claim.selectionNumber === number
+      )?.content.claim;
+    // Sets the category cell of national pick `number`; pick 1 is the Western Bulldogs', 4 Sydney's.
+    const withCategory = (number: number, label: string) => {
+      const $ = load(html);
+      const row = $('tbody tr').filter(
+        (_i, tr) =>
+          $(tr).find('td.draft').text().trim() === 'National' &&
+          $(tr).find('td.number').text().trim() === String(number)
+      );
+      expect(row).toHaveLength(1);
+      row.find('td.category').eq(1).text(label);
+      return $.html();
+    };
+    // A training-squad row as the 2010 page lists it.
+    const withTrainingSquadRow = () => {
+      const $ = load(html);
+      const national = $('tbody tr')
+        .filter((_i, tr) => $(tr).find('td.draft').text().trim() === 'National')
+        .first();
+      const squad = national.clone();
+      squad.find('td.draft').text('Training Squad Selection');
+      squad.find('td.category').eq(1).text('');
+      national.before(squad);
+      return $.html();
+    };
+
+    it('emits exactly the v3 claims on a page with only the v3 forms', () => {
+      const v3 = parseNational(html, 'draftguru-national-year-page/v3');
+      const v5 = parseNational();
+      expect(v5.issues).toEqual([]);
+      expect(v5.evidence.map(({ content }) => content.claim)).toEqual(
+        v3.evidence.map(({ content }) => content.claim)
+      );
+    });
+
+    it.each([
+      // A NSW scholarship player Sydney took.
+      [4, 'Scholarship(NSW)', 'academy'],
+      // A NSW scholarship player another club took with an ordinary pick.
+      [1, 'Scholarship(NSW)', 'open'],
+      [1, 'Father-Son(Chris Waterman)', 'father_son'],
+    ])('reads pick %s marked %s as %s', (number, label, expected) => {
+      const result = parseNational(withCategory(number, label));
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(selection(result, number)).toMatchObject({
+        accessCategory: expected,
+        draftYear: 2008,
+      });
+    });
+
+    it.each(['Scholarship(VIC)', 'Scholarship', 'Scholarship (NSW)', 'Zone(Western Bulldogs)'])(
+      'quarantines %s',
+      (label) => {
+        expect(parseNational(withCategory(1, label)).issues).toContainEqual(
+          expect.objectContaining({ code: 'unsupported_row' })
+        );
+      }
+    );
+
+    it('counts and drops a training-squad row', () => {
+      const result = parseNational(withTrainingSquadRow());
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(result.scopeSummary.excludedByPathway).toMatchObject({
+        'Training Squad Selection': 1,
+      });
+    });
+
+    it('keeps v3 and v4 refusing the scholarship form and the training-squad label', () => {
+      for (const [version, year] of [
+        ['draftguru-national-year-page/v3', 2008],
+        ['draftguru-national-year-page/v4', 2011],
+      ] as const) {
+        expect(
+          parseNational(withCategory(1, 'Scholarship(NSW)'), version, year).issues
+        ).toContainEqual(expect.objectContaining({ code: 'unsupported_row' }));
+        expect(parseNational(withTrainingSquadRow(), version, year).issues).toContainEqual(
+          expect.objectContaining({ detail: 'Unreviewed pathway label in national-only capture.' })
+        );
+      }
+    });
+
+    it.each([1999, 2011, 2020])('refuses a %s page under v5', (year) => {
+      const result = parseNational(html, V5, year);
+      expect(result.evidence).toEqual([]);
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('2000 to 2010 pages only'),
+        })
+      );
+    });
+  });
+
   it.each([
     [2020, 'https://example.com/years/2020'],
     [2020, 'https://www.draftguru.com.au/years/2021'],

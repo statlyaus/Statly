@@ -91,12 +91,26 @@ export const DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS: readonly number[] = [
   2011, 2012, 2013, 2014, 2015, 2016,
 ];
 
+/**
+ * v5 reads the 2000 to 2010 pages only (issue 789, owner decision 2026-10-20: career-stage origins,
+ * never canonical). On top of v3 it reviews two forms those pages use: the `Training Squad Selection`
+ * pathway label (counted and dropped, never a national pick) and `Scholarship(NSW)`, the NSW
+ * scholarship players, read as `academy` on a Sydney selection and `open` on any other club's.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION = 'draftguru-national-year-page/v5';
+
+/** The page years parser v5 is reviewed for. */
+export const DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS: readonly number[] = [
+  2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+];
+
 /** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
 export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
   return (
     parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION ||
-    parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION
   );
 }
 
