@@ -22,10 +22,10 @@ export type DraftAutoPickStrategy = 'queue-first' | 'best-available' | 'fill-pos
 
 export type DraftPositionLimits = Record<PositionLimitKey, number>;
 
-export interface DraftAutoPickRules {
+export type DraftAutoPickRules = {
   enabled: boolean;
   strategy: DraftAutoPickStrategy;
-}
+};
 
 export const DEFAULT_DRAFT_POSITION_LIMITS: DraftPositionLimits = {
   DEF: 5,

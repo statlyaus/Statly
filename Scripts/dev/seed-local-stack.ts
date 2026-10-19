@@ -1,5 +1,7 @@
 #!/usr/bin/env tsx
 
+import { isDeepStrictEqual } from 'node:util';
+
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099';
 process.env.GOOGLE_CLOUD_PROJECT ??= 'statly-4cbed';
@@ -106,8 +108,8 @@ async function main() {
     ...LEGACY_LOCAL_DEVELOPMENT_USER_IDS,
   ];
   const categoriesJson = JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]);
-  const positionLimitsJson = JSON.stringify(LOCAL_TEST_DRAFT_POSITION_LIMITS);
-  const autoPickRulesJson = JSON.stringify(DEFAULT_DRAFT_AUTO_PICK_RULES);
+  const positionLimitsJson = LOCAL_TEST_DRAFT_POSITION_LIMITS;
+  const autoPickRulesJson = DEFAULT_DRAFT_AUTO_PICK_RULES;
   const rosterSize = getRosterSizeFromPositionLimits(LOCAL_TEST_DRAFT_POSITION_LIMITS);
   const benchSize = getBenchSizeFromPositionLimits(LOCAL_TEST_DRAFT_POSITION_LIMITS);
   const repairedPickExpiryJobs: Array<{
@@ -164,8 +166,8 @@ async function main() {
       if (
         league.settings.rosterSize !== rosterSize ||
         league.settings.benchSize !== benchSize ||
-        league.settings.positionLimitsJson !== positionLimitsJson ||
-        league.settings.autoPickRulesJson !== autoPickRulesJson
+        !isDeepStrictEqual(league.settings.positionLimitsJson, positionLimitsJson) ||
+        !isDeepStrictEqual(league.settings.autoPickRulesJson, autoPickRulesJson)
       ) {
         await tx.leagueSettings.update({
           where: { id: league.settings.id },
@@ -224,8 +226,10 @@ async function main() {
   }
 
   if (repairedPickExpiryJobs.length > 0) {
-    const { draftQueue, scheduleDraftPickExpiry } = await import('../../src/server/queue/draftQueue');
-    const { ScalableRedisConnection } = await import('../../src/server/realtime/scalableConnection');
+    const { draftQueue, scheduleDraftPickExpiry } =
+      await import('../../src/server/queue/draftQueue');
+    const { ScalableRedisConnection } =
+      await import('../../src/server/realtime/scalableConnection');
 
     for (const job of repairedPickExpiryJobs) {
       await scheduleDraftPickExpiry(

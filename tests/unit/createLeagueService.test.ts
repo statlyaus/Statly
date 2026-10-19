@@ -30,8 +30,8 @@ describe('canonical league creation', () => {
         timeZone: 'Australia/Sydney',
         scoringMode: 'H2H_EACH_CATEGORY',
         fixtureGenerationMode: 'AUTOMATIC',
-        lineupSlotsJson: expect.any(String),
-        categoryDirectionsJson: expect.any(String),
+        lineupSlotsJson: expect.any(Object),
+        categoryDirectionsJson: expect.any(Object),
       }),
     });
     expect(tx.league.create).toHaveBeenCalledWith({

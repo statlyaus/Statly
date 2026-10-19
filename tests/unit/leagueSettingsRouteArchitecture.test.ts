@@ -45,7 +45,7 @@ describe('league settings route architecture', () => {
     expect(source).toContain('lineupSlotsJson');
     expect(source).toContain('categoryDirectionsJson');
     expect(source).toContain(
-      'parseCategoryDirectionsJson(categories, prismaLeague.settings.categoryDirectionsJson)'
+      'normalizeCategoryDirections(categories, prismaLeague.settings.categoryDirectionsJson)'
     );
     expect(source).toContain('scoringSettingsLockedAt');
   });
@@ -53,17 +53,17 @@ describe('league settings route architecture', () => {
   it('persists the durable commissioner settings fields', () => {
     const source = readSource();
 
-    expect(source).toContain('positionLimitsJson: JSON.stringify(positionLimits)');
-    expect(source).toContain('autoPickRulesJson: JSON.stringify(autoPickRules)');
+    expect(source).toContain('positionLimitsJson: positionLimits');
+    expect(source).toContain('autoPickRulesJson: autoPickRules');
     expect(source).toContain("pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM'");
     expect(source).toContain('allowAutoPick: autoPickRules.enabled');
     expect(source).toContain('rosterSize: getRosterSizeFromPositionLimits(positionLimits)');
     expect(source).toContain('benchSize: getBenchSizeFromPositionLimits(positionLimits)');
     expect(source).toContain('waiverRule');
     expect(source).toContain('maxTeams: maxTeams ?? prismaLeague.settings.maxTeams');
-    expect(source).toContain('lineupSlotsJson: JSON.stringify(lineupSlots)');
+    expect(source).toContain('lineupSlotsJson: lineupSlots');
     expect(source).toContain('fixtureGenerationMode');
-    expect(source).toContain('categoryDirectionsJson: JSON.stringify(categoryDirections)');
+    expect(source).toContain('categoryDirectionsJson: categoryDirections');
     expect(source).toContain("error: 'Scoring settings are locked'");
   });
 

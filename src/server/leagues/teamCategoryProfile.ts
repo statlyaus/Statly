@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 import { isActivePrismaMembership } from './membership';
-import { parseCategoryDirectionsJson } from './categoryDirections';
+import { normalizeCategoryDirections } from './categoryDirections';
 import { parseLeagueCategories } from './defaultLineups';
 import { parseStoredCategoryRows } from './matchupReadModel';
 import type { CategoryDirection } from './scoringTypes';
@@ -133,7 +133,7 @@ export async function loadTeamCategoryProfile({
     viewerMemberId: viewer.id,
     members,
     categories,
-    categoryDirections: parseCategoryDirectionsJson(
+    categoryDirections: normalizeCategoryDirections(
       categories,
       league.settings.categoryDirectionsJson
     ),

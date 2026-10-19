@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -75,8 +74,6 @@ function readBoundedInt(raw: string | null, fallback: number, max: number): numb
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(0, Math.min(max, parsed));
 }
-
-
 
 function parseActionDetails(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
@@ -280,47 +277,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       loadSelectedCategories(leagueId),
       loadStatsLookup(leagueId),
     ]);
-
-    if (firebaseAdminIsDisabled()) {
-      const [roster, availablePlayersResult] = await Promise.all([
-        loadCurrentRoster(leagueId, userId),
-        loadAvailablePlayers({
-          leagueId,
-          limit: playersLimit,
-          cursor: playersCursor,
-          selectedCategories,
-          statsLookup,
-        }),
-      ]);
-      const rosterPlayers =
-        roster && roster.playerIds.length > 0
-          ? await prisma.player.findMany({
-              where: { id: { in: roster.playerIds } },
-              select: { id: true, name: true, club: true, position: true },
-            })
-          : [];
-      const playersIndex: Record<string, PlayerLite> = Object.fromEntries(
-        rosterPlayers.map((player) => [player.id, toPlayerLite(player)])
-      );
-      for (const player of availablePlayersResult.items) {
-        playersIndex[player.id] = player;
-      }
-
-      return NextResponse.json(
-        {
-          claims: [],
-          roster,
-          activity: [],
-          selectedCategories,
-          availablePlayers: availablePlayersResult.items,
-          playersIndex,
-          nextPlayersCursor: availablePlayersResult.nextCursor,
-          activityNextCursor: null,
-          activityHasMore: false,
-        },
-        { status: 200, headers: NO_STORE }
-      );
-    }
 
     // Claims and the FAAB balance come from Prisma. The member is looked up there too: the
     // membership check can return a Firestore member id for leagues that exist only in Firestore.
