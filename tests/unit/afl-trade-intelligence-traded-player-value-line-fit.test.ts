@@ -379,6 +379,46 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
     expect(backTest.limitations.longestObservedTenure).toBe(7);
   });
 
+  it('trains each back-test fold, like the fit, only on players with a reviewed leg', () => {
+    // A player whose only leg is an unreviewed 2019 arrival, with a long pre-trade career.
+    const extra: Player = {
+      playerId: 'pl-unreviewed',
+      origin: 2008,
+      drafted: false,
+      trades: [{ season: 2019, to: 'brisbane', reviewed: false }],
+    };
+    const extraRows: Row[] = range(2011, 2022).map((season) => ({
+      season,
+      playerId: extra.playerId,
+      clubId: season <= 2019 ? 'adelaide' : 'brisbane',
+      games: 22,
+      pav: 22 * 1.5,
+    }));
+    const refit = fitAflTradeTradedPlayerValueLine(
+      inputsOf([...players, extra], [...rows, ...extraRows])
+    );
+    expect(refit.content.legs.trainingPlayers).toBe(fit.content.legs.trainingPlayers);
+    const later = (f: typeof fit) =>
+      f.content.backTest.seasons
+        .filter(({ tradeSeason }) => tradeSeason > 2019)
+        .map(
+          ({
+            tradeSeason,
+            trainingPlayers,
+            gamesCredibilitySeasons,
+            rateCredibilityGames,
+            predictedAtTrade,
+          }) => ({
+            tradeSeason,
+            trainingPlayers,
+            gamesCredibilitySeasons,
+            rateCredibilityGames,
+            predictedAtTrade,
+          })
+        );
+    expect(later(refit)).toEqual(later(fit));
+  });
+
   it('values a held-out leg with no hindsight past its checkpoint', () => {
     // A 2019 leg's 2023 season moves its realized PAV, never its value at the trade or after year 1.
     const leg = inputs.legs.find(

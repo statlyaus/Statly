@@ -319,8 +319,11 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
 - **Prior along a stint.** For tenure `t`, band = band(`(Y − origin) + t`) and phase = `tenure_min(t,3)`.
   A young player traded moves into band 10+ as he ages, where the veterans' higher hazard applies, so
   ageing out comes from career stage, not from unobserved tenure past 7.
-- **Own form (owner 2026-10-19, the pick rule).** Every career season through the checkpoint, pre-trade at
-  any club included, so a traded star is not valued as an average player at his stage:
+- **Own form.** The owner's credibility rule (decision 3, 2026-10-19), read over every career season
+  through the checkpoint, pre-trade at any club included, so a traded star is not valued as an average
+  player at his stage. Counting pre-trade seasons is an implementation choice, not an owner rule (the
+  pick rule counts in-stint seasons only): the back-test's post-trade-only baseline tests it, and it
+  waits on owner review alongside the back-test result:
   `u_games = Σ (games(s) − E_games(band_s, phase_s)) / (n + k_games)` over all `n` seasons, zero-game seasons
   included; `u_rate = Σ (pav(s) − games(s) × E_rate(band_s, phase_s)) / (G + k_rate)` over his `G` games.
   Post-trade seasons are the stint's seasons at the receiving club.
@@ -341,7 +344,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   the trade season; a trade season with no season, or more than 20 seasons, observed after it.
 - **Back-test.** Leave one trade season out: every trade season with at least two observed seasons (2019 to
   2024 when the last season is 2026) is held out in turn, and all three curves and both `k` are refitted
-  without it. Every player with any leg in that season is removed from the fold entirely, his career
+  without it, on the fit's own training set (players with a reviewed leg). Every player with any leg in that season is removed from the fold entirely, his career
   included, because his other legs and pre-trade seasons overlap the held-out stint. Each held-out
   reviewed leg is valued at checkpoints 0, 1 and 3, counting only seasons up to `Y + checkpoint`; a
   checkpoint is scored for a trade season only when more seasons than it are observed (checkpoint 3 covers

@@ -53,8 +53,10 @@ export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
   horizonSeasons: 20,
   inactivityClosureSeasons: PICK_RULES.inactivityClosureSeasons,
   /**
-   * Own form (owner decision 2026-10-19): every career season through the checkpoint, pre-trade at
-   * any club included, against the prior of its own stage band and phase; additive, shrunk by k.
+   * Own form: the owner's credibility rule (2026-10-19), read over every career season through the
+   * checkpoint, pre-trade at any club included, against the prior of its own stage band and phase;
+   * additive, shrunk by k. Counting pre-trade seasons is an implementation choice, not an owner rule:
+   * the back-test's post-trade-only baseline tests it, for owner review.
    */
   ownFormUpdate: 'stage_and_phase_adjusted_additive_credibility',
   minimumRateCredibilityGames: PICK_RULES.minimumRateCredibilityGames,
@@ -811,7 +813,11 @@ const quantile = (values: readonly number[], q: number) => {
   return sorted[low]! + (sorted[high]! - sorted[low]!) * (position - low);
 };
 
-/** Holds out each trade season with enough observed seasons, its players removed from training. */
+/**
+ * Holds out each trade season with enough observed seasons, its players removed from training.
+ * `players` is the fit's own training set (players with a reviewed leg), so each fold is the
+ * published model minus the held-out season.
+ */
 function backTest(
   players: readonly FitPlayer[],
   tradeSeasons: readonly number[],
@@ -1082,7 +1088,7 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
     },
     priorTable,
     atTradeCurve,
-    backTest: backTest(players, tradeSeasons, lastSeason),
+    backTest: backTest(training, tradeSeasons, lastSeason),
     knownLimitations: [
       'Survival does not read own form, as in the pick fit.',
       'The 10+ band pools every veteran.',
