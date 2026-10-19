@@ -130,8 +130,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           allowAutoPick: autoPickRules.enabled,
           rosterSize: getRosterSizeFromPositionLimits(positionLimits),
           benchSize: getBenchSizeFromPositionLimits(positionLimits),
-          positionLimitsJson: JSON.stringify(positionLimits),
-          autoPickRulesJson: JSON.stringify(autoPickRules),
+          positionLimitsJson: positionLimits,
+          autoPickRulesJson: autoPickRules,
         },
       });
 

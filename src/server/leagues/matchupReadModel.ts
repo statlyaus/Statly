@@ -12,8 +12,8 @@ import {
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
 
-import { parseCategoryDirectionsJson } from './categoryDirections';
-import { parseCompetitionRulesJson } from './competitionRules';
+import { normalizeCategoryDirections } from './categoryDirections';
+import { normalizeCompetitionRules } from './competitionRules';
 import { synchronizeFinalsFixtures } from './finalsService';
 import type { FinalsTeamCount } from './finalsProgression';
 import { resolveAndPersistLineupAutosubs } from './lineupAutosubService';
@@ -33,7 +33,7 @@ import {
 } from './matchupScoringEngine';
 import { calculateStandingsRows } from './standingsService';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
-import { parseLineupSlotsJson } from './lineupSettings';
+import { normalizeLineupSlots } from './lineupSettings';
 import type { LeagueScoringMode } from './scoringTypes';
 
 type MatchupTeamSide = 'home' | 'away' | 'draw';
@@ -107,8 +107,8 @@ export interface LeagueMatchupReadModel {
   scoringMode: LeagueScoringMode;
   fixtureGenerationMode: 'AUTOMATIC' | 'MANUAL';
   categories: FantasyCategoryKey[];
-  lineupSlots: ReturnType<typeof parseLineupSlotsJson>;
-  categoryDirections: ReturnType<typeof parseCategoryDirectionsJson>;
+  lineupSlots: ReturnType<typeof normalizeLineupSlots>;
+  categoryDirections: ReturnType<typeof normalizeCategoryDirections>;
   availableRounds: number[];
   roundContext: {
     round: number;
@@ -194,7 +194,7 @@ function buildCategoryRows({
   categoriesJson,
 }: {
   categories: FantasyCategoryKey[];
-  categoryDirections: ReturnType<typeof parseCategoryDirectionsJson>;
+  categoryDirections: ReturnType<typeof normalizeCategoryDirections>;
   categoriesJson: string | null | undefined;
 }): LeagueMatchupCategoryRow[] {
   const storedRowsByCategory = new Map(
@@ -340,7 +340,7 @@ function buildMatchupCard({
     }>;
   };
   categories: FantasyCategoryKey[];
-  categoryDirections: ReturnType<typeof parseCategoryDirectionsJson>;
+  categoryDirections: ReturnType<typeof normalizeCategoryDirections>;
   lineupsByMemberId: Map<
     string,
     {
@@ -547,13 +547,13 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
     categories,
     scoringMode: league.settings.scoringMode as LeagueScoringMode,
     fixtureGenerationMode,
-    lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
-    categoryDirections: parseCategoryDirectionsJson(
+    lineupSlots: normalizeLineupSlots(league.settings.lineupSlotsJson),
+    categoryDirections: normalizeCategoryDirections(
       categories,
       league.settings.categoryDirectionsJson
     ),
     competitionStatus: league.settings.competitionStatus,
-    competitionRules: parseCompetitionRulesJson(
+    competitionRules: normalizeCompetitionRules(
       league.settings.competitionRulesJson,
       categories[0] ?? 'goals'
     ),

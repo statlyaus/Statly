@@ -15,6 +15,8 @@ import { getLeagueMemberDocId, isActiveMembershipData } from './leagueMembership
 import {
   normalizeDraftAutoPickRules,
   normalizeDraftPositionLimits,
+  type DraftAutoPickRules,
+  type DraftPositionLimits,
 } from './draftSettings';
 
 type PrismaClientLike = Pick<PrismaClient, '$transaction' | 'league'>;
@@ -47,8 +49,8 @@ export interface PrismaLeagueMirrorSnapshot {
   timeZone: string;
   pickSeconds: number;
   allowAutoPick: boolean;
-  positionLimitsJson: string;
-  autoPickRulesJson: string;
+  positionLimitsJson: DraftPositionLimits;
+  autoPickRulesJson: DraftAutoPickRules;
   members: PrismaLeagueMirrorMember[];
 }
 
@@ -194,13 +196,12 @@ export async function loadFirestoreLeagueMirrorSnapshot(
     startAt,
     timeZone: input.timeZone ?? stringOrUndefined(leagueData.timeZone) ?? 'Australia/Melbourne',
     pickSeconds: input.timePerPick ?? numberOrUndefined(leagueData.pickSeconds) ?? 120,
-    allowAutoPick: normalizeDraftAutoPickRules(input.autoPickRules ?? leagueData.autoPickRules).enabled,
-    positionLimitsJson: JSON.stringify(
-      normalizeDraftPositionLimits(input.positionLimits ?? leagueData.positionLimits)
+    allowAutoPick: normalizeDraftAutoPickRules(input.autoPickRules ?? leagueData.autoPickRules)
+      .enabled,
+    positionLimitsJson: normalizeDraftPositionLimits(
+      input.positionLimits ?? leagueData.positionLimits
     ),
-    autoPickRulesJson: JSON.stringify(
-      normalizeDraftAutoPickRules(input.autoPickRules ?? leagueData.autoPickRules)
-    ),
+    autoPickRulesJson: normalizeDraftAutoPickRules(input.autoPickRules ?? leagueData.autoPickRules),
     members,
   };
 }

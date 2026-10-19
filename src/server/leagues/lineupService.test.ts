@@ -41,7 +41,7 @@ import { DEFAULT_ACTIVE_LINEUP_SLOTS } from './lineupSettings';
 const settings = {
   competitionStatus: 'ACTIVE',
   competitionRulesVersion: 1,
-  competitionRulesJson: JSON.stringify({ lockPolicy: 'INDIVIDUAL_GAME_START' }),
+  competitionRulesJson: { lockPolicy: 'INDIVIDUAL_GAME_START' },
   lineupSlotsJson: null,
 };
 
@@ -148,10 +148,10 @@ describe('authoritative lineup timing', () => {
       mocks.prisma.league.findUnique.mockResolvedValue({
         settings: {
           ...settings,
-          competitionRulesJson: JSON.stringify({
+          competitionRulesJson: {
             lockPolicy: 'THURSDAY_7PM_AEST',
             leagueTimeZone,
-          }),
+          },
         },
       });
       mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
@@ -176,10 +176,10 @@ describe('authoritative lineup timing', () => {
     mocks.prisma.league.findUnique.mockResolvedValue({
       settings: {
         ...settings,
-        competitionRulesJson: JSON.stringify({
+        competitionRulesJson: {
           lockPolicy: 'THURSDAY_7PM_AEST',
           leagueTimeZone: 'Australia/Sydney',
-        }),
+        },
       },
     });
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
@@ -262,7 +262,7 @@ describe('authoritative lineup timing', () => {
   it('resolves a retired player alias before saving a lineup', async () => {
     const thursdaySettings = {
       ...settings,
-      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+      competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
     mocks.prisma.playerExternalIdentity.findMany.mockResolvedValue([
       { externalId: 'retired-player-1', playerId: 'player-1' },
@@ -411,7 +411,7 @@ describe('save boundary invariants', () => {
   ])('rejects a %s slot index instead of coercing it to zero', async (_label, slotIndex) => {
     const thursdaySettings = {
       ...settings,
-      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+      competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
     mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
@@ -439,7 +439,7 @@ describe('save boundary invariants', () => {
   it('keeps an empty legacy BENCH slot index invalid during normalization', async () => {
     const thursdaySettings = {
       ...settings,
-      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+      competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
     mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
@@ -469,7 +469,7 @@ describe('save boundary invariants', () => {
   ])('preserves a valid %s slot index', async (_label, slotIndex) => {
     const thursdaySettings = {
       ...settings,
-      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+      competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
     mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
@@ -527,7 +527,7 @@ describe('save boundary invariants', () => {
   it('does not require per-player fixture timing for a Thursday round lock', async () => {
     const thursdaySettings = {
       ...settings,
-      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+      competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
     mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);

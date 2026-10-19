@@ -9,15 +9,15 @@ import {
 } from '@/lib/leagues/lineupAutoFill';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { loadInjuryLookup, type InjuryListing } from '@/server/injuries/injuryListReadModel';
-import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
+import { normalizeCompetitionRules } from '@/server/leagues/competitionRules';
 import {
   loadLineupRoundSummaries,
   loadRoundPlayerFixtures,
   type RoundPlayerFixture,
 } from '@/server/leagues/lineupService';
-import { parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
+import { normalizeLineupSlots } from '@/server/leagues/lineupSettings';
 import type { LineupSlotSettings } from '@/server/leagues/scoringTypes';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 import {
@@ -103,7 +103,7 @@ export function scoreRosterPlayers({
   sourcePlayers: readonly SourcePlayer[];
   roster: ReadonlyArray<{ playerId: string; name: string; club: string }>;
   categoriesJson: string | null | undefined;
-  categoryDirectionsJson: string | null | undefined;
+  categoryDirectionsJson: unknown;
 }): Map<string, number> {
   if (sourcePlayers.length === 0 || roster.length === 0) return new Map();
   const categories = parseLeagueCategories(categoriesJson);
@@ -112,7 +112,7 @@ export function scoreRosterPlayers({
     roster.map((player) => ({ id: player.playerId, name: player.name, club: player.club })),
     {
       categories,
-      categoryDirections: parseCategoryDirectionsJson(categories, categoryDirectionsJson),
+      categoryDirections: normalizeCategoryDirections(categories, categoryDirectionsJson),
     }
   );
   return scorePlayersByStats(dataset.columns, dataset.playersById);
@@ -157,9 +157,9 @@ export async function ensureDefaultLineups({
     include: { settings: true },
   });
   if (!league?.settings) return 0;
-  const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
+  const rules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const spots = buildLineupSpots(
-    parseLineupSlotsJson(league.settings.lineupSlotsJson),
+    normalizeLineupSlots(league.settings.lineupSlotsJson),
     rules.interchangeSlots
   );
 

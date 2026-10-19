@@ -26,7 +26,7 @@ export type CompetitionRulesIssueCode =
   | 'AFL_START_ROUND'
   | 'TIME_ZONE';
 
-export interface CompetitionRules {
+export type CompetitionRules = {
   seasonStartAflRound: number;
   regularSeasonRounds: number;
   finalsTeams: (typeof SUPPORTED_FINALS_TEAM_COUNTS)[number];
@@ -36,7 +36,7 @@ export interface CompetitionRules {
   interchangeSlots: number;
   standingsTieBreakCategory: FantasyCategoryKey;
   excludedAflRounds: number[];
-}
+};
 
 export interface CompetitionRulesIssue {
   code: CompetitionRulesIssueCode;
@@ -137,19 +137,6 @@ export function normalizeCompetitionRules(
       : fallbackCategory,
     excludedAflRounds: normalizeExcludedAflRounds(source.excludedAflRounds),
   };
-}
-
-export function parseCompetitionRulesJson(
-  value: string | null | undefined,
-  fallbackCategory: FantasyCategoryKey
-): CompetitionRules {
-  if (!value) return normalizeCompetitionRules(null, fallbackCategory);
-
-  try {
-    return normalizeCompetitionRules(JSON.parse(value), fallbackCategory);
-  } catch {
-    return normalizeCompetitionRules(null, fallbackCategory);
-  }
 }
 
 export function isBalancedByeSeason(teamCount: number, regularSeasonRounds: number) {

@@ -185,7 +185,7 @@ async function main() {
         competitionStatus: 'ACTIVE',
         competitionRulesVersion: FIXTURE_VERSION,
         // Top four play finals, so Standings shows a finals line.
-        competitionRulesJson: JSON.stringify({ regularSeasonRounds: ROUNDS, finalsTeams: 4 }),
+        competitionRulesJson: { regularSeasonRounds: ROUNDS, finalsTeams: 4 },
         competitionPublishedAt: new Date(now.getTime() - 30 * DAY),
       },
     });

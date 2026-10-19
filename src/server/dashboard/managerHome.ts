@@ -3,7 +3,7 @@ import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
-import { parseLineupSlotsJson, totalActiveLineupSlots } from '@/server/leagues/lineupSettings';
+import { normalizeLineupSlots, totalActiveLineupSlots } from '@/server/leagues/lineupSettings';
 import { parseStoredCategoryRows } from '@/server/leagues/matchupReadModel';
 import { isActivePrismaMembership } from '@/server/leagues/membership';
 import {
@@ -427,7 +427,7 @@ export async function loadManagerHome(
           lineup = {
             roundLabel: nextRound.roundLabel,
             filled: saved?.players.length ?? 0,
-            required: totalActiveLineupSlots(parseLineupSlotsJson(league.settings.lineupSlotsJson)),
+            required: totalActiveLineupSlots(normalizeLineupSlots(league.settings.lineupSlotsJson)),
             locksAt: nextRound.startsAt,
           };
         }
