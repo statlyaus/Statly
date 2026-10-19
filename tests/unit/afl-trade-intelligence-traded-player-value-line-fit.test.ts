@@ -367,6 +367,20 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       all(backTest.baselines.producedOnly, 0).meanAbsoluteError
     );
     expect(backTest.bySeasonAndCheckpoint.length).toBeGreaterThan(0);
+    // Veterans the read seasons do not start: left-censored, or drafted before the first read season.
+    for (const checkpoint of [0, 1, 3]) {
+      const entry = (group: string) =>
+        backTest.byEntryAndCheckpoint.find(
+          (r) => r.group === group && r.checkpoint === checkpoint
+        )!;
+      const censored = backTest.byStageBasisAndCheckpoint.find(
+        (r) => r.group === 'first_game_censored' && r.checkpoint === checkpoint
+      )!;
+      expect(entry('entered_before_first_read').legs).toBeGreaterThanOrEqual(censored.legs);
+      expect(entry('entered_before_first_read').legs + entry('entered_from_first_read').legs).toBe(
+        all(backTest.byStageBandAndCheckpoint, checkpoint).legs
+      );
+    }
     expect(backTest.seasons.map(({ tradeSeason }) => tradeSeason)).toEqual(range(2019, 2024));
     for (const season of backTest.seasons)
       expect(season.trainingPlayers).toBeLessThan(fit.content.legs.trainingPlayers);

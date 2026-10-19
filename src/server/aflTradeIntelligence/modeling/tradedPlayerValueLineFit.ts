@@ -781,6 +781,8 @@ interface Pair {
   tradeSeason: number;
   band: Band;
   basis: BasisGroup;
+  /** He entered the AFL before the first season read: drafted earlier, or left-censored. */
+  enteredBeforeFirstRead: boolean;
   checkpoint: number;
   predicted: number;
   producedOnly: number;
@@ -826,6 +828,7 @@ const quantile = (values: readonly number[], q: number) => {
 function backTest(
   players: readonly FitPlayer[],
   tradeSeasons: readonly number[],
+  firstReadSeason: number,
   lastSeason: number
 ) {
   const heldOut = tradeSeasons.filter(
@@ -856,6 +859,9 @@ function backTest(
           tradeSeason: year,
           band,
           basis: basisGroupOf(valued.stage),
+          enteredBeforeFirstRead:
+            valued.stage.leftCensored ||
+            (valued.stage.basis === 'draft' && valued.stage.originSeason < firstReadSeason),
           checkpoint,
           predicted,
           producedOnly: full.produced,
@@ -956,6 +962,11 @@ function backTest(
     byStageBasisAndCheckpoint: by(
       basisGroups,
       (group) => (pair) => group === 'all' || pair.basis === group
+    ),
+    // The veterans whose career the read seasons do not start: the group the 10+ band pools.
+    byEntryAndCheckpoint: by(
+      ['entered_before_first_read', 'entered_from_first_read'],
+      (group) => (pair) => pair.enteredBeforeFirstRead === (group === 'entered_before_first_read')
     ),
     bySeasonAndCheckpoint: by(
       heldOut.map(String),
@@ -1093,7 +1104,7 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
     },
     priorTable,
     atTradeCurve,
-    backTest: backTest(training, tradeSeasons, lastSeason),
+    backTest: backTest(training, tradeSeasons, firstReadSeason, lastSeason),
     knownLimitations: [
       'Survival does not read own form, as in the pick fit.',
       'The 10+ band pools every veteran.',
