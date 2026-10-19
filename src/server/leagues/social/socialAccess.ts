@@ -163,16 +163,15 @@ export async function ensureActiveLeagueSeason(leagueId: string): Promise<string
       }
     }
 
+    // Concurrent first requests both reach here; ON CONFLICT DO NOTHING lets the loser read the
+    // winner's row instead of failing on the unique key, as upsert did (#1009).
     const year = (league.settings.startAt ?? new Date()).getUTCFullYear();
-    const season = await tx.leagueSeason.upsert({
+    await tx.leagueSeason.createMany({
+      data: { leagueId, year, label: String(year), startsAt: league.settings.startAt },
+      skipDuplicates: true,
+    });
+    const season = await tx.leagueSeason.findUniqueOrThrow({
       where: { leagueId_year: { leagueId, year } },
-      update: {},
-      create: {
-        leagueId,
-        year,
-        label: String(year),
-        startsAt: league.settings.startAt,
-      },
       select: { id: true },
     });
 
