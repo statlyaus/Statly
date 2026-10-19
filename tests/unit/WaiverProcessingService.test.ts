@@ -100,6 +100,41 @@ function createClaimStoreMock() {
   };
 }
 
+function createSubmitDbMock() {
+  const db = {
+    leagueMember: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+      findMany: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'member-1', userId: 'user-1', draftSlot: 1, joinedAt: new Date() },
+        ]),
+    },
+    teamAction: {
+      create: vi.fn().mockResolvedValue({ id: 'action-1' }),
+      update: vi.fn().mockResolvedValue({ id: 'action-1' }),
+    },
+    waiverPriority: {
+      findMany: vi
+        .fn()
+        .mockResolvedValue([
+          { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
+        ]),
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    pick: {
+      groupBy: vi.fn().mockResolvedValue([{ memberId: 'member-1', _max: { overall: 1 } }]),
+    },
+    $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
+  };
+  return db;
+}
+
 function createCompatibilityProjectionMock() {
   const waiverDoc = {
     set: vi.fn().mockResolvedValue(undefined),
@@ -178,6 +213,22 @@ describe('WaiverProcessingService', () => {
     );
     expect(db.$transaction).toHaveBeenCalledTimes(1);
     expect(projection.projectLeague).toHaveBeenCalledWith({ leagueId: 'league-1' });
+  });
+
+  it('keeps a settled claim when the availability projection refresh fails', async () => {
+    const { db } = createDbMock();
+    const claimStore = createClaimStoreMock();
+    const projection = { projectLeague: vi.fn().mockRejectedValue(new Error('firestore down')) };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ dropPlayerId: 'old-player' })],
+    });
+
+    expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+    expect(projection.projectLeague).toHaveBeenCalled();
   });
 
   it('drops a player whose roster row is still stored under an alias id', async () => {
@@ -612,37 +663,7 @@ describe('PrismaWaiverClaimStore', () => {
   });
 
   it('submits a canonical TeamAction claim, reserves pending FAAB, and mirrors to Firestore', async () => {
-    const db = {
-      leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            { id: 'member-1', userId: 'user-1', draftSlot: 1, joinedAt: new Date() },
-          ]),
-      },
-      teamAction: {
-        create: vi.fn().mockResolvedValue({ id: 'action-1' }),
-        update: vi.fn().mockResolvedValue({ id: 'action-1' }),
-      },
-      waiverPriority: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
-          ])
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([
-            { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
-          ]),
-        createMany: vi.fn().mockResolvedValue({ count: 1 }),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-      },
-      pick: {
-        groupBy: vi.fn().mockResolvedValue([{ memberId: 'member-1', _max: { overall: 1 } }]),
-      },
-      $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
-    };
+    const db = createSubmitDbMock();
     const { firestore, waiverDoc, activityDoc } = createCompatibilityProjectionMock();
     const store = new PrismaWaiverClaimStore(db as never, firestore as never);
 
@@ -685,6 +706,31 @@ describe('PrismaWaiverClaimStore', () => {
     expect(firestore.doc).toHaveBeenCalledWith('leagues/league-1/waiverPriorities/user-1');
     // A submitted claim and its bid stay private until waivers run: nothing is published.
     expect(activityDoc.set).not.toHaveBeenCalled();
+  });
+
+  it('keeps a submitted claim when the Firestore compatibility projection fails', async () => {
+    const db = createSubmitDbMock();
+    const { firestore, waiverDoc } = createCompatibilityProjectionMock();
+    waiverDoc.set.mockRejectedValue(new Error('firestore unavailable'));
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    const result = await store.submitClaim({
+      leagueId: 'league-1',
+      userId: 'user-1',
+      teamId: 'member-1',
+      playerId: 'free-player',
+      priority: 2,
+      bidAmount: 7,
+      waiverSettings: { system: 'FAAB', faabBudget: 100 },
+    });
+
+    expect(result.id).toBe('action-1');
+    expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1' },
+      data: { pendingBidTotal: { increment: 7 } },
+    });
+    // Only the pending-to-cancelled guard writes status; a kept claim is never cancelled.
+    expect(db.teamAction.update).not.toHaveBeenCalled();
   });
 
   it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
