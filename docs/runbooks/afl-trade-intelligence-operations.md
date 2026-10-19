@@ -3637,6 +3637,37 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   about 100 held-out selections. A bias in one direction across every pick range at a checkpoint is a
   finding to report, not a reason to re-tune.
 
+## Computing the value lines
+
+`outcomes:grading:value-lines` computes every traded asset's value line at each checkpoint and each
+trade's per-club nets (statlyaus/Statly#789; the architecture doc's "Value lines" section and the
+value-line spec's "Value lines (step 3)"). It takes the realized grader's arguments plus a stored fit,
+rebuilds the asset ledger and the batch's trades in process, and its one write is the value lines'
+evidence record in the registered store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:value-lines -- --candidate <external-reconciliation:...> \
+  --method <hpn-pav-method:...> --seasons 2019-2026 --official-seasons <seasons> \
+  --benchmark <hpn-pick-benchmark:...> --fit <absolute-path-to-fit.json> --through-season 2026 \
+  --store-id <store-id> --out <absolute-path.json>
+```
+
+- Run it on statly-grading-1 from its own checkout. `AFL_OUTCOMES_DATABASE_URL` must name a loopback
+  database. Never run it in a checkout where a pipeline is running.
+- Run `--dry-run` first: it computes and writes `--out` without `--store-id` and stores nothing.
+- `--fit` is the `--out` file of "Fitting the value-line priors"; its content address is checked. The
+  fit, the ledger, the batch and the games read model must pin the same calculation for every season they
+  share, and the games read model must be of the fit's method, or it refuses. `--through-season` may not
+  pass the fit's last season, every season end from the first trade to it must be official, and every
+  `--seasons` season must be finalized with no games discrepancy.
+- `--out` is never overwritten. The printed line has the value-lines id, its inputs and its summary
+  (assets by basis, assets pending at the last season end, trades with a provisional net), and the
+  stored `artifactId`. It is stored as `derived_private` in repository `value-lines`.
+- No traded-player fit is stored yet, so every traded player's open stint is pending
+  (`traded_player_fit_not_stored`) and its trades' nets are provisional. Report the provisional count;
+  do not read a provisional net as a result.
+
 ## Fitting the traded-player value line
 
 `outcomes:grading:traded-player-value-line-fit` fits and back-tests the traded-player value line
@@ -3653,6 +3684,10 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   --store-id <store-id> --out <absolute-path.json>
 ```
 
+- **Do not store it yet (owner, 2026-10-19).** Dry runs only. The 13 legs of players drafted before 2011
+  (left-censored stage) are still about 10 to 13 PAV high at every checkpoint (fit `447b54dd…`). Storing waits
+  for the 2000-2010 national drafts to become canonical and the veteran bias to be within about one standard
+  error of zero (statlyaus/Statly#1023 comments).
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.

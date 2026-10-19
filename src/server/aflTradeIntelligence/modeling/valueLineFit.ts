@@ -246,17 +246,6 @@ function buildStints(inputs: AflTradeValueLineFitInputs): {
   return { stints, lastSeason };
 }
 
-/** Whether the stint is known to be closed at the end of season `tenure` after the draft. */
-function closedAt(stint: Stint, tenure: number): boolean {
-  if (stint.closedAtTenure !== null && stint.closedAtTenure <= tenure) return true;
-  const last = stint.seasons.slice(Math.max(0, tenure - RULES.inactivityClosureSeasons), tenure);
-  return (
-    tenure >= RULES.inactivityClosureSeasons &&
-    last.length === RULES.inactivityClosureSeasons &&
-    last.every(({ games }) => games === 0)
-  );
-}
-
 interface GlmObservation {
   group: number;
   slotBasis: number[];
@@ -377,14 +366,56 @@ function curves(
   return { survival, games, rate };
 }
 
-interface PlayerEffect {
-  /** Games per season above the slot's expectation at the same tenures, shrunk. */
-  games: number;
-  /** PAV per game above the slot's expectation at the same tenures, shrunk. */
-  rate: number;
+/** The prior curves of one slot, per tenure 0 to the horizon (index = tenure). */
+export interface AflTradeValueLineSlotCurve {
+  /** P(season `t` is in the stint); `survival[0]` is 1. */
+  readonly survival: readonly number[];
+  /** Expected games in season `t` when in the stint. */
+  readonly games: readonly number[];
+  /** Expected PAV per game in season `t` when in the stint with a game. */
+  readonly rate: readonly number[];
 }
 
-const NO_EFFECT: PlayerEffect = { games: 0, rate: 0 };
+/** The two credibility weights, as the fit publishes them. */
+export interface AflTradeValueLineCredibility {
+  readonly gamesCredibilitySeasons: number;
+  readonly rateCredibilityGames: number;
+}
+
+/** One in-stint season after the draft: tenure 1 is the season after it. */
+export interface AflTradeValueLineStintSeason {
+  readonly tenure: number;
+  readonly games: number;
+  /** Signed HPN PAV at the club. */
+  readonly pav: number;
+}
+
+/** The player's development-adjusted effects, and the evidence they rest on. */
+export interface AflTradeValueLinePlayerEffect {
+  /** Games per season above the slot's expectation at the same tenures, shrunk. */
+  readonly games: number;
+  /** PAV per game above the slot's expectation at the same tenures, shrunk. */
+  readonly rate: number;
+  /** In-stint seasons counted. */
+  readonly seasons: number;
+  /** Games in them. */
+  readonly gamesPlayed: number;
+}
+
+/** A drafted player's value-line point at a checkpoint. */
+export interface AflTradeValueLinePointEvaluation {
+  readonly state: 'open' | 'closed';
+  /** `ended`: the stint ended by the checkpoint; `inactive`: three in-stint seasons with no game. */
+  readonly closeReason: 'ended' | 'inactive' | null;
+  readonly produced: number;
+  /** 0 when closed. */
+  readonly expectedRemaining: number;
+  /** `produced + expectedRemaining`, signed: never floored. */
+  readonly value: number;
+  readonly effect: AflTradeValueLinePlayerEffect;
+}
+
+const NO_EFFECT: AflTradeValueLinePlayerEffect = { games: 0, rate: 0, seasons: 0, gamesPlayed: 0 };
 
 /**
  * The player's development-adjusted effects at a checkpoint (owner decision 2026-10-19), each
@@ -394,25 +425,27 @@ const NO_EFFECT: PlayerEffect = { games: 0, rate: 0 };
  * season with no game says nothing about his level).
  */
 function playerEffect(
-  stint: Stint,
-  curve: ReturnType<typeof curves>,
+  seasons: readonly AflTradeValueLineStintSeason[],
+  curve: AflTradeValueLineSlotCurve,
   checkpoint: number,
-  priors: Pick<FittedPriors, 'gamesCredibilitySeasons' | 'rateCredibilityGames'>
-): PlayerEffect {
+  credibility: AflTradeValueLineCredibility
+): AflTradeValueLinePlayerEffect {
   let gamesResidual = 0;
-  let seasons = 0;
+  let counted = 0;
   let rateResidual = 0;
   let games = 0;
-  for (const season of stint.seasons) {
+  for (const season of seasons) {
     if (season.tenure > checkpoint) continue;
     gamesResidual += season.games - curve.games[season.tenure]!;
-    seasons += 1;
+    counted += 1;
     rateResidual += season.pav - season.games * curve.rate[season.tenure]!;
     games += season.games;
   }
   return {
-    games: seasons === 0 ? 0 : gamesResidual / (seasons + priors.gamesCredibilitySeasons),
-    rate: games === 0 ? 0 : rateResidual / (games + priors.rateCredibilityGames),
+    games: counted === 0 ? 0 : gamesResidual / (counted + credibility.gamesCredibilitySeasons),
+    rate: games === 0 ? 0 : rateResidual / (games + credibility.rateCredibilityGames),
+    seasons: counted,
+    gamesPlayed: games,
   };
 }
 
@@ -421,10 +454,10 @@ function playerEffect(
  * `Σ S(t)/S(τ) × max(0, games(t) + u_games) × (rate(t) + u_rate)`.
  */
 function remaining(
-  curve: ReturnType<typeof curves>,
+  curve: AflTradeValueLineSlotCurve,
   fromTenure: number,
   throughTenure: number,
-  effect: PlayerEffect
+  effect: AflTradeValueLinePlayerEffect
 ): number {
   let total = 0;
   for (let tenure = fromTenure + 1; tenure <= throughTenure; tenure++) {
@@ -438,9 +471,69 @@ function remaining(
 }
 
 /**
- * The value line at a checkpoint: PAV produced so far plus expected PAV still to come. With
- * `ownForm` false (the draft-slot-only baseline) the player's own seasons move nothing.
+ * The value line of a drafted player at tenure `checkpoint` (0 is the draft): PAV produced so far
+ * plus expected PAV still to come (value-line method, "Value at a checkpoint"). The one evaluator
+ * the fit's back-test and the value-line calculator share. Only seasons through the checkpoint are
+ * read. The stint is closed when `ended` (it ended by the checkpoint) or after three consecutive
+ * in-stint seasons with no game; a closed stint is worth exactly what it produced. With `ownForm`
+ * false (the draft-slot-only baseline) the player's own seasons move nothing. `throughTenure`
+ * (default: the horizon) bounds the seasons summed.
  */
+export function aflTradeValueLinePointAt(
+  curve: AflTradeValueLineSlotCurve,
+  credibility: AflTradeValueLineCredibility,
+  seasons: readonly AflTradeValueLineStintSeason[],
+  checkpoint: number,
+  options: { ended?: boolean; throughTenure?: number; ownForm?: boolean } = {}
+): AflTradeValueLinePointEvaluation {
+  const throughTenure = options.throughTenure ?? RULES.horizonSeasons;
+  if (!Number.isInteger(checkpoint) || checkpoint < 0 || checkpoint > RULES.horizonSeasons)
+    throw new Error(`Tenure ${checkpoint} is outside the curves (0 to ${RULES.horizonSeasons}).`);
+  if (!Number.isInteger(throughTenure) || throughTenure > RULES.horizonSeasons)
+    throw new Error(`Tenure ${throughTenure} is past the curves' horizon.`);
+  const read = seasons.filter(({ tenure }) => tenure <= checkpoint);
+  if (read.some(({ tenure }, index) => tenure !== index + 1))
+    throw new Error('In-stint seasons must run from tenure 1 without a gap.');
+  if (checkpoint === 0)
+    return {
+      state: 'open',
+      closeReason: null,
+      produced: 0,
+      expectedRemaining: remaining(curve, 0, throughTenure, NO_EFFECT),
+      value: remaining(curve, 0, throughTenure, NO_EFFECT),
+      effect: NO_EFFECT,
+    };
+  const produced = read.reduce((sum, { pav }) => sum + pav, 0);
+  const closure = RULES.inactivityClosureSeasons;
+  const last = read.slice(Math.max(0, checkpoint - closure), checkpoint);
+  const inactive =
+    checkpoint >= closure && last.length === closure && last.every(({ games }) => games === 0);
+  const closeReason = options.ended ? 'ended' : inactive ? 'inactive' : null;
+  if (closeReason === null && read.length !== checkpoint)
+    throw new Error(`An open stint needs every season through tenure ${checkpoint}.`);
+  const effect =
+    options.ownForm === false ? NO_EFFECT : playerEffect(read, curve, checkpoint, credibility);
+  if (closeReason !== null)
+    return {
+      state: 'closed',
+      closeReason,
+      produced,
+      expectedRemaining: 0,
+      value: produced,
+      effect,
+    };
+  const expectedRemaining = remaining(curve, checkpoint, throughTenure, effect);
+  return {
+    state: 'open',
+    closeReason: null,
+    produced,
+    expectedRemaining,
+    value: produced + expectedRemaining,
+    effect,
+  };
+}
+
+/** The fit's value at a checkpoint, through the shared evaluator. */
 function valueAt(
   stint: Stint,
   priors: FittedPriors,
@@ -448,14 +541,17 @@ function valueAt(
   throughTenure: number,
   ownForm = true
 ): number {
-  const curve = curves(priors, stint.slotBasis);
-  if (checkpoint === 0) return remaining(curve, 0, throughTenure, NO_EFFECT);
-  const produced = stint.seasons
-    .filter(({ tenure }) => tenure <= checkpoint)
-    .reduce((sum, { pav }) => sum + pav, 0);
-  if (closedAt(stint, checkpoint)) return produced;
-  const effect = ownForm ? playerEffect(stint, curve, checkpoint, priors) : NO_EFFECT;
-  return produced + remaining(curve, checkpoint, throughTenure, effect);
+  return aflTradeValueLinePointAt(
+    curves(priors, stint.slotBasis),
+    priors,
+    stint.seasons,
+    checkpoint,
+    {
+      ended: stint.closedAtTenure !== null && stint.closedAtTenure <= checkpoint,
+      throughTenure,
+      ownForm,
+    }
+  ).value;
 }
 
 /** Fits the survival, games and rate curves, then the two credibility weights, on `stints`. */
@@ -688,6 +784,43 @@ const publishPriors = (priors: FittedPriors) => ({
     rate: publishComponents(priors.varianceComponents.rate),
   },
 });
+
+/** A stored fit's published parameters, as `content.parameters` carries them. */
+export type AflTradeValueLineFitParameters = ReturnType<typeof publishPriors>;
+
+/**
+ * Rebuilds a slot's prior curves from a stored fit's published parameters (value-line method step
+ * 3): the value-line calculator reads the sealed fit, never a refit. The published coefficients
+ * are rounded to nine places, so a curve matches the fit's own to about 1e-6 PAV.
+ */
+export function aflTradeValueLineSlotCurve(
+  parameters: Pick<
+    AflTradeValueLineFitParameters,
+    'survivalHazardLogit' | 'gamesWhenInStintLog' | 'pavPerGameLog'
+  >,
+  slot: number
+): AflTradeValueLineSlotCurve {
+  if (!Number.isInteger(slot) || slot < 1) throw new Error(`Slot ${slot} is not a positive pick.`);
+  const coefficients = (published: ReturnType<typeof publishCoefficients>): Coefficients => {
+    if (
+      published.interceptsByTenure.length !== RULES.pooledTenureFrom ||
+      published.lnSlotSlopes.length !== BANDS.length * (SLOT_KNOTS.length + 1)
+    )
+      throw new Error('The fit parameters do not match the fit rules.');
+    return {
+      intercepts: published.interceptsByTenure.map(({ intercept }) => intercept),
+      slotSlopes: published.lnSlotSlopes.map(({ slope }) => slope),
+    };
+  };
+  return curves(
+    {
+      survival: coefficients(parameters.survivalHazardLogit),
+      games: coefficients(parameters.gamesWhenInStintLog),
+      rate: coefficients(parameters.pavPerGameLog),
+    },
+    slotBasis(slot)
+  );
+}
 
 /** Fits on every class, then back-tests by holding out each mature class in turn. */
 export function fitAflTradeValueLine(inputs: AflTradeValueLineFitInputs) {
