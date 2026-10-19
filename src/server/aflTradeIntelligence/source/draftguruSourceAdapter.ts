@@ -10,6 +10,8 @@ import type { AnyNode } from 'domhandler';
 
 import {
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS,
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
@@ -651,16 +653,23 @@ export function parseDraftguruYearSelections(
  * pages Draftguru also marks an academy player taken by another club as `Academy(<club>)` without
  * ` - Not Matched`; the selecting club used an ordinary pick, so a named club that differs from the
  * selecting club reads as `open`. A zone naming another club stays unreviewed.
+ *
+ * With `early` (parser v5, the 2000 to 2010 pages only), the v3 forms and `Scholarship(NSW)` are
+ * reviewed. It marks a player from the NSW scholarship scheme, which gave Sydney access to its
+ * scholarship holders before the academies: on a Sydney selection it reads as `academy`, and on any
+ * other club's selection as `open`, an ordinary pick. Any other scholarship text stays unreviewed.
  */
 function accessCategoryOf(
   text: string,
   selectingClub: string,
-  forms: 'plain' | 'qualified' | 'legacy'
+  forms: 'plain' | 'qualified' | 'legacy' | 'early'
 ): 'open' | 'academy' | 'father_son' | null {
   if (text === '') return 'open';
   if (text === 'Academy' || text === 'Academy (NG)') return 'academy';
   if (/^Father-Son ?\([A-Z][A-Za-z'’.-]*(?: [A-Za-z'’.-]+)+\)$/.test(text)) return 'father_son';
   if (forms === 'plain' || !selectingClub) return null;
+  if (forms === 'early' && text === 'Scholarship(NSW)')
+    return selectingClub === 'Sydney' ? 'academy' : 'open';
   const clubName = "[A-Z][A-Za-z'’. -]*?[A-Za-z]";
   if (forms === 'legacy') {
     const zone = new RegExp(`^Zone\\((${clubName})\\)$`).exec(text);
@@ -678,8 +687,9 @@ function accessCategoryOf(
 }
 
 /** The access forms a national-year parser version reviews. */
-function accessFormsOf(parserVersion: string): 'plain' | 'qualified' | 'legacy' {
+function accessFormsOf(parserVersion: string): 'plain' | 'qualified' | 'legacy' | 'early' {
   if (parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION) return 'legacy';
+  if (parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION) return 'early';
   return parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
     ? 'qualified'
     : 'plain';
@@ -859,14 +869,20 @@ export function parseDraftguruNationalYearSelections(
   const issues: DraftguruParseIssue[] = [];
   const legacy =
     input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION;
-  if (legacy && !DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(input.draftYear)) {
+  const early = input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION;
+  const outOfScope =
+    (legacy && !DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(input.draftYear)) ||
+    (early && !DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS.includes(input.draftYear));
+  if (outOfScope) {
     return {
       evidence: [],
       issues: [
         {
           code: 'unsupported_row',
           sourceKey: 'year-table',
-          detail: `Parser ${DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION} is reviewed for the 2011 to 2016 pages only.`,
+          detail: legacy
+            ? `Parser ${DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION} is reviewed for the 2011 to 2016 pages only.`
+            : `Parser ${DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION} is reviewed for the 2000 to 2010 pages only.`,
         },
       ],
       scopeSummary: summary,
@@ -882,6 +898,8 @@ export function parseDraftguruNationalYearSelections(
     'Mid-Season',
     // The 2011 and 2012 pages list the Gold Coast and GWS mini-draft picks; a separate pathway.
     ...(legacy ? ['Mini-Draft'] : []),
+    // The 2010 page lists one training-squad selection; a separate pathway, never a national pick.
+    ...(early ? ['Training Squad Selection'] : []),
   ]);
   if (tables.length !== 1)
     issues.push({
