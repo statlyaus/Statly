@@ -14,6 +14,8 @@ import {
 import {
   buildAflTradeTradedPlayerValueLineFitInputs,
   loadAflTradeTradedPlayerDraftOrigins,
+  loadAflTradeTradedPlayerDraftguruOrigins,
+  mergeAflTradeTradedPlayerDraftOrigins,
 } from '@/server/aflTradeIntelligence/modeling/postgresTradedPlayerValueLineFitInputs';
 import {
   AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION,
@@ -827,6 +829,49 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(statements[0]).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     expect(statements[1]).toMatch(/outcome_current_canonical_draft_selection_picks\('AFLM'\)/);
     expect(statements[1]).not.toMatch(/draft_type =/);
+  });
+
+  it('reads reviewed Draftguru 2000-2010 national selections through approved identities only', async () => {
+    const statements: { sql: string; values?: unknown[] }[] = [];
+    const query = async (sql: string, values?: unknown[]) => {
+      statements.push({ sql, values });
+      return {
+        rows: [{ player_id: 'p9', draft_year: 2004, evidence_id: 'external-evidence:e1' }],
+      };
+    };
+    const client = {
+      query,
+      transaction: async <T>(work: (transaction: { query: typeof query }) => Promise<T>) =>
+        work({ query }),
+    } as unknown as AflOutcomeSqlClient;
+    expect(await loadAflTradeTradedPlayerDraftguruOrigins(client)).toEqual([
+      {
+        playerId: 'p9',
+        draftYear: 2004,
+        draftType: 'national',
+        selectionId: 'external-evidence:e1',
+      },
+    ]);
+    expect(statements[0]!.sql).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    const read = statements[1]!;
+    expect(read.values).toEqual(['draftguru-national-year-page/v5']);
+    expect(read.sql).toMatch(/batch\.status = 'finalized' AND batch\.issue_count = 0/);
+    expect(read.sql).toMatch(/head\.status = 'approved'/);
+    expect(read.sql).toMatch(/decision\.outcome = 'approved'/);
+    expect(read.sql).toMatch(/BETWEEN 2000 AND 2010/);
+    expect(read.sql).not.toMatch(/recorded_?[nN]ame|display_name/);
+  });
+
+  it('adds a Draftguru origin only for a player with no canonical draft row', () => {
+    const canonical = [{ playerId: 'p1', draftYear: 2012, draftType: 'rookie', selectionId: 's1' }];
+    const draftguru = [
+      { playerId: 'p1', draftYear: 2008, draftType: 'national', selectionId: 'e1' },
+      { playerId: 'p2', draftYear: 2006, draftType: 'national', selectionId: 'e2' },
+    ];
+    expect(mergeAflTradeTradedPlayerDraftOrigins(canonical, draftguru)).toEqual([
+      canonical[0],
+      draftguru[1],
+    ]);
   });
 });
 

@@ -273,6 +273,10 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   `Y + 1` at stage `(Y − origin) + 1`; tenure at the receiving club is `t = s − Y`. Origin, in order:
   1. `draft`: his earliest `draft_year` in `outcome_current_canonical_draft_selection_picks('AFLM')`,
      read for every draft type and year (a re-drafted player's first draft, since stage stands in for age).
+     With no canonical row, his earliest national selection on the reviewed Draftguru 2000 to 2010 year
+     pages (parser v5, finalized issue-free batches), joined only through an approved Draftguru player
+     identity decision, never by name. Owner decision 2026-10-20 ("Draftguru only"): these give a career
+     origin only and are never canonical drafts. The origin's `selectionId` is the evidence id it read.
   2. `first_game`: no canonical draft row, so origin = his first season with a game at any club, up to his
      first trade, minus 1. When that is the first season read (2011) the stage is a lower bound
      (`leftCensored`).
@@ -290,8 +294,9 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   `Y`): `pre_trade` (before his first trade in the window), `tenure_1`, `tenure_2`, `tenure_3+`.
   `tenure_1` is the reference (effect 0).
 - **Coverage classes**, published per trade season with counts and carried on every value as
-  `stageBasis`: (a) `draft`, national draftees of 2011 to 2025, exact; (b) drafted 2010 or earlier, first
-  game in 2011: `first_game`, left-censored, exact 10+ after the trade; (c) rookie, pre-season, mid-season
+  `stageBasis`: (a) `draft`, national draftees of 2000 to 2025, exact (2000 to 2010 from Draftguru, see
+  origin 1); (b) drafted 1999 or earlier, or outside the national draft, first game in 2011:
+  `first_game`, left-censored, exact 10+ after the trade; (c) rookie, pre-season, mid-season
   and SSP listings, and pre-2011 draftees who first played in 2012 or later: `first_game`, stage understated
   by the seasons listed before a debut, in the fit; (d) no draft row and no game before the trade:
   `assumed_youngest`; (e) mature-age draftees: `draft`, stage understating age, accepted under "career
