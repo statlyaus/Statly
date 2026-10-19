@@ -10,7 +10,8 @@
  */
 
 export type AflTradeTradedPlayerStageBasis = 'draft' | 'first_game' | 'assumed_youngest';
-export type AflTradeTradedPlayerStageBand = '1' | '2-3' | '4-5' | '6-7' | '8-9' | '10+';
+export type AflTradeTradedPlayerStageBand =
+  '1' | '2-3' | '4-5' | '6-7' | '8-9' | '10-11' | '12-13' | '14+';
 export type AflTradeTradedPlayerPhase = 'pre_trade' | 'tenure_1' | 'tenure_2' | 'tenure_3+';
 
 export interface AflTradeTradedPlayerCurve {
