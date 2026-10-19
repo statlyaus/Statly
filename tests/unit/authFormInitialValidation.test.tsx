@@ -101,7 +101,8 @@ describe('AuthForm initial validation state', () => {
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
 
     expect(await screen.findByText(error.message)).toBeInTheDocument();
-    expect(mocks.showNotification).toHaveBeenCalledWith('error', error.message);
+    // The inline alert is the only announcement; a second error toast made screen readers repeat it.
+    expect(mocks.showNotification).not.toHaveBeenCalledWith('error', expect.anything());
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 

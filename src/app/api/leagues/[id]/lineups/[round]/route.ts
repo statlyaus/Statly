@@ -7,8 +7,8 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { loadInjuryLookup } from '@/server/injuries/injuryListReadModel';
-import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
-import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import { normalizeCompetitionRules } from '@/server/leagues/competitionRules';
 import { buildDefaultLineup, type AutoFillSpot } from '@/lib/leagues/lineupAutoFill';
 import {
   buildLineupSpots,
@@ -17,7 +17,7 @@ import {
   scoreRosterPlayers,
   toAutoFillPlayers,
 } from '@/server/leagues/defaultLineups';
-import { parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
+import { normalizeLineupSlots } from '@/server/leagues/lineupSettings';
 import { buildLeagueStandings } from '@/server/leagues/standingsReadModel';
 import {
   createSetupLineupRoundContext,
@@ -123,7 +123,7 @@ export async function GET(
         },
         orderBy: { round: 'desc' },
       });
-  const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
+  const rules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const selectedLineup = lineup ?? carriedLineup;
   const normalizedPlayers = normalizeLegacyBenchAssignments(selectedLineup?.players ?? []);
 
@@ -254,7 +254,7 @@ export async function GET(
         })),
         {
           categories,
-          categoryDirections: parseCategoryDirectionsJson(
+          categoryDirections: normalizeCategoryDirections(
             categories,
             league.settings.categoryDirectionsJson
           ),
@@ -267,7 +267,7 @@ export async function GET(
 
   // No saved lineup: offer the default the team will get if the manager changes nothing, so
   // they only need to confirm changes. It is saved for real when the round starts.
-  const lineupSlots = parseLineupSlotsJson(league.settings.lineupSlotsJson);
+  const lineupSlots = normalizeLineupSlots(league.settings.lineupSlotsJson);
   const defaultLineup = lineup
     ? null
     : buildDefaultLineup({

@@ -8,7 +8,7 @@ import {
   buildLeaguePlayerStatDatasetForTargets,
   type LeaguePlayerStatTarget,
 } from '@/server/players/readModels/leaguePlayerStatReadModel';
-import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import {
   RosterPreferenceError,
   RosterProjectionService,
@@ -68,7 +68,7 @@ export async function GET(
     if (!league) return errorResponse('League not found', 404);
 
     const selectedCategories = getSelectedLeagueCategories(league.categoriesJson);
-    const categoryDirections = parseCategoryDirectionsJson(
+    const categoryDirections = normalizeCategoryDirections(
       selectedCategories,
       league.settings?.categoryDirectionsJson
     );

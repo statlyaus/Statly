@@ -9,7 +9,7 @@ import {
 
 import { getPlayers } from '@/lib/data';
 import { prisma } from '@/lib/prisma';
-import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 import {
   normalizeFantasyCategoryKeys,
@@ -279,7 +279,7 @@ async function requireReadAccess(leagueId: string, userId: string | null): Promi
     memberId: member.id,
     isCommissioner: league.ownerId === userId || member.isCoCommissioner,
     categories,
-    categoryDirections: parseCategoryDirectionsJson(
+    categoryDirections: normalizeCategoryDirections(
       categories,
       league.settings.categoryDirectionsJson
     ),

@@ -34,8 +34,8 @@ describe('league draft-settings route architecture', () => {
     );
 
     expect(source).toContain('MIN_PICK_SECONDS');
-    expect(source).toContain('positionLimitsJson: JSON.stringify(positionLimits)');
-    expect(source).toContain('autoPickRulesJson: JSON.stringify(autoPickRules)');
+    expect(source).toContain('positionLimitsJson: positionLimits');
+    expect(source).toContain('autoPickRulesJson: autoPickRules');
     expect(source).toContain("pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM'");
     expect(source).toContain('allowAutoPick: autoPickRules.enabled');
   });

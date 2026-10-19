@@ -358,8 +358,8 @@ function buildSettingsData(
     locked: false,
     scoringMode: normalized.scoringMode,
     fixtureGenerationMode: normalized.fixtureGenerationMode,
-    lineupSlotsJson: JSON.stringify(normalized.lineupSlots),
-    categoryDirectionsJson: JSON.stringify(normalized.categoryDirections),
+    lineupSlotsJson: normalized.lineupSlots,
+    categoryDirectionsJson: normalized.categoryDirections,
     tradeLimit: input.tradeSettings?.tradeLimit ?? 10,
     tradeReviewMode:
       input.tradeSettings?.tradeReview === 'admin'
