@@ -157,17 +157,20 @@ describe('fitAflTradeValueLine', () => {
         '4+:30+',
       ]);
     }
-    // k is the within-player season variance over the between-player variance.
-    // Each k is its within-player variance over its between-player variance.
+    // Each k is its within-player variance over its between-player variance, never below the
+    // owner's floors (2026-10-19): 3 seasons for games, 10 games for rate.
+    expect(content.rules.minimumGamesCredibilitySeasons).toBe(3);
+    expect(content.rules.minimumRateCredibilityGames).toBe(10);
     const { gamesCredibilitySeasons, rateCredibilityGames, varianceComponents } =
       content.parameters;
-    for (const [k, components] of [
-      [gamesCredibilitySeasons, varianceComponents.games],
-      [rateCredibilityGames, varianceComponents.rate],
+    for (const [k, components, floor] of [
+      [gamesCredibilitySeasons, varianceComponents.games, 3],
+      [rateCredibilityGames, varianceComponents.rate, 10],
     ] as const) {
       expect(components.within).toBeGreaterThan(0);
       expect(components.between).toBeGreaterThan(0);
-      expect(k).toBeCloseTo(components.within / components.between, 3);
+      expect(k).toBeGreaterThanOrEqual(floor);
+      expect(k).toBeCloseTo(Math.max(floor, components.within / components.between), 3);
       expect(components.observations).toBeGreaterThan(components.stints);
     }
     // Rate is weighted by games: its total weight is the games played in stints.
@@ -303,6 +306,13 @@ describe('fitAflTradeValueLine', () => {
         }
       }
     const steadyFit = fitAflTradeValueLine({ selections: steady, games: model(steadyRows) });
+    // Each player is steady at his own level, so the variance ratios are far below the owner's floors
+    // (2026-10-19) and the floors are what set k, as published.
+    const { varianceComponents: steadyVariance, ...steadyK } = steadyFit.content.parameters;
+    expect(steadyVariance.games.within / steadyVariance.games.between).toBeLessThan(3);
+    expect(steadyVariance.rate.within / steadyVariance.rate.between).toBeLessThan(10);
+    expect(steadyK.gamesCredibilitySeasons).toBe(3);
+    expect(steadyK.rateCredibilityGames).toBe(10);
     for (const checkpoint of [1, 3]) {
       const row = (rows: typeof steadyFit.content.backTest.byRangeAndCheckpoint) =>
         rows.find((r) => r.range === 'all' && r.checkpoint === checkpoint)!;
