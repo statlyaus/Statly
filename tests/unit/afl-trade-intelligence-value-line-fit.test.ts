@@ -158,14 +158,20 @@ describe('fitAflTradeValueLine', () => {
       ]);
     }
     // k is the within-player season variance over the between-player variance.
-    const { credibilitySeasons, varianceComponents } = content.parameters;
-    expect(varianceComponents.withinSeason).toBeGreaterThan(0);
-    expect(varianceComponents.betweenPlayer).toBeGreaterThan(0);
-    expect(credibilitySeasons).toBeCloseTo(
-      varianceComponents.withinSeason / varianceComponents.betweenPlayer,
-      4
-    );
-    expect(varianceComponents.seasons).toBeGreaterThan(varianceComponents.stints);
+    // Each k is its within-player variance over its between-player variance.
+    const { gamesCredibilitySeasons, rateCredibilityGames, varianceComponents } =
+      content.parameters;
+    for (const [k, components] of [
+      [gamesCredibilitySeasons, varianceComponents.games],
+      [rateCredibilityGames, varianceComponents.rate],
+    ] as const) {
+      expect(components.within).toBeGreaterThan(0);
+      expect(components.between).toBeGreaterThan(0);
+      expect(k).toBeCloseTo(components.within / components.between, 3);
+      expect(components.observations).toBeGreaterThan(components.stints);
+    }
+    // Rate is weighted by games: its total weight is the games played in stints.
+    expect(varianceComponents.rate.weight).toBeGreaterThan(varianceComponents.rate.observations);
   });
 
   it('moves a player’s value with his form against his slot at the same tenure', () => {
@@ -180,9 +186,6 @@ describe('fitAflTradeValueLine', () => {
     const after = refit.content.backTest.classes.find(({ draftYear }) => draftYear === 2011)!;
     expect(after.fittedAtDraft).toBe(before.fittedAtDraft);
     expect(after.fittedAtYear1 - before.fittedAtYear1).toBeGreaterThan(20);
-    // The class's own fold never sees its seasons, so the rise is the 20 produced plus the effect
-    // (20 / (1 + k) per remaining season, survival-weighted): bounded by 20 per season to come.
-    expect(after.fittedAtYear1 - before.fittedAtYear1).toBeLessThan(20 * 15);
     expect(fit.content.backTest.slotOnlyByRangeAndCheckpoint).toHaveLength(12);
   });
 
@@ -265,6 +268,45 @@ describe('fitAflTradeValueLine', () => {
     expect(after.firstStintPav).toBeCloseTo(before.firstStintPav + 16, 3);
   });
 
+  it('reads own form against the prior at the same tenures, so development is kept', () => {
+    // Every pick stays, and plays more and better each season, the same at every slot. A young
+    // player's level carried forward as it is would undervalue every open stint at year 1 and year 3.
+    // (#1001's version also had one pick in five never play: those stints all close at tenure 4, and
+    // slot-only survival then closes playing stints too, about 10% low at year 3 whatever the own-form
+    // rule. That is the survival limitation in the spec, not development.)
+    const steady: AflTradeValueLineFitSelection[] = [];
+    const steadyRows: Row[] = [];
+    for (let year = 2011; year <= 2024; year++)
+      for (let slot = 1; slot <= 40; slot++) {
+        const playerId = `q-${year}-${slot}`;
+        steady.push({
+          selectionId: `t-${year}-${slot}`,
+          draftYear: year,
+          slot,
+          clubId: 'adelaide',
+          playerId,
+        });
+        for (let season = year + 1; season <= LAST_SEASON; season++) {
+          const tenure = season - year;
+          const games = Math.min(22, 8 + 2 * tenure);
+          steadyRows.push({
+            season,
+            playerId,
+            clubId: 'adelaide',
+            games,
+            pav: games * 0.2 * Math.min(2, 1 + tenure / 5),
+          });
+        }
+      }
+    const steadyFit = fitAflTradeValueLine({ selections: steady, games: model(steadyRows) });
+    for (const checkpoint of [1, 3]) {
+      const all = steadyFit.content.backTest.byRangeAndCheckpoint.find(
+        (row) => row.range === 'all' && row.checkpoint === checkpoint
+      )!;
+      expect(Math.abs(all.bias) / all.meanRealized).toBeLessThan(0.03);
+    }
+  });
+
   it('uses only the held-out class seasons up to each checkpoint', () => {
     // A 2011 pick's 2016 season moves its realized PAV, never its value at draft, year 1 or year 3.
     const changed = rows.map((row) =>
@@ -302,6 +344,12 @@ describe('fitAflTradeValueLine', () => {
         games,
       })
     ).toThrow(/no season observed after it/);
+    expect(() =>
+      fitAflTradeValueLine({
+        selections: [...selections, { ...selections[0]!, selectionId: 'old', draftYear: 2005 }],
+        games: model(rows, range(2006, LAST_SEASON)),
+      })
+    ).toThrow(/more than 20 seasons observed/);
     expect(() =>
       fitAflTradeValueLine({
         selections,

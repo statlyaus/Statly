@@ -4163,8 +4163,9 @@ player-season games".
 `modeling/valueLineFit.ts` fits and back-tests the value-line priors
 ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation order step 2, "Fit
 specification (step 2)"; statlyaus/Statly#789): the first-stint pick curve, the survival curve by slot and
-tenure, and the credibility weight `k` (seasons, from variance components; owner decision 2026-10-19:
-a development-adjusted additive player effect replaces the v1 rate blend). It is pure and deterministic: input
+tenure, and the credibility weights `k_games` (seasons) and `k_rate` (games), each from variance
+components (owner decision 2026-10-19: development-adjusted additive effects on games and on PAV per
+game replace the v1 rate blend). It is pure and deterministic: input
 order does not change the fit id. Like the games read model, it reads no candidate, no grade rule and
 nothing of the realized grader.
 
@@ -4178,7 +4179,7 @@ class with no selections, a season that is not available and any games discrepan
 stay stored as recorded). It holds
 the rules, the fit window (classes, seasons with calculation ids, selections per class), stint diagnostics
 (open, closed by move, re-draft or inactivity, never played, returns after an inactivity closure), every
-coefficient (slot slopes per tenure band), `k` with its two variance components, the pick curve for
+coefficient (slot slopes per tenure band), `k_games` and `k_rate` with their variance components, the pick curve for
 slots 1 to 90 beside HPN DPVC v3, and the back-test: bias, mean absolute error and RMSE by pick range and
 checkpoint for the value line and the draft-slot-only baseline, calibration bins, an 80% interval by
 range and checkpoint, the fitted curve against DPVC at the draft, and per-class totals. `npm run outcomes:grading:value-line-fit`

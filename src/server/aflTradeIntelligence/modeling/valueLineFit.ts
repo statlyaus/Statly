@@ -106,16 +106,11 @@ interface FittedPriors {
   survival: Coefficients;
   games: Coefficients;
   rate: Coefficients;
-  /** k: seasons of own form that weigh as much as the prior. */
-  credibilitySeasons: number;
-  varianceComponents: {
-    stints: number;
-    seasons: number;
-    /** Within-player variance of one season's residual. */
-    withinSeason: number;
-    /** Between-player variance of the true effect. */
-    betweenPlayer: number;
-  };
+  /** k for games per season: seasons of own form that weigh as much as the prior. */
+  gamesCredibilitySeasons: number;
+  /** k for PAV per game: games of own form that weigh as much as the prior. */
+  rateCredibilityGames: number;
+  varianceComponents: { games: VarianceComponents; rate: VarianceComponents };
 }
 
 const round = (value: number, places = 6) => {
@@ -166,6 +161,11 @@ function buildStints(inputs: AflTradeValueLineFitInputs): {
       throw new Error(`Selection ${selection.selectionId} has no positive slot.`);
     if (selection.draftYear >= lastSeason)
       throw new Error(`Draft ${selection.draftYear} has no season observed after it.`);
+    // The curves run to the horizon; a class observed for longer would be read past them (#1001).
+    if (lastSeason - selection.draftYear > RULES.horizonSeasons)
+      throw new Error(
+        `Draft ${selection.draftYear} has more than ${RULES.horizonSeasons} seasons observed, past the curves.`
+      );
     const slotKey = `${selection.draftYear}|${selection.slot}`;
     if (ids.has(selection.selectionId) || slots.has(slotKey))
       throw new Error(`Selection ${selection.selectionId} is duplicated.`);
@@ -371,40 +371,62 @@ function curves(
   return { survival, games, rate };
 }
 
-/** Expected in-stint PAV at each tenure, given the season is in the stint: games × PAV per game. */
-const expectedSeasonPav = (curve: ReturnType<typeof curves>, tenure: number) =>
-  curve.games[tenure]! * curve.rate[tenure]!;
+interface PlayerEffect {
+  /** Games per season above the slot's expectation at the same tenures, shrunk. */
+  games: number;
+  /** PAV per game above the slot's expectation at the same tenures, shrunk. */
+  rate: number;
+}
+
+const NO_EFFECT: PlayerEffect = { games: 0, rate: 0 };
 
 /**
- * The player's development-adjusted effect at a checkpoint: each in-stint season's PAV minus the
- * same slot's expected in-stint PAV at that tenure, summed and shrunk by seasons / (seasons + k).
+ * The player's development-adjusted effects at a checkpoint (owner decision 2026-10-19), each
+ * additive and shrunk by its own credibility: games per season against the slot's expected games at
+ * each tenure, over every in-stint season (a season with no game is evidence about playing time), and
+ * PAV per game against the slot's expected PAV per game at each tenure, over the seasons he played (a
+ * season with no game says nothing about his level).
  */
 function playerEffect(
   stint: Stint,
   curve: ReturnType<typeof curves>,
   checkpoint: number,
-  credibilitySeasons: number
-): number {
-  const seasons = stint.seasons.filter(({ tenure }) => tenure <= checkpoint);
-  if (seasons.length === 0) return 0;
-  const residual = seasons.reduce(
-    (sum, { tenure, pav }) => sum + pav - expectedSeasonPav(curve, tenure),
-    0
-  );
-  return residual / (seasons.length + credibilitySeasons);
+  priors: Pick<FittedPriors, 'gamesCredibilitySeasons' | 'rateCredibilityGames'>
+): PlayerEffect {
+  let gamesResidual = 0;
+  let seasons = 0;
+  let rateResidual = 0;
+  let games = 0;
+  for (const season of stint.seasons) {
+    if (season.tenure > checkpoint) continue;
+    gamesResidual += season.games - curve.games[season.tenure]!;
+    seasons += 1;
+    rateResidual += season.pav - season.games * curve.rate[season.tenure]!;
+    games += season.games;
+  }
+  return {
+    games: seasons === 0 ? 0 : gamesResidual / (seasons + priors.gamesCredibilitySeasons),
+    rate: games === 0 ? 0 : rateResidual / (games + priors.rateCredibilityGames),
+  };
 }
 
-/** Survival-weighted expected PAV still to come after `fromTenure`, with an additive effect. */
+/**
+ * Survival-weighted expected PAV still to come after `fromTenure`, with the additive effects:
+ * `Σ S(t)/S(τ) × max(0, games(t) + u_games) × (rate(t) + u_rate)`.
+ */
 function remaining(
   curve: ReturnType<typeof curves>,
   fromTenure: number,
   throughTenure: number,
-  effect: number
+  effect: PlayerEffect
 ): number {
   let total = 0;
   for (let tenure = fromTenure + 1; tenure <= throughTenure; tenure++) {
     const still = curve.survival[tenure]! / curve.survival[fromTenure]!;
-    total += still * (expectedSeasonPav(curve, tenure) + effect);
+    total +=
+      still *
+      Math.max(0, curve.games[tenure]! + effect.games) *
+      (curve.rate[tenure]! + effect.rate);
   }
   return total;
 }
@@ -421,12 +443,12 @@ function valueAt(
   ownForm = true
 ): number {
   const curve = curves(priors, stint.slotBasis);
-  if (checkpoint === 0) return remaining(curve, 0, throughTenure, 0);
+  if (checkpoint === 0) return remaining(curve, 0, throughTenure, NO_EFFECT);
   const produced = stint.seasons
     .filter(({ tenure }) => tenure <= checkpoint)
     .reduce((sum, { pav }) => sum + pav, 0);
   if (closedAt(stint, checkpoint)) return produced;
-  const effect = ownForm ? playerEffect(stint, curve, checkpoint, priors.credibilitySeasons) : 0;
+  const effect = ownForm ? playerEffect(stint, curve, checkpoint, priors) : NO_EFFECT;
   return produced + remaining(curve, checkpoint, throughTenure, effect);
 }
 
@@ -492,38 +514,87 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
     games: fitGlm('poisson', games, 'games'),
     rate: fitGlm('poisson', rate, 'rate'),
   };
-  // k from variance components: one-way random-effects ANOVA on every in-stint season's residual
-  // against its slot's expected in-stint PAV at that tenure (unbalanced, method of moments).
-  const groups = stints
-    .map((stint) => {
-      const curve = curves(curvePriors, stint.slotBasis);
-      return stint.seasons.map(({ tenure, pav }) => pav - expectedSeasonPav(curve, tenure));
-    })
-    .filter((residuals) => residuals.length > 0);
-  const seasons = groups.reduce((sum, residuals) => sum + residuals.length, 0);
-  if (groups.length < 2 || seasons <= groups.length)
-    throw new Error('Too few in-stint seasons to estimate the variance components.');
-  const grand = groups.flat().reduce((sum, value) => sum + value, 0) / seasons;
-  let withinSquares = 0;
-  let betweenSquares = 0;
-  for (const residuals of groups) {
-    const mean = residuals.reduce((sum, value) => sum + value, 0) / residuals.length;
-    for (const value of residuals) withinSquares += (value - mean) ** 2;
-    betweenSquares += residuals.length * (mean - grand) ** 2;
+  // Each k from variance components: a one-way random-effects ANOVA (method of moments, unbalanced)
+  // on the residuals of every in-stint season against its slot's expectation at that tenure.
+  const gamesRows: VarianceRow[][] = [];
+  const rateRows: VarianceRow[][] = [];
+  for (const stint of stints) {
+    const curve = curves(curvePriors, stint.slotBasis);
+    gamesRows.push(
+      stint.seasons.map(({ tenure, games }) => ({
+        value: games - curve.games[tenure]!,
+        weight: 1,
+      }))
+    );
+    rateRows.push(
+      stint.seasons
+        .filter(({ games }) => games > 0)
+        .map(({ tenure, games, pav }) => ({
+          value: pav / games - curve.rate[tenure]!,
+          weight: games,
+        }))
+    );
   }
-  const withinSeason = withinSquares / (seasons - groups.length);
-  const meanSquareBetween = betweenSquares / (groups.length - 1);
-  const n0 =
-    (seasons - groups.reduce((sum, residuals) => sum + residuals.length ** 2, 0) / seasons) /
-    (groups.length - 1);
-  const betweenPlayer = (meanSquareBetween - withinSeason) / n0;
-  if (!(betweenPlayer > 0))
-    throw new Error('The between-player variance is not positive; own form carries no signal.');
+  const gamesComponents = varianceComponents(gamesRows, 'games');
+  const rateComponents = varianceComponents(rateRows, 'PAV per game');
   return {
     ...curvePriors,
-    credibilitySeasons: withinSeason / betweenPlayer,
-    varianceComponents: { stints: groups.length, seasons, withinSeason, betweenPlayer },
+    gamesCredibilitySeasons: gamesComponents.within / gamesComponents.between,
+    rateCredibilityGames: rateComponents.within / rateComponents.between,
+    varianceComponents: { games: gamesComponents, rate: rateComponents },
   };
+}
+
+interface VarianceRow {
+  value: number;
+  /** Seasons weigh 1 for games; games weigh their count for PAV per game. */
+  weight: number;
+}
+
+interface VarianceComponents {
+  stints: number;
+  observations: number;
+  /** Total weight: seasons for games, games for PAV per game. */
+  weight: number;
+  /** Within-player variance of one unit of weight around the player's own level. */
+  within: number;
+  /** Between-player variance of the true effect. */
+  between: number;
+}
+
+/**
+ * The method-of-moments estimate for a weighted, unbalanced one-way random-effects model: within
+ * from the weighted squares around each player's mean on N − I degrees of freedom; between from the
+ * weighted squares of player means around the grand mean, less (I − 1) within, over W − Σ W_i² / W.
+ */
+function varianceComponents(groups: readonly VarianceRow[][], label: string): VarianceComponents {
+  const players = groups.filter((rows) => rows.length > 0);
+  const observations = players.reduce((sum, rows) => sum + rows.length, 0);
+  if (players.length < 2 || observations <= players.length)
+    throw new Error(`Too few in-stint seasons to estimate the ${label} variance components.`);
+  const weightOf = (rows: readonly VarianceRow[]) =>
+    rows.reduce((sum, { weight }) => sum + weight, 0);
+  const meanOf = (rows: readonly VarianceRow[]) =>
+    rows.reduce((sum, { value, weight }) => sum + value * weight, 0) / weightOf(rows);
+  const weight = players.reduce((sum, rows) => sum + weightOf(rows), 0);
+  const grand = meanOf(players.flat());
+  let withinSquares = 0;
+  let betweenSquares = 0;
+  let squaredWeights = 0;
+  for (const rows of players) {
+    const mean = meanOf(rows);
+    for (const row of rows) withinSquares += row.weight * (row.value - mean) ** 2;
+    betweenSquares += weightOf(rows) * (mean - grand) ** 2;
+    squaredWeights += weightOf(rows) ** 2;
+  }
+  const within = withinSquares / (observations - players.length);
+  const between =
+    (betweenSquares - (players.length - 1) * within) / (weight - squaredWeights / weight);
+  if (!(within > 0) || !(between > 0))
+    throw new Error(
+      `The ${label} between-player variance is not positive; own form carries no signal.`
+    );
+  return { stints: players.length, observations, weight, within, between };
 }
 
 export interface AflTradeValueLineFitErrorRow {
@@ -584,16 +655,23 @@ const publishCoefficients = (coefficients: Coefficients) => ({
   }),
 });
 
+const publishComponents = (components: VarianceComponents) => ({
+  stints: components.stints,
+  observations: components.observations,
+  weight: components.weight,
+  within: round(components.within, 9),
+  between: round(components.between, 9),
+});
+
 const publishPriors = (priors: FittedPriors) => ({
   survivalHazardLogit: publishCoefficients(priors.survival),
   gamesWhenInStintLog: publishCoefficients(priors.games),
   pavPerGameLog: publishCoefficients(priors.rate),
-  credibilitySeasons: round(priors.credibilitySeasons, 6),
+  gamesCredibilitySeasons: round(priors.gamesCredibilitySeasons, 6),
+  rateCredibilityGames: round(priors.rateCredibilityGames, 6),
   varianceComponents: {
-    stints: priors.varianceComponents.stints,
-    seasons: priors.varianceComponents.seasons,
-    withinSeason: round(priors.varianceComponents.withinSeason, 6),
-    betweenPlayer: round(priors.varianceComponents.betweenPlayer, 6),
+    games: publishComponents(priors.varianceComponents.games),
+    rate: publishComponents(priors.varianceComponents.rate),
   },
 });
 
@@ -630,7 +708,8 @@ export function fitAflTradeValueLine(inputs: AflTradeValueLineFitInputs) {
     fittedAtYear3: number;
     dpvcAtDraft: number;
     dpvcSelections: number;
-    credibilitySeasons: number;
+    gamesCredibilitySeasons: number;
+    rateCredibilityGames: number;
   }[] = [];
   for (const year of heldOut) {
     const held = stints.filter(({ selection }) => selection.draftYear === year);
@@ -688,7 +767,8 @@ export function fitAflTradeValueLine(inputs: AflTradeValueLineFitInputs) {
       fittedAtYear3: round(fittedAt.get(3) ?? 0, 3),
       dpvcAtDraft: round(dpvcAtDraft, 3),
       dpvcSelections,
-      credibilitySeasons: round(fitted.credibilitySeasons, 6),
+      gamesCredibilitySeasons: round(fitted.gamesCredibilitySeasons, 6),
+      rateCredibilityGames: round(fitted.rateCredibilityGames, 6),
     });
   }
   const ranges = [...RULES.pickRanges.map(({ label }) => label), 'all'];
@@ -795,7 +875,7 @@ export function fitAflTradeValueLine(inputs: AflTradeValueLineFitInputs) {
     const curve = curves(priors, slotBasis(slot));
     return {
       slot,
-      expectedFirstStintPav: round(remaining(curve, 0, RULES.horizonSeasons, 0), 3),
+      expectedFirstStintPav: round(remaining(curve, 0, RULES.horizonSeasons, NO_EFFECT), 3),
       hpnDpvcV3: round(hpnDpv3ValueForPick(slot), 3),
       stillInStintAfterSeasons: {
         '3': round(curve.survival[3]!, 4),

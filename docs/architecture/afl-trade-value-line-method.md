@@ -37,23 +37,27 @@ One rule covers picks and players (**Owner**).
 
 ```text
 expected_remaining(asset, checkpoint) = Σ over future seasons s:
-    P(still at club in s) × (expected_PAV(s) + own_form_effect)
+    P(still at club in s) × (expected_games(s) + u_games) × (expected_rate(s) + u_rate)
 ```
 
 - **Own form (Owner, 2026-10-19):** a player's own seasons move the line by how far he is above or below
-  what his prior expects at the same stage, not by his own early rate. Each season's residual is its PAV
-  minus the prior's expected PAV for that season. His effect is the residuals' sum shrunk by
-  `seasons / (seasons + k)`, and it is added to every expected season still to come. A 19-year-old's
-  first-year output is a young player's level; comparing it with players of the same slot at the same
-  tenure keeps normal development from reading as bad form. This replaces the 2026-10-17 rate blend
-  (`Z × own_rate + (1 − Z) × prior_rate` by games), which the back-test showed undervalues open stints by
-  about 12 PAV after year 1 and 10 after year 3 in every pick range.
+  what his prior expects at the same stage, not by his own early level. Two effects, each additive and
+  shrunk by its own credibility, and added to every expected season still to come:
+  - **games:** his games in each in-stint season minus the prior's expected games at that tenure, summed
+    and shrunk by `seasons / (seasons + k_games)`. A season with no game is evidence about playing time.
+  - **rate:** his PAV minus his games times the prior's expected PAV per game at that tenure, summed and
+    shrunk by `games / (games + k_rate)`. A season with no game says nothing about his level.
+    A 19-year-old's first-year output is a young player's level; comparing it with players of the same slot
+    at the same tenure keeps normal development from reading as bad form. This replaces the 2026-10-17
+    rate blend (`Z × own_rate + (1 − Z) × prior_rate`), which the back-test showed undervalues open stints
+    by about 12 PAV after year 1 and 10 after year 3 in every pick range.
 - **prior:**
   - For a drafted player, the expected games and PAV per game for his draft slot at each tenure.
   - For a traded player, the expected rate for his age and position.
-- **k (Owner: fitted from history):** the number of seasons at which a player's own record counts as much
-  as the prior. It is the ratio of one season's noise to how much players genuinely differ, both
-  estimated from past draft classes, not chosen by hand.
+- **k (Owner: fitted from history):** `k_games` is the number of seasons, and `k_rate` the number of
+  games, at which a player's own record counts as much as the prior. Each is the ratio of the noise in
+  one season (or one game) to how much players genuinely differ, estimated from past draft classes, not
+  chosen by hand.
 - **expected_games(s):** games per season expected from the player's availability history and age. An injury
   lowers this. It does not set it to zero.
 - **P(still at club in s):** a survival curve fitted from history. It runs by draft slot and seasons at the
@@ -197,18 +201,22 @@ none of the owner's rules.
   probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
   10+ tenure group carries the tail.
 - **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
-  `Σ_{t>τ} S(t)/S(τ) × (m(t, p) + u)`, with `m(t, p) = games(t, p) × rate(t, p)` the expected in-stint PAV
-  at tenure `t`. A closed stint is worth what it produced.
-  - **Player effect (Owner, 2026-10-19):** `u = Σ_{s≤τ} (pav(s) − m(s, p)) / (n + k)`, over the `n`
-    in-stint seasons through `τ`, additive and development-adjusted (each season against its own tenure's
-    expectation for the slot). A ratio form (own ÷ prior) was rejected: it overvalued picks 1 to 10 by 18
-    after year 1.
-- **k.** One-way random-effects analysis of variance (method of moments, unbalanced) on every in-stint
-  season's residual `pav − m` in the fitted classes: `k = σ²_within / τ²_between`, the within-player
-  variance of one season over the between-player variance of the effect. The fit refuses a between-player
-  variance that is not positive. v1 searched a grid for `k` against the next three seasons' PAV and
-  landed on its edge, because the rate blend's error came from development the blend could not see, not
-  from noise.
+  the remaining value below. A closed stint is worth what it produced.
+  - **Player effects (Owner, 2026-10-19):** `u_games = Σ_{s≤τ} (games(s) − games(t_s, p)) / (n + k_games)`
+    over the `n` in-stint seasons through `τ`, and `u_rate = Σ_{s≤τ} (pav(s) − games(s) × rate(t_s, p)) /
+(G + k_rate)` over the `G` games in them, each against its own tenure's expectation for the slot. The
+    remaining value is `Σ_{t>τ} S(t)/S(τ) × max(0, games(t, p) + u_games) × (rate(t, p) + u_rate)`. A ratio
+    form (own ÷ prior) was rejected: it overvalued picks 1 to 10 by 18 after year 1. One effect on PAV per
+    season was tried first: it read a season with no game as low level, so a league where one pick in
+    five never plays put playing stints 12% high, against 10% for the two effects (the survival
+    limitation below).
+- **k_games and k_rate.** One-way random-effects analysis of variance (method of moments, unbalanced)
+  on the residuals against the slot's expectation at each tenure: games per in-stint season, weight 1;
+  PAV per game in each in-stint season with a game, weighted by its games. Each `k` is the within-player
+  variance (of one season, or one game) over the between-player variance. The fit refuses a variance that
+  is not positive. v1 searched a grid for its two weights against the next three seasons' PAV and landed
+  on an edge, because the rate blend's error came from development the blend could not see, not from
+  noise.
 - **Back-test.** Each class with at least six observed seasons is held out in turn. All curves and `k` are refitted on the other classes, and the held-out class is valued at the draft, after year 1
   and after year 3.
   - **No hindsight:** at a checkpoint, the held-out class's own seasons count only up to it. The
@@ -226,9 +234,13 @@ none of the owner's rules.
     twelve observed seasons), where cutting the comparison at the last season read matters least.
 - **Known limitations (review 2026-10-19).** Survival is by slot and tenure only, so a player above his
   slot's expectation is treated as leaving as often as one below it; in truth he stays longer, so the
-  effect is somewhat under-credited for overperformers and over-counted for underperformers. One pooled
-  season variance sets `k` for every tenure, although early seasons vary less. A future season's
-  `m(t, p) + u` is not floored at 0; the calibration's first bin (below 0) shows how often a value line
+  effect is somewhat under-credited for overperformers and over-counted for underperformers. It also
+  spreads the inactivity closures of draftees who never play over every stint: in a synthetic league
+  where one pick in five never plays and the rest develop identically, playing stints come out about 10%
+  low at year 3 (18% low with no own form at all; with every pick playing, within 1%). A survival
+  model where an inactivity closure follows the player's own run of empty seasons is the fix. Each `k` pools
+  every tenure's variance, although early seasons vary less. A future season's games are floored at 0;
+  its rate `rate(t, p) + u_rate` is not; the calibration's first bin (below 0) shows how often a value line
   goes negative (never in the 2026-10-19 fit). A hazard term in the effect, or a tenure-varying `k`, is a
   later refinement, not part of step 2.
 - **Out of scope here.** The traded-player prior and survival by age and position. `outcome_player`
