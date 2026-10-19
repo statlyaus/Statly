@@ -199,6 +199,10 @@ async function setup(pool: Pool, tamperFinalEvidenceCustody = false) {
   };
 }
 
+// Each case migrates its own database and builds a retained native-PAV graph: about 20 s on a
+// typical runner and up to 30 s on a slow one, so the 30 s default fails on ordinary variance.
+vi.setConfig({ testTimeout: 90_000 });
+
 describe('governed native player-PAV qualification evidence PostgreSQL repository', () => {
   it('retains exact inconclusive evidence, replays without another artifact, and is append-only', () =>
     withDatabase('retain', async (pool) => {

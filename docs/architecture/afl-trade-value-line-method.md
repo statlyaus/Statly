@@ -153,6 +153,68 @@ asset's value at the same checkpoint.
    reproduced from the stored inputs.
 4. **No hindsight:** a value line at a checkpoint may use only seasons up to that checkpoint.
 
+### Fit specification (step 2)
+
+Built in `modeling/valueLineFit.ts` (pure) and run by `npm run outcomes:grading:value-line-fit`. Every
+choice below is published in the fit artifact (`afl-trade-value-line-fit/v1`) with its fit window. This
+section fixes how the spec above is fitted; it changes none of the owner's rules.
+
+- **Data.** Every current canonical AFLM national-draft selection of the classes fitted
+  (`outcome_current_canonical_draft_selection_picks`), with its slot (selection number), drafting club
+  and player, and the player-season games read model for every season after the first class. The fit
+  refuses a season that is not available and any games discrepancy. Busts stay in: a draftee who never
+  plays contributes 0.
+- **First stint.** Season `t` after the draft (season 1 is the season after the draft) is in the stint
+  until the first of:
+  - the player appears for another club (that season is out);
+  - he is drafted again (the seasons after the later draft are out);
+  - three consecutive in-stint seasons with no game at the club (the stint closes after the third).
+    Appearances cannot show a delisting, and a year-3 debut is common (67 of 1,029 selections), so two
+    empty seasons would close live stints. A return after three empty seasons is not first-stint PAV; the
+    fit reports how many there are and their PAV.
+- **Ended stints and censoring.** No class has every stint ended (2011 still has open ones), so the fit
+  does not wait for whole classes. Every class contributes each season it has observed. An open stint is
+  censored at the last season read and never counted as ended. Draft classes from 2011 to the season
+  before the last are in the fit window.
+- **Model forms.** Three curves, each with its own intercept for tenure 1 to 9 and a shared one for 10
+  and later, and a continuous piecewise-linear effect of ln(slot) with knots at picks 10 and 30:
+  - survival: the per-season hazard of leaving the stint (logit link), with half an event and half a
+    non-event added per tenure group so a group with no exits stays finite;
+  - expected games in a season in the stint (quasi-Poisson, log link);
+  - expected PAV per game in a season in the stint with a game (quasi-Poisson, log link, offset
+    ln games).
+    A single ln(slot) slope was tried first and rejected: it put pick 1 at 265 PAV, while the pick 1s of
+    2011 to 2020 averaged 86.
+- **First-stint pick curve.** `V(p) = Σ_{t=1..20} S(t, p) × games(t, p) × rate(t, p)`, with `S` the
+  probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
+  10+ tenure group carries the tail.
+- **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
+  `Σ_{t>τ} S(t)/S(τ) × expected_games(t) × expected_rate(t)`. A closed stint is worth what it produced.
+  - `expected_rate(t) = Z × own_rate + (1 − Z) × rate(t, p)` with `Z = games / (games + k)`, and
+    `own_rate` the PAV per game over the last three in-stint seasons weighted 3, 2, 1 from the most
+    recent; `games` is the games in those seasons (Owner: credibility by games).
+  - `expected_games(t) = Z_g × own_games + (1 − Z_g) × games(t, p)` with `Z_g = seasons / (seasons +
+k_g)` and `own_games` the games per season over the same window, 0-game seasons included (the spec's
+    "availability history": an injury lowers it, never to zero).
+- **k and k_g.** Grid search, `k` over 0 to 300 games by 5 and `k_g` over 0 to 10 seasons by 0.5,
+  minimizing the squared error of the predicted against the realized PAV of the next three seasons, at
+  every open checkpoint whose next three seasons are observed. Ties take the smaller value. An optimum on
+  a grid edge is flagged.
+- **Back-test.** Each class with at least six observed seasons is held out in turn. All curves, `k` and
+  `k_g` are refitted on the other classes, and the held-out class is valued at the draft, after year 1
+  and after year 3.
+  - **No hindsight:** at a checkpoint, the held-out class's own seasons count only up to it. The
+    parameters come from the other classes' seasons through the last season read. A strictly
+    forward-only fit would leave the 2011 to 2014 checkpoints with almost nothing to fit on.
+  - **Compared with:** the first-stint PAV the class produced through the last season read, against the
+    value line's expected PAV summed over the same seasons. Report bias (mean predicted minus realized),
+    mean absolute error and RMSE per selection, for picks 1–10, 11–30 and 31+ and all, at each checkpoint.
+  - **Prior comparison:** at the draft, the fitted curve against HPN DPVC v3 on the same selections
+    (slots 1 to 90). Both are reported for every held-out class and for the mature classes (at least
+    twelve observed seasons), where cutting the comparison at the last season read matters least.
+- **Out of scope here.** The traded-player prior and survival by age and position. `outcome_player`
+  has a birth date for under half the players and no position, so these wait for that data.
+
 ## What this retires
 
 - **Grade rules v14 to v18.**
@@ -183,6 +245,11 @@ asset's value at the same checkpoint.
    2018 season the same way once its calculation is finalized. Seasons before 2011 have no second
    statistics source, so they fail closed and stay out of the fit window.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
+   The fit and back-test command is in place ([Fit specification](#fit-specification-step-2)). The
+   curves beat whole-career DPVC as the prior at the draft. But the own-form blend, as written above,
+   values open stints too low after year 1 and year 3, in every pick range: `own_rate` is a young
+   player's current level, blended with a prior for the seasons in which he has developed. The own-form
+   definition waits on an owner decision before step 3 uses it.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset

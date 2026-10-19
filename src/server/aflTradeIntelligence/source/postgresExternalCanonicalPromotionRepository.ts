@@ -27,6 +27,7 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../outcomes/postgresOutcomeReleaseRepository';
+import { retryAflOutcomeSerializationFailure } from '../outcomes/serializationRetry';
 import {
   aflTradeExternalCanonicalPromotionApprovalEvidenceSchema,
   authenticateAflTradeExternalCanonicalPromotionProposal,
@@ -1239,7 +1240,17 @@ function plannedTradeAsset(promotionId: string, eventVersionId: string, transfer
 }
 
 export class PostgresAflTradeExternalCanonicalPromotionRepository {
-  constructor(private readonly client: AflOutcomeSqlClient) {}
+  /** `nested` marks a repository bound to an outer transaction, which must not retry its work. */
+  constructor(
+    private readonly client: AflOutcomeSqlClient,
+    private readonly options: { nested?: boolean } = {}
+  ) {}
+
+  /** Retries a 40001 try-lock loss only when this repository owns the transaction. */
+  private ownTransaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>) {
+    const run = () => this.client.transaction(work);
+    return this.options.nested ? run() : retryAflOutcomeSerializationFailure(run);
+  }
 
   async prepareReviewedPickLineagePromotion(input: {
     registrationId: string;
@@ -1351,7 +1362,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
   }) {
     const record = specialEntitlementLifecycleSchema.parse(input.record);
     const decisionId = z.string().min(1).parse(input.approvalDecisionId);
-    return this.client.transaction(async (transaction) => {
+    return this.ownTransaction(async (transaction) => {
       const result = await transaction.query<{ record_json: unknown; idempotent_replay: boolean }>(
         'SELECT * FROM register_outcome_special_entitlement_lifecycle($1::jsonb,$2)',
         [canonicalizeAflTradeJson(record), decisionId]
@@ -1387,7 +1398,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
   }) {
     const revision = specialEntitlementRevisionSchema.parse(input.revision);
     const decisionId = z.string().min(1).parse(input.approvalDecisionId);
-    return this.client.transaction(async (transaction) => {
+    return this.ownTransaction(async (transaction) => {
       const result = await transaction.query<{
         retained_revision: unknown;
         idempotent_replay: boolean;
@@ -1513,10 +1524,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
           historicalFeatureEligible: false as const,
           idempotentReplay: started.rows[0]?.replay === true,
         };
-      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository({
-        query: transaction.query.bind(transaction),
-        transaction: (work) => work(transaction),
-      });
+      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository(
+        {
+          query: transaction.query.bind(transaction),
+          transaction: (work) => work(transaction),
+        },
+        { nested: true }
+      );
       const result = await bound.promoteWithSpecialEntitlementRevisions({
         promotion: input.promotion!,
         revisions: [
@@ -1547,10 +1561,13 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
     if (states.size !== revisions.length)
       throw new TypeError('Atomic correction cannot repeat a right.');
     return this.client.transaction(async (transaction) => {
-      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository({
-        query: transaction.query.bind(transaction),
-        transaction: (work) => work(transaction),
-      });
+      const bound = new PostgresAflTradeExternalCanonicalPromotionRepository(
+        {
+          query: transaction.query.bind(transaction),
+          transaction: (work) => work(transaction),
+        },
+        { nested: true }
+      );
       const promotion = await bound.promoteInternal(input.promotion, states);
       const retained = [];
       for (const item of revisions)

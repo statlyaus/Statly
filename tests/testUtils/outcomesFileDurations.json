@@ -13,6 +13,7 @@
   "tests/outcomes-integration/afl-artifact-store-mirror-postgres.test.ts": 2,
   "tests/outcomes-integration/afl-asset-ledger-labels-postgres.test.ts": 1,
   "tests/outcomes-integration/afl-asset-scoped-event-supersession-postgres.test.ts": 8,
+  "tests/outcomes-integration/afl-assignment-continuity-memo-postgres.test.ts": 40,
   "tests/outcomes-integration/afl-assignment-continuity-set-postgres.test.ts": 43,
   "tests/outcomes-integration/afl-authenticated-prepared-valuation-input-postgres.test.ts": 2,
   "tests/outcomes-integration/afl-authority-term-at-decision-postgres.test.ts": 10,
