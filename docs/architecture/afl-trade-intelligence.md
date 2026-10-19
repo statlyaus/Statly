@@ -4163,7 +4163,9 @@ player-season games".
 `modeling/valueLineFit.ts` fits and back-tests the value-line priors
 ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation order step 2, "Fit
 specification (step 2)"; statlyaus/Statly#789): the first-stint pick curve, the survival curve by slot and
-tenure, and the credibility weights `k` (games) and `k_g` (seasons). It is pure and deterministic: input
+tenure, and the credibility weights `k_games` (seasons) and `k_rate` (games), each from variance
+components (owner decision 2026-10-19: development-adjusted additive effects on games and on PAV per
+game replace the v1 rate blend). It is pure and deterministic: input
 order does not change the fit id. Like the games read model, it reads no candidate, no grade rule and
 nothing of the realized grader.
 
@@ -4173,12 +4175,14 @@ the promoter and the candidate guards read) in a read-only repeatable-read trans
 player-season games read model over the seasons after the first class. A selection with no player, a
 class with no selections, a season that is not available and any games discrepancy are refused.
 
-**Output.** The fit is sealed under `value-line-fit:<sha256>` (`afl-trade-value-line-fit/v1`). It holds
+**Output.** The fit is sealed under `value-line-fit:<sha256>` (`afl-trade-value-line-fit/v2`; v1 fits
+stay stored as recorded). It holds
 the rules, the fit window (classes, seasons with calculation ids, selections per class), stint diagnostics
 (open, closed by move, re-draft or inactivity, never played, returns after an inactivity closure), every
-coefficient, `k` and `k_g` with their objective and a grid-edge flag, the pick curve for slots 1 to 90 beside
-HPN DPVC v3, and the back-test: bias, mean absolute error and RMSE by pick range and checkpoint, the
-fitted curve against DPVC at the draft, and per-class totals. `npm run outcomes:grading:value-line-fit`
+coefficient (slot slopes per tenure band), `k_games` and `k_rate` with their variance components, the pick curve for
+slots 1 to 90 beside HPN DPVC v3, and the back-test: bias, mean absolute error and RMSE by pick range and
+checkpoint for the value line and the draft-slot-only baseline, calibration bins, an 80% interval by
+range and checkpoint, the fitted curve against DPVC at the draft, and per-class totals. `npm run outcomes:grading:value-line-fit`
 (`Scripts/fit-value-line.ts`) stores it as `derived_private` in repository `value-line-fits`. See the
 operations runbook, "Fitting the value-line priors".
 
