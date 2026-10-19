@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
 import { buttonStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
+import { toSafeRedirect } from '@/lib/safeRedirect';
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -90,10 +91,6 @@ const AuthForm = ({
   const { notification, showNotification } = useNotification();
   const hasStartedRedirect = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
-
-  // Safe redirect helper to avoid open redirects
-  const toSafeRedirect = (url?: string) =>
-    url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
 
   // Form state
   const [isSignup, setIsSignup] = useState(initialMode === 'signup');
