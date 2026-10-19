@@ -128,10 +128,78 @@ export async function loadAflTradeTradedPlayerDraftOrigins(
   );
 }
 
+/** The reviewed Draftguru parser for the 2000 to 2010 pages, whose selections give career origins. */
+const DRAFTGURU_EARLY_PARSER_VERSION = 'draftguru-national-year-page/v5';
+
+/**
+ * National draft origins for players with no canonical draft row, from the reviewed Draftguru 2000 to
+ * 2010 year pages (owner decision 2026-10-20, issue 789: career-stage origins only, never canonical
+ * drafts). A selection counts only from a finalized, issue-free parser-v5 batch, and only when its
+ * Draftguru player id is a subject whose current identity decision is an approved canonical player;
+ * no name is matched here. `selectionId` is the evidence id, so each origin names the row it read.
+ * One read-only, repeatable-read transaction.
+ */
+export async function loadAflTradeTradedPlayerDraftguruOrigins(
+  sql: AflOutcomeSqlClient
+): Promise<AflTradeTradedPlayerDraftOrigin[]> {
+  const rows = await sql.transaction(async (transaction) => {
+    await transaction.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    const result = await transaction.query<{
+      player_id: string;
+      draft_year: number;
+      evidence_id: string;
+    }>(
+      `SELECT decision.canonical_target_id AS player_id,
+              (evidence.evidence_json->'content'->'claim'->>'draftYear')::int AS draft_year,
+              evidence.evidence_id
+         FROM outcome_external_evidence_row evidence
+         JOIN outcome_external_evidence_batch batch
+           ON batch.batch_id = evidence.batch_id
+          AND batch.status = 'finalized' AND batch.issue_count = 0
+         JOIN outcome_external_identity_subject subject
+           ON subject.provider = 'draftguru' AND subject.entity_kind = 'player'
+          AND subject.scope_kind = 'provider_native_id' AND subject.competition = 'AFLM'
+          AND subject.native_id = evidence.evidence_json->'content'->'claim'->'player'->>'nativeId'
+         JOIN outcome_external_identity_resolution_head head
+           ON head.subject_id = subject.subject_id AND head.status = 'approved'
+         JOIN outcome_external_identity_review_decision decision
+           ON decision.decision_id = head.decision_id AND decision.outcome = 'approved'
+          AND decision.canonical_target_kind = 'player'
+        WHERE batch.provider = 'draftguru'
+          AND evidence.claim_kind = 'draft_selection'
+          AND evidence.evidence_json->'content'->'capture'->>'parserVersion' = $1
+          AND evidence.evidence_json->'content'->'claim'->>'draftType' = 'national'
+          AND (evidence.evidence_json->'content'->'claim'->>'draftYear')::int BETWEEN 2000 AND 2010
+        ORDER BY 1, 2, 3`,
+      [DRAFTGURU_EARLY_PARSER_VERSION]
+    );
+    return result.rows;
+  });
+  return rows.map((row) => ({
+    playerId: row.player_id,
+    draftYear: Number(row.draft_year),
+    draftType: 'national',
+    selectionId: row.evidence_id,
+  }));
+}
+
+/**
+ * The fit's draft origins: every canonical row, and for a player with none, his reviewed Draftguru
+ * 2000 to 2010 national selections (`loadAflTradeTradedPlayerDraftguruOrigins`). A canonical row
+ * always wins; the fit takes each player's earliest origin.
+ */
+export function mergeAflTradeTradedPlayerDraftOrigins(
+  canonical: readonly AflTradeTradedPlayerDraftOrigin[],
+  draftguru: readonly AflTradeTradedPlayerDraftOrigin[]
+): AflTradeTradedPlayerDraftOrigin[] {
+  const drafted = new Set(canonical.map(({ playerId }) => playerId));
+  return [...canonical, ...draftguru.filter(({ playerId }) => !drafted.has(playerId))];
+}
+
 /**
  * Loads the traded-player fit's inputs, read-only: the realized grader's inputs over the seasons from
  * the first trade season to the last season, the player-season games read model over `seasons`, and
- * every canonical draft row. Each read is its own repeatable-read, read-only transaction; it writes
+ * the draft origins (`mergeAflTradeTradedPlayerDraftOrigins`). Each read is its own repeatable-read, read-only transaction; it writes
  * nothing.
  */
 export async function loadAflTradeTradedPlayerValueLineFitInputs(
@@ -165,7 +233,10 @@ export async function loadAflTradeTradedPlayerValueLineFitInputs(
   return buildAflTradeTradedPlayerValueLineFitInputs({
     grader,
     games,
-    draftOrigins: await loadAflTradeTradedPlayerDraftOrigins(sql),
+    draftOrigins: mergeAflTradeTradedPlayerDraftOrigins(
+      await loadAflTradeTradedPlayerDraftOrigins(sql),
+      await loadAflTradeTradedPlayerDraftguruOrigins(sql)
+    ),
     tradeSeasons: options.tradeSeasons,
   });
 }

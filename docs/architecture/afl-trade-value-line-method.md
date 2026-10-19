@@ -273,25 +273,31 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   `Y + 1` at stage `(Y − origin) + 1`; tenure at the receiving club is `t = s − Y`. Origin, in order:
   1. `draft`: his earliest `draft_year` in `outcome_current_canonical_draft_selection_picks('AFLM')`,
      read for every draft type and year (a re-drafted player's first draft, since stage stands in for age).
+     With no canonical row, his earliest national selection on the reviewed Draftguru 2000 to 2010 year
+     pages (parser v5, finalized issue-free batches), joined only through an approved Draftguru player
+     identity decision, never by name. Owner decision 2026-10-20 ("Draftguru only"): these give a career
+     origin only and are never canonical drafts. The origin's `selectionId` is the evidence id it read.
   2. `first_game`: no canonical draft row, so origin = his first season with a game at any club, up to his
      first trade, minus 1. When that is the first season read (2011) the stage is a lower bound
      (`leftCensored`).
   3. `assumed_youngest`: no draft row and no game up to his first trade, so origin = `Y − 1` and his first
      stint season is stage 2, the youngest a traded player can be. A player drafted in November `Y`
      cannot be traded in October `Y`, so stage 1 never follows a trade.
-- **Stage bands** (curve intercepts): 1, 2-3, 4-5, 6-7, 8-9, 10+. Band 1 holds only pre-trade seasons.
-  10+ is pooled because it is exact for every left-censored veteran after a trade: a player first seen in
-  2011 is at stage 10 or more in every season from 2020. His pre-trade seasons below that have an unknown
-  band: they are out of the curve fit, the variance components and own form. Scored at the lower bound, a
-  veteran's early seasons read against a far younger expectation: in the first genuine back-test that put the
-  13 left-censored legs 25 PAV high at the trade. Position is not used (the outcomes database has none) and neither is birth date
+- **Stage bands** (curve intercepts): 1, 2-3, 4-5, 6-7, 8-9, 10-11, 12-13, 14+. Band 1 holds only
+  pre-trade seasons. A left-censored player's season is in a known band only when its lower bound is in
+  the open top band, 14+ (from 2024 for a player first seen in 2011); his other seasons have an unknown
+  band and are out of the curve fit, the variance components and own form. Until 2026-10-20 the top band
+  was 10+, which valued a stage-18 veteran as a stage-10 one: with the 2000 to 2010 national origins
+  read, the back-test put pre-2011 entrants 16 PAV high at the trade under 10+, and 8 under the split
+  (genuine dry runs `traded-player-value-line-fit:8b04f9d8…` and `05b9a248…`, issue 789). Position is not used (the outcomes database has none) and neither is birth date
   (`outcome_player.birth_date` is null for more than half the players).
 - **Phase** of a season, relative to his most recent trade before it (a trade in `Y` comes after season
   `Y`): `pre_trade` (before his first trade in the window), `tenure_1`, `tenure_2`, `tenure_3+`.
   `tenure_1` is the reference (effect 0).
 - **Coverage classes**, published per trade season with counts and carried on every value as
-  `stageBasis`: (a) `draft`, national draftees of 2011 to 2025, exact; (b) drafted 2010 or earlier, first
-  game in 2011: `first_game`, left-censored, exact 10+ after the trade; (c) rookie, pre-season, mid-season
+  `stageBasis`: (a) `draft`, national draftees of 2000 to 2025, exact (2000 to 2010 from Draftguru, see
+  origin 1); (b) drafted 1999 or earlier, or outside the national draft, first game in 2011:
+  `first_game`, left-censored, in a known band only from 14+; (c) rookie, pre-season, mid-season
   and SSP listings, and pre-2011 draftees who first played in 2012 or later: `first_game`, stage understated
   by the seasons listed before a debut, in the fit; (d) no draft row and no game before the trade:
   `assumed_youngest`; (e) mature-age draftees: `draft`, stage understating age, accepted under "career
@@ -304,7 +310,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   played elsewhere in `e`, and otherwise at the end of `e + 1`, so no checkpoint reads a closure early. An
   open stint is censored at the last season read.
 - **Curves.** Each is `link = stageIntercept[band(stage of s)] + phaseEffect[phase]`:
-  - survival: the per-season hazard of leaving the stint (logit), on bands 2-3 to 10+ and the tenure
+  - survival: the per-season hazard of leaving the stint (logit), on bands 2-3 to 14+ and the tenure
     phases, with half an event and half a non-event per band and tenure phase. A move is an exit once
     seen, even when the departure season is the last read; an inactivity closure is an exit only inside the
     window, as in the pick fit;
@@ -318,7 +324,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   a move by free agency) are left out: survival already carries the exit, and counting a retired player's
   empty seasons as low games would charge it twice.
 - **Prior along a stint.** For tenure `t`, band = band(`(Y − origin) + t`) and phase = `tenure_min(t,3)`.
-  A young player traded moves into band 10+ as he ages, where the veterans' higher hazard applies, so
+  A young player traded moves into the older bands as he ages, where the veterans' higher hazard applies, so
   ageing out comes from career stage, not from unobserved tenure past 7.
 - **Own form.** The owner's credibility rule (decision 3, 2026-10-19), read over every career season
   through the checkpoint, pre-trade at any club included, so a traded star is not valued as an average
@@ -359,8 +365,9 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   per-season totals and each fold's `k`. Expect 25 to 45 legs per fold, so judge every bias against its
   standard error. Checkpoint 3 rests on four trade seasons, and the tail past tenure 7 cannot be
   back-tested; the artifact says so.
-- **Known limitations.** Survival does not read own form, as in the pick fit. The 10+ band pools every
-  veteran. First-game stages are understated for players listed before their debut. Recency is not
+- **Known limitations.** Survival does not read own form, as in the pick fit. The 14+ band pools every
+  veteran from stage 14. The five legs of players who entered before 2011 through a pre-season, rookie
+  or pre-draft listing stay left-censored, still about 17 PAV high at the trade. First-game stages are understated for players listed before their debut. Recency is not
   weighted: a veteran's effect is his career average, so decline shows only through the stage prior.
 
 ### Value lines (step 3)

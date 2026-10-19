@@ -26,7 +26,8 @@ export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION =
 const FIT_PREFIX = 'traded-player-value-line-fit';
 
 export type AflTradeTradedPlayerStageBasis = 'draft' | 'first_game' | 'assumed_youngest';
-export type AflTradeTradedPlayerStageBand = '1' | '2-3' | '4-5' | '6-7' | '8-9' | '10+';
+export type AflTradeTradedPlayerStageBand =
+  '1' | '2-3' | '4-5' | '6-7' | '8-9' | '10-11' | '12-13' | '14+';
 export type AflTradeTradedPlayerPhase = 'pre_trade' | 'tenure_1' | 'tenure_2' | 'tenure_3+';
 
 const PICK_RULES = AFL_TRADE_VALUE_LINE_FIT_RULES;
@@ -40,10 +41,14 @@ export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
     { band: '4-5', from: 4, through: 5 },
     { band: '6-7', from: 6, through: 7 },
     { band: '8-9', from: 8, through: 9 },
-    { band: '10+', from: 10, through: null },
+    // 10+ was one band until 2026-10-20: it valued a stage-18 veteran as a stage-10 one, and the
+    // back-test put pre-2011 entrants 12 to 16 PAV high (issue 789).
+    { band: '10-11', from: 10, through: 11 },
+    { band: '12-13', from: 12, through: 13 },
+    { band: '14+', from: 14, through: null },
   ],
   /** Band 1 holds only pre-trade seasons: a traded player's first stint season is stage 2 or later. */
-  survivalBands: ['2-3', '4-5', '6-7', '8-9', '10+'],
+  survivalBands: ['2-3', '4-5', '6-7', '8-9', '10-11', '12-13', '14+'],
   /** tenure_1 is the reference phase (effect 0); survival has no pre_trade phase. */
   phases: ['pre_trade', 'tenure_1', 'tenure_2', 'tenure_3+'],
   referencePhase: 'tenure_1',
@@ -231,10 +236,13 @@ const bandOf = (stage: number): Band =>
 /** The band a season is scored at (a left-censored stage is its lower bound). */
 const scoringBand = (stage: Stage, season: number) => bandOf(season - stage.originSeason);
 
+/** The open-ended oldest band: a left-censored stage at or past its lower bound is exactly in it. */
+const TOP_BAND = RULES.stageBands[RULES.stageBands.length - 1]!.band as Band;
+
 /** Null when a left-censored stage's lower bound leaves the true band unknown. */
 const knownBand = (stage: Stage, season: number): Band | null => {
   const band = scoringBand(stage, season);
-  return stage.leftCensored && band !== '10+' ? null : band;
+  return stage.leftCensored && band !== TOP_BAND ? null : band;
 };
 
 const tenurePhase = (tenure: number): Phase =>
@@ -343,7 +351,7 @@ interface Effect {
 
 /**
  * The player's additive effects at checkpoint `c`, each against its own season's stage and phase. A
- * season whose band is unknown (a left-censored stage below 10+) is left out: scored at its lower bound,
+ * season whose band is unknown (a left-censored stage below the top band, 14+) is left out: scored at its lower bound,
  * a veteran's season reads against a far younger expectation and inflates his effect.
  */
 function playerEffect(priors: Priors, leg: Valued, checkpoint: number, mode: OwnForm): Effect {
@@ -777,10 +785,19 @@ const publishComponents = (components: VarianceComponents) => ({
   between: round(components.between, 9),
 });
 
+const ENTRY_GROUPS = [
+  'drafted_before_first_read',
+  'left_censored',
+  'entered_from_first_read',
+] as const;
+type EntryGroup = (typeof ENTRY_GROUPS)[number];
+
 interface Pair {
   tradeSeason: number;
   band: Band;
   basis: BasisGroup;
+  /** Whether he entered the AFL before the first season read: drafted earlier, or left-censored. */
+  entry: EntryGroup;
   checkpoint: number;
   predicted: number;
   producedOnly: number;
@@ -826,6 +843,7 @@ const quantile = (values: readonly number[], q: number) => {
 function backTest(
   players: readonly FitPlayer[],
   tradeSeasons: readonly number[],
+  firstReadSeason: number,
   lastSeason: number
 ) {
   const heldOut = tradeSeasons.filter(
@@ -856,6 +874,11 @@ function backTest(
           tradeSeason: year,
           band,
           basis: basisGroupOf(valued.stage),
+          entry: valued.stage.leftCensored
+            ? 'left_censored'
+            : valued.stage.basis === 'draft' && valued.stage.originSeason < firstReadSeason
+              ? 'drafted_before_first_read'
+              : 'entered_from_first_read',
           checkpoint,
           predicted,
           producedOnly: full.produced,
@@ -957,6 +980,14 @@ function backTest(
       basisGroups,
       (group) => (pair) => group === 'all' || pair.basis === group
     ),
+    // The veterans whose career the read seasons do not start: most fall in the oldest bands.
+    byEntryAndCheckpoint: by(
+      ['entered_before_first_read', ...ENTRY_GROUPS],
+      (group) => (pair) =>
+        group === 'entered_before_first_read'
+          ? pair.entry !== 'entered_from_first_read'
+          : pair.entry === group
+    ),
     bySeasonAndCheckpoint: by(
       heldOut.map(String),
       (group) => (pair) => String(pair.tradeSeason) === group
@@ -972,7 +1003,7 @@ function backTest(
     limitations: {
       checkpoint3TradeSeasons: checkpointSeasons['3']?.length ?? 0,
       longestObservedTenure: lastSeason - Math.min(...tradeSeasons),
-      note: 'Checkpoint 3 rests on few trade seasons, and tenure past the longest observed cannot be back-tested: the pooled tenure_3+ phase and 10+ band carry that tail.',
+      note: 'Checkpoint 3 rests on few trade seasons, and tenure past the longest observed cannot be back-tested: the pooled tenure_3+ phase and 14+ band carry that tail.',
     },
   };
 }
@@ -1093,10 +1124,11 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
     },
     priorTable,
     atTradeCurve,
-    backTest: backTest(training, tradeSeasons, lastSeason),
+    backTest: backTest(training, tradeSeasons, firstReadSeason, lastSeason),
     knownLimitations: [
       'Survival does not read own form, as in the pick fit.',
-      'The 10+ band pools every veteran.',
+      'The 14+ band pools every veteran from stage 14.',
+      'A player who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored.',
       'First-game stages are understated for players listed before their debut.',
       "Recency is not weighted: a veteran's effect is his career average; decline shows only through the stage prior.",
     ],

@@ -4219,7 +4219,8 @@ The trade story does not read the value lines yet (implementation order step 5).
 ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), "Traded-player fit"; statlyaus/Statly#789;
 owner decision 2026-10-19: a traded player's open stint is estimated like a pick). The prior is by career
 stage (seasons since the player's first canonical draft, else his first game, else assumed youngest; bands
-1, 2-3, 4-5, 6-7, 8-9, 10+) and phase (pre-trade, tenure 1, 2, 3+ at the receiving club), with three small
+1, 2-3, 4-5, 6-7, 8-9, 10-11, 12-13, 14+; a player with no canonical draft row takes his reviewed Draftguru
+2000 to 2010 national selection, owner decision 2026-10-20) and phase (pre-trade, tenure 1, 2, 3+ at the receiving club), with three small
 GLMs (survival, games per season, PAV per game), own form by the pick fit's credibility rule over every
 career season through the checkpoint, and `k_games` and `k_rate` from the pick fit's variance components.
 It reuses the pick fit's exported `solve`, `varianceComponents`, `errorRow` and `round`, so the pick fit's

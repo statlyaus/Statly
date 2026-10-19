@@ -14,6 +14,8 @@ import {
 import {
   buildAflTradeTradedPlayerValueLineFitInputs,
   loadAflTradeTradedPlayerDraftOrigins,
+  loadAflTradeTradedPlayerDraftguruOrigins,
+  mergeAflTradeTradedPlayerDraftOrigins,
 } from '@/server/aflTradeIntelligence/modeling/postgresTradedPlayerValueLineFitInputs';
 import {
   AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION,
@@ -234,7 +236,9 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       '4-5',
       '6-7',
       '8-9',
-      '10+',
+      '10-11',
+      '12-13',
+      '14+',
     ]);
     const { survivalHazardLogit, gamesLog, pavPerGameLog } = content.parameters;
     expect(survivalHazardLogit.stageIntercepts.map(({ band }) => band)).toEqual([
@@ -242,7 +246,9 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       '4-5',
       '6-7',
       '8-9',
-      '10+',
+      '10-11',
+      '12-13',
+      '14+',
     ]);
     expect(survivalHazardLogit.phaseEffects.map(({ phase }) => phase)).toEqual([
       'tenure_1',
@@ -250,7 +256,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       'tenure_3+',
     ]);
     for (const curve of [gamesLog, pavPerGameLog]) {
-      expect(curve.stageIntercepts).toHaveLength(6);
+      expect(curve.stageIntercepts).toHaveLength(8);
       expect(curve.phaseEffects.map(({ phase }) => phase)).toEqual([
         'pre_trade',
         'tenure_1',
@@ -259,7 +265,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       ]);
       expect(curve.phaseEffects.find(({ phase }) => phase === 'tenure_1')!.effect).toBe(0);
     }
-    expect(content.priorTable).toHaveLength(24);
+    expect(content.priorTable).toHaveLength(32);
   });
 
   it('estimates each k from variance components, k_rate on its 10-game guard', () => {
@@ -275,8 +281,10 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       Math.max(10, varianceComponents.rate.within / varianceComponents.rate.between),
       5
     );
-    // Grouped by player: one group per training player with a season.
-    expect(varianceComponents.games.players).toBe(fit.content.legs.trainingPlayers);
+    // Grouped by player: one group per training player with a known-band season (a left-censored
+    // player's seasons below 14+ have none).
+    expect(varianceComponents.games.players).toBeGreaterThan(0);
+    expect(varianceComponents.games.players).toBeLessThanOrEqual(fit.content.legs.trainingPlayers);
     expect(varianceComponents.rate.weight).toBeGreaterThan(varianceComponents.rate.observations);
   });
 
@@ -293,9 +301,9 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
     // Survival has no pre-trade phase and no stage band 1.
     expect(table('1', 'tenure_1').hazard).toBeNull();
     expect(table('6-7', 'pre_trade').hazard).toBeNull();
-    expect(table('10+', 'tenure_1').hazard).toBeGreaterThan(table('2-3', 'tenure_1').hazard!);
+    expect(table('14+', 'tenure_1').hazard).toBeGreaterThan(table('2-3', 'tenure_1').hazard!);
     expect(table('6-7', 'tenure_1').expectedGames).toBeGreaterThan(
-      table('10+', 'tenure_1').expectedGames
+      table('14+', 'tenure_1').expectedGames
     );
   });
 
@@ -321,7 +329,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
     expect(byStageBasis.draft).toBeGreaterThan(0);
     expect(byStageBasis.first_game).toBeGreaterThan(0);
     expect(byStageBasis.first_game_censored).toBeGreaterThan(0);
-    // Left-censored pre-trade seasons below band 10+ are out of the curve fit, and counted.
+    // Left-censored pre-trade seasons below the top band, 14+, are out of the curve fit, and counted.
     expect(fit.content.legs.unknownBandSeasonsExcluded).toBeGreaterThan(0);
   });
 
@@ -338,7 +346,9 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       backTest.byStageBandAndCheckpoint.map(({ group, checkpoint }) => `${checkpoint}:${group}`)
     ).toEqual(
       [0, 1, 3].flatMap((checkpoint) =>
-        ['2-3', '4-5', '6-7', '8-9', '10+', 'all'].map((band) => `${checkpoint}:${band}`)
+        ['2-3', '4-5', '6-7', '8-9', '10-11', '12-13', '14+', 'all'].map(
+          (band) => `${checkpoint}:${band}`
+        )
       )
     );
     expect(backTest.byStageBasisAndCheckpoint.map(({ group }) => group).slice(0, 5)).toEqual([
@@ -358,13 +368,27 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
     expect(row.bias).toBeCloseTo(row.meanPredicted - row.meanRealized, 2);
     expect(row.standardError).toBeCloseTo(row.rootMeanSquaredError / Math.sqrt(row.legs), 2);
     for (const baseline of ['producedOnly', 'stageOnly', 'postTradeOwnFormOnly'] as const)
-      expect(backTest.baselines[baseline]).toHaveLength(18);
+      expect(backTest.baselines[baseline]).toHaveLength(24);
     // Produced-only shows what estimating adds: at the trade it predicts nothing.
     expect(all(backTest.baselines.producedOnly, 0).meanPredicted).toBe(0);
     expect(all(backTest.byStageBandAndCheckpoint, 0).meanAbsoluteError).toBeLessThan(
       all(backTest.baselines.producedOnly, 0).meanAbsoluteError
     );
     expect(backTest.bySeasonAndCheckpoint.length).toBeGreaterThan(0);
+    // Veterans the read seasons do not start: left-censored, or drafted before the first read season.
+    for (const checkpoint of [0, 1, 3]) {
+      const entry = (group: string) =>
+        backTest.byEntryAndCheckpoint.find(
+          (r) => r.group === group && r.checkpoint === checkpoint
+        )!;
+      const censored = backTest.byStageBasisAndCheckpoint.find(
+        (r) => r.group === 'first_game_censored' && r.checkpoint === checkpoint
+      )!;
+      expect(entry('entered_before_first_read').legs).toBeGreaterThanOrEqual(censored.legs);
+      expect(entry('entered_before_first_read').legs + entry('entered_from_first_read').legs).toBe(
+        all(backTest.byStageBandAndCheckpoint, checkpoint).legs
+      );
+    }
     expect(backTest.seasons.map(({ tradeSeason }) => tradeSeason)).toEqual(range(2019, 2024));
     for (const season of backTest.seasons)
       expect(season.trainingPlayers).toBeLessThan(fit.content.legs.trainingPlayers);
@@ -584,7 +608,7 @@ describe('aflTradeTradedPlayerValueAt', () => {
   });
 
   it('leaves a left-censored veteran’s unknown-band seasons out of his form', () => {
-    // First seen in 2011, so stage >= s - 2010: only 2020 and later are certainly 10+.
+    // First seen in 2011, so stage >= s - 2010: only 2024 and later are certainly in the top band, 14+.
     const veteran: AflTradeTradedPlayerValueInput = {
       ...base,
       stage: { basis: 'first_game', originSeason: 2010, leftCensored: true },
@@ -595,14 +619,14 @@ describe('aflTradeTradedPlayerValueAt', () => {
       career: veteran.career.map((row) => (row.season === season ? { ...row, pav } : row)),
     });
     const atTrade = aflTradeTradedPlayerValueAt(parameters, veteran, tradeSeason);
-    expect(atTrade.effect.seasons).toBe(2);
-    // A great 2015 (lower bound 5, true band unknown) does not move him; a great 2020 (10+) does.
-    expect(
-      aflTradeTradedPlayerValueAt(parameters, withCareerSeason(2015, 40), tradeSeason).value
-    ).toBe(atTrade.value);
-    expect(
-      aflTradeTradedPlayerValueAt(parameters, withCareerSeason(2020, 40), tradeSeason).value
-    ).toBeGreaterThan(atTrade.value);
+    expect(atTrade.effect.seasons).toBe(0);
+    // A great 2015 or 2020 (lower bounds 5 and 10, true band unknown) does not move him.
+    for (const season of [2015, 2020])
+      expect(
+        aflTradeTradedPlayerValueAt(parameters, withCareerSeason(season, 40), tradeSeason).value
+      ).toBe(atTrade.value);
+    // 2024 and 2025 are 14+ whatever his true stage, so they count once read.
+    expect(aflTradeTradedPlayerValueAt(parameters, veteran, 2025).effect.seasons).toBe(2);
   });
 
   it('gives a player with no history no effect at the trade', () => {
@@ -827,6 +851,49 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(statements[0]).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     expect(statements[1]).toMatch(/outcome_current_canonical_draft_selection_picks\('AFLM'\)/);
     expect(statements[1]).not.toMatch(/draft_type =/);
+  });
+
+  it('reads reviewed Draftguru 2000-2010 national selections through approved identities only', async () => {
+    const statements: { sql: string; values?: unknown[] }[] = [];
+    const query = async (sql: string, values?: unknown[]) => {
+      statements.push({ sql, values });
+      return {
+        rows: [{ player_id: 'p9', draft_year: 2004, evidence_id: 'external-evidence:e1' }],
+      };
+    };
+    const client = {
+      query,
+      transaction: async <T>(work: (transaction: { query: typeof query }) => Promise<T>) =>
+        work({ query }),
+    } as unknown as AflOutcomeSqlClient;
+    expect(await loadAflTradeTradedPlayerDraftguruOrigins(client)).toEqual([
+      {
+        playerId: 'p9',
+        draftYear: 2004,
+        draftType: 'national',
+        selectionId: 'external-evidence:e1',
+      },
+    ]);
+    expect(statements[0]!.sql).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    const read = statements[1]!;
+    expect(read.values).toEqual(['draftguru-national-year-page/v5']);
+    expect(read.sql).toMatch(/batch\.status = 'finalized' AND batch\.issue_count = 0/);
+    expect(read.sql).toMatch(/head\.status = 'approved'/);
+    expect(read.sql).toMatch(/decision\.outcome = 'approved'/);
+    expect(read.sql).toMatch(/BETWEEN 2000 AND 2010/);
+    expect(read.sql).not.toMatch(/recorded_?[nN]ame|display_name/);
+  });
+
+  it('adds a Draftguru origin only for a player with no canonical draft row', () => {
+    const canonical = [{ playerId: 'p1', draftYear: 2012, draftType: 'rookie', selectionId: 's1' }];
+    const draftguru = [
+      { playerId: 'p1', draftYear: 2008, draftType: 'national', selectionId: 'e1' },
+      { playerId: 'p2', draftYear: 2006, draftType: 'national', selectionId: 'e2' },
+    ];
+    expect(mergeAflTradeTradedPlayerDraftOrigins(canonical, draftguru)).toEqual([
+      canonical[0],
+      draftguru[1],
+    ]);
   });
 });
 
