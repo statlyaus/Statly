@@ -343,7 +343,7 @@ describe('carried lineup normalization', () => {
       settings: {
         competitionStatus: 'ACTIVE',
         competitionRulesJson: null,
-        lineupSlotsJson: JSON.stringify({ DEF: 1, MID: 1, RUC: 0, FWD: 0, UTIL: 0 }),
+        lineupSlotsJson: { DEF: 1, MID: 1, RUC: 0, FWD: 0, UTIL: 0 },
       },
       members: [{ isCoCommissioner: false }],
     });

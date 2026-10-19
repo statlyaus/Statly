@@ -6,7 +6,6 @@ import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import {
   normalizeCompetitionRules,
-  parseCompetitionRulesJson,
   type CompetitionRules,
 } from '@/server/leagues/competitionRules';
 import {
@@ -87,7 +86,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if ('error' in authorization) return authorization.error;
 
   const categories = parseCategories(authorization.league.categoriesJson);
-  const rules = parseCompetitionRulesJson(
+  const rules = normalizeCompetitionRules(
     authorization.league.settings.competitionRulesJson,
     categories[0] ?? 'goals'
   );
@@ -211,7 +210,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const categories = parseCategories(authorization.league.categoriesJson);
   const rules: CompetitionRules =
     body.rules === undefined
-      ? parseCompetitionRulesJson(
+      ? normalizeCompetitionRules(
           authorization.league.settings.competitionRulesJson,
           categories[0] ?? 'goals'
         )

@@ -13,8 +13,8 @@ import {
 } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 
-import { parseCategoryDirectionsJson } from './categoryDirections';
-import { DEFAULT_ACTIVE_LINEUP_SLOTS, parseLineupSlotsJson } from './lineupSettings';
+import { normalizeCategoryDirections } from './categoryDirections';
+import { DEFAULT_ACTIVE_LINEUP_SLOTS, normalizeLineupSlots } from './lineupSettings';
 
 export type LeagueDetailSuccess = {
   ok: true;
@@ -100,8 +100,8 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
       const waiverRule = prismaLeague.settings?.waiverRule?.toLowerCase() as League['waiverRule'];
       const scoringMode = prismaLeague.settings?.scoringMode ?? 'H2H_EACH_CATEGORY';
       const fixtureGenerationMode = prismaLeague.settings?.fixtureGenerationMode ?? 'AUTOMATIC';
-      const lineupSlots = parseLineupSlotsJson(prismaLeague.settings?.lineupSlotsJson);
-      const categoryDirections = parseCategoryDirectionsJson(
+      const lineupSlots = normalizeLineupSlots(prismaLeague.settings?.lineupSlotsJson);
+      const categoryDirections = normalizeCategoryDirections(
         categories,
         prismaLeague.settings?.categoryDirectionsJson
       );
@@ -202,7 +202,7 @@ function createTestLeague(): League {
     scoringMode: 'H2H_EACH_CATEGORY',
     fixtureGenerationMode: 'AUTOMATIC',
     lineupSlots: DEFAULT_ACTIVE_LINEUP_SLOTS,
-    categoryDirections: parseCategoryDirectionsJson([...REAL_DATA_NINE_CATEGORY_PRESET], null),
+    categoryDirections: normalizeCategoryDirections([...REAL_DATA_NINE_CATEGORY_PRESET], null),
     status: 'active',
     draftDate: new Date(Date.now() + 86400000 * 3).toISOString(),
     draftType: 'snake',

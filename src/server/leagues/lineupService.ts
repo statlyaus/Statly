@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import type { Prisma } from '@prisma/client';
 
 import { getRoundMatchesResult } from '@/server/etl/etlRoundData';
@@ -6,8 +8,8 @@ import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 
-import { parseCompetitionRulesJson, type CompetitionRules } from './competitionRules';
-import { parseLineupSlotsJson } from './lineupSettings';
+import { normalizeCompetitionRules, type CompetitionRules } from './competitionRules';
+import { normalizeLineupSlots } from './lineupSettings';
 import type { ActiveLineupSlot, LeagueLineupSlot, LineupSlotSettings } from './scoringTypes';
 
 const LINEUP_SLOTS = new Set<LeagueLineupSlot>([
@@ -268,7 +270,7 @@ export async function loadMemberLineupRoundContext({
       : matchup?.awayMemberId === memberId
         ? matchup.homeMember
         : null;
-  const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
+  const rules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
   const lockState = deriveLineupLockState(competitionRound, lockAt, now);
 
@@ -324,7 +326,7 @@ export async function loadLineupRoundSummaries(
   });
   if (!league?.settings || league.settings.competitionRulesVersion < 1) return [];
 
-  const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
+  const rules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const rounds = await prisma.leagueCompetitionRound.findMany({
     where: { leagueId, fixtureVersion: league.settings.competitionRulesVersion },
     orderBy: { round: 'asc' },
@@ -830,7 +832,7 @@ export async function saveMemberLineup({
     };
   }
 
-  const initialRules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
+  const initialRules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const initialRoundLockAt = initialCompetitionRound
     ? (initialCompetitionRound.lockedAt ??
       resolveRoundLockAt(initialRules, initialCompetitionRound))
@@ -920,7 +922,10 @@ export async function saveMemberLineup({
       .join('|');
     if (
       currentLeague.settings.competitionRulesVersion !== league.settings.competitionRulesVersion ||
-      currentLeague.settings.competitionRulesJson !== league.settings.competitionRulesJson ||
+      !isDeepStrictEqual(
+        currentLeague.settings.competitionRulesJson,
+        league.settings.competitionRulesJson
+      ) ||
       currentCompetitionRound?.aflRound !== initialCompetitionRound?.aflRound ||
       currentRosterFingerprint !== initialRosterFingerprint
     ) {
@@ -931,7 +936,7 @@ export async function saveMemberLineup({
       };
     }
 
-    const currentRules = parseCompetitionRulesJson(
+    const currentRules = normalizeCompetitionRules(
       currentLeague.settings.competitionRulesJson,
       'goals'
     );
@@ -977,7 +982,7 @@ export async function saveMemberLineup({
       }));
 
     const validationResult = validateLineupSubmission({
-      lineupSlots: parseLineupSlotsJson(currentLeague.settings.lineupSlotsJson),
+      lineupSlots: normalizeLineupSlots(currentLeague.settings.lineupSlotsJson),
       rosterPlayers: currentRosterPlayers.map((row) => ({
         playerId: row.playerId,
         position: row.player.position,

@@ -54,8 +54,8 @@ function buildClient({
         id: 'league-1',
         categoriesJson: null,
         settings: {
-          lineupSlotsJson: JSON.stringify(lineupSlots),
-          competitionRulesJson: JSON.stringify({ interchangeSlots }),
+          lineupSlotsJson: lineupSlots,
+          competitionRulesJson: { interchangeSlots },
           categoryDirectionsJson: null,
         },
       }),

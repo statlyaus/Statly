@@ -200,8 +200,8 @@ model LeagueSettings {
   maxTeams                Int
   pickSeconds             Int
   allowAutoPick           Boolean                     @default(true)
-  positionLimitsJson      String?
-  autoPickRulesJson       String?
+  positionLimitsJson      Json?
+  autoPickRulesJson       Json?
   draftType               DraftType
   pickOrder               PickOrder                   @default(RANDOM)
   waiverRule              WaiverRule                  @default(WEEKLY)
@@ -212,11 +212,11 @@ model LeagueSettings {
   locked                  Boolean                     @default(false)
   scoringMode             LeagueScoringMode           @default(H2H_EACH_CATEGORY)
   fixtureGenerationMode   LeagueFixtureGenerationMode @default(AUTOMATIC)
-  lineupSlotsJson         String?
-  categoryDirectionsJson  String?
+  lineupSlotsJson         Json?
+  categoryDirectionsJson  Json?
   scoringSettingsLockedAt DateTime?
   competitionStatus       LeagueCompetitionStatus     @default(SETUP)
-  competitionRulesJson    String?
+  competitionRulesJson    Json?
   competitionRulesVersion Int                         @default(0)
   competitionPublishedAt  DateTime?
   tradeLimit              Int                         @default(10)
