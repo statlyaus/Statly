@@ -3692,10 +3692,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   --store-id <store-id> --out <absolute-path.json>
 ```
 
-- **Do not store it yet (owner, 2026-10-19).** Dry runs only. The 13 legs of players drafted before 2011
-  (left-censored stage) are still about 10 to 13 PAV high at every checkpoint (fit `447b54dd…`). Storing waits
-  for the 2000-2010 national drafts to become canonical and the veteran bias to be within about one standard
-  error of zero (statlyaus/Statly#1023 comments).
+- **Do not store it yet (owner, 2026-10-19).** Dry runs only, until veterans who entered before 2011 and
+  the bands from 10 up are within about one standard error of zero at the trade, year 1 and year 3. The
+  2000-2010 Draftguru national origins (career origins only, never canonical; owner 2026-10-20) and the
+  10-11 / 12-13 / 14+ split (fit `05b9a248…`, statlyaus/Statly#1025) bring the 8 legs drafted 2000-2010 to
+  +2.4 / +4.3 / +8.2 PAV (SE 5.6 / 4.6 / 4.4; year 3 on 5 legs). The 5 legs that entered through a
+  pre-season, rookie or zone pre-draft listing are still left-censored at +18 / +17 / +12 (SE 10 / 8 / 5).
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.
