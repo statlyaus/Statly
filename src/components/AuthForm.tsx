@@ -34,6 +34,30 @@ interface AuthFormProps {
   showModeSwitch?: boolean;
 }
 
+const AUTH_ERROR_MESSAGES: Record<string, string | null> = {
+  'auth/invalid-credential': 'Email or password is incorrect.',
+  'auth/wrong-password': 'Email or password is incorrect.',
+  'auth/user-not-found': 'Email or password is incorrect.',
+  'auth/invalid-email': 'Email or password is incorrect.',
+  'auth/too-many-requests': 'Too many attempts. Try again later or reset your password.',
+  'auth/network-request-failed': 'Network error. Check your connection and try again.',
+  'auth/popup-blocked': 'Your browser blocked the sign-in window. Allow pop-ups and try again.',
+  'auth/email-already-in-use': 'An account already exists for this email. Sign in instead.',
+  'auth/popup-closed-by-user': null,
+  'auth/cancelled-popup-request': null,
+};
+
+// Firebase errors carry a code; never show their raw message. Our own errors (no code) are already plain.
+const authErrorMessage = (err: unknown): string | null => {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === 'string') {
+    return code in AUTH_ERROR_MESSAGES
+      ? AUTH_ERROR_MESSAGES[code]
+      : 'Sign-in failed. Please try again.';
+  }
+  return err instanceof Error ? err.message : 'Sign-in failed. Please try again.';
+};
+
 interface FormValidation {
   email: {
     isValid: boolean;
@@ -66,6 +90,7 @@ const AuthForm = ({
   const router = useRouter();
   const { notification, showNotification } = useNotification();
   const hasStartedRedirect = useRef(false);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   // Form state
   const [isSignup, setIsSignup] = useState(initialMode === 'signup');
@@ -188,9 +213,7 @@ const AuthForm = ({
       }
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Authentication error occurred';
-      setError(message);
-      showNotification('error', message);
+      setError(authErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -204,9 +227,7 @@ const AuthForm = ({
       showNotification('success', 'Successfully signed in with Google!');
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Google sign-in failed';
-      setError(message);
-      showNotification('error', message);
+      setError(authErrorMessage(err));
     } finally {
       setIsGoogleLoading(false);
     }
@@ -220,9 +241,7 @@ const AuthForm = ({
       showNotification('success', 'Successfully signed in with Facebook!');
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Facebook sign-in failed';
-      setError(message);
-      showNotification('error', message);
+      setError(authErrorMessage(err));
     } finally {
       setIsGithubLoading(false);
     }
@@ -236,13 +255,15 @@ const AuthForm = ({
       showNotification('success', 'Successfully signed in with Apple!');
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Apple sign-in failed';
-      setError(message);
-      showNotification('error', message);
+      setError(authErrorMessage(err));
     } finally {
       setIsAppleLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   // Optional: redirect immediately if already authenticated
   useEffect(() => {
@@ -376,9 +397,7 @@ const AuthForm = ({
                   className={`w-5 h-5 transition-colors ${
                     showEmailError
                       ? 'text-result-loss'
-                      : email && validation.email.isValid
-                        ? 'text-result-win'
-                        : 'text-muted-foreground group-focus-within:text-foreground'
+                      : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
               </div>
@@ -390,21 +409,15 @@ const AuthForm = ({
                 className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showEmailError
                     ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
-                    : email && validation.email.isValid
-                      ? 'border-result-win/50 bg-result-win/5 text-result-win'
-                      : 'border-input bg-background text-foreground hover:border-foreground/40'
+                    : 'border-input bg-background text-foreground hover:border-foreground/40'
                 }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => setTouched((current) => ({ ...current, email: true }))}
                 required
+                aria-invalid={showEmailError || undefined}
                 aria-describedby={showEmailError ? 'email-error' : undefined}
               />
-              {email && validation.email.isValid && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                  <CheckCircleIcon className="w-5 h-5 text-result-win" />
-                </div>
-              )}
             </div>
             {showEmailError && (
               <p id="email-error" className="text-sm text-result-loss flex items-center gap-1">
@@ -425,9 +438,7 @@ const AuthForm = ({
                   className={`w-5 h-5 transition-colors ${
                     showPasswordError
                       ? 'text-result-loss'
-                      : password && validation.password.isValid
-                        ? 'text-result-win'
-                        : 'text-muted-foreground group-focus-within:text-foreground'
+                      : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
               </div>
@@ -439,14 +450,13 @@ const AuthForm = ({
                 className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showPasswordError
                     ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
-                    : password && validation.password.isValid
-                      ? 'border-result-win/50 bg-result-win/5 text-result-win'
-                      : 'border-input bg-background text-foreground hover:border-foreground/40'
+                    : 'border-input bg-background text-foreground hover:border-foreground/40'
                 }`}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => setTouched((current) => ({ ...current, password: true }))}
                 required
+                aria-invalid={showPasswordError || undefined}
                 aria-describedby={showPasswordError ? 'password-error' : undefined}
               />
               <button
@@ -527,9 +537,7 @@ const AuthForm = ({
                     className={`w-5 h-5 transition-colors ${
                       confirmPassword && password !== confirmPassword
                         ? 'text-result-loss'
-                        : confirmPassword && password === confirmPassword
-                          ? 'text-result-win'
-                          : 'text-muted-foreground group-focus-within:text-foreground'
+                        : 'text-muted-foreground group-focus-within:text-foreground'
                     }`}
                   />
                 </div>
@@ -541,9 +549,7 @@ const AuthForm = ({
                   className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                     confirmPassword && password !== confirmPassword
                       ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
-                      : confirmPassword && password === confirmPassword
-                        ? 'border-result-win/50 bg-result-win/5 text-result-win'
-                        : 'border-input bg-background text-foreground hover:border-foreground/40'
+                      : 'border-input bg-background text-foreground hover:border-foreground/40'
                   }`}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -574,6 +580,8 @@ const AuthForm = ({
           {/* Error Message */}
           {error && (
             <motion.div
+              ref={errorRef}
+              tabIndex={-1}
               role="alert"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
