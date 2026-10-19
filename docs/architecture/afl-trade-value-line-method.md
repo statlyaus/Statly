@@ -37,34 +37,43 @@ One rule covers picks and players (**Owner**).
 
 ```text
 expected_remaining(asset, checkpoint) = Σ over future seasons s:
-    P(still at club in s) × expected_games(s) × expected_rate(s)
+    P(still at club in s) × (expected_games(s) + u_games) × (expected_rate(s) + u_rate)
 ```
 
-- **expected_rate**, the expected PAV per game, is a credibility blend:
-  `Z × own_rate + (1 − Z) × prior_rate`, with `Z = games / (games + k)`.
-- **own_rate (Owner):** PAV per game over the player's last three seasons, with recent seasons weighted
-  more. A season lost to injury adds no games. It neither lowers nor props up the rate.
-- **Credibility by games (Owner):** `games` is the games actually played in that window, not seasons on the
-  list, so 30 games of evidence outweighs 5.
-- **prior_rate:**
-  - For a drafted player, the expected rate for his draft slot.
+- **Own form (Owner, 2026-10-19):** a player's own seasons move the line by how far he is above or below
+  what his prior expects at the same stage, not by his own early level. Two effects, each additive and
+  shrunk by its own credibility, and added to every expected season still to come:
+  - **games:** his games in each in-stint season minus the prior's expected games at that tenure, summed
+    and shrunk by `seasons / (seasons + k_games)`. A season with no game is evidence about playing time.
+  - **rate:** his PAV minus his games times the prior's expected PAV per game at that tenure, summed and
+    shrunk by `games / (games + k_rate)`. A season with no game says nothing about his level.
+    A 19-year-old's first-year output is a young player's level; comparing it with players of the same slot
+    at the same tenure keeps normal development from reading as bad form. This replaces the 2026-10-17
+    rate blend (`Z × own_rate + (1 − Z) × prior_rate`), which the back-test showed undervalues open stints
+    by about 12 PAV after year 1 and 10 after year 3 in every pick range.
+- **prior:**
+  - For a drafted player, the expected games and PAV per game for his draft slot at each tenure.
   - For a traded player, the expected rate for his age and position.
-- **k (Owner: fitted from history):** the number of games at which a player's own record counts as much as
-  the prior. It is fitted on past draft classes and trades, not chosen by hand.
+- **k (Owner: fitted from history):** `k_games` is the number of seasons, and `k_rate` the number of
+  games, at which a player's own record counts as much as the prior. Each is the ratio of the noise in
+  one season (or one game) to how much players genuinely differ, estimated from past draft classes, not
+  chosen by hand.
 - **expected_games(s):** games per season expected from the player's availability history and age. An injury
   lowers this. It does not set it to zero.
 - **P(still at club in s):** a survival curve fitted from history. It runs by draft slot and seasons at the
   club for a drafted player, and by age and tenure for a traded one.
 
-Overperformance and underperformance move the line through the same formula. As games accumulate, Z tends
-to 1 and the slot or age prior fades.
+Overperformance and underperformance move the line through the same formula. As seasons accumulate, the
+shrinkage tends to 1 and the slot or age prior fades.
 
 ## Picks
 
 - **Trade date, pick not yet used:** the value is the expected first-stint PAV of its slot, from the fitted
   **first-stint pick curve**. That curve replaces HPN's whole-career DPVC, which measures a different unit.
   The slot comes from the live Official AFL order, as grade rule v6 already does. A draft with no order yet
-  uses the original club's slot in the latest order. The proxy is flagged.
+  uses the original club's slot in the latest order. The proxy is flagged. A pick of a held draft that no
+  captured order places takes the number a reviewed Footyinfo board states it held before the draft
+  (parser v3, owner decision 2026-10-18), as grade rule v19's at-trade view does.
 - **At the draft:** the pick becomes the player, valued at the same slot expectation. From then on it
   follows the player's value line.
 - **Pick not used (no player taken):** 0 from the draft onward.
@@ -130,13 +139,13 @@ asset's value at the same checkpoint.
 
 ## Data needed
 
-| Input                                              | Source                                                                                                                                                                                                                          | Status                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                                                                                                                  | In the outcomes database   |
-| Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs                                                                                                                                                                                | Stored; needs a read model |
-| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only)                                                     | Being calculated           |
-| Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                                                                                                                     | In place                   |
-| AFL draft points table, bid points, matching picks | Bid points and spent picks from the reviewed Footyinfo boards, 2019 to 2025 (parser v2, **Owner:** approved 2026-10-17); the price from each draft year's AFL rule (`matchedBidPriceRules.ts`), never the board's `points_used` | In the outcomes database   |
+| Input                                              | Source                                                                                                                                                                                                                          | Status                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Season PAV, 2019 to 2026                           | HPN PAV calculations, official                                                                                                                                                                                                  | In the outcomes database |
+| Games per player-season, 2019 onward               | Match appearances already used by the PAV inputs: `source.gamesPlayed` on each finalized HPN PAV calculation's player rows, cross-checked against its factual appearances (`modeling/playerSeasonGames.ts`)                     | Read model in place      |
+| Season PAV and games, 2011 to 2018                 | Statly's own HPN PAV calculation from AFL Tables and Footywire captures, on the grading VM (**Owner:** calculated, not imported; HPN's published PAV is a cross-check only)                                                     | Being calculated         |
+| Draft slot, club, first-stint boundaries           | Reconciled candidate and acquisition spells                                                                                                                                                                                     | In place                 |
+| AFL draft points table, bid points, matching picks | Bid points and spent picks from the reviewed Footyinfo boards, 2019 to 2025 (parser v2, **Owner:** approved 2026-10-17); the price from each draft year's AFL rule (`matchedBidPriceRules.ts`), never the board's `points_used` | In the outcomes database |
 
 ## Fitting and validation
 
@@ -150,6 +159,95 @@ asset's value at the same checkpoint.
 3. **Published:** every fitted parameter is published with its fit window, so a value line can be
    reproduced from the stored inputs.
 4. **No hindsight:** a value line at a checkpoint may use only seasons up to that checkpoint.
+
+### Fit specification (step 2)
+
+Built in `modeling/valueLineFit.ts` (pure) and run by `npm run outcomes:grading:value-line-fit`. Every
+choice below is published in the fit artifact (`afl-trade-value-line-fit/v2`, from 2026-10-19; v1 is the
+superseded rate blend) with its fit window. This section fixes how the spec above is fitted; it changes
+none of the owner's rules.
+
+- **Data.** Every current canonical AFLM national-draft selection of the classes fitted
+  (`outcome_current_canonical_draft_selection_picks`), with its slot (selection number), drafting club
+  and player, and the player-season games read model for every season after the first class. The fit
+  refuses a season that is not available and any games discrepancy. Busts stay in: a draftee who never
+  plays contributes 0.
+- **First stint.** Season `t` after the draft (season 1 is the season after the draft) is in the stint
+  until the first of:
+  - the player appears for another club (that season is out);
+  - he is drafted again (the seasons after the later draft are out);
+  - three consecutive in-stint seasons with no game at the club (the stint closes after the third).
+    Appearances cannot show a delisting, and a year-3 debut is common (67 of 1,029 selections), so two
+    empty seasons would close live stints. A return after three empty seasons is not first-stint PAV; the
+    fit reports how many there are and their PAV.
+- **Ended stints and censoring.** No class has every stint ended (2011 still has open ones), so the fit
+  does not wait for whole classes. Every class contributes each season it has observed. An open stint is
+  censored at the last season read and never counted as ended. Draft classes from 2011 to the season
+  before the last are in the fit window.
+- **Model forms.** Three curves, each with its own intercept for tenure 1 to 9 and a shared one for 10
+  and later, and a continuous piecewise-linear effect of ln(slot) with knots at picks 10 and 30, fitted
+  separately for tenures 1 to 3 and 4 and later. One shared slot effect (v1) under-predicted picks 1 to 10
+  early (+1.4 PAV per season at tenure 1) and over-predicted them late (−2.6 from tenure 7): top picks play
+  more early and plateau lower. With the two bands every pick range is within ±1.2 PAV per season at every
+  tenure. The curves:
+  - survival: the per-season hazard of leaving the stint (logit link), with half an event and half a
+    non-event added per tenure group so a group with no exits stays finite;
+  - expected games in a season in the stint (quasi-Poisson, log link);
+  - expected PAV per game in a season in the stint with a game (quasi-Poisson, log link, offset
+    ln games).
+    A single ln(slot) slope was tried first and rejected: it put pick 1 at 265 PAV, while the pick 1s of
+    2011 to 2020 averaged 86.
+- **First-stint pick curve.** `V(p) = Σ_{t=1..20} S(t, p) × games(t, p) × rate(t, p)`, with `S` the
+  probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
+  10+ tenure group carries the tail. A class with more than twenty observed seasons is refused, so no curve is
+  read past its horizon.
+- **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
+  the remaining value below. A closed stint is worth what it produced.
+  - **Player effects (Owner, 2026-10-19):** `u_games = Σ_{s≤τ} (games(s) − games(t_s, p)) / (n + k_games)`
+    over the `n` in-stint seasons through `τ`, and `u_rate = Σ_{s≤τ} (pav(s) − games(s) × rate(t_s, p)) /
+(G + k_rate)` over the `G` games in them, each against its own tenure's expectation for the slot. The
+    remaining value is `Σ_{t>τ} S(t)/S(τ) × max(0, games(t, p) + u_games) × (rate(t, p) + u_rate)`. A ratio
+    form (own ÷ prior) was rejected: it overvalued picks 1 to 10 by 18 after year 1. One effect on PAV per
+    season was tried first: it read a season with no game as low level, so a league where one pick in
+    five never plays put playing stints 12% high, against 10% for the two effects (the survival
+    limitation below).
+- **k_games and k_rate.** One-way random-effects analysis of variance (method of moments, unbalanced)
+  on the residuals against the slot's expectation at each tenure: games per in-stint season, weight 1;
+  PAV per game in each in-stint season with a game, weighted by its games. Each `k` is the within-player
+  variance (of one season, or one game) over the between-player variance. The fit refuses a variance that
+  is not positive. v1 searched a grid for its two weights against the next three seasons' PAV and landed
+  on an edge, because the rate blend's error came from development the blend could not see, not from
+  noise.
+- **Back-test.** Each class with at least six observed seasons is held out in turn. All curves and `k` are refitted on the other classes, and the held-out class is valued at the draft, after year 1
+  and after year 3.
+  - **No hindsight:** at a checkpoint, the held-out class's own seasons count only up to it. The
+    parameters come from the other classes' seasons through the last season read. A strictly
+    forward-only fit would leave the 2011 to 2014 checkpoints with almost nothing to fit on.
+  - **Compared with:** the first-stint PAV the class produced through the last season read, against the
+    value line's expected PAV summed over the same seasons. Report bias (mean predicted minus realized),
+    mean absolute error and RMSE per selection, for picks 1–10, 11–30 and 31+ and all, at each checkpoint.
+  - **Baseline:** the draft-slot-only line (own form moves nothing) at the same checkpoints.
+  - **Calibration:** mean realized against mean predicted in bins of predicted value (0, 5, 10, 20, 40, 80,
+    160 PAV) at each checkpoint.
+  - **Interval:** the 10th and 90th percentiles of realized minus predicted, by pick range and checkpoint.
+  - **Prior comparison:** at the draft, the fitted curve against HPN DPVC v3 on the same selections
+    (slots 1 to 90). Both are reported for every held-out class and for the mature classes (at least
+    twelve observed seasons), where cutting the comparison at the last season read matters least.
+- **Known limitations (review 2026-10-19).** Survival is by slot and tenure only, so a player above his
+  slot's expectation is treated as leaving as often as one below it; in truth he stays longer, so the
+  effect is somewhat under-credited for overperformers and over-counted for underperformers. It also
+  spreads the inactivity closures of draftees who never play over every stint: in a synthetic league
+  where one pick in five never plays and the rest develop identically, playing stints come out about 10%
+  low at year 3 (18% low with no own form at all; with every pick playing, within 1%). A survival
+  model where an inactivity closure follows the player's own run of empty seasons is the fix. The two effects are estimated
+  separately and multiplied, so their covariance is dropped: if players who play more also score more per
+  game, an overperformer is slightly under-credited, the same direction as the survival limitation. Each `k` pools
+  every tenure's variance, although early seasons vary less. A future season's games are floored at 0;
+  its rate `rate(t, p) + u_rate` is not; the calibration's first bin (below 0) shows how often a value line
+  goes negative (never in the 2026-10-19 fit). A hazard term in the effect, or a tenure-varying `k`, is a
+  later refinement, not part of step 2.
+- **Out of scope here.** The traded-player prior and survival by age and position. `outcome_player`
+  has a birth date for under half the players and no position, so these wait for that data.
 
 ## What this retires
 
@@ -177,9 +275,15 @@ asset's value at the same checkpoint.
 
 1. **Pre-2019 data:** calculate HPN PAV and games for 2011 to 2018 on the VM with the same governed season
    pipeline as 2019 to 2026, cross-checked against HPN's published values, and add the games read model
-   for 2019 onward. Seasons before 2011 have no second statistics source, so they fail closed and stay
-   out of the fit window.
+   for 2019 onward. The read model is in place (`modeling/playerSeasonGames.ts`) and reads each 2011 to
+   2018 season the same way once its calculation is finalized. Seasons before 2011 have no second
+   statistics source, so they fail closed and stay out of the fit window.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
+   The fit and back-test command is in place ([Fit specification](#fit-specification-step-2)). The
+   curves beat whole-career DPVC as the prior at the draft. But the own-form blend, as written above,
+   values open stints too low after year 1 and year 3, in every pick range: `own_rate` is a young
+   player's current level, blended with a prior for the seasons in which he has developed. The own-form
+   definition waits on an owner decision before step 3 uses it.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
@@ -187,4 +291,6 @@ asset's value at the same checkpoint.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
    bundle split, then regrade on intrinsic value lines.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
-7. **Preview:** a value line per club per trade over time, with each club's chains.
+7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
+   is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence
+   architecture); it shows the story's values until value lines exist.

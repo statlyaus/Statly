@@ -515,6 +515,7 @@ export function gradeAflTradesOnRealizedValue(
     pickCustody,
     outcomes,
     selections,
+    boardPicks: inputs.candidate.draftBoardPicks ?? [],
     onwardTransferOf,
     specialSuccessorOf: (transfer, transaction) => onwardOfSpecial(transfer, transaction)?.transfer,
     playerView: (transfer, tradeYear) => playerAtTrade(index, transfer, tradeYear),

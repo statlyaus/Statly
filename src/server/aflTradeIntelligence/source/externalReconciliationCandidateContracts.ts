@@ -246,12 +246,19 @@ const draftBoardPickSchema = z
     routeClubIds: z.array(z.string().trim().min(1).max(240)).max(16).nullable(),
     /** Issue 789: the basis of the bid the holder matched, when the board states a matched bid. */
     matchedBidBasis: z.enum(['father_son', 'academy', 'next_generation_academy']).optional(),
+    /** Issue 789, parser v3: the board's original club and pre-draft number; absent before v3. */
+    originalClubId: z.string().trim().min(1).max(240).nullable().optional(),
+    originalNumber: z.number().int().positive().nullable().optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine(
     (record) => (record.status === 'selected') === (record.recordedPickNumber !== null),
     'A board pick has a number exactly when it was selected.'
+  )
+  .refine(
+    (record) => (record.originalClubId === undefined) === (record.originalNumber === undefined),
+    'A board pick states its original club and pre-draft number together or neither.'
   );
 
 const boardClubIdSchema = z.string().trim().min(1).max(240).nullable();

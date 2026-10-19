@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
-import type { AflTradeGateDecisionLedger } from '../governance/gateDecisionLedger';
-import { resolveAflTradeGateEligibility } from '../governance/gateDecisionLedger';
+import type {
+  AflTradeGateDecisionLedger,
+  AflTradeGateEligibilityResolver,
+} from '../governance/gateDecisionLedger';
+import { createAflTradeGateEligibilityResolver } from '../governance/gateDecisionLedger';
 import type {
   AflTradeDecisionEnvironment,
   AflTradeGateDecisionRecord,
@@ -143,12 +146,12 @@ function collectDecisionScopeBlockers(
 }
 
 function evaluateGateDecisionAuthorization(
-  ledger: AflTradeGateDecisionLedger,
+  resolveGate: AflTradeGateEligibilityResolver,
   rights: AflTradeSourceRightsProposal,
   request: AflTradeGate0ARequest
 ): { decision: AflTradeGateDecisionRecord | null; blockers: AflTradeGate0ABlocker[] } {
   const blockers: AflTradeGate0ABlocker[] = [];
-  const gateResolution = resolveAflTradeGateEligibility(ledger, {
+  const gateResolution = resolveGate({
     gate: 'gate_0a_permission_to_evaluate',
     decisionKey: request.decisionKey,
     environment: request.environment,
@@ -523,16 +526,32 @@ function evaluateAflTradeGate0AWithAuthorization(
   };
 }
 
+export type AflTradeGate0AEvaluator = (
+  unparsedRights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest
+) => AflTradeGate0AEvaluation;
+
+/**
+ * Evaluates many requests against one ledger while validating that ledger once. Results are
+ * identical to calling evaluateAflTradeGate0A per request; see createAflTradeGateEligibilityResolver
+ * for the constraint on editing the ledger while the evaluator is in use.
+ */
+export function createAflTradeGate0AEvaluator(
+  ledger: AflTradeGateDecisionLedger
+): AflTradeGate0AEvaluator {
+  const resolveGate = createAflTradeGateEligibilityResolver(ledger);
+  return (unparsedRights, request) =>
+    evaluateAflTradeGate0AWithAuthorization(unparsedRights, request, (rights) =>
+      evaluateGateDecisionAuthorization(resolveGate, rights, request)
+    );
+}
+
 export function evaluateAflTradeGate0A(
   ledger: AflTradeGateDecisionLedger,
   unparsedRights: AflTradeSourceRightsProposal,
   request: AflTradeGate0ARequest
 ): AflTradeGate0AEvaluation {
-  return evaluateAflTradeGate0AWithAuthorization(
-    unparsedRights,
-    request,
-    (rights) => evaluateGateDecisionAuthorization(ledger, rights, request)
-  );
+  return createAflTradeGate0AEvaluator(ledger)(unparsedRights, request);
 }
 
 export function evaluateAflTradeGate0AAgainstDecision(

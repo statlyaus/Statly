@@ -128,6 +128,24 @@ describe('getLeagueDraftOperationalReadiness', () => {
     expect(readiness.blockers).toEqual([]);
   });
 
+  it('opens the room for a scheduled draft whose lobby is open before its start', async () => {
+    const readiness = await getLeagueDraftOperationalReadiness(
+      buildClient({
+        startAt: new Date('2026-05-02T00:00:00.000Z'),
+        availablePlayers: 100,
+        lobbyStatus: 'OPEN',
+        lobbyOpenAt: new Date('2026-05-01T00:00:00.000Z'),
+      }) as any,
+      {
+        leagueId: 'league-1',
+        now: new Date('2026-05-01T23:30:00.000Z'),
+      }
+    );
+
+    expect(readiness.status).toBe('room_open');
+    expect(readiness.lifecycle.canEnterRoom).toBe(true);
+  });
+
   it('marks an overdue scheduled draft as enterable and startable', async () => {
     const readiness = await getLeagueDraftOperationalReadiness(
       buildClient({

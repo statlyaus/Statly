@@ -243,6 +243,14 @@ projections and exports retain their prior local release identity. This removes 
 access; it does not activate, roll back or alter a factual release. Unsetting variables alone is not a
 withdrawal proof because Next development environment files may supply a configured value.
 
+The private trade page (statlyaus/Statly#789) has its own switch. Set `STATLY_ENABLE_DEV_TOOLS=true`
+and `AFL_TRADE_STORY_READER_ENABLED=true` for the web process, sign in through the Firebase Auth
+emulator as `admin@statly.dev`, and open `http://localhost:3000/dev/afl-trade-stories`. It lists the
+sample stories (the Jeremy Cameron chain and the Geelong ⇄ Western Bulldogs 2021 swap with Sam Darcy's
+matched bid). Check each page in light and dark mode and at 390 pixels: the scarf scrolls sideways,
+nothing else does, and every lineage trade button opens its trade in the map. The route is not found in
+production, with either switch off, or for any other user.
+
 After `npm run dev:full:all` reports that the web process is ready, open
 `http://localhost:3000/draft/trades`. Verify the 38 year filters, the 783-trade archive, the 21 trades
 in 2025, and the 20 trades in 1988. Then compare the governed 2025 trade detail page with:
@@ -535,6 +543,20 @@ runner, and it matches the budget part of that family already used. A test that 
 is signalling that its work is reducible, and should be profiled rather than given a larger number.
 Do not drop a heavy test back to 60 seconds to make the suite look tidier: at that setting the family
 times out whenever the suite is under load.
+
+The shared native-PAV fixtures built in `beforeAll` (`nativePavModelRunSqlFixture`, the admitted-run and
+dataset-admission fixtures) take about 7 to 21 seconds on a typical runner and twice that on a slow one,
+so their hooks declare 30 or 60 seconds instead of the 10 second hook default. The outcomes PostgreSQL
+budgets follow the same rule: about three times the typical CI duration, which is about 1.5 times the
+slowest observed run.
+
+The continuation PostgreSQL adapter test is the worked example. It took 55 to 58 seconds on a typical
+runner and up to 118 on a slow one, and a CPU profile put about 40% of that in revalidating the same
+55-entry Gate 0A decision ledger: every `evaluateAflTradeGate0A` call re-hashes every proposal and
+decision, and the run-authority currentness check made one call per source-rights artifact (54) on
+each authentication. Loops that evaluate many artifacts against one ledger now share
+`createAflTradeGate0AEvaluator` (or `createAflTradeGateEligibilityResolver`), which validates the
+ledger once. Look for the same shape first when a heavy test approaches the ceiling.
 
 Lock-space failures are not budget failures. A suite that reports `out of shared memory` while dropping
 its temporary schema, or that times out only when other suites run beside it, is hitting the disposable

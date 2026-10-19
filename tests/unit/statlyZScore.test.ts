@@ -66,6 +66,38 @@ describe('calculateStatlyZScores', () => {
     });
   });
 
+  it('gives a draft player the stats of its own club when another player shares the name', () => {
+    const seasonStats = (id: string, team: string, goals: number) => ({
+      id,
+      name: 'Max King',
+      team,
+      position: 'FWD',
+      games: 10,
+      statsSeason: 2025,
+      availableStatSeasons: [2025],
+      stats: { goals },
+      statsBySeason: {
+        '2025': {
+          games: 10,
+          dataThrough: '2025-07-18',
+          stats: { goals },
+          basisByStat: { goals: 'TOTAL' as const },
+        },
+      },
+    });
+    const lookup = buildDraftPlayerStatsLookup(
+      [seasonStats('stk-max-king', 'St Kilda', 10), seasonStats('syd-max-king', 'Sydney', 20)],
+      { season: 2025 }
+    );
+
+    const player = buildAvailableDraftPlayer(
+      { id: 'draft-77', name: 'Max King', club: 'St Kilda', position: 'FWD' },
+      lookup
+    );
+
+    expect(player.stats?.goals).toBe(1);
+  });
+
   it('projects season match-log totals into per-game averages for the selected season', () => {
     const lookup = buildDraftPlayerStatsLookup(
       [

@@ -441,6 +441,13 @@ interface CanonicalDraftBoardPick {
    * matched; the bidding club is another club.
    */
   matchedBidBasis?: 'father_son' | 'academy' | 'next_generation_academy';
+  /**
+   * Present only from a parser v3 row (issue 789), so earlier candidate ids are unchanged: the
+   * entitlement's original club as the board states it (null when it has no reviewed resolution) and
+   * the pick's number before the draft (null when the board states none).
+   */
+  originalClubId?: string | null;
+  originalNumber?: number | null;
   evidenceIds: string[];
 }
 
@@ -1461,6 +1468,12 @@ function reconcileDraftBoardPicks(input: {
         ...(claim.routeLabel === 'matched_bid' && claim.bid !== null
           ? { matchedBidBasis: claim.bid.basis }
           : {}),
+        ...(claim.originalClub === undefined
+          ? {}
+          : {
+              originalClubId: clubOf(claim.originalClub),
+              originalNumber: claim.originalNumber ?? null,
+            }),
         evidenceIds: [row.evidenceId],
       };
     });
