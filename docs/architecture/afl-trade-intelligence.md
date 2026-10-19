@@ -4186,6 +4186,33 @@ range and checkpoint, the fitted curve against DPVC at the draft, and per-class 
 (`Scripts/fit-value-line.ts`) stores it as `derived_private` in repository `value-line-fits`. See the
 operations runbook, "Fitting the value-line priors".
 
+The fit's back-test values a checkpoint through `aflTradeValueLinePointAt`, the one evaluator the
+value-line calculator also uses, and `aflTradeValueLineSlotCurve` rebuilds a slot's curves from a stored
+fit's published parameters.
+
+### Value lines
+
+`valuation/valueLines.ts` computes the value lines ([afl-trade-value-line-method.md](afl-trade-value-line-method.md),
+implementation order step 3, "Value lines (step 3)"; statlyaus/Statly#789): every traded asset's line at
+each checkpoint and each trade's per-club nets on those lines, with each leg's at-trade view beside them.
+It is pure and deterministic (trade order does not change the id).
+
+**Inputs.** A stored value-line fit (its content address checked), the asset ledger read model, the
+player-season games read model, the reconciliation candidate (transfers, custody orders, Footyinfo boards
+and draft selections) and a realized-trade-grade batch, read only for its trades, legs and onward links,
+never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`)
+estimates traded players' open stints; the fit behind it is built separately. Inputs that pin different
+calculations for a season, a games read model of another method, a checkpoint past the fit's last season
+or a tenure past the curves' horizon are refused.
+
+**Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v1`): the rules, the inputs (fit, traded-player
+fit, ledger, candidate and batch ids, each season's calculation), one line per asset (a pick, a traded
+player's stint at the receiving club, or an unresolved transfer), each trade's legs with their at-trade
+views, and per club the at-trade net and the net at each draft and season end, provisional while a leg is
+pending. `npm run outcomes:grading:value-lines` (`Scripts/compute-value-lines.ts`) stores it as
+`derived_private` in repository `value-lines`. See the operations runbook, "Computing the value lines".
+The trade story does not read the value lines yet (implementation order step 5).
+
 ### Private trade page
 
 The value-line trade page (statlyaus/Statly#789) renders one trade's realized story for the local

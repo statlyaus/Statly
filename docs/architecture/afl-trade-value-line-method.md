@@ -53,7 +53,9 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
     by about 12 PAV after year 1 and 10 after year 3 in every pick range.
 - **prior:**
   - For a drafted player, the expected games and PAV per game for his draft slot at each tenure.
-  - For a traded player, the expected rate for his age and position.
+  - For a traded player (**Owner, 2026-10-19:** estimated, by career stage), what traded players at the
+    same career stage (seasons since his draft, standing in for age) produce at the receiving club from
+    there. No position is used, as none is sourced; it can be added later.
 - **k (Owner: fitted from history):** `k_games` is the number of seasons, and `k_rate` the number of
   games, at which a player's own record counts as much as the prior. Each is the ratio of the noise in
   one season (or one game) to how much players genuinely differ, estimated from past draft classes, not
@@ -62,7 +64,7 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
 - **expected_games(s):** games per season expected from the player's availability history and age. An injury
   lowers this. It does not set it to zero.
 - **P(still at club in s):** a survival curve fitted from history. It runs by draft slot and seasons at the
-  club for a drafted player, and by age and tenure for a traded one.
+  club for a drafted player, and by career stage and tenure at the receiving club for a traded one.
 
 Overperformance and underperformance move the line through the same formula. As seasons accumulate, the
 shrinkage tends to 1 and the slot or age prior fades.
@@ -250,8 +252,47 @@ none of the owner's rules.
   its rate `rate(t, p) + u_rate` is not; the calibration's first bin (below 0) shows how often a value line
   goes negative (never in the 2026-10-19 fit). A hazard term in the effect, or a tenure-varying `k`, is a
   later refinement, not part of step 2.
-- **Out of scope here.** The traded-player prior and survival by age and position. `outcome_player`
-  has a birth date for under half the players and no position, so these wait for that data.
+- **Out of scope here.** The traded-player prior and survival. `outcome_player` has a birth date for
+  under half the players and no position, so they are a separate fit by career stage
+  ([Owner decisions](#owner-decisions-2026-10-19), item 3), with its own held-out back-test.
+
+### Value lines (step 3)
+
+Built in `valuation/valueLines.ts` (pure) and run by `npm run outcomes:grading:value-lines`; the
+artifact is `afl-trade-value-lines/v1`. Every rule is published in it (`rules`). This section fixes how
+the spec above is applied; it changes none of the owner's rules.
+
+- **Checkpoints.** Each point names its kind: `season_end` (season Y's HPN PAV official), `trade` (the
+  trade period of Y) and `draft` (the national draft of Y), in that order within a year. A checkpoint
+  reads only seasons through Y. A trade's nets are at its picks' drafts and every season end after it,
+  through `--through-season`, which may not pass the fit's last season.
+- **At-trade view.** Each leg carries its asset's value at the trade, beside the trade's nets; the
+  per-club at-trade net is shown, never subtracted from a later one.
+- **Picks before the draft.** `V(at-trade slot)`, never the eventual selection. The at-trade slot is the
+  number the trade states, else rule v6's slot in the live Official AFL order (the previous draft's order
+  is a flagged `order_proxy`), else the reviewed board's pre-draft number (rule v19); with none the
+  point is pending (`slot_unknown`). A season end between trades takes the slot of the pick's latest hop
+  (by year, then trade id).
+- **Picks from the draft.** A used pick is `V(used slot)` at the draft, then the drafted player's first
+  stint at the drafting club. A pick not used or passed is 0. A matched-bid spent pick is its share of
+  the nominee's line (at the bid slot) from the bid; before it, its own slot. A pick whose draft is not in
+  evidence stays at its slot, and an unresolved outcome is pending.
+- **One evaluator.** A drafted player's point is `aflTradeValueLinePointAt` in `modeling/valueLineFit.ts`,
+  the evaluator the fit's back-test uses, on curves rebuilt from the stored fit's published parameters.
+  The ledger's stint end closes a stint, as do three in-stint seasons with no game. A tenure past the
+  20-season horizon is refused.
+- **Signed values.** No floor: a closed asset is exactly what it produced, negative PAV included.
+- **Traded players.** A player's line is his first stint at the club that received him in that trade
+  (never followed on). A closed stint is what it produced. An open stint takes produced plus expected
+  remaining from the injected traded-player fit (`modeling/tradedPlayerValueLineContracts.ts`); his
+  career-stage origin is his first national draft, else the season before his first game (assumed
+  youngest and left-censored when that game is in the first season read). With no fit stored the point
+  is pending (`traded_player_fit_not_stored`) and the trade's net is provisional.
+- **Traded-on picks.** A pick leg is followed through each onward trade to its final hop (a special
+  entitlement to its successor pick), so every trade it passed through carries the same line.
+- **Refusals.** The fit, ledger, batch and games read model must pin the same calculation per shared
+  season, the games read model must be of the fit's method with every season available, and the ledger,
+  batch and candidate must be of one candidate.
 
 ## What this retires
 
@@ -286,6 +327,12 @@ none of the owner's rules.
    -1.34) and every post-draft RMSE worse (year 1 37.6 to 38.2, year 3 28.6 to 29.1), with the bias
    changes inside their standard errors. Owner, after review: "Revert games floor". `k_games` is the
    estimate; `k_rate` keeps its 10-game guard, which does not bind (13.85).
+3. **Traded players' open stints:** "estimated", "Yes, career stage". A traded player's open stint is
+   estimated like a pick, not shown as produced-only or pending. The prior is what traded players at the
+   same career stage (seasons since draft, standing in for age; no position, as there is no position
+   data) produce from there; his own form is blended in by the same credibility rule (games and PAV per
+   game, `k` from variance components); survival is at the receiving club. All are fitted from past
+   trades with a held-out back-test. Position can be added later if it is sourced.
 
 ## Implementation order
 
@@ -295,13 +342,14 @@ none of the owner's rules.
    2018 season the same way once its calculation is finalized. Seasons before 2011 have no second
    statistics source, so they fail closed and stay out of the fit window.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
-   The fit and back-test command is in place ([Fit specification](#fit-specification-step-2)). The
-   curves beat whole-career DPVC as the prior at the draft. But the own-form blend, as written above,
-   values open stints too low after year 1 and year 3, in every pick range: `own_rate` is a young
-   player's current level, blended with a prior for the seasons in which he has developed. The own-form
-   definition waits on an owner decision before step 3 uses it.
+   Done: the fit and back-test command is in place ([Fit specification](#fit-specification-step-2)),
+   with own form read against the pick's average at the same tenure and `k` from variance components
+   (owner decisions 2026-10-19, items 1 and 2). The curves beat whole-career DPVC as the prior at the
+   draft.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
-   picks.
+   picks. The calculator, contract and command are in place for picks
+   ([Value lines (step 3)](#value-lines-step-3)). Traded players' open stints are pending until the
+   traded-player fit (owner decision 2026-10-19, item 3) is stored.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
    ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
