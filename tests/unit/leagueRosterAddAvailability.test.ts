@@ -16,13 +16,10 @@ const prismaMocks = vi.hoisted(() => ({
   playerExternalIdentity: {
     findUnique: vi.fn(),
   },
-  leagueRoster: {
-    upsert: vi.fn(),
-    update: vi.fn(),
-  },
   leagueRosterPlayer: {
     findFirst: vi.fn(),
     create: vi.fn(),
+    findMany: vi.fn(),
   },
   teamAction: {
     findFirst: vi.fn(),
@@ -97,15 +94,11 @@ describe('league roster free-agent add eligibility', () => {
     prismaMocks.player.findUnique.mockResolvedValue({ id: 'held-player' });
     prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue(null);
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
+    prismaMocks.leagueRosterPlayer.findMany.mockResolvedValue([]);
     prismaMocks.teamAction.findFirst.mockResolvedValue({
       id: 'drop-hold-1',
       processingAt: new Date(Date.now() + 60 * 60 * 1000),
     });
-    prismaMocks.leagueRoster.upsert.mockResolvedValue({
-      id: 'roster-1',
-      playerIds: JSON.stringify([]),
-    });
-    prismaMocks.leagueRoster.update.mockResolvedValue({ id: 'roster-1' });
     prismaMocks.leagueRosterPlayer.create.mockResolvedValue({ id: 'roster-player-1' });
     prismaMocks.$transaction.mockImplementation((work: unknown) => {
       if (Array.isArray(work)) return Promise.all(work);

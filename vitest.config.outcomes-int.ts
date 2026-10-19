@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+import OutcomesShardSequencer from './tests/testUtils/outcomesShardSequencer';
+
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
@@ -33,8 +35,9 @@ export default defineConfig({
     fileParallelism: true,
     maxWorkers: 2,
     // The per-file database is dropped by the setup file's afterAll, which must run after the
-    // file's own afterAll hooks have closed their pools.
-    sequence: { hooks: 'stack' },
+    // file's own afterAll hooks have closed their pools. CI shards by measured file duration, not
+    // by path hash; see docs/development/testing.md before changing the shard count.
+    sequence: { hooks: 'stack', sequencer: OutcomesShardSequencer },
     reporters: ['default'],
   },
 });

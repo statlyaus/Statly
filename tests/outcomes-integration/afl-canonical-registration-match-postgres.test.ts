@@ -83,11 +83,15 @@ afterAll(async () => {
 });
 
 // Synthetic upstream custody/review evidence only; no registration or resolution guard is replaced.
+const retainedEvidence = new Set<string>();
 async function retainEvidence(kind: string, fields: Readonly<Record<string, unknown>>) {
   const payload = { evidenceKind: kind, environment: execution.environment, ...fields };
   const prefix = kind.replaceAll('_', '-');
   const id = createAflTradeContentAddress(prefix, payload);
   const sha256 = sha256AflTradeCanonicalJson(payload);
+  // Content-addressed: retaining the same evidence again reuses it.
+  if (retainedEvidence.has(id)) return { id, sha256 };
+  retainedEvidence.add(id);
   const canonical = canonicalizeAflTradeJson(payload);
   const artifact = createAflTradeContentAddress('governed-evidence-artifact', { id });
   const approval = createAflTradeContentAddress('governed-evidence-approval-decision', { id });
@@ -339,7 +343,8 @@ it('registers synthetic club parents, then a date-only match and exactly replays
     identityId: string,
     entityKind: 'club_alias' | 'match',
     sourceStaging: AflTradeProviderResolutionProposal['content']['staging'] = staging,
-    creationReplay = false
+    creationReplay = false,
+    expectedRegistrationError?: string
   ) {
     const snapshot = {
       evidenceKind: 'canonical_target_snapshot',
@@ -468,6 +473,12 @@ it('registers synthetic club parents, then a date-only match and exactly replays
         reviewedAt,
       ]
     );
+    if (expectedRegistrationError) {
+      await expect(repository.registerCanonicalTarget(request, execution)).rejects.toThrow(
+        expectedRegistrationError
+      );
+      return decision.decisionId;
+    }
     await expect(repository.registerCanonicalTarget(request, execution)).resolves.toEqual({
       entityKind: record.entityKind,
       canonicalId: record.canonicalId,
@@ -488,7 +499,20 @@ it('registers synthetic club parents, then a date-only match and exactly replays
     });
     return decision.decisionId;
   }
+  const secondRow = result.rows[1]!;
+  const secondStaging = {
+    ...staging,
+    providerDecodedRowId: secondRow.provider_decoded_row_id,
+    sourceRowSha256: secondRow.source_row_sha256,
+    candidateSha256: sha256AflTradeCanonicalJson(secondRow.candidate_json),
+    issueSet: ref('provider-resolution-issue-set', {
+      normalizationRunId: secondRow.normalization_run_id,
+      providerDecodedRowId: secondRow.provider_decoded_row_id,
+      issues: [],
+    }),
+  };
   const decisions: string[] = [];
+  const secondDecisions: string[] = [];
   for (const side of ['home', 'away'] as const) {
     const currentName = candidate[`${side}ClubName`];
     const normalizedName = currentName.toLowerCase();
@@ -541,7 +565,7 @@ it('registers synthetic club parents, then a date-only match and exactly replays
     );
     const second = result.rows[1]!;
     const secondOccurrence = { ...occurrence, matchCandidateId: second.match_candidate_id };
-    await register(
+    const secondDecision = await register(
       {
         entityKind: 'club',
         canonicalId: `club:synthetic-${side}`,
@@ -575,19 +599,10 @@ it('registers synthetic club parents, then a date-only match and exactly replays
       },
       aliasId,
       'club_alias',
-      {
-        ...staging,
-        providerDecodedRowId: second.provider_decoded_row_id,
-        sourceRowSha256: second.source_row_sha256,
-        candidateSha256: sha256AflTradeCanonicalJson(second.candidate_json),
-        issueSet: ref('provider-resolution-issue-set', {
-          normalizationRunId: second.normalization_run_id,
-          providerDecodedRowId: second.provider_decoded_row_id,
-          issues: [],
-        }),
-      },
+      secondStaging,
       true
     );
+    secondDecisions.push(secondDecision);
   }
   expect(candidate.matchDateText).toBe('2026-03-20');
   expect(candidate.nativeMatchId).toBeNull();
@@ -651,6 +666,101 @@ it('registers synthetic club parents, then a date-only match and exactly replays
     },
     matchIdentityId,
     'match'
+  );
+  // The second occurrence lists the fixture the other way round from its canonical match (as Footywire
+  // does for the 2015 Grand Final): its provider home side is the canonical away club.
+  const reversedCandidate = secondRow.candidate_json;
+  expect(reversedCandidate.nativeMatchId).toBeNull();
+  const reversedDate = `${reversedCandidate.matchDateText}T00:00:00.000Z`;
+  const reversedFingerprint = createAflTradeReviewedFixtureFingerprint({
+    competition: 'AFLM',
+    seasonYear: 2026,
+    canonicalRoundLabel: reversedCandidate.roundLabel,
+    canonicalMatchDate: reversedDate,
+    clubIds: ['club:synthetic-away', 'club:synthetic-home'],
+  });
+  const reversedIdentityId = createAflTradeContentAddress('provider-match-identity', {
+    provider: row.provider,
+    competition: 'AFLM',
+    seasonYear: 2026,
+    fixtureFingerprintSha256: reversedFingerprint,
+  });
+  const reversedRecord = {
+    entityKind: 'match' as const,
+    canonicalId: 'match:synthetic-reversed-sides',
+    competition: 'AFLM' as const,
+    seasonYear: 2026,
+    roundLabel: reversedCandidate.roundLabel,
+    sourceDateText: reversedCandidate.matchDateText!,
+    dateInterpretation: 'source_calendar_date_as_utc_midnight' as const,
+    matchDate: reversedDate,
+    homeClubId: 'club:synthetic-away',
+    awayClubId: 'club:synthetic-home',
+  };
+  const reversedProposal = (
+    correspondence: { providerSideCorrespondence?: 'reversed' },
+    home: string,
+    away: string
+  ) => ({
+    subjectType: 'provider_match_candidate' as const,
+    matchCandidateId: secondRow.match_candidate_id,
+    resolutionCaseId: createAflTradeContentAddress('provider-resolution-case', {
+      subjectType: 'provider_match_candidate',
+      matchCandidateId: secondRow.match_candidate_id,
+    }),
+    candidate: {
+      nativeMatchId: reversedCandidate.nativeMatchId,
+      roundLabel: reversedCandidate.roundLabel,
+      matchDateText: reversedCandidate.matchDateText,
+      homeClubNativeId: reversedCandidate.homeClubNativeId,
+      homeClubName: reversedCandidate.homeClubName,
+      awayClubNativeId: reversedCandidate.awayClubNativeId,
+      awayClubName: reversedCandidate.awayClubName,
+      orderIndependentSha256: reversedCandidate.orderIndependentSha256,
+    },
+    proposedTarget: {
+      matchIdentityKind: 'reviewed_fixture_fingerprint' as const,
+      matchIdentityId: reversedIdentityId,
+      assignmentCaseId: assignment('match', reversedIdentityId),
+      matchId: reversedRecord.canonicalId,
+      canonicalMatchDate: reversedDate,
+      canonicalRoundLabel: reversedCandidate.roundLabel,
+      homeClubId: 'club:synthetic-away',
+      awayClubId: 'club:synthetic-home',
+      fixtureFingerprintSha256: reversedFingerprint,
+      homeClubResolutionDecisionId: home,
+      awayClubResolutionDecisionId: away,
+      ...correspondence,
+    },
+    alternativeMatchIds: [],
+  });
+  const [secondHomeSide, secondAwaySide] = secondDecisions as [string, string];
+  // Undeclared, the canonical home club is not backed by the provider's home side.
+  await register(
+    reversedRecord,
+    reversedProposal({}, secondAwaySide, secondHomeSide),
+    reversedIdentityId,
+    'match',
+    secondStaging,
+    false,
+    'The canonical home club is not backed by its exact current approved resolution.'
+  );
+  // Declared reversed, each canonical club must still come from the opposite provider side.
+  await register(
+    reversedRecord,
+    reversedProposal({ providerSideCorrespondence: 'reversed' }, secondHomeSide, secondAwaySide),
+    reversedIdentityId,
+    'match',
+    secondStaging,
+    false,
+    'The canonical home club is not backed by its exact current approved resolution.'
+  );
+  await register(
+    reversedRecord,
+    reversedProposal({ providerSideCorrespondence: 'reversed' }, secondAwaySide, secondHomeSide),
+    reversedIdentityId,
+    'match',
+    secondStaging
   );
   const originalHomeAuthority = {
     entityKind: 'club',

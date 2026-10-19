@@ -28,7 +28,7 @@ import {
 export const LOCAL_AFL_TRADE_FITZROY_RUNTIME = {
   rVersion: '4.5.1' as const,
   dependencyLockSha256: '061c2ff232be7bd262ae64b29100a773d437748471fb96936f2c768d0ab9c24a',
-  imageDigest: 'sha256:aae92ffaaf657de99be3cfd86e10a091ebdb516ed7a188ee09bcecd9035e0348' as const,
+  imageDigest: 'sha256:c135a1d830667bafecd7357f6845c02b206e043442840f586ce7f9abcd9ec6b2' as const,
 };
 
 export interface LocalAflTradeFiveSeasonStagingOptions {

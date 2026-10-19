@@ -44,6 +44,45 @@ describe('league detail Prisma member projection', () => {
     mocks.getLeagueDraftOperationalReadiness.mockResolvedValue({ isReady: true });
   });
 
+  it.each([
+    ['SCHEDULED', 'preseason'],
+    ['LIVE', 'active'],
+    ['PAUSED', 'active'],
+    ['COMPLETED', 'completed'],
+  ] as const)('maps a %s draft to a %s league', async (draftStatus, leagueStatus) => {
+    mocks.leagueFindUnique.mockResolvedValue({
+      id: 'test-league-id',
+      name: 'Test League',
+      inviteCode: 'TEST123',
+      ownerId: 'owner-user',
+      categoriesJson: null,
+      createdAt: new Date('2026-07-21T00:00:00.000Z'),
+      settings: { maxTeams: 2 },
+      drafts: [{ id: 'draft-1', status: draftStatus }],
+      members: [
+        {
+          id: 'active-member',
+          leagueId: 'test-league-id',
+          userId: 'owner-user',
+          teamName: 'Active Team',
+          teamLogoUrl: null,
+          teamLogoPositionX: null,
+          teamLogoPositionY: null,
+          teamLogoZoom: null,
+          joinedAt: new Date('2026-07-01T00:00:00.000Z'),
+          isActive: true,
+          status: 'ACTIVE',
+        },
+      ],
+    } as never);
+
+    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.league?.status).toBe(leagueStatus);
+  });
+
   it('excludes retained inactive members from teams and league capacity', async () => {
     mocks.leagueFindUnique.mockResolvedValue({
       id: 'test-league-id',

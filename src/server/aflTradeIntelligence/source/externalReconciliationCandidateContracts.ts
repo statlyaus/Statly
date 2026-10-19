@@ -246,12 +246,75 @@ const draftBoardPickSchema = z
     routeClubIds: z.array(z.string().trim().min(1).max(240)).max(16).nullable(),
     /** Issue 789: the basis of the bid the holder matched, when the board states a matched bid. */
     matchedBidBasis: z.enum(['father_son', 'academy', 'next_generation_academy']).optional(),
+    /** Issue 789, parser v3: the board's original club and pre-draft number; absent before v3. */
+    originalClubId: z.string().trim().min(1).max(240).nullable().optional(),
+    originalNumber: z.number().int().positive().nullable().optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine(
     (record) => (record.status === 'selected') === (record.recordedPickNumber !== null),
     'A board pick has a number exactly when it was selected.'
+  )
+  .refine(
+    (record) => (record.originalClubId === undefined) === (record.originalNumber === undefined),
+    'A board pick states its original club and pre-draft number together or neither.'
+  );
+
+const boardClubIdSchema = z.string().trim().min(1).max(240).nullable();
+const boardPointsSchema = z.number().int().min(0).max(10_000);
+const boardNativePickIdSchema = z.string().regex(/^[1-9]\d{0,9}$/);
+
+/**
+ * One matched bid a Footyinfo v2 board states (issue 789), clubs and nominee resolved; see the
+ * reconciliation. A statement of the board: the matched-bid shares are computed from it, never
+ * stored on it.
+ */
+const draftBoardBidMatchSchema = z
+  .object({
+    bidMatchId: aflTradeContentAddressedIdSchema('external-draft-board-bid-match'),
+    draftYear: z.number().int().min(1897).max(2200),
+    draftType: z.string().trim().min(1).max(80),
+    nativePickId: boardNativePickIdSchema,
+    selectionNumber: z.number().int().positive(),
+    roundNumber: z.number().int().positive().nullable(),
+    clubId: boardClubIdSchema,
+    playerId: z.string().trim().min(1).max(240).nullable(),
+    bidClubId: boardClubIdSchema,
+    basis: z.enum(['father_son', 'academy', 'next_generation_academy']),
+    points: boardPointsSchema,
+    pointsUsed: boardPointsSchema.nullable(),
+    consumedPicks: z
+      .array(
+        z
+          .object({
+            nativePickId: boardNativePickIdSchema,
+            label: z.string().trim().min(1).max(1_000),
+            originalNumber: z.number().int().positive().nullable(),
+            originalClubId: boardClubIdSchema,
+            holdingClubId: boardClubIdSchema,
+            pointsUsed: boardPointsSchema,
+          })
+          .strict()
+      )
+      .max(16),
+    leftoverPicks: z
+      .array(
+        z
+          .object({
+            nativePickId: boardNativePickIdSchema,
+            holdingClubId: boardClubIdSchema,
+            points: boardPointsSchema.nullable(),
+          })
+          .strict()
+      )
+      .max(8),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine(
+    (record) => (record.pointsUsed === null) === (record.consumedPicks.length === 0),
+    'A matched bid states the points used exactly when it lists spent picks.'
   );
 
 const issueSchema = z
@@ -380,6 +443,8 @@ const contentFieldsSchema = z
     pickOutcomes: z.array(pickOutcomeSchema).min(1).optional(),
     /** Present only when a Footyinfo board was reconciled, so earlier candidate ids are unchanged. */
     draftBoardPicks: z.array(draftBoardPickSchema).min(1).optional(),
+    /** Present only when a Footyinfo v2 board states a matched bid (issue 789). */
+    draftBoardBidMatches: z.array(draftBoardBidMatchSchema).min(1).optional(),
     /**
      * The approved owner `reconciliation_scope` decision under which pick-side issues are `deferred`
      * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
@@ -857,6 +922,10 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
     ['pickOutcomes', (content.pickOutcomes ?? []).map(({ outcomeId }) => outcomeId)],
     ['draftBoardPicks', (content.draftBoardPicks ?? []).map(({ boardPickId }) => boardPickId)],
+    [
+      'draftBoardBidMatches',
+      (content.draftBoardBidMatches ?? []).map(({ bidMatchId }) => bidMatchId),
+    ],
   ] as const;
   const relevantSeasonYears = new Set([
     ...content.transactions.map(({ seasonYear }) => seasonYear),

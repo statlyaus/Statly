@@ -36,9 +36,6 @@ async function globalSetup() {
       await tx.leagueRosterPlayer.deleteMany({
         where: { OR: [{ leagueId: E2E_LEAGUE_ID }, { memberId: { in: E2E_MEMBER_IDS } }] },
       });
-      await tx.leagueRoster.deleteMany({
-        where: { OR: [{ leagueId: E2E_LEAGUE_ID }, { memberId: { in: E2E_MEMBER_IDS } }] },
-      });
       await tx.teamAction.deleteMany({
         where: {
           OR: [
@@ -270,15 +267,6 @@ async function globalSetup() {
           madeAt: now,
           auto: pick.memberId !== E2E_HUMAN_MEMBER_ID,
         })),
-      });
-
-      await tx.leagueRoster.create({
-        data: {
-          id: 'e2e-roster-human',
-          leagueId: E2E_LEAGUE_ID,
-          memberId: E2E_HUMAN_MEMBER_ID,
-          playerIds: JSON.stringify([canonicalPlayerIds[0], canonicalPlayerIds[3]]),
-        },
       });
 
       await tx.leagueRosterPlayer.createMany({

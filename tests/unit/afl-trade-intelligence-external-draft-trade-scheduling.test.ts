@@ -260,6 +260,37 @@ describe('AFL external draft/trade capture scheduling', () => {
     expect(late.action).toBe('skip_late');
   });
 
+  it('keeps a claimed occurrence that runs late leased, then dead-letters it with its claim', () => {
+    const claimed = evaluateAflTradeExternalCaptureOccurrence({
+      ...evaluation(),
+      observedAt: '2026-08-10T00:59:00.000Z',
+    });
+    const leased = occurrenceFromClaim(claimed.proposedClaim!, {
+      status: 'leased',
+      availableAt: claimed.proposedClaim!.claimedAt,
+      completedAt: null,
+      resultId: null,
+      failureCode: null,
+    });
+    const leaseLive = evaluateAflTradeExternalCaptureOccurrence({
+      ...evaluation(),
+      observedAt: '2026-08-10T01:05:00.000Z',
+      priorOccurrence: leased,
+    });
+    const leaseExpired = evaluateAflTradeExternalCaptureOccurrence({
+      ...evaluation(),
+      observedAt: '2026-08-10T01:20:00.000Z',
+      priorOccurrence: leased,
+    });
+
+    expect(leaseLive.action).toBe('defer_lease');
+    expect(leaseExpired).toMatchObject({
+      action: 'dead_letter',
+      reason: 'occurrence_exceeded_lateness_limit',
+      proposedOccurrence: { status: 'dead_letter', lastClaim: claimed.proposedClaim },
+    });
+  });
+
   it('rejects scope drift, misaligned occurrences, and ownership fields', () => {
     expect(() =>
       createAflTradeExternalCaptureSchedule({

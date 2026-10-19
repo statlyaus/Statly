@@ -1,12 +1,12 @@
 import { DraftStatus, DraftType } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
-import type { LiveDraftState } from '@/services/liveDraftEngine';
 import {
   DraftRoomSnapshotPayloadSchema,
   type CanonicalLiveDraftState,
   type DraftClockPayload,
   type DraftRoomSnapshotPayload,
+  type LiveDraftState,
 } from '@/services/realtime/draftStateWire';
 
 import { calculateDraftTurn } from '../domain/draftRules';

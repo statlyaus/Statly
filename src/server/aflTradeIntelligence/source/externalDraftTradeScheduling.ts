@@ -465,6 +465,7 @@ export function evaluateAflTradeExternalCaptureOccurrence(
   const { schedule, dueAt, observedAt, priorOccurrence } = evaluation;
   const dispatchKey = createAflTradeExternalCaptureDispatchKey(schedule.scheduleId, dueAt);
   const latenessSeconds = (Date.parse(observedAt) - Date.parse(dueAt)) / 1_000;
+  const late = latenessSeconds > schedule.definition.cadence.maximumLatenessSeconds;
   const terminalStatuses = new Set(['completed', 'not_modified', 'skipped_late', 'dead_letter']);
   let action: AflTradeExternalCaptureScheduleDecision['action'];
   let reason: string;
@@ -477,7 +478,7 @@ export function evaluateAflTradeExternalCaptureOccurrence(
     action = 'not_due';
     reason = 'occurrence_not_due';
     retryAt = dueAt;
-  } else if (latenessSeconds > schedule.definition.cadence.maximumLatenessSeconds) {
+  } else if (late && !priorOccurrence) {
     action = 'skip_late';
     reason = 'occurrence_exceeded_lateness_limit';
   } else if (
@@ -510,10 +511,11 @@ export function evaluateAflTradeExternalCaptureOccurrence(
     retryAt = priorOccurrence.availableAt;
   } else if (
     priorOccurrence &&
-    priorOccurrence.lastClaim!.attemptNumber >= schedule.definition.execution.maximumAttempts
+    (late ||
+      priorOccurrence.lastClaim!.attemptNumber >= schedule.definition.execution.maximumAttempts)
   ) {
     action = 'dead_letter';
-    reason = 'occurrence_attempts_exhausted';
+    reason = late ? 'occurrence_exceeded_lateness_limit' : 'occurrence_attempts_exhausted';
   } else {
     action = 'claim';
     reason = priorOccurrence ? 'occurrence_ready_for_reclaim' : 'occurrence_ready';

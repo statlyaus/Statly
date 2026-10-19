@@ -140,6 +140,7 @@ export async function publishCompetition({
     include: {
       settings: true,
       members: { where: { isActive: true }, orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
+      activeSeason: { select: { year: true } },
     },
   });
   if (!league?.settings) return { ok: false, errors: ['League settings were not found.'] };
@@ -181,7 +182,11 @@ export async function publishCompetition({
           excludedAflRounds: effectiveRules.excludedAflRounds,
           finalsTeams: effectiveRules.finalsTeams,
         });
-  const schedule = await hydrateOfficialRoundTimings(generatedSchedule, new Date().getFullYear());
+  // Round timings belong to the season being published, which can be in a different calendar year.
+  const schedule = await hydrateOfficialRoundTimings(
+    generatedSchedule,
+    league.activeSeason?.year ?? new Date().getFullYear()
+  );
   const publishedAt = new Date();
 
   try {

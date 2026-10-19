@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,6 +8,7 @@ import {
   absoluteLocalPathPatterns,
   isProhibitedTrackedArtifact,
   isProhibitedTrackedEnvironment,
+  listMarkdownFiles,
   stripFencedCode,
   validateMarkdownLinks,
 } from '../../Scripts/check-docs.mjs';
@@ -143,6 +145,15 @@ describe('documentation validation', () => {
         'source.md: missing Markdown anchor in target.md#fenced-heading',
       ])
     );
+  });
+
+  it('skips symlinked Markdown, including links with no target', () => {
+    const root = createFixture({ 'real.md': '# Real' });
+    symlinkSync('real.md', join(root, 'linked.md'));
+    symlinkSync(join(root, 'absent', 'checklist.md'), join(root, 'dangling.md'));
+    execFileSync('git', ['init', '-q'], { cwd: root });
+
+    expect(listMarkdownFiles(root)).toEqual(['real.md']);
   });
 });
 

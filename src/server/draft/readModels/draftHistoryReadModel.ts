@@ -363,7 +363,7 @@ async function fetchDraftHistoryRecords(
       status: 'COMPLETED',
       league: {
         members: {
-          some: { userId },
+          some: { userId, isActive: true },
         },
       },
     },
@@ -380,7 +380,7 @@ async function fetchDraftHistoryRecord(db: DraftHistoryDb, userId: string, draft
       status: 'COMPLETED',
       league: {
         members: {
-          some: { userId },
+          some: { userId, isActive: true },
         },
       },
     },
