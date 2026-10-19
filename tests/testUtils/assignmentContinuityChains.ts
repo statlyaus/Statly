@@ -10,7 +10,10 @@ const subject = (key: string, index: number) => `provider_resolution_case:${key}
 
 // Scale measurement: every row's resolution shares one of a few long club chains, as every club
 // occurrence of a genuine season shares its club's identity-assignment chain.
-export const SCALE_CASES = 20;
+// ponytail: one transaction holds SCALE_CASES * SCALE_CHAIN advisory locks. At 20 cases (12,000
+// locks) a default PostgreSQL 16 lock table ran out of shared memory once a parallel file also
+// held locks; raise only with max_locks_per_transaction on the CI service containers.
+export const SCALE_CASES = 5;
 export const SCALE_CHAIN = 600;
 export const SCALE_ROWS_PER_CASE = 100;
 
