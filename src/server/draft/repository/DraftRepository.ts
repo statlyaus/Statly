@@ -983,8 +983,9 @@ export class DraftRepository {
         displayName: pick.member.user.displayName || pick.member.user.email || 'Unknown',
       },
       auto: pick.auto,
-      madeAt: new Date().toISOString(),
-      timestamp: new Date(),
+      // The persisted time, so a replayed pick reports when it was made, not when it was replayed.
+      madeAt: pick.madeAt.toISOString(),
+      timestamp: pick.madeAt,
     };
   }
 }

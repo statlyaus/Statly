@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
   FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION,
+  FOOTYINFO_DRAFT_BOARD_V2_PARSER_VERSION,
   parseFootyinfoDraftBoard,
 } from '@/server/aflTradeIntelligence/source/footyinfoDraftBoardAdapter';
 
@@ -153,7 +154,10 @@ describe('Footyinfo board matched-bid points (parser v2, issue 789)', () => {
       year: 2024,
       parserVersion: FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION,
     });
-    const v2 = parse(SYNTHETIC_BOARD_PICKS, { year: 2024 });
+    const v2 = parse(SYNTHETIC_BOARD_PICKS, {
+      year: 2024,
+      parserVersion: FOOTYINFO_DRAFT_BOARD_V2_PARSER_VERSION,
+    });
     expect(bidMatches(v1)).toEqual([]);
     const rows = (result: typeof v1) =>
       result.evidence.map(({ content: { sourceRow, claim } }) => ({ sourceRow, claim }));
@@ -249,7 +253,7 @@ describe('Footyinfo board matched-bid points (parser v2, issue 789)', () => {
 
   it('refuses a capture that names an unreviewed parser version rather than reading it as v1', () => {
     expect(() =>
-      parse(FOOTYINFO_2021_MATCHED_BIDS, { parserVersion: 'footyinfo-draft-board-parser/v3' })
+      parse(FOOTYINFO_2021_MATCHED_BIDS, { parserVersion: 'footyinfo-draft-board-parser/v4' })
     ).toThrow(/no reviewed parser version/);
   });
 

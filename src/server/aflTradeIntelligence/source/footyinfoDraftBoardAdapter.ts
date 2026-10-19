@@ -19,14 +19,26 @@ export const FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION = 'footyinfo-draft-board-pa
 /**
  * v2 (issue 789) emits, on a page it accepts, exactly v1's claims and rows (ordinals and keys), then
  * one `draft_board_bid_match` per matched bid: its points and the picks spent matching it. It checks
- * every pick's bid fields, so it can refuse a page v1 accepted. The version every new capture names.
+ * every pick's bid fields, so it can refuse a page v1 accepted. Its captures replay exactly as recorded.
  */
-export const FOOTYINFO_DRAFT_BOARD_PARSER_VERSION = 'footyinfo-draft-board-parser/v2';
+export const FOOTYINFO_DRAFT_BOARD_V2_PARSER_VERSION = 'footyinfo-draft-board-parser/v2';
 
-/** v2 adds the matched bids; v1 replays as recorded; any other version is refused, not read as v1. */
-function recordsBidMatches(parserVersion: string): boolean {
-  if (parserVersion === FOOTYINFO_DRAFT_BOARD_PARSER_VERSION) return true;
-  if (parserVersion === FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION) return false;
+/**
+ * v3 (issue 789, owner decision 2026-10-18) emits v2's claims, rows and order, each board pick also
+ * stating its original club and pre-draft number (`original.team`, `original_number`). It refuses a
+ * pick with no original club or whose route does not start with it, so it can refuse a page v2
+ * accepted. The version every new capture names.
+ */
+export const FOOTYINFO_DRAFT_BOARD_PARSER_VERSION = 'footyinfo-draft-board-parser/v3';
+
+/** What a reviewed parser version emits; any other version is refused, not read as an earlier one. */
+function reviewedParser(parserVersion: string): { bidMatches: boolean; pickOrigins: boolean } {
+  if (parserVersion === FOOTYINFO_DRAFT_BOARD_PARSER_VERSION)
+    return { bidMatches: true, pickOrigins: true };
+  if (parserVersion === FOOTYINFO_DRAFT_BOARD_V2_PARSER_VERSION)
+    return { bidMatches: true, pickOrigins: false };
+  if (parserVersion === FOOTYINFO_DRAFT_BOARD_V1_PARSER_VERSION)
+    return { bidMatches: false, pickOrigins: false };
   throw new TypeError('Footyinfo board capture names no reviewed parser version.');
 }
 
@@ -210,6 +222,9 @@ const pickSchema = z.object({
   origin: z.object({ id: z.string() }),
   points: z.number().int().optional(),
   note: z.string().optional(),
+  // Read from parser v3 only: the entitlement the pick was and its number before the draft.
+  original: z.object({ team: team.optional() }).optional(),
+  original_number: z.number().int().positive().optional(),
   // A bid without a bidding team is an academy or father-son selection no rival club bid on;
   // the board prints no matched bid for it.
   bid: z.object({ team: team.optional(), match_reason: z.string() }).optional(),
@@ -273,7 +288,7 @@ export function parseFootyinfoDraftBoard(
   if (reviewedFootyinfoDraftBoardSeason(input.capture.sourceUrl) !== input.draftYear) {
     throw new TypeError('Footyinfo board URL is not the reviewed page of this draft year.');
   }
-  const withBidMatches = recordsBidMatches(input.capture.parserVersion);
+  const parser = reviewedParser(input.capture.parserVersion);
   const invalid = (detail: string): FootyinfoDraftBoardResult => ({
     evidence: [],
     issues: [{ code: 'invalid_page', sourceKey: String(input.draftYear), detail }],
@@ -385,6 +400,15 @@ export function parseFootyinfoDraftBoard(
     // The board prints a leftover-points pick's label without its route, and a matched bid instead
     // of one.
     const route = routeLabel === 'leftover_points' || routeLabel === 'matched_bid' ? [] : chain;
+    const originalTeam = pick.original?.team;
+    if (
+      parser.pickOrigins &&
+      (originalTeam === undefined || (chain.length > 0 && chain[0]!.abbrev !== originalTeam.abbrev))
+    ) {
+      return invalid(
+        `Board pick ${pick.id} states no original club, or a route from another club.`
+      );
+    }
     if (status === 'selected') {
       if (pick.number === undefined || pick.player === undefined) {
         return invalid(`Selected board pick ${pick.id} has no number or player.`);
@@ -445,6 +469,9 @@ export function parseFootyinfoDraftBoard(
         bid: bid === undefined ? null : { club: club(bid.team), basis: basis! },
         points: pick.points ?? null,
         note: pick.note === undefined ? null : normalize(pick.note) || null,
+        ...(parser.pickOrigins
+          ? { originalClub: club(originalTeam!), originalNumber: pick.original_number ?? null }
+          : {}),
       },
     });
     if (player !== undefined) {
@@ -465,8 +492,8 @@ export function parseFootyinfoDraftBoard(
   if (selected.size !== tableRows.size || selected.size === 0) {
     return invalid('The board table and the board data do not list the same selections.');
   }
-  // Only a v2 capture's recorded rights admit the bid fields, so a v1 capture replays exactly.
-  if (withBidMatches) {
+  // Only a v2 or later capture's recorded rights admit the bid fields, so a v1 capture replays exactly.
+  if (parser.bidMatches) {
     const bidMatches = readFootyinfoBoardBidMatches(loader.content.picks, input.draftYear);
     if ('error' in bidMatches) return invalid(bidMatches.error);
     claims.push(...bidMatches.claims);

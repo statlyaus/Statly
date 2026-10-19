@@ -1116,19 +1116,23 @@ Prerequisites:
      the parser must reproduce it. The window is a traded arrival's date precision, never a day.
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
      refuses the capture's evidence rows; and
-   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v2` decision per captured
-     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v2`
-     (issues 853 and 789). Parser `footyinfo-draft-board-parser/v2` reads
+   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v3` decision per captured
+     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v3`
+     (issues 853 and 789). Parser `footyinfo-draft-board-parser/v3` reads
      `https://www.footyinfo.com/draft/<season>` as `draft_board_pick` claims for every selected,
-     passed and removed pick, a `draft_selection` for each selection, and (new in v2) one
-     `draft_board_bid_match` per matched bid. The rights must name exactly
+     passed and removed pick (from v3 with its original club and pre-draft number), a
+     `draft_selection` for each selection, and (from v2) one `draft_board_bid_match` per matched
+     bid. The rights must name exactly
      `FOOTYINFO_DRAFT_BOARD_FIELDS` from `development/localFootyinfoDraftBoardCapture.ts` (v1's
-     fields plus `FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS`), with provider `footyinfo` and an
+     fields, `FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS` and `FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS`,
+     51 in all), with provider `footyinfo` and an
      86,400 s cache. The owner recorded the seven `-board-v2` decisions on 2026-10-17 (ledger
      revision 103; receipt `receipts/footyinfo-board-v2-bid-match-decision-2026-10-17.json`): the
      price of a bid comes from the draft year's AFL rule, and Footyinfo's bid points and spent picks
-     may be used, privately, on the grading VM only. The v1 decisions and captures stay valid as
-     recorded. Staging admits `draft_board_pick` from migration 0271 and `draft_board_bid_match` from
+     may be used, privately, on the grading VM only. The owner approved the v3 fields on 2026-10-18
+     (record the seven `-board-v3` decisions from each season's `-board-v2` record with parser v3 and
+     the 51 fields, receipt `receipts/footyinfo-board-v3-pick-origin-decision-2026-10-18.json`). The
+     v1 and v2 decisions and captures stay valid as recorded. Staging admits `draft_board_pick` from migration 0271 and `draft_board_bid_match` from
      migration 0287; an earlier database refuses the capture's evidence rows. Reconcile a v2 board
      batch only on a database at migration 0288 or later and with code that carries
      `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
@@ -1138,7 +1142,7 @@ Prerequisites:
    `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
-   `footyinfo-draft-board-parser/v2`), seasons inside one range, 1 request per 5 seconds
+   `footyinfo-draft-board-parser/v3`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
@@ -1245,7 +1249,7 @@ source policy before the scope file changes. A reviewed window is consumed by th
 command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
 
 Capture the Footyinfo national draft boards (issues 853 and 789) under the owner's per-season
-`-board-v2` decisions (recorded 2026-10-17). The owner approved egress only from `statly-grading-1` through
+`-board-v3` decisions (approved 2026-10-18; record them before capturing). The owner approved egress only from `statly-grading-1` through
 the genuine-database wrapper, so this runs there and nowhere else. Each `--season` is the one board
 `https://www.footyinfo.com/draft/<season>`; there is no `--url`:
 
@@ -3534,6 +3538,20 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   trade, and the 2023 R2 (GWS) pick should be worth 17.1 plus its three projections (about 91.6),
   not 17.1. Count the partial returns that are now unallocated because an excluded leg has no
   projection (v17 valued them at their valued legs alone).
+- Under rule v19 an unused future pick that held no slot in its draft's final order takes, before
+  the proxy, the pre-draft number a reviewed Footyinfo board states (`board_pre_draft_slot`). It needs
+  v3 board captures: record the seven `-board-v3` decisions, re-capture the seven boards, prepare a
+  candidate with the v3 batches and regrade. Diff the candidate against the previous one first. A
+  re-capture gives every board row a new evidence id, so every `boardPickId` changes, and with it
+  `pickOutcomes[].boardPickId`, `matchedBidBoardPickIds`, the `draftBoardBidMatches` records and the
+  evidence ids Footyinfo rows add to selections; each v3 `draftBoardPicks` record also gains
+  `originalClubId` and `originalNumber`. Nothing else may change: any transaction, transfer, pick id,
+  custody, selection number or player, or outcome disposition that differs is a stop. Against batch
+  twenty-nine (`a9733065…`), expect 7 of the 16 proxy views to move to `board_pre_draft_slot`: 2023 R4
+  (Brisbane Lions) at 75 on two legs, 2023 R4 (Melbourne) at 71, 2024 R4 (Port Adelaide) at 76, and
+  2024 R4 (Collingwood) at 70 on three legs. The other 9 stay proxied, and the 4 capped views and the
+  unavailable 2023 R3 are unchanged. A total moves only where one of the 7 legs is a bundle weight or
+  an excluded onward-return leg; list every changed total and check that each holds one of them.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
@@ -3574,6 +3592,49 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   no bid matches, so all its matched-bid picks stay `no_bid_spend`.
 - Like a grade batch, each run is a different ledger (its build time and spell cutoff are the run's
   start). Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
+
+## Reporting player-season games
+
+`outcomes:grading:season-games` reports the player-season games read model (statlyaus/Statly#789; the
+architecture doc's "Player-season games read model" section) for one HPN PAV method and a consecutive run
+of seasons, in one read-only transaction. It writes nothing, so it needs no store and no `--out`.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:season-games -- --method <hpn-pav-method:...> --seasons 2011-2026
+```
+
+- Run it on statly-grading-1. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database.
+- Each season prints its `availability` (`available`, `no_head`, `not_finalized`), its calculation id,
+  rows, distinct players, games, PAV, and its `pavWithoutAppearances`, `appearancesWithoutPav` and
+  `gameCountMismatches`. `discrepancies` lists each one. All three counts are 0 on a sound calculation.
+- A season still being calculated reads as `no_head` or `not_finalized`, never as zero games.
+
+## Fitting the value-line priors
+
+`outcomes:grading:value-line-fit` fits and back-tests the value-line priors (statlyaus/Statly#789; the
+architecture doc's "Value-line fit" section and the value-line spec's "Fit specification (step 2)"). It
+reads the current canonical national drafts and the player-season games read model, and its one write is
+the fit's evidence record in the registered store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:value-line-fit -- --method <hpn-pav-method:...> \
+  --draft-years 2011-2025 --last-season 2026 --store-id <store-id> --out <absolute-path.json>
+```
+
+- Run it on statly-grading-1 from its own checkout. `AFL_OUTCOMES_DATABASE_URL` must name a loopback
+  database. Never run it in a checkout where a pipeline is running.
+- Run `--dry-run` first: it fits and writes `--out` without `--store-id` and stores nothing.
+- Every season from the first class's next season through `--last-season` must have a finalized
+  calculation with no games discrepancy (check with "Reporting player-season games"), or it refuses.
+- `--out` is never overwritten. The printed line has the fit id, the parameters, the back-test by pick
+  range and checkpoint, and the stored `artifactId`.
+- Check `parameters.varianceComponents` (both variances positive, `k` their ratio), the back-test bias
+  against the draft-slot-only baseline, and the calibration bins before anything reads the fit. Judge a
+  bias against its standard error (RMSE over the square root of the selections): picks 1 to 10 have only
+  about 100 held-out selections. A bias in one direction across every pick range at a checkpoint is a
+  finding to report, not a reason to re-tune.
 
 ## Building pick values and complete trade assessments
 
@@ -4421,6 +4482,54 @@ holds about `max_locks_per_transaction × (max_connections + max_prepared_transa
 At `max_locks_per_transaction=1024` it overflowed with "out of shared memory". CI and the disposable
 harness use 2048. Size the setting to the season before a genuine build, then restart PostgreSQL.
 Reducing the lock count would need a different writer protocol, such as one lock per assignment case.
+
+Migration 0290 makes the per-origin function itself walk each assignment case once per transaction.
+Every factual row insert asks `outcome_provider_assignment_continuity_current` for its player, match
+and club assignment decisions, so a season's fact batch (about 9,100 rows in one transaction over
+about 70 club cases whose heads sit about 1,000 revisions above their origins) repeated the same
+walk thousands of times. The function now remembers, until the transaction ends, what its last walk
+of a case proved: for that head (revision and decision) and the lowest revision it walked, the
+lowest revision from which the suffix to the head passes every per-origin rule (the walk of
+migration 0242's set function). A later origin at or above the walked revision is answered from
+that verdict. A lower origin walks again and replaces it, unless the walk already found a break,
+which lies inside the lower origin's suffix too. The rename keeps the unchanged 0128 walk as
+`outcome_provider_assignment_continuity_current_uncached`. Origins that walk cannot represent (a
+decision in more than one resolution table, or one without an assignment revision) still go to it.
+
+The remembered verdict is the per-origin answer because nothing it read can change while it is used:
+
+- Other transactions cannot change it. The walk holds the head `FOR SHARE` and an advisory lock on
+  every review subject of the walked span until the transaction ends. A new link must advance the
+  head, and every review decision takes its subject's advisory lock first; a successor review must
+  share the superseded review's subject.
+- The same transaction cannot change it unseen. A `BEFORE ROW` trigger named
+  `zzz_outcome_assignment_continuity_memo` on `outcome_review_decision`, the three provider
+  resolution tables and `outcome_provider_identity_assignment_head` bumps a transaction-local
+  generation on every insert, update or delete, and a verdict from an older generation is never
+  used. The trigger is enabled `ALWAYS`, so replica-mode writes bump it too. It must stay the last
+  `BEFORE` trigger on each table, so no trigger can remember a verdict between the bump and the row
+  change; the migration refuses to run if a later-sorting trigger exists. A new trigger on those
+  tables must sort before it.
+- Savepoints roll back the verdict, the generation and the locks together.
+
+Nothing is remembered from a call that fails on a held lock, a missing, moved or inactive head, or a
+kind or identity mismatch, so those calls re-check every time, as before. Each case's verdict lives
+in its own transaction-local setting, `statly_assignment_continuity.c<md5 of the case id>`, with the
+case, generation, `current_user` and head it was proved for. Cases never share a setting: a fact
+batch interleaves hundreds of short player and match cases with the long club cases, and a first
+version with 64 shared slots kept evicting the club verdicts. The rules, the locks
+taken and the fail-closed results are unchanged. `afl-assignment-continuity-memo-postgres.test.ts`
+checks every origin of the 22 chain states against the uncached walk in five evaluation orders,
+twice per transaction, with a subject and a head held by another session. It also checks a lock
+released mid-transaction, a withdrawal and a moved head written inside the transaction, a
+rolled-back savepoint, and that nothing outlives the transaction. With 1,500 shuffled rows over
+twenty 600-revision club chains, both forms take the same 12,000 advisory locks and the memo is
+about 40 times faster per row (76 ms to 1.7 ms on the grading VM).
+On a copy of the genuine database the 2017 AFL Tables fact batch (18,216 facts, rolled back) took
+1,813 s to insert with the per-origin walk and 405 s with the memo; continuity itself fell from 1,471 s
+to 60 s. The spell-currency query of spells-derive fell by about a fifth; it is now dominated by
+`outcome_afl_trade_canonical_json`. Provider resolution runs each decision in its own transaction, so
+the memo does not change it (continuity is about 1.5% of a resolution decision).
 
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,

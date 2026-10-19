@@ -20,13 +20,16 @@ import {
   isAflTradeContentAddress,
 } from '../artifacts/contentAddress';
 import type { AflTradeGateDecisionLedger } from '../governance/gateDecisionLedger';
-import { resolveAflTradeGateEligibility } from '../governance/gateDecisionLedger';
+import {
+  createAflTradeGateEligibilityResolver,
+  resolveAflTradeGateEligibility,
+} from '../governance/gateDecisionLedger';
 import type {
   AflTradeDecisionEnvironment,
   AflTradeGateCode,
   AflTradeGovernedArtifactRef,
 } from '../governance/gateDecisionTypes';
-import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
+import { createAflTradeGate0AEvaluator } from '../source/gate0aEvaluation';
 
 export const AFL_DRAFT_TRADE_OUTCOME_RELEASE_STATES = [
   'candidate',
@@ -1024,6 +1027,7 @@ function requireSourceRights(
   }
 ) {
   if (record.releaseManifest.content.schemaVersion === 'afl-draft-trade-factual-release/v3') {
+    const resolveGate = createAflTradeGateEligibilityResolver(input.ledger);
     for (const capture of record.releaseManifest.content.sourceCaptures) {
       const decision = input.ledger.decisions.find(
         ({ decisionId }) => decisionId === capture.gateDecisionId
@@ -1042,7 +1046,7 @@ function requireSourceRights(
           'Every promotion-backed source capture requires its exact current Gate 0A decision.'
         );
       }
-      const eligibility = resolveAflTradeGateEligibility(input.ledger, {
+      const eligibility = resolveGate({
         gate: 'gate_0a_permission_to_evaluate',
         decisionKey: decision.content.decisionKey,
         environment: input.environment,
@@ -1060,6 +1064,7 @@ function requireSourceRights(
     }
     return;
   }
+  const evaluateGate0A = createAflTradeGate0AEvaluator(input.ledger);
   for (const binding of record.releaseManifest.content.sourceRightsBindings) {
     if (binding.sourceUseBoundary !== undefined && input.purpose === 'activate') {
       throw new AflDraftTradeOutcomeReleaseStateError(
@@ -1067,7 +1072,7 @@ function requireSourceRights(
         'Private modeling source bindings cannot authorize factual release activation.'
       );
     }
-    const currentEvaluation = evaluateAflTradeGate0A(input.ledger, binding.sourceRightsProposal, {
+    const currentEvaluation = evaluateGate0A(binding.sourceRightsProposal, {
       ...binding.gate0aReceipt.content.request,
       evaluatedAt: input.evaluatedAt,
     });

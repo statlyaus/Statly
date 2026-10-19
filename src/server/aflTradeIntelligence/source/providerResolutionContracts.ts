@@ -415,6 +415,12 @@ const matchTargetSchema = z
     fixtureFingerprintSha256: aflTradeSha256Schema,
     homeClubResolutionDecisionId: aflTradeContentAddressedIdSchema('provider-resolution-decision'),
     awayClubResolutionDecisionId: aflTradeContentAddressedIdSchema('provider-resolution-decision'),
+    /**
+     * Absent: the provider's home and away sides are the canonical home and away clubs. `reversed`: the
+     * provider lists the fixture the other way round (e.g. a Grand Final), so the canonical home club is
+     * backed by the provider's away-side club resolution and the canonical away club by its home side.
+     */
+    providerSideCorrespondence: z.literal('reversed').optional(),
   })
   .strict();
 
