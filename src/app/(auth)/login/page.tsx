@@ -1,6 +1,7 @@
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
+import { toSafeRedirect } from '@/lib/safeRedirect';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { Suspense } from 'react';
@@ -19,8 +20,6 @@ export default async function LoginPage({
 }) {
   const params = (await searchParams) ?? {};
   const pickFirst = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
-  const toSafeRedirect = (url?: string) =>
-    url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
   const nextUrl =
     toSafeRedirect(pickFirst(params.callbackUrl)) ?? toSafeRedirect(pickFirst(params.next));
 
