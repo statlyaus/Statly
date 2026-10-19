@@ -40,24 +40,27 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
     P(still at club in s) × expected_games(s) × expected_rate(s)
 ```
 
-- **expected_rate**, the expected PAV per game, is a credibility blend:
-  `Z × own_rate + (1 − Z) × prior_rate`, with `Z = games / (games + k)`.
-- **own_rate (Owner):** PAV per game over the player's last three seasons, with recent seasons weighted
-  more. A season lost to injury adds no games. It neither lowers nor props up the rate.
-- **Credibility by games (Owner):** `games` is the games actually played in that window, not seasons on the
-  list, so 30 games of evidence outweighs 5.
-- **prior_rate:**
-  - For a drafted player, the expected rate for his draft slot.
+- **Own form (Owner, 2026-10-19):** a player's own seasons move the line by how far he is above or below
+  what his prior expects at the same stage, not by his own early rate. Each season's residual is its PAV
+  minus the prior's expected PAV for that season. His effect is the residuals' sum shrunk by
+  `seasons / (seasons + k)`, and it is added to every expected season still to come. A 19-year-old's
+  first-year output is a young player's level; comparing it with players of the same slot at the same
+  tenure keeps normal development from reading as bad form. This replaces the 2026-10-17 rate blend
+  (`Z × own_rate + (1 − Z) × prior_rate` by games), which the back-test showed undervalues open stints by
+  about 12 PAV after year 1 and 10 after year 3 in every pick range.
+- **prior:**
+  - For a drafted player, the expected games and PAV per game for his draft slot at each tenure.
   - For a traded player, the expected rate for his age and position.
-- **k (Owner: fitted from history):** the number of games at which a player's own record counts as much as
-  the prior. It is fitted on past draft classes and trades, not chosen by hand.
+- **k (Owner: fitted from history):** the number of seasons at which a player's own record counts as much
+  as the prior. It is the ratio of one season's noise to how much players genuinely differ, both
+  estimated from past draft classes, not chosen by hand.
 - **expected_games(s):** games per season expected from the player's availability history and age. An injury
   lowers this. It does not set it to zero.
 - **P(still at club in s):** a survival curve fitted from history. It runs by draft slot and seasons at the
   club for a drafted player, and by age and tenure for a traded one.
 
-Overperformance and underperformance move the line through the same formula. As games accumulate, Z tends
-to 1 and the slot or age prior fades.
+Overperformance and underperformance move the line through the same formula. As seasons accumulate, the
+shrinkage tends to 1 and the slot or age prior fades.
 
 ## Picks
 
@@ -156,8 +159,9 @@ asset's value at the same checkpoint.
 ### Fit specification (step 2)
 
 Built in `modeling/valueLineFit.ts` (pure) and run by `npm run outcomes:grading:value-line-fit`. Every
-choice below is published in the fit artifact (`afl-trade-value-line-fit/v1`) with its fit window. This
-section fixes how the spec above is fitted; it changes none of the owner's rules.
+choice below is published in the fit artifact (`afl-trade-value-line-fit/v2`, from 2026-10-19; v1 is the
+superseded rate blend) with its fit window. This section fixes how the spec above is fitted; it changes
+none of the owner's rules.
 
 - **Data.** Every current canonical AFLM national-draft selection of the classes fitted
   (`outcome_current_canonical_draft_selection_picks`), with its slot (selection number), drafting club
@@ -177,7 +181,11 @@ section fixes how the spec above is fitted; it changes none of the owner's rules
   censored at the last season read and never counted as ended. Draft classes from 2011 to the season
   before the last are in the fit window.
 - **Model forms.** Three curves, each with its own intercept for tenure 1 to 9 and a shared one for 10
-  and later, and a continuous piecewise-linear effect of ln(slot) with knots at picks 10 and 30:
+  and later, and a continuous piecewise-linear effect of ln(slot) with knots at picks 10 and 30, fitted
+  separately for tenures 1 to 3 and 4 and later. One shared slot effect (v1) under-predicted picks 1 to 10
+  early (+1.4 PAV per season at tenure 1) and over-predicted them late (−2.6 from tenure 7): top picks play
+  more early and plateau lower. With the two bands every pick range is within ±1.2 PAV per season at every
+  tenure. The curves:
   - survival: the per-season hazard of leaving the stint (logit link), with half an event and half a
     non-event added per tenure group so a group with no exits stays finite;
   - expected games in a season in the stint (quasi-Poisson, log link);
@@ -189,19 +197,19 @@ section fixes how the spec above is fitted; it changes none of the owner's rules
   probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
   10+ tenure group carries the tail.
 - **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
-  `Σ_{t>τ} S(t)/S(τ) × expected_games(t) × expected_rate(t)`. A closed stint is worth what it produced.
-  - `expected_rate(t) = Z × own_rate + (1 − Z) × rate(t, p)` with `Z = games / (games + k)`, and
-    `own_rate` the PAV per game over the last three in-stint seasons weighted 3, 2, 1 from the most
-    recent; `games` is the games in those seasons (Owner: credibility by games).
-  - `expected_games(t) = Z_g × own_games + (1 − Z_g) × games(t, p)` with `Z_g = seasons / (seasons +
-k_g)` and `own_games` the games per season over the same window, 0-game seasons included (the spec's
-    "availability history": an injury lowers it, never to zero).
-- **k and k_g.** Grid search, `k` over 0 to 300 games by 5 and `k_g` over 0 to 10 seasons by 0.5,
-  minimizing the squared error of the predicted against the realized PAV of the next three seasons, at
-  every open checkpoint whose next three seasons are observed. Ties take the smaller value. An optimum on
-  a grid edge is flagged.
-- **Back-test.** Each class with at least six observed seasons is held out in turn. All curves, `k` and
-  `k_g` are refitted on the other classes, and the held-out class is valued at the draft, after year 1
+  `Σ_{t>τ} S(t)/S(τ) × (m(t, p) + u)`, with `m(t, p) = games(t, p) × rate(t, p)` the expected in-stint PAV
+  at tenure `t`. A closed stint is worth what it produced.
+  - **Player effect (Owner, 2026-10-19):** `u = Σ_{s≤τ} (pav(s) − m(s, p)) / (n + k)`, over the `n`
+    in-stint seasons through `τ`, additive and development-adjusted (each season against its own tenure's
+    expectation for the slot). A ratio form (own ÷ prior) was rejected: it overvalued picks 1 to 10 by 18
+    after year 1.
+- **k.** One-way random-effects analysis of variance (method of moments, unbalanced) on every in-stint
+  season's residual `pav − m` in the fitted classes: `k = σ²_within / τ²_between`, the within-player
+  variance of one season over the between-player variance of the effect. The fit refuses a between-player
+  variance that is not positive. v1 searched a grid for `k` against the next three seasons' PAV and
+  landed on its edge, because the rate blend's error came from development the blend could not see, not
+  from noise.
+- **Back-test.** Each class with at least six observed seasons is held out in turn. All curves and `k` are refitted on the other classes, and the held-out class is valued at the draft, after year 1
   and after year 3.
   - **No hindsight:** at a checkpoint, the held-out class's own seasons count only up to it. The
     parameters come from the other classes' seasons through the last season read. A strictly
@@ -209,6 +217,10 @@ k_g)` and `own_games` the games per season over the same window, 0-game seasons 
   - **Compared with:** the first-stint PAV the class produced through the last season read, against the
     value line's expected PAV summed over the same seasons. Report bias (mean predicted minus realized),
     mean absolute error and RMSE per selection, for picks 1–10, 11–30 and 31+ and all, at each checkpoint.
+  - **Baseline:** the draft-slot-only line (own form moves nothing) at the same checkpoints.
+  - **Calibration:** mean realized against mean predicted in bins of predicted value (0, 5, 10, 20, 40, 80,
+    160 PAV) at each checkpoint.
+  - **Interval:** the 10th and 90th percentiles of realized minus predicted, by pick range and checkpoint.
   - **Prior comparison:** at the draft, the fitted curve against HPN DPVC v3 on the same selections
     (slots 1 to 90). Both are reported for every held-out class and for the mature classes (at least
     twelve observed seasons), where cutting the comparison at the last season read matters least.

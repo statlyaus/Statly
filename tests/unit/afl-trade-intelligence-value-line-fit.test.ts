@@ -147,10 +147,64 @@ describe('fitAflTradeValueLine', () => {
         '9',
         '10+',
       ]);
-      expect(curve.lnSlotSlopes).toHaveLength(3);
+      // Three ln(slot) slopes in each tenure band, 1-3 and 4+.
+      expect(curve.lnSlotSlopes.map(({ tenures, picks }) => `${tenures}:${picks}`)).toEqual([
+        '1-3:1-10',
+        '1-3:10-30',
+        '1-3:30+',
+        '4+:1-10',
+        '4+:10-30',
+        '4+:30+',
+      ]);
     }
-    expect(content.parameters.rateCredibilityGames).toBeGreaterThanOrEqual(0);
-    expect(content.parameters.gamesCredibilitySeasons).toBeGreaterThanOrEqual(0);
+    // k is the within-player season variance over the between-player variance.
+    const { credibilitySeasons, varianceComponents } = content.parameters;
+    expect(varianceComponents.withinSeason).toBeGreaterThan(0);
+    expect(varianceComponents.betweenPlayer).toBeGreaterThan(0);
+    expect(credibilitySeasons).toBeCloseTo(
+      varianceComponents.withinSeason / varianceComponents.betweenPlayer,
+      4
+    );
+    expect(varianceComponents.seasons).toBeGreaterThan(varianceComponents.stints);
+  });
+
+  it('moves a player’s value with his form against his slot at the same tenure', () => {
+    // A 2011 pick's year-1 season raised by 20 PAV: year 1's value rises by the 20 produced plus a
+    // shrunk effect carried to every remaining season; the value at draft does not move.
+    const better = rows.map((row) =>
+      row.playerId === 'p-2011-3' && row.season === 2012 ? { ...row, pav: row.pav + 20 } : row
+    );
+    expect(better).not.toEqual(rows);
+    const refit = fitAflTradeValueLine({ selections, games: model(better) });
+    const before = fit.content.backTest.classes.find(({ draftYear }) => draftYear === 2011)!;
+    const after = refit.content.backTest.classes.find(({ draftYear }) => draftYear === 2011)!;
+    expect(after.fittedAtDraft).toBe(before.fittedAtDraft);
+    expect(after.fittedAtYear1 - before.fittedAtYear1).toBeGreaterThan(20);
+    // The class's own fold never sees its seasons, so the rise is the 20 produced plus the effect
+    // (20 / (1 + k) per remaining season, survival-weighted): bounded by 20 per season to come.
+    expect(after.fittedAtYear1 - before.fittedAtYear1).toBeLessThan(20 * 15);
+    expect(fit.content.backTest.slotOnlyByRangeAndCheckpoint).toHaveLength(12);
+  });
+
+  it('reports calibration bins and an interval for each range and checkpoint', () => {
+    const { calibration, intervals } = fit.content.backTest;
+    expect(
+      calibration
+        .filter(({ checkpoint }) => checkpoint === 0)
+        .map(({ predictedFrom }) => predictedFrom)
+    ).toEqual([0, 5, 10, 20, 40, 80, 160]);
+    for (const checkpoint of [0, 1, 3])
+      expect(
+        calibration
+          .filter((row) => row.checkpoint === checkpoint)
+          .reduce((sum, { selections }) => sum + selections, 0)
+      ).toBe(400);
+    for (const row of intervals) expect(row.lower).toBeLessThanOrEqual(row.upper);
+    expect(intervals.map(({ range, checkpoint }) => `${checkpoint}:${range}`)).toEqual(
+      [0, 1, 3].flatMap((checkpoint) =>
+        ['1-10', '11-30', '31+', 'all'].map((label) => `${checkpoint}:${label}`)
+      )
+    );
   });
 
   it('fits a pick curve that falls with the slot, beside DPVC', () => {
