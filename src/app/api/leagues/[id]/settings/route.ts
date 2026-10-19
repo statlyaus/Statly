@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -20,11 +21,8 @@ import {
   REAL_DATA_NINE_CATEGORY_PRESET,
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
-import {
-  normalizeCategoryDirections,
-  parseCategoryDirectionsJson,
-} from '@/server/leagues/categoryDirections';
-import { normalizeLineupSlots, parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import { normalizeLineupSlots } from '@/server/leagues/lineupSettings';
 import type { CategoryDirection, LeagueScoringMode, TradeReview } from '@/types/leagues';
 import {
   MAX_LEAGUE_TEAMS,
@@ -221,8 +219,8 @@ function toSettingsResponse(league: {
     benchSize: number;
     pickSeconds: number;
     allowAutoPick: boolean;
-    positionLimitsJson: string | null;
-    autoPickRulesJson: string | null;
+    positionLimitsJson: Prisma.JsonValue;
+    autoPickRulesJson: Prisma.JsonValue;
     draftType: string;
     pickOrder: string;
     waiverRule: string;
@@ -232,8 +230,8 @@ function toSettingsResponse(league: {
     locked: boolean;
     scoringMode: string;
     fixtureGenerationMode: string;
-    lineupSlotsJson: string | null;
-    categoryDirectionsJson: string | null;
+    lineupSlotsJson: Prisma.JsonValue;
+    categoryDirectionsJson: Prisma.JsonValue;
     scoringSettingsLockedAt: Date | null;
     tradeLimit: number;
     tradeReviewMode: string;
@@ -260,8 +258,8 @@ function toSettingsResponse(league: {
       categories,
       scoringMode: normalizeLeagueScoringMode(league.settings.scoringMode, 'H2H_EACH_CATEGORY'),
       fixtureGenerationMode: normalizeFixtureGenerationMode(league.settings.fixtureGenerationMode),
-      lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
-      categoryDirections: parseCategoryDirectionsJson(
+      lineupSlots: normalizeLineupSlots(league.settings.lineupSlotsJson),
+      categoryDirections: normalizeCategoryDirections(
         categories,
         league.settings.categoryDirectionsJson
       ),
@@ -483,12 +481,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
       const lineupSlots =
         scoringInput.lineupSlots === undefined && body.lineupSlots === undefined
-          ? parseLineupSlotsJson(prismaLeague.settings.lineupSlotsJson)
+          ? normalizeLineupSlots(prismaLeague.settings.lineupSlotsJson)
           : normalizeLineupSlots(scoringInput.lineupSlots ?? body.lineupSlots);
       const categoryDirectionsInput = scoringInput.categoryDirections ?? body.categoryDirections;
       const categoryDirections =
         categoryDirectionsInput === undefined
-          ? parseCategoryDirectionsJson(categories, prismaLeague.settings.categoryDirectionsJson)
+          ? normalizeCategoryDirections(categories, prismaLeague.settings.categoryDirectionsJson)
           : normalizeCategoryDirections(
               categories,
               categoryDirectionsInput as Partial<Record<FantasyCategoryKey, CategoryDirection>>
@@ -601,12 +599,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             allowAutoPick: autoPickRules.enabled,
             rosterSize: getRosterSizeFromPositionLimits(positionLimits),
             benchSize: getBenchSizeFromPositionLimits(positionLimits),
-            positionLimitsJson: JSON.stringify(positionLimits),
-            autoPickRulesJson: JSON.stringify(autoPickRules),
+            positionLimitsJson: positionLimits,
+            autoPickRulesJson: autoPickRules,
             scoringMode,
             fixtureGenerationMode,
-            lineupSlotsJson: JSON.stringify(lineupSlots),
-            categoryDirectionsJson: JSON.stringify(categoryDirections),
+            lineupSlotsJson: lineupSlots,
+            categoryDirectionsJson: categoryDirections,
             tradeLimit: tradeLimit ?? prismaLeague.settings.tradeLimit,
             tradeReviewMode: toPrismaTradeReview(nextTradeReview),
             ...(tradeDeadline !== undefined ? { tradeDeadline } : {}),

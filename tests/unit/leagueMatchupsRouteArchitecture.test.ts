@@ -58,7 +58,7 @@ describe('league matchup API route architecture', () => {
       settings: {
         id: 'settings-1',
         competitionStatus: 'PUBLISHED',
-        competitionRulesJson: '{}',
+        competitionRulesJson: {},
         competitionRulesVersion: 1,
       },
       members: [{ id: 'member-1', userId: 'owner-user', isCoCommissioner: false }],
@@ -168,7 +168,7 @@ describe('league matchup API route architecture', () => {
       settings: {
         id: 'settings-1',
         competitionStatus: 'SETUP',
-        competitionRulesJson: '{}',
+        competitionRulesJson: {},
         competitionRulesVersion: 0,
       },
       members: [{ id: 'member-1', userId: 'owner-user', isCoCommissioner: false }],

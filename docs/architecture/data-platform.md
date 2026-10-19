@@ -43,7 +43,15 @@ path.
 - `DIRECT_DATABASE_URL` is the direct migration/administrative connection.
 - Connection budgets include every process class, not only the web tier.
 - The PostgreSQL baseline preserves IDs, relationships, enums, timestamps, and current string-JSON
-  semantics. JSON redesign is a separate migration.
+  semantics. JSON columns move to `jsonb` in cohorts (#955), keeping their `...Json` names. The
+  `LeagueSettings` columns (`positionLimitsJson`, `autoPickRulesJson`, `lineupSlotsJson`,
+  `categoryDirectionsJson`, `competitionRulesJson`) are `jsonb`: write plain objects, never
+  `JSON.stringify` output, which would store a JSON string. Their normalizers (`normalizeLineupSlots`,
+  `normalizeCategoryDirections`, `normalizeCompetitionRules`, `normalizeDraftPositionLimits`,
+  `normalizeDraftAutoPickRules`) remain the shape authority. Each cohort's migration fails on any
+  unparseable stored value, listing the row ids, and carries its manual rollback SQL in a comment.
+  The other JSON-in-text columns (`League.categoriesJson`, `notificationSettingsJson` and the
+  outbox, audit and command payload columns) are still text.
 
 The migration history starts at a reviewed PostgreSQL baseline. No user data existed on SQLite, so
 there is no transfer. The SQLite history is archived in `prisma/migrations-sqlite-archive/` and must

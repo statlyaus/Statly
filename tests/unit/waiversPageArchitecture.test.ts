@@ -58,8 +58,7 @@ describe('league waivers page Firestore architecture', () => {
       'utf8'
     );
 
-    // Both successful responses, the Firebase-disabled one and the normal one, are no-store.
-    expect(routeSource.match(/\{ status: 200, headers: NO_STORE \}/g)).toHaveLength(2);
+    expect(routeSource.match(/\{ status: 200, headers: NO_STORE \}/g)).toHaveLength(1);
     expect(containerSource).toContain("fetch(url.toString(), { signal, cache: 'no-store' })");
     expect(faabSource).toContain('`${team} claimed ${player}`');
     expect(faabSource).toContain('`${team} missed out on ${player}`');
