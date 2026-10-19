@@ -279,8 +279,10 @@ the spec above is applied; it changes none of the owner's rules.
   evidence stays at its slot, and an unresolved outcome is pending.
 - **One evaluator.** A drafted player's point is `aflTradeValueLinePointAt` in `modeling/valueLineFit.ts`,
   the evaluator the fit's back-test uses, on curves rebuilt from the stored fit's published parameters.
-  The ledger's stint end closes a stint, as do three in-stint seasons with no game. A tenure past the
-  20-season horizon is refused.
+  The ledger's stint end closes a stint from the season that reveals it (its last counted season when
+  he also played elsewhere then, else the season after), never earlier. Three in-stint seasons with no
+  game also close it, for good: a later return is not first-stint PAV. A tenure past the 20-season
+  horizon is refused.
 - **Signed values.** No floor: a closed asset is exactly what it produced, negative PAV included.
 - **Traded players.** A player's line is his first stint at the club that received him in that trade
   (never followed on). A closed stint is what it produced. An open stint takes produced plus expected

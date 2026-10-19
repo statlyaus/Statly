@@ -62,6 +62,7 @@ export class AflTradeValueLineReader {
   private readonly pickValues = new Map<number, number>();
   private readonly gamesByKey = new Map<string, { games: number; pav: number }>();
   private readonly careerBySeason = new Map<string, { games: number; pav: number }>();
+  private readonly clubsBySeason = new Map<string, Set<string>>();
   private readonly firstReadSeason: number;
   private readonly lastReadSeason: number;
   private readonly credibility: AflTradeValueLineCredibility;
@@ -82,6 +83,8 @@ export class AflTradeValueLineReader {
       const key = `${row.playerId}|${row.season}`;
       const career = this.careerBySeason.get(key) ?? { games: 0, pav: 0 };
       this.careerBySeason.set(key, { games: career.games + row.games, pav: career.pav + row.pav });
+      const clubs = this.clubsBySeason.get(key) ?? new Set<string>();
+      this.clubsBySeason.set(key, clubs.add(row.clubId));
     }
     for (const selection of candidate.draftSelections ?? []) {
       if (selection.playerId === null || selection.draftType !== 'national') continue;
@@ -175,9 +178,7 @@ export class AflTradeValueLineReader {
     const read = this.stintSeasons(stint, playerId, checkpoint.season);
     if (read === null) return aflTradeValueLinePending('unavailable');
     const produced = read.seasons.reduce((sum, { pav }) => sum + pav, 0);
-    const last = read.seasons.slice(-CLOSURE);
-    const inactive = last.length === CLOSURE && last.every(({ games }) => games === 0);
-    if (read.ended || inactive)
+    if (read.ended)
       return {
         state: 'closed',
         value: produced,
@@ -231,27 +232,51 @@ export class AflTradeValueLineReader {
   }
 
   /**
-   * The stint's seasons from its start through `season`, cut at its end when it ended by then, or
-   * null when a counted season has no pinned PAV. No later season is read. A stint ends only from its
-   * first season: the at-trade and draft views never know it will close.
+   * The season whose games reveal that a ledger-closed stint ended: its last counted season when he
+   * also played for another club then (the ledger counts a departure season he played here), else
+   * the season after it (a departure without a game here, or a re-arrival). The ledger's end is
+   * derived from that later season, so a checkpoint before it must not see the closure.
+   */
+  private closingSeason(stint: AflTradeAssetLedgerStint, playerId: string): number | null {
+    if (stint.status !== 'closed') return null;
+    const endSeason = stint.endSeason ?? stint.startSeason - 1;
+    const clubs = this.clubsBySeason.get(`${playerId}|${endSeason}`);
+    const departedThen = !!clubs && [...clubs].some((club) => club !== stint.clubId);
+    return endSeason >= stint.startSeason && departedThen ? endSeason : endSeason + 1;
+  }
+
+  /**
+   * The stint's seasons from its start through `season`, cut where it ended by then, or null when a
+   * counted season has no pinned PAV. No later season is read. It ends at the ledger's end once the
+   * season revealing it is read, or after three consecutive seasons with no game here, which is
+   * terminal: a later return is not first-stint PAV (value-line method, "First stint"). The at-trade
+   * and draft views read no stint season, so never know it will close.
    */
   private stintSeasons(
     stint: AflTradeAssetLedgerStint,
     playerId: string,
     season: number
   ): { seasons: StintSeason[]; ended: boolean } | null {
-    const endSeason = stint.endSeason ?? stint.startSeason - 1;
-    const ended = stint.status === 'closed' && season >= stint.startSeason && endSeason <= season;
-    const last = ended ? endSeason : season;
+    const closing = this.closingSeason(stint, playerId);
+    let ended = closing !== null && closing <= season;
+    const last = ended ? (stint.endSeason ?? stint.startSeason - 1) : season;
     const pav = new Map(stint.seasons.map((row) => [row.season, row.pav]));
     const seasons: StintSeason[] = [];
+    let zeroRun = 0;
     for (let year = stint.startSeason; year <= last; year++) {
+      if (zeroRun >= CLOSURE) {
+        ended = true;
+        break;
+      }
       if (stint.seasonsMissingPav.includes(year)) return null;
       const value = pav.get(year);
       if (value === undefined)
         throw new Error(`The ledger stint of ${playerId} has no season ${year}.`);
-      seasons.push({ season: year, games: this.games(playerId, year, stint.clubId), pav: value });
+      const games = this.games(playerId, year, stint.clubId);
+      seasons.push({ season: year, games, pav: value });
+      zeroRun = games === 0 ? zeroRun + 1 : 0;
     }
+    if (zeroRun >= CLOSURE) ended = true;
     return { seasons, ended };
   }
 

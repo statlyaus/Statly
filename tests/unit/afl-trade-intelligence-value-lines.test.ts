@@ -177,6 +177,8 @@ interface Options {
   special?: boolean;
   custody?: { draftYear: number; recordedPickNumber: number }[];
   oldPick?: boolean;
+  /** Ledger stint ends by `player|club|fromSeason`, overriding the fixture's. */
+  ends?: Record<string, number>;
 }
 
 function inputs(options: Options = {}): AflTradeValueLineInputs {
@@ -187,8 +189,9 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
     playerId: string,
     clubId: string,
     fromSeason: number,
-    endSeason: number | null = null
+    fixtureEnd: number | null = null
   ): AflTradeAssetLedgerStint => {
+    const endSeason = options.ends?.[`${playerId}|${clubId}|${fromSeason}`] ?? fixtureEnd;
     const through = endSeason ?? LAST;
     const counted = range(fromSeason, through).map((season) => ({
       season,
@@ -550,6 +553,62 @@ describe('computeAflTradeValueLines', () => {
       tenure: 4,
     });
     expect(pointOf(lines, P('p1'), at('season_end', LAST)).value).toBe(6);
+  });
+
+  it('keeps an inactivity closure: a game after three empty seasons is not first-stint PAV', () => {
+    const rows = [...BASE_ROWS, { season: 2024, playerId: 'd1', clubId: 'b', games: 9, pav: 4 }];
+    const comeback = computeAflTradeValueLines(inputs({ rows }));
+    for (const season of [2023, 2024, LAST])
+      expect(pointOf(comeback, P('p1'), at('season_end', season))).toMatchObject({
+        state: 'closed',
+        value: 6,
+        produced: 6,
+        expectedRemaining: 0,
+      });
+  });
+
+  it('closes a ledger-ended stint only once the season that reveals the move is read', () => {
+    // Y leaves B for A in 2023 without a game for B that season: the ledger counts B through 2022.
+    const rows = BASE_ROWS.filter(
+      (row) => !(row.playerId === 'y' && row.clubId === 'b' && row.season === 2023)
+    );
+    const moved = computeAflTradeValueLines(inputs({ rows, ends: { 'y|b|2021': 2022 } }));
+    expect(pointOf(moved, 'player|y|b|2021', at('season_end', 2022))).toMatchObject({
+      state: 'pending',
+      produced: -4,
+    });
+    expect(pointOf(moved, 'player|y|b|2021', at('season_end', 2023))).toMatchObject({
+      state: 'closed',
+      value: -4,
+      produced: -4,
+    });
+    // D2 leaves C for A in 2024: his pick's line stays open through 2023 and closes in 2024.
+    const d2Rows = [
+      ...BASE_ROWS.filter((row) => !(row.playerId === 'd2' && row.season >= 2024)),
+      ...range(2024, LAST).map((season) => ({
+        season,
+        playerId: 'd2',
+        clubId: 'a',
+        games: 12,
+        pav: 5,
+      })),
+    ];
+    const left = computeAflTradeValueLines(inputs({ rows: d2Rows, ends: { 'd2|c|2021': 2023 } }));
+    const open = aflTradeValueLinePointAt(
+      aflTradeValueLineSlotCurve(PARAMETERS, 12),
+      PARAMETERS,
+      range(2021, 2023).map((season) => ({ tenure: season - 2020, games: 12, pav: 5 })),
+      3
+    );
+    const at2023 = pointOf(left, P('p2'), at('season_end', 2023));
+    expect(at2023.state).toBe('open');
+    expect(at2023.value).toBeCloseTo(open.value, 6);
+    expect(pointOf(left, P('p2'), at('season_end', 2024))).toMatchObject({
+      state: 'closed',
+      value: 15,
+      produced: 15,
+      expectedRemaining: 0,
+    });
   });
 
   it('values a matched-bid pick at its own slot until the bid, then its share of the nominee', () => {
