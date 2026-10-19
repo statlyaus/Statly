@@ -590,7 +590,8 @@ function varianceComponents(groups: readonly VarianceRow[][], label: string): Va
   const within = withinSquares / (observations - players.length);
   const between =
     (betweenSquares - (players.length - 1) * within) / (weight - squaredWeights / weight);
-  if (!(within > 0) || !(between > 0))
+  // A between-player variance at float-noise scale is no signal: identical players are not a fit.
+  if (!(within > 0) || !(between > within * 1e-6))
     throw new Error(
       `The ${label} between-player variance is not positive; own form carries no signal.`
     );

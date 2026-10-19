@@ -269,15 +269,19 @@ describe('fitAflTradeValueLine', () => {
   });
 
   it('reads own form against the prior at the same tenures, so development is kept', () => {
-    // Every pick stays, and plays more and better each season, the same at every slot. A young
-    // player's level carried forward as it is would undervalue every open stint at year 1 and year 3.
+    // Every pick stays, and plays more and better each season, the same at every slot, each at his own
+    // fixed level. A young player's level carried forward as it is would undervalue every open stint
+    // at year 1 and year 3; own form against the same tenure keeps the development and the level.
     // (#1001's version also had one pick in five never play: those stints all close at tenure 4, and
     // slot-only survival then closes playing stints too, about 10% low at year 3 whatever the own-form
     // rule. That is the survival limitation in the spec, not development.)
     const steady: AflTradeValueLineFitSelection[] = [];
     const steadyRows: Row[] = [];
+    const level = random(11);
     for (let year = 2011; year <= 2024; year++)
       for (let slot = 1; slot <= 40; slot++) {
+        const form = 0.6 + 0.8 * level();
+        const availability = 0.7 + 0.3 * level();
         const playerId = `q-${year}-${slot}`;
         steady.push({
           selectionId: `t-${year}-${slot}`,
@@ -288,22 +292,25 @@ describe('fitAflTradeValueLine', () => {
         });
         for (let season = year + 1; season <= LAST_SEASON; season++) {
           const tenure = season - year;
-          const games = Math.min(22, 8 + 2 * tenure);
+          const games = Math.round(Math.min(22, 8 + 2 * tenure) * availability);
           steadyRows.push({
             season,
             playerId,
             clubId: 'adelaide',
             games,
-            pav: games * 0.2 * Math.min(2, 1 + tenure / 5),
+            pav: games * 0.2 * form * Math.min(2, 1 + tenure / 5),
           });
         }
       }
     const steadyFit = fitAflTradeValueLine({ selections: steady, games: model(steadyRows) });
     for (const checkpoint of [1, 3]) {
-      const all = steadyFit.content.backTest.byRangeAndCheckpoint.find(
-        (row) => row.range === 'all' && row.checkpoint === checkpoint
-      )!;
-      expect(Math.abs(all.bias) / all.meanRealized).toBeLessThan(0.03);
+      const row = (rows: typeof steadyFit.content.backTest.byRangeAndCheckpoint) =>
+        rows.find((r) => r.range === 'all' && r.checkpoint === checkpoint)!;
+      const own = row(steadyFit.content.backTest.byRangeAndCheckpoint);
+      const slotOnly = row(steadyFit.content.backTest.slotOnlyByRangeAndCheckpoint);
+      expect(Math.abs(own.bias) / own.meanRealized).toBeLessThan(0.03);
+      // Own form carries each player's level, so it beats the slot alone on error.
+      expect(own.meanAbsoluteError).toBeLessThan(slotOnly.meanAbsoluteError);
     }
   });
 

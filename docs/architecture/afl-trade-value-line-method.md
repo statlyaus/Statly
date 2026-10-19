@@ -199,7 +199,8 @@ none of the owner's rules.
     2011 to 2020 averaged 86.
 - **First-stint pick curve.** `V(p) = Σ_{t=1..20} S(t, p) × games(t, p) × rate(t, p)`, with `S` the
   probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
-  10+ tenure group carries the tail.
+  10+ tenure group carries the tail. A class with more than twenty observed seasons is refused, so no curve is
+  read past its horizon.
 - **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
   the remaining value below. A closed stint is worth what it produced.
   - **Player effects (Owner, 2026-10-19):** `u_games = Σ_{s≤τ} (games(s) − games(t_s, p)) / (n + k_games)`
@@ -238,7 +239,9 @@ none of the owner's rules.
   spreads the inactivity closures of draftees who never play over every stint: in a synthetic league
   where one pick in five never plays and the rest develop identically, playing stints come out about 10%
   low at year 3 (18% low with no own form at all; with every pick playing, within 1%). A survival
-  model where an inactivity closure follows the player's own run of empty seasons is the fix. Each `k` pools
+  model where an inactivity closure follows the player's own run of empty seasons is the fix. The two effects are estimated
+  separately and multiplied, so their covariance is dropped: if players who play more also score more per
+  game, an overperformer is slightly under-credited, the same direction as the survival limitation. Each `k` pools
   every tenure's variance, although early seasons vary less. A future season's games are floored at 0;
   its rate `rate(t, p) + u_rate` is not; the calibration's first bin (below 0) shows how often a value line
   goes negative (never in the 2026-10-19 fit). A hazard term in the effect, or a tenure-varying `k`, is a
