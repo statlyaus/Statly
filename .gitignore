@@ -97,4 +97,4 @@ lint.config.js
 .statly-local/
 
 # Local Redis snapshot written by the development socket/queue stack.
-dump.rdb
+/dump.rdb
