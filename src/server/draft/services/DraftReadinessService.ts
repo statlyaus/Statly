@@ -159,7 +159,12 @@ function resolveStatus(input: {
   if (draft.status === DraftStatus.COMPLETED) return 'completed';
   if (draft.status === DraftStatus.LIVE || draft.status === DraftStatus.PAUSED) return 'live';
   if (blockers.length > 0) return 'blocked';
-  if (shouldBeOpen || draft.lobbyStatus === 'COUNTDOWN' || draft.lobbyStatus === 'LIVE') {
+  if (
+    shouldBeOpen ||
+    draft.lobbyStatus === 'OPEN' ||
+    draft.lobbyStatus === 'COUNTDOWN' ||
+    draft.lobbyStatus === 'LIVE'
+  ) {
     return 'room_open';
   }
 

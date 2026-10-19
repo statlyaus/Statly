@@ -79,4 +79,12 @@ describe('footywire positions', () => {
     ).toHaveLength(1);
     expect(() => parseFootywirePositionNdjson('{oops')).toThrow('Line 1');
   });
+
+  it('counts blank lines when reporting the line of an invalid row', () => {
+    const valid = '{"team":"Carlton","first_name":"A","surname":"B","position_1":"Ruck"}';
+
+    expect(() => parseFootywirePositionNdjson(`${valid}\n\n{oops`)).toThrow(
+      'Line 3 is not valid JSON.'
+    );
+  });
 });

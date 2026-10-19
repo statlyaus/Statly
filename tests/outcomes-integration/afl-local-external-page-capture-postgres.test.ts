@@ -552,7 +552,7 @@ describe('local Footyinfo draft-board capture through the governed ingestion bou
     const options = { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl };
     const targets = createLocalFootyinfoDraftBoardTargets([2020]);
     await expect(runLocalExternalCapture(options, targets)).rejects.toThrow(
-      /footyinfo-national-draft-board-issue853-private-2020-board-v1/
+      /footyinfo-national-draft-board-issue853-private-2020-board-v3/
     );
     expect(calls).toEqual([]);
 
@@ -564,11 +564,12 @@ describe('local Footyinfo draft-board capture through the governed ingestion bou
     };
     await recordOfficialDecision(2020, evidenceIds, footyinfoDraftBoardAuthority);
     const [result] = await runLocalExternalCapture(options, targets);
-    // Eight board picks (five selected, two passed, one removed) and the five selections.
+    // Eight board picks (five selected, two passed, one removed), the five selections and the one
+    // matched bid (parser v2, migration 0287).
     expect(result).toMatchObject({
       season: 2020,
       status: 'staged',
-      evidenceCount: 13,
+      evidenceCount: 14,
       issueCount: 0,
     });
     expect(calls).toEqual(['https://www.footyinfo.com/draft/2020']);
@@ -582,6 +583,7 @@ describe('local Footyinfo draft-board capture through the governed ingestion bou
         GROUP BY row.claim_kind ORDER BY row.claim_kind`
     );
     expect(rows.rows).toEqual([
+      { kind: 'draft_board_bid_match', count: '1' },
       { kind: 'draft_board_pick', count: '8' },
       { kind: 'draft_selection', count: '5' },
     ]);

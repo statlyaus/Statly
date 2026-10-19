@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 
 import { Prisma, type TradeReviewMode } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -164,6 +165,7 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
   });
 
   let processed = 0;
+  const failures: unknown[] = [];
   for (const candidate of due) {
     try {
       await prisma.$transaction(async (tx) => {
@@ -201,8 +203,20 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
         }
       });
     } catch (error) {
-      if (!(error instanceof TradeServiceError)) throw error;
+      if (error instanceof TradeServiceError) continue;
+      // A thread that keeps failing stays first in updatedAt order, so skipping it keeps the rest moving.
+      logger.error('Failed to process a due league trade', {
+        threadId: candidate.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      failures.push(error);
     }
+  }
+  if (failures.length > 0) {
+    // Still report the run as failed, so the cron route surfaces the stuck thread.
+    throw new Error(`${failures.length} due league trade(s) failed to process`, {
+      cause: failures[0],
+    });
   }
   return processed;
 }
@@ -623,29 +637,9 @@ async function moveRosterPlayers(
     },
   });
 
-  await syncLegacyRoster(tx, leagueId, firstMemberId);
-  await syncLegacyRoster(tx, leagueId, secondMemberId);
 }
 
-async function syncLegacyRoster(
-  tx: Transaction,
-  leagueId: string,
-  memberId: string
-): Promise<void> {
-  const players = await tx.leagueRosterPlayer.findMany({
-    where: { leagueId, memberId },
-    select: { playerId: true },
-    orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
-  });
-  const data = { playerIds: JSON.stringify(players.map((player) => player.playerId)) };
-  await tx.leagueRoster.upsert({
-    where: { leagueId_memberId: { leagueId, memberId } },
-    update: data,
-    create: { leagueId, memberId, ...data },
-  });
-}
-
-async function invalidateConflictingTrades(
+export async function invalidateConflictingTrades(
   tx: Transaction,
   completedThread: LoadedTrade,
   playerIds: string[],
@@ -664,7 +658,12 @@ async function invalidateConflictingTrades(
 
   await tx.leagueTradeThread.updateMany({
     where: { id: { in: conflicts.map((conflict) => conflict.id) } },
-    data: { status: 'INVALIDATED', resolvedAt: now, version: { increment: 1 } },
+    data: {
+      status: 'INVALIDATED',
+      resolvedAt: now,
+      reviewEndsAt: null,
+      version: { increment: 1 },
+    },
   });
   await tx.leagueTradeOffer.updateMany({
     where: { id: { in: conflicts.flatMap((conflict) => conflict.currentOfferId ?? []) } },
@@ -678,6 +677,21 @@ async function invalidateConflictingTrades(
       previousStatus: conflict.status,
       nextStatus: 'INVALIDATED',
       reasonCode: 'PLAYER_TRADED_ELSEWHERE',
+    })),
+  });
+  // Same outbox row recordTradeEvent writes, so clients and notifications hear about the invalidation.
+  await tx.leagueTradeOutboxEvent.createMany({
+    data: conflicts.map((conflict) => ({
+      leagueId: completedThread.leagueId,
+      seasonId: completedThread.seasonId,
+      threadId: conflict.id,
+      offerId: conflict.currentOfferId,
+      eventType: 'trade:invalidated',
+      payloadJson: JSON.stringify({
+        threadId: conflict.id,
+        offerId: conflict.currentOfferId,
+        status: 'INVALIDATED',
+      }),
     })),
   });
 }

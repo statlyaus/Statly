@@ -71,4 +71,28 @@ describe('reviewed 2011 session source scope', () => {
       expect(result.issues).toHaveLength(1);
     }
   });
+  it('refuses a page with both date wrappers, as v19 requires exactly one date element', () => {
+    const digest = 'a'.repeat(64);
+    const time = '<time datetime="2011-11-24T22:58:00Z"></time>';
+    const result = parseOfficialAflDraftSession(
+      `<div class="article__date">${time}</div><div class="article__byline-date">${time}</div>` +
+        '<div class="article-body"><p>1. GWS Giants - Jonathon Patton</p></div>',
+      {
+        anchorSeasonYear: 2011,
+        capture: {
+          captureId: `source-capture:${digest}`,
+          artifactId: `artifact:${digest}`,
+          contentSha256: digest,
+          mediaType: 'text/html',
+          sourceUrl: OFFICIAL_AFL_2011_SESSION_URLS.membership,
+          capturedAt: '2026-10-17T00:00:00.000Z',
+          effectiveAt: '2011-11-24T22:58:00.000Z',
+          parserVersion: 'official-afl-completed-draft-session/v19',
+          fieldManifestSha256: digest,
+        },
+      }
+    );
+    expect(result.evidence).toEqual([]);
+    expect(result.issues).toHaveLength(1);
+  });
 });

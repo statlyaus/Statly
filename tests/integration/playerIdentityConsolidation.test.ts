@@ -40,7 +40,7 @@ const fixturePlayerIds = [
 ];
 
 async function deleteFixtures() {
-  await prisma.queueItem.deleteMany({ where: { memberId: 'queue-member' } });
+  await prisma.queueItem.deleteMany({ where: { memberId: 'member-c' } });
   await deleteLeagueFixtures(prisma, {
     leagueIds: fixtureLeagueIds,
     playerIds: fixturePlayerIds,
@@ -158,22 +158,6 @@ async function seedTwoLeagueOwnerships() {
       },
     ],
   });
-  await prisma.leagueRoster.createMany({
-    data: [
-      {
-        id: 'legacy-roster-a',
-        leagueId: 'league-a',
-        memberId: 'member-a',
-        playerIds: JSON.stringify([aliasPlayerId]),
-      },
-      {
-        id: 'legacy-roster-b',
-        leagueId: 'league-b',
-        memberId: 'member-b',
-        playerIds: JSON.stringify([canonicalPlayerId]),
-      },
-    ],
-  });
   await prisma.playerExternalIdentity.createMany({
     data: [canonicalPlayerId, aliasPlayerId].map((playerId) => ({
       playerId,
@@ -198,8 +182,8 @@ describe.sequential('player identity consolidation', () => {
 
     await prisma.queueItem.createMany({
       data: [
-        { id: 'canonical-queue', memberId: 'queue-member', playerId: canonicalPlayerId, rank: 2 },
-        { id: 'alias-queue', memberId: 'queue-member', playerId: aliasPlayerId, rank: 1 },
+        { id: 'canonical-queue', memberId: 'member-c', playerId: canonicalPlayerId, rank: 2 },
+        { id: 'alias-queue', memberId: 'member-c', playerId: aliasPlayerId, rank: 1 },
       ],
     });
     await prisma.teamAction.create({
@@ -248,7 +232,7 @@ describe.sequential('player identity consolidation', () => {
     await expect(
       prisma.queueItem.findUnique({
         where: {
-          memberId_playerId: { memberId: 'queue-member', playerId: canonicalPlayerId },
+          memberId_playerId: { memberId: 'member-c', playerId: canonicalPlayerId },
         },
         select: { rank: true },
       })
@@ -403,93 +387,6 @@ describe.sequential('player identity consolidation', () => {
     await expect(prisma.pick.count({ where: { draftId: 'duplicate-player-draft' } })).resolves.toBe(
       2
     );
-  });
-
-  it('blocks ownership conflicts that exist only in legacy roster JSON', async () => {
-    const canonicalId = 'legacy_conflict_player';
-    const aliasId = 'legacy-conflict-player-club';
-    await prisma.player.createMany({
-      data: [
-        { id: canonicalId, name: 'Legacy Conflict', club: 'Club', position: 'MID' },
-        { id: aliasId, name: 'Legacy Conflict', club: 'Club', position: 'MID' },
-      ],
-    });
-    await prisma.playerExternalIdentity.createMany({
-      data: [canonicalId, aliasId].map((playerId) => ({
-        playerId,
-        provider: 'statly-legacy',
-        externalId: playerId,
-      })),
-    });
-    await prisma.leagueRosterPlayer.create({
-      data: {
-        id: 'legacy-conflict-normalized',
-        leagueId: 'league-a',
-        memberId: 'member-a',
-        playerId: canonicalId,
-      },
-    });
-    await prisma.leagueRoster.create({
-      data: {
-        id: 'legacy-conflict-json',
-        leagueId: 'league-a',
-        memberId: 'member-c',
-        playerIds: JSON.stringify([aliasId]),
-      },
-    });
-
-    const plan = await planPlayerIdentityConsolidation(prisma, [
-      { aliasId, canonicalPlayerId: canonicalId },
-    ]);
-    expect(plan.status).toBe('blocked');
-    expect(plan.blockers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'LEGACY_OWNERSHIP_CONFLICT',
-          scopeId: 'league-a',
-        }),
-      ])
-    );
-  });
-
-  it('leaves unrelated malformed legacy roster JSON untouched', async () => {
-    const canonicalId = 'unrelated_roster_canonical';
-    const aliasId = 'unrelated-roster-alias';
-    await prisma.player.createMany({
-      data: [
-        { id: canonicalId, name: 'Unrelated Roster', club: 'Club', position: 'DEF' },
-        { id: aliasId, name: 'Unrelated Roster', club: 'Club', position: 'DEF' },
-      ],
-    });
-    await prisma.playerExternalIdentity.createMany({
-      data: [canonicalId, aliasId].map((playerId) => ({
-        playerId,
-        provider: 'statly-legacy',
-        externalId: playerId,
-      })),
-    });
-    await prisma.leagueRoster.update({
-      where: { leagueId_memberId: { leagueId: 'league-b', memberId: 'member-b' } },
-      data: { playerIds: 'unrelated malformed data', benchOrder: 'also malformed' },
-    });
-
-    const mapping = [{ aliasId, canonicalPlayerId: canonicalId }];
-    await expect(planPlayerIdentityConsolidation(prisma, mapping)).resolves.toMatchObject({
-      status: 'ready',
-    });
-    await expect(consolidatePlayerIdentities(prisma, mapping)).resolves.toMatchObject({
-      status: 'ready',
-    });
-    await expect(
-      prisma.leagueRoster.findUnique({
-        where: { leagueId_memberId: { leagueId: 'league-b', memberId: 'member-b' } },
-        select: { playerIds: true, benchOrder: true },
-      })
-    ).resolves.toEqual({
-      playerIds: 'unrelated malformed data',
-      benchOrder: 'also malformed',
-    });
-    await expect(prisma.player.findUnique({ where: { id: aliasId } })).resolves.toBeNull();
   });
 
   it('rechecks the reviewed player fingerprint inside the apply transaction', async () => {

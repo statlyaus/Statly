@@ -159,6 +159,7 @@ async function requireSourceEvidenceMembership(
     // Each outcome's disposition row is also on its transfer, which the database conserves.
     ...(candidate.content.pickOutcomes ?? []),
     ...(candidate.content.draftBoardPicks ?? []),
+    ...(candidate.content.draftBoardBidMatches ?? []),
     ...candidate.content.issues,
   ];
   const evidenceIds = [

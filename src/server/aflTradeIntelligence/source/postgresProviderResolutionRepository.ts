@@ -196,19 +196,10 @@ export class PostgresAflTradeProviderResolutionRepository {
           proposal.subjectType === 'provider_match_candidate' &&
           proposal.proposedTarget !== null
         ) {
-          await requireCurrentMatchClubResolution(
+          await requireCurrentMatchClubResolutions(
             transaction,
             proposal.matchCandidateId,
-            'home',
-            proposal.proposedTarget.homeClubId,
-            proposal.proposedTarget.homeClubResolutionDecisionId
-          );
-          await requireCurrentMatchClubResolution(
-            transaction,
-            proposal.matchCandidateId,
-            'away',
-            proposal.proposedTarget.awayClubId,
-            proposal.proposedTarget.awayClubResolutionDecisionId
+            proposal.proposedTarget
           );
         }
       }
@@ -813,20 +804,7 @@ async function requireCanonicalTarget(
       ]
     );
     if (found.rows[0]) {
-      await requireCurrentMatchClubResolution(
-        transaction,
-        content.matchCandidateId,
-        'home',
-        target.homeClubId,
-        target.homeClubResolutionDecisionId
-      );
-      await requireCurrentMatchClubResolution(
-        transaction,
-        content.matchCandidateId,
-        'away',
-        target.awayClubId,
-        target.awayClubResolutionDecisionId
-      );
+      await requireCurrentMatchClubResolutions(transaction, content.matchCandidateId, target);
       return;
     }
   }
@@ -836,10 +814,42 @@ async function requireCanonicalTarget(
   );
 }
 
+/** Each canonical club must be backed by the provider side it was recorded on (swapped when declared reversed). */
+async function requireCurrentMatchClubResolutions(
+  transaction: AflOutcomeSqlTransaction,
+  matchCandidateId: string,
+  target: {
+    homeClubId: string;
+    awayClubId: string;
+    homeClubResolutionDecisionId: string;
+    awayClubResolutionDecisionId: string;
+    providerSideCorrespondence?: 'reversed';
+  }
+) {
+  const reversed = target.providerSideCorrespondence === 'reversed';
+  await requireCurrentMatchClubResolution(
+    transaction,
+    matchCandidateId,
+    'home',
+    reversed ? 'away' : 'home',
+    target.homeClubId,
+    target.homeClubResolutionDecisionId
+  );
+  await requireCurrentMatchClubResolution(
+    transaction,
+    matchCandidateId,
+    'away',
+    reversed ? 'home' : 'away',
+    target.awayClubId,
+    target.awayClubResolutionDecisionId
+  );
+}
+
 async function requireCurrentMatchClubResolution(
   transaction: AflOutcomeSqlTransaction,
   matchCandidateId: string,
   side: 'home' | 'away',
+  providerSide: 'home' | 'away',
   clubId: string,
   decisionId: string
 ) {
@@ -855,7 +865,7 @@ async function requireCurrentMatchClubResolution(
       WHERE resolution.decision_id = $1 AND resolution.outcome = 'approved'
         AND resolution.match_candidate_id = $2 AND resolution.side = $3
         AND resolution.club_id = $4 AND resolution.assignment_status = 'active'`,
-    [decisionId, matchCandidateId, side, clubId]
+    [decisionId, matchCandidateId, providerSide, clubId]
   );
   if (!found.rows[0]) {
     throw new AflTradeProviderResolutionPersistenceError(

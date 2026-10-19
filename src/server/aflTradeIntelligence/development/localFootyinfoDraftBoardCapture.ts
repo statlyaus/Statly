@@ -11,7 +11,7 @@ import {
   type LocalNarrowCaptureAuthority,
 } from './localNarrowCaptureAuthority';
 
-/** The governed capability id; parser v1 reads the reviewed national draft boards under it. */
+/** The governed capability id; parser v3 reads the reviewed national draft boards under it. */
 export const FOOTYINFO_DRAFT_BOARD_CAPABILITY = 'footyinfo-national-draft-board';
 
 /**
@@ -21,7 +21,7 @@ export const FOOTYINFO_DRAFT_BOARD_CAPABILITY = 'footyinfo-national-draft-board'
  * Gate 0A decision of 2026-10-12 scoped them. The recorded rights must name exactly these; staging
  * refuses a capture that emits any other leaf.
  */
-export const FOOTYINFO_DRAFT_BOARD_FIELDS = [
+export const FOOTYINFO_DRAFT_BOARD_V1_FIELDS = [
   'draft_board_pick.bid.basis',
   'draft_board_pick.bid.club.nativeId',
   'draft_board_pick.bid.club.recordedName',
@@ -50,8 +50,61 @@ export const FOOTYINFO_DRAFT_BOARD_FIELDS = [
 ] as const;
 
 /**
+ * The leaves parser v2 adds (issue 789): every non-null leaf of a `draft_board_bid_match`, the
+ * matched bid's selection, bidding club and basis, its points and points used, each spent pick's
+ * board id, label, original number and club, holder and points used, and each leftover-points pick
+ * it created with its holder and points.
+ */
+export const FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS = [
+  'draft_board_bid_match.bid.basis',
+  'draft_board_bid_match.bid.club.nativeId',
+  'draft_board_bid_match.bid.club.recordedName',
+  'draft_board_bid_match.club.nativeId',
+  'draft_board_bid_match.club.recordedName',
+  'draft_board_bid_match.consumedPicks.holdingClubCode',
+  'draft_board_bid_match.consumedPicks.label',
+  'draft_board_bid_match.consumedPicks.nativePickId',
+  'draft_board_bid_match.consumedPicks.originalClubCode',
+  'draft_board_bid_match.consumedPicks.originalNumber',
+  'draft_board_bid_match.consumedPicks.pointsUsed',
+  'draft_board_bid_match.draftType',
+  'draft_board_bid_match.draftYear',
+  'draft_board_bid_match.leftoverPicks.holdingClubCode',
+  'draft_board_bid_match.leftoverPicks.nativePickId',
+  'draft_board_bid_match.leftoverPicks.points',
+  'draft_board_bid_match.nativePickId',
+  'draft_board_bid_match.player.nativeId',
+  'draft_board_bid_match.player.recordedName',
+  'draft_board_bid_match.points',
+  'draft_board_bid_match.pointsUsed',
+  'draft_board_bid_match.roundNumber',
+  'draft_board_bid_match.selectionNumber',
+] as const;
+
+/**
+ * The leaves parser v3 adds (issue 789, owner decision 2026-10-18): each board pick's original club
+ * and its number before the draft.
+ */
+export const FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS = [
+  'draft_board_pick.originalClub.nativeId',
+  'draft_board_pick.originalClub.recordedName',
+  'draft_board_pick.originalNumber',
+] as const;
+
+/**
+ * The field boundary parser v3 emits: v1's, the matched-bid and the pick-origin leaves. A v3 capture
+ * needs its own recorded decision naming exactly these; the v1 and v2 decisions and captures stay
+ * valid as recorded.
+ */
+export const FOOTYINFO_DRAFT_BOARD_FIELDS = [
+  ...FOOTYINFO_DRAFT_BOARD_V1_FIELDS,
+  ...FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS,
+  ...FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS,
+] as const;
+
+/**
  * The owner records one narrow decision per season and parser version, for example
- * `footyinfo-national-draft-board-issue853-private-2024-board-v1`. The runner never falls back to
+ * `footyinfo-national-draft-board-issue853-private-2024-board-v3`. The runner never falls back to
  * another season or parser version.
  */
 export function footyinfoDraftBoardDecisionKey(season: number): string {

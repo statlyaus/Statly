@@ -28,6 +28,10 @@ import {
   isAflTradePickSideReconciliationIssue,
   isAflTradeUsableCustodyStatus,
 } from './pickLineageDeferral';
+import {
+  aflTradePickCustodyHolders,
+  createAflTradePickOnwardTransfers,
+} from './pickOnwardTransfer';
 
 const instantSchema = z.iso.datetime({ offset: true });
 const statusSchema = z.enum(['single_source', 'corroborated', 'disputed', 'unresolved']);
@@ -171,6 +175,18 @@ const pickOutcomeSchema = z
      * count (owner decision 2026-10-14, issue 789). Absent when an official session proved it.
      */
     draftProvenBy: z.literal('footyinfo').optional(),
+    /**
+     * Issue 789 (2026-10-16): the board picks recording a receiving-club selection Draftguru marks
+     * open as that club's matched bid, each counted as a nominee.
+     */
+    matchedBidBoardPickIds: sortedUniqueIdsSchema
+      .pipe(z.array(aflTradeContentAddressedIdSchema('external-draft-board-pick')).min(1).max(90))
+      .optional(),
+    /**
+     * Issue 789: Draftguru stated this hop "not used", but the candidate holds the receiving club's
+     * onward transfer of the same pick in a later trade, so the outcome is traded on.
+     */
+    statedDisposition: z.literal('not_used').optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
@@ -183,6 +199,13 @@ const pickOutcomeSchema = z
       record.draftProvenBy !== undefined &&
       basis !== 'club_took_nominated_player' &&
       basis !== 'club_took_no_nominated_player'
+    )
+      return false;
+    // A board-recorded matched bid is a counted nominee, so it only ever raises a positive count.
+    const matchedBids = record.matchedBidBoardPickIds?.length ?? 0;
+    if (
+      matchedBids > 0 &&
+      (basis !== 'club_took_nominated_player' || count === undefined || count < matchedBids)
     )
       return false;
     if (basis === undefined) return count === undefined;
@@ -202,6 +225,12 @@ const pickOutcomeSchema = z
   .refine(
     (record) => record.outcomeStatus !== 'pending' || record.disposition === 'not_used',
     'Only a not-used pick can be pending.'
+  )
+  .refine(
+    (record) =>
+      record.statedDisposition === undefined ||
+      (record.disposition === 'traded_on' && record.outcomeStatus === 'stated'),
+    'Only a stated traded-on outcome overrides a stated not-used pick.'
   );
 
 /** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
@@ -215,12 +244,77 @@ const draftBoardPickSchema = z
     status: z.enum(['selected', 'passed', 'removed']),
     clubId: z.string().trim().min(1).max(240).nullable(),
     routeClubIds: z.array(z.string().trim().min(1).max(240)).max(16).nullable(),
+    /** Issue 789: the basis of the bid the holder matched, when the board states a matched bid. */
+    matchedBidBasis: z.enum(['father_son', 'academy', 'next_generation_academy']).optional(),
+    /** Issue 789, parser v3: the board's original club and pre-draft number; absent before v3. */
+    originalClubId: z.string().trim().min(1).max(240).nullable().optional(),
+    originalNumber: z.number().int().positive().nullable().optional(),
     evidenceIds: evidenceIdsSchema,
   })
   .strict()
   .refine(
     (record) => (record.status === 'selected') === (record.recordedPickNumber !== null),
     'A board pick has a number exactly when it was selected.'
+  )
+  .refine(
+    (record) => (record.originalClubId === undefined) === (record.originalNumber === undefined),
+    'A board pick states its original club and pre-draft number together or neither.'
+  );
+
+const boardClubIdSchema = z.string().trim().min(1).max(240).nullable();
+const boardPointsSchema = z.number().int().min(0).max(10_000);
+const boardNativePickIdSchema = z.string().regex(/^[1-9]\d{0,9}$/);
+
+/**
+ * One matched bid a Footyinfo v2 board states (issue 789), clubs and nominee resolved; see the
+ * reconciliation. A statement of the board: the matched-bid shares are computed from it, never
+ * stored on it.
+ */
+const draftBoardBidMatchSchema = z
+  .object({
+    bidMatchId: aflTradeContentAddressedIdSchema('external-draft-board-bid-match'),
+    draftYear: z.number().int().min(1897).max(2200),
+    draftType: z.string().trim().min(1).max(80),
+    nativePickId: boardNativePickIdSchema,
+    selectionNumber: z.number().int().positive(),
+    roundNumber: z.number().int().positive().nullable(),
+    clubId: boardClubIdSchema,
+    playerId: z.string().trim().min(1).max(240).nullable(),
+    bidClubId: boardClubIdSchema,
+    basis: z.enum(['father_son', 'academy', 'next_generation_academy']),
+    points: boardPointsSchema,
+    pointsUsed: boardPointsSchema.nullable(),
+    consumedPicks: z
+      .array(
+        z
+          .object({
+            nativePickId: boardNativePickIdSchema,
+            label: z.string().trim().min(1).max(1_000),
+            originalNumber: z.number().int().positive().nullable(),
+            originalClubId: boardClubIdSchema,
+            holdingClubId: boardClubIdSchema,
+            pointsUsed: boardPointsSchema,
+          })
+          .strict()
+      )
+      .max(16),
+    leftoverPicks: z
+      .array(
+        z
+          .object({
+            nativePickId: boardNativePickIdSchema,
+            holdingClubId: boardClubIdSchema,
+            points: boardPointsSchema.nullable(),
+          })
+          .strict()
+      )
+      .max(8),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine(
+    (record) => (record.pointsUsed === null) === (record.consumedPicks.length === 0),
+    'A matched bid states the points used exactly when it lists spent picks.'
   );
 
 const issueSchema = z
@@ -349,6 +443,8 @@ const contentFieldsSchema = z
     pickOutcomes: z.array(pickOutcomeSchema).min(1).optional(),
     /** Present only when a Footyinfo board was reconciled, so earlier candidate ids are unchanged. */
     draftBoardPicks: z.array(draftBoardPickSchema).min(1).optional(),
+    /** Present only when a Footyinfo v2 board states a matched bid (issue 789). */
+    draftBoardBidMatches: z.array(draftBoardBidMatchSchema).min(1).optional(),
     /**
      * The approved owner `reconciliation_scope` decision under which pick-side issues are `deferred`
      * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
@@ -437,6 +533,30 @@ const contentFieldsSchema = z
   .strict();
 
 type CandidateContent = z.infer<typeof contentFieldsSchema>;
+
+/**
+ * Whether a pick transfer's club traded the same pick on (issue 789): the reconciler's rule, which
+ * orders a season's undated pick trades by their Draftguru sequence and breaks a tie between trails
+ * by the pick's latest custody holder, or the unordered rule #952 shipped, so a candidate reconciled
+ * before the ordering rule (2026-10-16) still parses and keeps its stated outcomes.
+ */
+function createAflTradeTradedOnCheck(
+  content: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickCustody'>
+) {
+  const trades = new Map(
+    content.transactions
+      .filter(({ transactionType }) => transactionType === 'trade')
+      .map((transaction) => [transaction.transactionId, transaction])
+  );
+  const ordered = createAflTradePickOnwardTransfers(trades, content.transfers, {
+    custodyHolders: aflTradePickCustodyHolders(content.pickCustody),
+  });
+  const unordered = createAflTradePickOnwardTransfers(trades, content.transfers, {
+    unordered: true,
+  });
+  return (transfer: CandidateContent['transfers'][number]) =>
+    ordered(transfer).length > 0 || unordered(transfer).length > 0;
+}
 
 function validatePickLineageDeferral(content: CandidateContent, context: z.RefinementCtx) {
   const deferred = content.issues.filter(({ severity }) => severity === 'deferred');
@@ -802,6 +922,10 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     ['pickLineage', content.pickLineage.map(({ lineageId }) => lineageId)],
     ['pickOutcomes', (content.pickOutcomes ?? []).map(({ outcomeId }) => outcomeId)],
     ['draftBoardPicks', (content.draftBoardPicks ?? []).map(({ boardPickId }) => boardPickId)],
+    [
+      'draftBoardBidMatches',
+      (content.draftBoardBidMatches ?? []).map(({ bidMatchId }) => bidMatchId),
+    ],
   ] as const;
   const relevantSeasonYears = new Set([
     ...content.transactions.map(({ seasonYear }) => seasonYear),
@@ -863,8 +987,18 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
       });
     }
   });
+  // The rule the reconciler applies to a stated not-used pick its club traded on (issue 789).
+  const tradedOn = createAflTradeTradedOnCheck(content);
   (content.pickOutcomes ?? []).forEach((outcome, index) => {
     const transfer = content.transfers.find(({ transferId }) => transferId === outcome.transferId);
+    if (outcome.statedDisposition !== undefined && (!transfer || !tradedOn(transfer))) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickOutcomes', index, 'statedDisposition'],
+        message:
+          'A stated not-used pick is traded on only when its club gave the same pick away in a later trade.',
+      });
+    }
     const selection = content.draftSelections.find(
       ({ selectionId }) => selectionId === outcome.selectionId
     );
@@ -899,6 +1033,21 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
         : (content.draftBoardPicks ?? []).find(
             ({ boardPickId }) => boardPickId === outcome.boardPickId
           );
+    // A board-recorded nominee cites a selected matched-bid board pick the receiving club held in the
+    // pick's draft (issue 789).
+    const matchedBids = (outcome.matchedBidBoardPickIds ?? []).map((id) =>
+      (content.draftBoardPicks ?? []).find(({ boardPickId }) => boardPickId === id)
+    );
+    const matchedBidsMatch = matchedBids.every(
+      (matched) =>
+        matched !== undefined &&
+        asset !== null &&
+        matched.matchedBidBasis !== undefined &&
+        matched.status === 'selected' &&
+        matched.draftYear === asset.draftYear &&
+        matched.draftType === asset.draftType &&
+        matched.clubId === transfer?.toClubId
+    );
     const route = board?.routeClubIds ?? [];
     const boardMatches =
       outcome.boardPickId === undefined ||
@@ -918,13 +1067,15 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
       ...(selection?.evidenceIds ?? []),
       ...nominationEvidenceIds,
       ...(board?.evidenceIds ?? []),
+      ...matchedBids.flatMap((matched) => matched?.evidenceIds ?? []),
     ]);
     if (
       !transfer ||
       !asset ||
       !outcome.evidenceIds.every((evidenceId) => citable.has(evidenceId)) ||
       !selectedPlayerMatches ||
-      !boardMatches
+      !boardMatches ||
+      !matchedBidsMatch
     ) {
       context.addIssue({
         code: 'custom',
@@ -1039,24 +1190,29 @@ export function parseAflTradeExternalReconciliationCandidate(
 
 /**
  * The stated pick outcomes a derived candidate can keep: those whose transfer is still a pick
- * transfer in it and whose named selection, if any, it still holds. Returns no key when none remain,
- * so the derived candidate's id matches one built without dispositions.
+ * transfer in it, whose named selection, if any, it still holds, and, for a stated not-used pick
+ * kept as traded on (issue 789), whose club's onward transfer it still holds. Returns no key when
+ * none remain, so the derived candidate's id matches one built without dispositions.
  */
 export function retainAflTradePickOutcomes(
   pickOutcomes: CandidateContent['pickOutcomes'],
-  kept: Pick<CandidateContent, 'transfers' | 'draftSelections'>
+  kept: Pick<CandidateContent, 'transactions' | 'transfers' | 'draftSelections' | 'pickCustody'>
 ): Pick<CandidateContent, 'pickOutcomes'> {
-  const pickTransfers = new Set(
+  const pickTransfers = new Map(
     kept.transfers
       .filter(({ asset }) => asset.kind === 'pick_entitlement')
-      .map(({ transferId }) => transferId)
+      .map((transfer) => [transfer.transferId, transfer])
   );
   const selections = new Set(kept.draftSelections.map(({ selectionId }) => selectionId));
-  const retained = (pickOutcomes ?? []).filter(
-    (outcome) =>
-      pickTransfers.has(outcome.transferId) &&
-      (outcome.selectionId === null || selections.has(outcome.selectionId))
-  );
+  const tradedOn = createAflTradeTradedOnCheck(kept);
+  const retained = (pickOutcomes ?? []).filter((outcome) => {
+    const transfer = pickTransfers.get(outcome.transferId);
+    return (
+      transfer !== undefined &&
+      (outcome.selectionId === null || selections.has(outcome.selectionId)) &&
+      (outcome.statedDisposition === undefined || tradedOn(transfer))
+    );
+  });
   return retained.length === 0 ? {} : { pickOutcomes: retained };
 }
 

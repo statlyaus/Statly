@@ -294,12 +294,21 @@ export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatche
   const intervalMs = Number(process.env.METRICS_BATCH_INTERVAL_MS || 1000);
   const buffer: WebVitalRecord[] = [];
   let timer: NodeJS.Timeout | null = null;
-  let flushing = false;
+  let inFlight: Promise<void> | null = null;
 
-  async function doFlush() {
-    if (flushing) return;
+  // Overlapping callers share the write in flight rather than returning early, so flush() can wait
+  // for records a timer flush has already taken off the buffer.
+  function doFlush(): Promise<void> {
+    if (!inFlight) {
+      inFlight = drainBuffer().finally(() => {
+        inFlight = null;
+      });
+    }
+    return inFlight;
+  }
+
+  async function drainBuffer() {
     if (buffer.length === 0) return;
-    flushing = true;
     const toWrite = buffer.splice(0, buffer.length);
 
     const writeBatch = async (records: WebVitalRecord[]) => {
@@ -345,8 +354,6 @@ export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatche
           size: toWrite.length,
         });
       }
-    } finally {
-      flushing = false;
     }
   }
 
@@ -363,12 +370,20 @@ export function createWebVitalsBatcher(writer: WebVitalsWriter): WebVitalsBatche
       buffer.push(record);
       if (buffer.length >= batchSize) {
         await doFlush();
-      } else {
+      }
+      if (buffer.length > 0) {
         schedule();
       }
     },
     async flush() {
-      await doFlush();
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      // Keep draining until nothing is buffered or in flight, so records added during a write are kept.
+      while (inFlight || buffer.length > 0) {
+        await doFlush();
+      }
     },
   };
 }

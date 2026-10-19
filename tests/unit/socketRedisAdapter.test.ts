@@ -61,6 +61,22 @@ describe('installSocketRedisAdapter', () => {
     expect(subscribeClient.disconnect).toHaveBeenCalledOnce();
   });
 
+  it('uses the default attempt count when the attempt env var is empty', async () => {
+    vi.stubEnv('SOCKET_REDIS_ADAPTER_CONNECTION_ATTEMPTS', '');
+    vi.stubEnv('SOCKET_REDIS_ADAPTER_RETRY_DELAY_MS', '0');
+    const publishClient = client();
+    const subscribeClient = client();
+    subscribeClient.ping.mockRejectedValue(new Error('subscription failed'));
+    const redis = {
+      duplicate: vi.fn().mockReturnValueOnce(publishClient).mockReturnValueOnce(subscribeClient),
+    };
+
+    await expect(
+      installSocketRedisAdapter({ adapter: vi.fn() } as never, redis as never)
+    ).rejects.toThrow('subscription failed');
+    expect(subscribeClient.ping).toHaveBeenCalledTimes(3);
+  });
+
   it('recovers from a transient adapter connection failure', async () => {
     vi.stubEnv('SOCKET_REDIS_ADAPTER_RETRY_DELAY_MS', '0');
     const publishClient = client();

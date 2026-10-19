@@ -23,7 +23,11 @@ import {
 } from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
-import { loadWaiverOutcomes } from '@/server/waivers/waiverActivity';
+import {
+  encodeWaiverActivityCursor,
+  loadWaiverOutcomes,
+  parseWaiverActivityCursor,
+} from '@/server/waivers/waiverActivity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -72,18 +76,7 @@ function readBoundedInt(raw: string | null, fallback: number, max: number): numb
   return Math.max(0, Math.min(max, parsed));
 }
 
-function parsePlayerIds(raw: unknown): string[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map(String);
-  if (typeof raw !== 'string') return [];
 
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
 
 function parseActionDetails(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
@@ -117,39 +110,39 @@ async function loadCurrentRoster(leagueId: string, userId: string): Promise<Rost
   });
   if (!member) return null;
 
-  const [roster, rosterRows] = await Promise.all([
-    prisma.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      select: {
-        id: true,
-        playerIds: true,
-        benchOrder: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }),
-    prisma.leagueRosterPlayer.findMany({
-      where: { leagueId, memberId: member.id },
-      orderBy: { createdAt: 'asc' },
-      select: { playerId: true },
-    }),
-  ]);
+  const rosterRows = await prisma.leagueRosterPlayer.findMany({
+    where: { leagueId, memberId: member.id },
+    orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
+    select: { playerId: true, benchPosition: true, createdAt: true, updatedAt: true },
+  });
 
-  const playerIds =
-    rosterRows.length > 0
-      ? rosterRows.map((row) => row.playerId)
-      : parsePlayerIds(roster?.playerIds);
+  const playerIds = rosterRows.map((row) => row.playerId);
+
+  // Derive bench order from benchPosition (players with non-null benchPosition, sorted)
+  const benchRows = rosterRows
+    .filter((row) => row.benchPosition !== null)
+    .sort((a, b) => (a.benchPosition ?? 0) - (b.benchPosition ?? 0));
+  const bench = benchRows.map((row) => row.playerId);
+
+  const latestUpdate = rosterRows.reduce(
+    (latest, row) => (row.updatedAt > latest ? row.updatedAt : latest),
+    new Date(0)
+  );
+  const earliestCreate = rosterRows.reduce(
+    (earliest, row) => (row.createdAt < earliest ? row.createdAt : earliest),
+    new Date()
+  );
 
   return {
     id: member.id,
     userId,
     teamName: member.teamName,
     playerIds,
-    bench: parsePlayerIds(roster?.benchOrder),
+    bench,
     emergencies: [],
     leagueId,
-    updatedAt: (roster?.updatedAt ?? new Date()).toISOString(),
-    createdAt: (roster?.createdAt ?? new Date()).toISOString(),
+    updatedAt: (rosterRows.length > 0 ? latestUpdate : new Date()).toISOString(),
+    createdAt: (rosterRows.length > 0 ? earliestCreate : new Date()).toISOString(),
   };
 }
 
@@ -282,6 +275,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     );
     const playersCursor = url.searchParams.get('playersCursor') || undefined;
     const activityCursor = url.searchParams.get('activityCursor') || undefined;
+    const activityBefore = activityCursor ? parseWaiverActivityCursor(activityCursor) : null;
     const [selectedCategories, statsLookup] = await Promise.all([
       loadSelectedCategories(leagueId),
       loadStatsLookup(leagueId),
@@ -341,7 +335,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // Activity is the league's published waiver outcomes, from Prisma.
         loadWaiverOutcomes(leagueId, {
           limit: activityLimit,
-          ...(activityCursor ? { before: new Date(activityCursor) } : {}),
+          ...(activityBefore ?? {}),
         }),
         waiverStore.loadWaiverSettings(leagueId),
         loadCurrentRoster(leagueId, userId),
@@ -428,7 +422,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         availablePlayers: availablePlayersResult.items,
         playersIndex,
         nextPlayersCursor: availablePlayersResult.nextCursor,
-        activityNextCursor: lastActivity?.timestamp ?? null,
+        activityNextCursor: lastActivity ? encodeWaiverActivityCursor(lastActivity) : null,
         activityHasMore: activity.length === activityLimit,
       },
       { status: 200, headers: NO_STORE }

@@ -72,20 +72,30 @@ export async function GET(
       selectedCategories,
       league.settings?.categoryDirectionsJson
     );
-    const [roster, ownership, sourcePlayers] = await Promise.all([
-      prisma.leagueRoster.findUnique({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      }),
+    const [rosterPlayers, sourcePlayers] = await Promise.all([
       prisma.leagueRosterPlayer.findMany({
         where: { leagueId, memberId: member.id },
         select: {
           player: { select: { id: true, name: true, club: true, position: true } },
+          benchPosition: true,
+          updatedAt: true,
         },
         orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
       }),
       getPlayers(),
     ]);
-    const orderedPlayers = ownership.map(({ player }) => player);
+    const orderedPlayers = rosterPlayers.map(({ player }) => player);
+
+    // Derive bench order from benchPosition
+    const benchOrder = rosterPlayers
+      .filter((row) => row.benchPosition !== null)
+      .sort((a, b) => (a.benchPosition ?? 0) - (b.benchPosition ?? 0))
+      .map((row) => row.player.id);
+
+    const latestUpdate = rosterPlayers.reduce<Date | null>(
+      (latest, row) => (!latest || row.updatedAt > latest ? row.updatedAt : latest),
+      null
+    );
     const statTargets: LeaguePlayerStatTarget[] = orderedPlayers.map((player) => ({
       id: player.id,
       name: player.name,
@@ -111,14 +121,14 @@ export async function GET(
 
     const response = {
       roster: {
-        id: roster?.id || null,
+        id: rosterPlayers[0]?.player.id ?? null,
         leagueId,
         memberId: member.id,
         teamName: member.teamName,
         playerIds: orderedPlayers.map((player) => player.id),
         players: playersWithStats,
-        benchOrder: roster?.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],
-        updatedAt: roster?.updatedAt ?? null,
+        benchOrder,
+        updatedAt: latestUpdate,
       },
       leaguePlayerStats,
       leagueSettings: {

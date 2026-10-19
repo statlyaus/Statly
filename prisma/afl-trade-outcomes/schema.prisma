@@ -3214,6 +3214,8 @@ model OutcomePublicFactualArchiveRecord {
 
   @@id([archiveId, ordinal])
   @@unique([archiveId, recordKind, recordId], map: "outcome_public_factual_archive_record_identity_key")
+  // Expression index on (archiveId, recordKind, record_json->>supersedesVersionId) is created in migration
+  // 0289_public_archive_record_supersedes_index; Prisma cannot declare it, so it is not listed here.
   @@index([archiveId, recordKind, seasonYear, ordinal], map: "outcome_public_factual_archive_record_kind_season_idx")
   @@index([archiveId, eventVersionId, ordinal], map: "outcome_public_factual_archive_record_event_idx")
   @@index([archiveId, pickId, ordinal], map: "outcome_public_factual_archive_record_pick_idx")

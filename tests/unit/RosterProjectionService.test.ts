@@ -29,9 +29,6 @@ describe('RosterProjectionService', () => {
           },
         ]),
       },
-      leagueRoster: {
-        upsert: vi.fn().mockResolvedValue({ id: 'roster-1', playerIds: '[]' }),
-      },
       leagueRosterPlayer: {
         upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
       },
@@ -50,15 +47,6 @@ describe('RosterProjectionService', () => {
       where: { draftId: 'draft-1' },
       orderBy: { overall: 'asc' },
       select: { id: true, draftId: true, playerId: true, memberId: true, overall: true },
-    });
-    expect(db.leagueRoster.upsert).toHaveBeenCalledWith({
-      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
-      update: {},
-      create: {
-        leagueId: 'league-1',
-        memberId: 'member-1',
-        playerIds: '[]',
-      },
     });
     expect(db.leagueRosterPlayer.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -106,9 +94,6 @@ describe('RosterProjectionService', () => {
             overall: 1,
           },
         ]),
-      },
-      leagueRoster: {
-        upsert: vi.fn().mockResolvedValue({ id: 'roster-1', playerIds: '[]' }),
       },
       leagueRosterPlayer: {
         upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
@@ -169,9 +154,6 @@ describe('RosterProjectionService', () => {
           },
         ]),
       },
-      leagueRoster: {
-        upsert: vi.fn().mockResolvedValue({ id: 'roster-1', playerIds: '[]' }),
-      },
       leagueRosterPlayer: {
         upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
       },
@@ -216,12 +198,24 @@ describe('RosterProjectionService', () => {
     expect(source).toContain('this.rosterProjectionService.projectDraft');
   });
 
-  it('updates preferences while projecting canonical ownership into legacy JSON', async () => {
+  it('updates bench position on LeagueRosterPlayer when saving preferences', async () => {
     const tx = {
       leagueRosterPlayer: {
-        findMany: vi.fn().mockResolvedValue([{ playerId: 'player-2' }, { playerId: 'player-1' }]),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { playerId: 'player-2', player: { id: 'player-2' }, updatedAt: new Date() },
+            { playerId: 'player-1', player: { id: 'player-1' }, updatedAt: new Date() },
+          ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+        update: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'ownership-1',
+          leagueId: 'league-1',
+          memberId: 'member-1',
+          updatedAt: new Date(),
+        }),
       },
-      leagueRoster: { upsert: vi.fn().mockResolvedValue({ id: 'roster-1' }) },
     };
     const db = {
       $transaction: vi.fn((work) => work(tx)),
@@ -235,25 +229,28 @@ describe('RosterProjectionService', () => {
       benchOrder: ['player-2'],
     });
 
-    expect(tx.leagueRoster.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          playerIds: JSON.stringify(['player-2', 'player-1']),
-          benchOrder: JSON.stringify(['player-2']),
-        }),
-        update: expect.objectContaining({
-          playerIds: JSON.stringify(['player-2', 'player-1']),
-        }),
-      })
-    );
+    expect(tx.leagueRosterPlayer.updateMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1' },
+      data: { benchPosition: null },
+    });
+    expect(tx.leagueRosterPlayer.update).toHaveBeenCalledWith({
+      where: {
+        leagueId_memberId_playerId: {
+          leagueId: 'league-1',
+          memberId: 'member-1',
+          playerId: 'player-2',
+        },
+      },
+      data: { benchPosition: 0 },
+    });
   });
 
   it('rejects a stale client roster without changing ownership or preferences', async () => {
     const tx = {
       leagueRosterPlayer: {
         findMany: vi.fn().mockResolvedValue([{ playerId: 'player-1' }]),
+        updateMany: vi.fn(),
       },
-      leagueRoster: { upsert: vi.fn() },
     };
     const db = {
       $transaction: vi.fn((work) => work(tx)),
@@ -270,6 +267,6 @@ describe('RosterProjectionService', () => {
       code: 'ROSTER_CHANGED',
       status: 409,
     } satisfies Partial<RosterPreferenceError>);
-    expect(tx.leagueRoster.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   firestoreCollection: vi.fn(),
   getAuthenticatedUserId: vi.fn(),
   leagueMemberFindMany: vi.fn(),
-  leagueRosterFindMany: vi.fn(),
   leagueRosterPlayerFindMany: vi.fn(),
   listActiveLeagueMembers: vi.fn(),
   listActiveUserLeagueMemberships: vi.fn(),
@@ -29,7 +28,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     leagueMember: { findMany: mocks.leagueMemberFindMany },
-    leagueRoster: { findMany: mocks.leagueRosterFindMany },
     leagueRosterPlayer: { findMany: mocks.leagueRosterPlayerFindMany },
     pick: { findMany: mocks.pickFindMany },
     player: { findMany: mocks.playerFindMany },
@@ -56,7 +54,6 @@ describe('GET /api/players/[id]/availability', () => {
     ]);
     mocks.playerFindMany.mockResolvedValue([{ id: 'player-1' }]);
     mocks.leagueRosterPlayerFindMany.mockResolvedValue([]);
-    mocks.leagueRosterFindMany.mockResolvedValue([]);
     mocks.pickFindMany.mockResolvedValue([]);
     mocks.teamActionFindMany.mockResolvedValue([]);
     mocks.listActiveUserLeagueMemberships.mockRejectedValue(

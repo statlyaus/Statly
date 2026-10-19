@@ -6,8 +6,8 @@ import {
 import {
   DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
   DRAFTGURU_NATIONAL_YEAR_FIELDS as PRODUCTION_DRAFTGURU_NATIONAL_YEAR_FIELDS,
-  DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
   draftguruNationalYearDecisionKey,
+  draftguruNationalYearParserVersion,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import {
   FOOTYINFO_DRAFT_BOARD_CAPABILITY,
@@ -188,7 +188,7 @@ export function draftguruNationalYearAuthority(
     provider: 'draftguru',
     dataset: `Draftguru ${input.season} national draft selections`,
     capabilityId: DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
-    clientVersion: input.clientVersion ?? DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+    clientVersion: input.clientVersion ?? draftguruNationalYearParserVersion(input.season),
     fields: DRAFTGURU_NATIONAL_YEAR_FIELDS,
   });
 }

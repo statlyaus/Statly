@@ -196,6 +196,52 @@ describe('external identity review work builder', () => {
     ).toEqual(['Port Adelaide']);
   });
 
+  it('creates identity work for the matching club, bidding club and nominee of a matched bid', () => {
+    const club = (nativeId: string, recordedName: string) => ({ nativeId, recordedName });
+    const footyinfo = batch('footyinfo', 'e', [
+      {
+        kind: 'draft_board_bid_match',
+        draftYear: 2021,
+        draftType: 'national',
+        nativePickId: '5733',
+        selectionNumber: 2,
+        roundNumber: 1,
+        club: club('WBD', 'Western Bulldogs'),
+        player: { nativeId: 'sam-darcy', recordedName: 'Sam Darcy' },
+        bid: { club: club('GWS', 'GWS'), basis: 'father_son' },
+        points: 2517,
+        pointsUsed: 347,
+        consumedPicks: [
+          {
+            nativePickId: '5727',
+            label: 'R3 (HAW) - Pick 45',
+            originalNumber: 45,
+            originalClubCode: 'HAW',
+            holdingClubCode: 'WBD',
+            pointsUsed: 347,
+          },
+        ],
+        leftoverPicks: [],
+      },
+    ]);
+
+    const reviewPackage = buildAflTradeExternalIdentityReviewPackage({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      sourceAuthority: sourceAuthority([footyinfo]),
+      sourceBatches: [footyinfo],
+    });
+
+    // The bidding club is a subject though it holds no pick; Hawthorn, named by code on a spent pick
+    // only, is not an identity the board states.
+    expect(
+      reviewPackage.content.items
+        .map(({ workItem }) => workItem.content)
+        .map(({ subject, observedNames }) => `${subject.content.entityKind}:${observedNames[0]}`)
+        .sort()
+    ).toEqual(['club:GWS', 'club:Western Bulldogs', 'player:Sam Darcy']);
+  });
+
   it('enumerates the exact provider identities without merging distinct source scopes', () => {
     const reviewPackage = buildAflTradeExternalIdentityReviewPackage({
       environment: 'test_fixture',

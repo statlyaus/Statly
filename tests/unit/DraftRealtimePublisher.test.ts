@@ -12,6 +12,7 @@ const {
   draftRepository: {
     transaction: vi.fn(),
     releaseStaleDraftEventClaims: vi.fn(),
+    listPendingDraftEvents: vi.fn(),
     listPendingDraftEventsBatch: vi.fn(),
     claimDraftEvents: vi.fn(),
     listClaimedDraftEvents: vi.fn(),
@@ -156,6 +157,35 @@ describe('DraftRealtimePublisher', () => {
     draftClockCoordinator.ensureReady.mockResolvedValue({ receipt: null, repaired: false });
     revalidateTags.mockResolvedValue(undefined);
     publishLeagueSystemMessage.mockResolvedValue({});
+  });
+
+  it('publishes nothing when another flush already holds the draft events', async () => {
+    draftRepository.listPendingDraftEvents.mockResolvedValue([]);
+    draftRepository.listClaimedDraftEvents.mockResolvedValue([
+      {
+        id: 'event-1',
+        draftId: 'draft-1',
+        leagueId: 'league-1',
+        event: 'draft:paused',
+        payload: null,
+        publishState: false,
+        attempts: 0,
+        lastError: null,
+        lockedAt: new Date(),
+        lockedBy: 'locker-1',
+        publishedAt: null,
+        createdAt: new Date('2026-06-05T00:00:00.000Z'),
+      },
+    ] as any);
+    const publisher = new DraftRealtimePublisher();
+
+    const state = await publisher.flushPendingDraftEvents('draft-1');
+
+    expect(state).toBeNull();
+    expect(draftRepository.claimDraftEvents).not.toHaveBeenCalled();
+    expect(draftRepository.listClaimedDraftEvents).not.toHaveBeenCalled();
+    expect(draftRealtimeDispatcher.publishDraftEvent).not.toHaveBeenCalled();
+    expect(draftRepository.markDraftEventsPublished).not.toHaveBeenCalled();
   });
 
   it('drains the events claimed by batch flush instead of re-querying unlocked draft events', async () => {
