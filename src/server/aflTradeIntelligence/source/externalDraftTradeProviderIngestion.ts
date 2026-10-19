@@ -38,7 +38,10 @@ import type { AflTradeResolvedGateAuthorization } from '../governance/postgresGa
 import type { AflTradeGate0ARequest } from './gate0aEvaluation';
 import { evaluateAflTradeGate0A } from './gate0aEvaluation';
 import { createAflTradeGate0AReceipt } from './gate0aReceipt';
-import { isReviewedOfficialAflDraftSessionUrl } from './officialAflDraftSessionAdapter';
+import {
+  isReviewedOfficialAflDraftSessionUrl,
+  officialAflDraftSessionParserVersion,
+} from './officialAflDraftSessionAdapter';
 import { reviewedOfficialAflDraft2016EffectiveYear } from './officialAflDraft2016SessionFacts';
 import type {
   AflTradeExternalCaptureAdmission,
@@ -192,7 +195,7 @@ export function validateAflTradeExternalCaptureScope(
     return;
   }
   if (request.capabilityId === 'footyinfo-national-draft-board') {
-    // Parser v1 reads only the exact reviewed national draft boards (issues 853 and 789). A board
+    // Parser v3 reads only the exact reviewed national draft boards (issues 853 and 789). A board
     // states no as-of date, so its claims are effective when captured.
     if (
       request.provider !== 'footyinfo' ||
@@ -328,7 +331,8 @@ export function validateAflTradeExternalCaptureScope(
           ? 'mini_draft'
           : 'national') ||
       request.discoveryFromSeasonYear != null ||
-      request.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION ||
+      // Each season is pinned to its own reviewed parser: v20 for 2025, v19 otherwise.
+      request.parserVersion !== officialAflDraftSessionParserVersion(request.anchorSeasonYear) ||
       !isReviewedOfficialAflDraftSessionUrl(request.sourceUrl, request.anchorSeasonYear) ||
       new Date(request.effectiveAt).getUTCFullYear() !==
         (reviewedMini2012EffectiveYear ??
@@ -347,12 +351,16 @@ export function validateAflTradeExternalCaptureScope(
 }
 
 const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
+  // v19 stands in for an earlier session parser. 2025 is pinned to v20 by its season, and a v20
+  // capture is never earlier than v19, so it is checked as recorded.
   'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   'official-afl-trade-period-dates': OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
   'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,
   'official-afl-player-departure': OFFICIAL_AFL_PLAYER_DEPARTURE_PARSER_VERSION,
   'official-afl-compensation-lifecycle': OFFICIAL_AFL_COMPENSATION_PARSER_VERSION,
   'official-afl-issuing-award': OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
+  // A retained v1 (issue 853) or v2 board capture stays valid as recorded under v3 (issue 789).
+  'footyinfo-national-draft-board': FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
 };
 
 function isEarlierParserVersion(recorded: string, current: string): boolean {

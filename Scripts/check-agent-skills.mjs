@@ -245,8 +245,10 @@ async function checkStatlyGuidance() {
       `Statly engineering workflow must reference ${requiredReference}`
     );
   }
+  const workflowProse = workflow.replace(/\s+/g, ' ');
   assert(
-    workflow.includes('Never commit, push, open or merge a pull request'),
+    workflowProse.includes('Never push `main` directly or force-push') &&
+      workflowProse.includes('Never create issues, provision infrastructure'),
     'Statly engineering workflow must preserve delivery authority boundaries'
   );
 

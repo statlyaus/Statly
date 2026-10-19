@@ -1,7 +1,7 @@
 import { sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
 import type { AflTradeExternalProviderIngestionCommand } from '../source/externalDraftTradeProviderIngestion';
 import {
-  OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+  officialAflDraftSessionParserVersion,
   reviewedOfficialAflDraftSessionPages,
 } from '../source/officialAflDraftSessionAdapter';
 import {
@@ -13,12 +13,13 @@ import {
 export const OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY = 'official-afl-completed-draft-session';
 
 /**
- * The owner records one narrow decision per season and parser version for this capability, for
- * example `official-afl-completed-draft-session-issue579-private-2020-session-v19`. A new parser
- * version therefore needs its own recorded decision; the runner never falls back to an earlier one.
+ * The owner records one narrow decision per season and that season's parser version for this
+ * capability, for example `official-afl-completed-draft-session-issue579-private-2020-session-v19`
+ * or `…-2025-session-v20`. A new parser version therefore needs its own recorded decision; the
+ * runner never falls back to an earlier one or to another season's.
  */
 export function officialAflDraftSessionDecisionKey(season: number): string {
-  const parser = /\/(v[1-9]\d*)$/.exec(OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION)![1]!;
+  const parser = /\/(v[1-9]\d*)$/.exec(officialAflDraftSessionParserVersion(season))![1]!;
   return `${OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY}-issue579-private-${season}-session-${parser}`;
 }
 
@@ -26,7 +27,10 @@ export interface LocalOfficialAflDraftSessionTarget {
   capabilityId: typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY;
   season: number;
   sourceUrl: string;
-  /** The completed date the reviewed page reports; the claims are effective from that day. */
+  /**
+   * The completed date the reviewed page reports, from which its claims are effective; for a 2011 to
+   * 2016 page, the page's own reviewed date (see `reviewedOfficialAflDraftSessionPages`).
+   */
   effectiveAt: string;
 }
 
@@ -74,11 +78,13 @@ function enumerateSeasonTargets(seasons: readonly number[]): LocalOfficialAflDra
           `No reviewed Official AFL completed-session page is enumerable for ${season}.`
         );
       }
-      return pages.map(({ url, completedOn }) => ({
+      return pages.map(({ url, completedOn, effectiveAt }) => ({
         capabilityId: OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY,
         season,
         sourceUrl: url,
-        effectiveAt: `${completedOn}T00:00:00.000Z`,
+        effectiveAt: effectiveAt
+          ? new Date(effectiveAt).toISOString()
+          : `${completedOn}T00:00:00.000Z`,
       }));
     });
 }
@@ -119,7 +125,7 @@ export function createOfficialAflDraftSessionCaptureCommand(
       sourceUrl: input.target.sourceUrl,
       capturedAt: input.capturedAt,
       effectiveAt: input.target.effectiveAt,
-      parserVersion: OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+      parserVersion: officialAflDraftSessionParserVersion(input.target.season),
       fieldManifestSha256: sha256AflTradeCanonicalJson(rights.fields),
       maximumBytes: input.maximumBytes,
     },

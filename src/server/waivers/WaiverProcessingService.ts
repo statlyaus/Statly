@@ -135,7 +135,6 @@ type PrismaLike = Pick<
   | '$transaction'
   | 'league'
   | 'leagueMember'
-  | 'leagueRoster'
   | 'leagueRosterPlayer'
   | 'player'
   | 'teamAction'
@@ -161,24 +160,8 @@ type CanonicalRosterPlan =
       memberId: string;
       playerId: string;
       dropPlayerId?: string;
-      nextPlayerIds: string;
     }
   | { status: 'FAILED'; reason: string };
-
-function parsePlayerIds(raw?: string | null): string[] {
-  if (!raw) return [];
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
-function stringifyPlayerIds(playerIds: string[]): string {
-  return JSON.stringify(Array.from(new Set(playerIds)));
-}
 
 function normalizeDate(value: unknown): Date {
   if (value instanceof Date) return value;
@@ -452,11 +435,6 @@ export class WaiverProcessingService {
       });
     }
 
-    await tx.leagueRoster.upsert({
-      where: { leagueId_memberId: { leagueId, memberId: plan.memberId } },
-      update: { playerIds: plan.nextPlayerIds },
-      create: { leagueId, memberId: plan.memberId, playerIds: plan.nextPlayerIds },
-    });
     await tx.leagueRosterPlayer.upsert({
       where: { leagueId_playerId: { leagueId, playerId: plan.playerId } },
       update: {
@@ -543,10 +521,28 @@ export class WaiverProcessingService {
     const canonicalDropPlayerId = claim.dropPlayerId
       ? ((await resolveCanonicalPlayerId(claim.dropPlayerId, undefined, tx)) ?? claim.dropPlayerId)
       : undefined;
+    // Roster rows can still hold an alias id, so the drop is matched by every alias of that player.
+    const dropAliasIds = canonicalDropPlayerId
+      ? [
+          ...new Set([
+            ...(claim.dropPlayerId ? [claim.dropPlayerId] : []),
+            canonicalDropPlayerId,
+            ...(groupWaiverPlayersByIdentity(activePlayers)
+              .find((group) =>
+                group.aliases.some(
+                  (player) =>
+                    player.id === claim.dropPlayerId || player.id === canonicalDropPlayerId
+                )
+              )
+              ?.aliases.map((player) => player.id) ?? []),
+          ]),
+        ]
+      : [];
+    let storedDropPlayerId: string | undefined;
 
     if (canonicalDropPlayerId) {
       const dropOwnership = await tx.leagueRosterPlayer.findFirst({
-        where: { leagueId, memberId, playerId: canonicalDropPlayerId },
+        where: { leagueId, memberId, playerId: { in: dropAliasIds } },
         select: { playerId: true },
       });
 
@@ -554,6 +550,8 @@ export class WaiverProcessingService {
         return { status: 'FAILED', reason: 'Drop player not on roster' };
       }
 
+      // The stored id is what the drop deletes, so it must be the row that actually exists.
+      storedDropPlayerId = dropOwnership.playerId;
       nextRosterCount -= 1;
     }
 
@@ -561,21 +559,11 @@ export class WaiverProcessingService {
       return { status: 'FAILED', reason: 'Roster limit reached' };
     }
 
-    const roster = await tx.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId } },
-      select: { playerIds: true },
-    });
-    const playerIds = parsePlayerIds(roster?.playerIds)
-      .filter((playerId) => playerId !== claim.dropPlayerId && playerId !== canonicalDropPlayerId)
-      .filter((playerId) => !playerAliasIds.includes(playerId));
-    playerIds.push(canonicalPlayerId);
-
     return {
       status: 'READY',
       memberId,
       playerId: canonicalPlayerId,
-      ...(canonicalDropPlayerId ? { dropPlayerId: canonicalDropPlayerId } : {}),
-      nextPlayerIds: stringifyPlayerIds(playerIds),
+      ...(storedDropPlayerId ? { dropPlayerId: storedDropPlayerId } : {}),
     };
   }
 }
@@ -892,14 +880,22 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   async cancelPendingClaim(input: CancelWaiverClaimInput): Promise<void> {
     const cancelledAt = new Date();
     await this.db.$transaction(async (tx) => {
+      // The route read the claim as pending, but the run may have settled it since. Guard the write
+      // itself, as settlement does, so a settled claim is neither re-marked nor its bid released again.
+      const { count } = await tx.teamAction.updateMany({
+        where: { id: input.claimId, leagueId: input.leagueId, status: 'PENDING' },
+        data: { status: 'CANCELLED', processedAt: cancelledAt },
+      });
+      if (count !== 1) {
+        throw new WaiverClaimStoreError(
+          'CLAIM_NOT_PENDING',
+          'Only pending claims can be cancelled'
+        );
+      }
+
       if (typeof input.claim.bidAmount === 'number' && input.claim.bidAmount > 0) {
         await this.releasePendingBid(tx, input.claim);
       }
-
-      await tx.teamAction.update({
-        where: { id: input.claimId },
-        data: { status: 'CANCELLED', processedAt: cancelledAt },
-      });
     });
 
     await this.mirrorPriorityProjection(input.leagueId, input.claim.teamId);

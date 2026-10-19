@@ -6,8 +6,8 @@ import {
 import {
   DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
   DRAFTGURU_NATIONAL_YEAR_FIELDS as PRODUCTION_DRAFTGURU_NATIONAL_YEAR_FIELDS,
-  DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
   draftguruNationalYearDecisionKey,
+  draftguruNationalYearParserVersion,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import {
   FOOTYINFO_DRAFT_BOARD_CAPABILITY,
@@ -33,7 +33,7 @@ import {
   officialAflTradePeriodDecisionKey,
 } from '@/server/aflTradeIntelligence/development/localOfficialAflTradePeriodCapture';
 import { OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflTradePeriodAdapter';
-import { OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
+import { officialAflDraftSessionParserVersion } from '@/server/aflTradeIntelligence/source/officialAflDraftSessionAdapter';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
 export const OFFICIAL_AFL_DRAFT_SESSION_FIELDS = [
@@ -143,7 +143,7 @@ export function officialAflDraftSessionAuthority(
     provider: 'official_afl',
     dataset: `Official AFL ${input.season} completed national draft sessions`,
     capabilityId: 'official-afl-completed-draft-session',
-    clientVersion: input.clientVersion ?? OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
+    clientVersion: input.clientVersion ?? officialAflDraftSessionParserVersion(input.season),
     fields: OFFICIAL_AFL_DRAFT_SESSION_FIELDS,
   });
 }
@@ -188,7 +188,7 @@ export function draftguruNationalYearAuthority(
     provider: 'draftguru',
     dataset: `Draftguru ${input.season} national draft selections`,
     capabilityId: DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
-    clientVersion: input.clientVersion ?? DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION,
+    clientVersion: input.clientVersion ?? draftguruNationalYearParserVersion(input.season),
     fields: DRAFTGURU_NATIONAL_YEAR_FIELDS,
   });
 }

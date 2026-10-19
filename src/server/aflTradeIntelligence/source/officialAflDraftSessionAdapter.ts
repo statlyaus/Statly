@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_ARTICLE_DATE } from './officialAflArticleDate';
 import {
   reviewedOfficialAflDraft2010Source,
   OFFICIAL_AFL_2010_ADDITIONS_URL,
@@ -15,22 +16,27 @@ import {
 import {
   reviewedOfficialAflDraft2011EffectiveYear,
   parseOfficialAflDraft2011SessionFacts,
+  reviewedOfficialAflDraft2011SessionPages,
 } from './officialAflDraft2011SessionFacts';
 import {
   reviewedOfficialAflDraft2012EffectiveYear,
   parseOfficialAflDraft2012SessionFacts,
+  reviewedOfficialAflDraft2012SessionPages,
 } from './officialAflDraft2012SessionFacts';
 import {
   reviewedOfficialAflDraft2014EffectiveYear,
   parseOfficialAflDraft2014SessionFacts,
+  reviewedOfficialAflDraft2014SessionPages,
 } from './officialAflDraft2014SessionFacts';
 import {
   reviewedOfficialAflDraft2013EffectiveYear,
   parseOfficialAflDraft2013SessionFacts,
+  reviewedOfficialAflDraft2013SessionPages,
 } from './officialAflDraft2013SessionFacts';
 import {
   isReviewedOfficialAflDraft2015SessionFactUrl,
   parseOfficialAflDraft2015SessionFacts,
+  reviewedOfficialAflDraft2015SessionPages,
 } from './officialAflDraft2015SessionFacts';
 import { load } from 'cheerio';
 import {
@@ -42,6 +48,7 @@ import type { AflTradeExternalPageIssue } from './externalDraftTradeIngestion';
 import {
   isReviewedOfficialAflDraft2016SessionFactUrl,
   parseOfficialAflDraft2016SessionFacts,
+  reviewedOfficialAflDraft2016SessionPages,
 } from './officialAflDraft2016SessionFacts';
 import {
   isReviewedOfficialAflDraft2017SessionFactUrl,
@@ -56,13 +63,28 @@ import {
   OFFICIAL_AFL_2019_CLUB_REVIEW_URL,
   parseOfficialAflDraft2019Sessions,
 } from './officialAflDraft2019Sessions';
+import {
+  isReviewedOfficialAflDraft2025SessionUrl,
+  OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION,
+  parseOfficialAflDraft2025Sessions,
+  reviewedOfficialAflDraft2025SessionPages,
+} from './officialAflDraft2025Sessions';
 
 export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v19';
 
-// afl.com.au renamed the non-AMP date wrapper from `article__date` to `article__byline-date`
-// (seen 2026-10-08); the `datetime` values are unchanged. v19 accepts either wrapper, and the
-// parser still requires exactly one date element, so a page with both or neither is refused.
-const ARTICLE_DATE = '.article__date > time, .article__byline-date > time';
+/**
+ * The completed-session parser reviewed for a season: v20 for the 2025 national draft, whose night
+ * reports are read from their boundary sentences (`officialAflDraft2025Sessions.ts`), and v19 for
+ * every other season. A capture under the other version is refused.
+ */
+export function officialAflDraftSessionParserVersion(seasonYear: number): string {
+  return seasonYear === 2025
+    ? OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION
+    : OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION;
+}
+
+// afl.com.au renamed the non-AMP date wrapper (`OFFICIAL_AFL_ARTICLE_DATE`); v19 accepts either.
+const ARTICLE_DATE = OFFICIAL_AFL_ARTICLE_DATE;
 
 // Exact reviewed completed reports: contextual date, event-day narrative and full
 // selection coverage must agree. Publication time alone is never an event date.
@@ -220,18 +242,25 @@ const reviewedReports = [
 
 const reviewedSessionUrlChecks = new Map<number, (url: string) => boolean>([
   [2010, (url) => Boolean(reviewedOfficialAflDraft2010Source(url))],
-  [2011, (url) =>
-    reviewedOfficialAflMiniDraft2011EffectiveYear(url) !== null ||
-    reviewedOfficialAflDraft2011EffectiveYear(url) !== null],
-  [2012, (url) =>
-    reviewedOfficialAflMiniDraft2012EffectiveYear(url) !== null ||
-    reviewedOfficialAflDraft2012EffectiveYear(url) !== null],
+  [
+    2011,
+    (url) =>
+      reviewedOfficialAflMiniDraft2011EffectiveYear(url) !== null ||
+      reviewedOfficialAflDraft2011EffectiveYear(url) !== null,
+  ],
+  [
+    2012,
+    (url) =>
+      reviewedOfficialAflMiniDraft2012EffectiveYear(url) !== null ||
+      reviewedOfficialAflDraft2012EffectiveYear(url) !== null,
+  ],
   [2013, (url) => reviewedOfficialAflDraft2013EffectiveYear(url) !== null],
   [2014, (url) => reviewedOfficialAflDraft2014EffectiveYear(url) !== null],
   [2015, isReviewedOfficialAflDraft2015SessionFactUrl],
   [2016, isReviewedOfficialAflDraft2016SessionFactUrl],
   [2017, isReviewedOfficialAflDraft2017SessionFactUrl],
   [2018, isReviewedOfficialAflDraft2018SessionFactUrl],
+  [2025, isReviewedOfficialAflDraft2025SessionUrl],
 ]);
 
 export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: number): boolean {
@@ -240,14 +269,38 @@ export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: nu
   return reviewedReports.some((report) => report.year === seasonYear && report.url === url);
 }
 
+// The 2011 to 2016 national drafts were each held on one night (issue 789).
+const legacySeasonPages = new Map<
+  number,
+  { completedOn: string; pages: () => readonly { url: string; effectiveAt: string }[] }
+>([
+  [2011, { completedOn: '2011-11-24', pages: reviewedOfficialAflDraft2011SessionPages }],
+  [2012, { completedOn: '2012-11-22', pages: reviewedOfficialAflDraft2012SessionPages }],
+  [2013, { completedOn: '2013-11-21', pages: reviewedOfficialAflDraft2013SessionPages }],
+  [2014, { completedOn: '2014-11-27', pages: reviewedOfficialAflDraft2014SessionPages }],
+  [2015, { completedOn: '2015-11-24', pages: reviewedOfficialAflDraft2015SessionPages }],
+  [2016, { completedOn: '2016-11-25', pages: reviewedOfficialAflDraft2016SessionPages }],
+]);
+
 /**
  * The exact reviewed completed-session pages for one season that are enumerable here, in session
- * order, with the date of the last session each page reports. Seasons reviewed only through
- * dedicated per-season source scopes (2010-2018) return no pages.
+ * order, with the date of the last session each page reports. The 2011 to 2016 national-draft pages
+ * also carry `effectiveAt`, each page's own reviewed date: their facts combine across pages (a
+ * membership list, a dated wrap, a retrospective total), and ingestion pins each page's effective
+ * year to its reviewed publication year. Seasons reviewed only through dedicated per-season source
+ * scopes (2010, 2017 and 2018, and the 2011 and 2012 mini-drafts) return no pages.
  */
 export function reviewedOfficialAflDraftSessionPages(
   seasonYear: number
-): readonly { url: string; completedOn: string }[] {
+): readonly { url: string; completedOn: string; effectiveAt?: string }[] {
+  const legacy = legacySeasonPages.get(seasonYear);
+  if (legacy) {
+    return legacy
+      .pages()
+      .map((page) => ({ ...page, completedOn: legacy.completedOn }))
+      .sort((left, right) => Date.parse(left.effectiveAt) - Date.parse(right.effectiveAt));
+  }
+  if (seasonYear === 2025) return reviewedOfficialAflDraft2025SessionPages();
   if (seasonYear === 2019) {
     return [
       {
@@ -314,6 +367,8 @@ export function parseOfficialAflDraftSession(
     return parseOfficialAflDraft2018SessionFacts(html, input);
   if (input.capture.sourceUrl === OFFICIAL_AFL_2019_CLUB_REVIEW_URL)
     return parseOfficialAflDraft2019Sessions(html, input);
+  if (isReviewedOfficialAflDraft2025SessionUrl(input.capture.sourceUrl))
+    return parseOfficialAflDraft2025Sessions(html, input);
   const fail = (detail: string) => ({
     evidence: [],
     issues: [{ code: 'invalid_draft_session', sourceKey: input.capture.sourceUrl, detail }],

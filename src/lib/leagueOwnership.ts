@@ -1,24 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 
 export interface LeagueOwnershipMap {
   totalTeams: number;
   counts: Map<string, number>;
-}
-
-function parsePlayerIds(value: string | null | undefined): string[] {
-  if (!value) return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
-  } catch (error) {
-    logger.debug('Failed to parse league roster playerIds JSON', {
-      value,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
 }
 
 export async function getLeagueOwnershipMap(
@@ -38,18 +22,14 @@ export async function getLeagueOwnershipMap(
     return { totalTeams, counts };
   }
 
-  const rosters = await prisma.leagueRoster.findMany({
-    where: { leagueId },
-    select: { playerIds: true },
+  // Query LeagueRosterPlayer for ownership of the requested players
+  const ownedPlayers = await prisma.leagueRosterPlayer.findMany({
+    where: { leagueId, playerId: { in: requestedPlayerIds } },
+    select: { playerId: true },
   });
 
-  for (const roster of rosters) {
-    const rosterPlayerIds = new Set(parsePlayerIds(roster.playerIds));
-    for (const playerId of requestedPlayerIds) {
-      if (rosterPlayerIds.has(playerId)) {
-        counts.set(playerId, (counts.get(playerId) ?? 0) + 1);
-      }
-    }
+  for (const { playerId } of ownedPlayers) {
+    counts.set(playerId, (counts.get(playerId) ?? 0) + 1);
   }
 
   return { totalTeams, counts };

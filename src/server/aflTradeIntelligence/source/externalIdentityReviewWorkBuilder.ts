@@ -187,6 +187,23 @@ function addClaimIdentities(
     add('club', claim.selectedByClub, claim.draftYear);
     return;
   }
+  if (claim.kind === 'draft_board_pick') {
+    // Every identity the reconciler resolves from a board row: the holder and each route club (a
+    // club may appear only here, e.g. as the holder of a removed pick), and the selected player.
+    add('club', claim.club, claim.draftYear);
+    claim.route.forEach((club) => add('club', club, claim.draftYear));
+    if (claim.player !== undefined) add('player', claim.player, claim.draftYear);
+    return;
+  }
+  if (claim.kind === 'draft_board_bid_match') {
+    // The matching club, the bidding club (which may appear nowhere else on the board) and the
+    // nominee, as the reconciler resolves them (issue 789). Spent and leftover picks name clubs by
+    // code only; they resolve through these entities.
+    add('club', claim.club, claim.draftYear);
+    add('club', claim.bid.club, claim.draftYear);
+    add('player', claim.player, claim.draftYear);
+    return;
+  }
   if (claim.kind === 'pick_custody') {
     if (claim.originalClub !== null) add('club', claim.originalClub, claim.draftYear);
     add('club', claim.currentClub, claim.draftYear);

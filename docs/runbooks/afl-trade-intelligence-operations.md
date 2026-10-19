@@ -939,6 +939,38 @@ supersede production Gate authority, and production execution cannot reuse non-p
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
    lineage or a new candidate without the deferral, which supersedes it.
 
+   **Board-only clubs (#853, migrations 0285 and 0286).** The identity-review queue of a completion
+   with a Footyinfo board lists every club a board pick routes through or holds, and the board's
+   selected players, not only the clubs of its selections. A subject whose current approved decision
+   already covers the names it observes loads without a new review; a new subject is reviewed like any
+   other. Before 0286, preparing a completion whose board route stayed unresolved failed at
+   finalization with 22023 ("cannot get array length of a scalar"). It now keeps the record's
+   `board-pick:club:` issue instead.
+
+   **Re-keying number-only selection picks (#853, migration 0284).** A selection promoted before the
+   pick-identity rules carries its slot's number-only pick id. When the candidate names the pick
+   with usable custody, preparation records the slot under `pickLineageDeferral.rekeyedSelectionIds`
+   and the review proposes it in the same `promoted_session_resync` entries as a re-synced slot; the
+   promotion writes it under the candidate's pick with the same player and club. Preparation takes,
+   per session root, only the slots that keep the re-sync version from retiring any other slot, so
+   re-run the cycle until a preparation lists none:
+   1. `npm run outcomes:sources:prepare-external-reconciliation -- --completion <completion> --defer-pick-lineage <scope decision>`.
+      Read `pickLineageDeferral.rekeyedSelectionIds` (and `resyncedSelectionIds`) on the result.
+   2. Review with an empty draft-events file (`[]`) and the transaction dates the candidate writes,
+      then promote, exactly as above. The receipt shows `rekeyedSelectionCount`.
+   3. Re-register the draft-start spells (below), then prepare again. Stop when the candidate lists
+      no re-keyed selection.
+
+   A re-keyed slot's draftee asset is re-versioned (same player), so every reviewed spell that starts
+   at the old asset stops being current. Re-register each as a superseding arrival-only (v4) version
+   citing the re-sync version and its new asset, with the promotion's captures for that asset and
+   event as entry evidence and the predecessor's rule. The Phase E trade driver
+   (`reregister-arrivals-853.ts`) reads only trade events, so use a draft-start variant that reads
+   the promotion's `draft_player_asset` members and finds the current v4 spell citing the same
+   player's asset on the superseded session version. A slot on a small scoped version whose other
+   slot is not re-keyed never fits (re-keying it alone would retire that sibling) and stays on its
+   number-only id.
+
 8. Register each immutable reviewed URL schedule once with
    `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
    schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
@@ -1022,7 +1054,18 @@ Prerequisites:
      it emits exactly what v2 emits. The v1 and v2 per-season decisions and their captures stay
      valid, and reconciliation counts access from both v2 and v3 captures, so a season needs a v3
      decision only before its next capture. The runner never uses a combined key such as
-     `-2018-combined-v2`; and
+     `-2018-combined-v2`. The 2011 to 2016 pages alone are read by
+     `draftguru-national-year-page/v4` (issue 789), so their decisions are
+     `draftguru-national-year-page-issue579-private-<season>-parser-v4`; every other season stays
+     on v3. v4 reviews three forms those pages use and v3 refuses: the `Mini-Draft` pathway label
+     (the 2011 and 2012 Gold Coast and GWS mini-draft picks, counted and dropped like the other
+     non-national pathways), `Zone(<club>)` naming the selecting club (the Gold Coast, GWS and
+     Brisbane zone selections of 2011 to 2013, read as `academy`), and `Academy(<club>)` naming
+     another club with no annotation (an academy player another club took with an ordinary pick,
+     read as `open`; the 2015 and 2016 pages do not write ` - Not Matched`). A zone naming another
+     club, or any other `-` annotation, stays an `unsupported_row` issue, and v4 refuses any page
+     year outside 2011 to 2016. The 2011 to 2016 `-parser-v3` decisions of 2026-10-17 and their
+     captures stay recorded; only 2014's v3 capture was issue-free; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
@@ -1031,7 +1074,20 @@ Prerequisites:
      before any page is fetched. Parser v19 exists because afl.com.au renamed the non-AMP article
      date wrapper from `article__date` to `article__byline-date` (seen 2026-10-08; the `datetime`
      values are unchanged), which made v18 refuse every non-AMP report. v19 accepts either wrapper
-     and still requires exactly one. The v18 decisions and their captures stay valid; and
+     and still requires exactly one; the 2011 to 2016 national-draft parsers read either wrapper
+     too (issue 789, `source/officialAflArticleDate.ts`). The v18 decisions and their captures
+     stay valid. The 2025
+     national draft alone is read by parser v20, so its decision is
+     `official-afl-completed-draft-session-issue579-private-2025-session-v20` and its rights name
+     `official-afl-completed-draft-session/v20`; every other season stays on v19 (coordinator
+     decision 2026-10-16, issue 853). No Official AFL page enumerates the 2025 selections. v20 reads
+     the two dated night reports, each an exact Internet Archive snapshot (`id_`) named in
+     `source/officialAflDraft2025Sessions.ts`, from their boundary sentences only: night one
+     (19 November) is session 1, selections 1 to 25, and night two (20 November) is session 2,
+     selections 26 to 60, and the night-two total (35 that night, 60 in all) must agree. This is a
+     weaker standard than a numbered list: the claims prove the sessions, not the draft's
+     membership, which stays proven by the Footyinfo board and the Draftguru year page (grade rule
+     v5); and
    - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v4` decision per
      captured season, 2019 to 2025, for example
      `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. Parser
@@ -1060,20 +1116,33 @@ Prerequisites:
      the parser must reproduce it. The window is a traded arrival's date precision, never a day.
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
      refuses the capture's evidence rows; and
-   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v1` decision per captured
-     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v1`
-     (issues 853 and 789; owner decision of 2026-10-12 in the source policy). Parser
-     `footyinfo-draft-board-parser/v1` reads `https://www.footyinfo.com/draft/<season>` as
-     `draft_board_pick` claims for every selected, passed and removed pick, and a `draft_selection`
-     for each selection. The rights must name exactly `FOOTYINFO_DRAFT_BOARD_FIELDS` from
-     `development/localFootyinfoDraftBoardCapture.ts`, with provider `footyinfo` and an 86,400 s
-     cache. Staging admits the claim kind from migration 0271; an earlier database refuses the
-     capture's evidence rows.
+   - one `footyinfo-national-draft-board-issue853-private-<season>-board-v3` decision per captured
+     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v3`
+     (issues 853 and 789). Parser `footyinfo-draft-board-parser/v3` reads
+     `https://www.footyinfo.com/draft/<season>` as `draft_board_pick` claims for every selected,
+     passed and removed pick (from v3 with its original club and pre-draft number), a
+     `draft_selection` for each selection, and (from v2) one `draft_board_bid_match` per matched
+     bid. The rights must name exactly
+     `FOOTYINFO_DRAFT_BOARD_FIELDS` from `development/localFootyinfoDraftBoardCapture.ts` (v1's
+     fields, `FOOTYINFO_DRAFT_BOARD_BID_MATCH_FIELDS` and `FOOTYINFO_DRAFT_BOARD_PICK_ORIGIN_FIELDS`,
+     51 in all), with provider `footyinfo` and an
+     86,400 s cache. The owner recorded the seven `-board-v2` decisions on 2026-10-17 (ledger
+     revision 103; receipt `receipts/footyinfo-board-v2-bid-match-decision-2026-10-17.json`): the
+     price of a bid comes from the draft year's AFL rule, and Footyinfo's bid points and spent picks
+     may be used, privately, on the grading VM only. The owner approved the v3 fields on 2026-10-18
+     (record the seven `-board-v3` decisions from each season's `-board-v2` record with parser v3 and
+     the 51 fields, receipt `receipts/footyinfo-board-v3-pick-origin-decision-2026-10-18.json`). The
+     v1 and v2 decisions and captures stay valid as recorded. Staging admits `draft_board_pick` from migration 0271 and `draft_board_bid_match` from
+     migration 0287; an earlier database refuses the capture's evidence rows. Reconcile a v2 board
+     batch only on a database at migration 0288 or later and with code that carries
+     `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
-   `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3`,
-   `official-afl-completed-draft-session/v19`, `official-afl-draft-order-parser/v4` (2026:
+   `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
+   `draftguru-national-year-page/v4`),
+   `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
+   `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
-   `footyinfo-draft-board-parser/v1`), seasons inside one range, 1 request per 5 seconds
+   `footyinfo-draft-board-parser/v3`), seasons inside one range, 1 request per 5 seconds
    with burst 1, 365-day raw retention, the reviewed cache (86,400 s for Draftguru trade pages,
    3,600 s for Draftguru national-year pages and Official AFL, 86,400 s for Footyinfo boards) and exactly one `provider-egress-control` evidence
    record. That evidence ID is used as the enforced egress-policy evidence. Any other recorded
@@ -1100,7 +1169,24 @@ npm run outcomes:sources:capture-local-external -- \
 ```
 
 Seasons whose completed sessions are reviewed only through dedicated per-season source scopes
-(2010-2018) are not enumerable here and are refused.
+(2010, 2017 and 2018, and the 2011 and 2012 mini-drafts) are not enumerable here and are refused.
+`--season 2025` expands to its two night-report snapshots and needs the `-2025-session-v20`
+decision; a 2025 season in a run with other seasons still needs each season's own decision.
+
+The 2011 to 2016 national drafts (issue 789) are enumerable at parser v19, each needing its own
+`-<season>-session-v19` decision. Each season held one night (2011-11-24, 2012-11-22, 2013-11-21,
+2014-11-27, 2015-11-24, 2016-11-25), and its facts combine across the reviewed pages of
+`source/officialAflDraft<season>SessionFacts.ts`: a membership list or inventory, a dated wrap, first
+and last selections, and a total, some from retrospective articles (4, 3, 3, 5, 2 and 3 pages). Each
+target is effective at the page's own reviewed date, not the draft night, because ingestion pins a
+page's effective year to its reviewed publication year (2011's total is a 2013 article; the 2013 and
+2016 totals are the same 2019 article, captured once per season). These parsers pin each page's
+date and article text, and v19 now reads the renamed `article__byline-date` wrapper there too; a
+changed page is an `invalid_draft_session` issue. Their facts emit claim kinds the 2019 to 2025
+decisions do not name (membership rosters, member numbers, an inventory, rookie-elevation
+exclusions and two dated `draft_selection` rows), so each season's rights must name the leaves its
+pages emit. The selections themselves come from the Draftguru year pages; these pages prove the
+session that lets a selection without pick custody be promoted.
 
 To capture only some of a season's pages, add `--url` with each exact reviewed page, for example to
 recapture one night without fetching the other again.
@@ -1162,8 +1248,8 @@ but are not the AFL's; adding either, or any other substitute, is an owner decis
 source policy before the scope file changes. A reviewed window is consumed by the promotion review
 command as a transaction's `datePrecision` (runbook step 7); it is never typed by an operator.
 
-Capture the Footyinfo national draft boards (issues 853 and 789) once the owner's per-season
-`-board-v1` decisions are recorded. The owner approved egress only from `statly-grading-1` through
+Capture the Footyinfo national draft boards (issues 853 and 789) under the owner's per-season
+`-board-v3` decisions (approved 2026-10-18; record them before capturing). The owner approved egress only from `statly-grading-1` through
 the genuine-database wrapper, so this runs there and nowhere else. Each `--season` is the one board
 `https://www.footyinfo.com/draft/<season>`; there is no `--url`:
 
@@ -1184,7 +1270,7 @@ the page is one `invalid_page` issue with no claims. Each response is capped at 
 egress decision. Expect `issueCount` 0. A 403, a 429, any
 other non-200 status or a bot challenge fails the capture. Stop there: the decision does not allow
 retrying around it. Picks the board lists as points used to match a bid are not board rows and are
-not emitted.
+not emitted as board picks; v2 states each on the matched bid it was spent on (below).
 
 Each `draft_board_pick` states:
 
@@ -1197,6 +1283,24 @@ Each `draft_board_pick` states:
   for a matched bid the bidding club and basis;
 - the points and the note.
 
+Each `draft_board_bid_match` (v2, after every v1 row, source key
+`<season>:national:pick:<board id>:bid_match`) states the nominee's board id, number, round, club
+and player; the bidding club and basis; the bid's `points` and the `pointsUsed` the board gives;
+each spent pick (`consumedPicks`: board id, label such as `R2 (GEE) - Pick 34`, original number and
+club, holder, points used); and each leftover-points pick the board says the match created
+(`leftoverPicks`: board id, holder, points or null). Expect, on every reviewed board, 2019 to 2025:
+54 matched bids, 124 spent picks and 48 leftover picks. The parser refuses the whole page when:
+
+- a spent pick is not the board's own record of a pick spent on that nominee with the same points,
+  holder, original club, original number and label;
+- a points-used pick is listed by no matched bid, or by two;
+- `pointsUsed` is stated without spent picks, or the reverse (five 2025 bids state neither: the
+  club held no pick to spend);
+- the spent picks hold fewer points than `pointsUsed`, or their excess is not exactly the points of
+  the one leftover pick of that bid that carries points (2021 Sam Darcy: 2,024 spent, 1,889 used,
+  135 in the Bulldogs' leftover pick 61); or
+- a leftover-points pick does not name exactly one matched bid it was created from.
+
 An empty route means the board prints none, never that the pick did not move. A leftover-points
 pick's route is not printed. Footyinfo club and player names need their own `footyinfo` identity
 resolutions before reconciliation can use the rows. Reconciliation reads the `draft_selection`
@@ -1206,7 +1310,7 @@ change of its own.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v3`), which keeps national selections and counts every other pathway
+(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages), which keeps national selections and counts every other pathway
 as excluded, and records each selection's access category from the page's category cell. An
 unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 
@@ -3350,10 +3454,185 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   through the successor's trade (`special_entitlement_custody_linked`, provisional and single-source).
   The run reads that chain itself; no flag is needed. A special entitlement with no reviewed successor
   still blocks as `special_entitlement_unsupported`: review its custody before regrading.
+- Under rule v8 a future pick (traded before it had a slot) reports at trade the HPN DPVC v3 value
+  of the slot it eventually took (`pick_projection_eventual_slot`): the selection it was used at,
+  else its slot in its own draft's order, else for a pending pick its projected slot. It is
+  hindsight, not what the clubs knew, and changes no value or total. A future pick with no usable
+  slot from 1 to 90 still shows `future_pick_slot_unknown`; confirm its selection or order capture
+  before regrading.
+- Under rule v9 a pick hop Draftguru stated "not used", whose club the candidate shows trading the
+  same pick on later, is valued by its traded-on return (`stated_not_used_traded_on`). The
+  reconciler records it (`statedDisposition: 'not_used'`), so re-reconcile before regrading; a
+  candidate reconciled before this rule still values those hops at 0.
+- Under rule v10 a receiving club's selection Draftguru marks open but a reviewed Footyinfo board
+  records as that club's matched bid counts as a nominee, so the club's not-used picks in that draft
+  are excluded (`nomineeMatchedBidBy: footyinfo`) instead of worth 0 (2020 pick 41, Hawthorn to
+  Collingwood, with Reef McInnes). The reconciler records it (`matchedBidBoardPickIds`), so
+  re-reconcile before regrading; every board candidate gets a new id, since its board picks now
+  state any matched bid's basis.
+- Under rule v11 a traded-on pick that was the only asset its club gave in the onward trade is valued
+  at that club's whole return there, even when the next holder spent the pick on a nominee (it was
+  `pick_traded_on_return_unallocated` through v10). A hop whose club got back only excluded legs in
+  the onward trade is now unallocated instead of worth 0 (the 2026 picks in the Petracca and Fiorini
+  trades). Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
+  Compare the excluded and 0-valued traded-on counts against the v10 dry run's audit (16 sole-asset
+  legs revalued).
+- Under rule v12 a pick that cycled within one trade period follows one trail: undated pick-only
+  trades of a season are ordered by their Draftguru event id suffix, and several trails are narrowed
+  to the one ending at the pick's latest usable Official AFL custody holder. The reconciler applies
+  the same rule (a final holder's "not used" hop is no longer recorded as traded on), so
+  re-reconcile before regrading. The four trades the v10 dry run blocked as undated cycles (2019 #50,
+  2019 #64, 2020 #70 and the 2024 St Kilda and Essendon swap back) should no longer block as
+  `traded_on_return_blocked`; check each one's legs in the dry run. A candidate reconciled before
+  this rule still parses, but its final holder's hop stays traded on and grades as
+  `traded_on_return_unlinked`.
+- Under rule v13 a traded-on pick whose club gave a bundle in the onward trade with any excluded
+  asset is `pick_traded_on_return_unallocated`; through v12 the excluded sibling dropped out of the
+  weight total and the valued siblings took its share (stored batch twenty-three: 25 legs at share 1,
+  652.7 PAV, among them 2019 pick 32, Western Bulldogs, at 102.9). Only the grader changed, so
+  regrade the current candidate; no re-reconcile is needed. Check that those 25 legs are now
+  unallocated and that no valued traded-on leg's onward bundle holds an excluded asset.
+- Under rule v14 such a bundle is split by each given asset's HPN DPVC v3 at-trade projection
+  (`projection_weighted`, provisional `bundle_split_by_projection`) when every asset the club gave
+  there has one; a bundle with a player or an unprojected pick stays unallocated. Only the grader
+  changed, so regrade the current candidate; no re-reconcile is needed. Of the 115 legs (about 1,802
+  PAV) v13 left unallocated, count how many are now projection-split and how many stay unallocated,
+  and spot-check that each split leg's weights match its onward bundle's at-trade projections.
+- Under rule v15 such a bundle is split by hybrid weights instead (`hybrid_weighted`, provisional
+  `bundle_split_estimated_weights`): each valued asset weighs its realized value and each excluded
+  one its HPN DPVC v3 at-trade projection, so a bundle holding a player is now valued too. A bundle
+  stays unallocated only when an excluded asset has no projection. Only the grader changed, so
+  regrade the current candidate; no re-reconcile is needed. Of the 53 legs v14 left unallocated
+  (player beside an excluded asset), count how many are now split and how many stay unallocated,
+  and spot-check that each split leg's weights match its onward bundle's realized values and
+  projections.
+- Under rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is
+  valued at the sum of those legs' HPN DPVC v3 at-trade projections (`returnProjection`,
+  provisional `traded_on_return_estimated_from_projection`), shared among the assets the club gave
+  as any other return; it stays unallocated when a return leg has no projection. Only the grader
+  changed, so regrade the current candidate; no re-reconcile is needed. Of the 31 legs v15 left
+  unallocated on an all-excluded return, count how many are now valued (the coordinator expects
+  most of the 30 whose return is matched-bid picks) and how many stay unallocated, and spot-check
+  that each valued leg's `returnProjection` lists exactly its club's return legs in the onward trade.
+- Under rule v17 a used future pick takes its selection's slot (on a later hop of its trail too,
+  `onward_selection`, and when the selection is unresolved but not disputed), a future pick with no
+  slot in its draft's final order takes a round-position proxy (only when the order names all 18
+  clubs' first-round slots), and a pick numbered beyond 90 is
+  capped at DPVC(90); a traded-on pick whose weights or return rest on the proxy or the cap states
+  `projection_round_position_proxy` or `projection_domain_capped`. Only the grader changed, so
+  regrade the current candidate; no re-reconcile is needed. Of the 25 pick legs v16 left with no
+  at-trade view, count how many now have one by kind (expected: the three used picks by selection,
+  most of the 17 unused round-3 and round-4 picks by proxy, the four picks numbered 91 to 103 capped,
+  and the Gold Coast concession by its successor's selection), list those still unavailable (a pick
+  with no original club stays so), and count how many of the three legs v16 left unallocated are
+  now valued. Expect some existing traded-on at-trade views to move from `order` to
+  `onward_selection` where the trail ends in a selection at another number, and their bundle weights
+  and returns with them.
+- Under rule v18 every excluded leg of a traded-on pick's onward return counts at its at-trade
+  projection beside the valued legs' realized total (`returnProjection.realizedValue`), not only in
+  an all-excluded return; the pick is unallocated only when an excluded return leg has no
+  projection. Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
+  Against batch `414fa5dd`, check the 74 traded-on legs whose partial return held 106
+  `pick_not_used_nominee_excluded` legs: each should now carry a `returnProjection` listing exactly
+  its club's excluded return legs, with `realizedValue` equal to its club's `received` in the onward
+  trade, and the 2023 R2 (GWS) pick should be worth 17.1 plus its three projections (about 91.6),
+  not 17.1. Count the partial returns that are now unallocated because an excluded leg has no
+  projection (v17 valued them at their valued legs alone).
+- Under rule v19 an unused future pick that held no slot in its draft's final order takes, before
+  the proxy, the pre-draft number a reviewed Footyinfo board states (`board_pre_draft_slot`). It needs
+  v3 board captures: record the seven `-board-v3` decisions, re-capture the seven boards, prepare a
+  candidate with the v3 batches and regrade. Diff the candidate against the previous one first. A
+  re-capture gives every board row a new evidence id, so every `boardPickId` changes, and with it
+  `pickOutcomes[].boardPickId`, `matchedBidBoardPickIds`, the `draftBoardBidMatches` records and the
+  evidence ids Footyinfo rows add to selections; each v3 `draftBoardPicks` record also gains
+  `originalClubId` and `originalNumber`. Nothing else may change: any transaction, transfer, pick id,
+  custody, selection number or player, or outcome disposition that differs is a stop. Against batch
+  twenty-nine (`a9733065…`), expect 7 of the 16 proxy views to move to `board_pre_draft_slot`: 2023 R4
+  (Brisbane Lions) at 75 on two legs, 2023 R4 (Melbourne) at 71, 2024 R4 (Port Adelaide) at 76, and
+  2024 R4 (Collingwood) at 70 on three legs. The other 9 stay proxied, and the 4 capped views and the
+  unavailable 2023 R3 are unchanged. A total moves only where one of the 7 legs is a bundle weight or
+  an excluded onward-return leg; list every changed total and check that each holds one of them.
 - The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
   cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
   by `artifactId` and `batchId`, never "the latest".
 - It is private and `non_production`. Nothing here is publishable.
+
+## Exporting the asset ledger
+
+`outcomes:grading:asset-ledger` exports the private asset ledger (statlyaus/Statly#789): every player's
+club stints with PAV per season, and every pick's custody hops and outcome. The rules are in the
+architecture doc's "Asset ledger read model" section. It takes the same arguments as
+`outcomes:grading:realized` and reads the same inputs through the same loader in one read-only
+transaction, plus player and club names in a second one. It refuses wherever the grader's loader
+refuses (see above). It seals the ledger, stores it as `derived_private` in repository `asset-ledgers`
+(written and read back in full, then one custody transaction), and then writes `--out`. Nothing else is
+written. `--dry-run` builds and writes `--out` but stores nothing.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:asset-ledger -- \
+  --candidate <external-reconciliation:...> --method <hpn-pav-method:...> \
+  --seasons 2019-2026 --official-seasons <seasons> --benchmark <hpn-pick-benchmark:...> \
+  --store-id <store-id> --out <absolute-path.json> [--dry-run]
+```
+
+- Run it on statly-grading-1, which holds the genuine database. `AFL_OUTCOMES_DATABASE_URL` must name
+  a loopback database.
+- Every season in `--seasons` needs a finalized current HPN PAV head and season spells, or the loader
+  refuses. Before relying on 2019 and 2020, confirm both exist for them; otherwise export from the
+  first season that has them.
+- `--out` must not exist yet; the ledger is never overwritten. If writing it fails after the store, the
+  error names the stored `artifactId`.
+- Read the printed `summary` before citing a ledger: `playersWithoutName` counts players with no
+  approved canonical row, and `outcomes.unresolved` counts picks whose outcome the evidence does not
+  state. `matchedBidPicksShared` counts the matched-bid picks that took a share of their nominee;
+  every other `matched_bid` outcome is pending with its `pendingReason`. `bidMatches` lists each
+  board matched bid with its price by the year's AFL rule, leftover and deficit, and each spent pick's
+  custody join (`link`). A candidate reconciled before migration 0288, or over v1 boards only, holds
+  no bid matches, so all its matched-bid picks stay `no_bid_spend`.
+- Like a grade batch, each run is a different ledger (its build time and spell cutoff are the run's
+  start). Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
+
+## Reporting player-season games
+
+`outcomes:grading:season-games` reports the player-season games read model (statlyaus/Statly#789; the
+architecture doc's "Player-season games read model" section) for one HPN PAV method and a consecutive run
+of seasons, in one read-only transaction. It writes nothing, so it needs no store and no `--out`.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:season-games -- --method <hpn-pav-method:...> --seasons 2011-2026
+```
+
+- Run it on statly-grading-1. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database.
+- Each season prints its `availability` (`available`, `no_head`, `not_finalized`), its calculation id,
+  rows, distinct players, games, PAV, and its `pavWithoutAppearances`, `appearancesWithoutPav` and
+  `gameCountMismatches`. `discrepancies` lists each one. All three counts are 0 on a sound calculation.
+- A season still being calculated reads as `no_head` or `not_finalized`, never as zero games.
+
+## Fitting the value-line priors
+
+`outcomes:grading:value-line-fit` fits and back-tests the value-line priors (statlyaus/Statly#789; the
+architecture doc's "Value-line fit" section and the value-line spec's "Fit specification (step 2)"). It
+reads the current canonical national drafts and the player-season games read model, and its one write is
+the fit's evidence record in the registered store.
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:value-line-fit -- --method <hpn-pav-method:...> \
+  --draft-years 2011-2025 --last-season 2026 --store-id <store-id> --out <absolute-path.json>
+```
+
+- Run it on statly-grading-1 from its own checkout. `AFL_OUTCOMES_DATABASE_URL` must name a loopback
+  database. Never run it in a checkout where a pipeline is running.
+- Run `--dry-run` first: it fits and writes `--out` without `--store-id` and stores nothing.
+- Every season from the first class's next season through `--last-season` must have a finalized
+  calculation with no games discrepancy (check with "Reporting player-season games"), or it refuses.
+- `--out` is never overwritten. The printed line has the fit id, the parameters, the back-test by pick
+  range and checkpoint, and the stored `artifactId`.
+- Check `credibilityObjective.atGridEdge` and the back-test bias before anything reads the fit. A bias
+  in one direction across every pick range at a checkpoint is a finding to report, not a reason to
+  re-tune.
 
 ## Building pick values and complete trade assessments
 
@@ -3723,7 +4002,12 @@ promotion, its approval decision, the reviewed pick-lineage registration and the
 and custody IDs). Enrichment requires that registration (the candidate's reviewed scope/correction, or
 one registered against the promoted candidate itself) with its current approval; without it the
 conflict stands. A known value never changes, and a definition that omits a known value is still a
-conflict. Versions are gap-free and append-only, and promotion replay adds no version. Readers use
+conflict. A pick that only the promotion's draft selections define (no written transfer or custody row
+names it) asserts no facts, because a completed draft session states no round, number or original
+club: it references an approved stored pick of the same draft unchanged, whatever facts an earlier
+trade promotion recorded, with no enrichment (#853). Its draft year and kind must still match, and
+under a pick-side deferral it is still compared as before, so a finalized receipt replays exactly.
+Versions are gap-free and append-only, and promotion replay adds no version. Readers use
 `outcome_draft_pick_facts(pick_ids, as_of)`: promotion resolves current facts, while the public archive,
 pick-PAV selection and pick-PAV finalization pass the release's `effective_through`, so an enrichment
 recorded after a release never changes that release's reconstruction. Apply 0237 through the normal
@@ -4196,6 +4480,54 @@ holds about `max_locks_per_transaction × (max_connections + max_prepared_transa
 At `max_locks_per_transaction=1024` it overflowed with "out of shared memory". CI and the disposable
 harness use 2048. Size the setting to the season before a genuine build, then restart PostgreSQL.
 Reducing the lock count would need a different writer protocol, such as one lock per assignment case.
+
+Migration 0290 makes the per-origin function itself walk each assignment case once per transaction.
+Every factual row insert asks `outcome_provider_assignment_continuity_current` for its player, match
+and club assignment decisions, so a season's fact batch (about 9,100 rows in one transaction over
+about 70 club cases whose heads sit about 1,000 revisions above their origins) repeated the same
+walk thousands of times. The function now remembers, until the transaction ends, what its last walk
+of a case proved: for that head (revision and decision) and the lowest revision it walked, the
+lowest revision from which the suffix to the head passes every per-origin rule (the walk of
+migration 0242's set function). A later origin at or above the walked revision is answered from
+that verdict. A lower origin walks again and replaces it, unless the walk already found a break,
+which lies inside the lower origin's suffix too. The rename keeps the unchanged 0128 walk as
+`outcome_provider_assignment_continuity_current_uncached`. Origins that walk cannot represent (a
+decision in more than one resolution table, or one without an assignment revision) still go to it.
+
+The remembered verdict is the per-origin answer because nothing it read can change while it is used:
+
+- Other transactions cannot change it. The walk holds the head `FOR SHARE` and an advisory lock on
+  every review subject of the walked span until the transaction ends. A new link must advance the
+  head, and every review decision takes its subject's advisory lock first; a successor review must
+  share the superseded review's subject.
+- The same transaction cannot change it unseen. A `BEFORE ROW` trigger named
+  `zzz_outcome_assignment_continuity_memo` on `outcome_review_decision`, the three provider
+  resolution tables and `outcome_provider_identity_assignment_head` bumps a transaction-local
+  generation on every insert, update or delete, and a verdict from an older generation is never
+  used. The trigger is enabled `ALWAYS`, so replica-mode writes bump it too. It must stay the last
+  `BEFORE` trigger on each table, so no trigger can remember a verdict between the bump and the row
+  change; the migration refuses to run if a later-sorting trigger exists. A new trigger on those
+  tables must sort before it.
+- Savepoints roll back the verdict, the generation and the locks together.
+
+Nothing is remembered from a call that fails on a held lock, a missing, moved or inactive head, or a
+kind or identity mismatch, so those calls re-check every time, as before. Each case's verdict lives
+in its own transaction-local setting, `statly_assignment_continuity.c<md5 of the case id>`, with the
+case, generation, `current_user` and head it was proved for. Cases never share a setting: a fact
+batch interleaves hundreds of short player and match cases with the long club cases, and a first
+version with 64 shared slots kept evicting the club verdicts. The rules, the locks
+taken and the fail-closed results are unchanged. `afl-assignment-continuity-memo-postgres.test.ts`
+checks every origin of the 22 chain states against the uncached walk in five evaluation orders,
+twice per transaction, with a subject and a head held by another session. It also checks a lock
+released mid-transaction, a withdrawal and a moved head written inside the transaction, a
+rolled-back savepoint, and that nothing outlives the transaction. With 1,500 shuffled rows over
+twenty 600-revision club chains, both forms take the same 12,000 advisory locks and the memo is
+about 40 times faster per row (76 ms to 1.7 ms on the grading VM).
+On a copy of the genuine database the 2017 AFL Tables fact batch (18,216 facts, rolled back) took
+1,813 s to insert with the per-origin walk and 405 s with the memo; continuity itself fell from 1,471 s
+to 60 s. The spell-currency query of spells-derive fell by about a fifth; it is now dominated by
+`outcome_afl_trade_canonical_json`. Provider resolution runs each decision in its own transaction, so
+the memo does not change it (continuity is about 1.5% of a resolution decision).
 
 Canonical one-sided departures use `PostgresCanonicalPlayerDepartureRepository` and migration0211.
 They require a current promoted incoming asset, exact `player_departure_reference` source claim,

@@ -22,7 +22,10 @@ vi.mock('@/server/leagues/defaultLineups', () => ({
   ensureDefaultLineups: carryForwardMock,
 }));
 
-import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
+import {
+  recalculateLeagueRoundMatchups,
+  resolveRecalculatedMatchupStatus,
+} from '@/server/leagues/matchupReadModel';
 
 function leagueWithFixtureVersion(competitionRulesVersion: number) {
   return {
@@ -79,13 +82,97 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
       where: {
         leagueId_fixtureVersion_round: { leagueId: 'league-1', fixtureVersion: 7, round: 4 },
       },
-      select: { aflRound: true },
+      select: { aflRound: true, season: { select: { year: true } } },
     });
     expect(prismaMocks.leagueMatchup.findMany).toHaveBeenCalledWith({
       where: { leagueId: 'league-1', round: 4, fixtureVersion: 7 },
     });
     expect(etlMocks.getRoundMatchesResult).toHaveBeenCalledWith(new Date().getFullYear(), 12);
     expect(etlMocks.getRoundPlayerStatsResult).toHaveBeenCalledWith(new Date().getFullYear(), 12);
+  });
+
+  it('loads provider data for the season year of the round, not the calendar year', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
+    prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({
+      aflRound: 12,
+      season: { year: 2025 },
+    });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2' },
+    ]);
+    prismaMocks.leagueLineup.findMany.mockResolvedValue([
+      {
+        id: 'lineup-1',
+        memberId: 'member-1',
+        players: [
+          { id: 'a-1', playerId: 'player-1', slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+        ],
+      },
+      {
+        id: 'lineup-2',
+        memberId: 'member-2',
+        players: [
+          { id: 'a-2', playerId: 'player-2', slot: 'MID', slotIndex: 0, player: { club: 'GWS' } },
+        ],
+      },
+    ]);
+
+    await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
+
+    expect(etlMocks.getRoundMatchesResult).toHaveBeenCalledWith(2025, 12);
+    expect(etlMocks.getRoundPlayerStatsResult).toHaveBeenCalledWith(2025, 12);
+  });
+
+  it('refuses to recalculate a finalized round that still has an unscored matchup', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
+    prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2', status: 'FINAL' },
+      { id: 'matchup-2', homeMemberId: 'member-3', awayMemberId: 'member-4', status: 'SCHEDULED' },
+    ]);
+    const lineup = (memberId: string, players: number) => ({
+      id: `lineup-${memberId}`,
+      memberId,
+      players: Array.from({ length: players }, (_, index) => ({
+        id: `a-${memberId}-${index}`,
+        playerId: `player-${memberId}-${index}`,
+        slot: 'MID',
+        slotIndex: index,
+        player: { club: 'GWS' },
+      })),
+    });
+    prismaMocks.leagueLineup.findMany.mockResolvedValue([
+      lineup('member-1', 1),
+      lineup('member-2', 1),
+      lineup('member-3', 1),
+    ]);
+
+    const result = await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
+
+    expect(result).toMatchObject({
+      blocked: 'UNSCORED_MATCHUP_IN_FINAL_ROUND',
+      unscoredMatchupIds: ['matchup-2'],
+    });
+    expect(carryForwardMock).not.toHaveBeenCalled();
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps a round open while a matchup with two teams has no scorable lineup', () => {
+    const roundStatus = { anyLive: false, allFinal: true };
+
+    expect(
+      resolveRecalculatedMatchupStatus({ finalize: true, unresolvedMatchups: 1, roundStatus })
+    ).toBe('SCHEDULED');
+    expect(
+      resolveRecalculatedMatchupStatus({ finalize: true, unresolvedMatchups: 0, roundStatus })
+    ).toBe('FINAL');
+    expect(
+      resolveRecalculatedMatchupStatus({
+        finalize: false,
+        unresolvedMatchups: 0,
+        roundStatus: { anyLive: true, allFinal: false },
+      })
+    ).toBe('LIVE');
   });
 
   it('falls back to the fantasy round only for legacy unversioned fixtures', async () => {

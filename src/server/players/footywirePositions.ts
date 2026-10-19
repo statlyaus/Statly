@@ -214,13 +214,13 @@ export function planPositionSync(
 export function parseFootywirePositionNdjson(text: string): FootywirePositionRow[] {
   return text
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
+    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
+    .filter(({ line }) => Boolean(line))
+    .map(({ line, lineNumber }) => {
       try {
         return JSON.parse(line) as FootywirePositionRow;
       } catch {
-        throw new Error(`Line ${index + 1} is not valid JSON.`);
+        throw new Error(`Line ${lineNumber} is not valid JSON.`);
       }
     })
     .filter((row) => typeof row?.team === 'string');

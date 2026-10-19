@@ -1,3 +1,4 @@
+import { OFFICIAL_AFL_ARTICLE_DATE } from './officialAflArticleDate';
 import { createHash } from 'node:crypto';
 import { load } from 'cheerio';
 import {
@@ -134,7 +135,7 @@ export function parseOfficialAflDraft2014SessionFacts(
   if (!key) return fail();
   const $ = load(html),
     body = $('.article-body'),
-    date = $('.article__date > time');
+    date = $(OFFICIAL_AFL_ARTICLE_DATE);
   if (body.length !== 1 || date.length !== 1 || date.attr('datetime') !== times[key]) return fail();
   const common = { draftYear: 2014, draftType: 'national' as const };
   let claims: AflTradeExternalEvidenceContent['claim'][];
@@ -190,4 +191,18 @@ export function parseOfficialAflDraft2014SessionFacts(
     ),
     issues: [],
   };
+}
+
+/**
+ * The reviewed 2014 completed-session pages with each page's own reviewed date, which the capture
+ * records as its effective instant (a retrospective page keeps its later publication year).
+ */
+export function reviewedOfficialAflDraft2014SessionPages(): readonly {
+  url: string;
+  effectiveAt: string;
+}[] {
+  return (Object.keys(times) as (keyof typeof times)[]).map((key) => ({
+    url: reviewed.urls[key],
+    effectiveAt: times[key],
+  }));
 }

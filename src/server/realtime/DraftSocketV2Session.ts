@@ -189,12 +189,15 @@ export class DraftSocketV2Session {
         this.authorizedReads.authorizeMember(request.draftId, this.authenticatedUserId)
       );
       const room = await this.awaitCurrent(epoch, this.rooms.initRoomIfMissing(request.draftId));
-      const reservation = await this.awaitCurrent(
-        epoch,
-        this.rooms.addParticipantIfUnderLimit(request.draftId, this.socket.id, room.maxParticipants)
+      const reservation = await this.rooms.addParticipantIfUnderLimit(
+        request.draftId,
+        this.socket.id,
+        room.maxParticipants
       );
+      // Record an accepted reservation before the supersession check, so a superseded join still releases it.
+      if (reservation.accepted) targetReserved = true;
+      this.assertCurrent(epoch);
       if (!reservation.accepted) throw new RoomFullError();
-      targetReserved = true;
 
       await this.awaitCurrent(epoch, Promise.resolve(this.socket.join(`draft:${request.draftId}`)));
 

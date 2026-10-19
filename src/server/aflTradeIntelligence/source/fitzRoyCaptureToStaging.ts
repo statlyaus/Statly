@@ -1,5 +1,8 @@
 import { sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
-import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
+import {
+  AflTradeArtifactCustodyError,
+  type AflTradeImmutableArtifactRepository,
+} from '../artifacts/immutableArtifactRepository';
 import {
   aflTradeSourceSnapshotManifestSchema,
   type AflTradeSourceSnapshotManifest,
@@ -87,7 +90,9 @@ function exactInstant(value: string): boolean {
 
 function failureCode(phase: 'custody' | 'decode' | 'normalize' | 'persistence', error: unknown) {
   if (phase === 'custody') {
-    return 'custody_mismatch' as const;
+    return error instanceof AflTradeArtifactCustodyError && error.code === 'READBACK_MISMATCH'
+      ? ('custody_mismatch' as const)
+      : null;
   }
   if (phase === 'decode' && error instanceof AflTradeFitzRoyDecodeError) {
     return error.code === 'CUSTODY_MISMATCH'
@@ -206,16 +211,18 @@ export async function stageAflTradeFitzRoySourceSnapshot(
     );
     return { capture, normalization };
   } catch (cause) {
-    const completedAt = dependencies.clock.now();
-    await dependencies.providerObservationRepository.recordFailure({
-      captureId: capture.captureId,
-      fieldMapId: command.fieldMapId,
-      failureCode: failureCode(phase, cause),
-      publicSafeReason: 'The provider capture could not be admitted to normalized staging.',
-      captureReceiptSha256,
-      startedAt,
-      completedAt,
-    });
+    const code = failureCode(phase, cause);
+    if (code !== null) {
+      await dependencies.providerObservationRepository.recordFailure({
+        captureId: capture.captureId,
+        fieldMapId: command.fieldMapId,
+        failureCode: code,
+        publicSafeReason: 'The provider capture could not be admitted to normalized staging.',
+        captureReceiptSha256,
+        startedAt,
+        completedAt: dependencies.clock.now(),
+      });
+    }
     throw new AflTradeFitzRoyStagingError(
       cause instanceof AflTradeFitzRoyStagingError ? cause.code : 'STAGING_FAILED',
       'The provider capture was retained but normalized staging failed closed.',

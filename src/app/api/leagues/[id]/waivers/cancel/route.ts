@@ -6,7 +6,10 @@ import { withMetrics } from '@/lib/metrics';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
-import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
+import {
+  PrismaWaiverClaimStore,
+  WaiverClaimStoreError,
+} from '@/server/waivers/WaiverProcessingService';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -80,6 +83,12 @@ export const POST = withMetrics(
       }
       return NextResponse.json({ ok: true }, { status: 200 });
     } catch (err) {
+      if (err instanceof WaiverClaimStoreError && err.code === 'CLAIM_NOT_PENDING') {
+        return NextResponse.json(
+          { error: 'Only pending claims can be cancelled' },
+          { status: 409 }
+        );
+      }
       logger.apiError('POST', '/api/leagues/[id]/waivers/cancel', err);
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
