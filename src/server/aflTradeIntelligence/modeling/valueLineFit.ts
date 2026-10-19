@@ -119,7 +119,7 @@ interface FittedPriors {
   varianceComponents: { games: VarianceComponents; rate: VarianceComponents };
 }
 
-const round = (value: number, places = 6) => {
+export const round = (value: number, places = 6) => {
   const factor = 10 ** places;
   const rounded = Math.round(value * factor) / factor;
   return Object.is(rounded, -0) ? 0 : rounded;
@@ -266,7 +266,7 @@ interface GlmObservation {
 }
 
 /** Solves a small symmetric positive definite system by Cholesky decomposition. */
-function solve(matrix: number[][], vector: number[]): number[] {
+export function solve(matrix: number[][], vector: number[]): number[] {
   const size = vector.length;
   const lower = Array.from({ length: size }, () => new Array<number>(size).fill(0));
   for (let row = 0; row < size; row++) {
@@ -555,13 +555,13 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
   };
 }
 
-interface VarianceRow {
+export interface VarianceRow {
   value: number;
   /** Seasons weigh 1 for games; games weigh their count for PAV per game. */
   weight: number;
 }
 
-interface VarianceComponents {
+export interface VarianceComponents {
   stints: number;
   observations: number;
   /** Total weight: seasons for games, games for PAV per game. */
@@ -577,7 +577,10 @@ interface VarianceComponents {
  * from the weighted squares around each player's mean on N − I degrees of freedom; between from the
  * weighted squares of player means around the grand mean, less (I − 1) within, over W − Σ W_i² / W.
  */
-function varianceComponents(groups: readonly VarianceRow[][], label: string): VarianceComponents {
+export function varianceComponents(
+  groups: readonly VarianceRow[][],
+  label: string
+): VarianceComponents {
   const players = groups.filter((rows) => rows.length > 0);
   const observations = players.reduce((sum, rows) => sum + rows.length, 0);
   if (players.length < 2 || observations <= players.length)
@@ -619,7 +622,7 @@ export interface AflTradeValueLineFitErrorRow {
   rootMeanSquaredError: number;
 }
 
-function errorRow(
+export function errorRow(
   range: string,
   checkpoint: number,
   pairs: readonly { predicted: number; realized: number }[]
