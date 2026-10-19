@@ -137,6 +137,30 @@ const design = (curve: Curve, basis: readonly number[], tenure: number) =>
     ? [...basis, ...basis.map((value) => value * (Math.min(tenure, RULES.pooledTenureFrom) - 1))]
     : [...basis];
 
+/** Refuses a selection with no positive slot, outside the observed seasons, or duplicated. */
+function refuseInvalidSelections(
+  selections: readonly AflTradeValueLineFitSelection[],
+  lastSeason: number
+) {
+  const ids = new Set<string>();
+  const slots = new Set<string>();
+  for (const selection of selections) {
+    if (!Number.isInteger(selection.slot) || selection.slot < 1)
+      throw new Error(`Selection ${selection.selectionId} has no positive slot.`);
+    if (selection.draftYear >= lastSeason)
+      throw new Error(`Draft ${selection.draftYear} has no season observed after it.`);
+    if (lastSeason - selection.draftYear > RULES.horizonSeasons)
+      throw new Error(
+        `Draft ${selection.draftYear} has more than ${RULES.horizonSeasons} seasons observed, past the curves.`
+      );
+    const slotKey = `${selection.draftYear}|${selection.slot}`;
+    if (ids.has(selection.selectionId) || slots.has(slotKey))
+      throw new Error(`Selection ${selection.selectionId} is duplicated.`);
+    ids.add(selection.selectionId);
+    slots.add(slotKey);
+  }
+}
+
 /** Cuts each selection's first stint at its drafting club, by the specification's three rules. */
 function buildStints(inputs: AflTradeValueLineFitInputs): {
   stints: Stint[];
@@ -156,23 +180,7 @@ function buildStints(inputs: AflTradeValueLineFitInputs): {
   const firstClass = Math.min(...selections.map(({ draftYear }) => draftYear));
   if (Math.min(...seasons) > firstClass + 1)
     throw new Error(`Read every season from ${firstClass + 1}.`);
-  const ids = new Set<string>();
-  const slots = new Set<string>();
-  for (const selection of selections) {
-    if (!Number.isInteger(selection.slot) || selection.slot < 1)
-      throw new Error(`Selection ${selection.selectionId} has no positive slot.`);
-    if (selection.draftYear >= lastSeason)
-      throw new Error(`Draft ${selection.draftYear} has no season observed after it.`);
-    if (lastSeason - selection.draftYear > RULES.horizonSeasons)
-      throw new Error(
-        `Draft ${selection.draftYear} has more than ${RULES.horizonSeasons} seasons observed, past the curves.`
-      );
-    const slotKey = `${selection.draftYear}|${selection.slot}`;
-    if (ids.has(selection.selectionId) || slots.has(slotKey))
-      throw new Error(`Selection ${selection.selectionId} is duplicated.`);
-    ids.add(selection.selectionId);
-    slots.add(slotKey);
-  }
+  refuseInvalidSelections(selections, lastSeason);
   const rowsByPlayer = new Map<string, Map<number, Map<string, { games: number; pav: number }>>>();
   for (const row of games.rows) {
     const bySeason = rowsByPlayer.get(row.playerId) ?? new Map();
