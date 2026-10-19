@@ -10,7 +10,7 @@ import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import { HPN_DPVC_V3_LAST_SUPPORTED_PICK, hpnDpv3ValueForPick } from './hpnPickValueBenchmark';
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 
-export const AFL_TRADE_VALUE_LINE_FIT_SCHEMA_VERSION = 'afl-trade-value-line-fit/v1' as const;
+export const AFL_TRADE_VALUE_LINE_FIT_SCHEMA_VERSION = 'afl-trade-value-line-fit/v2' as const;
 
 /** Every fixed choice of the fit specification; published with the fit. */
 export const AFL_TRADE_VALUE_LINE_FIT_RULES = {
@@ -18,10 +18,14 @@ export const AFL_TRADE_VALUE_LINE_FIT_RULES = {
   inactivityClosureSeasons: 3,
   /** Tenure groups 1 to 9 each have their own intercept; 10 and later share one. */
   pooledTenureFrom: 10,
+  /** The games curve's ln(slot) slopes change linearly with tenure, up to the pooled group. */
+  gamesSlotSlopesByTenure: true,
   /** Seasons after the draft summed for a value at the full horizon. */
   horizonSeasons: 20,
   /** Own-form window: the last three in-stint seasons, most recent weighted 3, then 2, then 1. */
   ownWindowWeights: [3, 2, 1],
+  /** Own form is read relative to the slot prior at the same tenures, then carried to later ones. */
+  ownFormRelativeToPrior: true,
   /** Credibility is fitted on the PAV of the next three seasons after each checkpoint. */
   credibilityTargetSeasons: 3,
   rateCredibilityGrid: { from: 0, through: 300, step: 5 },
@@ -84,9 +88,14 @@ interface Stint {
 interface Coefficients {
   /** One intercept per tenure group (tenure 1 ... pooledTenureFrom). */
   intercepts: number[];
-  /** Slopes on ln(slot) below pick 10, from 10 to 30, and beyond 30 (continuous at the knots). */
+  /**
+   * Slopes on ln(slot) below pick 10, from 10 to 30, and beyond 30 (continuous at the knots); for a
+   * curve whose slopes change with tenure, then the change per season of tenure for each.
+   */
   slotSlopes: number[];
 }
+
+type Curve = 'survival' | 'games' | 'rate';
 
 interface FittedPriors {
   survival: Coefficients;
@@ -118,6 +127,39 @@ const slotBasis = (slot: number) => {
     Math.max(0, x - SLOT_KNOTS[1]),
   ];
 };
+/**
+ * The slot columns of a curve at a tenure. The games curve's slopes also change linearly with tenure:
+ * an early pick plays far more than a late one in his first season, and the gap closes as the late
+ * picks who stay become regulars.
+ */
+const design = (curve: Curve, basis: readonly number[], tenure: number) =>
+  curve === 'games' && RULES.gamesSlotSlopesByTenure
+    ? [...basis, ...basis.map((value) => value * (Math.min(tenure, RULES.pooledTenureFrom) - 1))]
+    : [...basis];
+
+/** Refuses a selection with no positive slot, outside the observed seasons, or duplicated. */
+function refuseInvalidSelections(
+  selections: readonly AflTradeValueLineFitSelection[],
+  lastSeason: number
+) {
+  const ids = new Set<string>();
+  const slots = new Set<string>();
+  for (const selection of selections) {
+    if (!Number.isInteger(selection.slot) || selection.slot < 1)
+      throw new Error(`Selection ${selection.selectionId} has no positive slot.`);
+    if (selection.draftYear >= lastSeason)
+      throw new Error(`Draft ${selection.draftYear} has no season observed after it.`);
+    if (lastSeason - selection.draftYear > RULES.horizonSeasons)
+      throw new Error(
+        `Draft ${selection.draftYear} has more than ${RULES.horizonSeasons} seasons observed, past the curves.`
+      );
+    const slotKey = `${selection.draftYear}|${selection.slot}`;
+    if (ids.has(selection.selectionId) || slots.has(slotKey))
+      throw new Error(`Selection ${selection.selectionId} is duplicated.`);
+    ids.add(selection.selectionId);
+    slots.add(slotKey);
+  }
+}
 
 /** Cuts each selection's first stint at its drafting club, by the specification's three rules. */
 function buildStints(inputs: AflTradeValueLineFitInputs): {
@@ -138,19 +180,7 @@ function buildStints(inputs: AflTradeValueLineFitInputs): {
   const firstClass = Math.min(...selections.map(({ draftYear }) => draftYear));
   if (Math.min(...seasons) > firstClass + 1)
     throw new Error(`Read every season from ${firstClass + 1}.`);
-  const ids = new Set<string>();
-  const slots = new Set<string>();
-  for (const selection of selections) {
-    if (!Number.isInteger(selection.slot) || selection.slot < 1)
-      throw new Error(`Selection ${selection.selectionId} has no positive slot.`);
-    if (selection.draftYear >= lastSeason)
-      throw new Error(`Draft ${selection.draftYear} has no season observed after it.`);
-    const slotKey = `${selection.draftYear}|${selection.slot}`;
-    if (ids.has(selection.selectionId) || slots.has(slotKey))
-      throw new Error(`Selection ${selection.selectionId} is duplicated.`);
-    ids.add(selection.selectionId);
-    slots.add(slotKey);
-  }
+  refuseInvalidSelections(selections, lastSeason);
   const rowsByPlayer = new Map<string, Map<number, Map<string, { games: number; pav: number }>>>();
   for (const row of games.rows) {
     const bySeason = rowsByPlayer.get(row.playerId) ?? new Map();
@@ -232,6 +262,7 @@ function closedAt(stint: Stint, tenure: number): boolean {
 
 interface GlmObservation {
   group: number;
+  /** The slot columns, from `design`. */
   slotBasis: number[];
   response: number;
   weight: number;
@@ -284,7 +315,7 @@ function fitGlm(
         `The ${label} fit has no positive observations in tenure group ${group + 1}.`
       );
   }
-  const slopes = SLOT_KNOTS.length + 1;
+  const slopes = observations[0]!.slotBasis.length;
   const size = groups + slopes;
   let beta = new Array<number>(size).fill(0);
   if (family === 'poisson') {
@@ -340,69 +371,71 @@ function curves(
   const games = [0];
   const rate = [0];
   for (let tenure = 1; tenure <= RULES.horizonSeasons; tenure++) {
-    const hazard = logistic(linear(priors.survival, tenure, basis));
+    const hazard = logistic(linear(priors.survival, tenure, design('survival', basis, tenure)));
     survival.push(survival[tenure - 1]! * (1 - hazard));
-    games.push(Math.exp(linear(priors.games, tenure, basis)));
-    rate.push(Math.exp(linear(priors.rate, tenure, basis)));
+    games.push(Math.exp(linear(priors.games, tenure, design('games', basis, tenure))));
+    rate.push(Math.exp(linear(priors.rate, tenure, design('rate', basis, tenure))));
   }
   return { survival, games, rate };
 }
 
-/** The own-form window at an open checkpoint: weighted rate, games and seasons counted. */
-function ownForm(stint: Stint, tenure: number) {
+/**
+ * The own-form window at an open checkpoint, read against the slot prior at the same tenures: a
+ * young player is compared with what his slot does at his age in the stint, not with what it does
+ * later, so his development is kept. `relativeRate` is his PAV per game over the prior's at those
+ * tenures, both weighted 3, 2, 1 by the games of each season; a season with no game counts for
+ * nothing (an injury never lowers the rate). `relativeGames` is his games over the prior's expected
+ * games in those seasons, 0-game seasons included (the availability history).
+ */
+function ownForm(stint: Stint, tenure: number, curve: ReturnType<typeof curves>) {
   const window = stint.seasons
     .filter((season) => season.tenure <= tenure && season.tenure > tenure - 3)
     .sort((left, right) => right.tenure - left.tenure);
   let weightedPav = 0;
-  let weightedGames = 0;
+  let weightedPriorPav = 0;
   window.forEach((season, index) => {
     const weight = RULES.ownWindowWeights[index]!;
     weightedPav += weight * season.pav;
-    weightedGames += weight * season.games;
+    weightedPriorPav += weight * season.games * curve.rate[season.tenure]!;
   });
   const games = window.reduce((sum, season) => sum + season.games, 0);
+  const priorGames = window.reduce((sum, season) => sum + curve.games[season.tenure]!, 0);
   return {
     games,
     seasons: window.length,
-    rate: weightedGames > 0 ? weightedPav / weightedGames : 0,
-    gamesPerSeason: window.length > 0 ? games / window.length : 0,
+    relativeRate: weightedPriorPav > 0 ? weightedPav / weightedPriorPav : 1,
+    relativeGames: priorGames > 0 ? games / priorGames : 1,
   };
 }
 
-/** The four survival-weighted sums the value at a checkpoint is bilinear in. */
-function remainingSums(
+/** The prior's expected PAV over tenures after `fromTenure` through `throughTenure`, if still open. */
+function remainingPrior(
   curve: ReturnType<typeof curves>,
   fromTenure: number,
   throughTenure: number
-) {
-  let survival = 0;
-  let games = 0;
-  let rate = 0;
-  let both = 0;
-  for (let tenure = fromTenure + 1; tenure <= throughTenure; tenure++) {
-    const still = curve.survival[tenure]! / curve.survival[fromTenure]!;
-    survival += still;
-    games += still * curve.games[tenure]!;
-    rate += still * curve.rate[tenure]!;
-    both += still * curve.games[tenure]! * curve.rate[tenure]!;
-  }
-  return { survival, games, rate, both };
+): number {
+  let expected = 0;
+  for (let tenure = fromTenure + 1; tenure <= throughTenure; tenure++)
+    expected +=
+      (curve.survival[tenure]! / curve.survival[fromTenure]!) *
+      curve.games[tenure]! *
+      curve.rate[tenure]!;
+  return expected;
 }
 
+/**
+ * The prior's remaining PAV, scaled by the credibility-weighted own form:
+ * `(Z_g × relativeGames + 1 − Z_g) × (Z × relativeRate + 1 − Z)`.
+ */
 function blendedRemaining(
-  sums: ReturnType<typeof remainingSums>,
+  prior: number,
   own: ReturnType<typeof ownForm>,
   rateCredibilityGames: number,
   gamesCredibilitySeasons: number
 ): number {
   const z = own.games === 0 ? 0 : own.games / (own.games + rateCredibilityGames);
   const zGames = own.seasons === 0 ? 0 : own.seasons / (own.seasons + gamesCredibilitySeasons);
-  return (
-    zGames * z * own.gamesPerSeason * own.rate * sums.survival +
-    zGames * (1 - z) * own.gamesPerSeason * sums.rate +
-    (1 - zGames) * z * own.rate * sums.games +
-    (1 - zGames) * (1 - z) * sums.both
-  );
+  return (zGames * own.relativeGames + 1 - zGames) * (z * own.relativeRate + 1 - z) * prior;
 }
 
 /** The value line at a checkpoint: PAV produced so far plus expected PAV still to come. */
@@ -413,7 +446,7 @@ function valueAt(
   throughTenure: number
 ): number {
   const curve = curves(priors, stint.slotBasis);
-  if (checkpoint === 0) return remainingSums(curve, 0, throughTenure).both;
+  if (checkpoint === 0) return remainingPrior(curve, 0, throughTenure);
   const produced = stint.seasons
     .filter(({ tenure }) => tenure <= checkpoint)
     .reduce((sum, { pav }) => sum + pav, 0);
@@ -421,8 +454,8 @@ function valueAt(
   return (
     produced +
     blendedRemaining(
-      remainingSums(curve, checkpoint, throughTenure),
-      ownForm(stint, checkpoint),
+      remainingPrior(curve, checkpoint, throughTenure),
+      ownForm(stint, checkpoint, curve),
       priors.rateCredibilityGames,
       priors.gamesCredibilitySeasons
     )
@@ -448,7 +481,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
       const group = tenureGroup(tenure);
       hazard.push({
         group,
-        slotBasis: stint.slotBasis,
+        slotBasis: design('survival', stint.slotBasis, tenure),
         response: inStint ? 0 : 1,
         weight: 1,
         offset: 0,
@@ -459,7 +492,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
       const group = tenureGroup(season.tenure);
       games.push({
         group,
-        slotBasis: stint.slotBasis,
+        slotBasis: design('games', stint.slotBasis, season.tenure),
         response: season.games,
         weight: 1,
         offset: 0,
@@ -467,7 +500,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
       if (season.games > 0)
         rate.push({
           group,
-          slotBasis: stint.slotBasis,
+          slotBasis: design('rate', stint.slotBasis, season.tenure),
           response: season.pav,
           weight: 1,
           offset: Math.log(season.games),
@@ -476,7 +509,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
   }
   for (let group = 0; group < RULES.pooledTenureFrom; group++) {
     const members = hazard.filter((observation) => observation.group === group);
-    const basis = SLOT_KNOTS.concat(0).map((_, index) =>
+    const basis = design('survival', slotBasis(1), group + 1).map((_, index) =>
       members.length === 0
         ? 0
         : members.reduce((sum, observation) => sum + observation.slotBasis[index]!, 0) /
@@ -498,7 +531,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
   };
   // Credibility: the next three seasons' PAV after every open checkpoint with those seasons observed.
   const targets: {
-    sums: ReturnType<typeof remainingSums>;
+    prior: number;
     own: ReturnType<typeof ownForm>;
     realized: number;
   }[] = [];
@@ -512,8 +545,8 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
       if (closedAt(stint, checkpoint)) break;
       const through = checkpoint + RULES.credibilityTargetSeasons;
       targets.push({
-        sums: remainingSums(curve, checkpoint, through),
-        own: ownForm(stint, checkpoint),
+        prior: remainingPrior(curve, checkpoint, through),
+        own: ownForm(stint, checkpoint, curve),
         realized: stint.seasons
           .filter(({ tenure }) => tenure > checkpoint && tenure <= through)
           .reduce((sum, { pav }) => sum + pav, 0),
@@ -528,7 +561,7 @@ function fitPriors(stints: readonly Stint[]): FittedPriors {
     for (const kGames of gamesGrid) {
       let error = 0;
       for (const target of targets) {
-        const residual = blendedRemaining(target.sums, target.own, k, kGames) - target.realized;
+        const residual = blendedRemaining(target.prior, target.own, k, kGames) - target.realized;
         error += residual * residual;
       }
       // Strictly better only, so a tie keeps the smaller k (grid order is ascending).
@@ -602,6 +635,15 @@ const publishCoefficients = (coefficients: Coefficients) => ({
     { picks: '10-30', slope: round(coefficients.slotSlopes[1]!, 9) },
     { picks: '30+', slope: round(coefficients.slotSlopes[2]!, 9) },
   ],
+  ...(coefficients.slotSlopes.length > 3
+    ? {
+        lnSlotSlopeChangePerTenureSeason: [
+          { picks: '1-10', change: round(coefficients.slotSlopes[3]!, 9) },
+          { picks: '10-30', change: round(coefficients.slotSlopes[4]!, 9) },
+          { picks: '30+', change: round(coefficients.slotSlopes[5]!, 9) },
+        ],
+      }
+    : {}),
 });
 
 const publishPriors = (priors: FittedPriors) => ({
@@ -748,7 +790,7 @@ export function fitAflTradeValueLine(inputs: AflTradeValueLineFitInputs) {
     const curve = curves(priors, slotBasis(slot));
     return {
       slot,
-      expectedFirstStintPav: round(remainingSums(curve, 0, RULES.horizonSeasons).both, 3),
+      expectedFirstStintPav: round(remainingPrior(curve, 0, RULES.horizonSeasons), 3),
       hpnDpvcV3: round(hpnDpv3ValueForPick(slot), 3),
       stillInStintAfterSeasons: {
         '3': round(curve.survival[3]!, 4),

@@ -41,7 +41,9 @@ expected_remaining(asset, checkpoint) = Σ over future seasons s:
 ```
 
 - **expected_rate**, the expected PAV per game, is a credibility blend:
-  `Z × own_rate + (1 − Z) × prior_rate`, with `Z = games / (games + k)`.
+  `Z × own_rate + (1 − Z) × prior_rate`, with `Z = games / (games + k)`. The fit reads `own_rate`
+  against the prior at the same seasons at the club, so a young player keeps the development his slot
+  shows later ([Fit specification](#fit-specification-step-2); for the owner to confirm).
 - **own_rate (Owner):** PAV per game over the player's last three seasons, with recent seasons weighted
   more. A season lost to injury adds no games. It neither lowers nor props up the rate.
 - **Credibility by games (Owner):** `games` is the games actually played in that window, not seasons on the
@@ -156,8 +158,9 @@ asset's value at the same checkpoint.
 ### Fit specification (step 2)
 
 Built in `modeling/valueLineFit.ts` (pure) and run by `npm run outcomes:grading:value-line-fit`. Every
-choice below is published in the fit artifact (`afl-trade-value-line-fit/v1`) with its fit window. This
-section fixes how the spec above is fitted; it changes none of the owner's rules.
+choice below is published in the fit artifact (`afl-trade-value-line-fit/v2`) with its fit window. This
+section fixes how the spec above is fitted. It changes none of the owner's rules; the relative own form
+(below) is how it reads `own_rate`, for the owner to confirm.
 
 - **Data.** Every current canonical AFLM national-draft selection of the classes fitted
   (`outcome_current_canonical_draft_selection_picks`), with its slot (selection number), drafting club
@@ -180,22 +183,45 @@ section fixes how the spec above is fitted; it changes none of the owner's rules
   and later, and a continuous piecewise-linear effect of ln(slot) with knots at picks 10 and 30:
   - survival: the per-season hazard of leaving the stint (logit link), with half an event and half a
     non-event added per tenure group so a group with no exits stays finite;
-  - expected games in a season in the stint (quasi-Poisson, log link);
+  - expected games in a season in the stint (quasi-Poisson, log link). Its ln(slot) slopes also change
+    linearly with tenure up to the pooled group (three more coefficients). With one slope for every
+    tenure, picks 1 to 10 played 47% more games than fitted in season 1 and 18% fewer from season 7,
+    and picks 31+ the reverse. The survival and rate curves showed no such pattern, so they keep one
+    slope;
   - expected PAV per game in a season in the stint with a game (quasi-Poisson, log link, offset
     ln games).
     A single ln(slot) slope was tried first and rejected: it put pick 1 at 265 PAV, while the pick 1s of
     2011 to 2020 averaged 86.
 - **First-stint pick curve.** `V(p) = Σ_{t=1..20} S(t, p) × games(t, p) × rate(t, p)`, with `S` the
   probability that season `t` is in the stint. Twenty seasons covers the longest stints; the pooled
-  10+ tenure group carries the tail.
+  10+ tenure group carries the tail. A class with more than twenty observed seasons is refused.
 - **Value at a checkpoint.** At the draft, `V(p)`. After season `τ` of an open stint: PAV produced, plus
   `Σ_{t>τ} S(t)/S(τ) × expected_games(t) × expected_rate(t)`. A closed stint is worth what it produced.
-  - `expected_rate(t) = Z × own_rate + (1 − Z) × rate(t, p)` with `Z = games / (games + k)`, and
-    `own_rate` the PAV per game over the last three in-stint seasons weighted 3, 2, 1 from the most
-    recent; `games` is the games in those seasons (Owner: credibility by games).
-  - `expected_games(t) = Z_g × own_games + (1 − Z_g) × games(t, p)` with `Z_g = seasons / (seasons +
-k_g)` and `own_games` the games per season over the same window, 0-game seasons included (the spec's
-    "availability history": an injury lowers it, never to zero).
+  Own form is read against the prior at the same tenures (the **relative own form**), then carried to
+  the later seasons:
+  - `expected_rate(t) = rate(t, p) × (Z × own_rate / prior_rate + 1 − Z)` with `Z = games / (games +
+k)`. `own_rate` is the PAV per game over the last three in-stint seasons weighted 3, 2, 1 from the
+    most recent, and `prior_rate` is `rate(·, p)` over the same seasons with the same weights; `games`
+    is the games in those seasons (Owner: credibility by games). A season with no game adds nothing to
+    either.
+  - `expected_games(t) = games(t, p) × (Z_g × own_games / prior_games + 1 − Z_g)` with `Z_g = seasons /
+(seasons + k_g)`, `own_games` the games over the same window, 0-game seasons included (the spec's
+    "availability history": an injury lowers it, never to zero), and `prior_games` the sum of
+    `games(·, p)` over those seasons.
+  - **Why relative (fit decision 2026-10-19, for the owner to confirm).** v1 blended the absolute
+    `own_rate` and `own_games` into every later season. A player's first three seasons are below the
+    level his slot reaches later, so v1 valued open stints too low at every checkpoint after the
+    draft: at year 3, 25.3 PAV a selection against 34.8 realized (−9.6, picks 1–10 −13.6, 11–30
+    −12.4, 31+ −7.2). Of the year-3 shortfall, about 0.23 (log) came from games, 0.12 from PAV per
+    game and 0.14 from survival. At year 3 the young player's own rate (0.44 a game) matched the
+    prior at the same tenures (0.46); the prior for the seasons still to come was 0.59. The relative
+    form keeps that development and moves a player only by how far he is above or below his slot at
+    the same age in the stint. The survival part needs no change of its own. `S(t)/S(τ)` and the
+    prior at the window's tenures both describe every draftee of the slot still in the stint,
+    including those about to close, so a player who has played is scaled up against that population
+    as much as the closures pull `S` down. Dating an inactivity closure at the third empty season
+    instead was tried and rejected: with the relative form it overvalued open stints at year 3
+    (+1.9 a selection).
 - **k and k_g.** Grid search, `k` over 0 to 300 games by 5 and `k_g` over 0 to 10 seasons by 0.5,
   minimizing the squared error of the predicted against the realized PAV of the next three seasons, at
   every open checkpoint whose next three seasons are observed. Ties take the smaller value. An optimum on
@@ -246,10 +272,14 @@ k_g)` and `own_games` the games per season over the same window, 0-game seasons 
    statistics source, so they fail closed and stay out of the fit window.
 2. **Fit and back-test:** fit the first-stint pick curve, the survival curves and k; publish the back-test.
    The fit and back-test command is in place ([Fit specification](#fit-specification-step-2)). The
-   curves beat whole-career DPVC as the prior at the draft. But the own-form blend, as written above,
-   values open stints too low after year 1 and year 3, in every pick range: `own_rate` is a young
-   player's current level, blended with a prior for the seasons in which he has developed. The own-form
-   definition waits on an owner decision before step 3 uses it.
+   curves beat whole-career DPVC as the prior at the draft. v1's absolute own-form blend valued open
+   stints too low after year 1 and year 3 in every pick range. v2 (relative own form, games slot
+   slopes by tenure) brings the year-3 bias to −0.7 PAV a selection (picks 1–10 −1.0, 11–30 −1.7,
+   31+ −0.2) and picks 1–10 at the draft from +9.2 to +6.0. Its fitted `k` is 0 games, the grid's lower
+   edge: per-game form relative to the slot is fully credible once a player has games. Players with 1
+   to 5 games in the window are not overvalued (year 1 −4.1, year 3 −0.7), but at year 1 those with 16
+   or more are (+14.8, 83 stints): a strong first season is carried forward at full weight. The owner
+   confirms the relative form and `k` = 0 before step 3 reads them.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset

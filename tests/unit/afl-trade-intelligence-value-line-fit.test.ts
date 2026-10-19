@@ -211,6 +211,51 @@ describe('fitAflTradeValueLine', () => {
     expect(after.firstStintPav).toBeCloseTo(before.firstStintPav + 16, 3);
   });
 
+  it('publishes how the games slot slopes change with tenure, and only for games', () => {
+    const { parameters } = fit.content;
+    expect(parameters.gamesWhenInStintLog.lnSlotSlopeChangePerTenureSeason).toHaveLength(3);
+    expect(parameters.survivalHazardLogit).not.toHaveProperty('lnSlotSlopeChangePerTenureSeason');
+    expect(parameters.pavPerGameLog).not.toHaveProperty('lnSlotSlopeChangePerTenureSeason');
+  });
+
+  it('reads own form against the prior at the same tenures, so development is kept', () => {
+    // One pick in five, spread over the slots, never plays. Everyone else stays, and plays more and
+    // better each season, the same at every slot. A young player's level carried forward as it is
+    // would undervalue every open stint at year 1 and year 3.
+    const steady: AflTradeValueLineFitSelection[] = [];
+    const steadyRows: Row[] = [];
+    for (let year = 2011; year <= 2024; year++)
+      for (let slot = 1; slot <= 40; slot++) {
+        const playerId = `q-${year}-${slot}`;
+        steady.push({
+          selectionId: `t-${year}-${slot}`,
+          draftYear: year,
+          slot,
+          clubId: 'adelaide',
+          playerId,
+        });
+        if ((year + slot) % 5 === 0) continue;
+        for (let season = year + 1; season <= LAST_SEASON; season++) {
+          const tenure = season - year;
+          const games = Math.min(22, 8 + 2 * tenure);
+          steadyRows.push({
+            season,
+            playerId,
+            clubId: 'adelaide',
+            games,
+            pav: games * 0.2 * Math.min(2, 1 + tenure / 5),
+          });
+        }
+      }
+    const steadyFit = fitAflTradeValueLine({ selections: steady, games: model(steadyRows) });
+    for (const checkpoint of [1, 3]) {
+      const all = steadyFit.content.backTest.byRangeAndCheckpoint.find(
+        (row) => row.range === 'all' && row.checkpoint === checkpoint
+      )!;
+      expect(Math.abs(all.bias) / all.meanRealized).toBeLessThan(0.03);
+    }
+  });
+
   it('uses only the held-out class seasons up to each checkpoint', () => {
     // A 2011 pick's 2016 season moves its realized PAV, never its value at draft, year 1 or year 3.
     const changed = rows.map((row) =>
@@ -248,6 +293,12 @@ describe('fitAflTradeValueLine', () => {
         games,
       })
     ).toThrow(/no season observed after it/);
+    expect(() =>
+      fitAflTradeValueLine({
+        selections: [...selections, { ...selections[0]!, selectionId: 'old', draftYear: 2005 }],
+        games: model(rows, range(2006, LAST_SEASON)),
+      })
+    ).toThrow(/more than 20 seasons observed/);
     expect(() =>
       fitAflTradeValueLine({
         selections,

@@ -4173,7 +4173,9 @@ the promoter and the candidate guards read) in a read-only repeatable-read trans
 player-season games read model over the seasons after the first class. A selection with no player, a
 class with no selections, a season that is not available and any games discrepancy are refused.
 
-**Output.** The fit is sealed under `value-line-fit:<sha256>` (`afl-trade-value-line-fit/v1`). It holds
+**Output.** The fit is sealed under `value-line-fit:<sha256>` (`afl-trade-value-line-fit/v2`: own form
+read relative to the slot prior at the same tenures, and the games curve's slot slopes changing with
+tenure; v1 blended absolute own form and valued open stints too low). It holds
 the rules, the fit window (classes, seasons with calculation ids, selections per class), stint diagnostics
 (open, closed by move, re-draft or inactivity, never played, returns after an inactivity closure), every
 coefficient, `k` and `k_g` with their objective and a grid-edge flag, the pick curve for slots 1 to 90 beside
