@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
     league: { findUnique: vi.fn(), update: vi.fn() },
-    leagueSeason: { findFirst: vi.fn(), upsert: vi.fn() },
+    leagueSeason: { findFirst: vi.fn(), createMany: vi.fn(), findUniqueOrThrow: vi.fn() },
     socialBoardCategory: { upsert: vi.fn() },
   };
   return {
