@@ -716,11 +716,13 @@ export function fitAflTradeValueLine(inputs: AflTradeValueLineFitInputs) {
   );
   // Calibration: mean realized against mean predicted, in bins of predicted value.
   const bins = RULES.calibrationBins;
+  // A first bin below 0 catches a value line whose added effect leaves it negative.
   const calibration = RULES.backTestCheckpoints.flatMap((checkpoint) =>
-    bins.map((from, index) => {
-      const through = bins[index + 1] ?? null;
+    [null, ...bins].map((from, index) => {
+      const through = index === 0 ? bins[0]! : (bins[index] ?? null);
       const members = select('all', checkpoint, false).filter(
-        ({ predicted }) => predicted >= from && (through === null || predicted < through)
+        ({ predicted }) =>
+          (from === null || predicted >= from) && (through === null || predicted < through)
       );
       const row = errorRow('all', checkpoint, members);
       return {

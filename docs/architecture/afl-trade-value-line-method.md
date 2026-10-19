@@ -37,7 +37,7 @@ One rule covers picks and players (**Owner**).
 
 ```text
 expected_remaining(asset, checkpoint) = Σ over future seasons s:
-    P(still at club in s) × expected_games(s) × expected_rate(s)
+    P(still at club in s) × (expected_PAV(s) + own_form_effect)
 ```
 
 - **Own form (Owner, 2026-10-19):** a player's own seasons move the line by how far he is above or below
@@ -224,6 +224,13 @@ none of the owner's rules.
   - **Prior comparison:** at the draft, the fitted curve against HPN DPVC v3 on the same selections
     (slots 1 to 90). Both are reported for every held-out class and for the mature classes (at least
     twelve observed seasons), where cutting the comparison at the last season read matters least.
+- **Known limitations (review 2026-10-19).** Survival is by slot and tenure only, so a player above his
+  slot's expectation is treated as leaving as often as one below it; in truth he stays longer, so the
+  effect is somewhat under-credited for overperformers and over-counted for underperformers. One pooled
+  season variance sets `k` for every tenure, although early seasons vary less. A future season's
+  `m(t, p) + u` is not floored at 0; the calibration's first bin (below 0) shows how often a value line
+  goes negative (never in the 2026-10-19 fit). A hazard term in the effect, or a tenure-varying `k`, is a
+  later refinement, not part of step 2.
 - **Out of scope here.** The traded-player prior and survival by age and position. `outcome_player`
   has a birth date for under half the players and no position, so these wait for that data.
 

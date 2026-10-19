@@ -192,7 +192,7 @@ describe('fitAflTradeValueLine', () => {
       calibration
         .filter(({ checkpoint }) => checkpoint === 0)
         .map(({ predictedFrom }) => predictedFrom)
-    ).toEqual([0, 5, 10, 20, 40, 80, 160]);
+    ).toEqual([null, 0, 5, 10, 20, 40, 80, 160]);
     for (const checkpoint of [0, 1, 3])
       expect(
         calibration
