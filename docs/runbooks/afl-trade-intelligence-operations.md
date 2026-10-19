@@ -3684,6 +3684,10 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   --store-id <store-id> --out <absolute-path.json>
 ```
 
+- **Do not store it yet (owner, 2026-10-19).** Dry runs only. The 13 legs of players drafted before 2011
+  (left-censored stage) are still about 10 to 13 PAV high at every checkpoint (fit `447b54dd…`). Storing waits
+  for the 2000-2010 national drafts to become canonical and the veteran bias to be within about one standard
+  error of zero (statlyaus/Statly#1023 comments).
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.
