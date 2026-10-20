@@ -366,7 +366,16 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
     expect(all(backTest.byStageBandAndCheckpoint, 0).legs).toBe(scored);
     const row = all(backTest.byStageBandAndCheckpoint, 1);
     expect(row.bias).toBeCloseTo(row.meanPredicted - row.meanRealized, 2);
-    expect(row.standardError).toBeCloseTo(row.rootMeanSquaredError / Math.sqrt(row.legs), 2);
+    // The SE of the bias: the residuals' SD over sqrt(n), from RMSE^2 = bias^2 + SD^2 (n - 1 denominator).
+    const deviation = Math.sqrt(
+      ((row.rootMeanSquaredError ** 2 - row.bias ** 2) * row.legs) / (row.legs - 1)
+    );
+    expect(row.standardError).toBeCloseTo(deviation / Math.sqrt(row.legs), 1);
+    expect(backTest.byVeteranBandsAndCheckpoint.map(({ group }) => group)).toEqual([
+      '10+',
+      '10+',
+      '10+',
+    ]);
     for (const baseline of ['producedOnly', 'stageOnly', 'postTradeOwnFormOnly'] as const)
       expect(backTest.baselines[baseline]).toHaveLength(24);
     // Produced-only shows what estimating adds: at the trade it predicts nothing.
@@ -557,6 +566,17 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
 });
 
 describe('aflTradeTradedPlayerValueAt', () => {
+  it('publishes a return probability per empty run and stage group', () => {
+    expect(
+      parameters.inactiveReturn.map(({ stageFrom, emptySeasons }) => `${stageFrom}:${emptySeasons}`)
+    ).toEqual(['1:1', '1:2', '10:1', '10:2']);
+    for (const row of parameters.inactiveReturn) {
+      expect(row.returned).toBeLessThanOrEqual(row.runs);
+      expect(row.probability).toBeGreaterThan(0);
+      expect(row.probability).toBeLessThan(1);
+    }
+  });
+
   const tradeSeason = 2021;
   /** A stage-6 player at the trade: drafted 2016, eleven to sixteen games a season. */
   const base: AflTradeTradedPlayerValueInput = {
@@ -627,6 +647,36 @@ describe('aflTradeTradedPlayerValueAt', () => {
       ).toBe(atTrade.value);
     // 2024 and 2025 are 14+ whatever his true stage, so they count once read.
     expect(aflTradeTradedPlayerValueAt(parameters, veteran, 2025).effect.seasons).toBe(2);
+  });
+
+  it('scales what remains after empty stint seasons, and leaves them out of form', () => {
+    const empty2023: AflTradeTradedPlayerValueInput = {
+      ...base,
+      career: base.career.map((row) => (row.season === 2023 ? { ...row, games: 0, pav: 0 } : row)),
+      stint: {
+        ...base.stint,
+        seasons: base.stint.seasons.map((row) =>
+          row.season === 2023 ? { ...row, games: 0, pav: 0 } : row
+        ),
+      },
+    };
+    const point = aflTradeTradedPlayerValueAt(parameters, empty2023, 2023);
+    // The empty 2023 is the retirement signal, not form: his effect is the 2022 view's.
+    expect(point.effect).toEqual(aflTradeTradedPlayerValueAt(parameters, base, 2022).effect);
+    const certain = aflTradeTradedPlayerValueAt(
+      {
+        ...parameters,
+        inactiveReturn: parameters.inactiveReturn.map((row) => ({ ...row, probability: 1 })),
+      },
+      empty2023,
+      2023
+    );
+    // Stage 8 at the 2023 checkpoint: the under-10 group after one empty season.
+    const row = parameters.inactiveReturn.find(
+      ({ stageFrom, emptySeasons }) => stageFrom === 1 && emptySeasons === 1
+    )!;
+    expect(point.expectedRemaining).toBeCloseTo(certain.expectedRemaining * row.probability, 9);
+    expect(point.state).toBe('open');
   });
 
   it('gives a player with no history no effect at the trade', () => {
@@ -894,7 +944,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(read.sql).not.toMatch(/recorded_?[nN]ame|display_name/);
   });
 
-  it('adds a Draftguru origin only for a player with no canonical draft row', () => {
+  it('keeps every canonical and Draftguru origin, so the fit takes the earliest', () => {
     const canonical = [{ playerId: 'p1', draftYear: 2012, draftType: 'rookie', selectionId: 's1' }];
     const draftguru = [
       { playerId: 'p1', draftYear: 2008, draftType: 'national', selectionId: 'e1' },
@@ -902,7 +952,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     ];
     expect(mergeAflTradeTradedPlayerDraftOrigins(canonical, draftguru)).toEqual([
       canonical[0],
-      draftguru[1],
+      ...draftguru,
     ]);
   });
 });

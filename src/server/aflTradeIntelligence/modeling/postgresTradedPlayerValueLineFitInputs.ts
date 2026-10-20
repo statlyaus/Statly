@@ -193,16 +193,16 @@ export async function loadAflTradeTradedPlayerDraftguruOrigins(
 }
 
 /**
- * The fit's draft origins: every canonical row, and for a player with none, his reviewed Draftguru
- * 2000 to 2010 rows (`loadAflTradeTradedPlayerDraftguruOrigins`). A canonical row
- * always wins; the fit takes each player's earliest origin.
+ * The fit's draft origins: every canonical row and every reviewed Draftguru 2000 to 2010 row
+ * (`loadAflTradeTradedPlayerDraftguruOrigins`). The fit takes each player's earliest, so a 2005
+ * Draftguru national selection precedes a later canonical re-draft (owner, 2026-10-20: "take the
+ * earliest draft origin"); stage stands in for age.
  */
 export function mergeAflTradeTradedPlayerDraftOrigins(
   canonical: readonly AflTradeTradedPlayerDraftOrigin[],
   draftguru: readonly AflTradeTradedPlayerDraftOrigin[]
 ): AflTradeTradedPlayerDraftOrigin[] {
-  const drafted = new Set(canonical.map(({ playerId }) => playerId));
-  return [...canonical, ...draftguru.filter(({ playerId }) => !drafted.has(playerId))];
+  return [...canonical, ...draftguru];
 }
 
 /**

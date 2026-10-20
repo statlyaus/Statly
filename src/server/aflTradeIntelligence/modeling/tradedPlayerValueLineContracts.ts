@@ -29,6 +29,14 @@ export interface AflTradeTradedPlayerValueLineParameters {
   pavPerGameLog: AflTradeTradedPlayerCurve;
   gamesCredibilitySeasons: number;
   rateCredibilityGames: number;
+  /** P(plays in the stint again | it ends in an empty run of `emptySeasons`, stage >= stageFrom). */
+  inactiveReturn: readonly {
+    stageFrom: number;
+    emptySeasons: number;
+    probability: number;
+    runs: number;
+    returned: number;
+  }[];
 }
 
 export interface AflTradeTradedPlayerValueInput {
