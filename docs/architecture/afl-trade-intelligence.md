@@ -4200,10 +4200,17 @@ It is pure and deterministic (trade order does not change the id).
 **Inputs.** A stored value-line fit (its content address checked), the asset ledger read model, the
 player-season games read model, the reconciliation candidate (transfers, custody orders, Footyinfo boards
 and draft selections) and a realized-trade-grade batch, read only for its trades, legs and onward links,
-never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`)
-estimates traded players' open stints; its fit is `modeling/tradedPlayerValueLineFit.ts` (below), not yet wired into the command. Inputs that pin different
-calculations for a season, a games read model of another method, a checkpoint past the fit's last season
-or a tenure past the curves' horizon are refused.
+never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
+whose types are the fit module's own, re-exported) estimates traded players' open stints from the stored
+traded-player fit (`modeling/tradedPlayerValueLineFit.ts`, below) and the evidence it read: its trade
+seasons, each player's trade seasons in that window, its merged draft origins and its games read model.
+`createAflTradeTradedPlayerValueEvaluator` (`modeling/tradedPlayerValueLineEvaluator.ts`) assembles it and
+refuses evidence that is not the fit's (another content address, method, season calculation, leg count or
+stage-basis count per trade season). The calculator builds each leg's input as the fit does
+(`aflTradeTradedPlayerFitLegInputs`): the stage by `aflTradeTradedPlayerStage` against his first trade,
+and his earlier trades for the phases; a unit test holds every fixture leg at every checkpoint to the
+fit's own point. Inputs that pin different calculations for a season, a games read model of another
+method, a checkpoint past the fit's last season or a tenure past the curves' horizon are refused.
 
 **Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v1`): the rules, the inputs (fit, traded-player
 fit, ledger, candidate and batch ids, each season's calculation), one line per asset (a pick, a traded

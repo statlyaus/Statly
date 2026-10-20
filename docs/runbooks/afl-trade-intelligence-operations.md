@@ -3662,6 +3662,7 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   npm run outcomes:grading:value-lines -- --candidate <external-reconciliation:...> \
   --method <hpn-pav-method:...> --seasons 2019-2026 --official-seasons <seasons> \
   --benchmark <hpn-pick-benchmark:...> --fit <absolute-path-to-fit.json> --through-season 2026 \
+  --traded-player-fit <absolute-path-to-traded-player-fit.json> \
   --store-id <store-id> --out <absolute-path.json>
 ```
 
@@ -3676,9 +3677,18 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 - `--out` is never overwritten. The printed line has the value-lines id, its inputs and its summary
   (assets by basis, assets pending at the last season end, trades with a provisional net), and the
   stored `artifactId`. It is stored as `derived_private` in repository `value-lines`.
-- No traded-player fit is stored yet, so every traded player's open stint is pending
-  (`traded_player_fit_not_stored`) and its trades' nets are provisional. Report the provisional count;
-  do not read a provisional net as a result.
+- `--traded-player-fit` (optional) is the `--out` file of "Fitting the traded-player value line" (the
+  stored fit is `044703d9…`); its schema and content address are checked before the database is opened.
+  The command re-reads what the fit read: the candidate's player legs in the fit's trade seasons, every
+  canonical and reviewed Draftguru draft origin, and the games read model over the fit's seasons (from
+  2011). It refuses unless the method and every season's calculation are the fit's, each trade season has
+  the fit's leg and unresolved counts, and each trade season's stage bases match the fit's (a Draftguru
+  batch or canonical draft row added since the fit changes them: refit first). `--through-season` may
+  not pass the fit's last season. A traded leg outside the fit's trade seasons, or with a draft origin at
+  or after his first trade, stays pending (`unavailable`).
+- Without `--traded-player-fit`, every traded player's open stint is pending
+  (`traded_player_fit_not_stored`) and its trades' nets are provisional. Either way, report the
+  provisional count; do not read a provisional net as a result.
 
 ## Fitting the traded-player value line
 
