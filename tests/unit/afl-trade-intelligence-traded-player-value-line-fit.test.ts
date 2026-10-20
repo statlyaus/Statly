@@ -330,6 +330,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       club_unresolved: 0,
     });
     for (const row of legsByTradeSeason) {
+      expect(row.stageDigest).toMatch(/^[0-9a-f]{64}$/);
       const basis = Object.values(row.byStageBasis).reduce((sum, count) => sum + count, 0);
       expect(basis).toBe(row.reviewed + row.unreviewed);
       expect(row.legs).toBe(row.reviewed + row.unreviewed + row.unresolved);
@@ -935,7 +936,41 @@ describe('createAflTradeTradedPlayerValueEvaluator', () => {
           },
         ],
       },
-      /stage bases of trade season \d{4} are not the fit's/
+      /stages of trade season \d{4} are not the fit's/
+    );
+    // An earlier origin that keeps the basis ('draft' either way) still moves the stage: refused.
+    const drafted = players.find(({ drafted, origin }) => drafted && origin >= 2012)!;
+    refuse(
+      {
+        draftOrigins: [
+          ...inputs.draftOrigins,
+          {
+            playerId: drafted.playerId,
+            draftYear: drafted.origin - 1,
+            draftType: 'rookie',
+            selectionId: 'external-evidence:earlier',
+          },
+        ],
+      },
+      /stages of trade season \d{4} are not the fit's/
+    );
+    // A leg re-read under another player keeps every count: refused all the same.
+    const season = TRADE_SEASONS.find((tradeSeason) => {
+      const here = inputs.legs.filter((leg) => leg.tradeSeason === tradeSeason);
+      return new Set(here.map(({ playerId }) => playerId)).size > 1;
+    })!;
+    const left = inputs.legs.find((leg) => leg.tradeSeason === season)!;
+    const outside = players.find(
+      ({ playerId, trades }) =>
+        playerId !== left.playerId && trades.every((trade) => trade.season !== season)
+    )!;
+    refuse(
+      {
+        legs: inputs.legs.map((leg) =>
+          leg === left ? { ...leg, playerId: outside.playerId } : leg
+        ),
+      },
+      /stages of trade season \d{4} are not the fit's/
     );
   });
 

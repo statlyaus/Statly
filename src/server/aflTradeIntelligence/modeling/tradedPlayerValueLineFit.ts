@@ -8,7 +8,10 @@
  * for byte. It reuses the pick fit's generic pieces (`solve`, `varianceComponents`, `errorRow`,
  * `round`) and changes nothing of it.
  */
-import { createAflTradeContentAddress } from '../artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '../artifacts/contentAddress';
 import type { AflTradeAssetLedgerStint } from '../valuation/assetLedgerContracts';
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 import {
@@ -22,7 +25,7 @@ import {
 } from './valueLineFit';
 
 export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION =
-  'afl-trade-traded-player-value-line-fit/v1' as const;
+  'afl-trade-traded-player-value-line-fit/v2' as const;
 const FIT_PREFIX = 'traded-player-value-line-fit';
 
 export type AflTradeTradedPlayerStageBasis = 'draft' | 'first_game' | 'assumed_youngest';
@@ -135,7 +138,7 @@ export interface AflTradeTradedPlayerCurve {
   phaseEffects: readonly { phase: AflTradeTradedPlayerPhase; effect: number }[];
 }
 
-/** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v1 artifact, plus its id. */
+/** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v2 artifact, plus its id. */
 export interface AflTradeTradedPlayerValueLineParameters {
   fitId: string;
   survivalHazardLogit: AflTradeTradedPlayerCurve;
@@ -761,6 +764,22 @@ export const aflTradeTradedPlayerStageBasisCounts = (stages: readonly Stage[]) =
     ])
   ) as Record<BasisGroup, number>;
 
+/**
+ * The sha256 of a trade season's legs as staged: each leg's player and stage, sorted. Recorded per trade
+ * season in `fitWindow.legsByTradeSeason` (v2), so a re-read whose origins or players moved a stage,
+ * even within one basis, cannot pass for the fit's.
+ */
+export const aflTradeTradedPlayerStageDigest = (
+  legs: readonly { playerId: string; stage: Stage }[]
+) =>
+  sha256AflTradeCanonicalJson(
+    legs
+      .map(({ playerId, stage }) =>
+        [playerId, stage.basis, stage.originSeason, stage.leftCensored].join('|')
+      )
+      .sort(compare)
+  );
+
 /** Validates the inputs and builds every player's stage, career and legs. */
 function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
   const { games } = inputs;
@@ -1190,6 +1209,9 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
       unreviewed: here.length - legsReviewed,
       unresolved,
       byStageBasis: aflTradeTradedPlayerStageBasisCounts(here.map(({ valued }) => valued.stage)),
+      stageDigest: aflTradeTradedPlayerStageDigest(
+        here.map(({ leg, valued }) => ({ playerId: leg.playerId, stage: valued.stage }))
+      ),
     };
   });
 

@@ -3,7 +3,7 @@ import type { AflTradeTradedPlayerValueEvaluator } from './tradedPlayerValueLine
 import {
   aflTradeTradedPlayerFirstDraftOrigins,
   aflTradeTradedPlayerStage,
-  aflTradeTradedPlayerStageBasisCounts,
+  aflTradeTradedPlayerStageDigest,
   aflTradeTradedPlayerValueAt,
   aflTradeTradedPlayerValueLineParameters,
   type AflTradeTradedPlayerDraftOrigin,
@@ -16,8 +16,10 @@ import {
  * (statlyaus/Statly#789): the legs and exclusions of the fit's trade seasons
  * (`aflTradeTradedPlayerTradeLegs`), the merged draft origins and the games read model over the fit's
  * seasons. Refuses evidence that is not the fit's own: another schema or content address, another HPN PAV
- * method, other seasons or calculations, other leg counts per trade season, or other stage bases per
- * trade season (a draft origin added or lost since the fit, such as a new Draftguru batch). Pure.
+ * method, other seasons or calculations, other leg counts per trade season, or other staged legs per
+ * trade season: any leg whose player or stage (basis, origin season, censoring) is not the fit's, as
+ * when a Draftguru batch or canonical draft row added since the fit moves an origin, even within one
+ * basis (the fit's `stageDigest`). Pure.
  */
 export function createAflTradeTradedPlayerValueEvaluator(input: {
   fit: AflTradeTradedPlayerValueLineFit;
@@ -78,15 +80,15 @@ export function createAflTradeTradedPlayerValueEvaluator(input: {
       throw new Error(
         `Trade season ${recorded.tradeSeason} has ${here.length + unresolved} legs; the fit read ${recorded.legs}.`
       );
-    const legStages = here.map(({ playerId }) => stages.get(playerId));
+    const staged = here.map(({ playerId }) => ({ playerId, stage: stages.get(playerId) }));
     if (
-      legStages.some((stage) => !stage) ||
-      JSON.stringify(
-        aflTradeTradedPlayerStageBasisCounts(legStages as AflTradeTradedPlayerStage[])
-      ) !== JSON.stringify(recorded.byStageBasis)
+      staged.some(({ stage }) => !stage) ||
+      aflTradeTradedPlayerStageDigest(
+        staged as { playerId: string; stage: AflTradeTradedPlayerStage }[]
+      ) !== recorded.stageDigest
     )
       throw new Error(
-        `The stage bases of trade season ${recorded.tradeSeason} are not the fit's: its draft origins or games differ.`
+        `The stages of trade season ${recorded.tradeSeason} are not the fit's: its legs, draft origins or games differ.`
       );
   }
   return {

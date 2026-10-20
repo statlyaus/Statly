@@ -258,7 +258,7 @@ none of the owner's rules.
 Built in `modeling/tradedPlayerValueLineFit.ts` (pure) and run by
 `npm run outcomes:grading:traded-player-value-line-fit`. Owner decision 2026-10-19: a traded player's open
 stint is **estimated** like a pick, not shown as produced-only or pending. Every choice below is published in
-the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded-player-value-line-fit:<sha256>`).
+the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded-player-value-line-fit:<sha256>`).
 
 - **Legs.** Every player leg of a candidate trade in the 2019 to 2025 trade periods
   (`source/officialAflTradePeriodSourceScope.ts`): a transfer with `asset.kind = 'player'`, a canonical
@@ -488,8 +488,9 @@ the spec above is applied; it changes none of the owner's rules.
    draft.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
    picks. The calculator, contract and command are in place
-   ([Value lines (step 3)](#value-lines-step-3)). The traded-player fit (owner decision 2026-10-19, item 3) is stored (`044703d9…`) and wired in by `--traded-player-fit`, which values traded players' open
-   stints on the fit's own leg inputs; the genuine value lines have not yet been computed with it.
+   ([Value lines (step 3)](#value-lines-step-3)). The traded-player fit (owner decision 2026-10-19, item 3) is stored (`044703d9…`, v1) and wired in by `--traded-player-fit`, which values traded players' open
+   stints on the fit's own leg inputs. The calculator needs a v2 fit (its per-season `stageDigest` ties the re-read stages to the fit's), so genuine needs a
+   refit before the value lines are computed with it.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
    ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
