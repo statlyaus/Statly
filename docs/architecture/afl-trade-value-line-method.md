@@ -258,7 +258,7 @@ none of the owner's rules.
 Built in `modeling/tradedPlayerValueLineFit.ts` (pure) and run by
 `npm run outcomes:grading:traded-player-value-line-fit`. Owner decision 2026-10-19: a traded player's open
 stint is **estimated** like a pick, not shown as produced-only or pending. Every choice below is published in
-the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded-player-value-line-fit:<sha256>`).
+the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded-player-value-line-fit:<sha256>`).
 
 - **Legs.** Every player leg of a candidate trade in the 2019 to 2025 trade periods
   (`source/officialAflTradePeriodSourceScope.ts`): a transfer with `asset.kind = 'player'`, a canonical
@@ -417,10 +417,16 @@ the spec above is applied; it changes none of the owner's rules.
 - **Signed values.** No floor: a closed asset is exactly what it produced, negative PAV included.
 - **Traded players.** A player's line is his first stint at the club that received him in that trade
   (never followed on). A closed stint is what it produced. An open stint takes produced plus expected
-  remaining from the injected traded-player fit (`modeling/tradedPlayerValueLineContracts.ts`); his
-  career-stage origin is his first national draft, else the season before his first game (assumed
-  youngest and left-censored when that game is in the first season read). With no fit stored the point
-  is pending (`traded_player_fit_not_stored`) and the trade's net is provisional.
+  remaining from the stored traded-player fit (`modeling/tradedPlayerValueLineContracts.ts`), on the
+  input the fit builds for the same leg: the stage by the fit's one rule (`aflTradeTradedPlayerStage`)
+  against his first trade in the fit's window, from the fit's merged draft origins (every canonical
+  AFLM draft type and the reviewed Draftguru 2000 to 2010 rows), else the season before his first game
+  (left-censored when it is in the fit's first read season), else assumed youngest (no draft and no
+  game: the season before that first trade); his career from the fit's games read model; and his
+  earlier trades in the window (every resolved leg, reviewed or not) for the phases. A leg is pending
+  (`unavailable`) only where the fit refuses it: a trade season outside its window, or a draft origin at
+  or after his first trade. With no fit given the point is pending (`traded_player_fit_not_stored`) and
+  the trade's net is provisional.
 - **Traded-on picks.** A pick leg is followed through each onward trade to its final hop (a special
   entitlement to its successor pick), so every trade it passed through carries the same line.
 - **Refusals.** The fit, ledger, batch and games read model must pin the same calculation per shared
@@ -481,9 +487,10 @@ the spec above is applied; it changes none of the owner's rules.
    (owner decisions 2026-10-19, items 1 and 2). The curves beat whole-career DPVC as the prior at the
    draft.
 3. **Value lines:** build the value-line calculator and contract, at every checkpoint, for players and
-   picks. The calculator, contract and command are in place for picks
-   ([Value lines (step 3)](#value-lines-step-3)). Traded players' open stints are pending until the
-   traded-player fit (owner decision 2026-10-19, item 3) is stored.
+   picks. The calculator, contract and command are in place
+   ([Value lines (step 3)](#value-lines-step-3)). The traded-player fit (owner decision 2026-10-19, item 3) is stored (`044703d9…`, v1) and wired in by `--traded-player-fit`, which values traded players' open
+   stints on the fit's own leg inputs. The calculator needs a v2 fit (its per-season `stageDigest` ties the re-read stages to the fit's), so genuine needs a
+   refit before the value lines are computed with it.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
    ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
