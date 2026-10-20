@@ -24,7 +24,10 @@ const admin = new Pool({ connectionString: databaseUrl, max: 2 });
 afterAll(async () => admin.end());
 
 const sha = (character: string) => character.repeat(64);
-const effectiveAt = '2026-09-20T00:00:00.000Z';
+// The successor revalidates 30 days after it takes effect, and the database permit checks that
+// against clock_timestamp(), so a fixed instant expires the accept path (#1034). The fixture's
+// rights terms end 2027-08-01, which bounds this to runs before 2027-07-02.
+const effectiveAt = new Date(Date.now() - 60_000).toISOString();
 const sourceReviewEvidence = { review: 'cameron-2020-source-control-review' };
 const ownerApprovalBytes = Buffer.from(
   JSON.stringify({
