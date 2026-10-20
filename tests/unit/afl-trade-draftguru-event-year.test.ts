@@ -441,8 +441,47 @@ describe('Draftguru event year provenance', () => {
       }
     });
 
-    it.each([1999, 2011, 2020])('refuses a %s page under v5', (year) => {
-      const result = parseNational(html, V5, year);
+    it('reads the numbered pre-season and rookie rows under v6 only, without an access category', () => {
+      const v6 = parseNational(html, 'draftguru-national-year-page/v6');
+      expect(v6.issues).toEqual([]);
+      const byType = (result: ReturnType<typeof parseNational>, type: string) =>
+        result.evidence
+          .map(({ content }) => content.claim)
+          .filter((claim) => claim.kind === 'draft_selection' && claim.draftType === type);
+      // The reduced 2020 table lists 59 national, 1 pre-season and 15 rookie rows.
+      expect(byType(v6, 'national')).toHaveLength(59);
+      expect(byType(v6, 'pre_season')).toHaveLength(1);
+      expect(byType(v6, 'rookie')).toHaveLength(15);
+      for (const claim of [...byType(v6, 'pre_season'), ...byType(v6, 'rookie')])
+        expect(claim).not.toHaveProperty('accessCategory');
+      expect(v6.scopeSummary.listedRows).toEqual({ 'Pre-Season': 1, Rookie: 15 });
+      // Pre-draft concessions carry no number and stay dropped.
+      expect(v6.scopeSummary.excludedByPathway).toMatchObject({ 'Pre-Draft': 4 });
+      // v6 national claims are exactly v5's.
+      expect(byType(v6, 'national')).toEqual(
+        parseNational().evidence.map(({ content }) => content.claim)
+      );
+      expect(byType(parseNational(), 'rookie')).toEqual([]);
+    });
+
+    it('reports an unnumbered rookie row under v6 as an issue', () => {
+      const $ = load(html);
+      const rookie = $('tbody tr')
+        .filter((_i, tr) => $(tr).find('td.draft').text().trim() === 'Rookie')
+        .first();
+      rookie.find('td.number').text('');
+      const result = parseNational($.html(), 'draftguru-national-year-page/v6');
+      // An issue keeps the batch out of every read, as for any other refused row.
+      expect(result.issues).toContainEqual(expect.objectContaining({ code: 'unsupported_row' }));
+    });
+
+    it.each([
+      [1999, V5],
+      [2011, V5],
+      [2020, V5],
+      [2011, 'draftguru-national-year-page/v6'],
+    ])('refuses a %s page under %s', (year, version) => {
+      const result = parseNational(html, version, year);
       expect(result.evidence).toEqual([]);
       expect(result.issues).toContainEqual(
         expect.objectContaining({

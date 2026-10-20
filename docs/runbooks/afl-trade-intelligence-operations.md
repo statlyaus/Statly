@@ -1073,7 +1073,11 @@ Prerequisites:
      label (the 2010 page; counted and dropped) and `Scholarship(NSW)`, read as `academy` on a
      Sydney selection and `open` on any other club's. Any other scholarship text stays an
      `unsupported_row` issue, and v5 refuses any page year outside 2000 to 2010. The 2000 to 2010
-     `-parser-v3` decisions of 2026-10-20 and their captures stay recorded; and
+     `-parser-v3` decisions of 2026-10-20 and their captures stay recorded. New captures of those pages use
+     `draftguru-national-year-page/v6` (owner 2026-10-20, "Yes, read them"), decisions `-parser-v6`: v5 plus
+     the numbered `Pre-Season` and `Rookie` rows as `pre_season` and `rookie` selections without an access
+     category, career origins for veterans listed before 2011 outside the national draft. `Pre-Draft` rows
+     carry no number and stay dropped. The v5 decisions and captures stay recorded; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
@@ -1146,7 +1150,7 @@ Prerequisites:
      `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
-   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v5`),
+   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v6`, earlier `/v5`),
    `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
@@ -1318,7 +1322,7 @@ change of its own.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v5 for the 2000 to 2010 pages), which keeps national selections and counts every other pathway
+(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v6 for the 2000 to 2010 pages, which also emits their pre-season and rookie rows), which keeps national selections and counts every other pathway
 as excluded, and records each selection's access category from the page's category cell. An
 unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 

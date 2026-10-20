@@ -12,6 +12,7 @@ import {
   AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
   DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS,
+  DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS,
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
@@ -689,7 +690,11 @@ function accessCategoryOf(
 /** The access forms a national-year parser version reviews. */
 function accessFormsOf(parserVersion: string): 'plain' | 'qualified' | 'legacy' | 'early' {
   if (parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION) return 'legacy';
-  if (parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION) return 'early';
+  if (
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION
+  )
+    return 'early';
   return parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION
     ? 'qualified'
     : 'plain';
@@ -759,14 +764,16 @@ function parseDraftguruYearSelectionRows(
     const playerName = normalizeText(playerCell.text());
     const clubName = normalizeText(clubCell.text());
     const categoryCells = wrapped.find('td.category');
-    const accessCategory = input.readAccessCategory
+    // Only a national row states access; a pre-season or rookie listing (parser v6) carries none.
+    const readsAccess = input.readAccessCategory && draftLabel === 'National';
+    const accessCategory = readsAccess
       ? accessCategoryOf(
           normalizeText(categoryCells.eq(1).text()),
           clubName,
           accessFormsOf(input.capture.parserVersion)
         )
       : undefined;
-    if (input.readAccessCategory && (categoryCells.length !== 2 || accessCategory === null)) {
+    if (readsAccess && (categoryCells.length !== 2 || accessCategory === null)) {
       scopeSummary.invalidRows++;
       issues.push({
         code: 'unsupported_row',
@@ -857,6 +864,8 @@ export function parseDraftguruNationalYearSelections(
     observedRows: number;
     includedRows: number;
     excludedByPathway: Record<string, number>;
+    /** Parser v6 only: the pre-season and rookie rows emitted beside the national selections. */
+    listedRows: Record<string, number>;
   };
 } {
   const $ = load(html);
@@ -865,11 +874,14 @@ export function parseDraftguruNationalYearSelections(
     observedRows: 0,
     includedRows: 0,
     excludedByPathway: {} as Record<string, number>,
+    listedRows: {} as Record<string, number>,
   };
   const issues: DraftguruParseIssue[] = [];
   const legacy =
     input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION;
-  const early = input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION;
+  const listings = input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION;
+  const early =
+    listings || input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION;
   const outOfScope =
     (legacy && !DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(input.draftYear)) ||
     (early && !DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS.includes(input.draftYear));
@@ -882,7 +894,7 @@ export function parseDraftguruNationalYearSelections(
           sourceKey: 'year-table',
           detail: legacy
             ? `Parser ${DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION} is reviewed for the 2011 to 2016 pages only.`
-            : `Parser ${DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION} is reviewed for the 2000 to 2010 pages only.`,
+            : `Parser ${input.capture.parserVersion} is reviewed for the 2000 to 2010 pages only.`,
         },
       ],
       scopeSummary: summary,
@@ -910,6 +922,11 @@ export function parseDraftguruNationalYearSelections(
   tables.find('tbody tr').each((index, row) => {
     summary.observedRows++;
     const label = normalizeText($(row).find('td.draft').text());
+    // Parser v6 keeps the numbered pre-season and rookie listings; the row parser checks each number.
+    if (listings && (label === 'Pre-Season' || label === 'Rookie')) {
+      summary.listedRows[label] = (summary.listedRows[label] ?? 0) + 1;
+      return;
+    }
     if (label === 'National') {
       summary.includedRows++;
       const numberCells = $(row).find('td.number');
