@@ -12,6 +12,18 @@ import {
 import { loadAflTradeAssetLedgerLabels } from '../src/server/aflTradeIntelligence/development/postgresAssetLedgerLabels';
 import { loadAflTradeRealizedTradeGradeInputs } from '../src/server/aflTradeIntelligence/development/postgresRealizedTradeGradeInputs';
 import { loadAflTradePlayerSeasonGames } from '../src/server/aflTradeIntelligence/modeling/postgresPlayerSeasonGames';
+import {
+  aflTradeTradedPlayerTradeLegs,
+  loadAflTradeTradedPlayerDraftguruOrigins,
+  loadAflTradeTradedPlayerDraftOrigins,
+  mergeAflTradeTradedPlayerDraftOrigins,
+} from '../src/server/aflTradeIntelligence/modeling/postgresTradedPlayerValueLineFitInputs';
+import type { AflTradeTradedPlayerValueEvaluator } from '../src/server/aflTradeIntelligence/modeling/tradedPlayerValueLineContracts';
+import { createAflTradeTradedPlayerValueEvaluator } from '../src/server/aflTradeIntelligence/modeling/tradedPlayerValueLineEvaluator';
+import {
+  aflTradeTradedPlayerValueLineParameters,
+  type AflTradeTradedPlayerValueLineFit,
+} from '../src/server/aflTradeIntelligence/modeling/tradedPlayerValueLineFit';
 import type { AflTradeValueLineFit } from '../src/server/aflTradeIntelligence/modeling/valueLineFit';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
@@ -33,26 +45,34 @@ import {
  * (the asset ledger and the batch's trades are rebuilt in process, never read for their values). It
  * takes the grader's arguments plus the fit file and the last season end, reads only, and its one
  * write is the value lines' evidence record, as the runbook section "Computing the value lines"
- * describes. No traded-player fit is stored yet, so traded players' open stints are pending.
+ * describes. With `--traded-player-fit` (the traded-player fit command's `--out` file), traded players'
+ * open stints are valued by that fit from the evidence it read (its games, draft origins and legs,
+ * re-read and refused unless they are the fit's); without it they are pending.
  *
  * Usage:
  *   npm run outcomes:grading:value-lines -- --candidate <external-reconciliation:...> \
  *     --method <hpn-pav-method:...> --seasons 2019-2026 --official-seasons <seasons> \
  *     --benchmark <hpn-pick-benchmark:...> --fit <absolute-path-to-fit.json> --through-season 2026 \
+ *     [--traded-player-fit <absolute-path-to-traded-player-fit.json>] \
  *     --store-id <store-id> --out <absolute-path.json> [--dry-run]
  */
 
 const REPOSITORY_ID = 'value-lines';
 const MAXIMUM_VALUE_LINES_BYTES = 64 * 1024 * 1024;
 const MAXIMUM_FIT_BYTES = 8 * 1024 * 1024;
-const OWN = ['--fit', '--through-season'];
+const OWN = ['--fit', '--through-season', '--traded-player-fit'];
 
 export interface ComputeValueLinesArguments extends GradeRealizedTradesArguments {
   fit: string;
   throughSeason: number;
+  /** The stored traded-player fit file, or null to leave traded players' open stints pending. */
+  tradedPlayerFit: string | null;
 }
 
-/** The grader's arguments, plus `--fit` (an absolute path) and `--through-season` (one season). */
+/**
+ * The grader's arguments, plus `--fit` (an absolute path), `--through-season` (one season) and the
+ * optional `--traded-player-fit` (an absolute path).
+ */
 export function parseComputeValueLinesArguments(
   argv: readonly string[],
   env: Readonly<Record<string, string | undefined>>
@@ -80,9 +100,16 @@ export function parseComputeValueLinesArguments(
   const [throughSeason, ...more] = parseSeasons('--through-season', season);
   if (throughSeason === undefined || more.length > 0 || season.includes('-'))
     throw new TypeError('--through-season must be one season.');
+  const tradedPlayerFit = own.get('--traded-player-fit') ?? null;
+  if (tradedPlayerFit !== null && !isAbsolute(tradedPlayerFit))
+    throw new TypeError('--traded-player-fit must be an absolute path.');
+  if (tradedPlayerFit === fit)
+    throw new TypeError('--traded-player-fit must not be the value-line fit.');
   const parsed = parseGradeRealizedTradesArguments(rest, env);
   if (parsed.out === fit) throw new TypeError('--out must not be the fit.');
-  return { ...parsed, fit, throughSeason };
+  if (parsed.out === tradedPlayerFit)
+    throw new TypeError('--out must not be the traded-player fit.');
+  return { ...parsed, fit, throughSeason, tradedPlayerFit };
 }
 
 /** Reads the stored fit file; the calculator checks its schema version and content address. */
@@ -98,6 +125,58 @@ export async function readValueLineFit(path: string): Promise<AflTradeValueLineF
   )
     throw new TypeError(`${path} is not a sealed value-line fit.`);
   return parsed as AflTradeValueLineFit;
+}
+
+/**
+ * Reads the stored traded-player fit file and checks it with `aflTradeTradedPlayerValueLineParameters`
+ * (its schema version and content address) before the database is opened.
+ */
+export async function readTradedPlayerValueLineFit(
+  path: string
+): Promise<AflTradeTradedPlayerValueLineFit> {
+  const { size } = await stat(path);
+  if (size > MAXIMUM_FIT_BYTES) throw new RangeError(`The fit exceeds ${MAXIMUM_FIT_BYTES} bytes.`);
+  const parsed: unknown = JSON.parse(await readFile(path, 'utf8'));
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    typeof (parsed as { fitId?: unknown }).fitId !== 'string' ||
+    typeof (parsed as { content?: unknown }).content !== 'object' ||
+    (parsed as { content?: unknown }).content === null
+  )
+    throw new TypeError(`${path} is not a sealed traded-player value-line fit.`);
+  const fit = parsed as AflTradeTradedPlayerValueLineFit;
+  aflTradeTradedPlayerValueLineParameters(fit);
+  return fit;
+}
+
+/**
+ * The traded-player evaluator from the stored fit and the evidence it read, re-read here: the
+ * candidate's player legs in the fit's trade seasons, every canonical and reviewed Draftguru draft
+ * origin, and the games read model over the fit's seasons. Refused unless they are the fit's.
+ */
+async function loadTradedPlayerEvaluator(
+  client: AflOutcomeSqlClient,
+  fit: AflTradeTradedPlayerValueLineFit,
+  candidate: Parameters<typeof aflTradeTradedPlayerTradeLegs>[0]
+): Promise<AflTradeTradedPlayerValueEvaluator> {
+  const { legs, excludedLegs } = aflTradeTradedPlayerTradeLegs(
+    candidate,
+    fit.content.fitWindow.legsByTradeSeason.map(({ tradeSeason }) => tradeSeason)
+  );
+  return createAflTradeTradedPlayerValueEvaluator({
+    fit,
+    legs,
+    excludedLegs,
+    draftOrigins: mergeAflTradeTradedPlayerDraftOrigins(
+      await loadAflTradeTradedPlayerDraftOrigins(client),
+      await loadAflTradeTradedPlayerDraftguruOrigins(client)
+    ),
+    games: await loadAflTradePlayerSeasonGames(client, {
+      methodId: fit.content.methodId,
+      seasons: fit.content.fitWindow.seasons.map(({ season }) => season),
+    }),
+  });
 }
 
 /** Stores the sealed value lines as private derived output: a calculation, not a source. */
@@ -130,6 +209,10 @@ export async function runComputeValueLinesCommand(input: {
   const parsed = parseComputeValueLinesArguments(input.argv, input.env);
   await requireOutAbsent(parsed.out, 'value-lines file');
   const fit = await readValueLineFit(parsed.fit);
+  const tradedPlayerFit =
+    parsed.tradedPlayerFit === null
+      ? null
+      : await readTradedPlayerValueLineFit(parsed.tradedPlayerFit);
   const pool = new Pool({ connectionString: parsed.databaseUrl, max: 2 });
   try {
     const client = createPgAflOutcomeSqlClient(pool);
@@ -144,6 +227,10 @@ export async function runComputeValueLinesCommand(input: {
       gradedAt: now,
     });
     const ledger = createAflTradeAssetLedger(inputs, await loadAflTradeAssetLedgerLabels(client));
+    const tradedPlayers =
+      tradedPlayerFit === null
+        ? undefined
+        : await loadTradedPlayerEvaluator(client, tradedPlayerFit, inputs.candidate);
     const valueLines = computeAflTradeValueLines({
       fit,
       ledger,
@@ -154,6 +241,7 @@ export async function runComputeValueLinesCommand(input: {
       candidateId: inputs.candidateId,
       candidate: inputs.candidate,
       batch: gradeAflTradesOnRealizedValue(inputs),
+      tradedPlayers,
       throughSeason: parsed.throughSeason,
     });
     const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(valueLines));

@@ -57,7 +57,10 @@ export interface AflTradeValueLineInputs {
       readonly trades: readonly AflTradeStoryTrade[];
     };
   };
-  /** The stored traded-player fit; without it a traded player's open stint is pending. */
+  /**
+   * The stored traded-player fit and the evidence it read (`createAflTradeTradedPlayerValueEvaluator`);
+   * without it a traded player's open stint is pending.
+   */
   readonly tradedPlayers?: AflTradeTradedPlayerValueEvaluator;
   /** The last season end valued. */
   readonly throughSeason: number;
@@ -191,7 +194,6 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
   const reader = new AflTradeValueLineReader(
     inputs.fit.content.parameters,
     inputs.games,
-    candidate,
     inputs.tradedPlayers
   );
   const { specs, legKeys } = aflTradeValueLineSpecs({ trades, index, candidate, ledger, reader });
