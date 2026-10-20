@@ -12,6 +12,7 @@ import {
   type AflTradePlayerSeasonGamesRows,
 } from '@/server/aflTradeIntelligence/modeling/playerSeasonGames';
 import {
+  aflTradeTradedPlayerTradeLegs,
   buildAflTradeTradedPlayerValueLineFitInputs,
   loadAflTradeTradedPlayerDraftOrigins,
   loadAflTradeTradedPlayerDraftguruOrigins,
@@ -39,6 +40,7 @@ import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/val
 import { AflTradeValueLineReader } from '@/server/aflTradeIntelligence/valuation/valueLineAssets';
 import type { AflTradeRealizedTradeGradeInputs } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
 
+import { readTradedPlayerValueLineFit } from '../../Scripts/compute-value-lines';
 import {
   parseFitTradedPlayerValueLineArguments,
   runFitTradedPlayerValueLineCommand,
@@ -1082,6 +1084,18 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       'player_identity_unresolved',
       'club_unresolved',
     ]);
+    // The value lines' evaluator reads the same legs through the same rule.
+    const shared = aflTradeTradedPlayerTradeLegs(grader.candidate, [2024]);
+    expect(shared.excludedLegs).toEqual(built.excludedLegs);
+    expect(shared.legs).toEqual(
+      built.legs.map(({ transferId, transactionId, tradeSeason, playerId, receivingClubId }) => ({
+        transferId,
+        transactionId,
+        tradeSeason,
+        playerId,
+        receivingClubId,
+      }))
+    );
     expect(built.stintCalculations).toEqual([
       { season: 2024, calculationId: 'hpn-pav-season:2024' },
       { season: 2025, calculationId: 'hpn-pav-season:2025' },
@@ -1239,6 +1253,17 @@ describe('fit-traded-player-value-line', () => {
     await expect(
       runFitTradedPlayerValueLineCommand({ argv: argv(out), env: loopback })
     ).rejects.toThrow(/a fit is never overwritten/);
+  });
+
+  it('reads a stored fit for the value lines only when it is sealed and of this schema', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'traded-player-fit-'));
+    const path = join(directory, 'fit.json');
+    await writeFile(path, JSON.stringify(fit));
+    expect((await readTradedPlayerValueLineFit(path)).fitId).toBe(fit.fitId);
+    await writeFile(path, JSON.stringify({ ...fit, fitId: `${fit.fitId.slice(0, -1)}0` }));
+    await expect(readTradedPlayerValueLineFit(path)).rejects.toThrow(/does not match/);
+    await writeFile(path, '[]');
+    await expect(readTradedPlayerValueLineFit(path)).rejects.toThrow(/not a sealed traded-player/);
   });
 
   it('takes the genuine database only on loopback', async () => {

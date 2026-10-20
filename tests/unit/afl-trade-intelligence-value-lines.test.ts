@@ -951,6 +951,35 @@ describe('compute-value-lines', () => {
     ).toThrow();
   });
 
+  it('takes an optional traded-player fit, an absolute path given once', () => {
+    expect(parseComputeValueLinesArguments(argv, loopback).tradedPlayerFit).toBeNull();
+    const withFit = [...argv, '--traded-player-fit', '/receipts/traded-player-fit.json'];
+    expect(parseComputeValueLinesArguments(withFit, loopback).tradedPlayerFit).toBe(
+      '/receipts/traded-player-fit.json'
+    );
+    expect(() =>
+      parseComputeValueLinesArguments([...argv, '--traded-player-fit', 'fit.json'], loopback)
+    ).toThrow(/--traded-player-fit must be an absolute path/);
+    expect(() =>
+      parseComputeValueLinesArguments([...withFit, '--traded-player-fit', '/x.json'], loopback)
+    ).toThrow(/--traded-player-fit may be given once/);
+    expect(() =>
+      parseComputeValueLinesArguments([...argv, '--traded-player-fit'], loopback)
+    ).toThrow(/--traded-player-fit needs a value/);
+    expect(() =>
+      parseComputeValueLinesArguments(
+        [...argv, '--traded-player-fit', '/receipts/value-lines.json'],
+        loopback
+      )
+    ).toThrow(/--out must not be the traded-player fit/);
+    expect(() =>
+      parseComputeValueLinesArguments(
+        [...argv, '--traded-player-fit', '/receipts/fit.json'],
+        loopback
+      )
+    ).toThrow(/--traded-player-fit must not be the value-line fit/);
+  });
+
   it('stores the value lines as private derived output in their own repository', async () => {
     const client = {} as AflOutcomeSqlClient;
     const bytes = new TextEncoder().encode('{"valueLinesId":"x"}');

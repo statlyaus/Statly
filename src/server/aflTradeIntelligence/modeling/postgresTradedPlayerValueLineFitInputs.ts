@@ -25,31 +25,38 @@ export interface AflTradeTradedPlayerValueLineFitInputOptions {
   spellCutoffAt: string;
 }
 
+/** A resolved player leg of a candidate trade, before its ledger stint is read. */
+export interface AflTradeTradedPlayerTradeLeg {
+  transferId: string;
+  transactionId: string;
+  tradeSeason: number;
+  playerId: string;
+  receivingClubId: string;
+}
+
 /**
- * Composes the fit's inputs from the realized grader's inputs (#789): every player leg of a candidate
- * trade in the trade seasons, with its first stint at the receiving club from Y + 1 by the grader's own
- * rule (`createAflTradeAssetLedgerStintValue`) and the grader's reviewed-arrival check. A leg with no
- * canonical player or no receiving club is listed as excluded, never dropped.
+ * Every player leg of a candidate trade in the trade seasons, ordered by transfer id: resolved, or
+ * excluded with its reason when it has no canonical player or no receiving club (never dropped). The
+ * fit and the value lines' traded-player evaluator read the same legs through this one rule.
  */
-export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
-  grader: AflTradeRealizedTradeGradeInputs;
-  games: AflTradePlayerSeasonGames;
-  draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
-  tradeSeasons: readonly number[];
-}): AflTradeTradedPlayerValueLineFitInputs {
-  const { grader, games, draftOrigins, tradeSeasons } = input;
-  const stintValue = createAflTradeAssetLedgerStintValue(grader);
+export function aflTradeTradedPlayerTradeLegs(
+  candidate: Pick<AflTradeRealizedTradeGradeInputs['candidate'], 'transactions' | 'transfers'>,
+  tradeSeasons: readonly number[]
+): {
+  legs: AflTradeTradedPlayerTradeLeg[];
+  excludedLegs: AflTradeTradedPlayerValueLineFitInputs['excludedLegs'][number][];
+} {
   const trades = new Map(
-    grader.candidate.transactions
+    candidate.transactions
       .filter(
         ({ transactionType, seasonYear }) =>
           transactionType === 'trade' && tradeSeasons.includes(seasonYear)
       )
       .map((transaction) => [transaction.transactionId, transaction])
   );
-  const legs: AflTradeTradedPlayerFitLeg[] = [];
+  const legs: AflTradeTradedPlayerTradeLeg[] = [];
   const excludedLegs: AflTradeTradedPlayerValueLineFitInputs['excludedLegs'][number][] = [];
-  const transfers = [...grader.candidate.transfers].sort((left, right) =>
+  const transfers = [...candidate.transfers].sort((left, right) =>
     left.transferId < right.transferId ? -1 : left.transferId > right.transferId ? 1 : 0
   );
   for (const transfer of transfers) {
@@ -70,15 +77,34 @@ export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
       excludedLegs.push({ ...base, reason: 'club_unresolved' });
       continue;
     }
-    const stint = stintValue(playerId, receivingClubId, trade.seasonYear + 1);
-    legs.push({
-      ...base,
-      playerId,
-      receivingClubId,
-      arrivalReviewed: stint.arrivalReviewed,
-      stint,
-    });
+    legs.push({ ...base, playerId, receivingClubId });
   }
+  return { legs, excludedLegs };
+}
+
+/**
+ * Composes the fit's inputs from the realized grader's inputs (#789): every player leg of a candidate
+ * trade in the trade seasons (`aflTradeTradedPlayerTradeLegs`), with its first stint at the receiving
+ * club from Y + 1 by the grader's own rule (`createAflTradeAssetLedgerStintValue`) and the grader's
+ * reviewed-arrival check. A leg with no canonical player or no receiving club is listed as excluded,
+ * never dropped.
+ */
+export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
+  grader: AflTradeRealizedTradeGradeInputs;
+  games: AflTradePlayerSeasonGames;
+  draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
+  tradeSeasons: readonly number[];
+}): AflTradeTradedPlayerValueLineFitInputs {
+  const { grader, games, draftOrigins, tradeSeasons } = input;
+  const stintValue = createAflTradeAssetLedgerStintValue(grader);
+  const { legs: resolved, excludedLegs } = aflTradeTradedPlayerTradeLegs(
+    grader.candidate,
+    tradeSeasons
+  );
+  const legs: AflTradeTradedPlayerFitLeg[] = resolved.map((leg) => {
+    const stint = stintValue(leg.playerId, leg.receivingClubId, leg.tradeSeason + 1);
+    return { ...leg, arrivalReviewed: stint.arrivalReviewed, stint };
+  });
   return {
     tradeSeasons,
     legs,
