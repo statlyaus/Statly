@@ -58,6 +58,13 @@ export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
   horizonSeasons: 20,
   inactivityClosureSeasons: PICK_RULES.inactivityClosureSeasons,
   /**
+   * Retirement (2026-10-20, issue 789). An inactivity closure is an exit in the season after his last
+   * game in the stint, not after the third empty season, and his empty seasons are out of the games
+   * curve. At a checkpoint whose stint ends in an empty run of 1 or 2 seasons, expected remaining is
+   * scaled by the fitted chance that a player in that state plays in the stint again, by stage group.
+   */
+  inactiveReturn: { emptyRuns: [1, 2], stageGroups: [{ from: 1 }, { from: 10 }] },
+  /**
    * Own form: the owner's credibility rule (2026-10-19), read over every career season through the
    * checkpoint, pre-trade at any club included, against the prior of its own stage band and phase;
    * additive, shrunk by k. Counting pre-trade seasons is an implementation choice, not an owner rule:
@@ -138,6 +145,17 @@ export interface AflTradeTradedPlayerValueLineParameters {
   rateCredibilityGames: number;
   /** The first season the fit read: a career begins no earlier than this. */
   firstReadSeason: number;
+  /** P(plays in the stint again | it ends in an empty run of `emptySeasons`, stage >= stageFrom). */
+  inactiveReturn: readonly AflTradeTradedPlayerInactiveReturn[];
+}
+
+export interface AflTradeTradedPlayerInactiveReturn {
+  stageFrom: number;
+  emptySeasons: number;
+  probability: number;
+  /** Resolved runs fitted (pseudo-counts excluded) and those that played again. */
+  runs: number;
+  returned: number;
 }
 
 export interface AflTradeTradedPlayerValueInput {
@@ -219,6 +237,7 @@ interface Priors {
   rate: Curve;
   gamesCredibilitySeasons: number;
   rateCredibilityGames: number;
+  inactiveReturn: readonly AflTradeTradedPlayerInactiveReturn[];
 }
 
 interface FittedPriors extends Priors {
@@ -325,6 +344,23 @@ function valuedLeg(
   };
 }
 
+/** The empty seasons that end `seasons` (0 when the last one has games). */
+const trailingEmpty = (seasons: readonly Season[]) => {
+  let run = 0;
+  for (let index = seasons.length - 1; index >= 0 && seasons[index]!.games === 0; index--) run++;
+  return run;
+};
+
+/** The fitted chance a player whose stint ends in `run` empty seasons, at `stage`, plays in it again. */
+const returnProbability = (priors: Pick<Priors, 'inactiveReturn'>, stage: number, run: number) => {
+  const groups = priors.inactiveReturn.filter(
+    (row) => row.emptySeasons === run && stage >= row.stageFrom
+  );
+  const row = groups.sort((left, right) => right.stageFrom - left.stageFrom)[0];
+  if (!row) throw new Error(`The fit has no return probability after ${run} empty seasons.`);
+  return row.probability;
+};
+
 /** Per tenure 1..horizon along a stint: P(season in stint), expected games, expected PAV per game. */
 function stintCurves(priors: Priors, stageAtTrade: number) {
   const survival = [1];
@@ -357,10 +393,12 @@ interface Effect {
 function playerEffect(priors: Priors, leg: Valued, checkpoint: number, mode: OwnForm): Effect {
   const candidates: PhasedSeason[] = [];
   if (mode === 'full') candidates.push(...leg.history.filter(({ season }) => season <= checkpoint));
-  if (mode !== 'none')
-    for (const season of leg.stint)
-      if (season.season <= checkpoint)
-        candidates.push({ ...season, phase: tenurePhase(season.season - leg.tradeSeason) });
+  if (mode !== 'none') {
+    // A trailing empty run is the retirement signal valueAt reads, not form.
+    const read = leg.stint.filter(({ season }) => season <= checkpoint);
+    for (const season of read.slice(0, read.length - trailingEmpty(read)))
+      candidates.push({ ...season, phase: tenurePhase(season.season - leg.tradeSeason) });
+  }
   const seasons = candidates.filter(({ season }) => knownBand(leg.stage, season) !== null);
   let gamesResidual = 0;
   let rateResidual = 0;
@@ -406,6 +444,9 @@ function valueAt(
       (curve.survival[t]! / curve.survival[tenure]!) *
       Math.max(0, curve.games[t]! + effect.games) *
       (curve.rate[t]! + effect.rate);
+  const empty = trailingEmpty(leg.stint.filter(({ season }) => season <= checkpoint));
+  if (empty > 0)
+    expectedRemaining *= returnProbability(priors, stageAtTradeOf(leg) - 1 + tenure, empty);
   return {
     tenure,
     closed,
@@ -513,6 +554,35 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
   const hazard: Observation[] = [];
   const games: Observation[] = [];
   const rate: Observation[] = [];
+  // Each time a stint's empty run reaches 1 or 2 seasons: did he play in it again? Resolved by a later
+  // game (yes) or the stint's close (no); a run still open at the last season read is not counted.
+  const { emptyRuns, stageGroups } = RULES.inactiveReturn;
+  const returnRuns = stageGroups.flatMap(({ from }) =>
+    emptyRuns.map((emptySeasons) => ({ stageFrom: from, emptySeasons, runs: 0, returned: 0 }))
+  );
+  for (const player of players)
+    for (const { leg, valued } of player.legs) {
+      if (!leg.arrivalReviewed) continue;
+      let run = 0;
+      valued.stint.forEach((season, index) => {
+        run = season.games === 0 ? run + 1 : 0;
+        if (!(emptyRuns as readonly number[]).includes(run)) return;
+        const later = valued.stint.slice(index + 1).some(({ games: played }) => played > 0);
+        if (!later && valued.closeReason === null) return;
+        const stage = stageAtTradeOf(valued) - 1 + (season.season - valued.tradeSeason);
+        const group = [...stageGroups].reverse().find(({ from }) => stage >= from)!.from;
+        const row = returnRuns.find(
+          (candidate) => candidate.stageFrom === group && candidate.emptySeasons === run
+        )!;
+        row.runs++;
+        if (later) row.returned++;
+      });
+    }
+  const inactiveReturn = returnRuns.map((row) => ({
+    ...row,
+    probability:
+      (row.returned + RULES.hazardPseudoCount) / (row.runs + 2 * RULES.hazardPseudoCount),
+  }));
   for (const player of players) {
     for (const season of player.active) {
       const band = knownBand(player.stage, season.season);
@@ -530,14 +600,11 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
     for (const { leg, valued } of player.legs) {
       if (!leg.arrivalReviewed) continue;
       const observed = lastSeason - valued.tradeSeason;
-      const inStint = valued.stint.length;
-      // A move is known once seen; an inactivity closure counts as an exit only inside the window.
-      const exitAt =
-        valued.closeReason === 'moved'
-          ? inStint + 1
-          : valued.closeReason === 'inactive' && inStint + 1 <= observed
-            ? inStint + 1
-            : null;
+      // His last season with a game: an inactivity closure exits the season after it, and an open
+      // stint ending in empty seasons is censored there (whether he retired is not yet known).
+      const played = valued.stint.length - trailingEmpty(valued.stint);
+      const inStint = valued.closeReason === 'moved' ? valued.stint.length : played;
+      const exitAt = valued.closeReason !== null ? inStint + 1 : null;
       const through = exitAt ?? Math.min(inStint, observed);
       for (let tenure = 1; tenure <= through; tenure++) {
         const band = knownBand(valued.stage, valued.tradeSeason + tenure);
@@ -549,6 +616,25 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
           weight: 1,
           offset: 0,
         });
+      }
+      // An open stint ending in 1 or 2 empty seasons: the season after his last game is an exit with
+      // the chance he does not return, else a survived season (fractional weights, so a recent
+      // retirement is not read as survival).
+      const pending = trailingEmpty(valued.stint);
+      if (exitAt === null && pending > 0 && played + 1 <= observed) {
+        const tenure = played + 1;
+        const band = knownBand(valued.stage, valued.tradeSeason + tenure);
+        const back = returnProbability(
+          { inactiveReturn },
+          stageAtTradeOf(valued) - 1 + tenure,
+          Math.min(pending, Math.max(...RULES.inactiveReturn.emptyRuns))
+        );
+        if (band !== null)
+          for (const [response, weight] of [
+            [1, 1 - back],
+            [0, back],
+          ] as const)
+            hazard.push({ band, phase: tenurePhase(tenure), response, weight, offset: 0 });
       }
     }
   }
@@ -588,6 +674,7 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
   const rateComponents = varianceComponents(rateRows, 'PAV per game');
   return {
     ...curves,
+    inactiveReturn,
     gamesCredibilitySeasons: gamesComponents.within / gamesComponents.between,
     rateCredibilityGames: Math.max(
       RULES.minimumRateCredibilityGames,
@@ -760,7 +847,9 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
     for (let season = careerStart; season <= lastTrade; season++)
       active.push({ ...career.get(season)!, phase: phaseOf(season, trades) });
     const last = legStates.find(({ leg }) => leg.tradeSeason === lastTrade && leg.arrivalReviewed);
-    for (const season of last?.valued.stint ?? [])
+    // His stint's trailing empty seasons are retirement (or not yet known), not low games.
+    const stint = last?.valued.stint ?? [];
+    for (const season of stint.slice(0, stint.length - trailingEmpty(stint)))
       active.push({ ...season, phase: tenurePhase(season.season - lastTrade) });
     if (playerLegs.some(({ arrivalReviewed }) => arrivalReviewed))
       unknownBandSeasonsExcluded += active.filter(
@@ -784,6 +873,8 @@ const publishComponents = (components: VarianceComponents) => ({
   within: round(components.within, 9),
   between: round(components.between, 9),
 });
+
+const VETERAN_BANDS: readonly Band[] = ['10-11', '12-13', '14+'];
 
 const ENTRY_GROUPS = [
   'drafted_before_first_read',
@@ -812,6 +903,15 @@ const legRow = (
   pairs: readonly { predicted: number; realized: number }[]
 ) => {
   const row = errorRow(group, checkpoint, pairs);
+  // The standard error of the bias: the residuals' sample SD over sqrt(n), not RMSE / sqrt(n), which
+  // counts the bias itself as noise (2026-10-20 review).
+  const n = pairs.length;
+  const residuals = pairs.map(({ predicted, realized }) => predicted - realized);
+  const meanResidual = n === 0 ? 0 : residuals.reduce((sum, value) => sum + value, 0) / n;
+  const deviation =
+    n < 2
+      ? 0
+      : Math.sqrt(residuals.reduce((sum, value) => sum + (value - meanResidual) ** 2, 0) / (n - 1));
   return {
     group,
     checkpoint,
@@ -821,8 +921,7 @@ const legRow = (
     bias: row.bias,
     meanAbsoluteError: row.meanAbsoluteError,
     rootMeanSquaredError: row.rootMeanSquaredError,
-    standardError:
-      row.selections === 0 ? 0 : round(row.rootMeanSquaredError / Math.sqrt(row.selections), 3),
+    standardError: n < 2 ? 0 : round(deviation / Math.sqrt(n), 3),
   };
 };
 
@@ -980,6 +1079,8 @@ function backTest(
       basisGroups,
       (group) => (pair) => group === 'all' || pair.basis === group
     ),
+    // Bands 10 and up pooled: each alone holds too few legs to test (2026-10-20 review).
+    byVeteranBandsAndCheckpoint: by(['10+'], () => (pair) => VETERAN_BANDS.includes(pair.band)),
     // The veterans whose career the read seasons do not start: most fall in the oldest bands.
     byEntryAndCheckpoint: by(
       ['entered_before_first_read', ...ENTRY_GROUPS],
@@ -1121,6 +1222,10 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
         rate: publishComponents(priors.varianceComponents.rate),
       },
       firstReadSeason,
+      inactiveReturn: priors.inactiveReturn.map((row) => ({
+        ...row,
+        probability: round(row.probability, 6),
+      })),
     },
     priorTable,
     atTradeCurve,
@@ -1131,6 +1236,7 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
       'A player who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored.',
       'First-game stages are understated for players listed before their debut.',
       "Recency is not weighted: a veteran's effect is his career average; decline shows only through the stage prior.",
+      'A retirement is seen only after the stint ends in empty seasons; until then the return probability by empty-run length and stage group stands in for it.',
     ],
   };
   return { fitId: createAflTradeContentAddress(FIT_PREFIX, content), content };
@@ -1164,6 +1270,7 @@ export function aflTradeTradedPlayerValueLineParameters(
     gamesCredibilitySeasons: parameters.gamesCredibilitySeasons,
     rateCredibilityGames: parameters.rateCredibilityGames,
     firstReadSeason: parameters.firstReadSeason,
+    inactiveReturn: parameters.inactiveReturn,
   };
 }
 
@@ -1209,6 +1316,7 @@ export function aflTradeTradedPlayerValueAt(
     rate: curveOf(parameters.pavPerGameLog),
     gamesCredibilitySeasons: parameters.gamesCredibilitySeasons,
     rateCredibilityGames: parameters.rateCredibilityGames,
+    inactiveReturn: parameters.inactiveReturn,
   };
   const point = valueAt(priors, valued, checkpointSeason, RULES.horizonSeasons);
   return {

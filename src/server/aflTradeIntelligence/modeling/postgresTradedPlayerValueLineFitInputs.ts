@@ -128,13 +128,20 @@ export async function loadAflTradeTradedPlayerDraftOrigins(
   );
 }
 
-/** The reviewed Draftguru parser for the 2000 to 2010 pages, whose selections give career origins. */
-const DRAFTGURU_EARLY_PARSER_VERSION = 'draftguru-national-year-page/v5';
+/**
+ * The reviewed Draftguru parsers for the 2000 to 2010 pages, whose rows give career origins: v5 (national
+ * selections) and v6 (also the pre-season and rookie listings, owner 2026-10-20).
+ */
+const DRAFTGURU_EARLY_PARSER_VERSIONS = [
+  'draftguru-national-year-page/v5',
+  'draftguru-national-year-page/v6',
+];
 
 /**
- * National draft origins for players with no canonical draft row, from the reviewed Draftguru 2000 to
- * 2010 year pages (owner decision 2026-10-20, issue 789: career-stage origins only, never canonical
- * drafts). A selection counts only from a finalized, issue-free parser-v5 batch, and only when its
+ * Draft origins for players with no canonical draft row, from the reviewed Draftguru 2000 to 2010 year
+ * pages (owner decisions 2026-10-20, issue 789: career-stage origins only, never canonical drafts): the
+ * national selections and, at parser v6, the pre-season and rookie listings. A row counts only from a
+ * finalized, issue-free parser-v5 or v6 batch, and only when its
  * Draftguru player id is a subject whose current identity decision is an approved canonical player;
  * no name is matched here. `selectionId` is the evidence id, so each origin names the row it read.
  * One read-only, repeatable-read transaction.
@@ -147,10 +154,12 @@ export async function loadAflTradeTradedPlayerDraftguruOrigins(
     const result = await transaction.query<{
       player_id: string;
       draft_year: number;
+      draft_type: string;
       evidence_id: string;
     }>(
       `SELECT decision.canonical_target_id AS player_id,
               (evidence.evidence_json->'content'->'claim'->>'draftYear')::int AS draft_year,
+              evidence.evidence_json->'content'->'claim'->>'draftType' AS draft_type,
               evidence.evidence_id
          FROM outcome_external_evidence_row evidence
          JOIN outcome_external_evidence_batch batch
@@ -167,33 +176,33 @@ export async function loadAflTradeTradedPlayerDraftguruOrigins(
           AND decision.canonical_target_kind = 'player'
         WHERE batch.provider = 'draftguru'
           AND evidence.claim_kind = 'draft_selection'
-          AND evidence.evidence_json->'content'->'capture'->>'parserVersion' = $1
-          AND evidence.evidence_json->'content'->'claim'->>'draftType' = 'national'
+          AND evidence.evidence_json->'content'->'capture'->>'parserVersion' = ANY($1::text[])
+          AND evidence.evidence_json->'content'->'claim'->>'draftType' IN ('national', 'pre_season', 'rookie')
           AND (evidence.evidence_json->'content'->'claim'->>'draftYear')::int BETWEEN 2000 AND 2010
-        ORDER BY 1, 2, 3`,
-      [DRAFTGURU_EARLY_PARSER_VERSION]
+        ORDER BY 1, 2, 3, 4`,
+      [DRAFTGURU_EARLY_PARSER_VERSIONS]
     );
     return result.rows;
   });
   return rows.map((row) => ({
     playerId: row.player_id,
     draftYear: Number(row.draft_year),
-    draftType: 'national',
+    draftType: row.draft_type,
     selectionId: row.evidence_id,
   }));
 }
 
 /**
- * The fit's draft origins: every canonical row, and for a player with none, his reviewed Draftguru
- * 2000 to 2010 national selections (`loadAflTradeTradedPlayerDraftguruOrigins`). A canonical row
- * always wins; the fit takes each player's earliest origin.
+ * The fit's draft origins: every canonical row and every reviewed Draftguru 2000 to 2010 row
+ * (`loadAflTradeTradedPlayerDraftguruOrigins`). The fit takes each player's earliest, so a 2005
+ * Draftguru national selection precedes a later canonical re-draft (owner, 2026-10-20: "take the
+ * earliest draft origin"); stage stands in for age.
  */
 export function mergeAflTradeTradedPlayerDraftOrigins(
   canonical: readonly AflTradeTradedPlayerDraftOrigin[],
   draftguru: readonly AflTradeTradedPlayerDraftOrigin[]
 ): AflTradeTradedPlayerDraftOrigin[] {
-  const drafted = new Set(canonical.map(({ playerId }) => playerId));
-  return [...canonical, ...draftguru.filter(({ playerId }) => !drafted.has(playerId))];
+  return [...canonical, ...draftguru];
 }
 
 /**

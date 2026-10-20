@@ -1073,7 +1073,11 @@ Prerequisites:
      label (the 2010 page; counted and dropped) and `Scholarship(NSW)`, read as `academy` on a
      Sydney selection and `open` on any other club's. Any other scholarship text stays an
      `unsupported_row` issue, and v5 refuses any page year outside 2000 to 2010. The 2000 to 2010
-     `-parser-v3` decisions of 2026-10-20 and their captures stay recorded; and
+     `-parser-v3` decisions of 2026-10-20 and their captures stay recorded. New captures of those pages use
+     `draftguru-national-year-page/v6` (owner 2026-10-20, "Yes, read them"), decisions `-parser-v6`: v5 plus
+     the numbered `Pre-Season` and `Rookie` rows as `pre_season` and `rookie` selections without an access
+     category, career origins for veterans listed before 2011 outside the national draft. `Pre-Draft` rows
+     carry no number and stay dropped. The v5 decisions and captures stay recorded; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
@@ -1146,7 +1150,7 @@ Prerequisites:
      `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
-   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v5`),
+   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v6`, earlier `/v5`),
    `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
@@ -1318,7 +1322,7 @@ change of its own.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v5 for the 2000 to 2010 pages), which keeps national selections and counts every other pathway
+(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v6 for the 2000 to 2010 pages, which also emits their pre-season and rookie rows), which keeps national selections and counts every other pathway
 as excluded, and records each selection's access category from the page's category cell. An
 unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 
@@ -3692,12 +3696,10 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   --store-id <store-id> --out <absolute-path.json>
 ```
 
-- **Do not store it yet (owner, 2026-10-19).** Dry runs only, until veterans who entered before 2011 and
-  the bands from 10 up are within about one standard error of zero at the trade, year 1 and year 3. The
-  2000-2010 Draftguru national origins (career origins only, never canonical; owner 2026-10-20) and the
-  10-11 / 12-13 / 14+ split (fit `05b9a248…`, statlyaus/Statly#1025) bring the 8 legs drafted 2000-2010 to
-  +2.4 / +4.3 / +8.2 PAV (SE 5.6 / 4.6 / 4.4; year 3 on 5 legs). The 5 legs that entered through a
-  pre-season, rookie or zone pre-draft listing are still left-censored at +18 / +17 / +12 (SE 10 / 8 / 5).
+- **Store gate (owner, 2026-10-20).** Store a fit only when the back-test bias of bands 10 and up pooled,
+  and of players who entered before 2011, is within two standard errors of zero at the trade, year 1 and
+  year 3. Fit `044703d9…` (statlyaus/Statly#789, retirement exits): pooled 10+ +2.6 / +1.2 / −0.6 PAV (SE
+  3.2 / 2.7 / 1.8); pre-2011 entrants +7.9 / +5.1 / +1.8 (SE 4.3 / 3.1 / 1.3).
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.

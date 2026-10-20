@@ -1,6 +1,6 @@
 import {
-  DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS,
+  DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS,
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
@@ -30,14 +30,14 @@ export const DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION =
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION;
 
 /**
- * The parser a new capture of one season uses: v5 for the 2000 to 2010 pages (training-squad rows and
- * NSW scholarship selections), v4 for the 2011 to 2016 pages, whose older forms (mini-draft rows,
+ * The parser a new capture of one season uses: v6 for the 2000 to 2010 pages (v5's training-squad rows
+ * and NSW scholarship selections, plus the pre-season and rookie rows; v5 captures stay valid), v4 for the 2011 to 2016 pages, whose older forms (mini-draft rows,
  * zone selections, unannotated academy players taken by another club) v3 refuses (issue 789); v3 for
  * every other season. A season's v3 capture stays valid as recorded.
  */
 export function draftguruNationalYearParserVersion(season: number): string {
   if (DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS.includes(season))
-    return DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION;
+    return DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION;
   return DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(season)
     ? DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION
     : DRAFTGURU_NATIONAL_YEAR_PARSER_VERSION;
@@ -64,7 +64,7 @@ export const DRAFTGURU_NATIONAL_YEAR_FIELDS = [
  * The owner records one narrow decision per season for this capability. v1 used
  * `draftguru-national-year-page-issue579-private-<season>`; each later parser has its own per-season
  * decision with a `-parser-v<n>` suffix (v2: `-parser-v2`, v3: `-parser-v3`, v4: `-parser-v4`, 2011 to
- * 2016 only, v5: `-parser-v5`, 2000 to 2010 only), so earlier decisions and their captures stay valid as recorded. The runner never falls back to an earlier parser or to a
+ * 2016 only, v5: `-parser-v5` and v6: `-parser-v6`, 2000 to 2010 only), so earlier decisions and their captures stay valid as recorded. The runner never falls back to an earlier parser or to a
  * combined or neighbouring season's decision.
  */
 export function draftguruNationalYearDecisionKey(season: number): string {
