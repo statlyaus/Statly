@@ -405,7 +405,7 @@ the spec above is applied; it changes none of the owner's rules.
   point is pending (`slot_unknown`). A season end between trades takes the slot of the pick's latest hop
   (by year, then trade id).
 - **Picks from the draft.** A used pick is `V(used slot)` at the draft, then the drafted player's first
-  stint at the drafting club. A pick not used or passed is 0. A matched-bid spent pick is its share of
+  stint at the drafting club. A pick not used or passed is 0, including one the boards show was not spent on a bid (owner, 2026-10-21). A matched-bid spent pick is its share of
   the nominee's line (at the bid slot) from the bid; before it, its own slot. A pick whose draft is not in
   evidence stays at its slot, and an unresolved outcome is pending.
 - **One evaluator.** A drafted player's point is `aflTradeValueLinePointAt` in `modeling/valueLineFit.ts`,

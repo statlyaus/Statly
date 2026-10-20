@@ -664,6 +664,36 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     });
   });
 
+  it('counts a nominee-count pick no board lists as not used, unless its holder has an unjoined spend', () => {
+    // Owner, 2026-10-21: a not-used pick the draft's boards do not list as spent was not spent.
+    const nomineeCount = (bid: BidMatch) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [bid],
+        pickOutcomes: candidate.pickOutcomes!.map((row) =>
+          row.transferId === 'tr-4'
+            ? outcome('tr-4', {
+                nominationBasis: 'club_took_nominated_player',
+                receivingClubNominatedSelections: 1,
+              })
+            : row
+        ),
+      }));
+    const unlisted = darcyBid({ consumedPicks: darcyBid().consumedPicks.slice(1) });
+    // Another club's bid: the Bulldogs, who held the pick, spent nothing the boards could not join.
+    expect(nomineeCount({ ...unlisted, clubId: 'geelong' }).pickOutcome(PICK_MATCHED)).toEqual({
+      kind: 'not_used',
+      evidence: 'board_not_spent',
+    });
+    // The Bulldogs' own bid has spent picks that join no slot: one of them could be this pick.
+    expect(nomineeCount(unlisted).pickOutcome(PICK_MATCHED)).toMatchObject({
+      kind: 'matched_bid',
+      status: 'pending',
+      basis: 'nominee_count',
+      pendingReason: 'no_bid_spend',
+    });
+  });
+
   it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {
     // On the genuine candidate every matched-bid selection is unresolved: the bid created its pick,
     // so it has no custody slot. Who was drafted is still stated by every provider.

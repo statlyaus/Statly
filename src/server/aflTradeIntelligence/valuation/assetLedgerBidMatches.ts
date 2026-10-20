@@ -4,6 +4,7 @@ import type {
   AflTradeAssetLedgerBidSpendLink,
   AflTradeAssetLedgerBidSpentPick,
   AflTradeAssetLedgerMatchedBidOutcome,
+  AflTradeAssetLedgerPickOutcome,
 } from './assetLedgerContracts';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
 import { aflTradeMatchedBidShares } from './matchedBidShares';
@@ -126,22 +127,60 @@ export function aflTradeAssetLedgerBidMatches(
 }
 
 /**
+ * Whether the boards show that a not-used pick was not spent on a bid (owner, 2026-10-21: "Yes, count
+ * it as 0"). Only for a pick whose matched-bid reading rests on a nominee count alone, when the draft's
+ * boards carry bid matches and none of the holder's bids in that draft has a spent pick that failed to
+ * join (it could be this one). With no known holder, it stays pending.
+ */
+function boardShowsNotSpent(
+  outcome: Extract<AflTradeAssetLedgerMatchedBidOutcome, { status: 'pending' }>,
+  pick: AflTradeAssetLedgerBidPick,
+  bidMatches: readonly AflTradeAssetLedgerBidMatch[]
+) {
+  if (outcome.basis !== 'nominee_count' || pick.holderClubId === null) return false;
+  const draft = bidMatches.filter(
+    ({ draftYear, draftType }) => draftYear === pick.draftYear && draftType === pick.draftType
+  );
+  return (
+    draft.length > 0 &&
+    !draft.some(
+      (bid) =>
+        bid.clubId === pick.holderClubId && bid.spentPicks.some(({ pickId }) => pickId === null)
+    )
+  );
+}
+
+/** The pick a matched-bid outcome belongs to: its draft and the club holding it at the draft. */
+export interface AflTradeAssetLedgerBidPick {
+  readonly pickId: string;
+  readonly draftYear: number;
+  readonly draftType: string;
+  readonly holderClubId: string | null;
+}
+
+/**
  * A pending matched-bid pick with its share of the nominee, when exactly one board bid match lists
- * it as spent, prices the bid and names its nominee. Otherwise it stays pending, with the reason.
+ * it as spent, prices the bid and names its nominee. A pick no board lists, where the boards show it
+ * was not spent, is not used. Otherwise it stays pending, with the reason.
  */
 export function aflTradeAssetLedgerShareMatchedBid(
   outcome: Extract<AflTradeAssetLedgerMatchedBidOutcome, { status: 'pending' }>,
-  pickId: string,
+  pick: AflTradeAssetLedgerBidPick,
   bidMatches: readonly AflTradeAssetLedgerBidMatch[]
-): AflTradeAssetLedgerMatchedBidOutcome {
+): AflTradeAssetLedgerPickOutcome {
   const spends = bidMatches.flatMap((bid) =>
-    bid.spentPicks.filter((pick) => pick.pickId === pickId).map((pick) => ({ bid, pick }))
+    bid.spentPicks
+      .filter((spent) => spent.pickId === pick.pickId)
+      .map((spent) => ({ bid, pick: spent }))
   );
   const pending = (pendingReason: typeof outcome.pendingReason) => ({ ...outcome, pendingReason });
-  if (spends.length === 0) return pending('no_bid_spend');
+  if (spends.length === 0)
+    return boardShowsNotSpent(outcome, pick, bidMatches)
+      ? { kind: 'not_used', evidence: 'board_not_spent' }
+      : pending('no_bid_spend');
   if (spends.length > 1) return pending('spent_twice');
-  const { bid, pick } = spends[0]!;
-  if (bid.pricing.status === 'refused' || pick.share === null) return pending('bid_unpriced');
+  const { bid, pick: spent } = spends[0]!;
+  if (bid.pricing.status === 'refused' || spent.share === null) return pending('bid_unpriced');
   if (bid.nominee === null) return pending('nominee_unresolved');
   return {
     kind: 'matched_bid',
@@ -150,9 +189,9 @@ export function aflTradeAssetLedgerShareMatchedBid(
     matchedBidBoardPickIds: outcome.matchedBidBoardPickIds,
     bidMatchId: bid.bidMatchId,
     nomineePlayerId: bid.nominee.playerId,
-    countedPoints: pick.countedPoints!,
-    share: pick.share,
-    use: pick.use!,
-    value: pick.value,
+    countedPoints: spent.countedPoints!,
+    share: spent.share,
+    use: spent.use!,
+    value: spent.value,
   };
 }
