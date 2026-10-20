@@ -19,6 +19,10 @@ import {
 } from '@/server/aflTradeIntelligence/modeling/postgresTradedPlayerValueLineFitInputs';
 import {
   AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION,
+  aflTradeTradedPlayerFirstDraftOrigins,
+  aflTradeTradedPlayerFitLegInputs,
+  aflTradeTradedPlayerStage,
+  aflTradeTradedPlayerStageBasisCounts,
   aflTradeTradedPlayerValueAt,
   aflTradeTradedPlayerValueLineParameters,
   fitAflTradeTradedPlayerValueLine,
@@ -783,6 +787,83 @@ describe('aflTradeTradedPlayerValueAt', () => {
         fitId: `traded-player-value-line-fit:${'0'.repeat(64)}`,
       })
     ).toThrow(/does not match/);
+  });
+});
+
+describe('aflTradeTradedPlayerStage', () => {
+  const stage = (
+    draftYear: number | null,
+    gameSeasons: number[],
+    firstTradeSeason = 2020,
+    firstReadSeason = 2011
+  ) =>
+    aflTradeTradedPlayerStage({
+      draftOrigin: draftYear === null ? null : { draftYear },
+      gameSeasons,
+      firstTradeSeason,
+      firstReadSeason,
+    });
+
+  it('takes the draft origin before his first trade, and refuses one at or after it', () => {
+    expect(stage(2015, [2011])).toEqual({
+      basis: 'draft',
+      originSeason: 2015,
+      leftCensored: false,
+    });
+    expect(stage(2020, [])).toBeNull();
+    expect(stage(2021, [])).toBeNull();
+  });
+
+  it('falls back to the season before his first game, left-censored in the first season read', () => {
+    expect(stage(null, [2013, 2014, 2021])).toEqual({
+      basis: 'first_game',
+      originSeason: 2012,
+      leftCensored: false,
+    });
+    expect(stage(null, [2014, 2011])).toEqual({
+      basis: 'first_game',
+      originSeason: 2010,
+      leftCensored: true,
+    });
+    // A game after his first trade is no evidence of where his career began.
+    expect(stage(null, [2021, 2022])).toEqual({
+      basis: 'assumed_youngest',
+      originSeason: 2019,
+      leftCensored: false,
+    });
+  });
+
+  it('takes the earliest draft origin, ties by draft type then selection', () => {
+    const first = aflTradeTradedPlayerFirstDraftOrigins([
+      { playerId: 'p1', draftYear: 2012, draftType: 'rookie', selectionId: 's1' },
+      { playerId: 'p1', draftYear: 2008, draftType: 'rookie', selectionId: 's3' },
+      { playerId: 'p1', draftYear: 2008, draftType: 'national', selectionId: 's4' },
+      { playerId: 'p2', draftYear: 2006, draftType: 'national', selectionId: 's2' },
+    ]);
+    expect(first.get('p1')).toMatchObject({ draftYear: 2008, selectionId: 's4' });
+    expect(first.get('p2')?.selectionId).toBe('s2');
+  });
+
+  it('gives each leg the input the fit values it from, its stage against his first trade', () => {
+    const legInputs = aflTradeTradedPlayerFitLegInputs(inputs);
+    expect(legInputs.map(({ transferId }) => transferId)).toEqual(
+      inputs.legs.map(({ transferId }) => transferId).sort()
+    );
+    const twice = players.find(({ trades }) => trades.length === 2)!;
+    const [first, second] = legInputs
+      .filter(({ input }) => input.playerId === twice.playerId)
+      .sort((left, right) => left.input.tradeSeason - right.input.tradeSeason);
+    expect(second!.input.stage).toEqual(first!.input.stage);
+    expect(second!.input.earlierTradeSeasons).toEqual([twice.trades[0]!.season]);
+    expect(first!.input.earlierTradeSeasons).toEqual([]);
+    for (const { tradeSeason, byStageBasis } of fit.content.fitWindow.legsByTradeSeason)
+      expect(
+        aflTradeTradedPlayerStageBasisCounts(
+          legInputs
+            .filter(({ input }) => input.tradeSeason === tradeSeason)
+            .map(({ input }) => input.stage)
+        )
+      ).toEqual(byStageBasis);
   });
 });
 
