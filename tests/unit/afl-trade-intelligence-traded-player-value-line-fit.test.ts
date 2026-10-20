@@ -853,12 +853,19 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(statements[1]).not.toMatch(/draft_type =/);
   });
 
-  it('reads reviewed Draftguru 2000-2010 national selections through approved identities only', async () => {
+  it('reads reviewed Draftguru 2000-2010 selections and listings through approved identities only', async () => {
     const statements: { sql: string; values?: unknown[] }[] = [];
     const query = async (sql: string, values?: unknown[]) => {
       statements.push({ sql, values });
       return {
-        rows: [{ player_id: 'p9', draft_year: 2004, evidence_id: 'external-evidence:e1' }],
+        rows: [
+          {
+            player_id: 'p9',
+            draft_year: 2004,
+            draft_type: 'pre_season',
+            evidence_id: 'external-evidence:e1',
+          },
+        ],
       };
     };
     const client = {
@@ -870,13 +877,16 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       {
         playerId: 'p9',
         draftYear: 2004,
-        draftType: 'national',
+        draftType: 'pre_season',
         selectionId: 'external-evidence:e1',
       },
     ]);
     expect(statements[0]!.sql).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     const read = statements[1]!;
-    expect(read.values).toEqual(['draftguru-national-year-page/v5']);
+    expect(read.values).toEqual([
+      ['draftguru-national-year-page/v5', 'draftguru-national-year-page/v6'],
+    ]);
+    expect(read.sql).toMatch(/IN \('national', 'pre_season', 'rookie'\)/);
     expect(read.sql).toMatch(/batch\.status = 'finalized' AND batch\.issue_count = 0/);
     expect(read.sql).toMatch(/head\.status = 'approved'/);
     expect(read.sql).toMatch(/decision\.outcome = 'approved'/);
