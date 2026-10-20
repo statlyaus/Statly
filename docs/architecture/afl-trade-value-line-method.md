@@ -312,8 +312,12 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
 - **Curves.** Each is `link = stageIntercept[band(stage of s)] + phaseEffect[phase]`:
   - survival: the per-season hazard of leaving the stint (logit), on bands 2-3 to 14+ and the tenure
     phases, with half an event and half a non-event per band and tenure phase. A move is an exit once
-    seen, even when the departure season is the last read; an inactivity closure is an exit only inside the
-    window, as in the pick fit;
+    seen, even when the departure season is the last read. **Retirement (2026-10-20):** an inactivity
+    closure is an exit in the season after his last game in the stint, not after the third empty season,
+    and an open stint ending in 1 or 2 empty seasons adds, at that season, an exit weighted by the chance he
+    does not return and a survived season weighted by the chance he does. Before this the exit landed three
+    seasons late, every 14+ veteran who had stopped playing was still "open" at year 3, and the back-test put
+    14+ at +9 PAV there;
   - games per season (quasi-Poisson, log) and PAV per game (quasi-Poisson, log, offset ln games, seasons
     with a game), on every band and phase. `pre_trade` is a phase, so his history at the old club informs
     the prior without being read as a season at the new club.
@@ -322,7 +326,13 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
 - **Seasons fitted.** Per player, every career season through his last trade (he was on a list to be
   traded), then his last reviewed leg's stint. Seasons after a stint with no later trade (a retirement, or
   a move by free agency) are left out: survival already carries the exit, and counting a retired player's
-  empty seasons as low games would charge it twice.
+  empty seasons as low games would charge it twice. For the same reason the empty seasons that end his last
+  stint are out of the games curve.
+- **Return after empty seasons** (2026-10-20). Each time a stint's empty run reaches 1 or 2 seasons, did he
+  play in it again? Resolved by a later game (yes) or the stint's close (no); a run still open at the last
+  season read is not counted. One probability per run length and stage group (under 10, 10 and up), with
+  half a return and half a non-return added; published as `inactiveReturn`. Genuine, 2026-10-20: after one
+  empty season 24% of under-10s and 8% of veterans played again; after two, 4% and 3%.
 - **Prior along a stint.** For tenure `t`, band = band(`(Y − origin) + t`) and phase = `tenure_min(t,3)`.
   A young player traded moves into the older bands as he ages, where the veterans' higher hazard applies, so
   ageing out comes from career stage, not from unobserved tenure past 7.
@@ -341,6 +351,9 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
 - **Value at checkpoint `c ≥ Y`,** `τ = c − Y`: a closed stint is worth what it produced. An open one is
   `produced(stint seasons ≤ c) + Σ_{t=τ+1..20} S(t)/S(τ) × max(0, E_games(t) + u_games) × (E_rate(t) + u_rate)`.
   `τ = 0` is the at-trade view, its own form from seasons up to the trade only. Only seasons `≤ c` are read.
+  When the stint's seasons up to `c` end in an empty run of 1 or 2, the sum is multiplied by that run's
+  return probability for his stage at `c`, and the run is left out of his own form (it is the retirement
+  signal, not form).
   `aflTradeTradedPlayerValueAt` computes it from the published parameters alone
   (`aflTradeTradedPlayerValueLineParameters` refuses another schema or a fit id that does not match its
   content), so a value line is reproducible from the stored fit; it takes the player's earlier trade
@@ -357,8 +370,10 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   checkpoint is scored for a trade season only when more seasons than it are observed (checkpoint 3 covers
   2019 to 2022). Realized: the leg's signed first-stint PAV at the receiving club through the last season
   read; predicted: the value line's expected PAV summed over the same seasons. Reported: bias (mean
-  predicted minus realized), MAE, RMSE and its standard error (RMSE / √n) per leg, by checkpoint and by
-  stage band at trade, by `stageBasis` (`first_game` split by left-censoring) and by trade season; the
+  predicted minus realized), MAE, RMSE and the bias's standard error (the residuals' sample SD over √n; until 2026-10-20 it
+  was RMSE / √n, which counts the bias itself as noise and understates large biases) per leg, by checkpoint
+  and by stage band at trade, bands 10 and up pooled (`byVeteranBandsAndCheckpoint`), by entry
+  (`byEntryAndCheckpoint`: drafted before the first read season, left-censored, later), by `stageBasis` (`first_game` split by left-censoring) and by trade season; the
   baselines produced-only (expected remaining 0: the display the owner rejected), stage-only (own form
   moves nothing) and post-trade-only own form (tests the at-trade use of history); calibration bins
   (below 0, then 0, 5, 10, 20, 40, 80, 160); the 10th and 90th percentiles of realized minus predicted;
@@ -366,8 +381,10 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v1`, sealed as `traded
   standard error. Checkpoint 3 rests on four trade seasons, and the tail past tenure 7 cannot be
   back-tested; the artifact says so.
 - **Known limitations.** Survival does not read own form, as in the pick fit. The 14+ band pools every
-  veteran from stage 14. The five legs of players who entered before 2011 through a pre-season, rookie
-  or pre-draft listing stay left-censored, still about 17 PAV high at the trade. First-game stages are understated for players listed before their debut. Recency is not
+  veteran from stage 14. The two legs of players who entered before 2011 through a pre-draft zone listing
+  (no pick number) stay left-censored. A retirement is seen only once the stint ends in empty seasons;
+  until then the stage prior carries it, so a veteran is still high at the trade (pre-2011 entrants +7.9,
+  SE 4.3, genuine fit `044703d9…`). First-game stages are understated for players listed before their debut. Recency is not
   weighted: a veteran's effect is his career average, so decline shows only through the stage prior.
 
 ### Value lines (step 3)
