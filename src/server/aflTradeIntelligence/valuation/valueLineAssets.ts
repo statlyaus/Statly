@@ -1,8 +1,13 @@
 import type { AflTradePlayerSeasonGames } from '../modeling/playerSeasonGames';
 import type {
+  AflTradeTradedPlayerDraftOrigin,
   AflTradeTradedPlayerValueEvaluator,
   AflTradeTradedPlayerValueInput,
 } from '../modeling/tradedPlayerValueLineContracts';
+import {
+  aflTradeTradedPlayerFirstDraftOrigins,
+  aflTradeTradedPlayerStage,
+} from '../modeling/tradedPlayerValueLineFit';
 import {
   AFL_TRADE_VALUE_LINE_FIT_RULES,
   aflTradeValueLinePointAt,
@@ -19,7 +24,6 @@ import {
   type AflTradeValueLinePoint,
   type AflTradeValueLineSlotSource,
 } from './valueLineContracts';
-import type { AflTradeValueLineCandidate } from './valueLineSlots';
 
 /** A point before its checkpoint, share and rounding are applied. */
 export type AflTradeValueLineRawPoint = Omit<AflTradeValueLinePoint, 'checkpoint'>;
@@ -52,6 +56,68 @@ interface StintSeason {
   pav: number;
 }
 
+/** The traded-player fit's evidence, indexed: careers, first games and stage origins as the fit read them. */
+interface TradedEvidence {
+  firstReadSeason: number;
+  lastReadSeason: number;
+  career: Map<string, { games: number; pav: number }>;
+  gameSeasons: Map<string, number[]>;
+  origins: Map<string, AflTradeTradedPlayerDraftOrigin>;
+}
+
+/**
+ * Indexes the traded-player fit's games read model, refusing one that is not of the value lines' method,
+ * pins another calculation for a season they share, or does not start at the fit's first read season.
+ */
+function tradedEvidence(
+  games: AflTradePlayerSeasonGames,
+  evaluator: AflTradeTradedPlayerValueEvaluator
+): TradedEvidence {
+  const fitGames = evaluator.games;
+  if (fitGames.methodId !== games.methodId)
+    throw new Error("The traded-player fit's games are not of the value lines' HPN PAV method.");
+  if (fitGames.discrepancies.length > 0)
+    throw new Error("The traded-player fit's games have discrepancies.");
+  const read = fitGames.seasons.map(({ season }) => season).sort((left, right) => left - right);
+  if (
+    fitGames.seasons.some(({ availability }) => availability !== 'available') ||
+    read.some((season, index) => index > 0 && season !== read[index - 1]! + 1)
+  )
+    throw new Error(
+      "Every season of the traded-player fit's games must be available, without a gap."
+    );
+  const { firstReadSeason } = evaluator.parameters;
+  if (read[0] !== firstReadSeason)
+    throw new Error(
+      `The traded-player fit's games do not start at its first read season ${firstReadSeason}.`
+    );
+  const pinned = new Map(games.seasons.map(({ season, calculationId }) => [season, calculationId]));
+  for (const { season, calculationId } of fitGames.seasons)
+    if (pinned.has(season) && pinned.get(season) !== calculationId)
+      throw new Error(
+        `Season ${season}: the traded-player fit's games pin another HPN PAV calculation.`
+      );
+  const career = new Map<string, { games: number; pav: number }>();
+  for (const row of fitGames.rows) {
+    const key = `${row.playerId}|${row.season}`;
+    const known = career.get(key) ?? { games: 0, pav: 0 };
+    career.set(key, { games: known.games + row.games, pav: known.pav + row.pav });
+  }
+  const gameSeasons = new Map<string, number[]>();
+  for (const [key, { games: played }] of career) {
+    if (played <= 0) continue;
+    const [playerId, season] = key.split('|') as [string, string];
+    gameSeasons.set(playerId, [...(gameSeasons.get(playerId) ?? []), Number(season)]);
+  }
+  return {
+    firstReadSeason,
+    lastReadSeason: read[read.length - 1]!,
+    career,
+    gameSeasons,
+    origins: aflTradeTradedPlayerFirstDraftOrigins(evaluator.draftOrigins),
+  };
+}
+
 /**
  * Reads value-line points from the stored fit, the ledger's stints and the games read model. Every
  * point reads only seasons through its checkpoint: the season a checkpoint closes is
@@ -61,17 +127,15 @@ export class AflTradeValueLineReader {
   private readonly curves = new Map<number, AflTradeValueLineSlotCurve>();
   private readonly pickValues = new Map<number, number>();
   private readonly gamesByKey = new Map<string, { games: number; pav: number }>();
-  private readonly careerBySeason = new Map<string, { games: number; pav: number }>();
   private readonly clubsBySeason = new Map<string, Set<string>>();
   private readonly firstReadSeason: number;
   private readonly lastReadSeason: number;
   private readonly credibility: AflTradeValueLineCredibility;
-  private readonly firstDraft = new Map<string, number>();
+  private readonly tradedEvidence: TradedEvidence | null;
 
   constructor(
     private readonly parameters: AflTradeValueLineFitParameters,
     games: AflTradePlayerSeasonGames,
-    candidate: AflTradeValueLineCandidate,
     private readonly tradedPlayers: AflTradeTradedPlayerValueEvaluator | undefined
   ) {
     this.credibility = parameters;
@@ -81,18 +145,10 @@ export class AflTradeValueLineReader {
     for (const row of games.rows) {
       this.gamesByKey.set(`${row.playerId}|${row.season}|${row.clubId}`, row);
       const key = `${row.playerId}|${row.season}`;
-      const career = this.careerBySeason.get(key) ?? { games: 0, pav: 0 };
-      this.careerBySeason.set(key, { games: career.games + row.games, pav: career.pav + row.pav });
       const clubs = this.clubsBySeason.get(key) ?? new Set<string>();
       this.clubsBySeason.set(key, clubs.add(row.clubId));
     }
-    for (const selection of candidate.draftSelections ?? []) {
-      if (selection.playerId === null || selection.draftType !== 'national') continue;
-      if (selection.status === 'disputed') continue;
-      const earlier = this.firstDraft.get(selection.playerId);
-      if (earlier === undefined || selection.draftYear < earlier)
-        this.firstDraft.set(selection.playerId, selection.draftYear);
-    }
+    this.tradedEvidence = tradedPlayers ? tradedEvidence(games, tradedPlayers) : null;
   }
 
   /** The slot's first-stint pick curve value, `V(slot)`. */
@@ -281,9 +337,12 @@ export class AflTradeValueLineReader {
   }
 
   /**
-   * The traded-player fit's input from evidence at the trade: his career-stage origin (first national
-   * draft, else the season before his first game, assumed youngest and left-censored when that game
-   * is in the first season read), his career through the checkpoint, and the stint so far.
+   * The traded-player fit's input, built as the fit builds a leg's (`aflTradeTradedPlayerFitLegInputs`):
+   * his stage by the fit's one rule (`aflTradeTradedPlayerStage`) against his first trade in the
+   * window, from the fit's merged draft origins and games; his career at any club from the stage origin
+   * (or the fit's first read season) through the checkpoint; his earlier trades in the window; and the
+   * stint so far. Null where the fit refuses the leg: a trade season it did not fit, or a draft origin
+   * at or after his first trade.
    */
   private tradedPlayerInput(
     playerId: string,
@@ -292,29 +351,30 @@ export class AflTradeValueLineReader {
     seasons: readonly StintSeason[],
     checkpointSeason: number
   ): AflTradeTradedPlayerValueInput | null {
-    const drafted = this.firstDraft.get(playerId);
-    let stage: AflTradeTradedPlayerValueInput['stage'];
-    if (drafted !== undefined && drafted < tradeSeason)
-      stage = { basis: 'draft', originSeason: drafted, leftCensored: false };
-    else {
-      let firstGame: number | undefined;
-      for (let year = this.firstReadSeason; year <= tradeSeason && firstGame === undefined; year++)
-        if ((this.careerBySeason.get(`${playerId}|${year}`)?.games ?? 0) > 0) firstGame = year;
-      if (firstGame === undefined) return null;
-      stage =
-        firstGame === this.firstReadSeason
-          ? { basis: 'assumed_youngest', originSeason: firstGame - 1, leftCensored: true }
-          : { basis: 'first_game', originSeason: firstGame - 1, leftCensored: false };
-    }
+    const evidence = this.tradedEvidence!;
+    const { tradeSeasons, playerTradeSeasons } = this.tradedPlayers!;
+    if (!tradeSeasons.includes(tradeSeason)) return null;
+    const trades = playerTradeSeasons.get(playerId) ?? [];
+    if (!trades.includes(tradeSeason))
+      throw new Error(`The traded-player fit has no ${tradeSeason} trade of ${playerId}.`);
+    const stage = aflTradeTradedPlayerStage({
+      draftOrigin: evidence.origins.get(playerId) ?? null,
+      gameSeasons: evidence.gameSeasons.get(playerId) ?? [],
+      firstTradeSeason: Math.min(...trades),
+      firstReadSeason: evidence.firstReadSeason,
+    });
+    if (stage === null) return null;
+    if (checkpointSeason > evidence.lastReadSeason)
+      throw new Error(`The traded-player fit's games do not read season ${checkpointSeason}.`);
     const career = [];
     for (
-      let year = Math.max(stage.originSeason + 1, this.firstReadSeason);
+      let year = Math.max(stage.originSeason + 1, evidence.firstReadSeason);
       year <= checkpointSeason;
       year++
     )
       career.push({
         season: year,
-        ...(this.careerBySeason.get(`${playerId}|${year}`) ?? { games: 0, pav: 0 }),
+        ...(evidence.career.get(`${playerId}|${year}`) ?? { games: 0, pav: 0 }),
       });
     return {
       playerId,
@@ -324,6 +384,7 @@ export class AflTradeValueLineReader {
       career,
       // Only an open stint reaches the fit: a closed one is worth what it produced.
       stint: { status: 'open', endSeason: null, seasons },
+      earlierTradeSeasons: trades.filter((season) => season < tradeSeason),
     };
   }
 }

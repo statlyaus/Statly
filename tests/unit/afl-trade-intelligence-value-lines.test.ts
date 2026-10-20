@@ -435,13 +435,26 @@ const trade = (lines: AflTradeValueLines, id: string) =>
 const PLAYER_X = 'player|x|a|2020';
 const P = (name: string) => `pick|${pickId(name)}`;
 
-/** A stand-in traded-player fit: one PAV per season still to come, reading only the checkpoint. */
+/**
+ * A stand-in traded-player fit: one PAV per season still to come, reading only the checkpoint. It read
+ * the fixture's games from 2018, x's 2016 national draft, and x's 2019 and y's 2020 trades.
+ */
 function stubEvaluator(
-  seen: AflTradeTradedPlayerValueInput[] = []
+  seen: AflTradeTradedPlayerValueInput[] = [],
+  extra: Partial<AflTradeTradedPlayerValueEvaluator> = {}
 ): AflTradeTradedPlayerValueEvaluator {
   return {
+    tradeSeasons: range(2019, 2025),
+    playerTradeSeasons: new Map([
+      ['x', [2019]],
+      ['y', [2020]],
+    ]),
+    draftOrigins: [{ playerId: 'x', draftYear: 2016, draftType: 'national', selectionId: 'sx' }],
+    games: inputs().games,
+    ...extra,
     parameters: {
       fitId: 'traded-player-value-line-fit:stub',
+      firstReadSeason: 2018,
     } as AflTradeTradedPlayerValueEvaluator['parameters'],
     valueAt: (parameters, input, checkpointSeason) => {
       seen.push(input);
@@ -683,6 +696,106 @@ describe('computeAflTradeValueLines', () => {
     expect(input.stage).toEqual({ basis: 'draft', originSeason: 2016, leftCensored: false });
     expect(input.career.map(({ season }) => season)).toEqual(range(2018, 2022));
     expect(input.stint.seasons.map(({ season }) => season)).toEqual(range(2020, 2022));
+  });
+
+  it("takes the traded player's stage and phases as the fit does", () => {
+    const inputOf = (extra: Partial<AflTradeTradedPlayerValueEvaluator>) => {
+      const seen: AflTradeTradedPlayerValueInput[] = [];
+      const result = computeAflTradeValueLines({
+        ...inputs(),
+        tradedPlayers: stubEvaluator(seen, extra),
+      });
+      return { result, input: seen.find(({ playerId }) => playerId === 'x') };
+    };
+    // The merged origins, not the candidate's draft selections: an earlier Draftguru listing wins.
+    expect(
+      inputOf({
+        draftOrigins: [
+          { playerId: 'x', draftYear: 2016, draftType: 'national', selectionId: 'sx' },
+          {
+            playerId: 'x',
+            draftYear: 2010,
+            draftType: 'rookie',
+            selectionId: 'external-evidence:x',
+          },
+        ],
+      }).input?.stage
+    ).toEqual({ basis: 'draft', originSeason: 2010, leftCensored: false });
+    // No draft: his first game, in the first season read, is a left-censored first game.
+    expect(inputOf({ draftOrigins: [] }).input?.stage).toEqual({
+      basis: 'first_game',
+      originSeason: 2017,
+      leftCensored: true,
+    });
+    // An earlier trade in the window sets the stage origin's trade and the phases.
+    const twice = inputOf({
+      draftOrigins: [],
+      playerTradeSeasons: new Map([
+        ['x', [2017, 2019]],
+        ['y', [2020]],
+      ]),
+    }).input!;
+    expect(twice.stage).toEqual({
+      basis: 'assumed_youngest',
+      originSeason: 2016,
+      leftCensored: false,
+    });
+    expect(twice.earlierTradeSeasons).toEqual([2017]);
+    expect(inputOf({}).input?.earlierTradeSeasons).toEqual([]);
+  });
+
+  it('leaves a traded stint unavailable only where the fit refuses it', () => {
+    const lines = (extra: Partial<AflTradeTradedPlayerValueEvaluator>) =>
+      computeAflTradeValueLines({ ...inputs(), tradedPlayers: stubEvaluator([], extra) });
+    // A trade season the fit did not read.
+    expect(
+      pointOf(lines({ tradeSeasons: [2020] }), PLAYER_X, at('season_end', 2024))
+    ).toMatchObject({ state: 'pending', pending: 'unavailable', produced: 50 });
+    // A draft origin at or after his first trade.
+    expect(
+      pointOf(
+        lines({
+          draftOrigins: [{ playerId: 'x', draftYear: 2019, draftType: 'rookie', selectionId: 's' }],
+        }),
+        PLAYER_X,
+        at('season_end', 2024)
+      )
+    ).toMatchObject({ state: 'pending', pending: 'unavailable' });
+    expect(() => lines({ playerTradeSeasons: new Map([['y', [2020]]]) })).toThrow(
+      /has no 2019 trade of x/
+    );
+  });
+
+  it('refuses a traded-player fit that read other games', () => {
+    const base = inputs();
+    const refuse = (extra: Partial<AflTradeTradedPlayerValueEvaluator>, message: RegExp) =>
+      expect(() =>
+        computeAflTradeValueLines({ ...base, tradedPlayers: stubEvaluator([], extra) })
+      ).toThrow(message);
+    refuse(
+      { games: { ...base.games, methodId: 'hpn-pav-method:other' } },
+      /traded-player fit's games are not of the value lines' HPN PAV method/
+    );
+    refuse(
+      {
+        games: {
+          ...base.games,
+          seasons: base.games.seasons.map((row) =>
+            row.season === 2021 ? { ...row, calculationId: 'hpn-pav-season:other' } : row
+          ),
+        },
+      },
+      /Season 2021: the traded-player fit's games pin another HPN PAV calculation/
+    );
+    refuse(
+      {
+        games: gamesModel(
+          BASE_ROWS.filter(({ season }) => season >= 2019),
+          range(2019, LAST)
+        ),
+      },
+      /traded-player fit's games do not start at its first read season 2018/
+    );
   });
 
   it('reads no season after a checkpoint', () => {

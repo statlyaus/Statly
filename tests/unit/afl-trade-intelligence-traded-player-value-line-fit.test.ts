@@ -32,7 +32,11 @@ import {
   type AflTradeTradedPlayerValueLineFitInputs,
 } from '@/server/aflTradeIntelligence/modeling/tradedPlayerValueLineFit';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import { createAflTradeTradedPlayerValueEvaluator } from '@/server/aflTradeIntelligence/modeling/tradedPlayerValueLineEvaluator';
+import type { AflTradeTradedPlayerValuePoint } from '@/server/aflTradeIntelligence/modeling/tradedPlayerValueLineContracts';
+import type { AflTradeValueLineFitParameters } from '@/server/aflTradeIntelligence/modeling/valueLineFit';
 import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
+import { AflTradeValueLineReader } from '@/server/aflTradeIntelligence/valuation/valueLineAssets';
 import type { AflTradeRealizedTradeGradeInputs } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
 
 import {
@@ -864,6 +868,131 @@ describe('aflTradeTradedPlayerStage', () => {
             .map(({ input }) => input.stage)
         )
       ).toEqual(byStageBasis);
+  });
+});
+
+describe('createAflTradeTradedPlayerValueEvaluator', () => {
+  const evidence = {
+    fit,
+    legs: inputs.legs,
+    excludedLegs: inputs.excludedLegs,
+    draftOrigins: inputs.draftOrigins,
+    games: inputs.games,
+  };
+  const evaluator = createAflTradeTradedPlayerValueEvaluator(evidence);
+
+  it("carries the fit, its trade seasons and each player's trades in the window", () => {
+    expect(evaluator.parameters).toEqual(parameters);
+    expect(evaluator.valueAt).toBe(aflTradeTradedPlayerValueAt);
+    expect(evaluator.tradeSeasons).toEqual(TRADE_SEASONS);
+    const twice = players.find(({ trades }) => trades.length === 2)!;
+    expect(evaluator.playerTradeSeasons.get(twice.playerId)).toEqual(
+      twice.trades.map(({ season }) => season)
+    );
+    // Unreviewed legs count, as in the fit: they set his first trade and phases.
+    const unreviewed = players.find(({ trades }) => trades.some(({ reviewed }) => !reviewed))!;
+    expect(evaluator.playerTradeSeasons.get(unreviewed.playerId)).toEqual(
+      unreviewed.trades.map(({ season }) => season)
+    );
+  });
+
+  it('refuses evidence that is not what the fit read', () => {
+    const refuse = (change: Partial<typeof evidence>, message: RegExp) =>
+      expect(() => createAflTradeTradedPlayerValueEvaluator({ ...evidence, ...change })).toThrow(
+        message
+      );
+    refuse(
+      { fit: { ...fit, fitId: `traded-player-value-line-fit:${'0'.repeat(64)}` } },
+      /does not match/
+    );
+    refuse({ games: { ...inputs.games, methodId: 'hpn-pav-method:other' } }, /method/);
+    refuse(
+      {
+        games: {
+          ...inputs.games,
+          seasons: inputs.games.seasons.map((row) =>
+            row.season === 2015 ? { ...row, calculationId: 'hpn-pav-season:other' } : row
+          ),
+        },
+      },
+      /seasons and calculations are not the fit's/
+    );
+    refuse({ legs: inputs.legs.slice(1) }, /Trade season \d{4} has \d+ legs; the fit read \d+/);
+    refuse({ excludedLegs: [] }, /Trade season 2021 has \d+ legs; the fit read \d+/);
+    // A new origin (another Draftguru batch, say) moves a stage basis: refused, never re-read.
+    const undrafted = players.find(({ drafted }) => !drafted)!;
+    refuse(
+      {
+        draftOrigins: [
+          ...inputs.draftOrigins,
+          {
+            playerId: undrafted.playerId,
+            draftYear: undrafted.trades[0]!.season - 1,
+            draftType: 'rookie',
+            selectionId: 'external-evidence:new',
+          },
+        ],
+      },
+      /stage bases of trade season \d{4} are not the fit's/
+    );
+  });
+
+  it("gives the value lines the fit's own point for every leg at every checkpoint", () => {
+    const points: AflTradeTradedPlayerValuePoint[] = [];
+    const recording = {
+      ...evaluator,
+      valueAt: (...args: Parameters<typeof evaluator.valueAt>) => {
+        const point = evaluator.valueAt(...args);
+        points.push(point);
+        return point;
+      },
+    };
+    // The value lines read fewer seasons than the fit; careers before them come from the fit's games.
+    const reader = new AflTradeValueLineReader(
+      {} as AflTradeValueLineFitParameters,
+      model(
+        rows.filter(({ season }) => season >= 2019),
+        range(2019, LAST_SEASON)
+      ),
+      recording
+    );
+    const legInputs = new Map(
+      aflTradeTradedPlayerFitLegInputs(inputs).map(({ transferId, input }) => [transferId, input])
+    );
+    const seen = { open: 0, closed: 0, bases: new Set<string>() };
+    for (const leg of inputs.legs) {
+      const fitInput = legInputs.get(leg.transferId)!;
+      for (let season = leg.tradeSeason; season <= LAST_SEASON; season++) {
+        const kind = season === leg.tradeSeason ? 'trade' : 'season_end';
+        points.length = 0;
+        const line = reader.traded(leg.playerId, leg.tradeSeason, leg.stint, { kind, season });
+        const expected = aflTradeTradedPlayerValueAt(parameters, fitInput, season);
+        expect(line.state).toBe(expected.state);
+        expect(line.produced).toBeCloseTo(expected.produced, 9);
+        expect(line.expectedRemaining).toBeCloseTo(expected.expectedRemaining, 9);
+        expect(line.value).toBeCloseTo(expected.value, 9);
+        if (line.state === 'closed') {
+          seen.closed++;
+          continue;
+        }
+        seen.open++;
+        expect(points).toHaveLength(1);
+        expect(points[0]).toMatchObject({
+          stageBasis: expected.stageBasis,
+          leftCensored: expected.leftCensored,
+          stageAtTrade: expected.stageAtTrade,
+        });
+        seen.bases.add(`${expected.stageBasis}${expected.leftCensored ? ':censored' : ''}`);
+      }
+    }
+    expect(seen.open).toBeGreaterThan(500);
+    expect(seen.closed).toBeGreaterThan(100);
+    expect([...seen.bases].sort()).toEqual([
+      'assumed_youngest',
+      'draft',
+      'first_game',
+      'first_game:censored',
+    ]);
   });
 });
 
