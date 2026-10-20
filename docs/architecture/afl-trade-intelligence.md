@@ -4038,7 +4038,10 @@ one of:
 
 - `selected`: the selection, player, drafting club and number, and `firstStint`, the draftee's first
   stint at the drafting club from the season after the draft.
-- `not_used`: stated not used by a club that took no nominee.
+- `not_used`: stated not used by a club that took no nominee. Also, with `evidence: 'board_not_spent'`,
+  a pick of a club that took a nominee whose matched-bid reading rests on the nominee count alone, when
+  the draft's boards carry bid matches, none lists it as spent and none of the holder's bids in that
+  draft has a spent pick that joins no slot (owner, 2026-10-21: "Yes, count it as 0").
 - `matched_bid`: a not-used pick of a club that took a nominee. Its `basis` is `board_matched_bid`
   when Footyinfo board picks record the club's matched bid (listed), or `nominee_count` when the
   evidence says only that the club took a nominee in that draft, so the pick may have been spent
@@ -4046,7 +4049,7 @@ one of:
   year's rule prices the bid and its nominee is one candidate selection ("Matched-bid shares" below):
   it then carries the bid, the nominee, its counted points, its share and its `value`. Otherwise it is
   `status: 'pending'` with a `pendingReason` (`no_bid_spend`, `bid_unpriced`, `nominee_unresolved` or
-  `spent_twice`). Never 0 and never estimated.
+  `spent_twice`). Never estimated, and 0 only through `not_used` with `board_not_spent` above.
 - `passed`: a board-stated passed or removed pick.
 - `future`: a pick not yet drafted, with its projected slot in the live Official AFL order (rule v6's
   lookup over the hop's own entitlement, including the previous draft's order as a proxy), or null
