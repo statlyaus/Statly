@@ -352,7 +352,7 @@ const trailingEmpty = (seasons: readonly Season[]) => {
 };
 
 /** The fitted chance a player whose stint ends in `run` empty seasons, at `stage`, plays in it again. */
-const returnProbability = (priors: Priors, stage: number, run: number) => {
+const returnProbability = (priors: Pick<Priors, 'inactiveReturn'>, stage: number, run: number) => {
   const groups = priors.inactiveReturn.filter(
     (row) => row.emptySeasons === run && stage >= row.stageFrom
   );
@@ -554,6 +554,35 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
   const hazard: Observation[] = [];
   const games: Observation[] = [];
   const rate: Observation[] = [];
+  // Each time a stint's empty run reaches 1 or 2 seasons: did he play in it again? Resolved by a later
+  // game (yes) or the stint's close (no); a run still open at the last season read is not counted.
+  const { emptyRuns, stageGroups } = RULES.inactiveReturn;
+  const returnRuns = stageGroups.flatMap(({ from }) =>
+    emptyRuns.map((emptySeasons) => ({ stageFrom: from, emptySeasons, runs: 0, returned: 0 }))
+  );
+  for (const player of players)
+    for (const { leg, valued } of player.legs) {
+      if (!leg.arrivalReviewed) continue;
+      let run = 0;
+      valued.stint.forEach((season, index) => {
+        run = season.games === 0 ? run + 1 : 0;
+        if (!(emptyRuns as readonly number[]).includes(run)) return;
+        const later = valued.stint.slice(index + 1).some(({ games: played }) => played > 0);
+        if (!later && valued.closeReason === null) return;
+        const stage = stageAtTradeOf(valued) - 1 + (season.season - valued.tradeSeason);
+        const group = [...stageGroups].reverse().find(({ from }) => stage >= from)!.from;
+        const row = returnRuns.find(
+          (candidate) => candidate.stageFrom === group && candidate.emptySeasons === run
+        )!;
+        row.runs++;
+        if (later) row.returned++;
+      });
+    }
+  const inactiveReturn = returnRuns.map((row) => ({
+    ...row,
+    probability:
+      (row.returned + RULES.hazardPseudoCount) / (row.runs + 2 * RULES.hazardPseudoCount),
+  }));
   for (const player of players) {
     for (const season of player.active) {
       const band = knownBand(player.stage, season.season);
@@ -588,41 +617,31 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
           offset: 0,
         });
       }
+      // An open stint ending in 1 or 2 empty seasons: the season after his last game is an exit with
+      // the chance he does not return, else a survived season (fractional weights, so a recent
+      // retirement is not read as survival).
+      const pending = trailingEmpty(valued.stint);
+      if (exitAt === null && pending > 0 && played + 1 <= observed) {
+        const tenure = played + 1;
+        const band = knownBand(valued.stage, valued.tradeSeason + tenure);
+        const back = returnProbability(
+          { inactiveReturn },
+          stageAtTradeOf(valued) - 1 + tenure,
+          Math.min(pending, Math.max(...RULES.inactiveReturn.emptyRuns))
+        );
+        if (band !== null)
+          for (const [response, weight] of [
+            [1, 1 - back],
+            [0, back],
+          ] as const)
+            hazard.push({ band, phase: tenurePhase(tenure), response, weight, offset: 0 });
+      }
     }
   }
   for (const band of SURVIVAL_BANDS)
     for (const phase of TENURE_PHASES)
       for (const response of [0, 1])
         hazard.push({ band, phase, response, weight: RULES.hazardPseudoCount, offset: 0 });
-  // Each time a stint's empty run reaches 1 or 2 seasons: did he play in it again? Resolved by a later
-  // game (yes) or the stint's close (no); a run still open at the last season read is not counted.
-  const { emptyRuns, stageGroups } = RULES.inactiveReturn;
-  const returnRuns = stageGroups.flatMap(({ from }) =>
-    emptyRuns.map((emptySeasons) => ({ stageFrom: from, emptySeasons, runs: 0, returned: 0 }))
-  );
-  for (const player of players)
-    for (const { leg, valued } of player.legs) {
-      if (!leg.arrivalReviewed) continue;
-      let run = 0;
-      valued.stint.forEach((season, index) => {
-        run = season.games === 0 ? run + 1 : 0;
-        if (!(emptyRuns as readonly number[]).includes(run)) return;
-        const later = valued.stint.slice(index + 1).some(({ games: played }) => played > 0);
-        if (!later && valued.closeReason === null) return;
-        const stage = stageAtTradeOf(valued) - 1 + (season.season - valued.tradeSeason);
-        const group = [...stageGroups].reverse().find(({ from }) => stage >= from)!.from;
-        const row = returnRuns.find(
-          (candidate) => candidate.stageFrom === group && candidate.emptySeasons === run
-        )!;
-        row.runs++;
-        if (later) row.returned++;
-      });
-    }
-  const inactiveReturn = returnRuns.map((row) => ({
-    ...row,
-    probability:
-      (row.returned + RULES.hazardPseudoCount) / (row.runs + 2 * RULES.hazardPseudoCount),
-  }));
   const curves = {
     survival: fitCurve('binomial', hazard, SURVIVAL_BANDS, TENURE_PHASES, 'survival'),
     games: fitCurve('poisson', games, ALL_BANDS, ALL_PHASES, 'games'),
