@@ -865,21 +865,27 @@ export function parseDraftguruNationalYearSelections(
     includedRows: number;
     excludedByPathway: Record<string, number>;
     /** Parser v6 only: the pre-season and rookie rows emitted beside the national selections. */
-    listedRows: Record<string, number>;
+    listedRows?: Record<string, number>;
   };
 } {
   const $ = load(html);
   const tables = $('table.big-pick-movements');
-  const summary = {
+  const listings = input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION;
+  // Earlier parsers keep their recorded summary shape: only v6 carries `listedRows`.
+  const summary: {
+    observedRows: number;
+    includedRows: number;
+    excludedByPathway: Record<string, number>;
+    listedRows?: Record<string, number>;
+  } = {
     observedRows: 0,
     includedRows: 0,
-    excludedByPathway: {} as Record<string, number>,
-    listedRows: {} as Record<string, number>,
+    excludedByPathway: {},
+    ...(listings ? { listedRows: {} } : {}),
   };
   const issues: DraftguruParseIssue[] = [];
   const legacy =
     input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION;
-  const listings = input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION;
   const early =
     listings || input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION;
   const outOfScope =
@@ -923,7 +929,7 @@ export function parseDraftguruNationalYearSelections(
     summary.observedRows++;
     const label = normalizeText($(row).find('td.draft').text());
     // Parser v6 keeps the numbered pre-season and rookie listings; the row parser checks each number.
-    if (listings && (label === 'Pre-Season' || label === 'Rookie')) {
+    if (summary.listedRows && (label === 'Pre-Season' || label === 'Rookie')) {
       summary.listedRows[label] = (summary.listedRows[label] ?? 0) + 1;
       return;
     }
