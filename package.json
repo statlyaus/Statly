@@ -193,7 +193,7 @@
     "read-excel-file": "9.3.12",
     "server-only": "0.0.1",
     "socket.io": "^4.8.4",
-    "styled-components": "6.4.4",
+    "styled-components": "6.6.0",
     "swr": "^2.5.1",
     "tailwind-merge": "^3.6.0",
     "tailwind-scrollbar": "^4.0.2",
