@@ -63,8 +63,19 @@ if (sharedUrl) {
     if (runtimeUrlFollowsTestUrl && process.env.AFL_OUTCOMES_DATABASE_URL !== undefined) {
       process.env.AFL_OUTCOMES_DATABASE_URL = sharedUrl;
     }
-    await withOutcomesAdminPool(sharedUrl, (admin: Pool) =>
-      admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-    );
+    await withOutcomesAdminPool(sharedUrl, async (admin: Pool) => {
+      // pg Pool.end() resolves before its clients' sockets close. Forcing the drop while one is still
+      // closing terminates it, and its 57P01 surfaces as an uncaught error that fails the file
+      // (#1034). Wait for the file's own disconnects first; FORCE is only for pools left open.
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const open = await admin.query(
+          'SELECT 1 FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()',
+          [databaseName]
+        );
+        if (open.rowCount === 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+    });
   });
 }
