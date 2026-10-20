@@ -8,7 +8,10 @@
  * for byte. It reuses the pick fit's generic pieces (`solve`, `varianceComponents`, `errorRow`,
  * `round`) and changes nothing of it.
  */
-import { createAflTradeContentAddress } from '../artifacts/contentAddress';
+import {
+  createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
+} from '../artifacts/contentAddress';
 import type { AflTradeAssetLedgerStint } from '../valuation/assetLedgerContracts';
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 import {
@@ -22,7 +25,7 @@ import {
 } from './valueLineFit';
 
 export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION =
-  'afl-trade-traded-player-value-line-fit/v1' as const;
+  'afl-trade-traded-player-value-line-fit/v2' as const;
 const FIT_PREFIX = 'traded-player-value-line-fit';
 
 export type AflTradeTradedPlayerStageBasis = 'draft' | 'first_game' | 'assumed_youngest';
@@ -57,6 +60,13 @@ export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
   /** Seasons after the trade summed for a value at the full horizon. */
   horizonSeasons: 20,
   inactivityClosureSeasons: PICK_RULES.inactivityClosureSeasons,
+  /**
+   * Retirement (2026-10-20, issue 789). An inactivity closure is an exit in the season after his last
+   * game in the stint, not after the third empty season, and his empty seasons are out of the games
+   * curve. At a checkpoint whose stint ends in an empty run of 1 or 2 seasons, expected remaining is
+   * scaled by the fitted chance that a player in that state plays in the stint again, by stage group.
+   */
+  inactiveReturn: { emptyRuns: [1, 2], stageGroups: [{ from: 1 }, { from: 10 }] },
   /**
    * Own form: the owner's credibility rule (2026-10-19), read over every career season through the
    * checkpoint, pre-trade at any club included, against the prior of its own stage band and phase;
@@ -128,7 +138,7 @@ export interface AflTradeTradedPlayerCurve {
   phaseEffects: readonly { phase: AflTradeTradedPlayerPhase; effect: number }[];
 }
 
-/** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v1 artifact, plus its id. */
+/** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v2 artifact, plus its id. */
 export interface AflTradeTradedPlayerValueLineParameters {
   fitId: string;
   survivalHazardLogit: AflTradeTradedPlayerCurve;
@@ -138,6 +148,17 @@ export interface AflTradeTradedPlayerValueLineParameters {
   rateCredibilityGames: number;
   /** The first season the fit read: a career begins no earlier than this. */
   firstReadSeason: number;
+  /** P(plays in the stint again | it ends in an empty run of `emptySeasons`, stage >= stageFrom). */
+  inactiveReturn: readonly AflTradeTradedPlayerInactiveReturn[];
+}
+
+export interface AflTradeTradedPlayerInactiveReturn {
+  stageFrom: number;
+  emptySeasons: number;
+  probability: number;
+  /** Resolved runs fitted (pseudo-counts excluded) and those that played again. */
+  runs: number;
+  returned: number;
 }
 
 export interface AflTradeTradedPlayerValueInput {
@@ -146,7 +167,7 @@ export interface AflTradeTradedPlayerValueInput {
   /** The trade period season Y; the stint starts in Y + 1. */
   tradeSeason: number;
   /** The stage of season s is s - originSeason; leftCensored means originSeason is an upper bound. */
-  stage: { basis: AflTradeTradedPlayerStageBasis; originSeason: number; leftCensored: boolean };
+  stage: AflTradeTradedPlayerStage;
   /** Every read season from stage 1 (or the first read season) onward, at any club, 0/0 when he played nowhere. */
   career: readonly { season: number; games: number; pav: number }[];
   /** The ledger stint (AflTradeAssetLedgerStint) seasons with games joined from the read model. */
@@ -177,11 +198,14 @@ export interface AflTradeTradedPlayerValuePoint {
   effect: { games: number; rate: number; seasons: number; gamesPlayed: number };
 }
 
-interface Stage {
+/** A player's career stage: season s is stage s - originSeason; leftCensored means originSeason is an upper bound. */
+export interface AflTradeTradedPlayerStage {
   basis: AflTradeTradedPlayerStageBasis;
   originSeason: number;
   leftCensored: boolean;
 }
+
+type Stage = AflTradeTradedPlayerStage;
 
 interface Season {
   season: number;
@@ -219,6 +243,7 @@ interface Priors {
   rate: Curve;
   gamesCredibilitySeasons: number;
   rateCredibilityGames: number;
+  inactiveReturn: readonly AflTradeTradedPlayerInactiveReturn[];
 }
 
 interface FittedPriors extends Priors {
@@ -227,6 +252,60 @@ interface FittedPriors extends Priors {
 
 const logistic = (value: number) => 1 / (1 + Math.exp(-value));
 const compare = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+
+/**
+ * Each player's stage origin: his earliest draft row of any type (canonical AFLM or reviewed Draftguru
+ * 2000-2010), ties broken by draft type, then selection id.
+ */
+export function aflTradeTradedPlayerFirstDraftOrigins(
+  origins: readonly AflTradeTradedPlayerDraftOrigin[]
+): Map<string, AflTradeTradedPlayerDraftOrigin> {
+  const first = new Map<string, AflTradeTradedPlayerDraftOrigin>();
+  for (const origin of origins) {
+    const known = first.get(origin.playerId);
+    if (
+      !known ||
+      origin.draftYear < known.draftYear ||
+      (origin.draftYear === known.draftYear &&
+        (compare(origin.draftType, known.draftType) ||
+          compare(origin.selectionId, known.selectionId)) < 0)
+    )
+      first.set(origin.playerId, origin);
+  }
+  return first;
+}
+
+/**
+ * The one stage rule, the fit's and the value lines': taken against the player's first trade in the
+ * window. His earliest draft origin when it is before that trade; else the season before his first
+ * game through that trade, left-censored when that game is in the first season read; else (no draft
+ * and no game) assumed youngest, the season before that trade. Null when the draft origin is at or
+ * after his first trade, which the fit refuses.
+ */
+export function aflTradeTradedPlayerStage(input: {
+  draftOrigin: { draftYear: number } | null;
+  /** Read seasons in which he played a game, at any club. */
+  gameSeasons: Iterable<number>;
+  firstTradeSeason: number;
+  firstReadSeason: number;
+}): AflTradeTradedPlayerStage | null {
+  const { draftOrigin, firstTradeSeason, firstReadSeason } = input;
+  if (draftOrigin)
+    return draftOrigin.draftYear >= firstTradeSeason
+      ? null
+      : { basis: 'draft', originSeason: draftOrigin.draftYear, leftCensored: false };
+  const firstGame = Math.min(
+    Infinity,
+    ...[...input.gameSeasons].filter((season) => season <= firstTradeSeason)
+  );
+  return firstGame === Infinity
+    ? { basis: 'assumed_youngest', originSeason: firstTradeSeason - 1, leftCensored: false }
+    : {
+        basis: 'first_game',
+        originSeason: firstGame - 1,
+        leftCensored: firstGame === firstReadSeason,
+      };
+}
 
 const bandOf = (stage: number): Band =>
   RULES.stageBands.find(
@@ -325,6 +404,23 @@ function valuedLeg(
   };
 }
 
+/** The empty seasons that end `seasons` (0 when the last one has games). */
+const trailingEmpty = (seasons: readonly Season[]) => {
+  let run = 0;
+  for (let index = seasons.length - 1; index >= 0 && seasons[index]!.games === 0; index--) run++;
+  return run;
+};
+
+/** The fitted chance a player whose stint ends in `run` empty seasons, at `stage`, plays in it again. */
+const returnProbability = (priors: Pick<Priors, 'inactiveReturn'>, stage: number, run: number) => {
+  const groups = priors.inactiveReturn.filter(
+    (row) => row.emptySeasons === run && stage >= row.stageFrom
+  );
+  const row = groups.sort((left, right) => right.stageFrom - left.stageFrom)[0];
+  if (!row) throw new Error(`The fit has no return probability after ${run} empty seasons.`);
+  return row.probability;
+};
+
 /** Per tenure 1..horizon along a stint: P(season in stint), expected games, expected PAV per game. */
 function stintCurves(priors: Priors, stageAtTrade: number) {
   const survival = [1];
@@ -357,10 +453,12 @@ interface Effect {
 function playerEffect(priors: Priors, leg: Valued, checkpoint: number, mode: OwnForm): Effect {
   const candidates: PhasedSeason[] = [];
   if (mode === 'full') candidates.push(...leg.history.filter(({ season }) => season <= checkpoint));
-  if (mode !== 'none')
-    for (const season of leg.stint)
-      if (season.season <= checkpoint)
-        candidates.push({ ...season, phase: tenurePhase(season.season - leg.tradeSeason) });
+  if (mode !== 'none') {
+    // A trailing empty run is the retirement signal valueAt reads, not form.
+    const read = leg.stint.filter(({ season }) => season <= checkpoint);
+    for (const season of read.slice(0, read.length - trailingEmpty(read)))
+      candidates.push({ ...season, phase: tenurePhase(season.season - leg.tradeSeason) });
+  }
   const seasons = candidates.filter(({ season }) => knownBand(leg.stage, season) !== null);
   let gamesResidual = 0;
   let rateResidual = 0;
@@ -406,6 +504,9 @@ function valueAt(
       (curve.survival[t]! / curve.survival[tenure]!) *
       Math.max(0, curve.games[t]! + effect.games) *
       (curve.rate[t]! + effect.rate);
+  const empty = trailingEmpty(leg.stint.filter(({ season }) => season <= checkpoint));
+  if (empty > 0)
+    expectedRemaining *= returnProbability(priors, stageAtTradeOf(leg) - 1 + tenure, empty);
   return {
     tenure,
     closed,
@@ -506,6 +607,8 @@ interface FitPlayer {
 interface FitLegState {
   leg: AflTradeTradedPlayerFitLeg;
   valued: Valued;
+  /** The leg as `aflTradeTradedPlayerValueAt` takes it. */
+  input: AflTradeTradedPlayerValueInput;
 }
 
 /** Fits the three curves and both k on the training players. */
@@ -513,6 +616,35 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
   const hazard: Observation[] = [];
   const games: Observation[] = [];
   const rate: Observation[] = [];
+  // Each time a stint's empty run reaches 1 or 2 seasons: did he play in it again? Resolved by a later
+  // game (yes) or the stint's close (no); a run still open at the last season read is not counted.
+  const { emptyRuns, stageGroups } = RULES.inactiveReturn;
+  const returnRuns = stageGroups.flatMap(({ from }) =>
+    emptyRuns.map((emptySeasons) => ({ stageFrom: from, emptySeasons, runs: 0, returned: 0 }))
+  );
+  for (const player of players)
+    for (const { leg, valued } of player.legs) {
+      if (!leg.arrivalReviewed) continue;
+      let run = 0;
+      valued.stint.forEach((season, index) => {
+        run = season.games === 0 ? run + 1 : 0;
+        if (!(emptyRuns as readonly number[]).includes(run)) return;
+        const later = valued.stint.slice(index + 1).some(({ games: played }) => played > 0);
+        if (!later && valued.closeReason === null) return;
+        const stage = stageAtTradeOf(valued) - 1 + (season.season - valued.tradeSeason);
+        const group = [...stageGroups].reverse().find(({ from }) => stage >= from)!.from;
+        const row = returnRuns.find(
+          (candidate) => candidate.stageFrom === group && candidate.emptySeasons === run
+        )!;
+        row.runs++;
+        if (later) row.returned++;
+      });
+    }
+  const inactiveReturn = returnRuns.map((row) => ({
+    ...row,
+    probability:
+      (row.returned + RULES.hazardPseudoCount) / (row.runs + 2 * RULES.hazardPseudoCount),
+  }));
   for (const player of players) {
     for (const season of player.active) {
       const band = knownBand(player.stage, season.season);
@@ -530,14 +662,11 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
     for (const { leg, valued } of player.legs) {
       if (!leg.arrivalReviewed) continue;
       const observed = lastSeason - valued.tradeSeason;
-      const inStint = valued.stint.length;
-      // A move is known once seen; an inactivity closure counts as an exit only inside the window.
-      const exitAt =
-        valued.closeReason === 'moved'
-          ? inStint + 1
-          : valued.closeReason === 'inactive' && inStint + 1 <= observed
-            ? inStint + 1
-            : null;
+      // His last season with a game: an inactivity closure exits the season after it, and an open
+      // stint ending in empty seasons is censored there (whether he retired is not yet known).
+      const played = valued.stint.length - trailingEmpty(valued.stint);
+      const inStint = valued.closeReason === 'moved' ? valued.stint.length : played;
+      const exitAt = valued.closeReason !== null ? inStint + 1 : null;
       const through = exitAt ?? Math.min(inStint, observed);
       for (let tenure = 1; tenure <= through; tenure++) {
         const band = knownBand(valued.stage, valued.tradeSeason + tenure);
@@ -549,6 +678,25 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
           weight: 1,
           offset: 0,
         });
+      }
+      // An open stint ending in 1 or 2 empty seasons: the season after his last game is an exit with
+      // the chance he does not return, else a survived season (fractional weights, so a recent
+      // retirement is not read as survival).
+      const pending = trailingEmpty(valued.stint);
+      if (exitAt === null && pending > 0 && played + 1 <= observed) {
+        const tenure = played + 1;
+        const band = knownBand(valued.stage, valued.tradeSeason + tenure);
+        const back = returnProbability(
+          { inactiveReturn },
+          stageAtTradeOf(valued) - 1 + tenure,
+          Math.min(pending, Math.max(...RULES.inactiveReturn.emptyRuns))
+        );
+        if (band !== null)
+          for (const [response, weight] of [
+            [1, 1 - back],
+            [0, back],
+          ] as const)
+            hazard.push({ band, phase: tenurePhase(tenure), response, weight, offset: 0 });
       }
     }
   }
@@ -588,6 +736,7 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
   const rateComponents = varianceComponents(rateRows, 'PAV per game');
   return {
     ...curves,
+    inactiveReturn,
     gamesCredibilitySeasons: gamesComponents.within / gamesComponents.between,
     rateCredibilityGames: Math.max(
       RULES.minimumRateCredibilityGames,
@@ -606,13 +755,30 @@ const BASIS_GROUPS: readonly BasisGroup[] = [
 ];
 const basisGroupOf = (stage: Stage): BasisGroup =>
   stage.basis === 'first_game' && stage.leftCensored ? 'first_game_censored' : stage.basis;
-const countBasis = (stages: readonly Stage[]) =>
+/** Stages counted by basis, a left-censored first game apart, as `fitWindow.legsByTradeSeason` records them. */
+export const aflTradeTradedPlayerStageBasisCounts = (stages: readonly Stage[]) =>
   Object.fromEntries(
     BASIS_GROUPS.map((group) => [
       group,
       stages.filter((stage) => basisGroupOf(stage) === group).length,
     ])
   ) as Record<BasisGroup, number>;
+
+/**
+ * The sha256 of a trade season's legs as staged: each leg's player and stage, sorted. Recorded per trade
+ * season in `fitWindow.legsByTradeSeason` (v2), so a re-read whose origins or players moved a stage,
+ * even within one basis, cannot pass for the fit's.
+ */
+export const aflTradeTradedPlayerStageDigest = (
+  legs: readonly { playerId: string; stage: Stage }[]
+) =>
+  sha256AflTradeCanonicalJson(
+    legs
+      .map(({ playerId, stage }) =>
+        [playerId, stage.basis, stage.originSeason, stage.leftCensored].join('|')
+      )
+      .sort(compare)
+  );
 
 /** Validates the inputs and builds every player's stage, career and legs. */
 function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
@@ -661,18 +827,7 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
     entry.clubs.set(row.clubId, { season: row.season, games: row.games, pav: row.pav });
     seasons.set(row.season, entry);
   }
-  const firstDraft = new Map<string, AflTradeTradedPlayerDraftOrigin>();
-  for (const origin of inputs.draftOrigins) {
-    const known = firstDraft.get(origin.playerId);
-    if (
-      !known ||
-      origin.draftYear < known.draftYear ||
-      (origin.draftYear === known.draftYear &&
-        (compare(origin.draftType, known.draftType) ||
-          compare(origin.selectionId, known.selectionId)) < 0)
-    )
-      firstDraft.set(origin.playerId, origin);
-  }
+  const firstDraft = aflTradeTradedPlayerFirstDraftOrigins(inputs.draftOrigins);
 
   const legs = [...inputs.legs].sort((left, right) => compare(left.transferId, right.transferId));
   const transferIds = new Set<string>();
@@ -706,29 +861,16 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
     const firstTrade = trades[0]!;
     const seasons = bySeason.get(playerId) ?? new Map();
     const draft = firstDraft.get(playerId);
-    let stage: Stage;
-    if (draft) {
-      if (draft.draftYear >= firstTrade)
-        throw new Error(
-          `Player ${playerId}'s draft origin ${draft.draftYear} is at or after the trade season ${firstTrade}.`
-        );
-      stage = { basis: 'draft', originSeason: draft.draftYear, leftCensored: false };
-    } else {
-      const firstGame = Math.min(
-        Infinity,
-        ...[...seasons]
-          .filter(([season, row]) => season <= firstTrade && row.games > 0)
-          .map(([season]) => season)
+    const stage = aflTradeTradedPlayerStage({
+      draftOrigin: draft ?? null,
+      gameSeasons: [...seasons].filter(([, row]) => row.games > 0).map(([season]) => season),
+      firstTradeSeason: firstTrade,
+      firstReadSeason,
+    });
+    if (stage === null)
+      throw new Error(
+        `Player ${playerId}'s draft origin ${draft!.draftYear} is at or after the trade season ${firstTrade}.`
       );
-      stage =
-        firstGame === Infinity
-          ? { basis: 'assumed_youngest', originSeason: firstTrade - 1, leftCensored: false }
-          : {
-              basis: 'first_game',
-              originSeason: firstGame - 1,
-              leftCensored: firstGame === firstReadSeason,
-            };
-    }
     const careerStart = Math.max(stage.originSeason + 1, firstReadSeason);
     const career = new Map<number, Season>();
     for (let season = careerStart; season <= lastSeason; season++) {
@@ -741,16 +883,24 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
         pav,
         games: seasons.get(season)?.clubs.get(leg.receivingClubId)?.games ?? 0,
       }));
+      const earlierTradeSeasons = trades.filter((trade) => trade < leg.tradeSeason);
+      const stint = {
+        status: leg.stint.status,
+        endSeason: leg.stint.endSeason,
+        seasons: stintSeasons,
+      };
       return {
         leg,
-        valued: valuedLeg(
-          leg.tradeSeason,
+        valued: valuedLeg(leg.tradeSeason, stage, career, careerStart, earlierTradeSeasons, stint),
+        input: {
+          playerId,
+          receivingClubId: leg.receivingClubId,
+          tradeSeason: leg.tradeSeason,
           stage,
-          career,
-          careerStart,
-          trades.filter((trade) => trade < leg.tradeSeason),
-          { status: leg.stint.status, endSeason: leg.stint.endSeason, seasons: stintSeasons }
-        ),
+          career: [...career.values()],
+          stint,
+          earlierTradeSeasons,
+        },
       };
     });
     // Active seasons: every career season through his last trade (he was on a list to be traded),
@@ -760,7 +910,9 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
     for (let season = careerStart; season <= lastTrade; season++)
       active.push({ ...career.get(season)!, phase: phaseOf(season, trades) });
     const last = legStates.find(({ leg }) => leg.tradeSeason === lastTrade && leg.arrivalReviewed);
-    for (const season of last?.valued.stint ?? [])
+    // His stint's trailing empty seasons are retirement (or not yet known), not low games.
+    const stint = last?.valued.stint ?? [];
+    for (const season of stint.slice(0, stint.length - trailingEmpty(stint)))
       active.push({ ...season, phase: tenurePhase(season.season - lastTrade) });
     if (playerLegs.some(({ arrivalReviewed }) => arrivalReviewed))
       unknownBandSeasonsExcluded += active.filter(
@@ -784,6 +936,8 @@ const publishComponents = (components: VarianceComponents) => ({
   within: round(components.within, 9),
   between: round(components.between, 9),
 });
+
+const VETERAN_BANDS: readonly Band[] = ['10-11', '12-13', '14+'];
 
 const ENTRY_GROUPS = [
   'drafted_before_first_read',
@@ -812,6 +966,15 @@ const legRow = (
   pairs: readonly { predicted: number; realized: number }[]
 ) => {
   const row = errorRow(group, checkpoint, pairs);
+  // The standard error of the bias: the residuals' sample SD over sqrt(n), not RMSE / sqrt(n), which
+  // counts the bias itself as noise (2026-10-20 review).
+  const n = pairs.length;
+  const residuals = pairs.map(({ predicted, realized }) => predicted - realized);
+  const meanResidual = n === 0 ? 0 : residuals.reduce((sum, value) => sum + value, 0) / n;
+  const deviation =
+    n < 2
+      ? 0
+      : Math.sqrt(residuals.reduce((sum, value) => sum + (value - meanResidual) ** 2, 0) / (n - 1));
   return {
     group,
     checkpoint,
@@ -821,8 +984,7 @@ const legRow = (
     bias: row.bias,
     meanAbsoluteError: row.meanAbsoluteError,
     rootMeanSquaredError: row.rootMeanSquaredError,
-    standardError:
-      row.selections === 0 ? 0 : round(row.rootMeanSquaredError / Math.sqrt(row.selections), 3),
+    standardError: n < 2 ? 0 : round(deviation / Math.sqrt(n), 3),
   };
 };
 
@@ -980,6 +1142,8 @@ function backTest(
       basisGroups,
       (group) => (pair) => group === 'all' || pair.basis === group
     ),
+    // Bands 10 and up pooled: each alone holds too few legs to test (2026-10-20 review).
+    byVeteranBandsAndCheckpoint: by(['10+'], () => (pair) => VETERAN_BANDS.includes(pair.band)),
     // The veterans whose career the read seasons do not start: most fall in the oldest bands.
     byEntryAndCheckpoint: by(
       ['entered_before_first_read', ...ENTRY_GROUPS],
@@ -1008,6 +1172,18 @@ function backTest(
   };
 }
 
+/**
+ * Every leg of the inputs, reviewed or not, as the fit values it: the input `aflTradeTradedPlayerValueAt`
+ * takes, built by the fit's own rules (stage, career from the stage origin, stint, earlier trades).
+ * Ordered by transfer id. Refuses what the fit refuses.
+ */
+export function aflTradeTradedPlayerFitLegInputs(inputs: AflTradeTradedPlayerValueLineFitInputs) {
+  return prepare(inputs)
+    .players.flatMap(({ legs }) => legs)
+    .map(({ leg, input }) => ({ transferId: leg.transferId, input }))
+    .sort((left, right) => compare(left.transferId, right.transferId));
+}
+
 /** Fits on every reviewed leg, then back-tests by holding out each trade season in turn. */
 export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerValueLineFitInputs) {
   const { players, tradeSeasons, firstReadSeason, lastSeason, unknownBandSeasonsExcluded } =
@@ -1032,7 +1208,10 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
       reviewed: legsReviewed,
       unreviewed: here.length - legsReviewed,
       unresolved,
-      byStageBasis: countBasis(here.map(({ valued }) => valued.stage)),
+      byStageBasis: aflTradeTradedPlayerStageBasisCounts(here.map(({ valued }) => valued.stage)),
+      stageDigest: aflTradeTradedPlayerStageDigest(
+        here.map(({ leg, valued }) => ({ playerId: leg.playerId, stage: valued.stage }))
+      ),
     };
   });
 
@@ -1058,7 +1237,7 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
       ),
       3
     ),
-    byStageBasis: countBasis(all.map(({ valued }) => valued.stage)),
+    byStageBasis: aflTradeTradedPlayerStageBasisCounts(all.map(({ valued }) => valued.stage)),
     leftCensored: all.filter(({ valued }) => valued.stage.leftCensored).length,
     trainingPlayers: training.length,
     playerSeasonsFitted: training.reduce(
@@ -1121,6 +1300,10 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
         rate: publishComponents(priors.varianceComponents.rate),
       },
       firstReadSeason,
+      inactiveReturn: priors.inactiveReturn.map((row) => ({
+        ...row,
+        probability: round(row.probability, 6),
+      })),
     },
     priorTable,
     atTradeCurve,
@@ -1131,6 +1314,7 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
       'A player who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored.',
       'First-game stages are understated for players listed before their debut.',
       "Recency is not weighted: a veteran's effect is his career average; decline shows only through the stage prior.",
+      'A retirement is seen only after the stint ends in empty seasons; until then the return probability by empty-run length and stage group stands in for it.',
     ],
   };
   return { fitId: createAflTradeContentAddress(FIT_PREFIX, content), content };
@@ -1164,6 +1348,7 @@ export function aflTradeTradedPlayerValueLineParameters(
     gamesCredibilitySeasons: parameters.gamesCredibilitySeasons,
     rateCredibilityGames: parameters.rateCredibilityGames,
     firstReadSeason: parameters.firstReadSeason,
+    inactiveReturn: parameters.inactiveReturn,
   };
 }
 
@@ -1209,6 +1394,7 @@ export function aflTradeTradedPlayerValueAt(
     rate: curveOf(parameters.pavPerGameLog),
     gamesCredibilitySeasons: parameters.gamesCredibilitySeasons,
     rateCredibilityGames: parameters.rateCredibilityGames,
+    inactiveReturn: parameters.inactiveReturn,
   };
   const point = valueAt(priors, valued, checkpointSeason, RULES.horizonSeasons);
   return {

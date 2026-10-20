@@ -99,10 +99,19 @@ export const DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS: readonly number[] = [
  */
 export const DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION = 'draftguru-national-year-page/v5';
 
-/** The page years parser v5 is reviewed for. */
+/** The page years parsers v5 and v6 are reviewed for. */
 export const DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS: readonly number[] = [
   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
 ];
+
+/**
+ * v6 reads the 2000 to 2010 pages only (issue 789, owner decision 2026-10-20: "Yes, read them").
+ * On top of v5 it also emits the numbered `Pre-Season` and `Rookie` rows as `pre_season` and `rookie`
+ * selections, without an access category, so a veteran listed before 2011 outside the national draft
+ * has a career origin. They are career origins only, never canonical drafts. `Pre-Draft` rows (zone and
+ * underage concessions) carry no pick number and stay counted and dropped.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION = 'draftguru-national-year-page/v6';
 
 /** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
 export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
@@ -110,7 +119,8 @@ export function isDraftguruNationalYearAccessParserVersion(parserVersion: string
     parserVersion === DRAFTGURU_NATIONAL_YEAR_ACCESS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION ||
-    parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION
   );
 }
 

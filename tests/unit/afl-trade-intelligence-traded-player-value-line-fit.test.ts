@@ -12,6 +12,7 @@ import {
   type AflTradePlayerSeasonGamesRows,
 } from '@/server/aflTradeIntelligence/modeling/playerSeasonGames';
 import {
+  aflTradeTradedPlayerTradeLegs,
   buildAflTradeTradedPlayerValueLineFitInputs,
   loadAflTradeTradedPlayerDraftOrigins,
   loadAflTradeTradedPlayerDraftguruOrigins,
@@ -19,6 +20,10 @@ import {
 } from '@/server/aflTradeIntelligence/modeling/postgresTradedPlayerValueLineFitInputs';
 import {
   AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION,
+  aflTradeTradedPlayerFirstDraftOrigins,
+  aflTradeTradedPlayerFitLegInputs,
+  aflTradeTradedPlayerStage,
+  aflTradeTradedPlayerStageBasisCounts,
   aflTradeTradedPlayerValueAt,
   aflTradeTradedPlayerValueLineParameters,
   fitAflTradeTradedPlayerValueLine,
@@ -28,9 +33,14 @@ import {
   type AflTradeTradedPlayerValueLineFitInputs,
 } from '@/server/aflTradeIntelligence/modeling/tradedPlayerValueLineFit';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import { createAflTradeTradedPlayerValueEvaluator } from '@/server/aflTradeIntelligence/modeling/tradedPlayerValueLineEvaluator';
+import type { AflTradeTradedPlayerValuePoint } from '@/server/aflTradeIntelligence/modeling/tradedPlayerValueLineContracts';
+import type { AflTradeValueLineFitParameters } from '@/server/aflTradeIntelligence/modeling/valueLineFit';
 import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
+import { AflTradeValueLineReader } from '@/server/aflTradeIntelligence/valuation/valueLineAssets';
 import type { AflTradeRealizedTradeGradeInputs } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
 
+import { readTradedPlayerValueLineFit } from '../../Scripts/compute-value-lines';
 import {
   parseFitTradedPlayerValueLineArguments,
   runFitTradedPlayerValueLineCommand,
@@ -320,6 +330,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       club_unresolved: 0,
     });
     for (const row of legsByTradeSeason) {
+      expect(row.stageDigest).toMatch(/^[0-9a-f]{64}$/);
       const basis = Object.values(row.byStageBasis).reduce((sum, count) => sum + count, 0);
       expect(basis).toBe(row.reviewed + row.unreviewed);
       expect(row.legs).toBe(row.reviewed + row.unreviewed + row.unresolved);
@@ -366,7 +377,16 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
     expect(all(backTest.byStageBandAndCheckpoint, 0).legs).toBe(scored);
     const row = all(backTest.byStageBandAndCheckpoint, 1);
     expect(row.bias).toBeCloseTo(row.meanPredicted - row.meanRealized, 2);
-    expect(row.standardError).toBeCloseTo(row.rootMeanSquaredError / Math.sqrt(row.legs), 2);
+    // The SE of the bias: the residuals' SD over sqrt(n), from RMSE^2 = bias^2 + SD^2 (n - 1 denominator).
+    const deviation = Math.sqrt(
+      ((row.rootMeanSquaredError ** 2 - row.bias ** 2) * row.legs) / (row.legs - 1)
+    );
+    expect(row.standardError).toBeCloseTo(deviation / Math.sqrt(row.legs), 1);
+    expect(backTest.byVeteranBandsAndCheckpoint.map(({ group }) => group)).toEqual([
+      '10+',
+      '10+',
+      '10+',
+    ]);
     for (const baseline of ['producedOnly', 'stageOnly', 'postTradeOwnFormOnly'] as const)
       expect(backTest.baselines[baseline]).toHaveLength(24);
     // Produced-only shows what estimating adds: at the trade it predicts nothing.
@@ -557,6 +577,17 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
 });
 
 describe('aflTradeTradedPlayerValueAt', () => {
+  it('publishes a return probability per empty run and stage group', () => {
+    expect(
+      parameters.inactiveReturn.map(({ stageFrom, emptySeasons }) => `${stageFrom}:${emptySeasons}`)
+    ).toEqual(['1:1', '1:2', '10:1', '10:2']);
+    for (const row of parameters.inactiveReturn) {
+      expect(row.returned).toBeLessThanOrEqual(row.runs);
+      expect(row.probability).toBeGreaterThan(0);
+      expect(row.probability).toBeLessThan(1);
+    }
+  });
+
   const tradeSeason = 2021;
   /** A stage-6 player at the trade: drafted 2016, eleven to sixteen games a season. */
   const base: AflTradeTradedPlayerValueInput = {
@@ -627,6 +658,36 @@ describe('aflTradeTradedPlayerValueAt', () => {
       ).toBe(atTrade.value);
     // 2024 and 2025 are 14+ whatever his true stage, so they count once read.
     expect(aflTradeTradedPlayerValueAt(parameters, veteran, 2025).effect.seasons).toBe(2);
+  });
+
+  it('scales what remains after empty stint seasons, and leaves them out of form', () => {
+    const empty2023: AflTradeTradedPlayerValueInput = {
+      ...base,
+      career: base.career.map((row) => (row.season === 2023 ? { ...row, games: 0, pav: 0 } : row)),
+      stint: {
+        ...base.stint,
+        seasons: base.stint.seasons.map((row) =>
+          row.season === 2023 ? { ...row, games: 0, pav: 0 } : row
+        ),
+      },
+    };
+    const point = aflTradeTradedPlayerValueAt(parameters, empty2023, 2023);
+    // The empty 2023 is the retirement signal, not form: his effect is the 2022 view's.
+    expect(point.effect).toEqual(aflTradeTradedPlayerValueAt(parameters, base, 2022).effect);
+    const certain = aflTradeTradedPlayerValueAt(
+      {
+        ...parameters,
+        inactiveReturn: parameters.inactiveReturn.map((row) => ({ ...row, probability: 1 })),
+      },
+      empty2023,
+      2023
+    );
+    // Stage 8 at the 2023 checkpoint: the under-10 group after one empty season.
+    const row = parameters.inactiveReturn.find(
+      ({ stageFrom, emptySeasons }) => stageFrom === 1 && emptySeasons === 1
+    )!;
+    expect(point.expectedRemaining).toBeCloseTo(certain.expectedRemaining * row.probability, 9);
+    expect(point.state).toBe('open');
   });
 
   it('gives a player with no history no effect at the trade', () => {
@@ -736,6 +797,242 @@ describe('aflTradeTradedPlayerValueAt', () => {
   });
 });
 
+describe('aflTradeTradedPlayerStage', () => {
+  const stage = (
+    draftYear: number | null,
+    gameSeasons: number[],
+    firstTradeSeason = 2020,
+    firstReadSeason = 2011
+  ) =>
+    aflTradeTradedPlayerStage({
+      draftOrigin: draftYear === null ? null : { draftYear },
+      gameSeasons,
+      firstTradeSeason,
+      firstReadSeason,
+    });
+
+  it('takes the draft origin before his first trade, and refuses one at or after it', () => {
+    expect(stage(2015, [2011])).toEqual({
+      basis: 'draft',
+      originSeason: 2015,
+      leftCensored: false,
+    });
+    expect(stage(2020, [])).toBeNull();
+    expect(stage(2021, [])).toBeNull();
+  });
+
+  it('falls back to the season before his first game, left-censored in the first season read', () => {
+    expect(stage(null, [2013, 2014, 2021])).toEqual({
+      basis: 'first_game',
+      originSeason: 2012,
+      leftCensored: false,
+    });
+    expect(stage(null, [2014, 2011])).toEqual({
+      basis: 'first_game',
+      originSeason: 2010,
+      leftCensored: true,
+    });
+    // A game after his first trade is no evidence of where his career began.
+    expect(stage(null, [2021, 2022])).toEqual({
+      basis: 'assumed_youngest',
+      originSeason: 2019,
+      leftCensored: false,
+    });
+  });
+
+  it('takes the earliest draft origin, ties by draft type then selection', () => {
+    const first = aflTradeTradedPlayerFirstDraftOrigins([
+      { playerId: 'p1', draftYear: 2012, draftType: 'rookie', selectionId: 's1' },
+      { playerId: 'p1', draftYear: 2008, draftType: 'rookie', selectionId: 's3' },
+      { playerId: 'p1', draftYear: 2008, draftType: 'national', selectionId: 's4' },
+      { playerId: 'p2', draftYear: 2006, draftType: 'national', selectionId: 's2' },
+    ]);
+    expect(first.get('p1')).toMatchObject({ draftYear: 2008, selectionId: 's4' });
+    expect(first.get('p2')?.selectionId).toBe('s2');
+  });
+
+  it('gives each leg the input the fit values it from, its stage against his first trade', () => {
+    const legInputs = aflTradeTradedPlayerFitLegInputs(inputs);
+    expect(legInputs.map(({ transferId }) => transferId)).toEqual(
+      inputs.legs.map(({ transferId }) => transferId).sort()
+    );
+    const twice = players.find(({ trades }) => trades.length === 2)!;
+    const [first, second] = legInputs
+      .filter(({ input }) => input.playerId === twice.playerId)
+      .sort((left, right) => left.input.tradeSeason - right.input.tradeSeason);
+    expect(second!.input.stage).toEqual(first!.input.stage);
+    expect(second!.input.earlierTradeSeasons).toEqual([twice.trades[0]!.season]);
+    expect(first!.input.earlierTradeSeasons).toEqual([]);
+    for (const { tradeSeason, byStageBasis } of fit.content.fitWindow.legsByTradeSeason)
+      expect(
+        aflTradeTradedPlayerStageBasisCounts(
+          legInputs
+            .filter(({ input }) => input.tradeSeason === tradeSeason)
+            .map(({ input }) => input.stage)
+        )
+      ).toEqual(byStageBasis);
+  });
+});
+
+describe('createAflTradeTradedPlayerValueEvaluator', () => {
+  const evidence = {
+    fit,
+    legs: inputs.legs,
+    excludedLegs: inputs.excludedLegs,
+    draftOrigins: inputs.draftOrigins,
+    games: inputs.games,
+  };
+  const evaluator = createAflTradeTradedPlayerValueEvaluator(evidence);
+
+  it("carries the fit, its trade seasons and each player's trades in the window", () => {
+    expect(evaluator.parameters).toEqual(parameters);
+    expect(evaluator.valueAt).toBe(aflTradeTradedPlayerValueAt);
+    expect(evaluator.tradeSeasons).toEqual(TRADE_SEASONS);
+    const twice = players.find(({ trades }) => trades.length === 2)!;
+    expect(evaluator.playerTradeSeasons.get(twice.playerId)).toEqual(
+      twice.trades.map(({ season }) => season)
+    );
+    // Unreviewed legs count, as in the fit: they set his first trade and phases.
+    const unreviewed = players.find(({ trades }) => trades.some(({ reviewed }) => !reviewed))!;
+    expect(evaluator.playerTradeSeasons.get(unreviewed.playerId)).toEqual(
+      unreviewed.trades.map(({ season }) => season)
+    );
+  });
+
+  it('refuses evidence that is not what the fit read', () => {
+    const refuse = (change: Partial<typeof evidence>, message: RegExp) =>
+      expect(() => createAflTradeTradedPlayerValueEvaluator({ ...evidence, ...change })).toThrow(
+        message
+      );
+    refuse(
+      { fit: { ...fit, fitId: `traded-player-value-line-fit:${'0'.repeat(64)}` } },
+      /does not match/
+    );
+    refuse({ games: { ...inputs.games, methodId: 'hpn-pav-method:other' } }, /method/);
+    refuse(
+      {
+        games: {
+          ...inputs.games,
+          seasons: inputs.games.seasons.map((row) =>
+            row.season === 2015 ? { ...row, calculationId: 'hpn-pav-season:other' } : row
+          ),
+        },
+      },
+      /seasons and calculations are not the fit's/
+    );
+    refuse({ legs: inputs.legs.slice(1) }, /Trade season \d{4} has \d+ legs; the fit read \d+/);
+    refuse({ excludedLegs: [] }, /Trade season 2021 has \d+ legs; the fit read \d+/);
+    // A new origin (another Draftguru batch, say) moves a stage basis: refused, never re-read.
+    const undrafted = players.find(({ drafted }) => !drafted)!;
+    refuse(
+      {
+        draftOrigins: [
+          ...inputs.draftOrigins,
+          {
+            playerId: undrafted.playerId,
+            draftYear: undrafted.trades[0]!.season - 1,
+            draftType: 'rookie',
+            selectionId: 'external-evidence:new',
+          },
+        ],
+      },
+      /stages of trade season \d{4} are not the fit's/
+    );
+    // An earlier origin that keeps the basis ('draft' either way) still moves the stage: refused.
+    const drafted = players.find(({ drafted, origin }) => drafted && origin >= 2012)!;
+    refuse(
+      {
+        draftOrigins: [
+          ...inputs.draftOrigins,
+          {
+            playerId: drafted.playerId,
+            draftYear: drafted.origin - 1,
+            draftType: 'rookie',
+            selectionId: 'external-evidence:earlier',
+          },
+        ],
+      },
+      /stages of trade season \d{4} are not the fit's/
+    );
+    // A leg re-read under another player keeps every count: refused all the same.
+    const season = TRADE_SEASONS.find((tradeSeason) => {
+      const here = inputs.legs.filter((leg) => leg.tradeSeason === tradeSeason);
+      return new Set(here.map(({ playerId }) => playerId)).size > 1;
+    })!;
+    const left = inputs.legs.find((leg) => leg.tradeSeason === season)!;
+    const outside = players.find(
+      ({ playerId, trades }) =>
+        playerId !== left.playerId && trades.every((trade) => trade.season !== season)
+    )!;
+    refuse(
+      {
+        legs: inputs.legs.map((leg) =>
+          leg === left ? { ...leg, playerId: outside.playerId } : leg
+        ),
+      },
+      /stages of trade season \d{4} are not the fit's/
+    );
+  });
+
+  it("gives the value lines the fit's own point for every leg at every checkpoint", () => {
+    const points: AflTradeTradedPlayerValuePoint[] = [];
+    const recording = {
+      ...evaluator,
+      valueAt: (...args: Parameters<typeof evaluator.valueAt>) => {
+        const point = evaluator.valueAt(...args);
+        points.push(point);
+        return point;
+      },
+    };
+    // The value lines read fewer seasons than the fit; careers before them come from the fit's games.
+    const reader = new AflTradeValueLineReader(
+      {} as AflTradeValueLineFitParameters,
+      model(
+        rows.filter(({ season }) => season >= 2019),
+        range(2019, LAST_SEASON)
+      ),
+      recording
+    );
+    const legInputs = new Map(
+      aflTradeTradedPlayerFitLegInputs(inputs).map(({ transferId, input }) => [transferId, input])
+    );
+    const seen = { open: 0, closed: 0, bases: new Set<string>() };
+    for (const leg of inputs.legs) {
+      const fitInput = legInputs.get(leg.transferId)!;
+      for (let season = leg.tradeSeason; season <= LAST_SEASON; season++) {
+        const kind = season === leg.tradeSeason ? 'trade' : 'season_end';
+        points.length = 0;
+        const line = reader.traded(leg.playerId, leg.tradeSeason, leg.stint, { kind, season });
+        const expected = aflTradeTradedPlayerValueAt(parameters, fitInput, season);
+        expect(line.state).toBe(expected.state);
+        expect(line.produced).toBeCloseTo(expected.produced, 9);
+        expect(line.expectedRemaining).toBeCloseTo(expected.expectedRemaining, 9);
+        expect(line.value).toBeCloseTo(expected.value, 9);
+        if (line.state === 'closed') {
+          seen.closed++;
+          continue;
+        }
+        seen.open++;
+        expect(points).toHaveLength(1);
+        expect(points[0]).toMatchObject({
+          stageBasis: expected.stageBasis,
+          leftCensored: expected.leftCensored,
+          stageAtTrade: expected.stageAtTrade,
+        });
+        seen.bases.add(`${expected.stageBasis}${expected.leftCensored ? ':censored' : ''}`);
+      }
+    }
+    expect(seen.open).toBeGreaterThan(500);
+    expect(seen.closed).toBeGreaterThan(100);
+    expect([...seen.bases].sort()).toEqual([
+      'assumed_youngest',
+      'draft',
+      'first_game',
+      'first_game:censored',
+    ]);
+  });
+});
+
 describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
   const transfer = (
     id: string,
@@ -822,6 +1119,18 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       'player_identity_unresolved',
       'club_unresolved',
     ]);
+    // The value lines' evaluator reads the same legs through the same rule.
+    const shared = aflTradeTradedPlayerTradeLegs(grader.candidate, [2024]);
+    expect(shared.excludedLegs).toEqual(built.excludedLegs);
+    expect(shared.legs).toEqual(
+      built.legs.map(({ transferId, transactionId, tradeSeason, playerId, receivingClubId }) => ({
+        transferId,
+        transactionId,
+        tradeSeason,
+        playerId,
+        receivingClubId,
+      }))
+    );
     expect(built.stintCalculations).toEqual([
       { season: 2024, calculationId: 'hpn-pav-season:2024' },
       { season: 2025, calculationId: 'hpn-pav-season:2025' },
@@ -853,12 +1162,19 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(statements[1]).not.toMatch(/draft_type =/);
   });
 
-  it('reads reviewed Draftguru 2000-2010 national selections through approved identities only', async () => {
+  it('reads reviewed Draftguru 2000-2010 selections and listings through approved identities only', async () => {
     const statements: { sql: string; values?: unknown[] }[] = [];
     const query = async (sql: string, values?: unknown[]) => {
       statements.push({ sql, values });
       return {
-        rows: [{ player_id: 'p9', draft_year: 2004, evidence_id: 'external-evidence:e1' }],
+        rows: [
+          {
+            player_id: 'p9',
+            draft_year: 2004,
+            draft_type: 'pre_season',
+            evidence_id: 'external-evidence:e1',
+          },
+        ],
       };
     };
     const client = {
@@ -870,13 +1186,16 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       {
         playerId: 'p9',
         draftYear: 2004,
-        draftType: 'national',
+        draftType: 'pre_season',
         selectionId: 'external-evidence:e1',
       },
     ]);
     expect(statements[0]!.sql).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     const read = statements[1]!;
-    expect(read.values).toEqual(['draftguru-national-year-page/v5']);
+    expect(read.values).toEqual([
+      ['draftguru-national-year-page/v5', 'draftguru-national-year-page/v6'],
+    ]);
+    expect(read.sql).toMatch(/IN \('national', 'pre_season', 'rookie'\)/);
     expect(read.sql).toMatch(/batch\.status = 'finalized' AND batch\.issue_count = 0/);
     expect(read.sql).toMatch(/head\.status = 'approved'/);
     expect(read.sql).toMatch(/decision\.outcome = 'approved'/);
@@ -884,7 +1203,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(read.sql).not.toMatch(/recorded_?[nN]ame|display_name/);
   });
 
-  it('adds a Draftguru origin only for a player with no canonical draft row', () => {
+  it('keeps every canonical and Draftguru origin, so the fit takes the earliest', () => {
     const canonical = [{ playerId: 'p1', draftYear: 2012, draftType: 'rookie', selectionId: 's1' }];
     const draftguru = [
       { playerId: 'p1', draftYear: 2008, draftType: 'national', selectionId: 'e1' },
@@ -892,7 +1211,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     ];
     expect(mergeAflTradeTradedPlayerDraftOrigins(canonical, draftguru)).toEqual([
       canonical[0],
-      draftguru[1],
+      ...draftguru,
     ]);
   });
 });
@@ -969,6 +1288,17 @@ describe('fit-traded-player-value-line', () => {
     await expect(
       runFitTradedPlayerValueLineCommand({ argv: argv(out), env: loopback })
     ).rejects.toThrow(/a fit is never overwritten/);
+  });
+
+  it('reads a stored fit for the value lines only when it is sealed and of this schema', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'traded-player-fit-'));
+    const path = join(directory, 'fit.json');
+    await writeFile(path, JSON.stringify(fit));
+    expect((await readTradedPlayerValueLineFit(path)).fitId).toBe(fit.fitId);
+    await writeFile(path, JSON.stringify({ ...fit, fitId: `${fit.fitId.slice(0, -1)}0` }));
+    await expect(readTradedPlayerValueLineFit(path)).rejects.toThrow(/does not match/);
+    await writeFile(path, '[]');
+    await expect(readTradedPlayerValueLineFit(path)).rejects.toThrow(/not a sealed traded-player/);
   });
 
   it('takes the genuine database only on loopback', async () => {

@@ -4038,7 +4038,10 @@ one of:
 
 - `selected`: the selection, player, drafting club and number, and `firstStint`, the draftee's first
   stint at the drafting club from the season after the draft.
-- `not_used`: stated not used by a club that took no nominee.
+- `not_used`: stated not used by a club that took no nominee. Also, with `evidence: 'board_not_spent'`,
+  a pick of a club that took a nominee whose matched-bid reading rests on the nominee count alone, when
+  the draft's boards carry bid matches, none lists it as spent and none of the holder's bids in that
+  draft has a spent pick that joins no slot (owner, 2026-10-21: "Yes, count it as 0").
 - `matched_bid`: a not-used pick of a club that took a nominee. Its `basis` is `board_matched_bid`
   when Footyinfo board picks record the club's matched bid (listed), or `nominee_count` when the
   evidence says only that the club took a nominee in that draft, so the pick may have been spent
@@ -4046,7 +4049,7 @@ one of:
   year's rule prices the bid and its nominee is one candidate selection ("Matched-bid shares" below):
   it then carries the bid, the nominee, its counted points, its share and its `value`. Otherwise it is
   `status: 'pending'` with a `pendingReason` (`no_bid_spend`, `bid_unpriced`, `nominee_unresolved` or
-  `spent_twice`). Never 0 and never estimated.
+  `spent_twice`). Never estimated, and 0 only through `not_used` with `board_not_spent` above.
 - `passed`: a board-stated passed or removed pick.
 - `future`: a pick not yet drafted, with its projected slot in the live Official AFL order (rule v6's
   lookup over the hop's own entitlement, including the previous draft's order as a proxy), or null
@@ -4200,10 +4203,18 @@ It is pure and deterministic (trade order does not change the id).
 **Inputs.** A stored value-line fit (its content address checked), the asset ledger read model, the
 player-season games read model, the reconciliation candidate (transfers, custody orders, Footyinfo boards
 and draft selections) and a realized-trade-grade batch, read only for its trades, legs and onward links,
-never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`)
-estimates traded players' open stints; its fit is `modeling/tradedPlayerValueLineFit.ts` (below), not yet wired into the command. Inputs that pin different
-calculations for a season, a games read model of another method, a checkpoint past the fit's last season
-or a tenure past the curves' horizon are refused.
+never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
+whose types are the fit module's own, re-exported) estimates traded players' open stints from the stored
+traded-player fit (`modeling/tradedPlayerValueLineFit.ts`, below) and the evidence it read: its trade
+seasons, each player's trade seasons in that window, its merged draft origins and its games read model.
+`createAflTradeTradedPlayerValueEvaluator` (`modeling/tradedPlayerValueLineEvaluator.ts`) assembles it and
+refuses evidence that is not the fit's (another content address, method, season calculation or leg count
+per trade season, or any leg's player or stage differing from the fit's `stageDigest` for its trade
+season, even within one stage basis). The calculator builds each leg's input as the fit does
+(`aflTradeTradedPlayerFitLegInputs`): the stage by `aflTradeTradedPlayerStage` against his first trade,
+and his earlier trades for the phases; a unit test holds every fixture leg at every checkpoint to the
+fit's own point. Inputs that pin different calculations for a season, a games read model of another
+method, a checkpoint past the fit's last season or a tenure past the curves' horizon are refused.
 
 **Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v1`): the rules, the inputs (fit, traded-player
 fit, ledger, candidate and batch ids, each season's calculation), one line per asset (a pick, a traded
@@ -4236,9 +4247,10 @@ are counted, not trained on. The fit refuses an unavailable season, any games di
 seasons missing PAV or PAV that differs from the read model, a grader calculation id that differs from the
 read model's, and a draft origin at or after the trade season.
 
-**Output.** Sealed under `traded-player-value-line-fit:<sha256>` (`afl-trade-traded-player-value-line-fit/v1`).
-It holds the rules, the fit window (trade seasons, read seasons with calculation ids, legs per trade season
-by review state and stage basis), leg diagnostics (open, moved, inactive, exclusions, left-censored and
+**Output.** Sealed under `traded-player-value-line-fit:<sha256>` (`afl-trade-traded-player-value-line-fit/v2`;
+v2 added the per-season `stageDigest`, so the stored v1 fit `044703d9…` needs a refit before the value lines
+read it). It holds the rules, the fit window (trade seasons, read seasons with calculation ids, legs per trade
+season by review state and stage basis, and `stageDigest`, the sha256 of each leg's player and stage, sorted), leg diagnostics (open, moved, inactive, exclusions, left-censored and
 unknown-band seasons), every coefficient, a prior table by band and phase, the expected stint PAV by stage
 at trade, `k` with its variance components, and the leave-one-trade-season-out back-test: bias, MAE, RMSE
 and standard error by checkpoint and stage band, stage basis and trade season, against produced-only,

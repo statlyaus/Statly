@@ -120,7 +120,16 @@ function picksOf(
         // A pick a board lists as spent on a bid takes its share of the nominee (issue 789).
         outcome:
           outcome.kind === 'matched_bid' && outcome.status === 'pending'
-            ? aflTradeAssetLedgerShareMatchedBid(outcome, pick.pickId, bidMatches)
+            ? aflTradeAssetLedgerShareMatchedBid(
+                outcome,
+                {
+                  pickId: pick.pickId,
+                  draftYear: pick.draftYear,
+                  draftType: pick.draftType,
+                  holderClubId: trail.hops.at(-1)?.toClubId ?? pick.originalClubId,
+                },
+                bidMatches
+              )
             : outcome,
       };
     });

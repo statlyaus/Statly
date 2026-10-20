@@ -193,7 +193,14 @@ export type AflTradeAssetLedgerPickOutcome =
       /** The drafted player's first stint at the drafting club, from the season after the draft. */
       readonly firstStint: AflTradeAssetLedgerStint | null;
     }
-  | { readonly kind: 'not_used' }
+  | {
+      readonly kind: 'not_used';
+      /**
+       * `board_not_spent`: Draftguru says not used and the club took a nominee, but the draft's boards
+       * list the club's bid spends and this pick is not among them (owner, 2026-10-21).
+       */
+      readonly evidence?: 'board_not_spent';
+    }
   | AflTradeAssetLedgerMatchedBidOutcome
   | { readonly kind: 'passed'; readonly boardPickId: string }
   | { readonly kind: 'future'; readonly projectedSlot: AflTradeAssetLedgerProjectedSlot | null }
