@@ -114,14 +114,22 @@ function availableView(
   }>
 ): AvailableView {
   const total = (field: keyof AvailableView['components'] | 'totalPav') =>
-    normalized(allocations.reduce((sum, { allocation }) => sum + (allocation[field] as number), 0));
+    normalized(
+      allocations.reduce(
+        (sum, { allocation }) => sum + (allocation[field] as number),
+        0
+      )
+    );
   return {
     state: 'available',
     score: total('totalPav'),
-    gamesPlayed: allocations.reduce((sum, { allocation }) => sum + allocation.gamesPlayed, 0),
-    seasons: [
-      ...new Set(allocations.map(({ calculation }) => calculation.content.seasonYear)),
-    ].sort((left, right) => left - right),
+    gamesPlayed: allocations.reduce(
+      (sum, { allocation }) => sum + allocation.gamesPlayed,
+      0
+    ),
+    seasons: [...new Set(allocations.map(({ calculation }) => calculation.content.seasonYear))].sort(
+      (left, right) => left - right
+    ),
     components: {
       offensiveScore: total('offensiveScore'),
       midfieldScore: total('midfieldScore'),
@@ -242,12 +250,8 @@ function projectPlayer(input: {
     asset: input.asset,
     state: 'calculated',
     canonicalPlayerId,
-    identityDecisionIds: [
-      ...new Set(matching.flatMap(({ identityDecisionIds }) => identityDecisionIds)),
-    ].sort(),
-    reviewedSeasonIds: [
-      ...new Set(matching.flatMap(({ reviewedSeasonIds }) => reviewedSeasonIds)),
-    ].sort(),
+    identityDecisionIds: [...new Set(matching.flatMap(({ identityDecisionIds }) => identityDecisionIds))].sort(),
+    reviewedSeasonIds: [...new Set(matching.flatMap(({ reviewedSeasonIds }) => reviewedSeasonIds))].sort(),
     postTradeGames,
     atTrade:
       atTradeAllocations.length > 0
@@ -261,15 +265,13 @@ function projectPlayer(input: {
   };
 }
 
-export function projectLocalPrivateReviewedTradeCalculation(
-  input: Readonly<{
-    detail: DraftTradeDetail;
-    workbookSha256: string;
-    identities: readonly LocalPrivateReviewedPlayerIdentityEvidence[];
-    calculations: readonly unknown[];
-    outcomesByAssetId?: ReadonlyMap<string, AflTradeDevelopmentReconciledAcquisitionOutcome>;
-  }>
-): LocalPrivateReviewedTradeCalculation {
+export function projectLocalPrivateReviewedTradeCalculation(input: Readonly<{
+  detail: DraftTradeDetail;
+  workbookSha256: string;
+  identities: readonly LocalPrivateReviewedPlayerIdentityEvidence[];
+  calculations: readonly unknown[];
+  outcomesByAssetId?: ReadonlyMap<string, AflTradeDevelopmentReconciledAcquisitionOutcome>;
+}>): LocalPrivateReviewedTradeCalculation {
   if (!/^[a-f0-9]{64}$/u.test(input.workbookSha256)) {
     throw new TypeError('Private trade calculation requires the pinned workbook digest.');
   }

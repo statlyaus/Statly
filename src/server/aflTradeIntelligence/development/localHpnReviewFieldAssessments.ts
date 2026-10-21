@@ -53,26 +53,22 @@ function approvedSourceFields(
 function exactStringSet(left: readonly string[], right: readonly string[]): boolean {
   const leftSorted = [...left].sort();
   const rightSorted = [...right].sort();
-  return (
-    leftSorted.length === rightSorted.length &&
-    leftSorted.every((value, index) => value === rightSorted[index])
-  );
+  return leftSorted.length === rightSorted.length &&
+    leftSorted.every((value, index) => value === rightSorted[index]);
 }
 
-export function createSelectedLocalAflTradeHpnFields(
-  input: Readonly<{
-    candidate: AflTradeHpnFieldMapCandidate;
-    candidateArtifact: AflTradeArtifactRef;
-    decodeMapArtifact: AflTradeArtifactRef;
-    sourceUseAssessment: AflTradeHpnPrivateCalculationSourceUseAssessment;
-    sourceUseAssessmentArtifact: AflTradeArtifactRef;
-    currentMap: AflTradeHpnProjectedFieldMap | null;
-    currentMapArtifact: AflTradeArtifactRef | null;
-    factualRunId: string | null;
-    hpnResolutionsCurrent: boolean;
-    authoritySnapshotArtifact: AflTradeArtifactRef;
-  }>
-): readonly AflTradeHpnCalculationFieldAssessmentInput[] {
+export function createSelectedLocalAflTradeHpnFields(input: Readonly<{
+  candidate: AflTradeHpnFieldMapCandidate;
+  candidateArtifact: AflTradeArtifactRef;
+  decodeMapArtifact: AflTradeArtifactRef;
+  sourceUseAssessment: AflTradeHpnPrivateCalculationSourceUseAssessment;
+  sourceUseAssessmentArtifact: AflTradeArtifactRef;
+  currentMap: AflTradeHpnProjectedFieldMap | null;
+  currentMapArtifact: AflTradeArtifactRef | null;
+  factualRunId: string | null;
+  hpnResolutionsCurrent: boolean;
+  authoritySnapshotArtifact: AflTradeArtifactRef;
+}>): readonly AflTradeHpnCalculationFieldAssessmentInput[] {
   return listAflTradeHpnRequiredSemanticFields(input.candidate.content.inputKind).map(
     (semanticField): AflTradeHpnCalculationFieldAssessmentInput => {
       const sourceFields = listAflTradeHpnCandidateSourceFields(
@@ -87,8 +83,8 @@ export function createSelectedLocalAflTradeHpnFields(
       }
       const sourceUsePermitted = sourceFields.every((sourceField) =>
         input.sourceUseAssessment.content.fields.some(
-          (field) =>
-            field.sourceField === sourceField && field.state === 'permitted_private_calculation'
+          (field) => field.sourceField === sourceField &&
+            field.state === 'permitted_private_calculation'
         )
       );
       const identity = identityFields.has(semanticField);
@@ -96,14 +92,13 @@ export function createSelectedLocalAflTradeHpnFields(
         semanticField,
         sourceFields: [...sourceFields],
         rawAvailability: { state: 'available', evidenceRefs: [input.decodeMapArtifact] },
-        fieldMapReview:
-          input.currentMap && input.currentMapArtifact
-            ? {
-                state: 'current_approved',
-                fieldMapId: input.currentMap.fieldMapId,
-                evidenceRefs: [input.currentMapArtifact],
-              }
-            : { state: 'missing', evidenceRefs: [input.candidateArtifact] },
+        fieldMapReview: input.currentMap && input.currentMapArtifact
+          ? {
+              state: 'current_approved',
+              fieldMapId: input.currentMap.fieldMapId,
+              evidenceRefs: [input.currentMapArtifact],
+            }
+          : { state: 'missing', evidenceRefs: [input.candidateArtifact] },
         sourceUse: {
           state: sourceUsePermitted ? 'permitted_private_calculation' : 'not_permitted',
           evidenceRefs: [input.sourceUseAssessmentArtifact],
@@ -114,9 +109,7 @@ export function createSelectedLocalAflTradeHpnFields(
         },
         canonicalIdentity: {
           state: identity
-            ? input.hpnResolutionsCurrent
-              ? 'current_approved'
-              : 'incomplete'
+            ? input.hpnResolutionsCurrent ? 'current_approved' : 'incomplete'
             : 'not_applicable',
           evidenceRefs: [input.authoritySnapshotArtifact],
         },

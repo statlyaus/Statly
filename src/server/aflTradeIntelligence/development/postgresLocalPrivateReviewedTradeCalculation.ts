@@ -49,8 +49,9 @@ function acquisitionInputs(
             draftNumber: null,
             clubName: asset.clubName,
             playerName:
-              identities.find(({ sourcePlayerName }) => sourcePlayerName === asset.playerName)
-                ?.recordedName ?? asset.playerName,
+              identities.find(
+                ({ sourcePlayerName }) => sourcePlayerName === asset.playerName
+              )?.recordedName ?? asset.playerName,
             age: null,
             heightCm: null,
             weightKg: null,
@@ -152,7 +153,11 @@ export async function loadPostgresLocalPrivateReviewedTradeCalculation(
   }>
 ): Promise<LocalPrivateReviewedTradeCalculation> {
   return client.transaction(async (transaction) => {
-    const identities = await loadIdentityEvidence(transaction, input.detail, input.workbookSha256);
+    const identities = await loadIdentityEvidence(
+      transaction,
+      input.detail,
+      input.workbookSha256
+    );
     const outcomesByAssetId = await loadLocalAflTradeStagedWorkbookOutcomes(
       transactionClient(transaction),
       acquisitionInputs(input.detail, identities)

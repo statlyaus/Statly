@@ -89,14 +89,11 @@ export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
   }
   const providerFields = directFields[input.provider];
   // Follow the declared source locator; this candidate does not approve its identity namespace.
-  const playerField =
-    input.provider === 'afl_tables' && decodeMap.identity !== undefined
-      ? z
-          .object({
-            nativeId: z.object({ sourceField: z.enum(['ID', 'url']) }),
-          })
-          .parse(decodeMap.identity).nativeId.sourceField
-      : providerFields.player;
+  const playerField = input.provider === 'afl_tables' && decodeMap.identity !== undefined
+    ? z.object({
+        nativeId: z.object({ sourceField: z.enum(['ID', 'url']) }),
+      }).parse(decodeMap.identity).nativeId.sourceField
+    : providerFields.player;
   const semanticBindings = listAflTradeHpnRequiredSemanticFields(
     'player_match_stats'
   ).map<AflTradeHpnSemanticBindingCandidate>((semanticField) => ({
@@ -113,13 +110,13 @@ export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
               kind: 'composite_key',
               sourceFields: ['Date', 'Home.team', 'Away.team'],
             }
-          : {
-              kind: 'direct',
-              sourceField:
-                semanticField === 'player'
-                  ? playerField
-                  : providerFields[semanticField as keyof typeof providerFields],
-            },
+        : {
+            kind: 'direct',
+            sourceField:
+              semanticField === 'player'
+                ? playerField
+                : providerFields[semanticField as keyof typeof providerFields],
+          },
   }));
   return createAflTradeHpnFieldMapCandidate({
     environment: 'non_production',
@@ -148,7 +145,9 @@ export function createLocalAflTradeHpnCompletedResultFieldMapCandidate(input: {
     decodeMap.capabilityId !== 'afl-tables-results' &&
     decodeMap.capabilityId !== 'afl-tables-player-stats'
   ) {
-    throw new TypeError('The retained provider decode map has the wrong HPN result capability.');
+    throw new TypeError(
+      'The retained provider decode map has the wrong HPN result capability.'
+    );
   }
   const dedicatedResults = decodeMap.capabilityId === 'afl-tables-results';
   const homeClubField = dedicatedResults ? 'Home.Team' : 'Home.team';

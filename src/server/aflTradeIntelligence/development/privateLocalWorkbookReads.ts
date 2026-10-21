@@ -293,7 +293,11 @@ export function createPrivateLocalWorkbookReads(
       return dependencies.readGovernedEvaluation(
         environment,
         principalId,
-        governedRequest(evaluation, { kind: 'json_export' }, { kind: 'generation', generationId })
+        governedRequest(
+          evaluation,
+          { kind: 'json_export' },
+          { kind: 'generation', generationId }
+        )
       );
     },
   };
