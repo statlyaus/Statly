@@ -263,8 +263,8 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
 - **Legs.** Every player leg of a candidate trade in the 2019 to 2025 trade periods
   (`source/officialAflTradePeriodSourceScope.ts`): a transfer with `asset.kind = 'player'`, a canonical
   player and a receiving club, its trade season `Y`, and its first stint at the receiving club from `Y + 1`
-  by the grader's own rule (`createAflTradeAssetLedgerStintValue`, the asset ledger's stint). A leg is
-  trained on only when its arrival is reviewed (v4), the grader's check. Unreviewed legs, and legs with no
+  by the shared first-stint rule (`valuation/stints.ts` via `createAflTradeAssetLedgerStintValue`, the asset
+  ledger's stint). A leg is trained on only when its arrival is reviewed (v4), the reviewed-arrival check. Unreviewed legs, and legs with no
   canonical player or receiving club, are counted per trade season and left out of training; the
   calculator still values them, flagged. The #869 record has 173 reviewed traded arrivals, Cameron's the
   one unreviewed; re-count on the VM at the next real run.
@@ -304,7 +304,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
   stage stands in for age". Invisible, as in the ledger: delisting and re-signing at the same club, and a
   re-draft through a non-canonical pathway.
 - **Stint.** Seasons and status from the ledger stint (a two-club departure season counts if he played
-  for the receiving club, as the grader counts it), with the pick fit's inactivity closure on top: three
+  for the receiving club, as the ledger stint counts it), with the pick fit's inactivity closure on top: three
   consecutive in-stint seasons with no game close it after the third. Closed reasons: `moved` (the ledger
   closed it) or `inactive`. A ledger closure ending in season `e` is visible at the end of `e` when he also
   played elsewhere in `e`, and otherwise at the end of `e + 1`, so no checkpoint reads a closure early. An
@@ -359,7 +359,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
   content), so a value line is reproducible from the stored fit; it takes the player's earlier trade
   seasons, which set his earlier seasons' phases.
 - **Refusals.** A season that is not available or any games discrepancy; a leg whose ledger stint has
-  seasons missing PAV, or whose stint PAV in a season differs from the games read model; a grader PAV
+  seasons missing PAV, or whose stint PAV in a season differs from the games read model; a grading-input PAV
   calculation id that differs from the games read model's for the same season; a draft origin at or after
   the trade season; a trade season with no season, or more than 20 seasons, observed after it.
 - **Back-test.** Leave one trade season out: every trade season with at least two observed seasons (2019 to
