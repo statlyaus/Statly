@@ -4197,6 +4197,27 @@ The fit's back-test values a checkpoint through `aflTradeValueLinePointAt`, the 
 value-line calculator also uses, and `aflTradeValueLineSlotCurve` rebuilds a slot's curves from a stored
 fit's published parameters.
 
+### Trade structure
+
+`valuation/tradeStructure.ts` holds the structure of the graded trades with no valuation
+([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation order step 5,
+"Retire the old rules"; statlyaus/Statly#789). `buildAflTradeStructure` is pure and seals
+`afl-trade-structure:<sha256>` (`afl-trade-structure/v1`, `valuation/tradeStructureContracts.ts`): the
+candidate id, each graded trade (year, clubs, legs sorted by transfer), the trades it names instead
+(`no_transfers`, `club_unresolved`) and counts. The id does not depend on the candidate's row order.
+
+Each leg names its transfer, asset kind and clubs, and its **onward link** when its receiving club passed
+the asset on: a pick's unique trail (`pick_trail`, the pick-onward order of rule v12, with
+`corroboratedBy: 'footyinfo'` when exactly one board pick routes the hop pair), or a special
+entitlement's reviewed custody successor (`special_entitlement_successor`, rule v7). A link is emitted
+whatever became of the onward trade: the realized grader drops a traded-on leg's link when it blocks
+the leg (`traded_on_return_blocked`), the structure does not. Only the leadsTo cycle guard drops one, a
+link whose onward trade leads back to its own trade.
+
+The realized grader builds its trades, legs and onward links from the same module
+(`createAflTradeStructureView`), so its output is unchanged. The value lines and the trade story move
+onto the structure in later step 5 changes.
+
 ### Value lines
 
 `valuation/valueLines.ts` computes the value lines ([afl-trade-value-line-method.md](afl-trade-value-line-method.md),
