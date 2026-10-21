@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { readFileSync } from 'node:fs';
+
 import { DEVELOPMENT_AUTH_USER_ID } from '@/lib/devAuth';
 import { getExplicitAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 
@@ -9,6 +11,7 @@ import {
   type AflTradeStorySampleSource,
   type AflTradeStorySampleList,
 } from './tradeStorySamples';
+import { createAflTradeStoryBundleSource, verifyAflTradeStoryBundle } from './tradeStoryBundle';
 
 /**
  * The private trade page's only way in (statlyaus/Statly#789). Realized values are
@@ -66,8 +69,29 @@ export function createPrivateTradeStoryReads(
   };
 }
 
+/**
+ * The samples, or with `AFL_TRADE_STORY_BUNDLE_PATH` set (an absolute path to a bundle exported by
+ * `outcomes:grading:trade-story-bundle`, #1052) the genuine stored value lines. The bundle is read and
+ * verified once, on first use; a bad bundle fails the read, never falls back to the samples.
+ */
+export function createConfiguredTradeStorySource(
+  environment: () => Readonly<Record<string, string | undefined>>,
+  read: (path: string) => string = (path) => readFileSync(path, 'utf8')
+): AflTradeStorySampleSource {
+  let resolved: AflTradeStorySampleSource | null = null;
+  const source = () => {
+    if (resolved) return resolved;
+    const path = environment().AFL_TRADE_STORY_BUNDLE_PATH?.trim();
+    resolved = path
+      ? createAflTradeStoryBundleSource(verifyAflTradeStoryBundle(JSON.parse(read(path))))
+      : aflTradeStorySamples;
+    return resolved;
+  };
+  return { list: () => source().list(), load: (tradeId) => source().load(tradeId) };
+}
+
 export const privateTradeStoryReads = createPrivateTradeStoryReads({
   authenticate: getExplicitAuthenticatedUserIdFromServerContext,
   environment: () => process.env,
-  source: aflTradeStorySamples,
+  source: createConfiguredTradeStorySource(() => process.env),
 });
