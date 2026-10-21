@@ -6,6 +6,10 @@ import type {
   AflTradeAssetLedgerMatchedBidOutcome,
   AflTradeAssetLedgerPickOutcome,
 } from './assetLedgerContracts';
+import {
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS,
+  type AflTradeAssetLedgerReviewedBidSpend,
+} from './assetLedgerReviewedBidSpends';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
 import { aflTradeMatchedBidShares } from './matchedBidShares';
 import type { AflTradeRealizedTradeGradeInputs } from './realizedTradeGrade';
@@ -54,6 +58,8 @@ function linkTradedEntitlement(
 function linkSpentPick(
   custody: NonNullable<Candidate['pickCustody']>,
   entitlements: readonly AflTradeAssetLedgerTradedEntitlement[],
+  holders: ReadonlyMap<string, string | null>,
+  reviewedSpends: readonly AflTradeAssetLedgerReviewedBidSpend[],
   bid: BidMatchRecord,
   pick: ConsumedPick
 ): { pickId: string | null; link: AflTradeAssetLedgerBidSpendLink } {
@@ -74,9 +80,16 @@ function linkSpentPick(
   if (pickIds.size === 1) return { pickId: [...pickIds][0]!, link: 'custody' };
   if (pickIds.size > 1) return { pickId: null, link: 'ambiguous_custody' };
   const traded = linkTradedEntitlement(entitlements, bid, pick);
-  return traded === null
-    ? { pickId: null, link: 'no_custody' }
-    : { pickId: traded, link: 'trade_entitlement' };
+  if (traded !== null) return { pickId: traded, link: 'trade_entitlement' };
+  const reviewed = reviewedSpends.find(
+    (row) => row.bidMatchId === bid.bidMatchId && row.nativePickId === pick.nativePickId
+  );
+  if (reviewed === undefined) return { pickId: null, link: 'no_custody' };
+  if (holders.get(reviewed.pickId) !== bid.clubId)
+    throw new Error(
+      `Reviewed bid spend ${pick.nativePickId} names ${reviewed.pickId}, which the bidding club did not hold at the draft.`
+    );
+  return { pickId: reviewed.pickId, link: 'reviewed' };
 }
 
 /**
@@ -114,7 +127,9 @@ function nomineeOf(candidate: Candidate, bid: BidMatchRecord) {
 export function aflTradeAssetLedgerBidMatches(
   candidate: Candidate,
   stintValue: AflTradeAssetLedgerStintValue,
-  entitlements: readonly AflTradeAssetLedgerTradedEntitlement[] = []
+  entitlements: readonly AflTradeAssetLedgerTradedEntitlement[] = [],
+  holders: ReadonlyMap<string, string | null> = new Map(),
+  reviewedSpends: readonly AflTradeAssetLedgerReviewedBidSpend[] = AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS
 ): AflTradeAssetLedgerBidMatch[] {
   return (candidate.draftBoardBidMatches ?? []).map((bid) => {
     const shares = aflTradeMatchedBidShares(bid);
@@ -132,7 +147,14 @@ export function aflTradeAssetLedgerBidMatches(
         originalNumber: pick.originalNumber,
         originalClubId: pick.originalClubId,
         pointsUsed: pick.pointsUsed,
-        ...linkSpentPick(candidate.pickCustody ?? [], entitlements, bid, pick),
+        ...linkSpentPick(
+          candidate.pickCustody ?? [],
+          entitlements,
+          holders,
+          reviewedSpends,
+          bid,
+          pick
+        ),
         countedPoints: share?.countedPoints ?? null,
         share: share?.share ?? null,
         use: share?.use ?? null,

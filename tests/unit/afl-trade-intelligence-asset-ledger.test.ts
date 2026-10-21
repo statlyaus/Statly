@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAflTradeAssetLedger } from '@/server/aflTradeIntelligence/valuation/assetLedger';
+import { aflTradeAssetLedgerBidMatches } from '@/server/aflTradeIntelligence/valuation/assetLedgerBidMatches';
+import { AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedBidSpends';
+import { createAflTradeAssetLedgerStintValue } from '@/server/aflTradeIntelligence/valuation/assetLedgerStints';
 import type { AflTradeAssetLedgerLabels } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
 import {
   gradeAflTradesOnRealizedValue,
@@ -744,6 +747,40 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     expect(
       withSpends([spent('9002', null, 'hawthorn', 400)]).pickOutcome(PICK_MATCHED)
     ).toMatchObject({ status: 'pending', pendingReason: 'no_bid_spend' });
+  });
+
+  it('joins a reviewed spend only to a pick the bidding club held at the draft', () => {
+    const base = {
+      ...inputs(),
+      candidate: { ...inputs().candidate, draftBoardBidMatches: [darcyBid()] },
+    };
+    const stintValue = createAflTradeAssetLedgerStintValue(base);
+    // Gold Coast's 42, which no custody row or single trade places, reviewed as the Bulldogs' pick.
+    const reviewed = [
+      {
+        bidMatchId: darcyBid().bidMatchId,
+        nativePickId: '6042',
+        pickId: PICK_MATCHED,
+        note: 'test',
+      },
+    ];
+    const held = new Map([[PICK_MATCHED, 'western_bulldogs']]);
+    const [bid] = aflTradeAssetLedgerBidMatches(base.candidate, stintValue, [], held, reviewed);
+    expect(bid!.spentPicks[1]).toMatchObject({ link: 'reviewed', pickId: PICK_MATCHED });
+    expect(() =>
+      aflTradeAssetLedgerBidMatches(
+        base.candidate,
+        stintValue,
+        [],
+        new Map([[PICK_MATCHED, 'essendon']]),
+        reviewed
+      )
+    ).toThrow(/did not hold at the draft/);
+    // The owner's list (2026-10-21) has five reviewed spends, each named once.
+    const keys = AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS.map(
+      ({ bidMatchId, nativePickId }) => `${bidMatchId}|${nativePickId}`
+    );
+    expect(new Set(keys).size).toBe(5);
   });
 
   it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {

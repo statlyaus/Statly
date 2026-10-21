@@ -4106,7 +4106,10 @@ trade story read model does not read the shares yet; it still shows a matched-bi
   and the original club, on a usable Official AFL custody row of the same draft, naming exactly one pick
   id. The holder is not compared, because a club may acquire a pick on draft night to spend it. With
   no such row, it is the one pick traded exactly once, from its original club to the bidding club in
-  that draft, whose trade stated the board's number (`trade_entitlement`; owner, 2026-10-21). A spent
+  that draft, whose trade stated the board's number (`trade_entitlement`; owner, 2026-10-21). Else, a
+  spent pick on the owner-reviewed list (`valuation/assetLedgerReviewedBidSpends.ts`, five spends
+  approved 2026-10-21, keyed by bid match and board pick) joins its listed pick (`reviewed`), which the
+  bidding club must hold at the draft or the ledger refuses. A spent
   pick with no number (a leftover pick an earlier bid created), an unresolved original club, two
   custody pick ids, or none or two traded picks does not join, and a pick no bid lists stays pending. Only a pending matched-bid
   outcome takes a share; every other outcome is unchanged.
