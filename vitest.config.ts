@@ -7,8 +7,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
-  esbuild: {
-    jsx: 'automatic',
+  oxc: {
+    jsx: { runtime: 'automatic' },
   },
   test: {
     environment: 'jsdom',
