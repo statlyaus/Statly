@@ -9,10 +9,10 @@ import type {
   AflTradeAssetLedgerPickTrail,
 } from './assetLedgerPickHops';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
-import type { AflTradeRealizedTradeGradeInputs } from './realizedTradeGrade';
-import { aflTradeGradeOrderSlotOf, type AflTradeGradePickAsset } from './realizedTradeGradeAtTrade';
+import type { AflTradeGradingInputs } from './gradingInputs';
+import { aflTradePickOrderSlotOf, type AflTradePickAsset } from './pickSlots';
 
-type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
+type Candidate = AflTradeGradingInputs['candidate'];
 type PickOutcome = NonNullable<Candidate['pickOutcomes']>[number];
 type Selection = NonNullable<Candidate['draftSelections']>[number];
 
@@ -21,8 +21,8 @@ export interface AflTradeAssetLedgerOutcomeSources {
   stintValue: AflTradeAssetLedgerStintValue;
   pickCustody: NonNullable<Candidate['pickCustody']>;
   outcomesByTransfer: ReadonlyMap<string, PickOutcome>;
-  /** Each pick transfer's own entitlement, which the grader projects a pending pick from. */
-  pickAssetsByTransfer: ReadonlyMap<string, AflTradeGradePickAsset>;
+  /** Each pick transfer's own entitlement, which a pending pick is projected from. */
+  pickAssetsByTransfer: ReadonlyMap<string, AflTradePickAsset>;
   selectionsById: ReadonlyMap<string, Selection>;
   selectionsByPick: ReadonlyMap<string, readonly Selection[]>;
   /** The latest draft year the candidate holds a selection in; a later draft has not been run. */
@@ -87,7 +87,7 @@ function selected(
   };
 }
 
-const identityAsset = (pick: AflTradeAssetLedgerPickIdentity): AflTradeGradePickAsset => ({
+const identityAsset = (pick: AflTradeAssetLedgerPickIdentity): AflTradePickAsset => ({
   kind: 'pick_entitlement',
   pickId: pick.pickId,
   draftYear: pick.draftYear,
@@ -101,9 +101,9 @@ const identityAsset = (pick: AflTradeAssetLedgerPickIdentity): AflTradeGradePick
 /** A pick not yet drafted, at its slot in the live Official AFL order when it has one (rule v6). */
 function future(
   sources: AflTradeAssetLedgerOutcomeSources,
-  asset: AflTradeGradePickAsset
+  asset: AflTradePickAsset
 ): AflTradeAssetLedgerPickOutcome {
-  const slot = aflTradeGradeOrderSlotOf(sources.pickCustody, asset);
+  const slot = aflTradePickOrderSlotOf(sources.pickCustody, asset);
   return {
     kind: 'future',
     projectedSlot: slot
@@ -117,7 +117,7 @@ function future(
   };
 }
 
-/** A not-used pick by its nomination basis, as the grader reads it. */
+/** A not-used pick by its nomination basis. */
 function notUsed(outcome: PickOutcome): AflTradeAssetLedgerPickOutcome {
   switch (outcome.nominationBasis) {
     case 'club_took_nominated_player':
@@ -149,7 +149,7 @@ function fromHopOutcome(
   const asset = sources.pickAssetsByTransfer.get(hop.transferId) ?? identityAsset(pick);
   if (outcome.outcomeStatus === 'pending') return future(sources, asset);
   if (outcome.disposition === 'not_used') return notUsed(outcome);
-  // As for the grader: a pick is drafted at or after its trade, never in an earlier draft.
+  // A pick is drafted at or after its trade, never in an earlier draft.
   if (asset.draftYear < hop.seasonYear) return unresolved('pick_outcome_unresolved');
   const selection =
     outcome.selectionId === null ? undefined : sources.selectionsById.get(outcome.selectionId);
@@ -181,7 +181,7 @@ function fromSelections(
 }
 
 /**
- * What became of a pick. A hop's stated outcome wins, as it does for the grader: pending is a future
+ * What became of a pick. A hop's stated outcome wins: pending is a future
  * pick, not used splits into a matched bid (pending), passed, not used or unresolved, and selected
  * names its selection. Hops traded on say nothing of the end, and on an ordered trail only the last
  * hop may state one. Without a terminal hop the pick's own usable selection decides; with none, a pick

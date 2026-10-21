@@ -1,12 +1,8 @@
 import type { AflTradeAssetLedgerStint } from './assetLedgerContracts';
-import {
-  aflTradeRealizedArrivalReviewed,
-  aflTradeRealizedFirstStint,
-  indexAflTradeRealizedStintInputs,
-  type AflTradeRealizedTradeGradeInputs,
-} from './realizedTradeGrade';
+import type { AflTradeGradingInputs } from './gradingInputs';
+import { aflTradeArrivalReviewed, aflTradeFirstStint, indexAflTradeStintInputs } from './stints';
 
-/** Any player's first stint at any club from a season, by the realized grader's own rules. */
+/** Any player's first stint at any club from a season, by the shared stint rules (`stints.ts`). */
 export type AflTradeAssetLedgerStintValue = (
   playerId: string,
   clubId: string,
@@ -17,25 +13,19 @@ const pavKey = (playerId: string, season: number, clubId: string) =>
   `${playerId}|${season}|${clubId}`;
 
 /**
- * Builds `stintValue` over the grader's inputs. The arrival check matches the grader's: a reviewed
+ * Builds `stintValue` over the grading inputs. The arrival check: a reviewed
  * arrival at the club in the season before `fromSeason` or in `fromSeason` itself (a trade or draft in
  * year Y starts the stint in Y + 1).
  */
 export function createAflTradeAssetLedgerStintValue(
-  inputs: AflTradeRealizedTradeGradeInputs
+  inputs: AflTradeGradingInputs
 ): AflTradeAssetLedgerStintValue {
-  const index = indexAflTradeRealizedStintInputs(inputs);
+  const index = indexAflTradeStintInputs(inputs);
   const pav = new Map(inputs.pav.map((row) => [pavKey(row.playerId, row.season, row.clubId), row]));
   const firstCoveredSeason = Math.min(...inputs.spellSeasons);
   return (playerId, clubId, fromSeason) => {
-    const reviewed = aflTradeRealizedArrivalReviewed(
-      index,
-      playerId,
-      clubId,
-      fromSeason - 1,
-      fromSeason
-    );
-    const stint = aflTradeRealizedFirstStint(index, playerId, clubId, fromSeason, reviewed);
+    const reviewed = aflTradeArrivalReviewed(index, playerId, clubId, fromSeason - 1, fromSeason);
+    const stint = aflTradeFirstStint(index, playerId, clubId, fromSeason, reviewed);
     const counted = [...stint.seasonsValued, ...stint.seasonsMissingPav];
     return {
       clubId,
@@ -58,7 +48,7 @@ export function createAflTradeAssetLedgerStintValue(
 
 /** Each player's candidate stint starts by club: every season spell and every reviewed arrival. */
 export function aflTradeAssetLedgerStintStarts(
-  inputs: AflTradeRealizedTradeGradeInputs
+  inputs: AflTradeGradingInputs
 ): Map<string, Map<string, Set<number>>> {
   const starts = new Map<string, Map<string, Set<number>>>();
   for (const { playerId, clubId, season } of [...inputs.seasonSpells, ...inputs.reviewedArrivals]) {

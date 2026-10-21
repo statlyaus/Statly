@@ -12,9 +12,9 @@ import {
 } from './assetLedgerReviewedBidSpends';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
 import { aflTradeMatchedBidShares } from './matchedBidShares';
-import type { AflTradeRealizedTradeGradeInputs } from './realizedTradeGrade';
+import type { AflTradeGradingInputs } from './gradingInputs';
 
-type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
+type Candidate = AflTradeGradingInputs['candidate'];
 type BidMatchRecord = NonNullable<Candidate['draftBoardBidMatches']>[number];
 type ConsumedPick = BidMatchRecord['consumedPicks'][number];
 

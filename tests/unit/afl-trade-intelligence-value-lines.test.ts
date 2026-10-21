@@ -19,10 +19,6 @@ import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes
 import type { AflTradeAssetLedgerReadModel } from '@/server/aflTradeIntelligence/valuation/assetLedger';
 import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
 import {
-  gradeAflTradesOnRealizedValue,
-  type AflTradeRealizedTradeGradeInputs,
-} from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
-import {
   buildAflTradeStory,
   type AflTradeStoryAsset,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
@@ -214,7 +210,7 @@ interface Options {
   rows?: Row[];
   /** l3 is a special entitlement whose reviewed custody successor is l4. */
   special?: boolean;
-  /** The player C sends B in t2 is unresolved, so the batch blocked B's side of t2. */
+  /** The player C sends B in t2 is unresolved, so B's side of t2 cannot be valued. */
   unresolvedPears?: boolean;
   custody?: { draftYear: number; recordedPickNumber: number }[];
   oldPick?: boolean;
@@ -899,7 +895,7 @@ describe('computeAflTradeValueLines', () => {
     const base = inputs();
     const refuse = (change: Partial<AflTradeValueLineInputs>, message: RegExp) =>
       expect(() => computeAflTradeValueLines({ ...base, ...change })).toThrow(message);
-    // The ledger, fit and games read model must pin one calculation per season (the batch pin is gone).
+    // The ledger, fit and games read model must pin one calculation per season.
     const ledgerContent = base.ledger.ledger.content;
     refuse(
       {
@@ -1017,33 +1013,10 @@ describe('value lines on the trade structure (issue 789, step 5)', () => {
     expect(b2024).toBeCloseTo(line(P('p1')) + line(P('p2')) - line(PLAYER_X), 6);
   });
 
-  it('follows a special entitlement chain the batch dropped while its onward side was blocked', () => {
-    // With the pears unresolved the batch blocked B's side of t2, so its old traded-on valuation of
-    // l3 was blocked and the leg carried no successor. The structure still links l3 to l4.
+  it('follows a special entitlement chain while its onward side is unresolved', () => {
+    // With the pears unresolved, B's side of t2 cannot be valued; the structure still links l3 to l4.
     const options = { special: true, unresolvedPears: true };
-    const { structure, candidate } = inputs(options);
-    const batch = gradeAflTradesOnRealizedValue({
-      candidateId: CANDIDATE,
-      candidate: candidate as AflTradeRealizedTradeGradeInputs['candidate'],
-      specialEntitlementCustody: SPECIAL_CUSTODY,
-      pavCalculations: range(2019, 2021).map((season) => ({
-        season,
-        calculationId: `hpn-pav-season:${season}`,
-        official: true,
-      })),
-      pav: [],
-      seasonSpells: [],
-      spellSeasons: range(2019, 2021),
-      reviewedArrivals: [],
-      pickProjectionBenchmarkId: `hpn-pick-benchmark:${'b'.repeat(64)}`,
-      spellCutoffAt: '2026-10-21T00:00:00.000Z',
-      gradedAt: '2026-10-21T01:00:00.000Z',
-    });
-    const graded = batch.content.trades
-      .flatMap(({ legs }) => legs)
-      .find((leg) => leg.transferId === transferId('l3'))!;
-    expect(graded).toMatchObject({ state: 'blocked', reasons: ['traded_on_return_blocked'] });
-    expect(graded).not.toHaveProperty('specialEntitlement');
+    const { structure } = inputs(options);
     const l3 = structure.content.trades
       .flatMap(({ legs }) => legs)
       .find((leg) => leg.transferId === transferId('l3'))!;
@@ -1243,7 +1216,7 @@ describe('compute-value-lines', () => {
     '/receipts/value-lines.json',
   ];
 
-  it('parses the grader arguments, the fit and the last season end', () => {
+  it('parses the grading arguments, the fit and the last season end', () => {
     expect(parseComputeValueLinesArguments(argv, loopback)).toMatchObject({
       candidateId: CANDIDATE,
       fit: '/receipts/fit.json',

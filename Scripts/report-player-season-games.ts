@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 import { loadAflTradePlayerSeasonGames } from '../src/server/aflTradeIntelligence/modeling/postgresPlayerSeasonGames';
 import type { AflTradePlayerSeasonGames } from '../src/server/aflTradeIntelligence/modeling/playerSeasonGames';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
-import { parseSeasons } from './grade-realized-trades';
+import { parseSeasons } from './gradingArguments';
 import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
 
 /**

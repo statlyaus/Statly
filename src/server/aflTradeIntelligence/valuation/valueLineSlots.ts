@@ -1,9 +1,9 @@
 import type { AflTradeExternalReconciliationCandidateRecord } from '../source/externalReconciliationCandidateContracts';
 import {
   aflTradeBoardPreDraftSlotOf,
-  aflTradeGradeOrderSlotOf,
-  type AflTradeGradePickAsset,
-} from './realizedTradeGradeAtTrade';
+  aflTradePickOrderSlotOf,
+  type AflTradePickAsset,
+} from './pickSlots';
 import type { AflTradeValueLineSlotSource } from './valueLineContracts';
 
 type CandidateContent = AflTradeExternalReconciliationCandidateRecord['content'];
@@ -29,13 +29,13 @@ export interface AflTradeValueLineSlot {
  */
 export function aflTradeValueLineAtTradeSlot(
   candidate: AflTradeValueLineCandidate,
-  asset: AflTradeGradePickAsset,
+  asset: AflTradePickAsset,
   tradeYear: number
 ): AflTradeValueLineSlot | null {
   if (asset.draftType !== 'national' || asset.draftYear < tradeYear) return null;
   if (asset.nominalPick !== null)
     return { selectionNumber: asset.nominalPick, source: 'stated_at_trade' };
-  const order = aflTradeGradeOrderSlotOf(candidate.pickCustody ?? [], asset);
+  const order = aflTradePickOrderSlotOf(candidate.pickCustody ?? [], asset);
   if (order)
     return {
       selectionNumber: order.selectionNumber,

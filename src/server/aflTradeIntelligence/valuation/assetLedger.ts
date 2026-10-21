@@ -31,12 +31,12 @@ import {
   createAflTradeAssetLedgerStintValue,
   type AflTradeAssetLedgerStintValue,
 } from './assetLedgerStints';
-import type { AflTradeRealizedTradeGradeInputs } from './realizedTradeGrade';
+import type { AflTradeGradingInputs } from './gradingInputs';
 
 /**
  * The asset ledger read model (issue 789): one joined-up, private view of every player's club stints
- * and every pick's custody and outcome, built from the realized grader's own inputs
- * (`loadAflTradeRealizedTradeGradeInputs`) and its own stint rules. Pure: labels are injected.
+ * and every pick's custody and outcome, built from the grading inputs
+ * (`loadAflTradeGradingInputs`) and the shared stint rules (`stints.ts`). Pure: labels are injected.
  */
 export interface AflTradeAssetLedgerReadModel {
   readonly ledger: AflTradeAssetLedger;
@@ -49,7 +49,7 @@ export interface AflTradeAssetLedgerReadModel {
 const byCodeUnit = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
 
 /** Every player id the inputs or labels name, so no player in evidence is left out. */
-function playerIdsOf(inputs: AflTradeRealizedTradeGradeInputs, labels: AflTradeAssetLedgerLabels) {
+function playerIdsOf(inputs: AflTradeGradingInputs, labels: AflTradeAssetLedgerLabels) {
   const { candidate } = inputs;
   return new Set<string>([
     ...labels.players.map(({ playerId }) => playerId),
@@ -65,7 +65,7 @@ function playerIdsOf(inputs: AflTradeRealizedTradeGradeInputs, labels: AflTradeA
 
 /** Every club id the inputs or labels name. */
 function clubsOf(
-  inputs: AflTradeRealizedTradeGradeInputs,
+  inputs: AflTradeGradingInputs,
   labels: AflTradeAssetLedgerLabels
 ): AflTradeAssetLedgerClub[] {
   const names = new Map(labels.clubs.map(({ clubId, name }) => [clubId, name]));
@@ -89,7 +89,7 @@ function clubsOf(
 }
 
 function playersOf(
-  inputs: AflTradeRealizedTradeGradeInputs,
+  inputs: AflTradeGradingInputs,
   labels: AflTradeAssetLedgerLabels,
   stintValue: AflTradeAssetLedgerStintValue
 ): AflTradeAssetLedgerPlayer[] {
@@ -103,7 +103,7 @@ function playersOf(
 }
 
 /** The club holding each traded pick at its draft: its last trade's receiving club. */
-function holdersAtDraftOf(inputs: AflTradeRealizedTradeGradeInputs): Map<string, string | null> {
+function holdersAtDraftOf(inputs: AflTradeGradingInputs): Map<string, string | null> {
   return new Map(
     [...aflTradeAssetLedgerPickTrails(inputs)].map(([pickId, trail]) => [
       pickId,
@@ -114,7 +114,7 @@ function holdersAtDraftOf(inputs: AflTradeRealizedTradeGradeInputs): Map<string,
 
 /** Every pick traded exactly once, with the number its trade stated (issue 789). */
 function tradedEntitlementsOf(
-  inputs: AflTradeRealizedTradeGradeInputs
+  inputs: AflTradeGradingInputs
 ): AflTradeAssetLedgerTradedEntitlement[] {
   const transfers = new Map(inputs.candidate.transfers.map((row) => [row.transferId, row]));
   const identities = aflTradeAssetLedgerPickIdentities(inputs.candidate);
@@ -139,7 +139,7 @@ function tradedEntitlementsOf(
 }
 
 function picksOf(
-  inputs: AflTradeRealizedTradeGradeInputs,
+  inputs: AflTradeGradingInputs,
   stintValue: AflTradeAssetLedgerStintValue,
   bidMatches: readonly AflTradeAssetLedgerBidMatch[]
 ): AflTradeAssetLedgerPick[] {
@@ -202,7 +202,7 @@ function summaryOf(
 
 /** Builds and seals the ledger, and returns it with its lookup helpers. */
 export function createAflTradeAssetLedger(
-  inputs: AflTradeRealizedTradeGradeInputs,
+  inputs: AflTradeGradingInputs,
   labels: AflTradeAssetLedgerLabels
 ): AflTradeAssetLedgerReadModel {
   const stintValue = createAflTradeAssetLedgerStintValue(inputs);

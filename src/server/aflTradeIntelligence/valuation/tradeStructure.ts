@@ -24,8 +24,8 @@ type RawOnward =
   | { kind: 'pick_trail'; transfer: Transfer };
 
 /**
- * What the trade structure reads (value-line method step 5, issue 789). The realized grader's inputs
- * are assignable to it: the grader builds its trades, legs and onward links from this module.
+ * What the trade structure reads (value-line method step 5, issue 789). The grading inputs
+ * (`gradingInputs.ts`) are assignable to it.
  */
 export interface AflTradeStructureInputs {
   candidateId: string;
@@ -121,8 +121,8 @@ function createSpecialEntitlementLink(
 }
 
 /**
- * The structure of every graded trade, as functions the realized grader and the structure artifact
- * share: the graded and named trades, each trade's transfers, a pick's onward transfer, a special
+ * The structure of every graded trade, as functions the structure artifact
+ * reads: the graded and named trades, each trade's transfers, a pick's onward transfer, a special
  * entitlement's custody successor, the leadsTo cycle guard, and route corroboration of a trail.
  */
 export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {

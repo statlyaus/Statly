@@ -12,7 +12,7 @@ import {
   createAflTradeExternalIdentityResolution,
   reconcileAflTradeExternalEvidence,
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
-import { gradeAflTradesOnRealizedValue } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import { buildAflTradeStructure } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
 
 type Provider = AflTradeExternalEvidenceContent['provider'];
 type Claim = AflTradeExternalEvidenceContent['claim'];
@@ -447,33 +447,20 @@ describe('joining a renumbered pick through its eventual selection (statlyaus/St
     expect(issue?.evidenceIds).toHaveLength(1);
   });
 
-  it('lets the grader follow the traded-on pick into its draft-night trade', () => {
-    const grade = (eventual: boolean) => {
+  it('lets the trade structure follow the traded-on pick into its draft-night trade', () => {
+    const onward = (eventual: boolean) => {
       const candidate = reconcile([tradePeriod(eventual), draftNight(eventual)], order);
       const leg = transferOf(candidate, 'Carlton', 'West Coast', 12);
-      const batch = gradeAflTradesOnRealizedValue({
+      const structure = buildAflTradeStructure({
         candidateId: `external-reconciliation:${digest('c')}`,
         candidate,
-        pavCalculations: [2024, 2025].map((season) => ({
-          season,
-          calculationId: `hpn-pav-season:${season}`,
-          official: true,
-        })),
-        pav: [],
-        seasonSpells: [],
-        spellSeasons: [2024, 2025],
-        reviewedArrivals: [],
-        pickProjectionBenchmarkId: `hpn-pick-benchmark:${digest('b')}`,
-        spellCutoffAt: '2026-10-12T00:00:00.000Z',
-        gradedAt: '2026-10-12T02:00:00.000Z',
       });
-      return batch.content.trades
+      return structure.content.trades
         .flatMap(({ legs }) => legs)
-        .find(({ transferId }) => transferId === leg.transferId)!;
+        .find(({ transferId }) => transferId === leg.transferId)!.onward;
     };
-    expect(grade(false).reasons).toEqual(['traded_on_return_unlinked']);
-    // Linked: the leg now follows the draft-night trade, whose own received picks have no stated
-    // outcome here, so it is blocked on that trade rather than unlinked.
-    expect(grade(true).reasons).toEqual(['traded_on_return_blocked']);
+    // Unlinked without eventual selections; linked, the leg follows the draft-night trade.
+    expect(onward(false)).toBeUndefined();
+    expect(onward(true)).toMatchObject({ kind: 'pick_trail' });
   });
 });

@@ -16,7 +16,7 @@ import {
   createAflTradeExternalReconciliationCandidate,
   retainAflTradePickOutcomes,
 } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
-import { gradeAflTradesOnRealizedValue } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import { buildAflTradeStructure } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
 
 type Claim = AflTradeExternalEvidenceContent['claim'];
 const digest = (character: string) => character.repeat(64);
@@ -168,39 +168,17 @@ const chain = () => [
   page('2024-essendon-richmond', '2024-10-11', 'Essendon', 'Richmond', 'Player Three'),
 ];
 
-function grade(candidate: Candidate) {
-  const pav = [
-    // Each player's 2025 season at the club he joined.
-    { player: 'Player One', club: 'Collingwood', value: 4 },
-    { player: 'Player Two', club: 'Hawthorn', value: 7 },
-    { player: 'Player Three', club: 'Essendon', value: 5 },
-  ];
-  return gradeAflTradesOnRealizedValue({
-    candidateId: `external-reconciliation:${digest('c')}`,
-    candidate,
-    pavCalculations: [{ season: 2025, calculationId: 'hpn-pav-season:2025', official: true }],
-    pav: pav.map(({ player, club, value }) => ({
-      playerId: playerId(player),
-      season: 2025,
-      clubId: clubId(club),
-      value,
-    })),
-    seasonSpells: pav.map(({ player, club }) => ({
-      playerId: playerId(player),
-      season: 2025,
-      clubId: clubId(club),
-    })),
-    spellSeasons: [2025],
-    reviewedArrivals: [],
-    pickProjectionBenchmarkId: `hpn-pick-benchmark:${digest('b')}`,
-    spellCutoffAt: '2026-10-16T00:00:00.000Z',
-    gradedAt: '2026-10-16T02:00:00.000Z',
-  }).content;
-}
-const legOf = (candidate: Candidate, batch: ReturnType<typeof grade>, from: string, to: string) =>
-  batch.trades
-    .flatMap(({ legs }) => legs)
+const structure = (candidate: Candidate) =>
+  buildAflTradeStructure({ candidateId: `external-reconciliation:${digest('c')}`, candidate })
+    .content;
+const legOf = (candidate: Candidate, from: string, to: string) =>
+  structure(candidate)
+    .trades.flatMap(({ legs }) => legs)
     .find(({ transferId }) => transferId === pickTransfer(candidate, from, to).transferId)!;
+const linkTo = (candidate: Candidate, from: string, to: string) => {
+  const onward = pickTransfer(candidate, from, to);
+  return { kind: 'pick_trail', transactionId: onward.transactionId, transferId: onward.transferId };
+};
 
 describe('a stated not-used pick its club traded on (statlyaus/Statly#789)', () => {
   it('records every hop but the final holder as traded on, keeping what was stated', () => {
@@ -225,30 +203,16 @@ describe('a stated not-used pick its club traded on (statlyaus/Statly#789)', () 
     );
   });
 
-  it('lets the grader value each intermediate hop by its onward return', () => {
+  it('lets the trade structure follow each intermediate hop into its onward trade', () => {
     const candidate = reconcile(chain());
-    const batch = grade(candidate);
-    const tx = (from: string, to: string) => pickTransfer(candidate, from, to).transactionId;
-    // Hawthorn traded the pick on for Player Two (7); Essendon for Player Three (5).
-    expect(legOf(candidate, batch, 'Collingwood', 'Hawthorn')).toMatchObject({
-      state: 'valued',
-      basis: 'pick_traded_on_return',
-      realizedValue: 7,
-      onward: { transactionId: tx('Hawthorn', 'Essendon'), allocation: 'sole_asset' },
-    });
-    expect(legOf(candidate, batch, 'Collingwood', 'Hawthorn').reasons).toContain(
-      'stated_not_used_traded_on'
+    expect(legOf(candidate, 'Collingwood', 'Hawthorn').onward).toEqual(
+      linkTo(candidate, 'Hawthorn', 'Essendon')
     );
-    expect(legOf(candidate, batch, 'Hawthorn', 'Essendon')).toMatchObject({
-      state: 'valued',
-      basis: 'pick_traded_on_return',
-      realizedValue: 5,
-      onward: { transactionId: tx('Essendon', 'Richmond') },
-    });
-    // Richmond, the final holder, is not traded on: its 2025 pick waits on its draft.
-    const final = legOf(candidate, batch, 'Essendon', 'Richmond');
-    expect(final.basis).not.toBe('pick_traded_on_return');
-    expect(final.reasons).not.toContain('stated_not_used_traded_on');
+    expect(legOf(candidate, 'Hawthorn', 'Essendon').onward).toEqual(
+      linkTo(candidate, 'Essendon', 'Richmond')
+    );
+    // Richmond, the final holder, did not trade it on: its 2025 pick waits on its draft.
+    expect(legOf(candidate, 'Essendon', 'Richmond')).not.toHaveProperty('onward');
   });
 
   it('leaves a single not-used hop unchanged', () => {
@@ -342,7 +306,7 @@ describe('an undated swap back, ordered by the Draftguru pick-trade sequence (st
     page(second, null, 'Hawthorn', 'Collingwood', 'Player Two'),
   ];
 
-  it('keeps the final holder’s hop not used and values the first hop by its onward return', () => {
+  it('keeps the final holder’s hop not used and follows the first hop into its onward trade', () => {
     const candidate = reconcile(
       swapBack('2024-picks-collingwood-hawthorn-25', '2024-picks-collingwood-hawthorn-30')
     );
@@ -353,13 +317,10 @@ describe('an undated swap back, ordered by the Draftguru pick-trade sequence (st
     const final = outcomeOf(candidate, 'Hawthorn', 'Collingwood');
     expect(final?.disposition).toBe('not_used');
     expect(final).not.toHaveProperty('statedDisposition');
-    // Hawthorn traded the pick back for Player Two (7 at Hawthorn).
-    expect(legOf(candidate, grade(candidate), 'Collingwood', 'Hawthorn')).toMatchObject({
-      state: 'valued',
-      basis: 'pick_traded_on_return',
-      realizedValue: 7,
-      onward: { transactionId: pickTransfer(candidate, 'Hawthorn', 'Collingwood').transactionId },
-    });
+    // Hawthorn traded the pick back to Collingwood.
+    expect(legOf(candidate, 'Collingwood', 'Hawthorn').onward).toEqual(
+      linkTo(candidate, 'Hawthorn', 'Collingwood')
+    );
   });
 
   it('follows the sequence, not the order the pages were captured in', () => {
@@ -373,16 +334,14 @@ describe('an undated swap back, ordered by the Draftguru pick-trade sequence (st
     expect(outcomeOf(candidate, 'Collingwood', 'Hawthorn')?.disposition).toBe('not_used');
   });
 
-  it('still reads both player-trade hops as traded on, and the grader blocks the ring', () => {
+  it('still reads both player-trade hops as traded on, and the structure links neither in the ring', () => {
     const candidate = reconcile(swapBack('2024-collingwood-hawthorn', '2024-hawthorn-collingwood'));
     for (const [from, to] of [
       ['Collingwood', 'Hawthorn'],
       ['Hawthorn', 'Collingwood'],
     ] as const) {
       expect(outcomeOf(candidate, from, to)?.disposition).toBe('traded_on');
-      expect(legOf(candidate, grade(candidate), from, to).reasons).toContain(
-        'traded_on_return_blocked'
-      );
+      expect(legOf(candidate, from, to)).not.toHaveProperty('onward');
     }
   });
 });

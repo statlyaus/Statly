@@ -5,8 +5,8 @@ import type { z } from 'zod';
 /**
  * Where a received pick went next: the transfers of the same pick id that its receiving club made in
  * a later trade (issues 789 and 867). One rule, shared by the reconciler (a stated "not used" hop the
- * candidate shows traded on), the candidate contract (which checks that record) and the realized
- * grader (which follows a traded-on pick into its onward trade), so all three always agree.
+ * candidate shows traded on), the candidate contract (which checks that record) and the trade
+ * structure (which follows a traded-on pick into its onward trade), so all three always agree.
  */
 export interface AflTradeOnwardTransaction {
   transactionId: string;
