@@ -390,7 +390,9 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
 ### Value lines (step 3)
 
 Built in `valuation/valueLines.ts` (pure) and run by `npm run outcomes:grading:value-lines`; the
-artifact is `afl-trade-value-lines/v1`. Every rule is published in it (`rules`). This section fixes how
+artifact is `afl-trade-value-lines/v2`, which reads its trades, legs and onward links from the trade
+structure (`afl-trade-structure/v1`, step 5), never a realized grade. Every rule is published in it
+(`rules`). This section fixes how
 the spec above is applied; it changes none of the owner's rules.
 
 - **Checkpoints.** Each point names its kind: `season_end` (season Y's HPN PAV official), `trade` (the
@@ -427,11 +429,16 @@ the spec above is applied; it changes none of the owner's rules.
   (`unavailable`) only where the fit refuses it: a trade season outside its window, or a draft origin at
   or after his first trade. With no fit given the point is pending (`traded_player_fit_not_stored`) and
   the trade's net is provisional.
-- **Traded-on picks.** A pick leg is followed through each onward trade to its final hop (a special
-  entitlement to its successor pick), so every trade it passed through carries the same line.
-- **Refusals.** The fit, ledger, batch and games read model must pin the same calculation per shared
-  season, the games read model must be of the fit's method with every season available, and the ledger,
-  batch and candidate must be of one candidate.
+- **Traded-on picks.** A pick leg follows the trade structure's onward links (a pick trail, or a special
+  entitlement's reviewed custody successor) to its final hop, so every trade it passed through carries
+  the same line. A link is followed whatever became of the onward trade: one the realized grader drops
+  when it blocks the leg is still followed. A later trade's own assets never change an earlier trade's
+  result (in the orange example, the pears' value leaves trade 1 unchanged; the orange's drafted player
+  moves both).
+- **Refusals.** The fit, ledger and games read model must pin the same calculation per shared season
+  (the structure holds no value, so it pins none), the games read model must be of the fit's method with
+  every season available, the structure must match its content address, and the ledger, structure and
+  candidate must be of one candidate.
 
 ## What this retires
 
@@ -494,7 +501,9 @@ the spec above is applied; it changes none of the owner's rules.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
    ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
-   bundle split, then regrade on intrinsic value lines.
+   bundle split, then regrade on intrinsic value lines. In progress: the trade structure (trades, legs and onward links with no
+   value) is in place, and the value lines read it (`afl-trade-value-lines/v2`); the trade story does not
+   yet.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
 7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
    is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence

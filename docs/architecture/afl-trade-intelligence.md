@@ -4218,8 +4218,9 @@ the leg (`traded_on_return_blocked`), the structure does not. Only the leadsTo c
 link whose onward trade leads back to its own trade.
 
 The realized grader builds its trades, legs and onward links from the same module
-(`createAflTradeStructureView`), so its output is unchanged. The value lines and the trade story move
-onto the structure in later step 5 changes.
+(`createAflTradeStructureView`), so its output is unchanged. The value lines read their trades, legs and
+onward links from the structure (`afl-trade-value-lines/v2`, below); the trade story moves onto it in a
+later step 5 change.
 
 ### Value lines
 
@@ -4230,8 +4231,11 @@ It is pure and deterministic (trade order does not change the id).
 
 **Inputs.** A stored value-line fit (its content address checked), the asset ledger read model, the
 player-season games read model, the reconciliation candidate (transfers, custody orders, Footyinfo boards
-and draft selections) and a realized-trade-grade batch, read only for its trades, legs and onward links,
-never its values. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
+and draft selections) and the candidate's sealed trade structure (above; its content address checked,
+and it must be of the same candidate), the only source of trades, legs and onward links. No realized
+grade is computed or read: a pick leg follows the structure's onward links to its final hop, so a link
+the grader drops when it blocks the leg (a special entitlement whose onward side is blocked, say) is still
+followed. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
 whose types are the fit module's own, re-exported) estimates traded players' open stints from the stored
 traded-player fit (`modeling/tradedPlayerValueLineFit.ts`, below) and the evidence it read: its trade
 seasons, each player's trade seasons in that window, its merged draft origins and its games read model.
@@ -4241,11 +4245,11 @@ per trade season, or any leg's player or stage differing from the fit's `stageDi
 season, even within one stage basis). The calculator builds each leg's input as the fit does
 (`aflTradeTradedPlayerFitLegInputs`): the stage by `aflTradeTradedPlayerStage` against his first trade,
 and his earlier trades for the phases; a unit test holds every fixture leg at every checkpoint to the
-fit's own point. Inputs that pin different calculations for a season, a games read model of another
-method, a checkpoint past the fit's last season or a tenure past the curves' horizon are refused.
+fit's own point. Inputs that pin different calculations for a season (the fit, ledger and games read
+model; the structure pins none), a games read model of another method, a checkpoint past the fit's last season or a tenure past the curves' horizon are refused.
 
-**Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v1`): the rules, the inputs (fit, traded-player
-fit, ledger, candidate and batch ids, each season's calculation), one line per asset (a pick, a traded
+**Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v2`; v1 named a batch id): the rules, the
+inputs (fit, traded-player fit, ledger, candidate and trade structure ids, each season's calculation), one line per asset (a pick, a traded
 player's stint at the receiving club, or an unresolved transfer), each trade's legs with their at-trade
 views, and per club the at-trade net and the net at each draft and season end, provisional while a leg is
 pending. `npm run outcomes:grading:value-lines` (`Scripts/compute-value-lines.ts`) stores it as

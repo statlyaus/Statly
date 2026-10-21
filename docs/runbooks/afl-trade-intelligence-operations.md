@@ -3654,8 +3654,8 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 `outcomes:grading:value-lines` computes every traded asset's value line at each checkpoint and each
 trade's per-club nets (statlyaus/Statly#789; the architecture doc's "Value lines" section and the
 value-line spec's "Value lines (step 3)"). It takes the realized grader's arguments plus a stored fit,
-rebuilds the asset ledger and the batch's trades in process, and its one write is the value lines'
-evidence record in the registered store.
+rebuilds the asset ledger and the trade structure (`afl-trade-structure/v1`) in process, computes no
+realized grade, and its one write is the value lines' evidence record in the registered store.
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
@@ -3670,13 +3670,13 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   database. Never run it in a checkout where a pipeline is running.
 - Run `--dry-run` first: it computes and writes `--out` without `--store-id` and stores nothing.
 - `--fit` is the `--out` file of "Fitting the value-line priors"; its content address is checked. The
-  fit, the ledger, the batch and the games read model must pin the same calculation for every season they
-  share, and the games read model must be of the fit's method, or it refuses. `--through-season` may not
+  fit, the ledger and the games read model must pin the same calculation for every season they share, and the games read model must be of the fit's method, or it refuses. `--through-season` may not
   pass the fit's last season, every season end from the first trade to it must be official, and every
   `--seasons` season must be finalized with no games discrepancy.
 - `--out` is never overwritten. The printed line has the value-lines id, its inputs and its summary
   (assets by basis, assets pending at the last season end, trades with a provisional net), and the
-  stored `artifactId`. It is stored as `derived_private` in repository `value-lines`.
+  stored `artifactId`. It is stored as `derived_private` in repository `value-lines`. The printed
+  `inputs.structureId` names the trade structure it read (`afl-trade-value-lines/v2`).
 - `--traded-player-fit` (optional) is the `--out` file of "Fitting the traded-player value line" (the
   fit must be `afl-trade-traded-player-value-line-fit/v2`: the stored `044703d9…` is v1, has no per-season
   stage digest and is refused, so refit on genuine first); its schema and content address are checked
