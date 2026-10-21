@@ -19,6 +19,10 @@ import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes
 import type { AflTradeAssetLedgerReadModel } from '@/server/aflTradeIntelligence/valuation/assetLedger';
 import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
 import {
+  gradeAflTradesOnRealizedValue,
+  type AflTradeRealizedTradeGradeInputs,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import {
   buildAflTradeStructure,
   type AflTradeStructureInputs,
 } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
@@ -152,7 +156,7 @@ const BASE_ROWS: Row[] = [
 
 const transferId = (name: string) => `external-transfer:${name.padEnd(64, '0')}`;
 const pickId = (name: string) => `draft-pick:${name.padEnd(64, '0')}`;
-const ENTITLEMENT = 'special-draft-entitlement:x';
+const ENTITLEMENT = `special-draft-entitlement:${'e'.repeat(64)}`;
 
 /** A candidate transfer: its trade and clubs, then its asset. */
 const moved = (name: string, transactionId: string, from: string, to: string, asset: object) => ({
@@ -187,6 +191,16 @@ function pickTransfer(
     recordedLabel: null,
   });
 }
+
+/** Rule v7: l3's reviewed custody chain names l4 as its successor. */
+const SPECIAL_CUSTODY = [
+  { transferId: transferId('l3'), entitlementId: ENTITLEMENT, predecessorTransferId: null },
+  {
+    transferId: transferId('l4'),
+    entitlementId: ENTITLEMENT,
+    predecessorTransferId: transferId('l3'),
+  },
+];
 
 interface Options {
   rows?: Row[];
@@ -392,22 +406,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
   const structure = buildAflTradeStructure({
     candidateId: CANDIDATE,
     candidate,
-    ...(options.special
-      ? {
-          specialEntitlementCustody: [
-            {
-              transferId: transferId('l3'),
-              entitlementId: ENTITLEMENT,
-              predecessorTransferId: null,
-            },
-            {
-              transferId: transferId('l4'),
-              entitlementId: ENTITLEMENT,
-              predecessorTransferId: transferId('l3'),
-            },
-          ],
-        }
-      : {}),
+    ...(options.special ? { specialEntitlementCustody: SPECIAL_CUSTODY } : {}),
   });
   return {
     fit: FIT,
@@ -973,7 +972,29 @@ describe('value lines on the trade structure (issue 789, step 5)', () => {
     // With the pears unresolved the batch blocked B's side of t2, so its old traded-on valuation of
     // l3 was blocked and the leg carried no successor. The structure still links l3 to l4.
     const options = { special: true, unresolvedPears: true };
-    const { structure } = inputs(options);
+    const { structure, candidate } = inputs(options);
+    const batch = gradeAflTradesOnRealizedValue({
+      candidateId: CANDIDATE,
+      candidate: candidate as AflTradeRealizedTradeGradeInputs['candidate'],
+      specialEntitlementCustody: SPECIAL_CUSTODY,
+      pavCalculations: range(2019, 2021).map((season) => ({
+        season,
+        calculationId: `hpn-pav-season:${season}`,
+        official: true,
+      })),
+      pav: [],
+      seasonSpells: [],
+      spellSeasons: range(2019, 2021),
+      reviewedArrivals: [],
+      pickProjectionBenchmarkId: `hpn-pick-benchmark:${'b'.repeat(64)}`,
+      spellCutoffAt: '2026-10-21T00:00:00.000Z',
+      gradedAt: '2026-10-21T01:00:00.000Z',
+    });
+    const graded = batch.content.trades
+      .flatMap(({ legs }) => legs)
+      .find((leg) => leg.transferId === transferId('l3'))!;
+    expect(graded).toMatchObject({ state: 'blocked', reasons: ['traded_on_return_blocked'] });
+    expect(graded).not.toHaveProperty('specialEntitlement');
     const l3 = structure.content.trades
       .flatMap(({ legs }) => legs)
       .find((leg) => leg.transferId === transferId('l3'))!;
