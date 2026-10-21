@@ -173,6 +173,17 @@ describe('the trade structure (issue 789, value-line method step 5)', () => {
     expect(structure.content.summary).toEqual({ trades: 2, legs: 4, onwardLinks: 1, ungraded: 0 });
   });
 
+  it('holds a trade from any season the grader accepts, back to 1897', () => {
+    const candidate: Candidate = {
+      transactions: [trade('tx-old', 1898)],
+      transfers: [
+        player('tr-old-a', 'tx-old', 'fitzroy', 'carlton', 'p1'),
+        player('tr-old-b', 'tx-old', 'carlton', 'fitzroy', 'p2'),
+      ],
+    };
+    expect(structureOf(candidate).content.trades.map(({ tradeYear }) => tradeYear)).toEqual([1898]);
+  });
+
   it('keeps an onward link the grader drops when the onward side is blocked', () => {
     const candidate = blockedOnward();
     const grade = gradeAflTradesOnRealizedValue(gradeInputs(candidate));

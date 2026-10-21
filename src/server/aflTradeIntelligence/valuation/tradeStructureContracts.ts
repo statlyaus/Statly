@@ -59,7 +59,7 @@ const legSchema = z
 const tradeSchema = z
   .object({
     transactionId: idSchema,
-    tradeYear: z.number().int().min(1900).max(2200),
+    tradeYear: z.number().int().min(1897).max(2200),
     clubs: z.array(z.object({ clubId: idSchema }).strict()).min(2),
     legs: z.array(legSchema).min(1),
   })
