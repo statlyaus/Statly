@@ -15,7 +15,7 @@ import {
 } from '../src/server/aflTradeIntelligence/modeling/valueLineFit';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
-import { parseSeasons, requireOutAbsent, writeStoredOutputFile } from './grade-realized-trades';
+import { parseSeasons, requireOutAbsent, writeStoredOutputFile } from './gradingArguments';
 import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
 
 /**

@@ -32,19 +32,19 @@ import { buildAflTradeStructure } from '../src/server/aflTradeIntelligence/valua
 import type { AflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLineContracts';
 import { computeAflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLines';
 import {
-  parseGradeRealizedTradesArguments,
+  parseGradingArguments,
   parseSeasons,
   requireOutAbsent,
   writeStoredOutputFile,
-  type GradeRealizedTradesArguments,
-} from './grade-realized-trades';
+  type GradingArguments,
+} from './gradingArguments';
 
 /**
  * Computes the private value lines (#789 step 3): every traded asset's value line at each checkpoint
- * and each trade's per-club nets, from a stored value-line fit and the realized grader's own inputs
+ * and each trade's per-club nets, from a stored value-line fit and one candidate's governed inputs
  * (the asset ledger and the trade structure, `afl-trade-structure/v1`, are rebuilt in process; no
- * realized grade is computed or read). It
- * takes the grader's arguments plus the fit file and the last season end, reads only, and its one
+ * realized grade is computed or read). It takes the shared grading arguments (`gradingArguments.ts`)
+ * plus the fit file and the last season end, reads only, and its one
  * write is the value lines' evidence record, as the runbook section "Computing the value lines"
  * describes. With `--traded-player-fit` (the traded-player fit command's `--out` file), traded players'
  * open stints are valued by that fit from the evidence it read (its games, draft origins and legs,
@@ -63,7 +63,7 @@ const MAXIMUM_VALUE_LINES_BYTES = 64 * 1024 * 1024;
 const MAXIMUM_FIT_BYTES = 8 * 1024 * 1024;
 const OWN = ['--fit', '--through-season', '--traded-player-fit'];
 
-export interface ComputeValueLinesArguments extends GradeRealizedTradesArguments {
+export interface ComputeValueLinesArguments extends GradingArguments {
   fit: string;
   throughSeason: number;
   /** The stored traded-player fit file, or null to leave traded players' open stints pending. */
@@ -106,7 +106,7 @@ export function parseComputeValueLinesArguments(
     throw new TypeError('--traded-player-fit must be an absolute path.');
   if (tradedPlayerFit === fit)
     throw new TypeError('--traded-player-fit must not be the value-line fit.');
-  const parsed = parseGradeRealizedTradesArguments(rest, env);
+  const parsed = parseGradingArguments(rest, env);
   if (parsed.out === fit) throw new TypeError('--out must not be the fit.');
   if (parsed.out === tradedPlayerFit)
     throw new TypeError('--out must not be the traded-player fit.');

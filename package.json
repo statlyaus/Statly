@@ -76,7 +76,6 @@
     "outcomes:artifacts:readback": "tsx Scripts/read-back-artifact-custody.ts",
     "outcomes:artifacts:mirror": "tsx Scripts/mirror-artifact-store.ts",
     "outcomes:artifacts:store-evidence": "tsx Scripts/store-artifact-evidence.ts",
-    "outcomes:grading:realized": "tsx Scripts/grade-realized-trades.ts",
     "outcomes:grading:asset-ledger": "tsx Scripts/export-asset-ledger.ts",
     "outcomes:grading:season-games": "tsx Scripts/report-player-season-games.ts",
     "outcomes:grading:value-line-fit": "tsx Scripts/fit-value-line.ts",

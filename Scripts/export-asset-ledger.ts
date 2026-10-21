@@ -13,17 +13,14 @@ import type { AflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/out
 import { canonicalizeAflTradeJson } from '../src/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeAssetLedger } from '../src/server/aflTradeIntelligence/valuation/assetLedger';
 import type { AflTradeAssetLedgerContent } from '../src/server/aflTradeIntelligence/valuation/assetLedgerContracts';
-import {
-  parseGradeRealizedTradesArguments,
-  requireOutAbsent,
-  writeStoredOutputFile,
-} from './grade-realized-trades';
+import { parseGradingArguments, requireOutAbsent, writeStoredOutputFile } from './gradingArguments';
 
 /**
  * Exports the private asset ledger (#789): every player's club stints and every pick's custody and
- * outcome, from the realized grader's own inputs, as a content-addressed JSON artifact in the
- * registered store. It takes the grader's arguments and reads in the same way; the one write is the
- * ledger's evidence record, as the runbook section "Exporting the asset ledger" describes.
+ * outcome, from one candidate's governed inputs (`loadAflTradeRealizedTradeGradeInputs`), as a
+ * content-addressed JSON artifact in the registered store. It takes the shared grading arguments
+ * (`gradingArguments.ts`); the one write is the ledger's evidence record, as the runbook section
+ * "Exporting the asset ledger" describes.
  *
  * Usage:
  *   npm run outcomes:grading:asset-ledger -- --candidate <external-reconciliation:...> \
@@ -62,7 +59,7 @@ export async function runExportAssetLedgerCommand(input: {
   env: Readonly<Record<string, string | undefined>>;
   writeOutput?: (line: string) => void;
 }): Promise<ExportAssetLedgerResult> {
-  const parsed = parseGradeRealizedTradesArguments(input.argv, input.env);
+  const parsed = parseGradingArguments(input.argv, input.env);
   await requireOutAbsent(parsed.out, 'ledger');
   const pool = new Pool({ connectionString: parsed.databaseUrl, max: 2 });
   try {
