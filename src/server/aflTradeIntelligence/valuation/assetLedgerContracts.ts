@@ -119,10 +119,15 @@ export type AflTradeAssetLedgerMatchedBidOutcome =
       readonly value: number | null;
     });
 
-/** How a board's spent pick joins a candidate pick: by its custody slot only. */
+/** How a board's spent pick joins a candidate pick: by its custody slot, else by one trade. */
 export type AflTradeAssetLedgerBidSpendLink =
   /** One pick id has a usable custody row with the spent pick's number and original club. */
   | 'custody'
+  /**
+   * No custody slot, but exactly one pick traded once, from the spent pick's original club to the
+   * bidding club, with the trade-stated number equal to the board's (owner, 2026-10-21).
+   */
+  | 'trade_entitlement'
   /** The board gives no number: a leftover-points pick an earlier bid created. */
   | 'unnumbered'
   | 'club_unresolved'

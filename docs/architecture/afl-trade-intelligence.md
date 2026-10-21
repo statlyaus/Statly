@@ -4041,7 +4041,9 @@ one of:
 - `not_used`: stated not used by a club that took no nominee. Also, with `evidence: 'board_not_spent'`,
   a pick of a club that took a nominee whose matched-bid reading rests on the nominee count alone, when
   the draft's boards carry bid matches, none lists it as spent and none of the holder's bids in that
-  draft has a spent pick that joins no slot (owner, 2026-10-21: "Yes, count it as 0").
+  draft has a spent pick that joins no slot and could be this pick (owner, 2026-10-21: "Yes, count it
+  as 0"). An unjoined spend of the bidding club's own pick (its original club is the bidder) can only be
+  a pick whose first trade took it from that club, so it blocks no other pick (owner, 2026-10-21).
 - `matched_bid`: a not-used pick of a club that took a nominee. Its `basis` is `board_matched_bid`
   when Footyinfo board picks record the club's matched bid (listed), or `nominee_count` when the
   evidence says only that the club took a nominee in that draft, so the pick may have been spent
@@ -4102,9 +4104,11 @@ trade story read model does not read the shares yet; it still shows a matched-bi
   Ugle-Hagan 89, the AFL's pick 61).
 - **Which ledger pick a spent pick was.** By its custody slot only: the board label's pre-draft number
   and the original club, on a usable Official AFL custody row of the same draft, naming exactly one pick
-  id. The holder is not compared, because a club may acquire a pick on draft night to spend it. A spent
-  pick with no number (a leftover pick an earlier bid created), an unresolved original club, no such
-  row or two pick ids does not join, and a pick no bid lists stays pending. Only a pending matched-bid
+  id. The holder is not compared, because a club may acquire a pick on draft night to spend it. With
+  no such row, it is the one pick traded exactly once, from its original club to the bidding club in
+  that draft, whose trade stated the board's number (`trade_entitlement`; owner, 2026-10-21). A spent
+  pick with no number (a leftover pick an earlier bid created), an unresolved original club, two
+  custody pick ids, or none or two traded picks does not join, and a pick no bid lists stays pending. Only a pending matched-bid
   outcome takes a share; every other outcome is unchanged.
 - **The nominee.** The one candidate selection at the bid's number in its draft, held by the
   matching club and naming the player the board's nominee resolves to. A nominee with no reviewed

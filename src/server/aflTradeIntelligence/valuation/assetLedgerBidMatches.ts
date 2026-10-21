@@ -14,6 +14,37 @@ type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
 type BidMatchRecord = NonNullable<Candidate['draftBoardBidMatches']>[number];
 type ConsumedPick = BidMatchRecord['consumedPicks'][number];
 
+/** A pick that changed hands in exactly one trade, with the number that trade stated for it. */
+export interface AflTradeAssetLedgerTradedEntitlement {
+  readonly pickId: string;
+  readonly draftYear: number;
+  readonly draftType: string;
+  readonly fromClubId: string;
+  readonly toClubId: string;
+  readonly nominalPick: number;
+}
+
+/**
+ * Owner, 2026-10-21: a spent pick with no custody slot is the one pick traded once from its
+ * original club to the bidding club, in that draft, at the number the board gives. Two such picks,
+ * or none, join nothing.
+ */
+function linkTradedEntitlement(
+  entitlements: readonly AflTradeAssetLedgerTradedEntitlement[],
+  bid: BidMatchRecord,
+  pick: ConsumedPick
+): string | null {
+  const found = entitlements.filter(
+    (entitlement) =>
+      entitlement.draftYear === bid.draftYear &&
+      entitlement.draftType === bid.draftType &&
+      entitlement.toClubId === bid.clubId &&
+      entitlement.fromClubId === pick.originalClubId &&
+      entitlement.nominalPick === pick.originalNumber
+  );
+  return found.length === 1 ? found[0]!.pickId : null;
+}
+
 /**
  * The candidate pick a board's spent pick was, by its custody slot only: the draft, the pre-draft
  * number the board's label gives and the original club, on a usable Official AFL custody row. The
@@ -22,6 +53,7 @@ type ConsumedPick = BidMatchRecord['consumedPicks'][number];
  */
 function linkSpentPick(
   custody: NonNullable<Candidate['pickCustody']>,
+  entitlements: readonly AflTradeAssetLedgerTradedEntitlement[],
   bid: BidMatchRecord,
   pick: ConsumedPick
 ): { pickId: string | null; link: AflTradeAssetLedgerBidSpendLink } {
@@ -40,7 +72,11 @@ function linkSpentPick(
       .map(({ pickId }) => pickId)
   );
   if (pickIds.size === 1) return { pickId: [...pickIds][0]!, link: 'custody' };
-  return { pickId: null, link: pickIds.size === 0 ? 'no_custody' : 'ambiguous_custody' };
+  if (pickIds.size > 1) return { pickId: null, link: 'ambiguous_custody' };
+  const traded = linkTradedEntitlement(entitlements, bid, pick);
+  return traded === null
+    ? { pickId: null, link: 'no_custody' }
+    : { pickId: traded, link: 'trade_entitlement' };
 }
 
 /**
@@ -77,7 +113,8 @@ function nomineeOf(candidate: Candidate, bid: BidMatchRecord) {
  */
 export function aflTradeAssetLedgerBidMatches(
   candidate: Candidate,
-  stintValue: AflTradeAssetLedgerStintValue
+  stintValue: AflTradeAssetLedgerStintValue,
+  entitlements: readonly AflTradeAssetLedgerTradedEntitlement[] = []
 ): AflTradeAssetLedgerBidMatch[] {
   return (candidate.draftBoardBidMatches ?? []).map((bid) => {
     const shares = aflTradeMatchedBidShares(bid);
@@ -95,7 +132,7 @@ export function aflTradeAssetLedgerBidMatches(
         originalNumber: pick.originalNumber,
         originalClubId: pick.originalClubId,
         pointsUsed: pick.pointsUsed,
-        ...linkSpentPick(candidate.pickCustody ?? [], bid, pick),
+        ...linkSpentPick(candidate.pickCustody ?? [], entitlements, bid, pick),
         countedPoints: share?.countedPoints ?? null,
         share: share?.share ?? null,
         use: share?.use ?? null,
@@ -130,7 +167,7 @@ export function aflTradeAssetLedgerBidMatches(
  * Whether the boards show that a not-used pick was not spent on a bid (owner, 2026-10-21: "Yes, count
  * it as 0"). Only for a pick whose matched-bid reading rests on a nominee count alone, when the draft's
  * boards carry bid matches and none of the holder's bids in that draft has a spent pick that failed to
- * join (it could be this one). With no known holder, it stays pending.
+ * join and could be this one. With no known holder, it stays pending.
  */
 function boardShowsNotSpent(
   outcome: Extract<AflTradeAssetLedgerMatchedBidOutcome, { status: 'pending' }>,
@@ -141,11 +178,16 @@ function boardShowsNotSpent(
   const draft = bidMatches.filter(
     ({ draftYear, draftType }) => draftYear === pick.draftYear && draftType === pick.draftType
   );
+  // An unjoined spend of the bidding club's own pick (owner, 2026-10-21) can only be a pick whose
+  // trail starts at that club; any other unjoined spend could be this one.
+  const couldBeThis = (bid: AflTradeAssetLedgerBidMatch, spent: AflTradeAssetLedgerBidSpentPick) =>
+    spent.pickId === null &&
+    (spent.originalClubId !== bid.clubId || pick.firstFromClubId === bid.clubId);
   return (
     draft.length > 0 &&
     !draft.some(
       (bid) =>
-        bid.clubId === pick.holderClubId && bid.spentPicks.some(({ pickId }) => pickId === null)
+        bid.clubId === pick.holderClubId && bid.spentPicks.some((spent) => couldBeThis(bid, spent))
     )
   );
 }
@@ -156,6 +198,8 @@ export interface AflTradeAssetLedgerBidPick {
   readonly draftYear: number;
   readonly draftType: string;
   readonly holderClubId: string | null;
+  /** The club its first trade took it from; null when it was never traded. */
+  readonly firstFromClubId: string | null;
 }
 
 /**
