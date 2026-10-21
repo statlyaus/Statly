@@ -164,13 +164,43 @@ function pickSpec(
   }
 }
 
+type Transfer = AflTradeValueLineCandidate['transfers'][number];
+
+/**
+ * Whether `next` continues `hop`'s asset: given on by the club that received it, as the same pick (a
+ * pick trail) or as the next transfer of the same special entitlement's reviewed custody chain.
+ */
+function continues(
+  transfers: ReadonlyMap<string, Transfer>,
+  hop: AflTradeStructureLeg,
+  next: AflTradeStructureLeg
+): boolean {
+  const onward = hop.onward!;
+  const from = transfers.get(hop.transferId)?.asset;
+  const to = transfers.get(next.transferId)?.asset;
+  if (next.sendingClubId !== hop.receivingClubId || !from || !to) return false;
+  if (onward.kind === 'pick_trail')
+    return (
+      from.kind === 'pick_entitlement' &&
+      to.kind === 'pick_entitlement' &&
+      from.pickId === to.pickId
+    );
+  if (from.kind === 'player' || from.kind === 'pick_entitlement' || to.kind === 'player')
+    return false;
+  const own = (asset: typeof from | typeof to) =>
+    asset.kind !== 'special_entitlement' || asset.entitlementId === onward.entitlementId;
+  return own(from) && own(to);
+}
+
 /**
  * A leg's final hop: its onward links in the trade structure (a pick trail, or a special
  * entitlement's reviewed custody successor), followed to the leg that links nowhere. The structure
- * links whatever became of the onward trade and cuts every cycle; a cycle here is refused.
+ * links whatever became of the onward trade and cuts every cycle; a cycle here is refused, and so is a
+ * link that does not continue the asset (any caller can seal a structure).
  */
 function finalHopOf(
   legs: ReadonlyMap<string, AflTradeStructureLeg>,
+  transfers: ReadonlyMap<string, Transfer>,
   leg: AflTradeStructureLeg
 ): AflTradeStructureLeg {
   let hop = leg;
@@ -180,6 +210,10 @@ function finalHopOf(
     const next = legs.get(hop.onward.transferId);
     if (next === undefined)
       throw new Error(`The trade structure links transfer ${hop.transferId} outside itself.`);
+    if (!continues(transfers, hop, next))
+      throw new Error(
+        `The trade structure links transfer ${hop.transferId} to ${next.transferId}, which does not continue its asset.`
+      );
     hop = next;
   }
   return hop;
@@ -213,6 +247,8 @@ export function aflTradeValueLineSpecs(sources: Sources) {
         throw new Error(
           `The structure names transfer ${leg.transferId}, which the candidate does not hold.`
         );
+      if (transfer.fromClubId !== leg.sendingClubId || transfer.toClubId !== leg.receivingClubId)
+        throw new Error(`Transfer ${leg.transferId}'s clubs are not the candidate transfer's.`);
       const key = `${trade.transactionId}|${leg.transferId}`;
       const unresolved = (assetKey: string) => {
         if (!specs.has(assetKey))
@@ -255,7 +291,7 @@ export function aflTradeValueLineSpecs(sources: Sources) {
         legs.push({ key, assetKey, tradeYear: trade.tradeYear, slot: null, pick: false });
         continue;
       }
-      const final = transfers.get(finalHopOf(structureLegs, leg).transferId);
+      const final = transfers.get(finalHopOf(structureLegs, transfers, leg).transferId);
       if (final === undefined)
         throw new Error(`The final hop of transfer ${leg.transferId} is not in the candidate.`);
       if (final.asset.kind !== 'pick_entitlement') {

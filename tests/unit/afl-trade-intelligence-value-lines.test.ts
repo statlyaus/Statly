@@ -26,6 +26,10 @@ import {
   buildAflTradeStructure,
   type AflTradeStructureInputs,
 } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
+import {
+  createAflTradeStructure,
+  type AflTradeStructureLeg,
+} from '@/server/aflTradeIntelligence/valuation/tradeStructureContracts';
 import type {
   AflTradeValueLineCheckpoint,
   AflTradeValueLines,
@@ -877,15 +881,20 @@ describe('computeAflTradeValueLines', () => {
       },
       /Season 2020: .* pin different HPN PAV calculations/
     );
-    // The structure is sealed: tampered content, or another candidate's structure, is refused.
+    // The structure is sealed: content changed under its id (the summary still counts), or another
+    // candidate's structure, is refused.
+    const [first, ...rest] = base.structure.content.trades;
     refuse(
       {
         structure: {
           ...base.structure,
-          content: { ...base.structure.content, trades: base.structure.content.trades.slice(1) },
+          content: {
+            ...base.structure.content,
+            trades: [{ ...first!, tradeYear: first!.tradeYear + 1 }, ...rest],
+          },
         },
       },
-      /./
+      /Identifier must equal the canonical afl-trade-structure content address/
     );
     refuse(
       {
@@ -1023,6 +1032,79 @@ describe('value lines on the trade structure (issue 789, step 5)', () => {
         },
       ],
     });
+  });
+
+  it('refuses a structure leg or onward link that does not continue the asset', () => {
+    // Any caller can seal a structure, so its legs and links are checked against the candidate.
+    const resealed = (
+      options: Parameters<typeof inputs>[0],
+      change: (leg: AflTradeStructureLeg) => AflTradeStructureLeg
+    ) => {
+      const base = inputs(options);
+      const content = base.structure.content;
+      return () =>
+        computeAflTradeValueLines({
+          ...base,
+          structure: createAflTradeStructure({
+            ...content,
+            trades: content.trades.map((trade) => ({ ...trade, legs: trade.legs.map(change) })),
+          }),
+        });
+    };
+    const l3 = transferId('l3');
+    // l3 (A to B, pick p2) linked as a pick trail to l7 (C to A, pick p4): another club, another pick.
+    expect(
+      resealed({}, (leg) =>
+        leg.transferId === l3
+          ? {
+              ...leg,
+              onward: { kind: 'pick_trail', transactionId: 't3', transferId: transferId('l7') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // l3 linked to l6 (A to C, pick p3): A did not receive l3, and p3 is not p2.
+    expect(
+      resealed({}, (leg) =>
+        leg.transferId === l3
+          ? {
+              ...leg,
+              onward: { kind: 'pick_trail', transactionId: 't3', transferId: transferId('l6') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // A special entitlement successor of another entitlement.
+    expect(
+      resealed({ special: true }, (leg) =>
+        leg.onward?.kind === 'special_entitlement_successor'
+          ? {
+              ...leg,
+              onward: {
+                ...leg.onward,
+                entitlementId: `special-draft-entitlement:${'f'.repeat(64)}`,
+              },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // A pick trail from a special entitlement: the link is not a pick trail.
+    expect(
+      resealed({ special: true }, (leg) =>
+        leg.onward?.kind === 'special_entitlement_successor'
+          ? {
+              ...leg,
+              onward: { kind: 'pick_trail', transactionId: 't2', transferId: transferId('l4') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // A leg whose clubs are not its transfer's.
+    expect(
+      resealed({}, (leg) =>
+        leg.transferId === transferId('l1') ? { ...leg, receivingClubId: 'c' } : leg
+      )
+    ).toThrow(/clubs are not the candidate transfer's/);
   });
 
   it('keeps every trade zero-sum at every checkpoint, for every structure', () => {

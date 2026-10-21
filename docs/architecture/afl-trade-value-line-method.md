@@ -438,7 +438,10 @@ the spec above is applied; it changes none of the owner's rules.
 - **Refusals.** The fit, ledger and games read model must pin the same calculation per shared season
   (the structure holds no value, so it pins none), the games read model must be of the fit's method with
   every season available, the structure must match its content address, and the ledger, structure and
-  candidate must be of one candidate.
+  candidate must be of one candidate. Each structure leg's clubs must be its candidate transfer's, and
+  each onward link must continue the asset: given on by the club that received it, as the same pick (a
+  pick trail) or as the same special entitlement's next transfer (a successor). Any caller can seal a
+  structure, so a link that names another club's or another pick's transfer is refused, never valued.
 
 ## What this retires
 
