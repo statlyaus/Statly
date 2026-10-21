@@ -3567,6 +3567,32 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   (`traded_player_fit_not_stored`) and its trades' nets are provisional. Either way, report the
   provisional count; do not read a provisional net as a result.
 
+## Viewing genuine trades on the private trade page
+
+`outcomes:grading:trade-story-bundle` exports what the private trade page (`/dev/afl-trade-stories`)
+needs to show genuine trades (statlyaus/Statly#1052): the stored value lines (`--value-lines`, the value-lines
+command's `--out` file), the trade structure rebuilt in process (refused unless it is the one the lines
+were computed on), the club, player and pick names, and the ledger's matched bids. It reads only; its
+one write is the bundle's evidence record (`derived_private`, repository `trade-story-bundles`).
+
+```sh
+AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
+  npm run outcomes:grading:trade-story-bundle -- --candidate <external-reconciliation:...> \
+  --method <hpn-pav-method:...> --seasons 2019-2026 --official-seasons <seasons> \
+  --benchmark <hpn-pick-benchmark:...> --value-lines <absolute-path-to-value-lines.json> \
+  --store-id <store-id> --out <absolute-path.json>
+```
+
+- Use the same grading arguments as the value lines it reads. Run `--dry-run` first.
+- Copy `--out` to the development machine with `ssh <host> cat <file> > <local file>` (into the
+  gitignored `.statly-local/`), check its SHA-256 on both ends, and set
+  `AFL_TRADE_STORY_BUNDLE_PATH` to its absolute path. The page then shows "Genuine value lines …"; unset,
+  it shows the samples. A bundle whose content address, structure or value lines do not verify fails
+  the read; it never falls back to the samples.
+- The page keeps its gates: not production, `STATLY_ENABLE_DEV_TOOLS` and
+  `AFL_TRADE_STORY_READER_ENABLED` on, and the development user only. The bundle is
+  `publicationProhibited`.
+
 ## Fitting the traded-player value line
 
 `outcomes:grading:traded-player-value-line-fit` fits and back-tests the traded-player value line
