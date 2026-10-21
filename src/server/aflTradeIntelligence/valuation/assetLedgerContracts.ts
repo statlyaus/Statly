@@ -128,6 +128,8 @@ export type AflTradeAssetLedgerBidSpendLink =
    * bidding club, with the trade-stated number equal to the board's (owner, 2026-10-21).
    */
   | 'trade_entitlement'
+  /** Joined by owner review (`assetLedgerReviewedBidSpends.ts`). */
+  | 'reviewed'
   /** The board gives no number: a leftover-points pick an earlier bid created. */
   | 'unnumbered'
   | 'club_unresolved'

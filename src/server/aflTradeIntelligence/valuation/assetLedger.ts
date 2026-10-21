@@ -102,6 +102,16 @@ function playersOf(
   }));
 }
 
+/** The club holding each traded pick at its draft: its last trade's receiving club. */
+function holdersAtDraftOf(inputs: AflTradeRealizedTradeGradeInputs): Map<string, string | null> {
+  return new Map(
+    [...aflTradeAssetLedgerPickTrails(inputs)].map(([pickId, trail]) => [
+      pickId,
+      trail.hops.at(-1)?.toClubId ?? null,
+    ])
+  );
+}
+
 /** Every pick traded exactly once, with the number its trade stated (issue 789). */
 function tradedEntitlementsOf(
   inputs: AflTradeRealizedTradeGradeInputs
@@ -200,7 +210,8 @@ export function createAflTradeAssetLedger(
   const bidMatches = aflTradeAssetLedgerBidMatches(
     inputs.candidate,
     stintValue,
-    tradedEntitlementsOf(inputs)
+    tradedEntitlementsOf(inputs),
+    holdersAtDraftOf(inputs)
   );
   const picks = picksOf(inputs, stintValue, bidMatches);
   const content: AflTradeAssetLedgerContent = {
