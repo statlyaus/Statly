@@ -80,7 +80,16 @@ describe('Playwright browser matrix', () => {
     const gateJob = workflow.slice(workflow.indexOf('\n  ci-gate:'));
 
     expect(testsJob).toContain("PLAYWRIGHT_WITH_DRAFT_WORKER: 'false'");
-    expect(testsJob).toContain('npm run test:e2e');
+    // The standard matrix runs test:e2e through the flaky-test quarantine runner, which keeps the
+    // draft-worker exclusion when it adds its own --grep-invert.
+    expect(testsJob).toContain('node Scripts/ci/quarantine.mjs run e2e blocking');
+    expect(testsJob).toContain('node Scripts/ci/quarantine.mjs run e2e quarantined');
+    const quarantine = read('Scripts/ci/quarantine.mjs');
+    expect(quarantine).toContain("e2e: { script: 'test:e2e', runner: 'playwright' }");
+    expect(quarantine).toContain('`@draft-worker|${names}`');
+    expect(read('package.json')).toContain(
+      '"test:e2e": "playwright test --grep-invert @draft-worker"'
+    );
     expect(testsJob).toContain('npx playwright install --with-deps chromium firefox webkit');
 
     expect(workerJob).toContain('image: postgres:16-alpine');

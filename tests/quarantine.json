@@ -1,0 +1,11 @@
+[
+  {
+    "suite": "unit",
+    "file": "tests/unit/afl-trade-intelligence-nonproduction-infrastructure-plan.test.ts",
+    "describe": "AFL trade non-production infrastructure plan policy",
+    "title": "rejects a prior-state FIFO without blocking before regular-file admission",
+    "issue": 806,
+    "added": "2026-10-21",
+    "reason": "Asserts a 250 ms wall-clock limit; it measured 749 ms on a loaded CI runner (run 37308798525)."
+  }
+]

@@ -596,6 +596,50 @@ Realtime and routing changes also need direct-load/refresh evidence, not only cl
 Prefer these factories over copied production-shaped objects. Override only the fields that matter to
 the test so schema changes remain visible through TypeScript.
 
+## Flaky-test quarantine
+
+A known flaky test stays in the suite but stops blocking merges. `tests/quarantine.json` lists the
+quarantined tests. In CI, each test job runs twice through `Scripts/ci/quarantine.mjs`: a blocking step
+runs everything except the listed tests, then a non-blocking step runs only the listed tests. A
+failure in that second step never fails the job; it raises a `::warning` annotation and a line in the
+job summary, and a pass tells you the entry can probably go. Local `npm run test:*` commands still run
+every test.
+
+Suites map to the npm scripts CI already uses: `unit` (`test:unit`), `int` (`test:int`),
+`outcomes-int` (`test:outcomes:int:provisioned`) and `e2e` (`test:e2e`). `Draft worker E2E` has no
+quarantine step.
+
+Each entry has:
+
+| Field      | Meaning                                                                         |
+| ---------- | ------------------------------------------------------------------------------- |
+| `suite`    | One of the suites above.                                                        |
+| `file`     | Repository-relative path of the test file.                                      |
+| `describe` | Optional `describe` chain, space-joined, exactly as in the file.                |
+| `title`    | The test title, exactly as in the file.                                         |
+| `issue`    | Number of an **open** GitHub issue tracking the flake. No issue, no quarantine. |
+| `added`    | `YYYY-MM-DD` the entry was added.                                               |
+| `reason`   | One line: the observed failure and where it was seen.                           |
+
+Adding an entry:
+
+1. Open or find the issue for the flake, with the failing run linked. A flake that passes in CI and
+   fails only locally is not quarantined: CI never sees it.
+2. Add the entry in its own pull request, which the owner reviews. Do not touch the test or the
+   product code in that pull request.
+3. Run `node Scripts/ci/quarantine.mjs check` (offline: schema, the file exists, the names are still
+   in it) and `node Scripts/ci/quarantine.mjs run <suite> quarantined -- <test file>` to confirm the
+   entry selects the test.
+
+Removing an entry: delete it in the pull request that fixes the flake, or when the issue closes.
+The `Documentation` job runs `check --issues`, which fails while an entry references a closed issue,
+so a fixed flake cannot stay quarantined. Renaming or deleting a quarantined test also fails the
+check until the entry is updated.
+
+A name is matched as a regular expression over the full vitest name (`describe` chain plus title) or
+the Playwright title, so a same-named test in another file is quarantined too. Keep quarantined
+titles unique.
+
 ## Failure handling
 
 When a broad check fails, determine whether the branch introduced it with a focused reproduction and,
