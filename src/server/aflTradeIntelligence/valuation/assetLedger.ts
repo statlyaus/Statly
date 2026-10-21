@@ -15,6 +15,7 @@ import {
 import {
   aflTradeAssetLedgerBidMatches,
   aflTradeAssetLedgerShareMatchedBid,
+  type AflTradeAssetLedgerTradedEntitlement,
 } from './assetLedgerBidMatches';
 import {
   aflTradeAssetLedgerPickIdentities,
@@ -101,6 +102,32 @@ function playersOf(
   }));
 }
 
+/** Every pick traded exactly once, with the number its trade stated (issue 789). */
+function tradedEntitlementsOf(
+  inputs: AflTradeRealizedTradeGradeInputs
+): AflTradeAssetLedgerTradedEntitlement[] {
+  const transfers = new Map(inputs.candidate.transfers.map((row) => [row.transferId, row]));
+  const identities = aflTradeAssetLedgerPickIdentities(inputs.candidate);
+  return [...aflTradeAssetLedgerPickTrails(inputs)].flatMap(([pickId, trail]) => {
+    const identity = identities.get(pickId);
+    const [hop, ...more] = trail.hops;
+    const asset = hop && transfers.get(hop.transferId)?.asset;
+    if (!identity || !hop || more.length > 0 || asset?.kind !== 'pick_entitlement') return [];
+    if (hop.fromClubId === null || hop.toClubId === null) return [];
+    if (asset.nominalPick === null || asset.nominalPick === undefined) return [];
+    return [
+      {
+        pickId,
+        draftYear: identity.draftYear,
+        draftType: identity.draftType,
+        fromClubId: hop.fromClubId,
+        toClubId: hop.toClubId,
+        nominalPick: asset.nominalPick,
+      },
+    ];
+  });
+}
+
 function picksOf(
   inputs: AflTradeRealizedTradeGradeInputs,
   stintValue: AflTradeAssetLedgerStintValue,
@@ -127,6 +154,7 @@ function picksOf(
                   draftYear: pick.draftYear,
                   draftType: pick.draftType,
                   holderClubId: trail.hops.at(-1)?.toClubId ?? pick.originalClubId,
+                  firstFromClubId: trail.hops[0]?.fromClubId ?? null,
                 },
                 bidMatches
               )
@@ -169,7 +197,11 @@ export function createAflTradeAssetLedger(
 ): AflTradeAssetLedgerReadModel {
   const stintValue = createAflTradeAssetLedgerStintValue(inputs);
   const players = playersOf(inputs, labels, stintValue);
-  const bidMatches = aflTradeAssetLedgerBidMatches(inputs.candidate, stintValue);
+  const bidMatches = aflTradeAssetLedgerBidMatches(
+    inputs.candidate,
+    stintValue,
+    tradedEntitlementsOf(inputs)
+  );
   const picks = picksOf(inputs, stintValue, bidMatches);
   const content: AflTradeAssetLedgerContent = {
     schemaVersion: AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION,

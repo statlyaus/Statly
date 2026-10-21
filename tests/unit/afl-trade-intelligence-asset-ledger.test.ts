@@ -694,6 +694,58 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     });
   });
 
+  it('joins a spent pick with no custody slot to the one pick traded once at the board’s number', () => {
+    // Owner, 2026-10-21: Essendon's pick 34, traded once to the Bulldogs, is the board's spent 34.
+    const tradedAt = (nominalPick: number) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [darcyBid()],
+        transfers: candidate.transfers.map((row) =>
+          row.transferId === 'tr-4'
+            ? ({ ...row, asset: { ...row.asset, nominalPick } } as Transfer)
+            : row
+        ),
+      }));
+    const joined = tradedAt(34);
+    expect(joined.ledger.content.bidMatches[0]!.spentPicks[0]).toMatchObject({
+      link: 'trade_entitlement',
+      pickId: PICK_MATCHED,
+    });
+    expect(joined.pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'shared',
+      share: 542 / 2013.6,
+    });
+    // A different trade-stated number joins nothing.
+    expect(tradedAt(35).ledger.content.bidMatches[0]!.spentPicks[0]).toMatchObject({
+      link: 'no_custody',
+      pickId: null,
+    });
+  });
+
+  it('does not let an unjoined spend of the bidding club’s own pick block a pick traded in', () => {
+    const withSpends = (consumedPicks: BidMatch['consumedPicks']) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [darcyBid({ consumedPicks })],
+        pickOutcomes: candidate.pickOutcomes!.map((row) =>
+          row.transferId === 'tr-4'
+            ? outcome('tr-4', {
+                nominationBasis: 'club_took_nominated_player',
+                receivingClubNominatedSelections: 1,
+              })
+            : row
+        ),
+      }));
+    // The Bulldogs' own unnumbered pick cannot be the pick they got from Essendon.
+    expect(
+      withSpends([spent('9001', null, 'western_bulldogs', 400)]).pickOutcome(PICK_MATCHED)
+    ).toEqual({ kind: 'not_used', evidence: 'board_not_spent' });
+    // Hawthorn's unnumbered pick could have reached the Bulldogs some other way: still pending.
+    expect(
+      withSpends([spent('9002', null, 'hawthorn', 400)]).pickOutcome(PICK_MATCHED)
+    ).toMatchObject({ status: 'pending', pendingReason: 'no_bid_spend' });
+  });
+
   it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {
     // On the genuine candidate every matched-bid selection is unresolved: the bid created its pick,
     // so it has no custody slot. Who was drafted is still stated by every provider.
