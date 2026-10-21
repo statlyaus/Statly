@@ -26,7 +26,10 @@ function world() {
   } satisfies AflTradeStoryNames;
   const assets = new Map<string, AflTradeValueLineAsset>();
   const NOW = at.seasonEnd(2026);
-  const base = { pickId: null, playerId: null, clubId: null, draftYear: null, share: null };
+  const base: Pick<
+    AflTradeValueLineAsset,
+    'pickId' | 'playerId' | 'clubId' | 'draftYear' | 'share'
+  > = { pickId: null, playerId: null, clubId: null, draftYear: null, share: null };
   const line = (asset: Omit<AflTradeValueLineAsset, keyof typeof base> & Partial<typeof base>) =>
     assets.set(asset.assetKey, { ...base, ...asset });
   const leg = (
