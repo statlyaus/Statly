@@ -1,9 +1,4 @@
 import type { AflTradeExternalReconciliationCandidateRecord } from '../source/externalReconciliationCandidateContracts';
-import {
-  aflTradePickCustodyHolders,
-  aflTradeTransactionNotBefore,
-  createAflTradePickOnwardTransfers,
-} from '../source/pickOnwardTransfer';
 import { hpnDpv3ValueForPick } from '../modeling/hpnPickValueBenchmark';
 import { aflTradeGradeOrderSlotOf, createAflTradeAtTradeView } from './realizedTradeGradeAtTrade';
 import {
@@ -25,14 +20,13 @@ import {
   type AflTradeRealizedReturnProjection,
   type AflTradeRealizedTradeGrade,
   type AflTradeRealizedTradeGradeBatch,
-  type AflTradeRealizedTradeGradeBatchContent,
   type AflTradeRealizedTradeGradeLeg,
 } from './realizedTradeGradeContracts';
+import { createAflTradeStructureView, partitionAflTradeTrades } from './tradeStructure';
 
 type CandidateContent = AflTradeExternalReconciliationCandidateRecord['content'];
 type Transaction = CandidateContent['transactions'][number];
 type Transfer = CandidateContent['transfers'][number];
-type PickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
 
 /** Everything the MVP grader reads, already loaded; the grader itself does no I/O. */
 export interface AflTradeRealizedTradeGradeInputs {
@@ -75,7 +69,6 @@ export interface AflTradeRealizedTradeGradeInputs {
 }
 
 type Leg = AflTradeRealizedTradeGradeLeg;
-type Ungraded = AflTradeRealizedTradeGradeBatchContent['ungraded'][number];
 const SINGLE: AflTradeRealizedGradeReason = 'single_source_pick_outcome';
 /** Rule v2: a corroborated pick leg names its second provider; any other drops nothing. */
 const sourceOf = (corroborated: boolean) =>
@@ -227,10 +220,6 @@ function playerAtTrade(index: Index, transfer: Transfer, tradeYear: number): Leg
   };
 }
 
-// The batch's club id format (aflTradePublicIdSchema). A club the batch cannot name is unresolved.
-const representableClub = (clubId: string | null): clubId is string =>
-  !!clubId && clubId.length <= 160 && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(clubId);
-
 interface OnwardReturn {
   returnValue: number;
   returnProjection?: AflTradeRealizedReturnProjection;
@@ -363,138 +352,23 @@ function allocateOnwardReturn(givenCount: number, givenUp: number, weight: numbe
   };
 }
 
-/**
- * The trades the batch grades, by transaction, and the trades it names instead: a trade with no
- * transfers, or one with a club the batch cannot represent, is named, never dropped.
- */
-function partitionTrades(
-  inputs: AflTradeRealizedTradeGradeInputs,
-  transfersByTransaction: ReadonlyMap<string, Transfer[]>
-) {
-  const ungraded: Ungraded[] = [];
-  const transactions = new Map<string, Transaction>();
-  for (const transaction of inputs.candidate.transactions) {
-    if (transaction.transactionType !== 'trade') continue;
-    const transfers = transfersByTransaction.get(transaction.transactionId) ?? [];
-    if (transfers.length === 0)
-      ungraded.push({ transactionId: transaction.transactionId, reason: 'no_transfers' });
-    else if (
-      transfers.some(
-        ({ fromClubId, toClubId }) =>
-          !representableClub(fromClubId) || !representableClub(toClubId) || fromClubId === toClubId
-      )
-    )
-      ungraded.push({ transactionId: transaction.transactionId, reason: 'club_unresolved' });
-    else transactions.set(transaction.transactionId, transaction);
-  }
-  return { ungraded, transactions };
-}
-
-/** Rule v7: links a special entitlement to the transfer its reviewed custody chain names next. */
-function createSpecialEntitlementLink(
-  inputs: AflTradeRealizedTradeGradeInputs,
-  transactions: ReadonlyMap<string, Transaction>
-) {
-  // Rule v7: a special entitlement's reviewed custody chain, keyed by transfer and by predecessor.
-  const custodyRows = inputs.specialEntitlementCustody ?? [];
-  const specialCustody = new Map(custodyRows.map((row) => [row.transferId, row]));
-  const successorOf = new Map(
-    custodyRows.flatMap((row) =>
-      row.predecessorTransferId === null ? [] : [[row.predecessorTransferId, row] as const]
-    )
-  );
-  const transfersById = new Map(
-    inputs.candidate.transfers.map((transfer) => [transfer.transferId, transfer])
-  );
-  /**
-   * Rule v7: the transfer a special entitlement was traded on as. Its custody row's successor must be a
-   * transfer of the same entitlement in another graded trade, given by the club that received this one,
-   * no earlier than this trade. Anything else leaves it unlinked.
-   */
-  function onwardOfSpecial(transfer: Transfer, transaction: Transaction) {
-    const asset = transfer.asset;
-    if (asset.kind === 'player' || asset.kind === 'pick_entitlement') return undefined;
-    const own = specialCustody.get(transfer.transferId);
-    const successor = successorOf.get(transfer.transferId);
-    if (
-      !own ||
-      !successor ||
-      successor.entitlementId !== own.entitlementId ||
-      (asset.kind === 'special_entitlement' && asset.entitlementId !== own.entitlementId)
-    )
-      return undefined;
-    const onward = transfersById.get(successor.transferId);
-    if (
-      !onward ||
-      !transactions.has(onward.transactionId) ||
-      onward.transactionId === transfer.transactionId ||
-      onward.fromClubId !== transfer.toClubId ||
-      !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
-    )
-      return undefined;
-    return { transfer: onward, entitlementId: own.entitlementId };
-  }
-  return onwardOfSpecial;
-}
-
 /** Grades every trade in the candidate into one sealed private batch. */
 export function gradeAflTradesOnRealizedValue(
   inputs: AflTradeRealizedTradeGradeInputs
 ): AflTradeRealizedTradeGradeBatch {
   const index = indexInputs(inputs);
-  const transfersByTransaction = new Map<string, Transfer[]>();
-  for (const transfer of inputs.candidate.transfers)
-    transfersByTransaction.set(transfer.transactionId, [
-      ...(transfersByTransaction.get(transfer.transactionId) ?? []),
-      transfer,
-    ]);
-  const { ungraded, transactions } = partitionTrades(inputs, transfersByTransaction);
-  // A pick's onward transfers among the graded trades (`createAflTradePickOnwardTransfers`). Rule v12
-  // orders a season's undated pick trades by their Draftguru sequence and breaks a tie between trails
-  // by the pick's latest Official AFL custody holder.
-  const onwardTransfersOf = createAflTradePickOnwardTransfers(
+  // The trades, legs and onward links come from the trade structure (`tradeStructure.ts`), so the
+  // grade and the structure cannot disagree on which transfer a leg was passed on as.
+  const {
+    transfersByTransaction,
     transactions,
-    inputs.candidate.transfers,
-    { custodyHolders: aflTradePickCustodyHolders(inputs.candidate.pickCustody ?? []) }
-  );
-  const onwardOfSpecial = createSpecialEntitlementLink(inputs, transactions);
-  const outcomes = new Map<string, PickOutcome>(
-    (inputs.candidate.pickOutcomes ?? []).map((outcome) => [outcome.transferId, outcome])
-  );
-  // A traded-on pick follows its unique trail, else into the one later trade where its club gave it
-  // away. More than one, or none, leaves it unlinked.
-  function onwardTransferOf(transfer: Transfer): Transfer | undefined {
-    const onwardTransfers = onwardTransfersOf(transfer);
-    return onwardTransfers.length === 1 ? onwardTransfers[0] : undefined;
-  }
-  // Rule v3: the onward trades each trade's traded-on legs read. A leg whose onward trade leads back to
-  // its own trade is blocked before any grading, so no grade depends on the order trades are graded in.
-  const reads = new Map<string, string[]>();
-  for (const [transactionId, transaction] of transactions)
-    reads.set(
-      transactionId,
-      transfersByTransaction.get(transactionId)!.flatMap((transfer) => {
-        const special = onwardOfSpecial(transfer, transaction);
-        if (special) return [special.transfer.transactionId];
-        const outcome = outcomes.get(transfer.transferId);
-        const tradedOn = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'traded_on';
-        const onward = tradedOn ? onwardTransferOf(transfer) : undefined;
-        return onward ? [onward.transactionId] : [];
-      })
-    );
-  const leadsTo = (from: string, to: string) => {
-    const queue = [from];
-    const seen = new Set(queue);
-    for (let at = 0; at < queue.length; at++) {
-      if (queue[at] === to) return true;
-      for (const next of reads.get(queue[at]!)!) {
-        if (seen.has(next)) continue;
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-    return false;
-  };
+    ungraded,
+    outcomes,
+    onwardTransferOf,
+    onwardOfSpecial,
+    leadsTo,
+    routeCorroborated,
+  } = createAflTradeStructureView(inputs);
   const selections = new Map(
     (inputs.candidate.draftSelections ?? []).map((selection) => [selection.selectionId, selection])
   );
@@ -520,26 +394,6 @@ export function gradeAflTradesOnRealizedValue(
     specialSuccessorOf: (transfer, transaction) => onwardOfSpecial(transfer, transaction)?.transfer,
     playerView: (transfer, tradeYear) => playerAtTrade(index, transfer, tradeYear),
   });
-  // Rule v2: a traded-on outcome is corroborated when exactly one board pick in its draft routes it
-  // sender → receiver → onward receiver, with that hop pair once in its route.
-  const routeCorroborated = (transfer: Transfer, onward: Transfer) => {
-    const asset = transfer.asset;
-    if (asset.kind !== 'pick_entitlement') return false;
-    const boards = (inputs.candidate.draftBoardPicks ?? []).filter(
-      ({ draftYear, draftType, routeClubIds }) =>
-        draftYear === asset.draftYear &&
-        draftType === asset.draftType &&
-        routeClubIds !== null &&
-        routeClubIds.filter(
-          (club, at) =>
-            at > 1 &&
-            routeClubIds[at - 2] === transfer.fromClubId &&
-            routeClubIds[at - 1] === transfer.toClubId &&
-            club === onward.toClubId
-        ).length === 1
-    );
-    return boards.length === 1;
-  };
   const graded = new Map<string, AflTradeRealizedTradeGrade>();
 
   const blocked = (
@@ -799,7 +653,9 @@ export function gradeAflTradesOnRealizedValue(
     },
     gradedAt: inputs.gradedAt,
     trades,
-    ungraded: ungraded.sort((left, right) => (left.transactionId < right.transactionId ? -1 : 1)),
+    ungraded: [...ungraded].sort((left, right) =>
+      left.transactionId < right.transactionId ? -1 : 1
+    ),
     summary: {
       complete: trades.filter(({ state }) => state === 'complete').length,
       provisional: trades.filter(({ state }) => state === 'provisional').length,
@@ -821,6 +677,6 @@ export {
   arrivalReviewed as aflTradeRealizedArrivalReviewed,
   firstStint as aflTradeRealizedFirstStint,
   indexInputs as indexAflTradeRealizedStintInputs,
-  partitionTrades as partitionAflTradeRealizedTrades,
+  partitionAflTradeTrades as partitionAflTradeRealizedTrades,
 };
 export type { Index as AflTradeRealizedStintIndex, Stint as AflTradeRealizedStint };
