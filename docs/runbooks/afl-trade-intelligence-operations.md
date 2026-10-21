@@ -934,7 +934,7 @@ supersede production Gate authority, and production execution cannot reuse non-p
    differs from an undeferred promotion of the same candidate (`deferredIssueCount` is 0 for a
    decision that deferred nothing; the draft-events file is then `[]`, since no draft is written
    whole). Deferred issues stay on the candidate;
-   the grader keeps reporting those legs exactly as now. Nothing deferred is ever published: the
+   the trade structure and value lines read those legs exactly as now. Nothing deferred is ever published: the
    promotion-backed corpus excludes a deferred-lineage promotion from its scope and the database
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
    lineage or a new candidate without the deferral, which supersedes it.
@@ -3424,8 +3424,11 @@ have approved its exact artifacts.
 The realized grade command (`outcomes:grading:realized`, rules v1 to v19) is retired
 (statlyaus/Statly#789, step 5 of the value-line spec): trades are read on their value lines instead.
 Export the asset ledger, fit the value-line priors and the traded-player value line, then compute the
-value lines (the sections below). A stored realized grade batch stays in custody as evidence, but
-nothing reads it and none is made again.
+value lines (the sections below). The grader's code (`valuation/realizedTradeGrade*.ts`) is deleted
+too; the pick-slot lookups, the first-stint rule and the input loader it shared live on as
+`valuation/pickSlots.ts`, `valuation/stints.ts` and `development/postgresGradingInputs.ts`. A stored
+realized grade batch stays in custody as evidence, but nothing reads or parses it and none is made
+again.
 
 ## Exporting the asset ledger
 
@@ -3433,7 +3436,7 @@ nothing reads it and none is made again.
 club stints with PAV per season, and every pick's custody hops and outcome. The rules are in the
 architecture doc's "Asset ledger read model" section. It reads one candidate, the current HPN PAV
 calculation per season, and the current season spells and reviewed arrivals in one read-only
-transaction (the candidate-input loader, `loadAflTradeRealizedTradeGradeInputs`), plus player and club
+transaction (the candidate-input loader, `loadAflTradeGradingInputs`), plus player and club
 names in a second one. The value lines take the same arguments and read through the same loader. It
 seals the ledger, stores it as `derived_private` in repository `asset-ledgers`
 (written and read back in full, then one custody transaction), and then writes `--out`. Nothing else is

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  gradeAflTradesOnRealizedValue,
-  type AflTradeRealizedTradeGradeInputs,
-} from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
-import {
   buildAflTradeStructure,
   type AflTradeStructureInputs,
 } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
@@ -16,8 +12,8 @@ import {
 
 /**
  * Issue 789, value-line method step 5: the trade structure (graded trades, their legs and onward
- * links) extracted from the realized grader, with no valuation. Its onward links do not depend on
- * whether the onward side could be graded; only the leadsTo cycle guard drops one.
+ * links), with no valuation. Its onward links do not depend on whether the onward side could be
+ * valued; only the leadsTo cycle guard drops one.
  */
 const hex = (digit: string) => digit.repeat(64);
 type Candidate = AflTradeStructureInputs['candidate'];
@@ -107,27 +103,6 @@ const legOf = (structure: AflTradeStructure, transferId: string) =>
   structure.content.trades
     .flatMap(({ legs }) => legs)
     .find((leg) => leg.transferId === transferId)!;
-const gradeInputs = (
-  candidate: Candidate,
-  extra: Partial<AflTradeRealizedTradeGradeInputs> = {}
-): AflTradeRealizedTradeGradeInputs => ({
-  candidateId,
-  candidate,
-  pavCalculations: [2021, 2022].map((season) => ({
-    season,
-    calculationId: `hpn-pav-season:${season}`,
-    official: true,
-  })),
-  pav: [],
-  seasonSpells: [],
-  spellSeasons: [2021, 2022],
-  reviewedArrivals: [],
-  pickProjectionBenchmarkId: `hpn-pick-benchmark:${hex('b')}`,
-  spellCutoffAt: '2026-10-21T00:00:00.000Z',
-  gradedAt: '2026-10-21T01:00:00.000Z',
-  ...extra,
-});
-
 // tx-1 (2020): Richmond sends Hawthorn pick A for player p. tx-2 (2021): Hawthorn trades pick A on
 // to Sydney for a player whose identity is unresolved, so Hawthorn's side of tx-2 is blocked.
 const blockedOnward = (): Candidate => ({
@@ -173,7 +148,7 @@ describe('the trade structure (issue 789, value-line method step 5)', () => {
     expect(structure.content.summary).toEqual({ trades: 2, legs: 4, onwardLinks: 1, ungraded: 0 });
   });
 
-  it('holds a trade from any season the grader accepts, back to 1897', () => {
+  it('holds a trade from any season, back to 1897', () => {
     const candidate: Candidate = {
       transactions: [trade('tx-old', 1898)],
       transfers: [
@@ -184,16 +159,9 @@ describe('the trade structure (issue 789, value-line method step 5)', () => {
     expect(structureOf(candidate).content.trades.map(({ tradeYear }) => tradeYear)).toEqual([1898]);
   });
 
-  it('keeps an onward link the grader drops when the onward side is blocked', () => {
-    const candidate = blockedOnward();
-    const grade = gradeAflTradesOnRealizedValue(gradeInputs(candidate));
-    const graded = grade.content.trades
-      .flatMap(({ legs }) => legs)
-      .find((leg) => leg.transferId === 'tr-1a')!;
-    expect(graded).toMatchObject({ state: 'blocked', reasons: ['traded_on_return_blocked'] });
-    expect(graded).not.toHaveProperty('onward');
-    expect(graded).not.toHaveProperty('onwardTransactionId');
-    expect(legOf(structureOf(candidate), 'tr-1a').onward).toEqual({
+  it('keeps an onward link when the onward side cannot be valued', () => {
+    // tx-2's player has no resolved identity, so Hawthorn's return there is unknown; the link stays.
+    expect(legOf(structureOf(blockedOnward()), 'tr-1a').onward).toEqual({
       kind: 'pick_trail',
       transactionId: 'tx-2',
       transferId: 'tr-2a',
@@ -341,38 +309,5 @@ describe('the trade structure (issue 789, value-line method step 5)', () => {
     expect(() => parseAflTradeStructure(tampered)).toThrow();
     // A different candidate is a different structure.
     expect(structureOf({ ...candidate, pickOutcomes: [] }).structureId).not.toBe(first.structureId);
-  });
-
-  it('agrees with every onward link the grader still emits', () => {
-    const candidate: Candidate = {
-      ...blockedOnward(),
-      transfers: blockedOnward().transfers.map((transfer) =>
-        transfer.transferId === 'tr-2b'
-          ? player('tr-2b', 'tx-2', 'sydney', 'hawthorn', 'h')
-          : transfer
-      ),
-    };
-    const grade = gradeAflTradesOnRealizedValue(
-      gradeInputs(candidate, {
-        seasonSpells: [{ playerId: 'h', season: 2022, clubId: 'hawthorn' }],
-        pav: [{ playerId: 'h', season: 2022, clubId: 'hawthorn', value: 4 }],
-      })
-    );
-    const graded = grade.content.trades.flatMap(({ legs }) => legs);
-    const structure = structureOf(candidate);
-    for (const leg of graded) {
-      const gradedOnward =
-        'onward' in leg && leg.onward
-          ? leg.onward.transactionId
-          : 'onwardTransactionId' in leg
-            ? leg.onwardTransactionId
-            : undefined;
-      if (gradedOnward !== undefined)
-        expect(legOf(structure, leg.transferId).onward?.transactionId).toBe(gradedOnward);
-    }
-    expect(graded.find((leg) => leg.transferId === 'tr-1a')).toMatchObject({
-      state: 'valued',
-      onward: { transactionId: 'tx-2' },
-    });
   });
 });

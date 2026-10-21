@@ -1895,7 +1895,7 @@ transaction-date coverage accepts `occurredOn: null` plus a `datePrecision` wind
 `outcome_event_evidenced_date_bounds` proves a trade window from the finalized promotion's
 transaction member and coverage. A v4 arrival entry may then be a window (as a v2 `windowEvent` is);
 it is current only against an event of exactly that precision, and the spell starts at the window's
-earliest day, so the grader's season rule places an October arrival in the following season. An
+earliest day, so the first-stint season rule places an October arrival in the following season. An
 exact-day trade and every draftee arrival are unchanged; a window is reviewed precision from a
 stated source, never a substituted day. A year-only trade keeps its meaning with one exception
 (migration 0281): a trade promoted before 0261 whose current version came from reviewed pick
@@ -1941,9 +1941,9 @@ reviewed arrival for the same player and club. This is the unit of the realized-
 player or a drafted pick is valued over the whole first stint at the receiving club, with no cap, and a
 later return to that club is a separate stint that is excluded. Because an arrival claims a point in
 time and no continuity, two current v4 arrivals for one player and club may coexist when their dates
-differ (migration 0249). The MVP realized trade grader (`valuation/realizedTradeGrade.ts`) reads first
-stints from season spells and reviewed arrivals in memory, as "Realized trade grade (MVP) contract"
-describes. Phase 4 of the grading pipeline replaces that with set-based stint attribution in the
+differ (migration 0249). The first-stint rule (`valuation/stints.ts`, kept when #789 step 5 retired the
+realized grade) reads first stints from season spells and reviewed arrivals in memory, as "Realized
+trade grade: retired" describes. Phase 4 of the grading pipeline replaces that with set-based stint attribution in the
 database.
 
 Achievements now have their own governed reconciliation lane. Provider achievement claims remain
@@ -4016,12 +4016,11 @@ carried (owner, 2026-10-21, "Drop for now").
 `valuation/assetLedger.ts` builds one joined-up, private view of every player and every pick
 (statlyaus/Statly#789), so a value such as Sam Darcy's first stint at the Western Bulldogs (father-son
 nominee, 2021) has one home. Matched-bid shares and the private trade pages read from it. Like
-realized grades it is `non_production`, `publicationEligible: false` and `publicationProhibited: true`:
+the retired realized grades it is `non_production`, `publicationEligible: false` and `publicationProhibited: true`:
 public pages stay on the publication runtime and never read it.
 
-**Sources.** It invents no authority. Its facts are exactly the realized grader's inputs, loaded by
-the grader's own `loadAflTradeRealizedTradeGradeInputs` ("Realized trade grade (MVP) contract",
-**Inputs**): the finalized non-production candidate (transactions, transfers, draft selections,
+**Sources.** It invents no authority. Its facts are exactly the grading inputs, loaded by
+`loadAflTradeGradingInputs` ("Realized trade grade: retired", **Inputs**): the finalized non-production candidate (transactions, transfers, draft selections,
 Official AFL pick custody and pick outcomes, which cite Footyinfo board picks by id), the current HPN PAV calculation
 per season from `outcome_hpn_pav_calculation_head` (so a season with duplicate calculations reads only
 its governed head), those calculations' player rows, and the current v3 season spells and v4 reviewed
@@ -4032,12 +4031,11 @@ no stint in the covered seasons appears with no stints. `createAflTradeAssetLedg
 pure. The labels are read in a second read-only transaction; they carry no facts.
 
 **Players.** Every approved player and every player the inputs name, each with `stints[]`. A stint is
-the grader's own first stint (`firstStint` in `valuation/realizedTradeGrade.ts`, exported for the
-ledger so the two cannot drift): it starts at the first season in evidence (a season spell or reviewed
+the shared first stint (`aflTradeFirstStint` in `valuation/stints.ts`, which the value lines read
+through the ledger): it starts at the first season in evidence (a season spell or reviewed
 arrival), ends in the first covered season the player appears for another club (that season still
 counts there) or before a later reviewed arrival at the same club, and is open when it never ends inside
-the covered seasons. A season at two clubs therefore ends the stint at each, as it would for the
-grader. Each stint names its club, start and end season (null while open), whether its arrival is
+the covered seasons. A season at two clubs therefore ends the stint at each. Each stint names its club, start and end season (null while open), whether its arrival is
 reviewed, whether it starts in the first covered season with no reviewed arrival, its PAV per season (0
 for a valued season with no PAV row, flagged when the season is not official), the seasons with no
 pinned calculation, its signed `total` and its `value` (the total floored at 0, as a grade leg realizes
@@ -4049,9 +4047,9 @@ original club (from the custody rows, then the traded entitlement, then the sele
 those sources state differently listed in `identityDisagreements`), its custody hops (each trade it
 moved in, with the trade id and the club that held it after, null where the candidate could not resolve
 a club) and its outcome. Ids are never merged: pick-identity repairs are reviewed operations. Hops
-follow the grader's onward trail (`createAflTradePickOnwardTransfers` over the grader's own graded
+follow the trade structure's onward trail (`createAflTradePickOnwardTransfers` over its graded
 trades, with the latest custody holder as tie-break) when that gives one trail through every hop
-(`hopOrder: 'trail'`). Otherwise, including when a hop's trade is one the grader does not grade, they
+(`hopOrder: 'trail'`). Otherwise, including when a hop's trade is one the structure does not hold, they
 are `unordered`: sorted by season, Draftguru pick-trade sequence, date and transfer id. The outcome is
 one of:
 
@@ -4078,17 +4076,16 @@ one of:
 - `unresolved`: with a reason, when the evidence does not say. A not-used pick without access evidence
   is unresolved, since it may have matched a bid.
 
-A hop's stated outcome decides, as it does for the grader; hops traded on say nothing of the end. On an
+A hop's stated outcome decides; hops traded on say nothing of the end. On an
 ordered trail only the last hop may state an end, and two terminal hop outcomes are an
-`outcome_conflict`. A stated selection in a draft before the hop's trade is unresolved, as the grader
-refuses it. Without a terminal hop, the pick's usable selection decides. With none, a pick of a draft
+`outcome_conflict`. A stated selection in a draft before the hop's trade is unresolved. Without a terminal hop, the pick's usable selection decides. With none, a pick of a draft
 after the latest draft year the candidate holds a selection in is a future pick, and any other is
 unresolved: its draft has been run.
 
 **Matched-bid shares (issue 789, owner-approved 2026-10-17).** The value-line method gives each pick
 a club spent matching a father-son, academy or next-generation-academy bid a share of the nominee, in
 proportion to the points it covered (`afl-trade-value-line-method.md`). The owner chose a swap in the
-trade story, not a grade rule: the grader never reads bid matches, and the ledger's `bidMatches[]`
+trade story, not a grade rule: the trade structure never reads bid matches, and the ledger's `bidMatches[]`
 lists every board matched bid the candidate carries with its price and every spent pick's share. The
 trade story reads each spent pick's share through the value lines (`pick_matched_bid_share`), so a
 priced matched-bid pick is valued and counted in the trade's nets.
@@ -4140,12 +4137,12 @@ priced matched-bid pick is valued and counted in the trade's nets.
   selection, whose providers disagree on the player or club, names no nominee.
 
 **Lookups.** `stintValue(playerId, clubId, fromSeason)` returns any player's first stint at any club
-from a season, by the same rule and arrival check as the grader (a reviewed arrival in the season
+from a season, by the shared stint rule and arrival check (`valuation/stints.ts`; a reviewed arrival in the season
 before `fromSeason` or in it), so a player traded in year Y is `stintValue(player, club, Y + 1)`.
 `pickOutcome(pickId)` returns a ledger pick's outcome, or undefined for an id the ledger does not hold.
 
-**Export.** `npm run outcomes:grading:asset-ledger` (`Scripts/export-asset-ledger.ts`) takes the realized
-grader's arguments and reads the genuine database through `AFL_OUTCOMES_DATABASE_URL` (loopback only, so
+**Export.** `npm run outcomes:grading:asset-ledger` (`Scripts/export-asset-ledger.ts`) takes the shared
+grading arguments (`Scripts/gradingArguments.ts`) and reads the genuine database through `AFL_OUTCOMES_DATABASE_URL` (loopback only, so
 it runs on the grading VM). It seals the ledger under a content address (`asset-ledger:<sha256>`) and
 stores it as `derived_private` in repository `asset-ledgers`. See the operations runbook, "Exporting the
 asset ledger".
@@ -4154,8 +4151,8 @@ asset ledger".
 
 `modeling/playerSeasonGames.ts` gives games played and PAV per canonical player, season and club for
 the value-line method ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation
-order step 1; statlyaus/Statly#789). It reads no candidate, no grade rule and nothing of the realized
-grader, and it is private like the grader's inputs.
+order step 1; statlyaus/Statly#789). It reads no candidate and no grade rule, and it is private like the
+grading inputs.
 
 **Source.** No new storage: each finalized HPN PAV calculation (`afl-trade-hpn-pav-season-calculation/v3`)
 already states, per v3 season spell, `source.gamesPlayed` (the distinct matches the player has a primary
@@ -4178,7 +4175,7 @@ PAV. It is empty on a sound calculation, and a fit must refuse otherwise.
 seasons from `fromSeason`: a season counts with its games and PAV (0 and 0 when the player did not play
 anywhere, as a season lost to injury does), and the stint closes in the first available season the
 player appears for another club (that season still counts here if he also played here). This is the
-grader's boundary without its reviewed-arrival input. Seasons with no finalized calculation are listed in
+first-stint rule's boundary (`valuation/stints.ts`) without its reviewed-arrival input. Seasons with no finalized calculation are listed in
 `seasonsUnavailable`, not counted. Appearances cannot show a delisting or retirement (the stint stays
 open with 0-game seasons) or a re-arrival at the same club with no game elsewhere in between (read as
 one stint).
@@ -4195,8 +4192,7 @@ specification (step 2)"; statlyaus/Statly#789): the first-stint pick curve, the 
 tenure, and the credibility weights `k_games` (seasons) and `k_rate` (games), each from variance
 components (owner decision 2026-10-19: development-adjusted additive effects on games and on PAV per
 game replace the v1 rate blend). It is pure and deterministic: input
-order does not change the fit id. Like the games read model, it reads no candidate, no grade rule and
-nothing of the realized grader.
+order does not change the fit id. Like the games read model, it reads no candidate and no grade rule.
 
 **Inputs.** `modeling/postgresValueLineFitInputs.ts` reads every current canonical AFLM national-draft
 selection of a consecutive run of classes (`outcome_current_canonical_draft_selection_picks`, the function
@@ -4232,12 +4228,11 @@ Each leg names its transfer, asset kind and clubs, and its **onward link** when 
 the asset on: a pick's unique trail (`pick_trail`, the pick-onward order of rule v12, with
 `corroboratedBy: 'footyinfo'` when exactly one board pick routes the hop pair), or a special
 entitlement's reviewed custody successor (`special_entitlement_successor`, rule v7). A link is emitted
-whatever became of the onward trade: the realized grader drops a traded-on leg's link when it blocks
-the leg (`traded_on_return_blocked`), the structure does not. Only the leadsTo cycle guard drops one, a
+whatever became of the onward trade, even when its other side cannot be valued (the retired realized
+grade dropped such a link as `traded_on_return_blocked`). Only the leadsTo cycle guard drops one, a
 link whose onward trade leads back to its own trade.
 
-The realized grader builds its trades, legs and onward links from the same module
-(`createAflTradeStructureView`), so its output is unchanged. The value lines read their trades, legs and
+The value lines read their trades, legs and
 onward links from the structure (`afl-trade-value-lines/v3`, below), and the trade story reads the
 structure and those value lines (above).
 
@@ -4251,10 +4246,9 @@ It is pure and deterministic (trade order does not change the id).
 **Inputs.** A stored value-line fit (its content address checked), the asset ledger read model, the
 player-season games read model, the reconciliation candidate (transfers, custody orders, Footyinfo boards
 and draft selections) and the candidate's sealed trade structure (above; its content address checked,
-and it must be of the same candidate), the only source of trades, legs and onward links. No realized
-grade is computed or read: a pick leg follows the structure's onward links to its final hop, so a link
-the grader drops when it blocks the leg (a special entitlement whose onward side is blocked, say) is still
-followed. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
+and it must be of the same candidate), the only source of trades, legs and onward links. A pick leg
+follows the structure's onward links to its final hop, so a link whose onward side cannot be valued (a
+special entitlement's, say) is still followed. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
 whose types are the fit module's own, re-exported) estimates traded players' open stints from the stored
 traded-player fit (`modeling/tradedPlayerValueLineFit.ts`, below) and the evidence it read: its trade
 seasons, each player's trade seasons in that window, its merged draft origins and its games read model.
@@ -4293,12 +4287,12 @@ id is unchanged. It is pure and deterministic. `aflTradeTradedPlayerValueAt` val
 from the published parameters alone.
 
 **Inputs.** `modeling/postgresTradedPlayerValueLineFitInputs.ts` composes three read-only, repeatable-read
-reads: the realized grader's inputs for one candidate (`loadAflTradeRealizedTradeGradeInputs`; its trade
+reads: the grading inputs for one candidate (`loadAflTradeGradingInputs`; its trade
 legs, v3 season spells, v4 reviewed arrivals and PAV), the player-season games read model from 2011, and
 every canonical AFLM draft row of every draft type and year. Each player leg's stint is the asset ledger's
 (`createAflTradeAssetLedgerStintValue`). Unreviewed legs and legs with no canonical player or receiving club
 are counted, not trained on. The fit refuses an unavailable season, any games discrepancy, a stint with
-seasons missing PAV or PAV that differs from the read model, a grader calculation id that differs from the
+seasons missing PAV or PAV that differs from the read model, a grading-input calculation id that differs from the
 read model's, and a draft origin at or after the trade season.
 
 **Output.** Sealed under `traded-player-value-line-fit:<sha256>` (`afl-trade-traded-player-value-line-fit/v2`;
@@ -4734,7 +4728,8 @@ The remaining work proceeds through these independently verifiable gates:
    `matchedBidBoardPickIds` only on a `club_took_nominated_player` count at least as large, and only
    for selected matched-bid board picks the receiving club held in the pick's draft.
 
-   **Valuing a not-used pick (owner decision, 2026-10-08, statlyaus/Statly#789).** In the MVP grade,
+   **Valuing a not-used pick (owner decision, 2026-10-08, statlyaus/Statly#789; retired with the
+   realized grade, #789 step 5).** In the MVP grade,
    a stated not-used pick is valued by its `nominationBasis`:
    - `club_took_no_nominated_player`: **0 realized value**. Nothing was drafted with the pick, and the
      club took no nominee it could have funded. This is a modelling rule, not a measured fact, and the
@@ -4760,7 +4755,7 @@ The remaining work proceeds through these independently verifiable gates:
    Richmond (2024). When the candidate holds a transfer of the same pick id from the receiving club
    in a later trade, that transfer is direct evidence the club traded the pick on, so the
    reconciler records the outcome as a stated `traded_on` with `statedDisposition: 'not_used'`; only
-   the final holder's hop stays not used. The onward transfer is found by the rule the grader
+   the final holder's hop stays not used. The onward transfer is found by the rule the trade structure
    follows (`source/pickOnwardTransfer.ts`): the next edge of the pick's unique trail (see "Ordering
    undated pick hops" below), else the receiving club's transfers of the pick in another trade no
    earlier than this one. A transfer of the same pick by another club, or by this club before it
@@ -4778,7 +4773,7 @@ The remaining work proceeds through these independently verifiable gates:
    reconciler marked it traded on and the grader blocked the ring (four trades in the v10 dry run:
    2019 #50 Hawthorn, Melbourne, North Melbourne, Hawthorn; 2019 #64 West Coast, Brisbane,
    Essendon, West Coast; 2020 #70 Brisbane, North Melbourne, Collingwood, Brisbane; 2024 St Kilda,
-   Essendon, St Kilda). Two rules, shared by the reconciler, the candidate contract and the grader,
+   Essendon, St Kilda). Two rules, shared by the reconciler, the candidate contract and the trade structure,
    now order them:
    - **The Draftguru pick-trade sequence.** A pick-only trade's event id ends in a number
      (`2019-picks-melbourne-north_melbourne-8`, `aflTradePickTradeSequence`). It is unique per
@@ -4803,11 +4798,12 @@ The remaining work proceeds through these independently verifiable gates:
    candidate's anchor season and the candidate holds no `draft_selection` and no Footyinfo
    `draft_board_pick` for that (draftYear, draftType), `isAflTradeDraftPending`,
    statlyaus/Statly#927), is no longer
-   blocked when the live draft order holds its slot. Under rule v6 it is valued provisionally from
-   that slot; see "Projected picks (rule v6)" under the contract below. A pick with no resolvable
+   blocked when the live draft order holds its slot. Under rule v6 the retired grade valued it
+   provisionally from that slot; the value lines place it at that slot (`aflTradePickOrderSlotOf`). A pick with no resolvable
    original club (a compensation or assistance pick) stays pending.
 
-   **Traded-on picks and bundled trades (owner decision, 2026-10-08, statlyaus/Statly#789).** A pick a
+   **Traded-on picks and bundled trades (owner decision, 2026-10-08, statlyaus/Statly#789; retired with
+   the realized grade, #789 step 5: a traded-on pick now carries its own value line to its final hop).** A pick a
    club received and then traded on is worth what the club got back for it. When it was the only asset
    the club gave in the onward trade, it is worth that trade's whole realized return. If a returned pick
    was itself traded on, its value follows the chain the same way. When the club gave a bundle, the
@@ -4820,13 +4816,12 @@ The remaining work proceeds through these independently verifiable gates:
    reports what the club finally landed and gave up.
 
    **Pick projection (owner decision, 2026-10-08, replacing the 2026-10-06 "no projection in the MVP"
-   rule).** The MVP has a pick projection. It is the at-trade view of a pick (and, under rule v8, of a
-   future pick at the slot it eventually took, which is hindsight: "Future picks at their eventual
-   slot (rule v8)" below). It never feeds the
+   rule; the realized grade that used it is retired, #789 step 5).** The MVP has a pick projection. It is the at-trade view of a pick (and, under rule v8, of a
+   future pick at the slot it eventually took, which is hindsight). It never feeds the
    realized grade or the bundle allocation, so a change of projection never changes a grade, with one
    exception the owner directed on 2026-10-14 (issue 789): a pick whose draft is not yet in evidence
    is valued at the projection of its slot in the live draft order, because "careers run
-   continuously" and every grade is provisional ("Projected picks (rule v6)" below). The MVP
+   continuously" and every grade is provisional (rule v6). The MVP
    uses the HPN Draft Pick Value Chart v3.0 (https://www.hpnfooty.com/?page_id=22741): pick value =
    −30.36 × ln(pick number) + 146.95, in career PAV, fitted on the 1993-2006 drafts excluding father-son
    picks (R² 0.73). Pick 1 is about 147, pick 10 about 77 and pick 30 about 44. It is the existing HPN
@@ -4849,565 +4844,20 @@ The remaining work proceeds through these independently verifiable gates:
    own schema, added beside the v3 benchmark and never overwriting it. It needs its own
    owner decision. Earlier batches stay reproducible by the version they name.
 
-   **Realized trade grade (MVP) contract.** `valuation/realizedTradeGradeContracts.ts` defines the
-   private batch the grader produces (`afl-trade-realized-trade-grade-batch/v1`, rule
-   `afl-trade-realized-grade-rule/v18` (v1 to v17 batches still parse), unit `career_pav`, `non_production`, never publishable). A batch
-   pins its inputs: the reconciliation candidate, one HPN PAV calculation per season with whether that
-   season is official, the HPN benchmark record, and the spell cutoff. It is sealed under a
-   `realized-trade-grade-batch:` content address. A trade the candidate holds that cannot be represented as legs (no
-   transfers, or a transfer whose club is unknown, the same on both sides, or not a valid batch id) is
-   listed as ungraded with its reason, never dropped.
-   - **Legs.** Each transfer leg has one realized value at its receiving club, which counts as received
-     for that club and given up by the sender. A leg is `valued` (player first stint, selected pick's
-     first stint, traded-on pick's share of its onward return, a not-used pick worth 0, under rule
-     v6 a pending pick projected from its slot in the live draft order, or under rule v7 a special
-     entitlement traded on through its reviewed custody chain), `excluded`
-     (a not-used pick whose club took a nominee, or a traded-on pick the onward club spent on a
-     nominee, which has no realized weight to share a bundle by), or `blocked`. A first-stint leg lists the seasons it
-     valued and any season with no PAV calculation, and under rule v4 and later its signed PAV sum (`pavSum`). A traded-on leg names its onward trade, the
-     allocation (`sole_asset`, `relative_value`, `equal_split`, under rule v14 `projection_weighted`,
-     or from rule v15 `hybrid_weighted`), its share and the return (from rule v16, for a return whose
-     every leg is excluded and projected, the sum of their at-trade projections; from rule v18, for
-     any return with an excluded leg, its valued legs' realized total plus each excluded leg's
-     projection). The batch
-     checks that return, weight total and asset count against the onward trade it contains.
-   - **At-trade view.** Each leg reports a player's trade-season PAV (signed, as HPN publishes it) or a
-     pick's HPN projection, which must equal the benchmark formula for its slot. Under rule v8 a future
-     pick reports the HPN projection of the slot it eventually took (`pick_projection_eventual_slot`).
-     From rule v17 a pick with no slot in its draft's final order reports a round-position proxy
-     (`pick_projection_round_position_proxy`) and a pick numbered beyond 90 a capped projection
-     (`pick_projection_domain_capped`); see rule v17 below. From rule v19 an unused one first takes
-     the pre-draft number a reviewed Footyinfo board states (`slotSource: 'board_pre_draft_slot'`); see
-     rule v19 below. None ever enters a total.
-   - **States.** A trade is `blocked` if any leg carries a blocking reason (a pending pick outcome the
-     live order cannot place, an unresolved or
-     no-access-evidence pick outcome, unresolved identity, a special entitlement with no reviewed
-     custody successor, missing PAV
-     head, an unlinked onward trade, a cycle, or an onward trade whose holding club's side is unknown). It is
-     `provisional` if any leg carries a provisional reason (open stint, unreviewed arrival, missing or
-     unofficial PAV seasons, excluded nominee pick, equal-split tiebreak, provisional, partial or
-     projected onward trade, no appearances after the trade, a single-source pick outcome, a pick
-     projected from the live order or a prior-order proxy, or a special entitlement followed through
-     its custody chain). Otherwise it is
-     `complete`. Club totals are the exact received and given-up sums of the valued legs, so equal legs
-     always seal to the same batch. Under rule v3 a club's `received` is null only when a leg it
-     receives is blocked, and its `givenUp` only when a leg it sends is blocked; `net` is null when
-     either is. Rules v1 and v2 null every club's totals in a blocked trade, and their batches are still
-     checked that way.
-   - **Single source (rule v2, owner decision 2026-10-12, issues 853 and 789).** Pick outcomes come from
-     Draftguru. A valued or excluded pick leg carries `single_source_pick_outcome` unless a Footyinfo
-     draft board corroborates its outcome. The leg then names `corroboratedBy: footyinfo` and drops the
-     reason. Corroboration means:
-     - **Selected:** the outcome's canonical selection is `corroborated`, with Draftguru and Footyinfo
-       among its providers agreeing on the player and club.
-     - **Not used:** the outcome's basis is `board_pick_passed_or_removed`.
-     - **Traded on:** exactly one board pick in the pick's draft routes it sender, receiver, onward
-       receiver, with that sequence once in its route.
-
-     Every other pick leg keeps the reason, except a pick projected from the live draft order (rule
-     v6), which rests on the order, not on a pick outcome: it carries neither the reason nor
-     `corroboratedBy`. A nominee-excluded not-used pick is never corroborated.
-     Rule v2 introduced this and rule v3 keeps it. The contract still accepts v1 batches, which name no
-     corroborating provider, so earlier batches stay valid. Each version states its own limitation
-     text.
-
-   - **Club-scoped totals (rule v3, issue 789).** Rule v2 blocked a traded-on leg whenever its onward
-     trade was blocked anywhere, so trades with no blocked leg of their own were blocked. A traded-on
-     leg's value depends only on its holding club's side of the onward trade, so v3 scopes both rules
-     to that side:
-     - **Club totals** are null per side, as in "States" above. The trade state rule is unchanged.
-     - **Traded-on leg.** A `sole_asset` (the holder gave only the pick) needs the holder's `received`,
-       whatever the pick's own onward leg is. A bundle needs `received` and `givenUp`: `relative_value`
-       also takes the pick's weight, and `equal_split` applies when `givenUp` is known to be 0. When the
-       side it needs is unknown, the leg is `traded_on_return_blocked`. When it is known but the onward
-       trade is blocked elsewhere, the leg is valued with `traded_on_return_partial`. A holder that
-       received no leg at all in the onward trade has a known `received` of 0, as under v2 when the
-       onward trade is unblocked: a capture missing the holder's return side would value the pick at
-       0, so such legs are worth checking against the source (none in the 2026-10-13 regrade).
-     - **Excluded onward pick.** It is `pick_traded_on_return_unallocated` only when the side its
-       allocation would need is known (from rule v11, only in a bundle; from rule v13, also when another asset of the bundle is excluded, from rule v14 only when some asset of that bundle has no projection, and from rule v15 only when an excluded asset of that bundle has no projection; from rule v11 also when every leg its club received there is excluded, and from rule v16 only when one of those legs has no projection; from rule v18 whenever an excluded leg its club received there has no projection, however many of its return legs are valued; see below). A blocked side takes precedence, so it is
-       `traded_on_return_blocked`. An unallocated leg never carries the partial or provisional reason,
-       since it has no onward return.
-     - **Cycles.** Before grading, the grader maps which onward trade each traded-on leg reads. A leg
-       whose onward trade leads back to its own trade is `traded_on_return_blocked`, so the result
-       does not depend on the order the trades are graded in. Rule v2 blocked every leg in such a
-       cycle too.
-
-     The contract checks each batch's totals and onward links under the rule it names.
-
-   - **Signed PAV (rule v4, issue 789).** HPN PAV is signed: 10 of the 7,351 player-season rows on the
-     grading database on 2026-10-13 are slightly below 0 (the lowest is −0.045), so a first stint can sum below 0.
-     Under rule v4 a first-stint leg (player or selected pick) is worth its stint's PAV sum floored at
-     0, since a player cannot return less than nothing to the club. The stint records the signed sum
-     as `pavSum` for audit, and the contract checks `realizedValue = max(0, pavSum)`. A sum of 0 or
-     more is unchanged. Every realized value and club total therefore stays at 0 or more, and a
-     bundle's relative-value shares stay between 0 and 1: a floored asset weighs 0, and a bundle
-     whose assets all floor to 0 is an `equal_split_tiebreak`. Rules v1 to v3 record no `pavSum`, and
-     a v4 or later stint must record one.
-
-   - **Board-proven draft (rule v5, owner decision 2026-10-14, issue 789).** The 2025 national draft
-     has no reviewed official completed session, so its not-used picks were `no_access_evidence` and
-     blocked. Under rule v5 a not-used pick whose nominee count rests on a draft membership a reviewed
-     Footyinfo board proved (the outcome's `draftProvenBy: footyinfo`, "Not used" picks above) is
-     valued or excluded as any count is, and the leg names `draftProvenBy: footyinfo`. It keeps
-     `single_source_pick_outcome`: the board proves the draft's selections, not this pick's fate. Only
-     a `pick_not_used_no_nominee` or `pick_not_used_nominee_excluded` leg without `corroboratedBy` may
-     name it, and rules v1 to v4 never do. The v5 limitation text says that the membership of the 2025
-     national draft is proven by a reviewed Footyinfo board, no official session being reviewed.
-
-   - **Projected picks (rule v6, owner direction 2026-10-14, issue 789).** The owner's direction:
-     "it's always going to be a provisional grade of sorts because careers run continuously, if the
-     picks havent been selected, just find the live draft order and attribute the picks accordingly".
-     Until then a `pending` pick outcome blocked its trade. A pick is `pending` while its draft is
-     not yet in evidence: a draft is pending if and only if its year is at or after the candidate's
-     anchor season and the candidate holds no `draft_selection` and no Footyinfo `draft_board_pick`
-     for that (draftYear, draftType) (`isAflTradeDraftPending` in
-     `source/externalEvidenceReconciliation.ts`, statlyaus/Statly#927). Under rule v6 the
-     grader reads the candidate's `pickCustody`, the reviewed Official AFL indicative order rows
-     ("Pick custody from the pre-draft order" below), to find the pick's slot:
-     - **Slot.** Every national custody row of the pick's draft that captures this pick, whatever
-       its status: rows with the pick's `pickId`, and rows with its draft year, `nominalRound` and
-       `originalClubId` (a capture re-keyed under another `pickId`). The latest of them decides: the
-       one row observed after every other, where a day or year observation spans that whole period,
-       so two overlapping latest observations have no slot. That row must be usable (`single_source`
-       or `corroborated`) and name a `recordedPickNumber` from 1 to 90. A newer disputed or
-       unnumbered capture is never overridden by an older usable one; the pick stays pending.
-     - **Proxy.** When the pick's draft has no national custody row at all (a 2027 pick before any
-       2027 order exists), the latest row of the previous draft with the same round and original
-       club stands in, on the same usable-and-numbered terms, and the leg is flagged as a proxy. A
-       draft that has an order but not this pick is never proxied. Until a 2026 order capture is
-       retained, every 2026 pick is projected by this proxy from the 13 November 2025 order. The
-       reviewed 14 October 2026 order (parser v5, below) then gives each 2026 pick its own slot, and
-       a 2027 pick is proxied from it.
-     - **No original club.** A compensation, assistance, concession or priority pick has no
-       resolvable original club, so it matches only a row with its own `pickId` and never proxies.
-       In practice such a pick stays pending: an order row without an original club is `unresolved`.
-     - **Value.** The leg is `valued` on basis `pick_projected_from_order` at the raw HPN DPVC v3
-       value of the slot (`hpnDpv3ValueForPick`, no scaling), and names its `projection`: the batch's
-       benchmark, the slot, the order's and the pick's draft years, the custody row and its
-       observation, and whether it is a proxy. It carries exactly one reason,
-       `pick_projected_from_live_order` or `pick_projected_from_prior_order_proxy`, both provisional,
-       and neither `single_source_pick_outcome` nor `corroboratedBy`: it rests on the order, not on
-       a pick outcome. DPVC is whole-career expected PAV, while every other leg realizes first-stint
-       PAV, so a projected value is not like for like with a realized one, and the limitation says so.
-     - **Still pending.** No unique latest capture, a latest capture that is not usable, has no
-       number or is beyond HPN's 1 to 90, a pick with no original club and no own-`pickId` row, or a
-       non-national pick stays `pick_outcome_pending`, which still blocks.
-     - **Totals and chains.** A projected leg is valued like any other: it enters the club's
-       `received` and `givenUp`, and weighs its value in a relative-value bundle. A traded-on pick
-       whose onward trade holds one is valued as `pick_traded_on_return` with
-       `traded_on_return_provisional`, and also `traded_on_return_projected` when a projected leg, or
-       a return resting on one, sits on the side its value reads: a leg its club received there, or
-       for a bundle a leg it gave. A pick traded twice before its draft is projected to the same slot
-       on both hops, so the middle club's received and given-up values for it cancel.
-     - **At-trade view.** Under rule v6 a future pick's at-trade view stays `future_pick_slot_unknown`;
-       under rule v8 it is the slot the pick is projected from (`slotSource: 'projected_order'`).
-     - **After the draft.** Once the pick is drafted and the candidate is re-reconciled, its outcome
-       is `selected` and the leg becomes the draftee's realized first stint, which is 0 until he plays.
-       A trade's value therefore drops sharply after draft night and climbs back as the draftee plays.
-     - **Versions.** Rules v1 to v5 never project a pick, so their batches still parse. The contract
-       checks the value against the slot, the proxy flag against its reason and the year before, and
-       the benchmark against the batch's. The v6 limitation adds that a pick whose draft is not yet in
-       evidence is valued provisionally at the HPN DPVC v3 value (whole-career expected PAV, not
-       first-stint) of its slot in the live Official AFL indicative order, and that a pick of a draft
-       with no order yet uses its original club's slot in the latest order.
-
-   - **Special entitlements through their custody chain (rule v7, issue 789).** Until rule v7 a
-     special draft entitlement leg (a `special_pick`, such as the 2020 Gold Coast concession
-     `2020MIDR1`, or a resolved `special_entitlement`) was always `special_entitlement_unsupported`,
-     which blocked its trade and any traded-on pick whose onward side it entered. The grader now also
-     reads the approved canonical `outcome_special_entitlement_custody` chain: the rows whose custody
-     asset is `approved` and whose award is `non_production` AFLM, loaded by
-     `development/postgresRealizedTradeGradeInputs.ts` in the same repeatable-read transaction. Each
-     row is one transfer of the entitlement, and its successor is the row naming it as
-     `predecessor_transfer_id`.
-     - **Link.** A special leg follows its successor when the leg's transfer has a custody row, the
-       successor row is the same entitlement (and, for a resolved `special_entitlement`, the asset's
-       own `entitlementId`), and the successor's transfer is in another graded trade, given by the
-       club that received the special leg, no earlier than the special leg's trade. The successor's
-       transfer may be an ordinary `pick_entitlement` in the graded candidate: the pick the
-       entitlement was traded on as.
-     - **Value.** The leg is then a traded-on pick: `pick_traded_on_return` (or
-       `pick_traded_on_return_unallocated` when the successor is excluded there), worth its share of
-       what its club received in the successor's trade, by the same sole-asset, relative-value and
-       equal-split rules. It names `specialEntitlement` (the entitlement and the successor transfer)
-       and carries `special_entitlement_custody_linked`, which is provisional. It always keeps
-       `single_source_pick_outcome` and never names `corroboratedBy`: the chain is reviewed custody,
-       not a corroborating draft board.
-     - **Cycles and gaps.** The link enters the rule v3 cycle guard like any traded-on hop, so a
-       custody link whose onward trade leads back to its own trade is `traded_on_return_blocked`, as
-       is one whose club's side of the onward trade is unknown. A special leg with no custody row, no
-       successor, a successor of another entitlement or club, or a successor trade before its own
-       stays `special_entitlement_unsupported`.
-     - **Versions.** Rules v1 to v6 never follow the chain, so their batches still parse and the
-       contract refuses `specialEntitlement` or the reason under them. Under rule v7 the field and
-       the reason go together, only on a single-source traded-on pick leg, and the successor must be
-       the leg its club gave in the onward trade the leg names. The v7 limitation adds that a special
-       draft entitlement is followed through its reviewed canonical custody chain to the ordinary
-       pick it was traded on as, and valued as that pick's traded-on return.
-
-   - **Future picks at their eventual slot (rule v8, owner direction 2026-10-16, issue 789).** "Picks
-     that are unknown like Finn Callaghan in 2021 need to be confirmed." Until rule v8 a national
-     pick traded with no slot yet (no `nominalPick`) reported `future_pick_slot_unknown` at trade, even
-     once its slot was known: Collingwood's 2021 first-round pick, traded to GWS in 2020 and used at 3
-     on Finn Callaghan, was valued on his first stint but showed no at-trade view. Rule v8 fills it in.
-     - **Slot.** The selection number the pick was used at, when its outcome is a stated `selected`
-       one whose selection is usable (`single_source` or `corroborated`) and in the pick's draft.
-       Otherwise the latest usable slot of the pick in its own draft's order, by the rule v6 lookup
-       ("Projected picks (rule v6)", **Slot**) but never the previous draft's order as a proxy: a
-       traded-on, not-used or unresolved pick has a draft of its own. For a pending pick it is the
-       rule v6 projected slot, proxy included, so the view always matches the leg's `projection`. The
-       slot must be 1 to 90; a selection beyond 90 (even with an order slot inside it), no usable
-       slot, or a draft before the trade leaves `future_pick_slot_unknown`.
-     - **View.** `pick_projection_eventual_slot` names the batch's benchmark, the slot, its source
-       (`selection`, `order` or `projected_order`) and the raw HPN DPVC v3 value of the slot
-       (`hpnDpv3ValueForPick`). A current pick (one with a `nominalPick`) keeps its `pick_projection`
-       at that slot.
-     - **Hindsight.** The slot was known only after the trade, so the view is not what the clubs knew.
-       It is not the Value Engine's contemporaneous at-trade benchmark, which values a future pick
-       across its final-selection distribution and never by its eventual position ("For a selection
-       known at the transaction cutoff" above); that rule is unchanged. Like every at-trade view it
-       never enters a leg's value, a club total or a bundle weight.
-     - **Versions.** Rules v1 to v7 never report it, so their batches still parse and the contract
-       refuses the kind under them. Under rule v8 the contract checks the value against the slot, the
-       benchmark against the batch's, that `projected_order` appears exactly on a projected leg and
-       at its projection's slot, and that `selection` appears only on a selected pick's leg (valued
-       or blocked). The v8 limitation adds that a future pick's at-trade view is valued at the slot
-       it eventually took, known only after the trade (hindsight, not what the clubs knew), and
-       enters no total.
-
-   - **Stated not-used picks traded on (rule v9, issue 789).** A pick hop whose outcome carries
-     `statedDisposition: 'not_used'` ("A stated not-used pick its club traded on" above) is graded
-     as a traded-on pick: its share of its club's onward return (rule v3), or blocked when that
-     return is unlinked or blocked, never the 0 a not-used pick is worth. The leg says so
-     (`stated_not_used_traded_on`, provisional). The contract allows the reason only on a
-     traded-on pick leg (`pick_traded_on_return` or `pick_traded_on_return_unallocated`) or a
-     blocked one, and refuses it under rules v1 to v8, whose batches still parse. The v9 limitation
-     adds that a pick stated not used that its club traded on in a later trade is valued by its
-     traded-on return, and only the final holder's stays not used.
-
-   - **Nominees a board matched bid records (rule v10, issue 789, 2026-10-16).** A not-used pick
-     whose club's nominee count includes a selection only a Footyinfo board's matched bid records
-     (the outcome's `matchedBidBoardPickIds`, "A nominee the board records as a matched bid" above)
-     is excluded like any nominee pick, and the leg names `nomineeMatchedBidBy: footyinfo`. It keeps
-     `single_source_pick_outcome`: the board states the nominee, not this pick's fate. Only a
-     `pick_not_used_nominee_excluded` leg without `corroboratedBy` may name it, and rules v1 to v9,
-     whose batches still parse, never do. The v10 limitation adds that a receiving club's selection
-     a reviewed Footyinfo board records as that club's matched bid counts as a nominee even when
-     Draftguru marks it open.
-
-   - **Traded-on allocation past an excluded leg (rule v11, issue 789, 2026-10-16).** An audit of the
-     v10 dry run on genuine found two defects in how a traded-on hop reads its onward trade:
-     - **Sole asset.** Through v10 a traded-on pick was `pick_traded_on_return_unallocated` whenever
-       its own leg in the onward trade was excluded (for example the next holder spent it matching a
-       bid, `pick_not_used_nominee_excluded`), even when it was the only asset its club gave. A sole
-       asset takes its club's whole return (share 1), so that later fate is irrelevant: from v11 it
-       is valued at what its club received (`sole_asset`). The audit counted 16 such legs in the dry
-       run, 11 with a known positive return. Only a bundle's excluded pick, which has no
-       realized weight to share the return by, stays unallocated. The rule v3 order is unchanged: a
-       blocked side still blocks first.
-     - **All-excluded return.** Club totals sum only valued legs, so a club whose every received leg
-       in the onward trade is excluded has a `received` of 0, and through v10 the hop was valued 0
-       with no reason naming the exclusion (Petracca's 2026 second-rounder, Melbourne to Gold Coast,
-       whose only return in the onward trade is a nominee-excluded pick; Fiorini's 2026 third-rounder
-       the same). From v11, when the club received at least one leg there and every one is excluded,
-       the hop is `pick_traded_on_return_unallocated` (`traded_on_return_unallocated`). A side with
-       any valued leg allocates as before.
-
-     The contract checks both under v11: an unallocated leg names an onward trade in which its club
-     gave a bundle with an excluded leg, or received only excluded legs; a valued traded-on leg whose
-     club received only excluded legs is refused. Rules v1 to v10, whose batches still parse, keep
-     their own check, and refuse a valued sole asset whose onward leg is excluded. The v11 limitation
-     adds that a sole asset traded on is valued at its club's whole return in the onward trade,
-     whatever became of the pick there, and that a traded-on pick whose club's every return leg in
-     the onward trade is excluded is unallocated, not worth 0.
-
-   - **Ordered undated pick hops (rule v12, issue 789, 2026-10-16).** A traded-on pick's onward
-     trade comes from a trail ordered by the Draftguru pick-trade sequence, with the pick's latest
-     Official AFL custody holder breaking a tie between trails ("Ordering undated pick hops" above).
-     The four trades the v10 dry run blocked as undated cycles then follow one trail, and a final
-     holder's hop no longer links back into the first trade. The batch records no new field, so
-     the contract cannot tell v11 and v12 legs apart; the version and the limitation name the rule.
-     The v12 limitation adds that undated pick trades of one season are ordered by the Draftguru
-     pick-trade sequence, an ordering inferred from its agreement with every chain checked, not a
-     stated date, and that a pick with more than one possible trail follows the one ending at its
-     latest Official AFL custody holder.
-
-   - **Excluded asset in a traded-on bundle (rule v13, issue 789, 2026-10-16).** A Fable audit of
-     stored batch twenty-three found that a bundle's allocation silently dropped an excluded sibling.
-     A traded-on pick in a bundle shares its club's onward return by its realized weight over what
-     the club gave up, and `givenUp` sums only valued legs. So when another asset the club gave in
-     the onward trade was excluded (for example a pick the next holder spent matching a bid), its
-     unknown weight fell out of the total and the valued siblings absorbed its share: 2019 pick 32
-     (Western Bulldogs) took share 1, 102.9, because its sibling, Fremantle's 2020 third-rounder,
-     was excluded. The audit counted 25 legs taking share 1 this way, 652.7 PAV. From v13, a
-     traded-on pick whose club gave more than one asset in the onward trade, any of them excluded,
-     is `pick_traded_on_return_unallocated` (`traded_on_return_unallocated`), on the weighted path
-     and on the even split alike: no traded-on asset's share of that return is known. A sole asset
-     still takes the whole return (rule v11), a bundle whose every asset is valued allocates as
-     before, and a blocked side still blocks first (rule v3).
-
-     The contract refuses, under v13, a valued traded-on pick whose club's onward bundle holds an
-     excluded asset. Rules v1 to v12, whose batches still parse, accept the shared value they
-     recorded; their unallocated grounds are unchanged. The v13 limitation adds that a traded-on
-     pick given in a bundle with an excluded asset is unallocated, the excluded asset's share of the
-     return being unknown, and that a sole asset still takes the whole return.
-
-   - **Projection split of a bundle with an excluded asset (rule v14, issue 789, 2026-10-16;
-     coordinator decision under the owner's full permission).** By the coordinator's count, rule
-     v13 left 115 legs (about 1,802 PAV) unallocated because their bundle held one excluded asset,
-     often a late pick spent matching a bid. The owner's 2026-10-08 rule, bundles split by realized value, stays the primary rule.
-     When that split is unknown, from v14 the club's onward return is split by each given asset's
-     HPN DPVC v3 at-trade projection, provided every asset the club gave there has one with a value
-     above 0: a current pick's `pick_projection` (its known slot), or a future pick's rule v8
-     `pick_projection_eventual_slot` (its selection, order slot or projected slot). The traded-on
-     pick is valued at `returnValue × w_self / Σ w`, with allocation `projection_weighted`: `weight`
-     and `weightTotal` are its projection and the projections' total (summed in transfer order), and
-     `projectionWeights` records the pinned benchmark, the pick's own transfer in the onward trade,
-     and each asset's transfer, source and value. The leg is provisional and says so
-     (`bundle_split_by_projection`). The projections are an at-trade view (for a future pick,
-     hindsight), not realized value, which is why the reason is stated.
-
-     A bundle holding a player, a pick outside 1 to 90 or a pick whose slot is unknown has no
-     projection weight for that asset, so its traded-on picks stay unallocated as under v13. A
-     return whose every leg is excluded stays unallocated (rule v11), a sole asset still takes the
-     whole return, a bundle whose every asset is valued keeps its realized split, and a blocked side
-     still blocks first (rule v3).
-
-     The contract checks the split under v14: `projection_weighted` records the weights, its share is
-     the pick's projection over their total, the weights are exactly the at-trade projections of
-     every asset the club gave in the onward trade and cite the batch's pinned benchmark, the bundle
-     holds an excluded asset, and the reason is stated exactly then. Under v14 it refuses an
-     unallocated leg a projection split would value, and still refuses a realized share past an
-     excluded asset. Rules v1 to v13, whose batches still parse, refuse the new allocation and
-     reason. The v14 limitation adds that such a bundle whose every asset has an HPN DPVC v3
-     at-trade projection is split by those projections instead, provisionally, realized value
-     staying the primary split.
-
-   - **Hybrid split of a bundle with an excluded asset (rule v15, issue 789, 2026-10-16; owner
-     decision).** Rule v14 still left 53 traded-on legs unallocated, by the coordinator's count,
-     because their onward bundle held a player (no DPVC projection) beside an excluded asset. The
-     owner's answer: "of course I want them valued". Rule v15 supersedes v14's projection-only split.
-     When a club's onward bundle (more than one asset given) holds an excluded asset, each asset it
-     gave there is weighted by its realized value when its leg is `valued` (a player's first-stint
-     PAV, a selected pick, a traded-on return or a pick projected from an order), and by its HPN DPVC
-     v3 at-trade projection when it is excluded: a current pick's `pick_projection`, or a future
-     pick's rule v8 `pick_projection_eventual_slot`. A special entitlement is weighted through its
-     successor pick. The traded-on pick is valued at `returnValue × w_self / Σ w`, with allocation
-     `hybrid_weighted`: `weight` and `weightTotal` are its own weight and the total (summed in
-     transfer order), and `hybridWeights` records the pinned benchmark, the pick's own transfer in the
-     onward trade, and each asset's transfer, source (`realized` or `projection`) and value. The leg
-     is provisional and says so (`bundle_split_estimated_weights`), since an excluded asset's
-     projection stands in for a realized value nobody can know.
-
-     An excluded asset with no projection (an excluded player, a pick outside 1 to 90, a pick whose
-     slot is unknown) leaves the bundle's traded-on picks unallocated. Every excluded asset that is
-     weighted weighs more than 0 and the bundle holds at least one, so the total is always positive
-     and no equal split is needed. A return whose every leg is excluded stays unallocated (rule v11),
-     a sole asset still takes the whole return, a bundle whose every asset is valued keeps its
-     realized split, and a blocked side still blocks first (rule v3).
-
-     The contract checks the split under v15: `hybrid_weighted` records the weights, its share is the
-     pick's weight over their positive total, the weights are exactly each given asset's realized
-     value or, when excluded, its at-trade projection (shared helper
-     `aflTradeRealizedOnwardHybridWeights`, so the grader and the contract cannot drift), they cite
-     the batch's pinned benchmark, the bundle holds an excluded asset, a special entitlement's weights
-     name its successor, and the reason is stated exactly then. Under v15 it refuses an unallocated
-     leg a hybrid split would value, a realized share past an excluded asset, and v14's
-     `projection_weighted` split. Rules v1 to v14, whose batches still parse (v14 keeping
-     `projection_weighted`), refuse the new allocation and reason. The v15 limitation adds that a
-     bundle with an excluded asset is split by each asset's realized value where known and its HPN
-     DPVC v3 projection otherwise, provisionally, and stays unallocated when an excluded asset has no
-     projection.
-
-   - **All-excluded return valued at its projections (rule v16, issue 789, 2026-10-16; owner
-     decision).** Rule v11 left a traded-on pick unallocated when every leg its club received in the
-     onward trade was excluded. By the coordinator's count of the genuine batch, 30 of 31 such legs
-     had a return made entirely of picks the club then spent matching a bid
-     (`pick_not_used_nominee_excluded`), sometimes beside another `pick_traded_on_return_unallocated`
-     leg, and 56 of those 58 return legs carry an HPN DPVC v3 at-trade projection. The owner wants
-     them valued. From v16, when every leg the club received there is excluded and each has a
-     positive at-trade projection (a current pick's `pick_projection`, or a future pick's rule v8
-     `pick_projection_eventual_slot`), the return is the sum of those projections: the draft value the
-     club spent on the bid match. The onward block records it as `returnProjection` (the pinned
-     benchmark and each return leg's transfer, source and value, in transfer order) with
-     `returnValue` equal to their sum, and the leg is provisional and says so
-     (`traded_on_return_estimated_from_projection`). A return leg that is itself an unallocated
-     traded-on pick counts at its own projection; its onward chain is not followed.
-
-     The return is shared among the assets the club gave exactly as any other return: a sole asset
-     takes it all, an all-valued bundle splits it by realized value (or evenly when every asset is
-     worth 0), and a bundle with an excluded asset by the rule v15 hybrid weights, staying
-     unallocated when an excluded given asset has no projection. When any excluded return leg has no
-     projection, the pick stays `pick_traded_on_return_unallocated` as under v11. A matched-bid
-     nominee pick graded directly stays excluded; only the traded-on return changes. A projection is
-     whole-career expected PAV at the trade, not the first stint a realized leg measures, which is why
-     the leg is provisional. Under v16 an excluded return leg's projection counts only when every return
-     leg is excluded: a partly valued return takes only its valued legs (rule v11), so a better onward
-     return can lower an upstream pick's value. Rule v18 removes that discontinuity (below).
-
-     The contract checks the return under v16: `returnProjection` is present exactly when the reason
-     is, `returnValue` is the projections' sum, the projections are exactly those of every leg the
-     club received there, every one excluded (shared helper
-     `aflTradeRealizedOnwardReturnProjection`, so the grader and the contract cannot drift), and they
-     cite the batch's pinned benchmark. Under v16 it refuses an unallocated leg that a projected return
-     would value, and still refuses an all-excluded return valued without projections. Rules v1 to
-     v15, whose batches still parse, refuse the new field and reason. The v16 limitation adds that a
-     traded-on pick whose club's every return leg in the onward trade is excluded is valued,
-     provisionally, at the sum of those legs' HPN DPVC v3 at-trade projections (the draft value its
-     club spent matching a bid), and stays unallocated when one has none.
-
-   - **At-trade projections for selected, consumed and out-of-domain picks (rule v17, issue 789,
-     2026-10-16; coordinator decision under the owner's full permission).** In the genuine v16 batch
-     (candidate `31f01d22`, batch `e8c27ee4`) 25 pick legs had no at-trade view. A projection enters
-     no club total itself, but rules v15 and v16 use an excluded asset's projection as its bundle
-     weight or return value, so the three legs v16 left `pick_traded_on_return_unallocated` each
-     hinged on a pick spent matching a bid with no view. Rule v17 gives three kinds of pick one.
-
-     - **A used pick takes its selection's slot.** Rule v8 read the eventual slot from the pick's own
-       selected outcome only when that selection's status was usable, and never followed a traded-on
-       pick to the hop that used it. The reconciler records a stated selected outcome against any
-       selection of that player, club and draft that is not disputed, so it may rest on an
-       `unresolved` one (in practice a selection whose slot no custody capture identifies, which is
-       also why the label has no original club and the order lookup fails). From v17 such a selection
-       counts when it is not disputed and names its player and club. A traded-on pick follows its
-       trail of stated traded-on hops (the same unique onward trail its value follows) to the hop that
-       was not traded on; when that hop was selected, its selection gives the slot,
-       `slotSource: 'onward_selection'` (2024 R1 used at 27 on Matt Whitlock two hops later). An
-       unresolved or unlinked hop ends the trail, and the pick falls back to its own order slot. The
-       selection comes before the order slot, as rule v8 states. A selection beyond 90 still leaves
-       the slot unknown. A special entitlement reports the selection its rule v7 custody successor's
-       trail ends in (the 2020 Gold Coast concession `2020MIDR1`, traded on as pick 13 and used at
-       15), and stays `pick_outside_projection_domain` without one. That is hindsight even where the
-       successor's own leg reports its slot at its own trade (13).
-     - **A pick with no slot in its draft's final order takes a round-position proxy.** A future pick
-       whose trail ended unused (spent matching a bid, passed, or never used), whose own draft's
-       latest capture of it names no slot or which was never captured, is projected at
-       `pick_projection_round_position_proxy`. Its original club's position is its rank by its own
-       first-round slot (rule v6's lookup by draft, round and original club, from the latest usable
-       observation), and the proxy slot is that position plus 18 for each later round, capped at 90.
-       The ranking needs every club: when the order names fewer than 18 clubs' usable first-round
-       slots, a missing club would move every club below it up a place, so no proxy is given. The view
-       records the round, the position, the slot and the first-round custody row it ranked by. It is
-       an estimate of where the pick would have fallen, not a slot it held. These keep
-       `future_pick_slot_unknown`: a pick with no original club or round, an order without all 18
-       usable first-round slots, a pick whose latest capture names a slot (usable or not) or whose
-       captures are too close in time to tell which is latest, a pending pick, and a draft with no
-       order. The rule v6 prior-order proxy is a different case (a pending pick of a draft with no
-       order yet) and is unchanged.
-     - **A pick beyond HPN's 1 to 90 is capped.** The benchmark is a formula,
-       `DPVC(p) = -30.36 * ln(p) + 146.95`, but HPN states it for selections 1 to 90 only and the
-       pinned benchmark's curve has exactly those 90 points, so v17 does not extrapolate it. A
-       national pick numbered beyond 90 (up to the contract's bound of 500) is projected at
-       `pick_projection_domain_capped`, recording its number and `cappedAt: 90`, at DPVC(90): an
-       upper bound, the curve falling with the slot. A pick of another draft stays
-       `pick_outside_projection_domain`.
-
-     Each view still enters no total by itself, so a leg valued without it keeps its value and
-     reasons. As a rule v15 hybrid weight or a rule v16 return projection, the new kinds count like
-     any other positive projection; a traded-on pick whose weights or return rest on a proxy or a cap
-     says so (`projection_round_position_proxy`, `projection_domain_capped`, provisional; shared helper
-     `aflTradeRealizedOnwardEstimateReasons`). The contract checks the proxy slot against its position
-     and round, every value against the benchmark (the cap against slot 90), the benchmark against the
-     batch's, `onward_selection` only on a traded-on or blocked leg, no proxy on a selected or
-     projected leg, and the estimate reasons exactly. Rules v1 to v16, whose batches still parse,
-     refuse the new kinds, slot source and reasons. The v17 limitation adds that a future pick's
-     at-trade view also takes the selection its traded-on trail, or a special entitlement's custody
-     successor, ends in, and its own selection when that selection is unresolved but not disputed and
-     names its player and club; that a future pick that held no slot in its draft's final order is
-     projected at an estimated round-position proxy, ranked among all 18 clubs, not a slot it held;
-     that a pick numbered beyond HPN's 1 to 90 is projected at DPVC(90), an upper bound; and that a
-     traded-on pick whose weights or return rest on the proxy or the cap says so.
-
-   - **Every excluded leg of an onward return counts at its projection (rule v18, issue 789,
-     2026-10-17; coordinator decision under the owner's full permission).** Rule v16 projected an
-     onward return only when every leg was excluded; a partly valued return took only its valued legs
-     (rule v11), its excluded legs counting 0. The genuine regrade under v17 showed the cost: a 2023
-     R2 (GWS) pick's return was three matched-bid picks (`pick_not_used_nominee_excluded`) and one
-     unallocated pick. Under v16 it was worth 74.5, the three projections; under v17 the fourth leg
-     became valued at 17.1, the return turned partial, and the pick fell to 17.1, so more information
-     erased 57 PAV. By the coordinator's count of batch `414fa5dd`, 74 traded-on legs across 50 onward
-     trades had a partial return holding 106 excluded legs, all `pick_not_used_nominee_excluded`, about
-     1,588 PAV of projection counting 0.
-
-     From v18, in any onward return with an excluded leg, each excluded leg that has a positive HPN
-     DPVC v3 at-trade projection (any kind rule v17 produces: `pick_projection`,
-     `pick_projection_eventual_slot`, `pick_projection_round_position_proxy`,
-     `pick_projection_domain_capped`) counts at its projection, and each valued leg at its realized
-     value. The return is unallocated only when some excluded return leg has no projection; a valued
-     leg beside it no longer makes the return known, so a partly valued return that rule v17 valued at
-     its valued legs alone may now be unallocated. An all-excluded return is the v16 special case. The
-     onward block's `returnProjection` records the excluded legs counted by projection (in transfer
-     order) and, new in v18, `realizedValue`, the valued legs' realized total (the club's `received`
-     there, 0 for an all-excluded return); `returnValue` is that plus the projections. The leg is
-     provisional and says so (`traded_on_return_estimated_from_projection`) whenever any part of its
-     return is a projection, and the rule v17 proxy and cap reasons still apply to the legs it reads.
-     Within onward returns, matched-bid picks are therefore valued uniformly, wherever they sit. The
-     club's own totals in the onward trade are unchanged (an excluded leg enters none); only the
-     traded-on pick reading that return changes, and an upstream hop reading that pick as a valued
-     leg takes its value as realized. Allocation across the assets the club gave is unchanged, and a
-     matched-bid nominee pick graded directly stays excluded.
-
-     The contract checks under v18 that `returnProjection` lists exactly the projections of every
-     excluded leg the club received there (shared helper `aflTradeRealizedOnwardReturnProjection`,
-     now rule-aware, with `aflTradeRealizedOnwardReturnHoldsExcluded` deciding which returns a rule
-     projects, so the grader and the contract cannot drift), that `realizedValue` is present and
-     equals the club's `received`, and that `returnValue` is their sum
-     (`aflTradeRealizedProjectedReturnValue`). It refuses a valued leg on a return with an excluded leg
-     but no projection, and an unallocated leg whose partly valued return could be projected. Rules
-     v1 to v17, whose batches still parse with their old semantics, refuse `realizedValue` and any
-     projection of a partly valued return. The v18 limitation adds that every excluded leg of a
-     traded-on pick's onward return counts at its projection beside the valued legs' realized value,
-     provisionally, mixing whole-career expected PAV with first-stint PAV, and that the pick stays
-     unallocated when an excluded return leg has no projection.
-
-   - **A board's stated pre-draft slot before the proxy (rule v19, issue 789, owner decision
-     2026-10-18).** A future pick whose trail ended unused and which held no slot in its draft's final
-     order took the rule v17 round-position proxy, an estimate. From v19 it first takes the number a
-     reviewed Footyinfo board states it held before the draft: the one passed or removed board pick
-     of its entitlement (national draft, round and original club, as parser v3 states them), with a
-     pre-draft number in HPN's 1 to 90 (`aflTradeBoardPreDraftSlotOf`). The view is
-     `pick_projection_eventual_slot` with `slotSource: 'board_pre_draft_slot'` and the cited
-     `boardPickId`; it is a stated slot, so the leg carries no proxy reason. Nothing is matched by
-     holder: the board may name a later holder than the graded trail reaches (in batch twenty-nine,
-     4 of the 7 legs it changes end at Richmond while the board's holder is Gold Coast). No board
-     pick, several, a selected one, no number, or a number beyond 90 falls through to the proxy, and
-     like the proxy it never applies to a pick whose final order shows a slot, a disputed slot or
-     captures too close to tell apart (`heldOrderSlot`). The view itself enters no total, but like
-     any at-trade projection it is a rule v15 bundle weight and a rule v16 or v18 excluded-return
-     value, so a bundle or onward return holding such a leg (in practice an excluded
-     `pick_not_used_nominee_excluded` leg) moves by the difference between the stated slot's DPVC and
-     the proxy's, with no proxy reason. The contract refuses the source under rules v1 to v18,
-     requires `boardPickId` exactly with it, refuses it on a selected or projected leg, and the v19
-     limitation adds that such a pick reports the number a reviewed Footyinfo board states it held
-     before the draft, before any round-position proxy. Measured on batch twenty-nine: 7 of its 16
-     proxy views (three entitlements) gain a stated slot; the other 9 stay proxied, their board picks
-     stating no number, and the one view left unavailable (a 2023 R3 with no original club, whose
-     board pick was spent on a bid) is unchanged.
-
-   - **Grader.** `valuation/realizedTradeGrade.ts` is pure: it reads the candidate's trades, pick
-     custody (rule v6) and draft selections (rules v2 and v8), the special entitlement custody chain
-     (rule v7), v3 season
-     spells, the pinned PAV rows and current reviewed (v4) arrivals, and seals one batch. A first stint
-     starts the season after the trade (or after the draft, for a selected pick). It ends at the first
-     season covered by spells in which the player appears for another club; that season still counts at
-     this club if he played for it. Once the move's own arrival is reviewed, it also ends before a later
-     reviewed arrival at the same club, which is a delisted-and-redrafted second stint. Seasons the spells do not cover (2020) cannot show a
-     departure, so the stint runs through them and they are listed as missing PAV. A season with spells
-     but no PAV row for the club is worth 0. The stint's value is its signed PAV sum floored at 0
-     ("Signed PAV"). A stint none of whose seasons has a pinned PAV calculation
-     has no known value and blocks the leg (`hpn_pav_head_missing`), as does a selected pick whose draft
-     year is before the trade. A candidate with no trades at all is refused. A move without a reviewed arrival in the trade or draft
-     season or the season after is `arrival_unreviewed`. A traded-on pick follows the trail its `pickId`'s
-     transfers form: when exactly one ordering chains every transfer club to club with its trades in
-     time order, the onward trade is the next transfer on that trail (issue 867: a pick that leaves the
-     same club twice in one undated season). From rule v12 time order includes the Draftguru pick-trade
-     sequence, and several trails are narrowed to the one ending at the pick's latest custody holder
-     ("Ordering undated pick hops" above). Otherwise it links to the one later trade in which its
-     receiving club gave the same `pickId` away, never to an earlier one. No link, or more than one, is
-     `traded_on_return_unlinked`. A cycle, or an onward trade in which the side the leg needs is
-     unknown, is `traded_on_return_blocked` ("Club-scoped totals"). A player's at-trade view is his
-     PAV at the sending club in the trade season.
+   **Realized trade grade: retired (statlyaus/Statly#789, value-line method step 5).** The MVP
+   realized grade (`afl-trade-realized-trade-grade-batch/v1`, rules v1 to v19: first-stint legs,
+   traded-on returns, the relative-value, projection and hybrid bundle splits, projected pending and
+   excluded legs, and the at-trade views it sealed) is deleted with its command. Trades are now valued
+   on intrinsic value lines (`docs/architecture/afl-trade-value-line-method.md`): the trade structure
+   (`valuation/tradeStructure.ts`, `afl-trade-structure/v1`) holds the trades, legs and onward links
+   with no value, the value lines (`afl-trade-value-lines/v3`) value every asset at each checkpoint,
+   and the regrade is the value lines' per-club nets, which the trade story reads. Sealed batches stay
+   in evidence storage as history; nothing reads them. What the value lines still share from the
+   grader is kept under non-grade names: a pick's slot in the Official AFL order (rule v6) and its
+   stated pre-draft board number (rule v19) in `valuation/pickSlots.ts`, and the first-stint rule (a
+   stint ends in the first covered season the player appears for another club, or before a later
+   reviewed arrival once its own arrival is reviewed; uncovered seasons run through with their PAV
+   missing) in `valuation/stints.ts`. The candidate facts below are unchanged.
    - **Pick custody from the pre-draft order (issue 853).** A pick traded as a future pick is keyed
      by year, round and original club; once the order is published Draftguru records the same pick
      only as `Pick N`, so the onward trade never shared the first trade's `pickId` and the leg stayed
@@ -5574,7 +5024,7 @@ The remaining work proceeds through these independently verifiable gates:
          two must chain in time order. Members of another pick are left as they were, such as a pick
          a matched bid merged into the group. Where a walk reaches two custody picks and the route
          names every member's hop in order, the custody pick whose original club starts the route is
-         the pick. The board row is cited on every hop it keyed. The grader's traded-on rule is
+         the pick. The board row is cited on every hop it keyed. The trade structure's onward rule is
          unchanged: the re-keyed hops share one `pickId`, so the existing trail or later-trade link
          finds the onward trade. Nothing is inferred from a pick number. The number only joins two
          statements about one named player's selection.
@@ -5602,9 +5052,12 @@ The remaining work proceeds through these independently verifiable gates:
          candidate's selections are the only guards. Where an official session exists it alone
          proves the draft.
 
-       Rule v2 of the grade (below, "Single source") lifts `single_source_pick_outcome` for
-       outcomes that Draftguru and Footyinfo corroborate.
-   - **Inputs.** `development/postgresRealizedTradeGradeInputs.ts` loads them in one read-only,
+       Rule v2 of the retired grade lifted `single_source_pick_outcome` for outcomes that
+       Draftguru and Footyinfo corroborate; the trade structure names a route-corroborated trail
+       (`corroboratedBy: footyinfo`).
+   - **Inputs.** `development/postgresGradingInputs.ts` (`loadAflTradeGradingInputs`, types in
+     `valuation/gradingInputs.ts`) loads them for the asset ledger, the value lines and the
+     traded-player fit in one read-only,
      repeatable-read transaction, one query per table: the finalized non-production candidate (its
      content address re-checked), the current HPN PAV calculation per requested season from
      `outcome_hpn_pav_calculation_head`, those calculations' player rows (`total_pav` per player and
@@ -5617,10 +5070,10 @@ The remaining work proceeds through these independently verifiable gates:
      `outcome_acquisition_spell_registration_current`, agreed with this proxy on all 247 v4 arrivals
      (247/247, 15 min). After 0259 the same check took 2.5 min, still 247/247 (2026-10-09). Phase 4
      adds set-based currency. A season without a finalized current calculation is refused, never
-     guessed. Migration 0259 is not a grader dependency: the reader never calls the functions it
+     guessed. Migration 0259 is not a dependency: the reader never calls the functions it
      rewrites.
-   - **No letter grade.** The grade is the per-club net in `career_pav`. The Statly grade policy converts
-     probability distributions and does not apply. Asset letter grades stay prohibited.
+   - **No letter grade.** A trade's result is each club's value-line net. The Statly grade policy
+     converts probability distributions and does not apply. Asset letter grades stay prohibited.
 
 4. **Activate factual production independently.** Build the exact factual corpus and candidate,
    generate sealed public projections and exports, complete factual and operational review, activate

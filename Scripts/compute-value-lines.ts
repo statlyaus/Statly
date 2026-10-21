@@ -10,7 +10,7 @@ import {
   type AflTradeStoredEvidence,
 } from '../src/server/aflTradeIntelligence/development/localEvidenceStorage';
 import { loadAflTradeAssetLedgerLabels } from '../src/server/aflTradeIntelligence/development/postgresAssetLedgerLabels';
-import { loadAflTradeRealizedTradeGradeInputs } from '../src/server/aflTradeIntelligence/development/postgresRealizedTradeGradeInputs';
+import { loadAflTradeGradingInputs } from '../src/server/aflTradeIntelligence/development/postgresGradingInputs';
 import { loadAflTradePlayerSeasonGames } from '../src/server/aflTradeIntelligence/modeling/postgresPlayerSeasonGames';
 import {
   aflTradeTradedPlayerTradeLegs,
@@ -71,7 +71,7 @@ export interface ComputeValueLinesArguments extends GradingArguments {
 }
 
 /**
- * The grader's arguments, plus `--fit` (an absolute path), `--through-season` (one season) and the
+ * The shared grading arguments, plus `--fit` (an absolute path), `--through-season` (one season) and the
  * optional `--traded-player-fit` (an absolute path).
  */
 export function parseComputeValueLinesArguments(
@@ -218,7 +218,7 @@ export async function runComputeValueLinesCommand(input: {
   try {
     const client = createPgAflOutcomeSqlClient(pool);
     const now = new Date().toISOString();
-    const inputs = await loadAflTradeRealizedTradeGradeInputs(client, {
+    const inputs = await loadAflTradeGradingInputs(client, {
       candidateId: parsed.candidateId,
       methodId: parsed.methodId,
       seasons: parsed.seasons,

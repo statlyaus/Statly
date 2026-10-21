@@ -14,7 +14,8 @@ import {
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { parseAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import { isAflTradePickSideReconciliationIssue } from '@/server/aflTradeIntelligence/source/pickLineageDeferral';
-import { gradeAflTradesOnRealizedValue } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import { createAflTradeAssetLedger } from '@/server/aflTradeIntelligence/valuation/assetLedger';
+import { buildAflTradeStructure } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
 
 /**
  * Footyinfo draft-board picks read by reconciliation (statlyaus/Statly#853, #789): a board route
@@ -258,25 +259,35 @@ const pickIdOf = (transfer: ReturnType<typeof transferOf>) =>
 const boardEvidenceIds = (candidate: Candidate) =>
   (candidate.draftBoardPicks ?? []).flatMap(({ evidenceIds }) => evidenceIds);
 
-function gradeLeg(candidate: Candidate, transferId: string) {
-  return gradeAflTradesOnRealizedValue({
-    candidateId: `external-reconciliation:${digest('c')}`,
-    candidate,
-    pavCalculations: [2024, 2025].map((season) => ({
-      season,
-      calculationId: `hpn-pav-season:${season}`,
-      official: true,
-    })),
-    pav: [],
-    seasonSpells: [],
-    spellSeasons: [2024, 2025],
-    reviewedArrivals: [],
-    pickProjectionBenchmarkId: `hpn-pick-benchmark:${digest('b')}`,
-    spellCutoffAt: '2026-10-12T00:00:00.000Z',
-    gradedAt: '2026-10-12T02:00:00.000Z',
-  })
+const candidateId = `external-reconciliation:${digest('c')}`;
+function structureLeg(candidate: Candidate, transferId: string) {
+  return buildAflTradeStructure({ candidateId, candidate })
     .content.trades.flatMap(({ legs }) => legs)
     .find((leg) => leg.transferId === transferId)!;
+}
+
+/** The asset ledger's outcome for the pick a transfer carries. */
+function ledgerOutcome(candidate: Candidate, transfer: Candidate['transfers'][number]) {
+  const ledger = createAflTradeAssetLedger(
+    {
+      candidateId,
+      candidate,
+      pavCalculations: [2024, 2025].map((season) => ({
+        season,
+        calculationId: `hpn-pav-season:${season}`,
+        official: true,
+      })),
+      pav: [],
+      seasonSpells: [],
+      spellSeasons: [2024, 2025],
+      reviewedArrivals: [],
+      pickProjectionBenchmarkId: `hpn-pick-benchmark:${digest('b')}`,
+      spellCutoffAt: '2026-10-12T00:00:00.000Z',
+      gradedAt: '2026-10-12T02:00:00.000Z',
+    },
+    { players: [], clubs: [] }
+  );
+  return ledger.pickOutcome(pickIdOf(transfer)!);
 }
 
 // As 2019 #58 Ben Johnson's pick moved (STK → WCE → BRL → ESS → WCE): the first hop predates the
@@ -317,16 +328,19 @@ describe('Footyinfo board routes order an eventual-selection group (issue 853)',
     expect(transferOf(candidate, 'Port Adelaide', 'Richmond', 20).evidenceIds).toContain(boardRow);
   });
 
-  it('lets the grader follow an unlinked traded-on leg into its route-stated onward trade', () => {
-    const leg = (candidate: Candidate) =>
-      gradeLeg(candidate, transferOf(candidate, 'Port Adelaide', 'Richmond', 20).transferId);
-    expect(leg(reconcile(loop([20]))).reasons).toEqual(['traded_on_return_unlinked']);
-    // Linked to Richmond → West Coast. West Coast's received pick has no stated outcome here, so
-    // that trade is blocked; under rule v3 Richmond's own side (it received nothing) is known, so
-    // the leg is valued on it and partial.
-    expect(leg(reconcile(loop([20]), { board: [loopRoute] })).reasons).toEqual([
-      'traded_on_return_partial',
-    ]);
+  it('lets the trade structure follow an unlinked traded-on leg into its route-stated onward trade', () => {
+    const onward = (candidate: Candidate) =>
+      structureLeg(candidate, transferOf(candidate, 'Port Adelaide', 'Richmond', 20).transferId)
+        .onward;
+    expect(onward(reconcile(loop([20])))).toBeUndefined();
+    // Linked to Richmond → West Coast, the trail the board route states.
+    const linked = reconcile(loop([20]), { board: [loopRoute] });
+    expect(onward(linked)).toEqual({
+      kind: 'pick_trail',
+      transactionId: transferOf(linked, 'Richmond', 'West Coast', 30).transactionId,
+      transferId: transferOf(linked, 'Richmond', 'West Coast', 30).transferId,
+      corroboratedBy: 'footyinfo',
+    });
   });
 
   it('keys only the hops the route names when a matched bid merged another pick into the group', () => {
@@ -583,21 +597,14 @@ describe('Footyinfo passed and removed picks as not-used evidence (issue 853)', 
     }
   });
 
-  it('values the board-settled not-used pick at 0 in the grade', () => {
-    const transferIdOf = (candidate: Candidate) => candidate.transfers[0]!.transferId;
+  it('reads the board-settled not-used pick as passed, and never as 0 without the board', () => {
     const blocked = reconcile([futureTrade(), heldDraft]);
-    expect(gradeLeg(blocked, transferIdOf(blocked)).reasons).toEqual([
-      'not_used_no_access_evidence',
-    ]);
-    const settled = reconcile([futureTrade()], { board: [claim(passed())] });
-    expect(gradeLeg(settled, transferIdOf(settled))).toMatchObject({
-      state: 'valued',
-      basis: 'pick_not_used_no_nominee',
-      realizedValue: 0,
-      // Rule v2: the board corroborates Draftguru's "not used".
-      corroboratedBy: 'footyinfo',
-      reasons: [],
+    expect(ledgerOutcome(blocked, blocked.transfers[0]!)).toMatchObject({
+      kind: 'unresolved',
+      reason: 'not_used_no_access_evidence',
     });
+    const settled = reconcile([futureTrade()], { board: [claim(passed())] });
+    expect(ledgerOutcome(settled, settled.transfers[0]!)).toMatchObject({ kind: 'passed' });
   });
 
   it('conserves every board row, read or not, on its board-pick record', () => {

@@ -432,8 +432,8 @@ the spec above is applied; it changes none of the owner's rules.
   the trade's net is provisional.
 - **Traded-on picks.** A pick leg follows the trade structure's onward links (a pick trail, or a special
   entitlement's reviewed custody successor) to its final hop, so every trade it passed through carries
-  the same line. A link is followed whatever became of the onward trade: one the realized grader drops
-  when it blocks the leg is still followed. A later trade's own assets never change an earlier trade's
+  the same line. A link is followed whatever became of the onward trade, even when its other side cannot be
+  valued. A later trade's own assets never change an earlier trade's
   result (in the orange example, the pears' value leaves trade 1 unchanged; the orange's drafted player
   moves both).
 - **Refusals.** The fit, ledger and games read model must pin the same calculation per shared season
@@ -506,12 +506,17 @@ the spec above is applied; it changes none of the owner's rules.
    ledger (#971: prices, shares, leftover picks and deficits); the value lines value each spent pick by its
    share and the trade story reads them (step 5).
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
-   bundle split, then regrade on intrinsic value lines. In progress: the trade structure (trades, legs and onward links with no
-   value) is in place, the value lines read it (`afl-trade-value-lines/v3`, with each leg's points), and
-   the trade story reads the structure and value lines, not a realized grade: signed values at the latest
-   checkpoint (each leg at the point its trade's net counts), the at-trade view beside them, matched-bid shares and future picks valued, and each club's net on the trade alone as
-   the page headline (owner, 2026-10-21). Retiring grade rules v11 and v13 to v18 and the regrade are
-   still to come.
+   bundle split, then regrade on intrinsic value lines. Done (#789 step 5): the trade structure (trades,
+   legs and onward links with no value) is in place, the value lines read it (`afl-trade-value-lines/v3`,
+   with each leg's points), and the trade story reads the structure and value lines: signed values at
+   the latest checkpoint (each leg at the point its trade's net counts), the at-trade view beside them,
+   matched-bid shares and future picks valued, and each club's net on the trade alone as the page
+   headline (owner, 2026-10-21). The realized grade (rules v1 to v19: first-stint legs, traded-on
+   returns, the bundle and hybrid splits, the projected legs and the at-trade views it sealed) and its
+   command are deleted. The regrade is the value lines' per-club nets, which the trade story reads. The
+   pick-slot lookups (`valuation/pickSlots.ts`), the first-stint rule (`valuation/stints.ts`) and the
+   input loader (`development/postgresGradingInputs.ts`) are kept for the asset ledger, the trade
+   structure and the value lines.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
 7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
    is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence

@@ -7,12 +7,10 @@ import type {
   AflTradeAssetLedgerPickHop,
   AflTradeAssetLedgerPickIdentityField,
 } from './assetLedgerContracts';
-import {
-  partitionAflTradeRealizedTrades,
-  type AflTradeRealizedTradeGradeInputs,
-} from './realizedTradeGrade';
+import type { AflTradeGradingInputs } from './gradingInputs';
+import { partitionAflTradeTrades } from './tradeStructure';
 
-type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
+type Candidate = AflTradeGradingInputs['candidate'];
 type Transaction = Candidate['transactions'][number];
 type Transfer = Candidate['transfers'][number];
 
@@ -164,12 +162,12 @@ function pickTransfersByPick(candidate: Candidate, trades: ReadonlyMap<string, T
 
 /**
  * Each pick's trades, by pick id. Every trade hop is listed, even one whose club the candidate could
- * not resolve. The order is the grader's onward-transfer trail (`createAflTradePickOnwardTransfers`
- * over the grader's own graded trades, with the latest custody holder as tie-break) when that gives
- * one trail through every hop; a hop in a trade the grader does not grade never joins one.
+ * not resolve. The order is the trade structure's onward-transfer trail (`createAflTradePickOnwardTransfers`
+ * over its graded trades, with the latest custody holder as tie-break) when that gives one trail
+ * through every hop; a hop in a trade the structure does not hold never joins one.
  */
 export function aflTradeAssetLedgerPickTrails(
-  inputs: AflTradeRealizedTradeGradeInputs
+  inputs: AflTradeGradingInputs
 ): Map<string, AflTradeAssetLedgerPickTrail> {
   const { candidate } = inputs;
   const trades = new Map(
@@ -183,7 +181,7 @@ export function aflTradeAssetLedgerPickTrails(
       ...(transfersByTransaction.get(transfer.transactionId) ?? []),
       transfer,
     ]);
-  const graded = partitionAflTradeRealizedTrades(inputs, transfersByTransaction).transactions;
+  const graded = partitionAflTradeTrades(inputs, transfersByTransaction).transactions;
   const onwardOf = createAflTradePickOnwardTransfers(graded, candidate.transfers, {
     custodyHolders: aflTradePickCustodyHolders(candidate.pickCustody ?? []),
   });

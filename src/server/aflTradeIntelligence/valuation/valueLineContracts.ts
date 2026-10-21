@@ -2,9 +2,9 @@
  * The value-line contract (value-line method, implementation order step 3; statlyaus/Statly#789):
  * every traded asset's value line at each checkpoint, and each trade's per-club nets on those lines,
  * with each leg's at-trade view beside them. Private and publication-prohibited, like the asset ledger
- * and realized grades. v2 (step 5) reads its trades, legs and onward links from the trade structure
-(`afl-trade-structure/v1`), never a realized-trade-grade batch; v3 carries each trade leg's points at
-the trade's checkpoints, the values its nets count.
+ * and the retired realized grade. v2 (step 5) reads its trades, legs and onward links from the trade
+ * structure (`afl-trade-structure/v1`); v3 carries each trade leg's points at the trade's checkpoints,
+ * the values its nets count.
  */
 
 export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v3' as const;

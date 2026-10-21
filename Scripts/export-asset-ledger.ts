@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { Pool } from 'pg';
 
 import { loadAflTradeAssetLedgerLabels } from '../src/server/aflTradeIntelligence/development/postgresAssetLedgerLabels';
-import { loadAflTradeRealizedTradeGradeInputs } from '../src/server/aflTradeIntelligence/development/postgresRealizedTradeGradeInputs';
+import { loadAflTradeGradingInputs } from '../src/server/aflTradeIntelligence/development/postgresGradingInputs';
 import {
   storeLocalAflTradeEvidence,
   type AflTradeStoredEvidence,
@@ -17,7 +17,7 @@ import { parseGradingArguments, requireOutAbsent, writeStoredOutputFile } from '
 
 /**
  * Exports the private asset ledger (#789): every player's club stints and every pick's custody and
- * outcome, from one candidate's governed inputs (`loadAflTradeRealizedTradeGradeInputs`), as a
+ * outcome, from one candidate's governed inputs (`loadAflTradeGradingInputs`), as a
  * content-addressed JSON artifact in the registered store. It takes the shared grading arguments
  * (`gradingArguments.ts`); the one write is the ledger's evidence record, as the runbook section
  * "Exporting the asset ledger" describes.
@@ -65,7 +65,7 @@ export async function runExportAssetLedgerCommand(input: {
   try {
     const client = createPgAflOutcomeSqlClient(pool);
     const now = new Date().toISOString();
-    const inputs = await loadAflTradeRealizedTradeGradeInputs(client, {
+    const inputs = await loadAflTradeGradingInputs(client, {
       candidateId: parsed.candidateId,
       methodId: parsed.methodId,
       seasons: parsed.seasons,

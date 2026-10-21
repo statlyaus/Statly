@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildAflTradeRealizedTradeGradeInputs,
-  loadAflTradeRealizedTradeGradeInputs,
-  type AflTradeRealizedTradeGradeRows,
-} from '@/server/aflTradeIntelligence/development/postgresRealizedTradeGradeInputs';
+  buildAflTradeGradingInputs,
+  loadAflTradeGradingInputs,
+  type AflTradeGradingInputRows,
+} from '@/server/aflTradeIntelligence/development/postgresGradingInputs';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
 import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
@@ -92,7 +92,7 @@ const spell = (id: string, player: string, club: string, season: number, schema 
   season,
   schema,
 });
-const rows = (): AflTradeRealizedTradeGradeRows => ({
+const rows = (): AflTradeGradingInputRows => ({
   candidate: { candidate_json: candidate, environment: 'non_production', status: 'finalized' },
   heads: [head(2021), head(2022)],
   pav: [
@@ -123,9 +123,9 @@ const rows = (): AflTradeRealizedTradeGradeRows => ({
   ],
 });
 
-describe('realized trade grade inputs from PostgreSQL rows', () => {
+describe('grading inputs from PostgreSQL rows', () => {
   it('maps calculations, PAV, season spells and reviewed arrivals', () => {
-    const inputs = buildAflTradeRealizedTradeGradeInputs(options, rows());
+    const inputs = buildAflTradeGradingInputs(options, rows());
     expect(inputs.candidateId).toBe(candidate.candidateId);
     expect(inputs.pavCalculations).toEqual([
       { season: 2021, calculationId: 'hpn-pav-season:2021', official: true },
@@ -154,14 +154,12 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
       },
     ]);
     const { specialCustody: _unloaded, ...withoutCustody } = rows();
-    expect(
-      buildAflTradeRealizedTradeGradeInputs(options, withoutCustody).specialEntitlementCustody
-    ).toEqual([]);
+    expect(buildAflTradeGradingInputs(options, withoutCustody).specialEntitlementCustody).toEqual(
+      []
+    );
   });
 
-  it.each<
-    [string, (value: AflTradeRealizedTradeGradeRows) => AflTradeRealizedTradeGradeRows, RegExp]
-  >([
+  it.each<[string, (value: AflTradeGradingInputRows) => AflTradeGradingInputRows, RegExp]>([
     ['an unknown candidate', (value) => ({ ...value, candidate: undefined }), /Unknown candidate/],
     [
       'a candidate that is not finalized',
@@ -224,18 +222,18 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
       /sv-a is not bound to a current season spell/,
     ],
   ])('refuses %s', (_label, change, message) => {
-    expect(() => buildAflTradeRealizedTradeGradeInputs(options, change(rows()))).toThrow(message);
+    expect(() => buildAflTradeGradingInputs(options, change(rows()))).toThrow(message);
   });
 
   it('refuses empty or repeated seasons, and an official season outside them', () => {
+    expect(() => buildAflTradeGradingInputs({ ...options, seasons: [] }, rows())).toThrow(
+      /distinct seasons/
+    );
+    expect(() => buildAflTradeGradingInputs({ ...options, seasons: [2021, 2021] }, rows())).toThrow(
+      /distinct seasons/
+    );
     expect(() =>
-      buildAflTradeRealizedTradeGradeInputs({ ...options, seasons: [] }, rows())
-    ).toThrow(/distinct seasons/);
-    expect(() =>
-      buildAflTradeRealizedTradeGradeInputs({ ...options, seasons: [2021, 2021] }, rows())
-    ).toThrow(/distinct seasons/);
-    expect(() =>
-      buildAflTradeRealizedTradeGradeInputs({ ...options, officialSeasons: [2020] }, rows())
+      buildAflTradeGradingInputs({ ...options, officialSeasons: [2020] }, rows())
     ).toThrow(/official season must be one of the graded seasons/);
   });
 
@@ -262,7 +260,7 @@ describe('realized trade grade inputs from PostgreSQL rows', () => {
         return work({ query });
       },
     } as unknown as AflOutcomeSqlClient;
-    const inputs = await loadAflTradeRealizedTradeGradeInputs(client, options);
+    const inputs = await loadAflTradeGradingInputs(client, options);
     expect(transactions).toBe(1);
     expect(statements[0]!.sql).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     expect(statements[2]!.parameters).toEqual([options.methodId, options.seasons]);

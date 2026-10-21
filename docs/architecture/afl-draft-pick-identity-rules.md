@@ -40,10 +40,11 @@ not evidence of a merge: of 59 such ids, 19 are contradicted by any rule below.
 
 ## What reads pick ids
 
-- The realized grader uses a pick id for one thing: following a traded-on pick to its onward trade
-  (`realizedTradeGrade.ts`, the pick trail and the same-id fallback). A traded pick's outcome (selected,
+- The trade structure (`valuation/tradeStructure.ts`; the realized grader until #789 step 5 retired it)
+  uses a pick id for one thing: following a traded-on pick to its onward trade (the pick trail and the
+  same-id fallback, `source/pickOnwardTransfer.ts`). A traded pick's outcome (selected,
   not used, traded on) comes from Draftguru's per-transfer disposition matched by player, receiving club
-  and draft year, never from the pick id. The grader never reads a transfer's status.
+  and draft year, never from the pick id. The structure never reads a transfer's status.
 - The trail walk chains every transfer on one id from club to club, so two picks on one id can form one
   plausible trail and be followed without any signal.
 - The pick-side deferral treats `pick_identity_conflict` as pick-side for every subject key, but works out

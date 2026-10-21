@@ -38,7 +38,7 @@ import type { AflTradeTradedPlayerValuePoint } from '@/server/aflTradeIntelligen
 import type { AflTradeValueLineFitParameters } from '@/server/aflTradeIntelligence/modeling/valueLineFit';
 import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
 import { AflTradeValueLineReader } from '@/server/aflTradeIntelligence/valuation/valueLineAssets';
-import type { AflTradeRealizedTradeGradeInputs } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import type { AflTradeGradingInputs } from '@/server/aflTradeIntelligence/valuation/gradingInputs';
 
 import { readTradedPlayerValueLineFit } from '../../Scripts/compute-value-lines';
 import {
@@ -162,7 +162,7 @@ function model(rows: readonly Row[], seasons = range(FIRST_READ, LAST_SEASON)) {
   );
 }
 
-/** The ledger stint by the grader's rule, from appearances alone (no later reviewed arrival). */
+/** The ledger stint by the shared stint rule, from appearances alone (no later reviewed arrival). */
 function ledgerStint(
   games: AflTradePlayerSeasonGames,
   playerId: string,
@@ -1047,7 +1047,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     status: 'corroborated',
     evidenceIds: ['e'],
   });
-  const grader = {
+  const grading = {
     candidateId: 'external-reconciliation:x',
     candidate: {
       transactions: [
@@ -1087,7 +1087,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     pickProjectionBenchmarkId: 'not-read',
     spellCutoffAt: '2026-10-19T00:00:00.000Z',
     gradedAt: '2026-10-19T00:00:00.000Z',
-  } as unknown as AflTradeRealizedTradeGradeInputs;
+  } as unknown as AflTradeGradingInputs;
 
   it('takes each traded player leg with its ledger stint, and counts the unresolved ones', () => {
     const games = model(
@@ -1098,7 +1098,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       [2024, 2025]
     );
     const built = buildAflTradeTradedPlayerValueLineFitInputs({
-      grader,
+      grading,
       games,
       draftOrigins: [],
       tradeSeasons: [2024],
@@ -1120,7 +1120,7 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       'club_unresolved',
     ]);
     // The value lines' evaluator reads the same legs through the same rule.
-    const shared = aflTradeTradedPlayerTradeLegs(grader.candidate, [2024]);
+    const shared = aflTradeTradedPlayerTradeLegs(grading.candidate, [2024]);
     expect(shared.excludedLegs).toEqual(built.excludedLegs);
     expect(shared.legs).toEqual(
       built.legs.map(({ transferId, transactionId, tradeSeason, playerId, receivingClubId }) => ({

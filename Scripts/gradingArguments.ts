@@ -6,7 +6,7 @@ import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
 
 /**
  * The arguments and output helpers the #789 grading commands share: the candidate-input arguments
- * that `loadAflTradeRealizedTradeGradeInputs` reads (the asset ledger and the value lines take them),
+ * that `loadAflTradeGradingInputs` reads (the asset ledger and the value lines take them),
  * season lists, and the never-overwrite `--out` rule. Nothing here reads a database or grades.
  */
 
