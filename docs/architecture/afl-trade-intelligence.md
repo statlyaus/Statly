@@ -3953,44 +3953,58 @@ release, registered-reader availability, hosted operation, or publication readin
 user-facing private screen an unavailable package grade is `—`; detailed blocker and retry causes stay
 in backend evidence.
 
-### Realized trade story read model
+### Trade story read model
 
-`valuation/realizedTradeStory.ts` builds the data for the private realized trade page
-(statlyaus/Statly#789) from a realized-trade-grade batch. `buildAflTradeStory(batch, tradeId, names)`
-is pure: player, club, pick and transfer names are injected, and a missing name or onward leg fails the
-build rather than being guessed. It serves only the local private valuation reader ("Private trade
-page" below). Realized grades are
-publication-prohibited, so public pages stay on the publication runtime and never read this model.
+`valuation/realizedTradeStory.ts` builds the data for the private trade page (statlyaus/Statly#789)
+from a sealed trade structure and the sealed value lines computed on it
+([afl-trade-value-line-method.md](afl-trade-value-line-method.md), implementation order step 5). No
+realized grade is read. `buildAflTradeStory({ structure, valueLines }, tradeId, names)` is pure: club and
+player names and each pick transfer's label are injected, and a missing name, leg, line or onward leg
+fails the build rather than being guessed. It refuses value lines that are not
+`afl-trade-value-lines/v2`, do not match their content address, or were not computed on the given
+structure (`inputs.structureId`). It serves only the local private valuation reader ("Private trade
+page" below). Value lines are publication-prohibited, so public pages stay on the publication runtime
+and never read this model.
 
 It returns, for one trade:
 
-- **Trade and sides:** the trade's year and clubs, and for each club what it gave and received, with
-  each asset's label, what it became (player, club and draft slot, not used, or pending) and its value.
-- **Nets:** each club's net on the trade alone, and with its next moves. The linked trades are the
-  trade and, repeatedly, each later trade a club of the trade passed a pick it received into. A club's
-  chain is the linked trades it is a party to. Its chain net is the sum of its nets on those trades, so
-  a pick received and passed on cancels out.
+- **Trade, checkpoint and sides:** the trade's year and clubs, the checkpoint its values are read at (the
+  trade's latest net point, normally the last season end), the structure and value-lines ids, and for
+  each club what it gave and received, highest value first. Each asset has its label, what it became, its
+  value at the checkpoint and its value at the trade.
+- **Nets:** each club's net on this trade, with its at-trade net beside it, and secondary, with its next
+  moves. Both trade nets come straight from the value lines' per-club net points, so each trade is
+  zero-sum. The linked trades are the trade and, repeatedly, each later trade a club of the trade passed
+  a pick it received into. A club's chain is the linked trades it is a party to; its chain net is the sum
+  of its nets on those trades, so a pick received and passed on cancels out. Owner, 2026-10-21 ("This
+  trade alone"): the trade's own net is the headline; step 6 builds the chain view.
 - **Players:** what each club of the trade ended up with along its chain, then the ones that got away:
   assets those clubs gave that none of them kept. Each has its club, how it was acquired, its value and
-  whether the stint is still open.
+  whether the stint (or a matched-bid nominee's) is still open.
 - **Lineage:** the linked trades plus each later trade an asset of the trade passed through, with
-  per-trade nets, and each asset's hops from its first hop in the batch to its final leg. An earlier hop
-  can name a trade that is not listed.
+  per-trade nets, and each asset's hops from its first hop in the structure to its final leg, following
+  the structure's onward links (a pick trail, or a special entitlement's reviewed custody successor). An
+  earlier hop can name a trade that is not listed.
 - **Events:** always empty for now. An event (for example a premiership) needs a `sourceId` naming a
   reviewed source record; an unsourced event is never shown.
 
-**Intrinsic value.** Every asset has one value in every trade it passes through. A player is worth his
-first stint at the receiving club. A pick is worth what it became: the drafted player's first-stint PAV
-at the club that used it, whoever ended up holding it. The model follows a traded-on pick through its
-onward trades to its final leg, and a rule v7 special entitlement to its successor pick. It never reads
-the batch's traded-on return value, which belongs to the old return rule. Each trade is therefore
-zero-sum on its known values. A player traded on has a value per receiving club, so unlike a pick he
-does not cancel out along a chain.
+**Values.** Each leg reads the value line the value lines give it (`assetKey`), the same line in every
+trade a pick passes through. An asset's value is that line's point at the trade's checkpoint (its latest
+earlier point when the line has none there). Values are signed, never floored: a closed stint that cost
+value is negative, and sorts and draws accordingly, with a pending value after every known one. What the
+asset became follows the line: a drafted or traded player at his club (open or closed), a matched-bid
+share of the nominee (`pick_matched_bid_share`, valued), a pick whose draft is still to come (valued at
+its slot), not used (0), or pending. A player traded on has a line per receiving club, so unlike a pick
+he does not cancel out along a chain.
 
-**Pending.** A pick spent matching a bid (`pick_not_used_nominee_excluded`) has its value pending: never
-0 and never estimated. A pick with no outcome in evidence yet (`pick_projected_from_order`, whose
-projection the story never uses) and a blocked leg are pending too. Nets leave pending assets out and
-list them instead, each as received or given.
+**At-trade view.** Each leg's at-trade value and each club's at-trade net come from the value lines and
+are shown beside the result, never subtracted from it.
+
+**Pending.** A point with no value is pending with the line's own reason: a matched bid the board does
+not price (`matched_bid`), a draft not in evidence, an unknown slot, a traded player with no stored fit,
+or an unavailable leg. Nets leave pending assets out and list them, each as received or given, with its
+reason. The old realized grader's evidence flags (single source, arrival unreviewed and so on) are not
+carried (owner, 2026-10-21, "Drop for now").
 
 ### Asset ledger read model
 
@@ -4071,8 +4085,8 @@ a club spent matching a father-son, academy or next-generation-academy bid a sha
 proportion to the points it covered (`afl-trade-value-line-method.md`). The owner chose a swap in the
 trade story, not a grade rule: the grader never reads bid matches, and the ledger's `bidMatches[]`
 lists every board matched bid the candidate carries with its price and every spent pick's share. The
-trade story read model does not read the shares yet; it still shows a matched-bid pick as pending
-(the next step of #789).
+trade story reads each spent pick's share through the value lines (`pick_matched_bid_share`), so a
+priced matched-bid pick is valued and counted in the trade's nets.
 
 - **Price, by the draft year's AFL rule** (`valuation/matchedBidPriceRules.ts`). The bid's own `points`
   is the DVI of the bid slot (audited for every year against the AFL's figures). The board's bid-level
@@ -4219,8 +4233,8 @@ link whose onward trade leads back to its own trade.
 
 The realized grader builds its trades, legs and onward links from the same module
 (`createAflTradeStructureView`), so its output is unchanged. The value lines read their trades, legs and
-onward links from the structure (`afl-trade-value-lines/v2`, below); the trade story moves onto it in a
-later step 5 change.
+onward links from the structure (`afl-trade-value-lines/v2`, below), and the trade story reads the
+structure and those value lines (above).
 
 ### Value lines
 
@@ -4254,7 +4268,9 @@ player's stint at the receiving club, or an unresolved transfer), each trade's l
 views, and per club the at-trade net and the net at each draft and season end, provisional while a leg is
 pending. `npm run outcomes:grading:value-lines` (`Scripts/compute-value-lines.ts`) stores it as
 `derived_private` in repository `value-lines`. See the operations runbook, "Computing the value lines".
-The trade story does not read the value lines yet (implementation order step 5).
+The trade story reads them with their structure ("Trade story read model" above; implementation order
+step 5). `aflTradeValueLineNetPoint` is the per-club net rule, exported so sample value lines net the
+same way.
 
 ### Traded-player value-line fit
 
@@ -4293,27 +4309,30 @@ it as `derived_private` in repository `traded-player-value-line-fits`. See the o
 
 ### Private trade page
 
-The value-line trade page (statlyaus/Statly#789) renders one trade's realized story for the local
-private reader at `/dev/afl-trade-stories/<tradeId>`. It shows values in PAV, never letter grades.
+The value-line trade page (statlyaus/Statly#789) renders one trade's story ("Trade story read model"
+above) for the local private reader at `/dev/afl-trade-stories/<tradeId>`. It shows value lines in
+signed PAV, never letter grades.
 
 **What it renders.** `AflTradePageModel` (`valuation/realizedTradePageContracts.ts`) is the story, the
 season the values count to, a source label, and the asset ledger's matched bids that spent a pick of the
 story. The page computes no value of its own, so a refitted pick curve or a new season changes it with no
 code change. Top to bottom:
 
-- **Header:** a headline from the nets, each club's net with its next moves as the biggest text above
-  the timeline, and a deal strip: one line per club of what it gave, from the trade's sides.
-- **Scarf timeline:** a sidebar with each club's value now (as of the model's season), the chain's
-  trade and club counts and its biggest values; then the trade's highest-value players as club-coloured
-  panels in the order they arrived, each trade, other clubs' deals and draft of the chain pinned along
-  it, and each club's net at the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
+- **Header:** a headline from each club's net on this trade alone (owner, 2026-10-21, "This trade
+  alone"; a chain total never sets it), those nets as the biggest text above the timeline, and a deal
+  strip: one line per club of what it gave, highest value first, from the trade's sides.
+- **Scarf timeline:** a sidebar with each club's net on this trade now (as of the model's season), the
+  chain's trade and club counts and its biggest values; then the trade's highest-value players as
+  club-coloured panels in the order they arrived, each trade, other clubs' deals and draft of the chain
+  pinned along it, and each club's net on this trade at the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
   events slot shows the story's sourced events, which are empty for now.
-- **Trade details:** what each club gave, what every asset became, each club's net on the trade alone
-  and with its next moves. A net that leaves out a pending asset is starred.
+- **Trade details:** what each club gave, what every asset became, its value now and its value at the
+  trade beside it, and each club's net on this trade with its at-trade net beside it (never subtracted).
+  The net with each club's next moves follows as the secondary view. A net that leaves out a pending
+  asset is starred.
 - **Matched bids:** a pick spent matching a bid is shown as a swap. Its card gives the AFL price, a
-  points bar and table of the points each spent pick covered, the pick's share of the nominee and any
-  leftover pick. Wherever the pick appears, its value is its ledger share, starred. The story's nets
-  do not read shares yet, so totals leave them out and say so.
+  points bar and table of the points and share of the price each spent pick covered, the pick's value
+  (its value line: its share of the nominee's line) and any leftover pick. The share is in the totals.
 - **Players:** what each club ended up with, then the ones that got away, each with a still-at-club
   marker.
 - **Lineage:** each asset of the trade followed through every later trade to what it became, with a
@@ -4333,13 +4352,16 @@ included ("taken with pick 18"), and a pick label is capitalised only where it s
 **Boundary.** `development/privateTradeStoryReads.ts` is the only way in. It answers only when
 `NODE_ENV` is not `production`, `STATLY_ENABLE_DEV_TOOLS=true` and `AFL_TRADE_STORY_READER_ENABLED=true`,
 for the verified local development user (the development-auth fallback is not accepted). Anything else
-is not found. A unit test fails if any module outside the private route, the page components and the
-story read model imports them, so public pages stay on the publication runtime and keep showing
+is not found. A unit test fails if any module outside the private route, the page components, the
+sample modules, the story read model and the value lines imports them, so public pages stay on the publication runtime and keep showing
 `not_calculated` without an active publication.
 
-**Source.** Until the page reads a sealed batch and ledger, `development/tradeStorySamples.ts` serves the
-Jeremy Cameron chain (the story's test fixture) and Sam Darcy's 2021 matched bid, with shares from
-`aflTradeMatchedBidShares`. The page labels it as sample data.
+**Source.** Until the page reads sealed value lines and a ledger, `development/tradeStorySamples.ts`
+serves the Jeremy Cameron chain (the story's test fixture) and Sam Darcy's 2021 matched bid, with shares
+from `aflTradeMatchedBidShares`. The chain is a trade structure and value lines, sealed by
+`development/tradeStorySampleLines.ts`, which nets each sample trade with the value lines' own net rule:
+values at the 2026 season end are the mockups' first-stint PAV, and draft-night and at-trade values are
+illustrative, from a sample slot curve. The page labels it as sample data.
 
 ## Immutable publication
 

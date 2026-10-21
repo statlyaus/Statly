@@ -502,12 +502,16 @@ the spec above is applied; it changes none of the owner's rules.
    stints on the fit's own leg inputs. The calculator needs a v2 fit (its per-season `stageDigest` ties the re-read stages to the fit's), so genuine needs a
    refit before the value lines are computed with it.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
-   ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
+   ledger (#971: prices, shares, leftover picks and deficits); the value lines value each spent pick by its
+   share and the trade story reads them (step 5).
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
    bundle split, then regrade on intrinsic value lines. In progress: the trade structure (trades, legs and onward links with no
-   value) is in place, and the value lines read it (`afl-trade-value-lines/v2`); the trade story does not
-   yet.
+   value) is in place, the value lines read it (`afl-trade-value-lines/v2`), and the trade story reads the
+   structure and value lines, not a realized grade: signed values at the latest checkpoint, the at-trade
+   view beside them, matched-bid shares and future picks valued, and each club's net on the trade alone as
+   the page headline (owner, 2026-10-21). Retiring grade rules v11 and v13 to v18 and the regrade are
+   still to come.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
 7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
    is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence
-   architecture); it shows the story's values until value lines exist.
+   architecture); it reads sample value lines until sealed ones are served to it.
