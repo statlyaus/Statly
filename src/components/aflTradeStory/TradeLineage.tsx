@@ -105,7 +105,6 @@ export function TradeLineage({
         trade={trade}
         isThisTrade={trade.tradeId === story.trade.id}
         clubNames={clubNames}
-        shares={shares}
         headingRef={headingRef}
         onClose={() => show(null)}
       />
@@ -209,9 +208,7 @@ export function TradeLineage({
                           </Fragment>
                         ))}
                         <Connector
-                          dashed={
-                            asset.outcome.kind === 'player' && asset.outcome.clubId !== club.clubId
-                          }
+                          dashed={'clubId' in asset.outcome && asset.outcome.clubId !== club.clubId}
                         />
                         <Outcome
                           asset={asset}

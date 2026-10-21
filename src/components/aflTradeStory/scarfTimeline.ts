@@ -135,7 +135,7 @@ function draftSteps(story: AflTradeStory): ScarfStep[] {
     year.set(outcome.playerId, {
       name: surname(outcome.playerName),
       selection: outcome.selection.selectionNumber,
-      value: knownPav(asset.value) ?? -1,
+      value: knownPav(asset.value) ?? -Infinity,
       own: own.has(asset.assetId) || (year.get(outcome.playerId)?.own ?? false),
     });
     byYear.set(outcome.selection.draftYear, year);

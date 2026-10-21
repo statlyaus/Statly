@@ -144,13 +144,13 @@ describe('publication boundary', () => {
     );
   /** The private page's modules. Only each other and the private route may import them. */
   const PRIVATE_MODULE =
-    /from ['"][^'"]*(components\/aflTradeStory|privateTradeStoryReads|tradeStorySamples|tradeStorySampleChain|realizedTradePageContracts|realizedTradeStory|valuation\/valueLine)[^'"]*['"]/u;
+    /from ['"][^'"]*(components\/aflTradeStory|privateTradeStoryReads|tradeStorySamples|tradeStorySampleChain|tradeStorySampleLines|realizedTradePageContracts|realizedTradeStory|valuation\/valueLine)[^'"]*['"]/u;
   const ALLOWED = [
     /^app\/dev\/afl-trade-stories\//u,
     /^components\/aflTradeStory\//u,
-    /^server\/aflTradeIntelligence\/development\/(privateTradeStoryReads|tradeStorySamples|tradeStorySampleChain)\.ts$/u,
+    /^server\/aflTradeIntelligence\/development\/(privateTradeStoryReads|tradeStorySamples|tradeStorySampleChain|tradeStorySampleLines)\.ts$/u,
     /^server\/aflTradeIntelligence\/valuation\/realizedTrade(Story|StoryAssets|StoryContracts|PageContracts)\.ts$/u,
-    // The value lines (#789 step 3) are private output that reuses the story's trade index.
+    // The value lines (#789 step 3) are private output; the story (step 5) reads them.
     /^server\/aflTradeIntelligence\/valuation\/valueLine(s|Specs|Assets|Contracts|Slots)\.ts$/u,
   ];
 

@@ -9,18 +9,25 @@ import { TradePlayerCards } from './TradePlayerCards';
 import { TradeScarf } from './TradeScarf';
 import {
   bidSharesByPickId,
+  checkpointText,
   inSentence,
   netText,
+  netTone,
   storyClubNames,
   tradeName,
   type AflTradePageModel,
 } from './tradePageModel';
 
-/** "Geelong are ahead so far", or "Level so far" when no club is ahead by 0.1 or more. */
+/**
+ * "Geelong are ahead so far" on this trade alone (owner, 2026-10-21), or "Level so far" when the top
+ * two nets read the same to one decimal, as the chips show them. The chain's nets are secondary and
+ * never set the headline.
+ */
 export function headline(model: AflTradePageModel): string {
-  const nets = [...model.story.nets.withNextMoves].sort((left, right) => right.net - left.net);
+  const nets = [...model.story.nets.tradeAlone].sort((left, right) => right.net - left.net);
   const [first, second] = nets;
-  if (!first || (second && Math.abs(first.net - second.net) < 0.05)) return 'Level so far';
+  const shown = (net: number) => Number(net.toFixed(1));
+  if (!first || (second && shown(first.net) === shown(second.net))) return 'Level so far';
   return `${first.clubName} are ahead so far`;
 }
 
@@ -33,10 +40,11 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   const { story, throughSeason, bidMatches } = model;
   const clubNames = storyClubNames(story);
   const shares = bidSharesByPickId(bidMatches);
-  const pendingCount = Math.max(
-    0,
-    ...story.nets.withNextMoves.map(({ pendingCount }) => pendingCount)
+  const pendingNow = [...story.nets.tradeAlone, ...story.nets.withNextMoves].some(
+    ({ pendingCount }) => pendingCount > 0
   );
+  // The at-trade view is starred too when a leg's at-trade value is not in yet.
+  const pendingAtTrade = story.nets.tradeAlone.some(({ atTrade }) => atTrade.pendingCount > 0);
 
   return (
     <div className="afl-trade-story min-h-screen">
@@ -56,16 +64,14 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           <p className="mt-1 ts-body text-(--ts-ink2)">
             {tradeName(story.trade.clubs)} trade, {story.trade.year}
           </p>
-          <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s value so far">
-            {story.nets.withNextMoves.map((net) => (
+          <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s net on this trade">
+            {story.nets.tradeAlone.map((net) => (
               <li
                 key={net.clubId}
                 className="flex items-center gap-2.5 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-3.5 py-2"
               >
                 <ClubBadge clubName={net.clubName} named />
-                <b
-                  className={`ts-net font-semibold tabular-nums ${net.net < 0 ? 'text-(--ts-neg)' : 'text-(--ts-pos)'}`}
-                >
+                <b className={`ts-net font-semibold tabular-nums ${netTone(net.net)}`}>
                   {netText(net)}
                 </b>
                 <span className="ts-small text-(--ts-ink2)">{net.clubName}</span>
@@ -82,8 +88,10 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
             ))}
           </ul>
           <p className="mt-3 max-w-[68ch] text-(--ts-ink2)">
-            Values are PAV (Player Approximate Value) to {throughSeason}: what each player has given
-            the club that drafted or traded for him.
+            Values are PAV (Player Approximate Value) value lines at{' '}
+            {checkpointText(story.checkpoint)}: what each player has given the club that drafted or
+            traded for him, plus what a stint still open is expected to add. A pick whose draft is
+            to come is valued at its slot.
           </p>
         </header>
 
@@ -98,10 +106,13 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-(--ts-ink2)">
           <p>
             PAV (Player Approximate Value): what each player has given the club that drafted or
-            traded for him, to {throughSeason}.
+            traded for him to {throughSeason}, plus what an open stint is expected to add. A pick
+            used to match a bid is worth its share of the player.
           </p>
-          {pendingCount > 0 ? (
-            <p>* Totals leave out bid-match shares and values not in yet, so they will move.</p>
+          {pendingNow ? (
+            <p>* Totals leave out values not in yet, so they will move.</p>
+          ) : pendingAtTrade ? (
+            <p>* Totals leave out values not in yet.</p>
           ) : null}
           <p>Players still at their club: values will move. Club colours only, no club marks.</p>
         </footer>

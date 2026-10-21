@@ -3,10 +3,11 @@
  * every traded asset's value line at each checkpoint, and each trade's per-club nets on those lines,
  * with each leg's at-trade view beside them. Private and publication-prohibited, like the asset ledger
  * and realized grades. v2 (step 5) reads its trades, legs and onward links from the trade structure
-(`afl-trade-structure/v1`), never a realized-trade-grade batch.
+(`afl-trade-structure/v1`), never a realized-trade-grade batch; v3 carries each trade leg's points at
+the trade's checkpoints, the values its nets count.
  */
 
-export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v2' as const;
+export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v3' as const;
 
 /**
  * Every choice step 3 makes where the method left one open. Published with the result; each is a
@@ -140,6 +141,12 @@ export interface AflTradeValueLineTradeLeg {
   readonly receivingClubId: string;
   /** The asset's value at this trade, from this leg's own at-trade slot for a pick. */
   readonly atTrade: AflTradeValueLinePoint;
+  /**
+   * The asset's value at each of the trade's checkpoints, aligned with each club's `points`: exactly
+   * the values the nets count (v3). A checkpoint another leg brings (a draft) is read on this line too,
+   * so a reader never derives a leg's value from the line's own points.
+   */
+  readonly points: readonly AflTradeValueLinePoint[];
 }
 
 export interface AflTradeValueLineNetPoint {

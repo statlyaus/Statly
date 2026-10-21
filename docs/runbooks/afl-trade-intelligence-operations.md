@@ -3676,7 +3676,8 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 - `--out` is never overwritten. The printed line has the value-lines id, its inputs and its summary
   (assets by basis, assets pending at the last season end, trades with a provisional net), and the
   stored `artifactId`. It is stored as `derived_private` in repository `value-lines`. The printed
-  `inputs.structureId` names the trade structure it read (`afl-trade-value-lines/v2`).
+  `inputs.structureId` names the trade structure it read (`afl-trade-value-lines/v3`; a v2 file has
+  no per-leg points and the trade story refuses it, so recompute).
 - `--traded-player-fit` (optional) is the `--out` file of "Fitting the traded-player value line" (the
   fit must be `afl-trade-traded-player-value-line-fit/v2`: the stored `044703d9…` is v1, has no per-season
   stage digest and is refused, so refit on genuine first); its schema and content address are checked

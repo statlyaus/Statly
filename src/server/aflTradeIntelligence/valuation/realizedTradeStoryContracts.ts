@@ -1,76 +1,42 @@
+import type { AflTradeStructure } from './tradeStructureContracts';
 import type {
-  AflTradeRealizedTradeGradeBatch,
-  AflTradeRealizedTradeGradeLeg,
-} from './realizedTradeGradeContracts';
+  AflTradeValueLineCheckpoint,
+  AflTradeValueLinePendingReason,
+  AflTradeValueLines,
+  AflTradeValueLineSlotSource,
+} from './valueLineContracts';
 
 /**
- * The realized trade story read model's input and output types. The story serves only the local
- * private valuation reader: realized grades are publication-prohibited.
+ * The trade story read model's input and output types (value-line method step 5,
+ * statlyaus/Statly#789). The story reads a trade structure and the value lines computed on it, never
+ * a realized grade. It serves only the local private valuation reader: value lines are
+ * publication-prohibited.
  */
 
-/** The leg fields the story reads. Every realized-trade-grade leg is assignable to it. */
-export interface AflTradeStoryLeg {
-  readonly transferId: string;
-  readonly assetKind: 'player' | 'pick';
-  readonly sendingClubId: string;
-  readonly receivingClubId: string;
-  readonly basis: AflTradeRealizedTradeGradeLeg['basis'];
-  /** Read only for a first-stint leg. A traded-on leg's value is never read (old return rule). */
-  readonly realizedValue?: number;
-  readonly stint?: { readonly status: 'closed' | 'open' };
-  readonly onward?: { readonly transactionId: string };
-  readonly onwardTransactionId?: string;
-  /** Rule v7: a special entitlement's next hop is its successor transfer, an ordinary pick. */
-  readonly specialEntitlement?: { readonly successorTransferId: string };
-}
-
-export interface AflTradeStoryTrade {
-  readonly transactionId: string;
-  readonly tradeYear: number;
-  readonly clubs: readonly { readonly clubId: string }[];
-  readonly legs: readonly AflTradeStoryLeg[];
-}
-
-/** The batch fields the story reads. A realized-trade-grade batch is assignable to it. */
-export interface AflTradeStoryBatch {
-  readonly content: { readonly trades: readonly AflTradeStoryTrade[] };
-}
-
-type ReadableAsStoryBatch<Batch extends AflTradeStoryBatch> = Batch;
-/** A sealed realized-trade-grade batch. This alias stops compiling if the story cannot read one. */
-export type AflTradeStoryGradeBatch = ReadableAsStoryBatch<AflTradeRealizedTradeGradeBatch>;
-
-/** The asset one transfer moved: a player, or a pick with its label at that transfer. */
-export type AflTradeStoryTransferAsset =
-  | { readonly kind: 'player'; readonly playerId: string }
-  | { readonly kind: 'pick'; readonly pickId: string; readonly label: string };
-
-/** The player a pick was used on, and where. */
-export interface AflTradeStorySelection {
-  readonly playerId: string;
-  readonly selectionNumber: number;
-  readonly draftYear: number;
+/** What the story reads: a sealed trade structure and the sealed value lines computed on it. */
+export interface AflTradeStoryLines {
+  readonly structure: AflTradeStructure;
+  readonly valueLines: AflTradeValueLines;
 }
 
 /** Injected names, so the builder stays pure. A missing name fails the build, never guesses. */
 export interface AflTradeStoryNames {
   readonly clubs: ReadonlyMap<string, string>;
   readonly players: ReadonlyMap<string, string>;
-  /** Each used pick by pick id: the selection it was used on. */
-  readonly picks: ReadonlyMap<string, AflTradeStorySelection>;
-  /** Each transfer by transfer id: the asset it moved. */
-  readonly transfers: ReadonlyMap<string, AflTradeStoryTransferAsset>;
+  /**
+   * Each transfer's label by transfer id: how that transfer names its pick. A player leg without one
+   * is labelled with the player's name.
+   */
+  readonly labels: ReadonlyMap<string, string>;
 }
 
-/**
- * Why an asset has no value yet. `matched_bid`: the pick was spent matching a bid, so its value is
- * pending, never 0 and never estimated. `draft_not_in_evidence`: no outcome is in evidence yet
- * (the grader projected it from the draft order, which the story never uses).
- * `unavailable`: the grader blocked the leg its value rests on.
- */
-export type AflTradeStoryPendingReason = 'matched_bid' | 'draft_not_in_evidence' | 'unavailable';
+/** Why an asset has no value: the value line's own reason. Never 0, never estimated. */
+export type AflTradeStoryPendingReason = AflTradeValueLinePendingReason;
 
-/** An asset's one intrinsic value, in first-stint PAV, the same in every trade it passes through. */
+/**
+ * An asset's value in signed first-stint HPN PAV, read from its value line: never floored, so a
+ * closed stint that cost value is negative.
+ */
 export type AflTradeStoryValue =
   | { readonly kind: 'known'; readonly pav: number }
   | { readonly kind: 'pending'; readonly pending: AflTradeStoryPendingReason };
@@ -80,7 +46,11 @@ export interface AflTradeStoryClub {
   readonly clubName: string;
 }
 
-/** What an asset became: a player at a club (with his draft slot for a pick), nothing, or pending. */
+/**
+ * What an asset became, by its value line: a player at a club (with his draft slot for a pick), a
+ * matched-bid share of the nominee, a pick whose draft is still to come (valued at its slot), nothing,
+ * or pending (the line's reason). An asset's value is pending exactly when its outcome is.
+ */
 export type AflTradeStoryOutcome =
   | (AflTradeStoryClub & {
       readonly kind: 'player';
@@ -90,6 +60,22 @@ export type AflTradeStoryOutcome =
       /** `open`: still at the club, so the value will move. */
       readonly stint: 'open' | 'closed';
     })
+  | (AflTradeStoryClub & {
+      readonly kind: 'bid_share';
+      /** The matched-bid nominee. */
+      readonly playerId: string;
+      readonly playerName: string;
+      /** The pick's share of the nominee's line, by the points it covered. */
+      readonly share: number;
+      readonly stint: 'open' | 'closed';
+    })
+  | {
+      readonly kind: 'pick';
+      readonly draftYear: number;
+      /** The slot the line reads before the draft: its latest hop's at-trade slot. */
+      readonly selectionNumber: number;
+      readonly source: AflTradeValueLineSlotSource;
+    }
   | { readonly kind: 'not_used' }
   | { readonly kind: 'pending'; readonly pending: AflTradeStoryPendingReason };
 
@@ -98,11 +84,16 @@ export interface AflTradeStoryAsset {
   readonly assetKind: 'player' | 'pick';
   /** The player or pick id, stable across every trade the asset passes through. */
   readonly assetId: string;
+  /** The value line this leg reads: the same for every hop of a pick. */
+  readonly assetKey: string;
   readonly label: string;
   readonly fromClubId: string;
   readonly toClubId: string;
   readonly outcome: AflTradeStoryOutcome;
+  /** The value line at the story's checkpoint. */
   readonly value: AflTradeStoryValue;
+  /** The value at this trade: shown beside the result, never subtracted from it. */
+  readonly atTrade: AflTradeStoryValue;
 }
 
 export interface AflTradeStorySide extends AflTradeStoryClub {
@@ -113,23 +104,36 @@ export interface AflTradeStorySide extends AflTradeStoryClub {
   readonly receivedPendingCount: number;
 }
 
+/** A pending asset a net leaves out: this hop's asset id, the direction and the line's reason. */
+export interface AflTradeStoryPendingAsset {
+  readonly assetId: string;
+  /** The value line it reads, so a pick received and passed on cancels out. */
+  readonly assetKey: string;
+  readonly direction: 'received' | 'given';
+  readonly reason: AflTradeStoryPendingReason;
+}
+
 export interface AflTradeStoryNet extends AflTradeStoryClub {
-  /** Known values received minus known values given. */
+  /** Known values received minus known values given, from the value lines. */
   readonly net: number;
-  /**
-   * Pending assets the net leaves out, each as this hop's asset id and whether the club received or
-   * gave it. A pick received and passed on cancels out.
-   */
+  /** Pending assets the net leaves out. A pick received and passed on cancels out. */
   readonly pendingCount: number;
-  readonly pending: readonly {
-    readonly assetId: string;
-    readonly direction: 'received' | 'given';
-  }[];
+  readonly pending: readonly AflTradeStoryPendingAsset[];
+}
+
+/** A club's net on one trade, with the at-trade view beside it (never subtracted). */
+export interface AflTradeStoryTradeNet extends AflTradeStoryNet {
+  readonly atTrade: {
+    readonly net: number;
+    readonly pendingCount: number;
+    readonly pending: readonly AflTradeStoryPendingAsset[];
+  };
 }
 
 /**
  * A club's net over its chain: the linked trades it is a party to. The linked trades are the story's
  * trade and, repeatedly, each later trade a club of the story's trade passed a received pick into.
+ * Secondary to the trade's own net (owner, 2026-10-21); step 6 builds the chain view.
  */
 export interface AflTradeStoryChainNet extends AflTradeStoryNet {
   readonly tradeIds: readonly string[];
@@ -139,15 +143,19 @@ export interface AflTradeStoryPlayer extends AflTradeStoryClub {
   /** `ended_with`: a club of this trade holds it; `got_away`: one of them gave it and lost it. */
   readonly group: 'ended_with' | 'got_away';
   readonly assetId: string;
-  /** How the club got it: the trade, the club it came from, and the pick label for a pick. */
+  /**
+   * How the club got it: the trade, the club it came from, the asset's label (a player's name for a
+   * player leg), and the pick label for a pick.
+   */
   readonly acquired: {
     readonly tradeId: string;
     readonly fromClubId: string;
+    readonly label: string;
     readonly pickLabel: string | null;
   };
   readonly outcome: AflTradeStoryOutcome;
   readonly value: AflTradeStoryValue;
-  /** True while the player's first stint at the club is open. */
+  /** True while the player's (or nominee's) first stint at the club is open. */
   readonly stillAtClub: boolean;
 }
 
@@ -163,7 +171,7 @@ export interface AflTradeStoryLineageTrade {
   readonly tradeId: string;
   readonly year: number;
   readonly clubs: readonly AflTradeStoryClub[];
-  readonly nets: readonly AflTradeStoryNet[];
+  readonly nets: readonly AflTradeStoryTradeNet[];
   readonly assets: readonly AflTradeStoryAsset[];
 }
 
@@ -194,9 +202,15 @@ export interface AflTradeStory {
     readonly year: number;
     readonly clubs: readonly AflTradeStoryClub[];
   };
+  /** The checkpoint the values are read at: the trade's latest, normally the last season end. */
+  readonly checkpoint: AflTradeValueLineCheckpoint;
+  /** Where the values came from. */
+  readonly inputs: { readonly structureId: string; readonly valueLinesId: string };
   readonly sides: readonly AflTradeStorySide[];
   readonly nets: {
-    readonly tradeAlone: readonly AflTradeStoryNet[];
+    /** The headline: each club's net on this trade only (owner, 2026-10-21). */
+    readonly tradeAlone: readonly AflTradeStoryTradeNet[];
+    /** Secondary: each club's net over its chain. */
     readonly withNextMoves: readonly AflTradeStoryChainNet[];
   };
   readonly players: readonly AflTradeStoryPlayer[];
@@ -206,7 +220,7 @@ export interface AflTradeStory {
      * first. A `before` hop of an asset can name a trade not listed here.
      */
     readonly trades: readonly AflTradeStoryLineageTrade[];
-    /** Each asset of the story's trade, hop by hop, to its final selection or pending value. */
+    /** Each asset of the story's trade, hop by hop, to what it became. */
     readonly assets: readonly AflTradeStoryLineageAsset[];
   };
   /** Always empty until sourced events exist. */

@@ -59,9 +59,12 @@ export const formatPercent = (share: number) => `${(share * 100).toFixed(1)}%`;
 
 export const knownPav = (value: AflTradeStoryValue) => (value.kind === 'known' ? value.pav : null);
 
+/** Each value line's pending reason, in a few words. */
 export const PENDING_TEXT: Record<AflTradeStoryPendingReason, string> = {
-  matched_bid: 'used to match a bid',
+  matched_bid: 'used to match a bid not priced yet',
   draft_not_in_evidence: 'draft result not in yet',
+  slot_unknown: 'pick slot not known yet',
+  traded_player_fit_not_stored: 'estimate not in yet',
   unavailable: 'value not available yet',
 };
 
@@ -115,18 +118,20 @@ export function bidSharesByPickId(
   return shares;
 }
 
-/** The share a pick spent matching a bid took, if the ledger joined it. */
+/** The ledger's matched bid a pick was spent on, if the pick's value line is a share of it. */
 export function bidShareOf(
-  asset: Pick<AflTradeStoryAsset, 'assetId' | 'value'>,
+  asset: Pick<AflTradeStoryAsset, 'assetId' | 'outcome'>,
   shares: ReadonlyMap<string, AflTradePageBidShare>
 ): AflTradePageBidShare | null {
-  if (asset.value.kind !== 'pending' || asset.value.pending !== 'matched_bid') return null;
+  if (asset.outcome.kind !== 'bid_share') return null;
   return shares.get(asset.assetId) ?? null;
 }
 
-/** The PAV a matched-bid pick's share is worth, from the ledger; null while the bid is unpriced. */
-export const bidShareValue = (share: AflTradePageBidShare | null) =>
-  share?.bid.match.spentPicks[share.spentIndex]?.value ?? null;
+/** A value: a known PAV (a matched-bid share to 2 decimals), else null. */
+export function valueText(value: AflTradeStoryValue, outcome?: AflTradeStoryAsset['outcome']) {
+  if (value.kind !== 'known') return null;
+  return formatPav(value.pav, outcome?.kind === 'bid_share' ? 2 : 1);
+}
 
 /** A pick label inside a sentence: "pick 13", capitalised only where a label starts a line. */
 export const inSentence = (label: string) => label.replace(/^Pick\b/u, 'pick');
@@ -134,6 +139,20 @@ export const inSentence = (label: string) => label.replace(/^Pick\b/u, 'pick');
 /** "Geelong ⇄ GWS". */
 export const tradeName = (clubs: readonly { clubName: string }[]) =>
   clubs.map(({ clubName }) => clubName).join(' ⇄ ');
+
+/** A net's ink: neutral when it reads 0.0, so a level net is never painted ahead or behind. */
+export const netTone = (value: number) =>
+  Number(Math.abs(value).toFixed(1)) === 0
+    ? 'text-(--ts-ink)'
+    : value < 0
+      ? 'text-(--ts-neg)'
+      : 'text-(--ts-pos)';
+
+/** Where the story read its values: "the end of 2026", "the 2026 draft", "the 2026 trade period". */
+export function checkpointText({ kind, season }: AflTradeStory['checkpoint']): string {
+  if (kind === 'season_end') return `the end of ${season}`;
+  return kind === 'draft' ? `the ${season} draft` : `the ${season} trade period`;
+}
 
 /** A net's value, starred when pending assets are left out. */
 export const netText = (net: Pick<AflTradeStoryNet, 'net' | 'pendingCount'>) =>
@@ -160,6 +179,9 @@ export function becameText(asset: AflTradeStoryAsset, clubNames: ReadonlyMap<str
   const { outcome } = asset;
   if (outcome.kind === 'not_used') return 'not used';
   if (outcome.kind === 'pending') return PENDING_TEXT[outcome.pending];
+  if (outcome.kind === 'pick')
+    return `${outcome.draftYear} draft to come, valued at pick ${outcome.selectionNumber}`;
+  if (outcome.kind === 'bid_share') return 'used to match a bid';
   if (asset.assetKind === 'player') return `first stint at ${outcome.clubName}`;
   const elsewhere = outcome.clubId !== asset.toClubId;
   return `became ${outcome.playerName}${elsewhere ? ` (at ${clubNames.get(outcome.clubId) ?? outcome.clubName})` : ''}`;
