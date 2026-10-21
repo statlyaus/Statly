@@ -57,8 +57,7 @@ function PlayerCard({
 }) {
   const value = knownPav(player.value);
   const { outcome } = player;
-  const name =
-    outcome.kind === 'player' ? outcome.playerName : (player.acquired.pickLabel ?? 'Pick');
+  const name = outcome.kind === 'player' ? outcome.playerName : player.acquired.label;
   const away = player.group === 'got_away';
   const share = bidShareOf(player, shares);
   const holder = outcome.kind === 'player' || outcome.kind === 'bid_share' ? outcome : null;

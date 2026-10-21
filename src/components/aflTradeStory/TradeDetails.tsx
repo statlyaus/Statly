@@ -13,6 +13,7 @@ import {
   formatPav,
   formatSigned,
   netText,
+  netTone,
   type AflTradePageBidShare,
 } from './tradePageModel';
 
@@ -71,9 +72,7 @@ function NetRow({ net, note }: { net: AflTradeStoryNet; note?: string }) {
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
       <ClubBadge clubName={net.clubName} />
-      <span
-        className={`ts-head font-semibold tabular-nums ${net.net < 0 ? 'text-(--ts-neg)' : 'text-(--ts-pos)'}`}
-      >
+      <span className={`ts-head font-semibold tabular-nums ${netTone(net.net)}`}>
         {netText(net)}
       </span>
       {note ? <span className="ts-small text-(--ts-ink2)">{note}</span> : null}
@@ -101,7 +100,7 @@ export function TradeDetails({
     ...story.sides.flatMap(({ gave }) => gave),
     ...story.players.map((player) => ({
       ...player,
-      label: player.acquired.pickLabel ?? 'Pick',
+      label: player.acquired.label,
     })),
   ]
     .flatMap(({ assetId, label, value, outcome }) => {

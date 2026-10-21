@@ -140,6 +140,20 @@ export const inSentence = (label: string) => label.replace(/^Pick\b/u, 'pick');
 export const tradeName = (clubs: readonly { clubName: string }[]) =>
   clubs.map(({ clubName }) => clubName).join(' ⇄ ');
 
+/** A net's ink: neutral when it reads 0.0, so a level net is never painted ahead or behind. */
+export const netTone = (value: number) =>
+  Number(Math.abs(value).toFixed(1)) === 0
+    ? 'text-(--ts-ink)'
+    : value < 0
+      ? 'text-(--ts-neg)'
+      : 'text-(--ts-pos)';
+
+/** Where the story read its values: "the end of 2026", "the 2026 draft", "the 2026 trade period". */
+export function checkpointText({ kind, season }: AflTradeStory['checkpoint']): string {
+  if (kind === 'season_end') return `the end of ${season}`;
+  return kind === 'draft' ? `the ${season} draft` : `the ${season} trade period`;
+}
+
 /** A net's value, starred when pending assets are left out. */
 export const netText = (net: Pick<AflTradeStoryNet, 'net' | 'pendingCount'>) =>
   `${formatSigned(net.net)}${net.pendingCount > 0 ? '*' : ''}`;

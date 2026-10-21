@@ -219,6 +219,69 @@ describe('private trade page: the headline', () => {
     expect(headline(flipped)).toBe('Geelong are ahead so far');
     expect(headline(model(TRADE.wbdNth))).toBe('North Melbourne are ahead so far');
   });
+
+  it('calls a trade level when its nets read 0.0, in neutral ink', () => {
+    const cameron = model(TRADE.cameron);
+    const level: AflTradePageModel = {
+      ...cameron,
+      story: {
+        ...cameron.story,
+        nets: {
+          ...cameron.story.nets,
+          tradeAlone: cameron.story.nets.tradeAlone.map((net, at) => ({
+            ...net,
+            net: at === 0 ? 0.03 : -0.03,
+          })),
+        },
+      },
+    };
+    expect(headline(level)).toBe('Level so far');
+    render(<AflTradeStoryPage model={level} />);
+    const chips = screen.getByRole('list', { name: 'Each club’s net on this trade' });
+    for (const value of within(chips).getAllByText('0.0')) {
+      expect(value.className).not.toMatch(/ts-(pos|neg)/u);
+    }
+  });
+
+  it('names the checkpoint the values were read at', () => {
+    const cameron = model(TRADE.cameron);
+    const atDraft: AflTradePageModel = {
+      ...cameron,
+      story: { ...cameron.story, checkpoint: { kind: 'draft', season: 2026 } },
+    };
+    render(<AflTradeStoryPage model={atDraft} />);
+    expect(screen.getByText(/value lines at the 2026 draft:/u)).toBeInTheDocument();
+  });
+});
+
+describe('private trade page: values not in yet', () => {
+  it('names a pending traded player on his card, never "Pick"', () => {
+    const cameron = model(TRADE.cameron);
+    const pending = { kind: 'pending', pending: 'traded_player_fit_not_stored' } as const;
+    const withPending: AflTradePageModel = {
+      ...cameron,
+      story: {
+        ...cameron.story,
+        players: cameron.story.players.map((player) =>
+          player.assetId === cameron.story.players[0]!.assetId
+            ? { ...player, outcome: pending, value: pending, stillAtClub: false }
+            : player
+        ),
+      },
+    };
+    render(<AflTradeStoryPage model={withPending} />);
+    const players = section('Who they ended up with');
+    const card = within(players).getByRole('heading', { name: /Jeremy Cameron/u }).parentElement!;
+    expect(textOf(card)).toContain('From GWS. Estimate not in yet.');
+  });
+
+  it('gives an at-trade value not in yet its reason, and footnotes an at-trade star', () => {
+    renderPage(TRADE.cameron);
+    const details = section('Trade details');
+    expect(textOf(details)).toContain('at the trade +28.1*');
+    expect(textOf(details)).toMatch(/at the trade pick slot not known yet/u);
+    expect(screen.getByText(/^\* Totals leave out values not in yet/u)).toBeInTheDocument();
+  });
 });
 
 describe('private trade page: the lineage map', () => {
