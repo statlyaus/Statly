@@ -28,7 +28,7 @@ import type { AflTradeValueLineFit } from '../src/server/aflTradeIntelligence/mo
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createAflTradeAssetLedger } from '../src/server/aflTradeIntelligence/valuation/assetLedger';
-import { gradeAflTradesOnRealizedValue } from '../src/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import { buildAflTradeStructure } from '../src/server/aflTradeIntelligence/valuation/tradeStructure';
 import type { AflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLineContracts';
 import { computeAflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLines';
 import {
@@ -42,7 +42,8 @@ import {
 /**
  * Computes the private value lines (#789 step 3): every traded asset's value line at each checkpoint
  * and each trade's per-club nets, from a stored value-line fit and the realized grader's own inputs
- * (the asset ledger and the batch's trades are rebuilt in process, never read for their values). It
+ * (the asset ledger and the trade structure, `afl-trade-structure/v1`, are rebuilt in process; no
+ * realized grade is computed or read). It
  * takes the grader's arguments plus the fit file and the last season end, reads only, and its one
  * write is the value lines' evidence record, as the runbook section "Computing the value lines"
  * describes. With `--traded-player-fit` (the traded-player fit command's `--out` file), traded players'
@@ -240,7 +241,7 @@ export async function runComputeValueLinesCommand(input: {
       }),
       candidateId: inputs.candidateId,
       candidate: inputs.candidate,
-      batch: gradeAflTradesOnRealizedValue(inputs),
+      structure: buildAflTradeStructure(inputs),
       tradedPlayers,
       throughSeason: parsed.throughSeason,
     });
