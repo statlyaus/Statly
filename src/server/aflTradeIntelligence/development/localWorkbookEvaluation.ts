@@ -81,8 +81,7 @@ export interface LocalWorkbookTradeEvaluation {
   detail: DraftTradeDetail;
   scenario: LocalWorkbookSyntheticValuationPreparation;
   numericalEvaluation:
-    | LocalWorkbookBlockedNumericalEvaluation
-    | LocalWorkbookPartialNumericalEvaluation;
+    LocalWorkbookBlockedNumericalEvaluation | LocalWorkbookPartialNumericalEvaluation;
   publicationEligible: false;
 }
 
@@ -141,9 +140,7 @@ function summarizeBatch(
   };
 }
 
-function hasAvailableCalculatedView(
-  calculation: LocalPrivateReviewedTradeCalculation
-): boolean {
+function hasAvailableCalculatedView(calculation: LocalPrivateReviewedTradeCalculation): boolean {
   return calculation.assets.some(
     (asset) =>
       asset.state === 'calculated' &&
@@ -260,9 +257,7 @@ export function createLocalWorkbookEvaluationService(
       if (repository === null) return null;
       const detail = await repository.getById(tradeId);
       if (detail === null) return null;
-      const readiness = await inspectValuationReadiness(
-        `afl-men:${detail.trade.year}-trades`
-      );
+      const readiness = await inspectValuationReadiness(`afl-men:${detail.trade.year}-trades`);
       const scenario = (
         await prepareScenarios(dependencies, repository, [detail.trade], environment, scenarioCache)
       ).get(tradeId)!;

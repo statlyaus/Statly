@@ -160,8 +160,7 @@ export async function assembleLocalAflTradeHpnReviewedSeasonUniverseCandidate(
       runResult.rows.length !== 1 ||
       !run ||
       Number(run.accepted_row_count) > Number(run.source_row_count) ||
-      Number(run.issue_count) <
-        Number(run.source_row_count) - Number(run.accepted_row_count)
+      Number(run.issue_count) < Number(run.source_row_count) - Number(run.accepted_row_count)
     ) {
       throw new TypeError('The exact finalized HPN source run is unavailable or incomplete.');
     }
@@ -192,9 +191,7 @@ export async function assembleLocalAflTradeHpnReviewedSeasonUniverseCandidate(
     ) {
       throw new TypeError('The exact current result and player HPN maps are unavailable.');
     }
-    const resultMap = maps.rows.find(
-      ({ input_kind }) => input_kind === 'completed_match_result'
-    )!;
+    const resultMap = maps.rows.find(({ input_kind }) => input_kind === 'completed_match_result')!;
     const playerMap = maps.rows.find(({ input_kind }) => input_kind === 'player_match_stats')!;
     const decoded = await transaction.query<DecodedRow>(
       `SELECT decoded.provider_decoded_row_id,decoded.source_row_sha256,
@@ -217,11 +214,7 @@ export async function assembleLocalAflTradeHpnReviewedSeasonUniverseCandidate(
           )
         WHERE decoded.normalization_run_id=$1 AND decoded.season_year=$3
         ORDER BY decoded.provider_decoded_row_id`,
-      [
-        run.normalization_run_id,
-        LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256,
-        seasonYear,
-      ]
+      [run.normalization_run_id, LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256, seasonYear]
     );
     if (decoded.rows.length !== Number(run.source_row_count)) {
       throw new TypeError('The HPN reviewed universe does not conserve every finalized row.');

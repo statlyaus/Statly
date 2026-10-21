@@ -250,9 +250,7 @@ export async function loadLocalAflTradeHpnReviewSnapshot(
       methodCount: row.method_count,
       method: row.method_json,
       methodRegisteredAt:
-        row.method_registered_at === null
-          ? null
-          : new Date(row.method_registered_at).toISOString(),
+        row.method_registered_at === null ? null : new Date(row.method_registered_at).toISOString(),
       sources: row.sources_json.map((source) => ({
         seasonYear: source.seasonYear,
         captureId: source.captureId,

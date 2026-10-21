@@ -9,14 +9,13 @@ import {
 
 import {
   CLUB,
-  OLD_RULE_RETURN_VALUE,
   TRADE,
-  cameronChainBatch,
+  cameronChainLines,
   cameronChainNames,
 } from '../fixtures/aflTradeStoryCameronChainFixture';
 
 const story = (tradeId: string) =>
-  buildAflTradeStory(cameronChainBatch, tradeId, cameronChainNames);
+  buildAflTradeStory(cameronChainLines, tradeId, cameronChainNames);
 const cameron = story(TRADE.cameron);
 
 const netOf = <Net extends AflTradeStoryNet>(nets: readonly Net[], clubId: string): Net => {
@@ -25,12 +24,17 @@ const netOf = <Net extends AflTradeStoryNet>(nets: readonly Net[], clubId: strin
   return net;
 };
 const pavOf = ({ value }: Pick<AflTradeStoryAsset, 'value'>) =>
-  value.kind === 'known' ? value.pav : value.pending;
-/** What an asset became, as `player (club abbreviation) pav`. */
-const became = (asset: AflTradeStoryAsset) =>
-  asset.outcome.kind === 'player'
-    ? `${asset.label} → ${asset.outcome.playerName} (${asset.outcome.clubId}) ${pavOf(asset)}`
-    : `${asset.label} → ${asset.outcome.kind === 'pending' ? asset.outcome.pending : 'not used'}`;
+  value.kind === 'known' ? Math.round(value.pav * 100) / 100 : value.pending;
+/** What an asset became, as `player (club id) pav`. */
+function became(asset: AflTradeStoryAsset): string {
+  const { outcome } = asset;
+  if (outcome.kind === 'player')
+    return `${asset.label} → ${outcome.playerName} (${outcome.clubId}) ${pavOf(asset)}`;
+  if (outcome.kind === 'bid_share')
+    return `${asset.label} → share of ${outcome.playerName} (${outcome.clubId}) ${pavOf(asset)}`;
+  if (outcome.kind === 'pending') return `${asset.label} → ${outcome.pending}`;
+  return `${asset.label} → ${outcome.kind}`;
+}
 const everyAsset = (built: AflTradeStory) => built.lineage.trades.flatMap(({ assets }) => assets);
 
 describe('realized trade story: the Cameron trade', () => {
@@ -44,20 +48,26 @@ describe('realized trade story: the Cameron trade', () => {
       ],
     });
     expect(cameron.events).toEqual([]);
+    expect(cameron.checkpoint).toEqual({ kind: 'season_end', season: 2026 });
+    expect(cameron.inputs).toEqual({
+      structureId: cameronChainLines.structure.structureId,
+      valueLinesId: cameronChainLines.valueLines.valueLinesId,
+    });
   });
 
   it('shows both sides with what every asset became', () => {
     const [geelong, gws] = cameron.sides;
+    // Highest value first: the structure lists legs by transfer id.
     expect(geelong!.received.map(became)).toEqual([
       'Jeremy Cameron → Jeremy Cameron (club:gee) 95.3',
       '2021 2nd round (GWS) → Paul Curtis (club:nth) 51.6',
       '2021 2nd round (ESS) → James Willis (club:gee) 0',
     ]);
     expect(gws!.received.map(became)).toEqual([
-      'Pick 13 → Conor Stone (club:gws) 8.6',
-      'Pick 15 (WCE) → Ryan Angwin (club:gws) 20.7',
-      'Pick 20 → pick 25 → Brayden Cook (club:ade) 23.5',
       '2021 4th round → Jase Burgoyne (club:pta) 43.2',
+      'Pick 20 → pick 25 → Brayden Cook (club:ade) 23.5',
+      'Pick 15 (WCE) → Ryan Angwin (club:gws) 20.7',
+      'Pick 13 → Conor Stone (club:gws) 8.6',
     ]);
     expect(geelong!.gave).toEqual(gws!.received);
     expect(geelong!.receivedValue).toBeCloseTo(146.9, 9);
@@ -69,17 +79,43 @@ describe('realized trade story: the Cameron trade', () => {
     });
   });
 
-  it('is Geelong +50.9 and GWS −50.9 on the trade alone', () => {
+  it('is Geelong +50.9 and GWS −50.9 on the trade alone, from the value lines', () => {
     expect(netOf(cameron.nets.tradeAlone, CLUB.gee).net).toBeCloseTo(50.9, 9);
     expect(netOf(cameron.nets.tradeAlone, CLUB.gws).net).toBeCloseTo(-50.9, 9);
     expect(cameron.nets.tradeAlone.every(({ pendingCount }) => pendingCount === 0)).toBe(true);
+    const lines = cameronChainLines.valueLines.content.trades.find(
+      ({ transactionId }) => transactionId === TRADE.cameron
+    )!;
+    expect(cameron.nets.tradeAlone.map(({ clubId, net }) => [clubId, net])).toEqual(
+      lines.clubs.map(({ clubId, points }) => [clubId, points.at(-1)!.net])
+    );
   });
 
-  it('follows each club’s next moves: Geelong +7.7 with pick 34 pending, GWS −57.6', () => {
+  it('shows the at-trade view beside the result, never subtracted', () => {
+    const geelong = netOf(cameron.nets.tradeAlone, CLUB.gee);
+    expect(geelong.atTrade.net).toBeCloseTo(28.1, 9);
+    expect(geelong.atTrade.pending).toEqual([
+      {
+        assetId: 'pick:2021-r4-gee',
+        assetKey: 'pick|pick:2021-r4-gee',
+        direction: 'given',
+        reason: 'slot_unknown',
+      },
+    ]);
+    expect(netOf(cameron.nets.tradeAlone, CLUB.gws).atTrade.net).toBeCloseTo(-28.1, 9);
+    // The result is the line at 2026 alone, not the change since the trade.
+    expect(geelong.net).toBeCloseTo(50.9, 9);
+    const cameronLeg = cameron.sides[0]!.received.find(
+      ({ assetId }) => assetId === 'player:jeremy-cameron'
+    );
+    expect(cameronLeg!.atTrade).toEqual({ kind: 'known', pav: 70 });
+    expect(cameronLeg!.value).toEqual({ kind: 'known', pav: 95.3 });
+  });
+
+  it('follows each club’s next moves (secondary): Geelong −1.6 with pick 34’s share, GWS −57.6', () => {
     const geelong = netOf(cameron.nets.withNextMoves, CLUB.gee);
-    expect(geelong.net).toBeCloseTo(7.7, 9);
-    expect(geelong.pending).toEqual([{ assetId: 'pick:2021-34-gee', direction: 'given' }]);
-    expect(geelong).toMatchObject({ pendingCount: 1, tradeIds: [TRADE.cameron, TRADE.geeWbd] });
+    expect(geelong.net).toBeCloseTo(50.9 - 51.6 - 9.342878 + 8.4, 5);
+    expect(geelong).toMatchObject({ pendingCount: 0, tradeIds: [TRADE.cameron, TRADE.geeWbd] });
     const gws = netOf(cameron.nets.withNextMoves, CLUB.gws);
     expect(gws.net).toBeCloseTo(-57.6, 9);
     expect(gws).toMatchObject({ pendingCount: 0, tradeIds: [TRADE.cameron, TRADE.gwsCol] });
@@ -108,19 +144,21 @@ describe('realized trade story: the Cameron trade', () => {
       'pick:2021-47-nth': ['Arthur Jones (club:wbd) 12.9'],
       'pick:2022-r3-nth': ['Harvey Gallagher (club:wbd) 11.3'],
     });
-    expect(everyAsset(cameron).some((asset) => pavOf(asset) === OLD_RULE_RETURN_VALUE)).toBe(false);
   });
 
-  it('keeps every pick spent matching a bid pending, never 0', () => {
+  it('values a priced matched-bid pick as its share of the nominee, and an unpriced one pending', () => {
     const assets = [...everyAsset(cameron), ...everyAsset(story(TRADE.geeWbd))];
-    const bids = ['pick:2021-34-gee', 'pick:2021-42-nth', 'pick:2022-r3-wbd', 'pick:2021-r3-ade'];
-    for (const assetId of bids) {
-      const asset = assets.find((candidate) => candidate.assetId === assetId);
-      expect(asset).toMatchObject({
+    const find = (assetId: string) => assets.find((candidate) => candidate.assetId === assetId)!;
+    expect(became(find('pick:2021-34-gee'))).toBe(
+      'Pick 34 · 2021 (GEE) → share of Sam Darcy (club:wbd) 9.34'
+    );
+    expect(find('pick:2021-34-gee').outcome).toMatchObject({ kind: 'bid_share', stint: 'open' });
+    expect(became(find('pick:2021-42-nth'))).toBe('Pick 42 → share of Sam Darcy (club:wbd) 6.81');
+    for (const assetId of ['pick:2022-r3-wbd', 'pick:2021-r3-ade'])
+      expect(find(assetId)).toMatchObject({
         value: { kind: 'pending', pending: 'matched_bid' },
         outcome: { kind: 'pending', pending: 'matched_bid' },
       });
-    }
   });
 
   it('groups what each club ended up with, then the ones that got away', () => {
@@ -138,8 +176,8 @@ describe('realized trade story: the Cameron trade', () => {
       'got_away North Melbourne: Paul Curtis',
       'got_away Port Adelaide: Jase Burgoyne',
       'got_away Adelaide: Brayden Cook',
+      'got_away Western Bulldogs: bid_share',
       'got_away Collingwood: Liam McMahon',
-      'got_away Western Bulldogs: pending',
     ]);
     const [cameronCard] = cameron.players;
     expect(cameronCard).toMatchObject({
@@ -171,7 +209,7 @@ describe('realized trade story: the Cameron trade', () => {
     const colAde = trades.find(({ tradeId }) => tradeId === TRADE.colAde)!;
     expect(netOf(colAde.nets, CLUB.col).net).toBeCloseTo(1.3, 9);
     expect(netOf(colAde.nets, CLUB.ade)).toMatchObject({
-      pending: [{ assetId: 'pick:2021-r3-ade', direction: 'given' }],
+      pending: [{ assetId: 'pick:2021-r3-ade', direction: 'given', reason: 'matched_bid' }],
     });
   });
 
@@ -193,25 +231,28 @@ describe('realized trade story: the Cameron trade', () => {
 describe('realized trade story: the 2021 Geelong ⇄ Bulldogs trade', () => {
   const swap = story(TRADE.geeWbd);
 
-  it('is Geelong −43.2 and the Bulldogs +43.2 alone, then Bulldogs +15.8 with three bids pending', () => {
-    expect(netOf(swap.nets.tradeAlone, CLUB.gee)).toMatchObject({ pendingCount: 1 });
-    expect(netOf(swap.nets.tradeAlone, CLUB.gee).net).toBeCloseTo(-43.2, 9);
-    expect(netOf(swap.nets.tradeAlone, CLUB.wbd).net).toBeCloseTo(43.2, 9);
+  it('is Geelong −52.5 and the Bulldogs +52.5 alone, then Bulldogs +32.0 with one bid pending', () => {
+    expect(netOf(swap.nets.tradeAlone, CLUB.gee)).toMatchObject({ pendingCount: 0 });
+    expect(netOf(swap.nets.tradeAlone, CLUB.gee).net).toBeCloseTo(-52.542878, 5);
+    expect(netOf(swap.nets.tradeAlone, CLUB.wbd).net).toBeCloseTo(52.542878, 5);
     const bulldogs = netOf(swap.nets.withNextMoves, CLUB.wbd);
-    expect(bulldogs.net).toBeCloseTo(15.8, 9);
+    expect(bulldogs.net).toBeCloseTo(52.542878 - 51.6 + 12.9 + 11.3 + 6.808924, 5);
     expect(bulldogs.pending).toEqual([
-      { assetId: 'pick:2021-34-gee', direction: 'received' },
-      { assetId: 'pick:2022-r3-wbd', direction: 'given' },
-      { assetId: 'pick:2021-42-nth', direction: 'received' },
+      {
+        assetId: 'pick:2022-r3-wbd',
+        assetKey: 'pick|pick:2022-r3-wbd',
+        direction: 'given',
+        reason: 'matched_bid',
+      },
     ]);
     expect(bulldogs.tradeIds).toEqual([TRADE.geeWbd, TRADE.wbdNth]);
-    expect(netOf(swap.nets.withNextMoves, CLUB.gee).net).toBeCloseTo(-43.2, 9);
+    expect(netOf(swap.nets.withNextMoves, CLUB.gee).net).toBeCloseTo(-52.542878, 5);
   });
 
   it('links two trades and three clubs, and shows where pick 32 came from', () => {
     expect(swap.lineage.trades.map(({ tradeId }) => tradeId)).toEqual([TRADE.geeWbd, TRADE.wbdNth]);
     const wbdNth = swap.lineage.trades[1]!;
-    expect(netOf(wbdNth.nets, CLUB.wbd).net).toBeCloseTo(-27.4, 9);
+    expect(netOf(wbdNth.nets, CLUB.wbd).net).toBeCloseTo(-27.4 + 6.808924, 5);
     const pick32 = swap.lineage.assets.find(({ assetId }) => assetId === 'pick:2021-r2-gws')!;
     expect(pick32.hops[0]).toMatchObject({
       tradeId: TRADE.cameron,
@@ -224,7 +265,7 @@ describe('realized trade story: the 2021 Geelong ⇄ Bulldogs trade', () => {
 
 describe('realized trade story invariants', () => {
   it('makes every trade zero-sum on its known values, with each pending asset on both sides', () => {
-    for (const { transactionId } of cameronChainBatch.content.trades) {
+    for (const { transactionId } of cameronChainLines.structure.content.trades) {
       const { tradeAlone } = story(transactionId).nets;
       expect(tradeAlone.reduce((total, { net }) => total + net, 0)).toBeCloseTo(0, 9);
       const pending = tradeAlone.flatMap(({ pending: assets }) => assets);
@@ -240,11 +281,30 @@ describe('realized trade story invariants', () => {
 
   it('fails closed on a missing name instead of guessing', () => {
     const names = { ...cameronChainNames, clubs: new Map([[CLUB.gee, 'Geelong']]) };
-    expect(() => buildAflTradeStory(cameronChainBatch, TRADE.cameron, names)).toThrow(
+    expect(() => buildAflTradeStory(cameronChainLines, TRADE.cameron, names)).toThrow(
       'The trade story has no name for club club:gws.'
     );
     expect(() => story('trade:unknown')).toThrow(
-      'The trade story has no trade trade:unknown in its batch.'
+      'The trade story has no trade trade:unknown in its structure.'
     );
+  });
+
+  it('refuses value lines that are not sealed over their content or not on this structure', () => {
+    const { structure, valueLines } = cameronChainLines;
+    const tampered = {
+      ...valueLines,
+      content: { ...valueLines.content, assets: valueLines.content.assets.slice(1) },
+    };
+    expect(() =>
+      buildAflTradeStory({ structure, valueLines: tampered }, TRADE.cameron, cameronChainNames)
+    ).toThrow('The value lines do not match their content address.');
+    const otherStructure = { ...structure, structureId: `afl-trade-structure:${'0'.repeat(64)}` };
+    expect(() =>
+      buildAflTradeStory(
+        { structure: otherStructure, valueLines },
+        TRADE.cameron,
+        cameronChainNames
+      )
+    ).toThrow();
   });
 });

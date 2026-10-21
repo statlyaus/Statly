@@ -16,25 +16,21 @@ export interface LocalAflTradeFiveSeasonCoverageReceipt {
   captureCount: number;
 }
 
-export interface LocalAflTradeFiveSeasonStagedCapture
-  extends LocalAflTradeSeasonCaptureCoverage {
+export interface LocalAflTradeFiveSeasonStagedCapture extends LocalAflTradeSeasonCaptureCoverage {
   captureId: string;
   normalizationRunId: string;
 }
 
-export interface LocalAflTradeFiveSeasonPostgresStagingReceipt
-  extends LocalAflTradeFiveSeasonCoverageReceipt {
+export interface LocalAflTradeFiveSeasonPostgresStagingReceipt extends LocalAflTradeFiveSeasonCoverageReceipt {
   rowCount: number;
 }
 
-export interface LocalAflTradeFiveSeasonReconciledCapture
-  extends LocalAflTradeFiveSeasonStagedCapture {
+export interface LocalAflTradeFiveSeasonReconciledCapture extends LocalAflTradeFiveSeasonStagedCapture {
   factBatchId: string;
   factualRunId: string;
 }
 
-export interface LocalAflTradeFiveSeasonPostgresFactualReceipt
-  extends LocalAflTradeFiveSeasonCoverageReceipt {
+export interface LocalAflTradeFiveSeasonPostgresFactualReceipt extends LocalAflTradeFiveSeasonCoverageReceipt {
   appearanceFactCount: number;
 }
 

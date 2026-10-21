@@ -124,7 +124,8 @@ function finish(
   };
 }
 
-function netPoint(
+/** A club's net at one checkpoint: known values received minus given, pending legs listed. */
+export function aflTradeValueLineNetPoint(
   checkpoint: AflTradeValueLineCheckpoint,
   clubId: string,
   legs: readonly { leg: AflTradeValueLineTradeLeg; point: AflTradeValueLinePoint }[]
@@ -251,13 +252,13 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
       legs: legs.map(({ leg }) => leg),
       clubs: clubIds.map((clubId) => ({
         clubId,
-        atTrade: netPoint(
+        atTrade: aflTradeValueLineNetPoint(
           atTradeCheckpoint,
           clubId,
           legs.map(({ leg }) => ({ leg, point: leg.atTrade }))
         ),
         points: checkpoints.map((checkpoint) =>
-          netPoint(
+          aflTradeValueLineNetPoint(
             checkpoint,
             clubId,
             legs.map(({ spec, leg }) => ({ leg, point: pointAt(spec, checkpoint) }))

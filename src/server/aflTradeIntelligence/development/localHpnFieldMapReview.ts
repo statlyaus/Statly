@@ -44,9 +44,9 @@ export type LocalAflTradeHpnFieldMapApproval = Readonly<{
 }>;
 
 function sourceFields(candidate: AflTradeHpnFieldMapCandidate): readonly string[] {
-  return [...new Set(
-    candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
-  )].sort();
+  return [
+    ...new Set(candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)),
+  ].sort();
 }
 
 function exactFields(
@@ -55,8 +55,9 @@ function exactFields(
 ): boolean {
   const expected = sourceFields(candidate);
   const actual = assessment.content.fields.map(({ sourceField }) => sourceField).sort();
-  return expected.length === actual.length &&
-    expected.every((field, index) => field === actual[index]);
+  return (
+    expected.length === actual.length && expected.every((field, index) => field === actual[index])
+  );
 }
 
 export async function approveLocalAflTradeHpnFieldMapCandidates(
@@ -92,9 +93,7 @@ export async function approveLocalAflTradeHpnFieldMapCandidates(
         seasonYear === binding.seasonYear &&
         assessment.content.seasonYear === binding.seasonYear &&
         assessment.content.state === 'permitted_private_calculation' &&
-        assessment.content.fields.every(
-          ({ state }) => state === 'permitted_private_calculation'
-        ) &&
+        assessment.content.fields.every(({ state }) => state === 'permitted_private_calculation') &&
         exactFields(binding.candidate, assessment) &&
         doesAflTradeArtifactRefMatchCanonicalJson(artifact, assessment)
     );
@@ -116,10 +115,7 @@ export async function approveLocalAflTradeHpnFieldMapCandidates(
         `${binding.seasonYear} private non-production HPN calculation only.`,
       decidedAt: input.reviewedAt,
     });
-    const decisionArtifact = createAflTradeCanonicalJsonArtifactRef(
-      decision,
-      input.reviewedAt
-    );
+    const decisionArtifact = createAflTradeCanonicalJsonArtifactRef(decision, input.reviewedAt);
     const map = createAflTradeHpnProjectedFieldMap({
       candidate: binding.candidate,
       candidateArtifact: binding.artifact,
@@ -161,7 +157,8 @@ export async function reviewLocalAflTradeHpnFieldMaps(
   const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(client, input);
   const expectedCount = assembled.eligibilityReports.reduce(
     (count, { report }) =>
-      count + report.content.sources.filter(({ selectionState }) => selectionState === 'selected').length,
+      count +
+      report.content.sources.filter(({ selectionState }) => selectionState === 'selected').length,
     0
   );
   if (

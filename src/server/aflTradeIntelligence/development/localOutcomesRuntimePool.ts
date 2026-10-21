@@ -54,7 +54,6 @@ declare global {
 }
 
 export function getLocalOutcomesRuntimePool(connectionString: string): Pool {
-  globalThis.__statlyLocalOutcomesRuntimePool__ ??=
-    createLocalOutcomesRuntimePoolProvider();
+  globalThis.__statlyLocalOutcomesRuntimePool__ ??= createLocalOutcomesRuntimePoolProvider();
   return globalThis.__statlyLocalOutcomesRuntimePool__.get(connectionString);
 }
