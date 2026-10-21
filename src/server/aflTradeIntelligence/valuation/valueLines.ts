@@ -6,8 +6,7 @@ import {
   type AflTradeValueLineFit,
 } from '../modeling/valueLineFit';
 import type { AflTradeAssetLedgerReadModel } from './assetLedger';
-import { AflTradeStoryIndex } from './realizedTradeStoryAssets';
-import type { AflTradeStoryTrade, AflTradeStoryTransferAsset } from './realizedTradeStoryContracts';
+import { parseAflTradeStructure, type AflTradeStructure } from './tradeStructureContracts';
 import {
   AflTradeValueLineReader,
   aflTradeValueLineCheckpointOrder as orderOf,
@@ -33,9 +32,9 @@ import type { AflTradeValueLineCandidate } from './valueLineSlots';
 /**
  * The value-line calculator (value-line method, implementation order step 3; statlyaus/Statly#789).
  * Pure and deterministic: from the stored fit, the asset ledger, the player-season games read model,
- * the reconciliation candidate and a realized-trade-grade batch (read for its trades, legs and onward
- * links only, never its values), it gives every traded asset's value line at each checkpoint and each
- * trade's per-club nets on those lines, with each leg's at-trade view beside them.
+ * the reconciliation candidate and its trade structure (step 5: the trades, legs and onward links,
+ * with no valuation), it gives every traded asset's value line at each checkpoint and each trade's
+ * per-club nets on those lines, with each leg's at-trade view beside them.
  */
 export interface AflTradeValueLineInputs {
   /** The sealed fit (`afl-trade-value-line-fit/v2`); its content address is checked. */
@@ -44,19 +43,8 @@ export interface AflTradeValueLineInputs {
   readonly games: AflTradePlayerSeasonGames;
   readonly candidateId: string;
   readonly candidate: AflTradeValueLineCandidate;
-  readonly batch: {
-    readonly batchId: string;
-    readonly content: {
-      readonly inputs: {
-        readonly candidateId: string;
-        readonly pavCalculations: readonly {
-          readonly season: number;
-          readonly calculationId: string;
-        }[];
-      };
-      readonly trades: readonly AflTradeStoryTrade[];
-    };
-  };
+  /** The candidate's sealed trade structure (`afl-trade-structure/v1`); its content address is checked. */
+  readonly structure: AflTradeStructure;
   /**
    * The stored traded-player fit and the evidence it read (`createAflTradeTradedPlayerValueEvaluator`);
    * without it a traded player's open stint is pending.
@@ -72,9 +60,13 @@ const round = (value: number) => {
   return Object.is(rounded, -0) ? 0 : rounded;
 };
 
-/** Refuses inputs that do not describe the same seasons, method and candidate. */
+/**
+ * Refuses inputs that do not describe the same seasons, method and candidate. The trade structure pins
+ * no season: it holds no value, so only the fit, ledger and games read model pin calculations.
+ */
 function requireConsistent(inputs: AflTradeValueLineInputs): Map<number, string> {
-  const { fit, ledger, games, batch, candidateId, throughSeason } = inputs;
+  const { fit, ledger, games, candidateId, throughSeason } = inputs;
+  const structure = parseAflTradeStructure(inputs.structure);
   if (fit.content.schemaVersion !== AFL_TRADE_VALUE_LINE_FIT_SCHEMA_VERSION)
     throw new Error(`The fit is not ${AFL_TRADE_VALUE_LINE_FIT_SCHEMA_VERSION}.`);
   if (createAflTradeContentAddress('value-line-fit', fit.content) !== fit.fitId)
@@ -91,9 +83,11 @@ function requireConsistent(inputs: AflTradeValueLineInputs): Map<number, string>
     throw new Error('Every season of the games read model must be available, without a gap.');
   if (
     ledger.ledger.content.inputs.candidateId !== candidateId ||
-    batch.content.inputs.candidateId !== candidateId
+    structure.content.inputs.candidateId !== candidateId
   )
-    throw new Error('The ledger, the batch and the candidate are not of the same candidate.');
+    throw new Error(
+      'The ledger, the trade structure and the candidate are not of the same candidate.'
+    );
   const pinned = new Map<number, { calculationId: string; from: string }>();
   const pin = (from: string, rows: readonly { season: number; calculationId: string | null }[]) => {
     for (const { season, calculationId } of rows) {
@@ -108,7 +102,6 @@ function requireConsistent(inputs: AflTradeValueLineInputs): Map<number, string>
   pin('games read model', games.seasons);
   pin('fit', fit.content.fitWindow.seasons);
   pin('ledger', ledger.ledger.content.inputs.pavCalculations);
-  pin('batch', batch.content.inputs.pavCalculations);
   if (throughSeason > fit.content.fitWindow.lastSeason)
     throw new Error(`Checkpoint ${throughSeason} is after the fit's last season.`);
   if (throughSeason > read[read.length - 1]!)
@@ -155,12 +148,12 @@ function netPoint(
 /** Computes and seals every traded asset's value line and each trade's per-club nets. */
 export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflTradeValueLines {
   const seasons = requireConsistent(inputs);
-  const { batch, candidate, throughSeason, ledger } = inputs;
-  const trades = [...batch.content.trades].sort(
+  const { structure, candidate, throughSeason, ledger } = inputs;
+  const trades = [...structure.content.trades].sort(
     (left, right) =>
       left.tradeYear - right.tradeYear || byCodeUnit(left.transactionId, right.transactionId)
   );
-  if (trades.length === 0) throw new Error('The batch has no trades.');
+  if (trades.length === 0) throw new Error('The trade structure has no trades.');
   if (trades.some(({ tradeYear }) => tradeYear > throughSeason))
     throw new Error(`A trade is after checkpoint ${throughSeason}.`);
   const official = new Map(
@@ -174,29 +167,12 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
   if (unofficial.length > 0)
     throw new Error(`Season ends ${unofficial.join(', ')} have no official HPN PAV.`);
 
-  const transfers = new Map<string, AflTradeStoryTransferAsset>(
-    candidate.transfers.map(({ transferId, asset }) => [
-      transferId,
-      asset.kind === 'pick_entitlement'
-        ? { kind: 'pick', pickId: asset.pickId, label: '' }
-        : asset.kind === 'player' && asset.playerId !== null
-          ? { kind: 'player', playerId: asset.playerId }
-          : // Never the same asset as another transfer, so never followed on.
-            { kind: 'pick', pickId: `unresolved|${transferId}`, label: '' },
-    ])
-  );
-  const index = new AflTradeStoryIndex(batch, {
-    clubs: new Map(),
-    players: new Map(),
-    picks: new Map(),
-    transfers,
-  });
   const reader = new AflTradeValueLineReader(
     inputs.fit.content.parameters,
     inputs.games,
     inputs.tradedPlayers
   );
-  const { specs, legKeys } = aflTradeValueLineSpecs({ trades, index, candidate, ledger, reader });
+  const { specs, legKeys } = aflTradeValueLineSpecs({ trades, candidate, ledger, reader });
 
   const cache = new Map<string, AflTradeValueLinePoint>();
   const pointAt = (spec: AflTradeValueLineSpec, checkpoint: AflTradeValueLineCheckpoint) => {
@@ -315,7 +291,7 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
       tradedPlayerFitId: inputs.tradedPlayers?.parameters.fitId ?? null,
       ledgerId: ledger.ledger.ledgerId,
       candidateId: inputs.candidateId,
-      batchId: batch.batchId,
+      structureId: structure.structureId,
       gamesMethodId: inputs.games.methodId,
       seasons: [...seasons]
         .sort(([left], [right]) => left - right)

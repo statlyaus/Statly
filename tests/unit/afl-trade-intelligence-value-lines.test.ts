@@ -18,6 +18,18 @@ import {
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import type { AflTradeAssetLedgerReadModel } from '@/server/aflTradeIntelligence/valuation/assetLedger';
 import type { AflTradeAssetLedgerStint } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
+import {
+  gradeAflTradesOnRealizedValue,
+  type AflTradeRealizedTradeGradeInputs,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import {
+  buildAflTradeStructure,
+  type AflTradeStructureInputs,
+} from '@/server/aflTradeIntelligence/valuation/tradeStructure';
+import {
+  createAflTradeStructure,
+  type AflTradeStructureLeg,
+} from '@/server/aflTradeIntelligence/valuation/tradeStructureContracts';
 import type {
   AflTradeValueLineCheckpoint,
   AflTradeValueLines,
@@ -148,39 +160,63 @@ const BASE_ROWS: Row[] = [
 
 const transferId = (name: string) => `external-transfer:${name.padEnd(64, '0')}`;
 const pickId = (name: string) => `draft-pick:${name.padEnd(64, '0')}`;
+const ENTITLEMENT = `special-draft-entitlement:${'e'.repeat(64)}`;
+
+/** A candidate transfer: its trade and clubs, then its asset. */
+const moved = (name: string, transactionId: string, from: string, to: string, asset: object) => ({
+  transferId: transferId(name),
+  transactionId,
+  fromClubId: from,
+  toClubId: to,
+  asset,
+  status: 'single_source',
+  evidenceIds: [],
+});
 
 function pickTransfer(
   name: string,
+  transactionId: string,
+  from: string,
+  to: string,
   pick: string,
   draftYear: number,
   nominalPick: number | null,
   round = 1,
   originalClubId = 'a'
 ) {
-  return {
-    transferId: transferId(name),
-    asset: {
-      kind: 'pick_entitlement' as const,
-      pickId: pickId(pick),
-      draftYear,
-      draftType: 'national',
-      nominalRound: round,
-      nominalPick,
-      originalClubId,
-      recordedLabel: null,
-    },
-  };
+  return moved(name, transactionId, from, to, {
+    kind: 'pick_entitlement' as const,
+    pickId: pickId(pick),
+    draftYear,
+    draftType: 'national',
+    nominalRound: round,
+    nominalPick,
+    originalClubId,
+    recordedLabel: null,
+  });
 }
+
+/** Rule v7: l3's reviewed custody chain names l4 as its successor. */
+const SPECIAL_CUSTODY = [
+  { transferId: transferId('l3'), entitlementId: ENTITLEMENT, predecessorTransferId: null },
+  {
+    transferId: transferId('l4'),
+    entitlementId: ENTITLEMENT,
+    predecessorTransferId: transferId('l3'),
+  },
+];
 
 interface Options {
   rows?: Row[];
+  /** l3 is a special entitlement whose reviewed custody successor is l4. */
   special?: boolean;
+  /** The player C sends B in t2 is unresolved, so the batch blocked B's side of t2. */
+  unresolvedPears?: boolean;
   custody?: { draftYear: number; recordedPickNumber: number }[];
   oldPick?: boolean;
   /** Ledger stint ends by `player|club|fromSeason`, overriding the fixture's. */
   ends?: Record<string, number>;
 }
-
 function inputs(options: Options = {}): AflTradeValueLineInputs {
   const rows = options.rows ?? BASE_ROWS;
   const seasons = options.oldPick ? range(2005, LAST) : range(2018, LAST);
@@ -306,22 +342,44 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
     stintValue: (playerId: string, clubId: string, fromSeason: number) =>
       stints[`${playerId}|${clubId}|${fromSeason}`] ?? stint(playerId, clubId, fromSeason),
   } as unknown as Pick<AflTradeAssetLedgerReadModel, 'ledger' | 'stintValue'>;
+  // t1 (2019): A gives B p1 and p2 (l3, traded on in t2) for X. t2 (2020): B gives C p2 for Y.
+  // t3 (2021): A gives C the matched-bid pick p3 for the unused p4.
   const l3 = options.special
-    ? {
-        transferId: transferId('l3'),
-        asset: { kind: 'special_entitlement', entitlementId: 'special-draft-entitlement:x' },
-      }
-    : pickTransfer('l3', 'p2', 2020, null);
+    ? moved('l3', 't1', 'a', 'b', { kind: 'special_entitlement', entitlementId: ENTITLEMENT })
+    : pickTransfer('l3', 't1', 'a', 'b', 'p2', 2020, null);
+  const player = (name: string, transactionId: string, from: string, to: string, id: string) =>
+    moved(name, transactionId, from, to, { kind: 'player', playerId: id, recordedName: id });
+  const transaction = (transactionId: string, seasonYear: number) => ({
+    transactionId,
+    providerEventId: transactionId,
+    seasonYear,
+    occurredOn: null,
+    transactionType: 'trade',
+  });
   const candidate = {
+    transactions: [transaction('t1', 2019), transaction('t2', 2020), transaction('t3', 2021)],
     transfers: [
-      pickTransfer('l1', 'p1', 2019, 5),
-      { transferId: transferId('l2'), asset: { kind: 'player', playerId: 'x', recordedName: 'X' } },
+      pickTransfer('l1', 't1', 'a', 'b', 'p1', 2019, 5),
+      player('l2', 't1', 'b', 'a', 'x'),
       l3,
-      pickTransfer('l4', 'p2', 2020, 12),
-      { transferId: transferId('l5'), asset: { kind: 'player', playerId: 'y', recordedName: 'Y' } },
-      pickTransfer('l6', 'p3', 2021, 20),
-      pickTransfer('l7', 'p4', 2021, 40, 3, 'c'),
-      ...(options.oldPick ? [pickTransfer('l9', 'p9', 2005, 5)] : []),
+      pickTransfer('l4', 't2', 'b', 'c', 'p2', 2020, 12),
+      options.unresolvedPears
+        ? moved('l5', 't2', 'c', 'b', { kind: 'player', playerId: null, recordedName: 'Y?' })
+        : player('l5', 't2', 'c', 'b', 'y'),
+      pickTransfer('l6', 't3', 'a', 'c', 'p3', 2021, 20),
+      pickTransfer('l7', 't3', 'c', 'a', 'p4', 2021, 40, 3, 'c'),
+      ...(options.oldPick ? [pickTransfer('l9', 't3', 'a', 'c', 'p9', 2005, 5)] : []),
+    ],
+    pickOutcomes: [
+      {
+        outcomeId: 'outcome-l3',
+        transferId: transferId('l3'),
+        disposition: 'traded_on',
+        outcomeStatus: 'stated',
+        selectionId: null,
+        playerId: null,
+        evidenceIds: [],
+      },
     ],
     pickCustody: (options.custody ?? [{ draftYear: 2020, recordedPickNumber: 14 }]).map(
       (row, index) => ({
@@ -348,76 +406,19 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
         status: 'corroborated',
       },
     ],
-  } as unknown as AflTradeValueLineInputs['candidate'];
-  const leg = (
-    name: string,
-    assetKind: 'player' | 'pick',
-    sendingClubId: string,
-    receivingClubId: string,
-    extra: object = {}
-  ) => ({
-    transferId: transferId(name),
-    assetKind,
-    sendingClubId,
-    receivingClubId,
-    basis:
-      assetKind === 'player'
-        ? ('player_first_stint' as const)
-        : ('pick_selected_first_stint' as const),
-    ...extra,
+  } as unknown as AflTradeValueLineInputs['candidate'] & AflTradeStructureInputs['candidate'];
+  const structure = buildAflTradeStructure({
+    candidateId: CANDIDATE,
+    candidate,
+    ...(options.special ? { specialEntitlementCustody: SPECIAL_CUSTODY } : {}),
   });
-  const trades = [
-    {
-      transactionId: 't1',
-      tradeYear: 2019,
-      clubs: [{ clubId: 'a' }, { clubId: 'b' }],
-      legs: [
-        leg('l1', 'pick', 'a', 'b'),
-        leg('l2', 'player', 'b', 'a'),
-        leg('l3', 'pick', 'a', 'b', {
-          onward: { transactionId: 't2' },
-          ...(options.special
-            ? { specialEntitlement: { successorTransferId: transferId('l4') } }
-            : {}),
-        }),
-      ],
-    },
-    {
-      transactionId: 't2',
-      tradeYear: 2020,
-      clubs: [{ clubId: 'b' }, { clubId: 'c' }],
-      legs: [leg('l4', 'pick', 'b', 'c'), leg('l5', 'player', 'c', 'b')],
-    },
-    {
-      transactionId: 't3',
-      tradeYear: 2021,
-      clubs: [{ clubId: 'a' }, { clubId: 'c' }],
-      legs: [
-        leg('l6', 'pick', 'a', 'c'),
-        leg('l7', 'pick', 'c', 'a'),
-        ...(options.oldPick ? [leg('l9', 'pick', 'a', 'c')] : []),
-      ],
-    },
-  ];
   return {
     fit: FIT,
     ledger,
     games,
     candidateId: CANDIDATE,
     candidate,
-    batch: {
-      batchId: 'realized-trade-grade-batch:test',
-      content: {
-        inputs: {
-          candidateId: CANDIDATE,
-          pavCalculations: seasons.map((season) => ({
-            season,
-            calculationId: `hpn-pav-season:${season}`,
-          })),
-        },
-        trades,
-      },
-    },
+    structure,
     throughSeason: LAST,
   };
 }
@@ -815,21 +816,29 @@ describe('computeAflTradeValueLines', () => {
     );
   });
 
-  it('seals a deterministic content address', () => {
+  it('seals a deterministic content address over the trade structure it read', () => {
     const again = inputs();
-    const reversed = {
+    // The same candidate in any order gives the same structure, so the same value lines.
+    const candidate = {
+      ...again.candidate,
+      transfers: [...again.candidate.transfers].reverse(),
+    } as typeof again.candidate & AflTradeStructureInputs['candidate'];
+    const reordered = {
       ...again,
-      batch: {
-        ...again.batch,
-        content: { ...again.batch.content, trades: [...again.batch.content.trades].reverse() },
-      },
+      candidate,
+      structure: buildAflTradeStructure({ candidateId: CANDIDATE, candidate }),
     };
-    expect(computeAflTradeValueLines(reversed).valueLinesId).toBe(lines.valueLinesId);
+    expect(reordered.structure.structureId).toBe(again.structure.structureId);
+    expect(computeAflTradeValueLines(reordered).valueLinesId).toBe(lines.valueLinesId);
     expect(lines.valueLinesId).toMatch(/^value-lines:[0-9a-f]{64}$/);
     expect(lines.content).toMatchObject({
+      schemaVersion: 'afl-trade-value-lines/v2',
       publicationEligible: false,
       publicationProhibited: true,
     });
+    expect(lines.content.inputs.structureId).toBe(again.structure.structureId);
+    expect(lines.content.inputs).not.toHaveProperty('batchId');
+    expect(lines.content.limitation).toMatch(/trade structure/);
   });
 
   it('matches the fit: one evaluator for the back-test and the lines', () => {
@@ -850,20 +859,51 @@ describe('computeAflTradeValueLines', () => {
     const base = inputs();
     const refuse = (change: Partial<AflTradeValueLineInputs>, message: RegExp) =>
       expect(() => computeAflTradeValueLines({ ...base, ...change })).toThrow(message);
-    const otherCalculation = base.batch.content.inputs.pavCalculations.map((row) =>
-      row.season === 2020 ? { ...row, calculationId: 'hpn-pav-season:other' } : row
-    );
+    // The ledger, fit and games read model must pin one calculation per season (the batch pin is gone).
+    const ledgerContent = base.ledger.ledger.content;
     refuse(
       {
-        batch: {
-          ...base.batch,
-          content: {
-            ...base.batch.content,
-            inputs: { ...base.batch.content.inputs, pavCalculations: otherCalculation },
+        ledger: {
+          ...base.ledger,
+          ledger: {
+            ...base.ledger.ledger,
+            content: {
+              ...ledgerContent,
+              inputs: {
+                ...ledgerContent.inputs,
+                pavCalculations: ledgerContent.inputs.pavCalculations.map((row) =>
+                  row.season === 2020 ? { ...row, calculationId: 'hpn-pav-season:other' } : row
+                ),
+              },
+            },
           },
         },
       },
       /Season 2020: .* pin different HPN PAV calculations/
+    );
+    // The structure is sealed: content changed under its id (the summary still counts), or another
+    // candidate's structure, is refused.
+    const [first, ...rest] = base.structure.content.trades;
+    refuse(
+      {
+        structure: {
+          ...base.structure,
+          content: {
+            ...base.structure.content,
+            trades: [{ ...first!, tradeYear: first!.tradeYear + 1 }, ...rest],
+          },
+        },
+      },
+      /Identifier must equal the canonical afl-trade-structure content address/
+    );
+    refuse(
+      {
+        structure: buildAflTradeStructure({
+          candidateId: `external-reconciliation:${'d'.repeat(64)}`,
+          candidate: base.candidate as AflTradeStructureInputs['candidate'],
+        }),
+      },
+      /not of the same candidate/
     );
     refuse(
       { games: { ...base.games, methodId: 'hpn-pav-method:other' } },
@@ -875,6 +915,217 @@ describe('computeAflTradeValueLines', () => {
     expect(() => computeAflTradeValueLines(inputs({ oldPick: true }))).toThrow(
       /past the 20-season horizon/
     );
+  });
+});
+
+describe('value lines on the trade structure (issue 789, step 5)', () => {
+  const netAt = (lines: AflTradeValueLines, tradeId: string, clubId: string, season: number) =>
+    trade(lines, tradeId)
+      .clubs.find((club) => club.clubId === clubId)!
+      .points.find(
+        ({ checkpoint }) => checkpoint.kind === 'season_end' && checkpoint.season === season
+      )!;
+  const tradeView = (lines: AflTradeValueLines, tradeId: string) => {
+    const { legs, clubs } = trade(lines, tradeId);
+    // The legs' at-trade views, and each club's nets: what the trade's result is made of.
+    return { legs, clubs };
+  };
+  const withFit = (options: Parameters<typeof inputs>[0] = {}) =>
+    computeAflTradeValueLines({ ...inputs(options), tradedPlayers: stubEvaluator() });
+
+  // The spec's example ("Each trade is zero-sum; chains are linked"): B gets the orange (pick p2,
+  // l3) from A in t1 for the apple (X), then trades the orange on to C in t2 for the pears (Y).
+  it("leaves trade 1 unchanged when the pears' value changes", () => {
+    const base = withFit();
+    const pears = BASE_ROWS.map((row) =>
+      row.playerId === 'y' && row.clubId === 'b' ? { ...row, pav: row.pav + 5 } : row
+    );
+    const changed = withFit({ rows: pears });
+    expect(tradeView(changed, 't1')).toEqual(tradeView(base, 't1'));
+    expect(netAt(changed, 't2', 'b', 2023).net).not.toBeCloseTo(
+      netAt(base, 't2', 'b', 2023).net,
+      3
+    );
+  });
+
+  it("moves both trades with the orange's drafted player, and the chain cancels it", () => {
+    const base = withFit();
+    const orange = BASE_ROWS.map((row) =>
+      row.playerId === 'd2' ? { ...row, games: 22, pav: row.pav + 6 } : row
+    );
+    const changed = withFit({ rows: orange });
+    for (const season of [2022, 2024, LAST]) {
+      const t1 = netAt(changed, 't1', 'b', season).net - netAt(base, 't1', 'b', season).net;
+      const t2 = netAt(changed, 't2', 'b', season).net - netAt(base, 't2', 'b', season).net;
+      expect(t1).toBeGreaterThan(0);
+      // B received the orange in t1 and gave it in t2: one line, so B's chain is unchanged.
+      expect(t1 + t2).toBeCloseTo(0, 6);
+      // A gave it in t1: its line moves A's result too, and C's in t2.
+      expect(
+        netAt(changed, 't1', 'a', season).net - netAt(base, 't1', 'a', season).net
+      ).toBeCloseTo(-t1, 6);
+      expect(
+        netAt(changed, 't2', 'c', season).net - netAt(base, 't2', 'c', season).net
+      ).toBeCloseTo(t1, 6);
+    }
+    // The at-trade view stays fixed and is never subtracted from the result.
+    expect(trade(changed, 't1').legs.map(({ atTrade }) => atTrade)).toEqual(
+      trade(base, 't1').legs.map(({ atTrade }) => atTrade)
+    );
+    const b2024 = netAt(changed, 't1', 'b', 2024).net;
+    const line = (key: string) => pointOf(changed, key, at('season_end', 2024)).value!;
+    expect(b2024).toBeCloseTo(line(P('p1')) + line(P('p2')) - line(PLAYER_X), 6);
+  });
+
+  it('follows a special entitlement chain the batch dropped while its onward side was blocked', () => {
+    // With the pears unresolved the batch blocked B's side of t2, so its old traded-on valuation of
+    // l3 was blocked and the leg carried no successor. The structure still links l3 to l4.
+    const options = { special: true, unresolvedPears: true };
+    const { structure, candidate } = inputs(options);
+    const batch = gradeAflTradesOnRealizedValue({
+      candidateId: CANDIDATE,
+      candidate: candidate as AflTradeRealizedTradeGradeInputs['candidate'],
+      specialEntitlementCustody: SPECIAL_CUSTODY,
+      pavCalculations: range(2019, 2021).map((season) => ({
+        season,
+        calculationId: `hpn-pav-season:${season}`,
+        official: true,
+      })),
+      pav: [],
+      seasonSpells: [],
+      spellSeasons: range(2019, 2021),
+      reviewedArrivals: [],
+      pickProjectionBenchmarkId: `hpn-pick-benchmark:${'b'.repeat(64)}`,
+      spellCutoffAt: '2026-10-21T00:00:00.000Z',
+      gradedAt: '2026-10-21T01:00:00.000Z',
+    });
+    const graded = batch.content.trades
+      .flatMap(({ legs }) => legs)
+      .find((leg) => leg.transferId === transferId('l3'))!;
+    expect(graded).toMatchObject({ state: 'blocked', reasons: ['traded_on_return_blocked'] });
+    expect(graded).not.toHaveProperty('specialEntitlement');
+    const l3 = structure.content.trades
+      .flatMap(({ legs }) => legs)
+      .find((leg) => leg.transferId === transferId('l3'))!;
+    expect(l3.onward).toEqual({
+      kind: 'special_entitlement_successor',
+      transactionId: 't2',
+      transferId: transferId('l4'),
+      entitlementId: ENTITLEMENT,
+    });
+    const lines = withFit(options);
+    const leg = trade(lines, 't1').legs.find(({ transferId: id }) => id === transferId('l3'))!;
+    expect(leg.assetKey).toBe(P('p2'));
+    const line = (key: string) => pointOf(lines, key, at('season_end', 2024)).value!;
+    expect(netAt(lines, 't1', 'b', 2024).net).toBeCloseTo(
+      line(P('p1')) + line(P('p2')) - line(PLAYER_X),
+      6
+    );
+    // B's side of t2 is the orange given and an unresolved player received: provisional, not lost.
+    expect(netAt(lines, 't2', 'b', 2024)).toMatchObject({
+      provisional: true,
+      pending: [
+        {
+          assetKey: `unresolved|${transferId('l5')}`,
+          direction: 'received',
+          reason: 'unavailable',
+        },
+      ],
+    });
+  });
+
+  it('refuses a structure leg or onward link that does not continue the asset', () => {
+    // Any caller can seal a structure, so its legs and links are checked against the candidate.
+    const resealed = (
+      options: Parameters<typeof inputs>[0],
+      change: (leg: AflTradeStructureLeg) => AflTradeStructureLeg
+    ) => {
+      const base = inputs(options);
+      const content = base.structure.content;
+      return () =>
+        computeAflTradeValueLines({
+          ...base,
+          structure: createAflTradeStructure({
+            ...content,
+            trades: content.trades.map((trade) => ({ ...trade, legs: trade.legs.map(change) })),
+          }),
+        });
+    };
+    const l3 = transferId('l3');
+    // l3 (A to B, pick p2) linked as a pick trail to l7 (C to A, pick p4): another club, another pick.
+    expect(
+      resealed({}, (leg) =>
+        leg.transferId === l3
+          ? {
+              ...leg,
+              onward: { kind: 'pick_trail', transactionId: 't3', transferId: transferId('l7') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // l3 linked to l6 (A to C, pick p3): A did not receive l3, and p3 is not p2.
+    expect(
+      resealed({}, (leg) =>
+        leg.transferId === l3
+          ? {
+              ...leg,
+              onward: { kind: 'pick_trail', transactionId: 't3', transferId: transferId('l6') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // A special entitlement successor of another entitlement.
+    expect(
+      resealed({ special: true }, (leg) =>
+        leg.onward?.kind === 'special_entitlement_successor'
+          ? {
+              ...leg,
+              onward: {
+                ...leg.onward,
+                entitlementId: `special-draft-entitlement:${'f'.repeat(64)}`,
+              },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // A pick trail from a special entitlement: the link is not a pick trail.
+    expect(
+      resealed({ special: true }, (leg) =>
+        leg.onward?.kind === 'special_entitlement_successor'
+          ? {
+              ...leg,
+              onward: { kind: 'pick_trail', transactionId: 't2', transferId: transferId('l4') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+    // A leg whose clubs are not its transfer's.
+    expect(
+      resealed({}, (leg) =>
+        leg.transferId === transferId('l1') ? { ...leg, receivingClubId: 'c' } : leg
+      )
+    ).toThrow(/clubs are not the candidate transfer's/);
+  });
+
+  it('keeps every trade zero-sum at every checkpoint, for every structure', () => {
+    const variants = [
+      {},
+      { special: true },
+      { unresolvedPears: true },
+      { special: true, unresolvedPears: true },
+      { custody: [] },
+    ];
+    for (const options of variants)
+      for (const result of [computeAflTradeValueLines(inputs(options)), withFit(options)])
+        for (const { clubs, legs } of result.content.trades) {
+          expect(legs.length).toBeGreaterThan(0);
+          const sum = (pick: (club: (typeof clubs)[number]) => number) =>
+            clubs.reduce((total, club) => total + pick(club), 0);
+          expect(sum((club) => club.atTrade.net)).toBeCloseTo(0, 6);
+          clubs[0]!.points.forEach((_, index) =>
+            expect(sum((club) => club.points[index]!.net)).toBeCloseTo(0, 6)
+          );
+        }
   });
 });
 
