@@ -390,8 +390,9 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
 ### Value lines (step 3)
 
 Built in `valuation/valueLines.ts` (pure) and run by `npm run outcomes:grading:value-lines`; the
-artifact is `afl-trade-value-lines/v2`, which reads its trades, legs and onward links from the trade
-structure (`afl-trade-structure/v1`, step 5), never a realized grade. Every rule is published in it
+artifact is `afl-trade-value-lines/v3`, which reads its trades, legs and onward links from the trade
+structure (`afl-trade-structure/v1`, step 5), never a realized grade, and carries each trade leg's
+points at the trade's checkpoints, so a reader takes a leg's value from the point its nets count. Every rule is published in it
 (`rules`). This section fixes how
 the spec above is applied; it changes none of the owner's rules.
 
@@ -506,9 +507,9 @@ the spec above is applied; it changes none of the owner's rules.
    share and the trade story reads them (step 5).
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
    bundle split, then regrade on intrinsic value lines. In progress: the trade structure (trades, legs and onward links with no
-   value) is in place, the value lines read it (`afl-trade-value-lines/v2`), and the trade story reads the
-   structure and value lines, not a realized grade: signed values at the latest checkpoint, the at-trade
-   view beside them, matched-bid shares and future picks valued, and each club's net on the trade alone as
+   value) is in place, the value lines read it (`afl-trade-value-lines/v3`, with each leg's points), and
+   the trade story reads the structure and value lines, not a realized grade: signed values at the latest
+   checkpoint (each leg at the point its trade's net counts), the at-trade view beside them, matched-bid shares and future picks valued, and each club's net on the trade alone as
    the page headline (owner, 2026-10-21). Retiring grade rules v11 and v13 to v18 and the regrade are
    still to come.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.

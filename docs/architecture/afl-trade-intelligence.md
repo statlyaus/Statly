@@ -3961,7 +3961,7 @@ from a sealed trade structure and the sealed value lines computed on it
 realized grade is read. `buildAflTradeStory({ structure, valueLines }, tradeId, names)` is pure: club and
 player names and each pick transfer's label are injected, and a missing name, leg, line or onward leg
 fails the build rather than being guessed. It refuses value lines that are not
-`afl-trade-value-lines/v2`, do not match their content address, or were not computed on the given
+`afl-trade-value-lines/v3`, do not match their content address, or were not computed on the given
 structure (`inputs.structureId`). It serves only the local private valuation reader ("Private trade
 page" below). Value lines are publication-prohibited, so public pages stay on the publication runtime
 and never read this model.
@@ -3975,12 +3975,15 @@ It returns, for one trade:
 - **Nets:** each club's net on this trade, with its at-trade net beside it, and secondary, with its next
   moves. Both trade nets come straight from the value lines' per-club net points, so each trade is
   zero-sum. The linked trades are the trade and, repeatedly, each later trade a club of the trade passed
-  a pick it received into. A club's chain is the linked trades it is a party to; its chain net is the sum
-  of its nets on those trades, so a pick received and passed on cancels out. Owner, 2026-10-21 ("This
+  a pick it received into. A club's chain is the linked trades it is a party to. Its chain net is counted
+  per value line: each line it received is +1 and each it gave is -1, valued at the latest chain trade
+  that moved it, so a pick received and passed on nets to zero and cancels out even when the two trades
+  read it at different slots. Owner, 2026-10-21 ("This
   trade alone"): the trade's own net is the headline; step 6 builds the chain view.
 - **Players:** what each club of the trade ended up with along its chain, then the ones that got away:
   assets those clubs gave that none of them kept. Each has its club, how it was acquired, its value and
-  whether the stint (or a matched-bid nominee's) is still open.
+  whether the stint (or a matched-bid nominee's) is still open. Its acquired label is the asset's label
+  (a player's name for a player leg), so a pending traded player is still named.
 - **Lineage:** the linked trades plus each later trade an asset of the trade passed through, with
   per-trade nets, and each asset's hops from its first hop in the structure to its final leg, following
   the structure's onward links (a pick trail, or a special entitlement's reviewed custody successor). An
@@ -3989,8 +3992,10 @@ It returns, for one trade:
   reviewed source record; an unsourced event is never shown.
 
 **Values.** Each leg reads the value line the value lines give it (`assetKey`), the same line in every
-trade a pick passes through. An asset's value is that line's point at the trade's checkpoint (its latest
-earlier point when the line has none there). Values are signed, never floored: a closed stint that cost
+trade a pick passes through. An asset's value in a trade is that trade leg's own point at the trade's
+checkpoint, which the value lines carry (v3), else its at-trade point: exactly the point the trade's
+nets count, so each side's known received minus given equals its net. A pick before its draft is read
+at the latest hop's slot, so the same pick can read differently in two trades. Values are signed, never floored: a closed stint that cost
 value is negative, and sorts and draws accordingly, with a pending value after every known one. What the
 asset became follows the line: a drafted or traded player at his club (open or closed), a matched-bid
 share of the nominee (`pick_matched_bid_share`, valued), a pick whose draft is still to come (valued at
@@ -4233,7 +4238,7 @@ link whose onward trade leads back to its own trade.
 
 The realized grader builds its trades, legs and onward links from the same module
 (`createAflTradeStructureView`), so its output is unchanged. The value lines read their trades, legs and
-onward links from the structure (`afl-trade-value-lines/v2`, below), and the trade story reads the
+onward links from the structure (`afl-trade-value-lines/v3`, below), and the trade story reads the
 structure and those value lines (above).
 
 ### Value lines
@@ -4262,10 +4267,11 @@ and his earlier trades for the phases; a unit test holds every fixture leg at ev
 fit's own point. Inputs that pin different calculations for a season (the fit, ledger and games read
 model; the structure pins none), a games read model of another method, a checkpoint past the fit's last season or a tenure past the curves' horizon are refused.
 
-**Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v2`; v1 named a batch id): the rules, the
+**Output.** `value-lines:<sha256>` (`afl-trade-value-lines/v3`; v2 had no per-leg points, v1 named a
+batch id): the rules, the
 inputs (fit, traded-player fit, ledger, candidate and trade structure ids, each season's calculation), one line per asset (a pick, a traded
 player's stint at the receiving club, or an unresolved transfer), each trade's legs with their at-trade
-views, and per club the at-trade net and the net at each draft and season end, provisional while a leg is
+views and their points at each of the trade's checkpoints (the values the nets count), and per club the at-trade net and the net at each draft and season end, provisional while a leg is
 pending. `npm run outcomes:grading:value-lines` (`Scripts/compute-value-lines.ts`) stores it as
 `derived_private` in repository `value-lines`. See the operations runbook, "Computing the value lines".
 The trade story reads them with their structure ("Trade story read model" above; implementation order
@@ -4329,7 +4335,10 @@ code change. Top to bottom:
 - **Trade details:** what each club gave, what every asset became, its value now and its value at the
   trade beside it, and each club's net on this trade with its at-trade net beside it (never subtracted).
   The net with each club's next moves follows as the secondary view. A net that leaves out a pending
-  asset is starred.
+  asset is starred, the at-trade net included, and the footer explains the star. An at-trade value not
+  in yet gives the line's reason. A net that reads 0.0 is in neutral ink, and the headline is "Level so
+  far" when the top two nets read the same to one decimal. The header names the checkpoint the values
+  were read at (the end of a season, or a draft or trade period of the last season).
 - **Matched bids:** a pick spent matching a bid is shown as a swap. Its card gives the AFL price, a
   points bar and table of the points and share of the price each spent pick covered, the pick's value
   (its value line: its share of the nominee's line) and any leftover pick. The share is in the totals.
