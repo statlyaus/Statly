@@ -36,7 +36,7 @@ export function TradeScarf({
       tradeClubs.map((club) => [club.clubId, club.clubName])
     )
   );
-  const pending = story.nets.withNextMoves.some(({ pendingCount }) => pendingCount > 0);
+  const pending = story.nets.tradeAlone.some(({ pendingCount }) => pendingCount > 0);
 
   const width = Math.max(820, 260 + steps.length * 95);
   const bandStart = 30 + FRINGE;
@@ -56,9 +56,9 @@ export function TradeScarf({
       className="overflow-hidden rounded-2xl lg:grid lg:grid-cols-[220px_1fr]"
     >
       <div className="bg-(--ts-scarf-side) p-5 text-(--ts-scarf-side-ink)">
-        <p className="ts-small text-(--ts-scarf-side-muted)">{`Value now (${throughSeason})`}</p>
+        <p className="ts-small text-(--ts-scarf-side-muted)">{`This trade now (${throughSeason})`}</p>
         <ul className="mt-1 grid gap-1">
-          {story.nets.withNextMoves.map((net) => (
+          {story.nets.tradeAlone.map((net) => (
             <li key={net.clubId} className="flex items-center gap-2">
               <ClubBadge clubName={net.clubName} />
               <span className="text-[20px] leading-tight font-bold tabular-nums">
@@ -116,7 +116,7 @@ export function TradeScarf({
         ) : null}
         {pending ? (
           <p className="mt-5 ts-small text-(--ts-scarf-side-muted)">
-            * Totals leave out bid-match shares and values not in yet.
+            * Totals leave out values not in yet.
           </p>
         ) : null}
       </div>
@@ -179,7 +179,7 @@ export function TradeScarf({
           ))}
           <li>
             {throughSeason}:{' '}
-            {story.nets.withNextMoves.map((net) => `${net.clubName} ${netText(net)}`).join(', ')}.
+            {story.nets.tradeAlone.map((net) => `${net.clubName} ${netText(net)}`).join(', ')}.
           </li>
         </ol>
       </figcaption>

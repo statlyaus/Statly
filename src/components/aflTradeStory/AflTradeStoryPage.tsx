@@ -16,9 +16,12 @@ import {
   type AflTradePageModel,
 } from './tradePageModel';
 
-/** "Geelong are ahead so far", or "Level so far" when no club is ahead by 0.1 or more. */
+/**
+ * "Geelong are ahead so far" on this trade alone (owner, 2026-10-21), or "Level so far" when no club
+ * is ahead by 0.1 or more. The chain's nets are secondary and never set the headline.
+ */
 export function headline(model: AflTradePageModel): string {
-  const nets = [...model.story.nets.withNextMoves].sort((left, right) => right.net - left.net);
+  const nets = [...model.story.nets.tradeAlone].sort((left, right) => right.net - left.net);
   const [first, second] = nets;
   if (!first || (second && Math.abs(first.net - second.net) < 0.05)) return 'Level so far';
   return `${first.clubName} are ahead so far`;
@@ -35,7 +38,9 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   const shares = bidSharesByPickId(bidMatches);
   const pendingCount = Math.max(
     0,
-    ...story.nets.withNextMoves.map(({ pendingCount }) => pendingCount)
+    ...[...story.nets.tradeAlone, ...story.nets.withNextMoves].map(
+      ({ pendingCount }) => pendingCount
+    )
   );
 
   return (
@@ -56,8 +61,8 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           <p className="mt-1 ts-body text-(--ts-ink2)">
             {tradeName(story.trade.clubs)} trade, {story.trade.year}
           </p>
-          <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s value so far">
-            {story.nets.withNextMoves.map((net) => (
+          <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s net on this trade">
+            {story.nets.tradeAlone.map((net) => (
               <li
                 key={net.clubId}
                 className="flex items-center gap-2.5 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-3.5 py-2"
@@ -82,8 +87,9 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
             ))}
           </ul>
           <p className="mt-3 max-w-[68ch] text-(--ts-ink2)">
-            Values are PAV (Player Approximate Value) to {throughSeason}: what each player has given
-            the club that drafted or traded for him.
+            Values are PAV (Player Approximate Value) value lines at the end of {throughSeason}:
+            what each player has given the club that drafted or traded for him, plus what a stint
+            still open is expected to add. A pick whose draft is to come is valued at its slot.
           </p>
         </header>
 
@@ -98,10 +104,11 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-(--ts-ink2)">
           <p>
             PAV (Player Approximate Value): what each player has given the club that drafted or
-            traded for him, to {throughSeason}.
+            traded for him to {throughSeason}, plus what an open stint is expected to add. A pick
+            used to match a bid is worth its share of the player.
           </p>
           {pendingCount > 0 ? (
-            <p>* Totals leave out bid-match shares and values not in yet, so they will move.</p>
+            <p>* Totals leave out values not in yet, so they will move.</p>
           ) : null}
           <p>Players still at their club: values will move. Club colours only, no club marks.</p>
         </footer>

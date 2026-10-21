@@ -130,7 +130,7 @@ export function EndBlock({
 }) {
   const top = Math.min(topEdge(x), topEdge(x + END_BLOCK)) - 12;
   const height = BAND + 30;
-  const nets = story.nets.withNextMoves;
+  const nets = story.nets.tradeAlone;
   const rowHeight = (height - 28) / Math.max(nets.length, 1);
   return (
     <g>

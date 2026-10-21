@@ -5,14 +5,7 @@ import type { AflTradeStoryLineageTrade } from '@/server/aflTradeIntelligence/va
 
 import { ClubBadge } from './ClubBadge';
 import { AssetValue } from './AssetValue';
-import {
-  becameText,
-  bidShareOf,
-  netText,
-  tradeName,
-  tradeStoryHref,
-  type AflTradePageBidShare,
-} from './tradePageModel';
+import { becameText, netText, tradeName, tradeStoryHref } from './tradePageModel';
 
 export const panelId = (tradeId: string) =>
   `trade-panel-${tradeId.replace(/[^a-zA-Z0-9_-]/gu, '-')}`;
@@ -25,14 +18,12 @@ export function LineageTradePanel({
   trade,
   isThisTrade,
   clubNames,
-  shares,
   headingRef,
   onClose,
 }: {
   trade: AflTradeStoryLineageTrade;
   isThisTrade: boolean;
   clubNames: ReadonlyMap<string, string>;
-  shares: ReadonlyMap<string, AflTradePageBidShare>;
   headingRef: RefObject<HTMLHeadingElement | null>;
   onClose: () => void;
 }) {
@@ -117,7 +108,7 @@ export function LineageTradePanel({
                       <span className="text-(--ts-ink2)">· {becameText(asset, clubNames)}</span>
                     </span>
                     <span className="font-semibold whitespace-nowrap tabular-nums">
-                      <AssetValue asset={asset} share={bidShareOf(asset, shares)} />
+                      <AssetValue asset={asset} />
                     </span>
                   </li>
                 ))}

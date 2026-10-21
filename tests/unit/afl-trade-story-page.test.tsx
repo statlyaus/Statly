@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { AflTradeStoryPage } from '@/components/aflTradeStory/AflTradeStoryPage';
+import { AflTradeStoryPage, headline } from '@/components/aflTradeStory/AflTradeStoryPage';
 import { aflTradeStorySamples } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
 import type { AflTradePageModel } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
 
@@ -43,16 +43,16 @@ afterEach(() => {
 });
 
 describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => {
-  it('leads with each club’s value so far, not a letter grade', () => {
+  it('leads with each club’s net on this trade alone, not a letter grade', () => {
     const { container } = renderPage(TRADE.cameron);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Geelong are ahead so far');
-    const chips = screen.getByRole('list', { name: 'Each club’s value so far' });
-    expect(textOf(chips)).toContain('+7.7* Geelong');
-    expect(textOf(chips)).toContain('−57.6 GWS');
-    // The deal strip: what each club gave, from the trade's sides.
+    const chips = screen.getByRole('list', { name: 'Each club’s net on this trade' });
+    expect(textOf(chips)).toContain('+50.9 Geelong');
+    expect(textOf(chips)).toContain('−50.9 GWS');
+    // The deal strip: what each club gave, highest value first, from the trade's sides.
     const deal = screen.getByRole('list', { name: 'What each club gave' });
     expect(within(deal).getAllByRole('listitem').map(textOf)).toEqual([
-      'Geelong gave pick 13, pick 15 (WCE), pick 20 → pick 25, 2021 4th round',
+      'Geelong gave 2021 4th round, pick 20 → pick 25, pick 15 (WCE), pick 13',
       'GWS gave Jeremy Cameron, 2021 2nd round (GWS), 2021 2nd round (ESS)',
     ]);
     expect(textOf(container)).not.toContain('on this trade, then');
@@ -66,18 +66,23 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     renderPage(TRADE.cameron);
     const details = section('Trade details');
     const gws = within(details).getByRole('heading', { name: /GWS gave Geelong/u }).parentElement!;
-    expect(textOf(gws)).toContain('Jeremy Cameron first stint at Geelong 95.3');
+    // Each asset's value at the trade sits beside its value now.
+    expect(textOf(gws)).toContain('Jeremy Cameron first stint at Geelong · at the trade 70.0 95.3');
     expect(textOf(gws)).toContain(
-      '2021 2nd round (GWS) became Paul Curtis (at North Melbourne) 51.6'
+      '2021 2nd round (GWS) became Paul Curtis (at North Melbourne) · at the trade 14.9 51.6'
     );
     expect(textOf(gws)).toContain('Geelong received 146.9');
     const geelong = within(details).getByRole('heading', {
       name: /Geelong gave GWS/u,
     }).parentElement!;
     expect(textOf(geelong)).toContain('GWS received 96.0');
-    expect(textOf(details)).toContain('On this trade alone');
-    expect(textOf(details)).toContain('+50.9');
-    expect(textOf(details)).toContain('−43.2 from 1 later trade');
+    expect(textOf(details)).toContain(
+      'On this trade alone Geelong +50.9 at the trade +28.1* GWS −50.9 at the trade −28.1*'
+    );
+    // The chain is secondary: shown, never the headline.
+    expect(textOf(details)).toContain(
+      'With what each club did next Geelong −1.6 −52.5 from 1 later trade'
+    );
   });
 
   it('marks players still at their club, and one who left', () => {
@@ -87,7 +92,7 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
       name: /Jeremy Cameron/u,
     }).parentElement!;
     expect(textOf(cameron)).toContain('From GWS in the 2020 trade.');
-    expect(textOf(cameron)).toContain('95.3 PAV to date');
+    expect(textOf(cameron)).toContain('95.3 PAV, produced plus expected');
     expect(textOf(cameron)).toContain('Still at Geelong · value will move');
     const curtis = within(players).getByRole('heading', { name: /Paul Curtis/u }).parentElement!;
     expect(textOf(curtis)).toContain(
@@ -97,6 +102,7 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
       within(players).getByRole('heading', { name: 'Now at other clubs' })
     ).toBeInTheDocument();
     const mcmahon = within(players).getByRole('heading', { name: /Liam McMahon/u }).parentElement!;
+    expect(textOf(mcmahon)).toContain('0.0 PAV produced');
     expect(textOf(mcmahon)).toContain('Left Collingwood · value is final');
   });
 
@@ -122,13 +128,13 @@ describe('private trade page: the Cameron trade (Geelong ⇄ GWS, 2020)', () => 
     expect(textOf(figure)).toContain('6 trades in the chain');
     expect(textOf(figure)).toContain('Biggest values');
     expect(textOf(figure)).toContain(
-      'Geelong get Jeremy Cameron and 2 more. GWS get pick 13 and 3 more.'
+      'Geelong get Jeremy Cameron and 2 more. GWS get 2021 4th round and 3 more.'
     );
-    expect(textOf(figure)).toContain('Value now (2026) Geelong +7.7* GWS −57.6');
+    expect(textOf(figure)).toContain('This trade now (2026) Geelong +50.9 GWS −50.9');
     expect(textOf(figure)).toContain(
       '2020. Draft. Cook (pick 25), Angwin (pick 18), Stone (pick 15) and'
     );
-    expect(textOf(figure)).toContain('2026: Geelong +7.7*, GWS −57.6.');
+    expect(textOf(figure)).toContain('2026: Geelong +50.9, GWS −50.9.');
   });
 });
 
@@ -142,39 +148,41 @@ describe('private trade page: Geelong ⇄ Western Bulldogs, 2021', () => {
     expect(textOf(card)).toContain(
       'Western Bulldogs matched a bid for Sam Darcy at pick 2 in 2021. The price was 2,013.6 points, paid with 5 picks.'
     );
-    expect(textOf(card)).toContain('9.34 Pick 34 · 2021 (GEE)’s share: 26.9% of Sam Darcy’s 34.71');
+    expect(textOf(card)).toContain('9.34 Pick 34 · 2021 (GEE)’s share: 26.9% of Sam Darcy’s value');
     const rows = within(card)
       .getAllByRole('row')
       .slice(1)
       .map((row) => [...row.querySelectorAll('th, td')].map(textOf));
     expect(rows).toEqual([
-      ['Pick 34 (this pick)', '542', '9.34'],
-      ['Pick 42', '395', '6.81'],
-      ['Pick 43', '378', '6.52'],
-      ['Pick 44', '362', '6.24'],
-      ['Pick 45 · part used', '336.6', '5.80'],
+      ['Pick 34 (this pick)', '542', '26.9%'],
+      ['Pick 42', '395', '19.6%'],
+      ['Pick 43', '378', '18.8%'],
+      ['Pick 44', '362', '18.0%'],
+      ['Pick 45 · part used', '336.6', '16.7%'],
     ]);
     expect(textOf(card)).toContain('Pick 45 had 10.4 points left over. They became pick 61.');
-    expect(textOf(card)).toContain('Shares are not in the totals yet.');
+    expect(textOf(card)).not.toContain('not in the totals');
   });
 
-  it('keeps the matched-bid picks out of the nets, starred', () => {
+  it('counts each matched-bid pick’s share in the nets, unstarred', () => {
     renderPage(TRADE.geeWbd);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       'Western Bulldogs are ahead so far'
     );
-    const chips = screen.getByRole('list', { name: 'Each club’s value so far' });
-    expect(textOf(chips)).toContain('−43.2* Geelong');
-    expect(textOf(chips)).toContain('+15.8* Western Bulldogs');
-    // Each matched-bid pick shows its ledger share, starred, instead of "pending".
+    const chips = screen.getByRole('list', { name: 'Each club’s net on this trade' });
+    expect(textOf(chips)).toContain('−52.5 Geelong');
+    expect(textOf(chips)).toContain('+52.5 Western Bulldogs');
+    // Each matched-bid pick's value is its value line: its share of the nominee.
     const details = section('Trade details');
-    expect(textOf(details)).toContain(
-      'Pick 34 · 2021 (GEE) used to match a bid · share of Sam Darcy 9.34 (share, not in the totals yet)'
+    expect(textOf(details)).toMatch(
+      /Pick 34 · 2021 \(GEE\) used to match a bid · share of Sam Darcy · at the trade \d+\.\d 9\.34/u
     );
+    // The chain still shows the unpriced 2022 bid as pending.
+    expect(textOf(details)).toContain('Western Bulldogs +32.0* −20.6 from 1 later trade');
     const pick42 = within(section('Who they ended up with')).getByRole('heading', {
       name: /Pick 42$/u,
     }).parentElement!;
-    expect(textOf(pick42)).toContain('6.81 share of Sam Darcy, not in the totals yet');
+    expect(textOf(pick42)).toContain('6.81 PAV, share of Sam Darcy');
     // Pick 42 came to the Bulldogs in their next trade: its share card is on the page too.
     expect(
       screen.getByRole('article', { name: 'Pick 42 became a share of Sam Darcy' })
@@ -188,6 +196,28 @@ describe('private trade page: Geelong ⇄ Western Bulldogs, 2021', () => {
     const link = within(lineage).getByRole('link', { name: 'Share of Sam Darcy: 9.34' });
     expect(link).toHaveAttribute('href', '#bid-pick-2021-34-gee');
     expect(document.getElementById('bid-pick-2021-34-gee')).not.toBeNull();
+  });
+});
+
+describe('private trade page: the headline', () => {
+  it('reads this trade alone, never the chain (owner, 2026-10-21)', () => {
+    const cameron = model(TRADE.cameron);
+    // A chain that leans the other way leaves the headline on this trade's own nets.
+    const flipped: AflTradePageModel = {
+      ...cameron,
+      story: {
+        ...cameron.story,
+        nets: {
+          ...cameron.story.nets,
+          withNextMoves: cameron.story.nets.withNextMoves.map((net) => ({
+            ...net,
+            net: -net.net,
+          })),
+        },
+      },
+    };
+    expect(headline(flipped)).toBe('Geelong are ahead so far');
+    expect(headline(model(TRADE.wbdNth))).toBe('North Melbourne are ahead so far');
   });
 });
 
