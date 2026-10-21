@@ -2,10 +2,12 @@
  * The value-line contract (value-line method, implementation order step 3; statlyaus/Statly#789):
  * every traded asset's value line at each checkpoint, and each trade's per-club nets on those lines,
  * with each leg's at-trade view beside them. Private and publication-prohibited, like the asset ledger
- * and realized grades.
+ * and the retired realized grade. v2 (step 5) reads its trades, legs and onward links from the trade
+ * structure (`afl-trade-structure/v1`); v3 carries each trade leg's points at the trade's checkpoints,
+ * the values its nets count.
  */
 
-export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v1' as const;
+export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v3' as const;
 
 /**
  * Every choice step 3 makes where the method left one open. Published with the result; each is a
@@ -139,6 +141,12 @@ export interface AflTradeValueLineTradeLeg {
   readonly receivingClubId: string;
   /** The asset's value at this trade, from this leg's own at-trade slot for a pick. */
   readonly atTrade: AflTradeValueLinePoint;
+  /**
+   * The asset's value at each of the trade's checkpoints, aligned with each club's `points`: exactly
+   * the values the nets count (v3). A checkpoint another leg brings (a draft) is read on this line too,
+   * so a reader never derives a leg's value from the line's own points.
+   */
+  readonly points: readonly AflTradeValueLinePoint[];
 }
 
 export interface AflTradeValueLineNetPoint {
@@ -157,7 +165,10 @@ export interface AflTradeValueLineNetPoint {
 export interface AflTradeValueLineTrade {
   readonly transactionId: string;
   readonly tradeYear: number;
-  /** Each pick leg's line is what its pick finally became (a traded-on pick is followed on). */
+  /**
+   * Each pick leg's line is what its pick finally became: a traded-on pick follows the structure's
+   * onward links (a pick trail, or a special entitlement's reviewed custody successor).
+   */
   readonly legs: readonly AflTradeValueLineTradeLeg[];
   readonly clubs: readonly {
     readonly clubId: string;
@@ -174,8 +185,9 @@ export const AFL_TRADE_VALUE_LINES_LIMITATION: string =
   "matched-bid spent pick by its own slot until the bid, then its share of the nominee's line; a " +
   'traded player by what he has produced at the receiving club plus what the traded-player fit ' +
   'expects, pending while no such fit is stored. Lines use only seasons through each checkpoint. ' +
-  'Each trade is zero-sum on these lines. Grade rules v11 and v13 to v18 are not retired here. Not ' +
-  'for publication.';
+  'Trades, legs and onward links come from the trade structure, with no realized grade read. Each ' +
+  'trade is zero-sum on these lines. Grade rules v11 and v13 to v18 are not retired here. Not for ' +
+  'publication.';
 
 export interface AflTradeValueLinesContent {
   readonly schemaVersion: typeof AFL_TRADE_VALUE_LINES_SCHEMA_VERSION;
@@ -188,7 +200,8 @@ export interface AflTradeValueLinesContent {
     readonly tradedPlayerFitId: string | null;
     readonly ledgerId: string;
     readonly candidateId: string;
-    readonly batchId: string;
+    /** The trade structure (`afl-trade-structure/v1`) the trades, legs and onward links came from. */
+    readonly structureId: string;
     readonly gamesMethodId: string;
     /** Every season read, with the HPN PAV calculation all inputs pinned for it. */
     readonly seasons: readonly { readonly season: number; readonly calculationId: string }[];

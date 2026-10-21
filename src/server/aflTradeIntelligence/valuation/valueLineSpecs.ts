@@ -1,7 +1,6 @@
 import type { AflTradeAssetLedgerReadModel } from './assetLedger';
 import type { AflTradeAssetLedgerPick } from './assetLedgerContracts';
-import type { AflTradeStoryIndex } from './realizedTradeStoryAssets';
-import type { AflTradeStoryTrade } from './realizedTradeStoryContracts';
+import type { AflTradeStructureLeg, AflTradeStructureTrade } from './tradeStructureContracts';
 import {
   aflTradeValueLineCheckpointOrder as orderOf,
   aflTradeValueLinePending as pending,
@@ -41,8 +40,7 @@ interface Hop {
 }
 
 type Sources = {
-  trades: readonly AflTradeStoryTrade[];
-  index: AflTradeStoryIndex;
+  trades: readonly AflTradeStructureTrade[];
   candidate: AflTradeValueLineCandidate;
   ledger: Pick<AflTradeAssetLedgerReadModel, 'ledger' | 'stintValue'>;
   reader: AflTradeValueLineReader;
@@ -166,14 +164,72 @@ function pickSpec(
   }
 }
 
+type Transfer = AflTradeValueLineCandidate['transfers'][number];
+
 /**
- * Every asset's line, and each leg's asset key and at-trade view. A pick leg is followed through
- * each onward trade to its final hop, so it carries what its pick finally became; a player leg is
- * his own stint at the club that received him in that trade.
+ * Whether `next` continues `hop`'s asset: given on by the club that received it, as the same pick (a
+ * pick trail) or as the next transfer of the same special entitlement's reviewed custody chain.
+ */
+function continues(
+  transfers: ReadonlyMap<string, Transfer>,
+  hop: AflTradeStructureLeg,
+  next: AflTradeStructureLeg
+): boolean {
+  const onward = hop.onward!;
+  const from = transfers.get(hop.transferId)?.asset;
+  const to = transfers.get(next.transferId)?.asset;
+  if (next.sendingClubId !== hop.receivingClubId || !from || !to) return false;
+  if (onward.kind === 'pick_trail')
+    return (
+      from.kind === 'pick_entitlement' &&
+      to.kind === 'pick_entitlement' &&
+      from.pickId === to.pickId
+    );
+  if (from.kind === 'player' || from.kind === 'pick_entitlement' || to.kind === 'player')
+    return false;
+  const own = (asset: typeof from | typeof to) =>
+    asset.kind !== 'special_entitlement' || asset.entitlementId === onward.entitlementId;
+  return own(from) && own(to);
+}
+
+/**
+ * A leg's final hop: its onward links in the trade structure (a pick trail, or a special
+ * entitlement's reviewed custody successor), followed to the leg that links nowhere. The structure
+ * links whatever became of the onward trade and cuts every cycle; a cycle here is refused, and so is a
+ * link that does not continue the asset (any caller can seal a structure).
+ */
+function finalHopOf(
+  legs: ReadonlyMap<string, AflTradeStructureLeg>,
+  transfers: ReadonlyMap<string, Transfer>,
+  leg: AflTradeStructureLeg
+): AflTradeStructureLeg {
+  let hop = leg;
+  for (let steps = 0; hop.onward !== undefined; steps++) {
+    if (steps > legs.size)
+      throw new Error(`The trade structure links transfer ${leg.transferId} in a cycle.`);
+    const next = legs.get(hop.onward.transferId);
+    if (next === undefined)
+      throw new Error(`The trade structure links transfer ${hop.transferId} outside itself.`);
+    if (!continues(transfers, hop, next))
+      throw new Error(
+        `The trade structure links transfer ${hop.transferId} to ${next.transferId}, which does not continue its asset.`
+      );
+    hop = next;
+  }
+  return hop;
+}
+
+/**
+ * Every asset's line, and each leg's asset key and at-trade view. A pick leg follows the trade
+ * structure's onward links to its final hop, so it carries what its pick finally became, in every
+ * trade it passed through; a player leg is his own stint at the club that received him in that trade.
  */
 export function aflTradeValueLineSpecs(sources: Sources) {
-  const { trades, index, candidate, ledger, reader } = sources;
+  const { trades, candidate, ledger, reader } = sources;
   const transfers = new Map(candidate.transfers.map((transfer) => [transfer.transferId, transfer]));
+  const structureLegs = new Map(
+    trades.flatMap(({ legs }) => legs.map((leg) => [leg.transferId, leg] as const))
+  );
   const picks = new Map(ledger.ledger.content.picks.map((pick) => [pick.pickId, pick]));
   const specs = new Map<string, AflTradeValueLineSpec>();
   const hops = new Map<string, { list: Hop[]; firstTradeYear: number; pickId: string }>();
@@ -189,8 +245,10 @@ export function aflTradeValueLineSpecs(sources: Sources) {
       const transfer = transfers.get(leg.transferId);
       if (transfer === undefined)
         throw new Error(
-          `The batch names transfer ${leg.transferId}, which the candidate does not hold.`
+          `The structure names transfer ${leg.transferId}, which the candidate does not hold.`
         );
+      if (transfer.fromClubId !== leg.sendingClubId || transfer.toClubId !== leg.receivingClubId)
+        throw new Error(`Transfer ${leg.transferId}'s clubs are not the candidate transfer's.`);
       const key = `${trade.transactionId}|${leg.transferId}`;
       const unresolved = (assetKey: string) => {
         if (!specs.has(assetKey))
@@ -233,7 +291,7 @@ export function aflTradeValueLineSpecs(sources: Sources) {
         legs.push({ key, assetKey, tradeYear: trade.tradeYear, slot: null, pick: false });
         continue;
       }
-      const final = transfers.get(index.finalHop({ trade, leg }).leg.transferId);
+      const final = transfers.get(finalHopOf(structureLegs, transfers, leg).transferId);
       if (final === undefined)
         throw new Error(`The final hop of transfer ${leg.transferId} is not in the candidate.`);
       if (final.asset.kind !== 'pick_entitlement') {

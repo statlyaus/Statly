@@ -934,7 +934,7 @@ supersede production Gate authority, and production execution cannot reuse non-p
    differs from an undeferred promotion of the same candidate (`deferredIssueCount` is 0 for a
    decision that deferred nothing; the draft-events file is then `[]`, since no draft is written
    whole). Deferred issues stay on the candidate;
-   the grader keeps reporting those legs exactly as now. Nothing deferred is ever published: the
+   the trade structure and value lines read those legs exactly as now. Nothing deferred is ever published: the
    promotion-backed corpus excludes a deferred-lineage promotion from its scope and the database
    refuses it as a member, so no factual release can carry it. Reversal is a later reviewed pick
    lineage or a new candidate without the deferral, which supersedes it.
@@ -1232,8 +1232,8 @@ pick. After capture, the order's club
 spellings (`Greater Western Sydney`, `GWS`, `GWS Giants`, `Brisbane Lions`) need current
 `official_afl` club resolutions before reconciliation can use the rows; an unresolved name leaves
 that row `unresolved`. Then, on an outcomes database at migration 0260 or later (earlier ones refuse
-this capability in a retained plan), rebuild the plan, completion and candidate as usual and run the realized
-grade; the `traded_on_return_unlinked` count on #853 is the measure.
+this capability in a retained plan), rebuild the plan, completion and candidate as usual and compute
+the value lines (see "Computing the value lines").
 
 Capture the Official AFL trade-period announcements (statlyaus/Statly#869) once the owner has
 recorded the per-season `-period-v2` decisions. Each `--season` is the exact reviewed announcement
@@ -3419,164 +3419,26 @@ a model or supply Gate 3 model-validity evidence. Do not claim a real model, num
 valuation publication until an executor has produced an immutable run and the later independent gates
 have approved its exact artifacts.
 
-## Grading trades on realized value (MVP)
+## Grading trades on realized value (retired)
 
-`outcomes:grading:realized` grades every trade in one reconciliation candidate on realized first-stint
-value (statlyaus/Statly#789). The rules are in the architecture doc's "Realized trade grade (MVP) contract"
-section. The command reads the candidate, the current HPN PAV calculation per season, and the current
-season spells and reviewed arrivals in one read-only transaction. It seals the private batch, writes it
-to `--out`, and stores it in the registered store as `derived_private` (repository
-`realized-trade-grades`): the bytes are written and read back in full, then one transaction records the
-custody row and its location. The batch is a calculation output, not a source, so it is not
-`raw_source`. Nothing else is written. `--dry-run` grades and writes `--out` but stores nothing.
-
-The nightly custody readback reads every `raw_source` row in full but only samples other classes (5% a
-run by default), so it does not check every stored batch each night. To check every stored batch, run
-`npm run outcomes:artifacts:readback -- --store-id <store-id> --sample-fraction 1`, which reads every
-located row of the store.
-
-```sh
-AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
-  npm run outcomes:grading:realized -- \
-  --candidate <external-reconciliation:...> --method <hpn-pav-method:...> \
-  --seasons 2021-2026 --official-seasons 2021-2025 --benchmark <hpn-pick-benchmark:...> \
-  --store-id <store-id> --out <absolute-path.json> [--dry-run]
-```
-
-- `--out` must not exist yet. The batch is never overwritten. It is written only after the batch is
-  stored, so a refused store leaves no batch file. If writing `--out` then fails, the error names the
-  stored `artifactId`, which is the batch's only copy.
-- The command refuses, and stores nothing, when:
-  - the candidate is not finalized `non_production`;
-  - a season has no finalized current PAV calculation, or its calculation was finalized after the run
-    started;
-  - a season has no season spells;
-  - a PAV row is duplicated or not bound to a current season spell;
-  - the candidate holds no trades.
-- A trade the batch cannot represent (no transfers, or an unusable club) is listed as `ungraded`.
-  Read the printed `summary` before citing a batch.
-- Under rule v6 a pick not yet drafted is valued from its slot in the candidate's live Official AFL
-  indicative order (`pick_projected_from_order`), or from its original club's slot in the previous
-  draft's order when its own draft has no order yet (`pick_projected_from_prior_order_proxy`). These
-  values are whole-career DPVC expectations, not realized first stints, so the trades are
-  `provisional`. A pick with no unique slot still blocks as `pick_outcome_pending`. After draft night,
-  re-reconcile and regrade: the leg becomes the draftee's first stint, which is 0 until he plays.
-- Under rule v7 a special draft entitlement (such as the 2020 Gold Coast concession) whose approved
-  canonical `outcome_special_entitlement_custody` row has a successor is valued as a traded-on pick
-  through the successor's trade (`special_entitlement_custody_linked`, provisional and single-source).
-  The run reads that chain itself; no flag is needed. A special entitlement with no reviewed successor
-  still blocks as `special_entitlement_unsupported`: review its custody before regrading.
-- Under rule v8 a future pick (traded before it had a slot) reports at trade the HPN DPVC v3 value
-  of the slot it eventually took (`pick_projection_eventual_slot`): the selection it was used at,
-  else its slot in its own draft's order, else for a pending pick its projected slot. It is
-  hindsight, not what the clubs knew, and changes no value or total. A future pick with no usable
-  slot from 1 to 90 still shows `future_pick_slot_unknown`; confirm its selection or order capture
-  before regrading.
-- Under rule v9 a pick hop Draftguru stated "not used", whose club the candidate shows trading the
-  same pick on later, is valued by its traded-on return (`stated_not_used_traded_on`). The
-  reconciler records it (`statedDisposition: 'not_used'`), so re-reconcile before regrading; a
-  candidate reconciled before this rule still values those hops at 0.
-- Under rule v10 a receiving club's selection Draftguru marks open but a reviewed Footyinfo board
-  records as that club's matched bid counts as a nominee, so the club's not-used picks in that draft
-  are excluded (`nomineeMatchedBidBy: footyinfo`) instead of worth 0 (2020 pick 41, Hawthorn to
-  Collingwood, with Reef McInnes). The reconciler records it (`matchedBidBoardPickIds`), so
-  re-reconcile before regrading; every board candidate gets a new id, since its board picks now
-  state any matched bid's basis.
-- Under rule v11 a traded-on pick that was the only asset its club gave in the onward trade is valued
-  at that club's whole return there, even when the next holder spent the pick on a nominee (it was
-  `pick_traded_on_return_unallocated` through v10). A hop whose club got back only excluded legs in
-  the onward trade is now unallocated instead of worth 0 (the 2026 picks in the Petracca and Fiorini
-  trades). Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
-  Compare the excluded and 0-valued traded-on counts against the v10 dry run's audit (16 sole-asset
-  legs revalued).
-- Under rule v12 a pick that cycled within one trade period follows one trail: undated pick-only
-  trades of a season are ordered by their Draftguru event id suffix, and several trails are narrowed
-  to the one ending at the pick's latest usable Official AFL custody holder. The reconciler applies
-  the same rule (a final holder's "not used" hop is no longer recorded as traded on), so
-  re-reconcile before regrading. The four trades the v10 dry run blocked as undated cycles (2019 #50,
-  2019 #64, 2020 #70 and the 2024 St Kilda and Essendon swap back) should no longer block as
-  `traded_on_return_blocked`; check each one's legs in the dry run. A candidate reconciled before
-  this rule still parses, but its final holder's hop stays traded on and grades as
-  `traded_on_return_unlinked`.
-- Under rule v13 a traded-on pick whose club gave a bundle in the onward trade with any excluded
-  asset is `pick_traded_on_return_unallocated`; through v12 the excluded sibling dropped out of the
-  weight total and the valued siblings took its share (stored batch twenty-three: 25 legs at share 1,
-  652.7 PAV, among them 2019 pick 32, Western Bulldogs, at 102.9). Only the grader changed, so
-  regrade the current candidate; no re-reconcile is needed. Check that those 25 legs are now
-  unallocated and that no valued traded-on leg's onward bundle holds an excluded asset.
-- Under rule v14 such a bundle is split by each given asset's HPN DPVC v3 at-trade projection
-  (`projection_weighted`, provisional `bundle_split_by_projection`) when every asset the club gave
-  there has one; a bundle with a player or an unprojected pick stays unallocated. Only the grader
-  changed, so regrade the current candidate; no re-reconcile is needed. Of the 115 legs (about 1,802
-  PAV) v13 left unallocated, count how many are now projection-split and how many stay unallocated,
-  and spot-check that each split leg's weights match its onward bundle's at-trade projections.
-- Under rule v15 such a bundle is split by hybrid weights instead (`hybrid_weighted`, provisional
-  `bundle_split_estimated_weights`): each valued asset weighs its realized value and each excluded
-  one its HPN DPVC v3 at-trade projection, so a bundle holding a player is now valued too. A bundle
-  stays unallocated only when an excluded asset has no projection. Only the grader changed, so
-  regrade the current candidate; no re-reconcile is needed. Of the 53 legs v14 left unallocated
-  (player beside an excluded asset), count how many are now split and how many stay unallocated,
-  and spot-check that each split leg's weights match its onward bundle's realized values and
-  projections.
-- Under rule v16 a traded-on pick whose club's every return leg in the onward trade is excluded is
-  valued at the sum of those legs' HPN DPVC v3 at-trade projections (`returnProjection`,
-  provisional `traded_on_return_estimated_from_projection`), shared among the assets the club gave
-  as any other return; it stays unallocated when a return leg has no projection. Only the grader
-  changed, so regrade the current candidate; no re-reconcile is needed. Of the 31 legs v15 left
-  unallocated on an all-excluded return, count how many are now valued (the coordinator expects
-  most of the 30 whose return is matched-bid picks) and how many stay unallocated, and spot-check
-  that each valued leg's `returnProjection` lists exactly its club's return legs in the onward trade.
-- Under rule v17 a used future pick takes its selection's slot (on a later hop of its trail too,
-  `onward_selection`, and when the selection is unresolved but not disputed), a future pick with no
-  slot in its draft's final order takes a round-position proxy (only when the order names all 18
-  clubs' first-round slots), and a pick numbered beyond 90 is
-  capped at DPVC(90); a traded-on pick whose weights or return rest on the proxy or the cap states
-  `projection_round_position_proxy` or `projection_domain_capped`. Only the grader changed, so
-  regrade the current candidate; no re-reconcile is needed. Of the 25 pick legs v16 left with no
-  at-trade view, count how many now have one by kind (expected: the three used picks by selection,
-  most of the 17 unused round-3 and round-4 picks by proxy, the four picks numbered 91 to 103 capped,
-  and the Gold Coast concession by its successor's selection), list those still unavailable (a pick
-  with no original club stays so), and count how many of the three legs v16 left unallocated are
-  now valued. Expect some existing traded-on at-trade views to move from `order` to
-  `onward_selection` where the trail ends in a selection at another number, and their bundle weights
-  and returns with them.
-- Under rule v18 every excluded leg of a traded-on pick's onward return counts at its at-trade
-  projection beside the valued legs' realized total (`returnProjection.realizedValue`), not only in
-  an all-excluded return; the pick is unallocated only when an excluded return leg has no
-  projection. Only the grader changed, so regrade the current candidate; no re-reconcile is needed.
-  Against batch `414fa5dd`, check the 74 traded-on legs whose partial return held 106
-  `pick_not_used_nominee_excluded` legs: each should now carry a `returnProjection` listing exactly
-  its club's excluded return legs, with `realizedValue` equal to its club's `received` in the onward
-  trade, and the 2023 R2 (GWS) pick should be worth 17.1 plus its three projections (about 91.6),
-  not 17.1. Count the partial returns that are now unallocated because an excluded leg has no
-  projection (v17 valued them at their valued legs alone).
-- Under rule v19 an unused future pick that held no slot in its draft's final order takes, before
-  the proxy, the pre-draft number a reviewed Footyinfo board states (`board_pre_draft_slot`). It needs
-  v3 board captures: record the seven `-board-v3` decisions, re-capture the seven boards, prepare a
-  candidate with the v3 batches and regrade. Diff the candidate against the previous one first. A
-  re-capture gives every board row a new evidence id, so every `boardPickId` changes, and with it
-  `pickOutcomes[].boardPickId`, `matchedBidBoardPickIds`, the `draftBoardBidMatches` records and the
-  evidence ids Footyinfo rows add to selections; each v3 `draftBoardPicks` record also gains
-  `originalClubId` and `originalNumber`. Nothing else may change: any transaction, transfer, pick id,
-  custody, selection number or player, or outcome disposition that differs is a stop. Against batch
-  twenty-nine (`a9733065…`), expect 7 of the 16 proxy views to move to `board_pre_draft_slot`: 2023 R4
-  (Brisbane Lions) at 75 on two legs, 2023 R4 (Melbourne) at 71, 2024 R4 (Port Adelaide) at 76, and
-  2024 R4 (Collingwood) at 70 on three legs. The other 9 stay proxied, and the 4 capped views and the
-  unavailable 2023 R3 are unchanged. A total moves only where one of the 7 legs is a bundle weight or
-  an excluded onward-return leg; list every changed total and check that each holds one of them.
-- The batch names its PAV calculations, benchmark and spell cutoff, and its grading time and spell
-  cutoff are the run's start, so every run is a different batch, even on unchanged data. Cite batches
-  by `artifactId` and `batchId`, never "the latest".
-- It is private and `non_production`. Nothing here is publishable.
+The realized grade command (`outcomes:grading:realized`, rules v1 to v19) is retired
+(statlyaus/Statly#789, step 5 of the value-line spec): trades are read on their value lines instead.
+Export the asset ledger, fit the value-line priors and the traded-player value line, then compute the
+value lines (the sections below). The grader's code (`valuation/realizedTradeGrade*.ts`) is deleted
+too; the pick-slot lookups, the first-stint rule and the input loader it shared live on as
+`valuation/pickSlots.ts`, `valuation/stints.ts` and `development/postgresGradingInputs.ts`. A stored
+realized grade batch stays in custody as evidence, but nothing reads or parses it and none is made
+again.
 
 ## Exporting the asset ledger
 
 `outcomes:grading:asset-ledger` exports the private asset ledger (statlyaus/Statly#789): every player's
 club stints with PAV per season, and every pick's custody hops and outcome. The rules are in the
-architecture doc's "Asset ledger read model" section. It takes the same arguments as
-`outcomes:grading:realized` and reads the same inputs through the same loader in one read-only
-transaction, plus player and club names in a second one. It refuses wherever the grader's loader
-refuses (see above). It seals the ledger, stores it as `derived_private` in repository `asset-ledgers`
+architecture doc's "Asset ledger read model" section. It reads one candidate, the current HPN PAV
+calculation per season, and the current season spells and reviewed arrivals in one read-only
+transaction (the candidate-input loader, `loadAflTradeGradingInputs`), plus player and club
+names in a second one. The value lines take the same arguments and read through the same loader. It
+seals the ledger, stores it as `derived_private` in repository `asset-ledgers`
 (written and read back in full, then one custody transaction), and then writes `--out`. Nothing else is
 written. `--dry-run` builds and writes `--out` but stores nothing.
 
@@ -3590,11 +3452,21 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 
 - Run it on statly-grading-1, which holds the genuine database. `AFL_OUTCOMES_DATABASE_URL` must name
   a loopback database.
-- Every season in `--seasons` needs a finalized current HPN PAV head and season spells, or the loader
-  refuses. Before relying on 2019 and 2020, confirm both exist for them; otherwise export from the
-  first season that has them.
+- The loader refuses, and nothing is stored, when:
+  - the candidate is not finalized `non_production`;
+  - a season has no finalized current PAV calculation, or its calculation was finalized after the run
+    started;
+  - a season has no season spells;
+  - a PAV row is duplicated or not bound to a current season spell;
+  - the candidate holds no trades.
+- Before relying on 2019 and 2020, confirm both have a finalized current HPN PAV head and season
+  spells; otherwise export from the first season that has them.
 - `--out` must not exist yet; the ledger is never overwritten. If writing it fails after the store, the
   error names the stored `artifactId`.
+- The nightly custody readback reads every `raw_source` row in full but only samples other classes (5%
+  a run by default). To check every stored ledger or value-lines file, run
+  `npm run outcomes:artifacts:readback -- --store-id <store-id> --sample-fraction 1`, which reads every
+  located row of the store.
 - Read the printed `summary` before citing a ledger: `playersWithoutName` counts players with no
   approved canonical row, and `outcomes.unresolved` counts picks whose outcome the evidence does not
   state. `matchedBidPicksShared` counts the matched-bid picks that took a share of their nominee;
@@ -3602,8 +3474,8 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   board matched bid with its price by the year's AFL rule, leftover and deficit, and each spent pick's
   custody join (`link`). A candidate reconciled before migration 0288, or over v1 boards only, holds
   no bid matches, so all its matched-bid picks stay `no_bid_spend`.
-- Like a grade batch, each run is a different ledger (its build time and spell cutoff are the run's
-  start). Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
+- Each run is a different ledger (its build time and spell cutoff are the run's start), even on
+  unchanged data. Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
 
 ## Reporting player-season games
 
@@ -3653,9 +3525,9 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 
 `outcomes:grading:value-lines` computes every traded asset's value line at each checkpoint and each
 trade's per-club nets (statlyaus/Statly#789; the architecture doc's "Value lines" section and the
-value-line spec's "Value lines (step 3)"). It takes the realized grader's arguments plus a stored fit,
-rebuilds the asset ledger and the batch's trades in process, and its one write is the value lines'
-evidence record in the registered store.
+value-line spec's "Value lines (step 3)"). It takes the asset ledger's arguments plus a stored fit,
+rebuilds the asset ledger and the trade structure (`afl-trade-structure/v1`) in process, computes no
+realized grade, and its one write is the value lines' evidence record in the registered store.
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
@@ -3670,13 +3542,14 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   database. Never run it in a checkout where a pipeline is running.
 - Run `--dry-run` first: it computes and writes `--out` without `--store-id` and stores nothing.
 - `--fit` is the `--out` file of "Fitting the value-line priors"; its content address is checked. The
-  fit, the ledger, the batch and the games read model must pin the same calculation for every season they
-  share, and the games read model must be of the fit's method, or it refuses. `--through-season` may not
+  fit, the ledger and the games read model must pin the same calculation for every season they share, and the games read model must be of the fit's method, or it refuses. `--through-season` may not
   pass the fit's last season, every season end from the first trade to it must be official, and every
   `--seasons` season must be finalized with no games discrepancy.
 - `--out` is never overwritten. The printed line has the value-lines id, its inputs and its summary
   (assets by basis, assets pending at the last season end, trades with a provisional net), and the
-  stored `artifactId`. It is stored as `derived_private` in repository `value-lines`.
+  stored `artifactId`. It is stored as `derived_private` in repository `value-lines`. The printed
+  `inputs.structureId` names the trade structure it read (`afl-trade-value-lines/v3`; a v2 file has
+  no per-leg points and the trade story refuses it, so recompute).
 - `--traded-player-fit` (optional) is the `--out` file of "Fitting the traded-player value line" (the
   fit must be `afl-trade-traded-player-value-line-fit/v2`: the stored `044703d9…` is v1, has no per-season
   stage digest and is refused, so refit on genuine first); its schema and content address are checked
@@ -3717,12 +3590,12 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.
-- Use the candidate and official seasons of the current realized batch. `--seasons` starts at or before
+- Use the candidate and official seasons of the current value lines. `--seasons` starts at or before
   the first trade season (2011, so pre-trade careers are read) and ends after the last.
 - Run `--dry-run` first: it fits and writes `--out` without `--store-id` and stores nothing.
 - Every season in `--seasons` must have a finalized calculation with no games discrepancy (check with
   "Reporting player-season games"), every ledger stint season must have PAV that matches the read model,
-  and the grader's calculation ids must equal the read model's, or it refuses.
+  and the loader's calculation ids must equal the read model's, or it refuses.
 - `--out` is never overwritten. The printed line has the fit id, the leg diagnostics, the parameters, the
   back-test by stage band and checkpoint, and the stored `artifactId`.
 - Check before anything reads the fit: `legs` (reviewed and excluded counts against the #869 record, 173

@@ -4,7 +4,7 @@ import type { AflTradeAssetLedgerLabels } from '../valuation/assetLedgerContract
 /**
  * Loads the asset ledger's labels (issue 789) in one read-only transaction: every approved canonical
  * player's display name and every club's current name. Labels carry no authority; the ledger's facts
- * come only from the realized grader's inputs (`loadAflTradeRealizedTradeGradeInputs`).
+ * come only from the grading inputs (`loadAflTradeGradingInputs`).
  */
 export async function loadAflTradeAssetLedgerLabels(
   sql: AflOutcomeSqlClient

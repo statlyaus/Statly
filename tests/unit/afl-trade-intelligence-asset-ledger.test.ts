@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAflTradeAssetLedger } from '@/server/aflTradeIntelligence/valuation/assetLedger';
+import { aflTradeAssetLedgerBidMatches } from '@/server/aflTradeIntelligence/valuation/assetLedgerBidMatches';
+import { AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedBidSpends';
+import { createAflTradeAssetLedgerStintValue } from '@/server/aflTradeIntelligence/valuation/assetLedgerStints';
 import type { AflTradeAssetLedgerLabels } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
+import type { AflTradeGradingInputs } from '@/server/aflTradeIntelligence/valuation/gradingInputs';
 import {
-  gradeAflTradesOnRealizedValue,
-  type AflTradeRealizedTradeGradeInputs,
-} from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+  aflTradeArrivalReviewed,
+  aflTradeFirstStint,
+  indexAflTradeStintInputs,
+} from '@/server/aflTradeIntelligence/valuation/stints';
+import { buildAflTradeStructure } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
 
 const hex = (digit: string) => digit.repeat(64);
-type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
+type Candidate = AflTradeGradingInputs['candidate'];
 type Transfer = Candidate['transfers'][number];
 type Outcome = NonNullable<Candidate['pickOutcomes']>[number];
 type Selection = NonNullable<Candidate['draftSelections']>[number];
@@ -169,7 +175,7 @@ const spells = (playerId: string, rows: Array<[number, string]>) =>
 const pav = (playerId: string, rows: Array<[number, string, number]>) =>
   rows.map(([season, clubId, value]) => ({ playerId, season, clubId, value }));
 
-const inputs = (): AflTradeRealizedTradeGradeInputs => ({
+const inputs = (): AflTradeGradingInputs => ({
   candidateId: `external-reconciliation:${hex('a')}`,
   candidate: candidate(),
   pavCalculations: seasons.map((season) => ({
@@ -312,14 +318,20 @@ describe('asset ledger stint values', () => {
     });
   });
 
-  it('answers any player at any club from any season, by the grader’s own stint rule', () => {
+  it('answers any player at any club from any season, by the shared stint rule', () => {
     const ledger = build();
     expect(ledger.stintValue('p1', 'carlton', 2022)).toMatchObject({ total: 10, endSeason: 2023 });
     expect(ledger.stintValue('p1', 'carlton', 2025)).toMatchObject({ total: 50, status: 'open' });
-    const graded = gradeAflTradesOnRealizedValue(inputs())
-      .content.trades.flatMap(({ legs }) => legs)
-      .find(({ transferId }) => transferId === 'tr-0')!;
-    expect(graded).toMatchObject({ realizedValue: ledger.stintValue('p1', 'carlton', 2022).value });
+    // tr-0: Collingwood traded p1 to Carlton in 2021, so his first stint there starts in 2022.
+    const index = indexAflTradeStintInputs(inputs());
+    const reviewed = aflTradeArrivalReviewed(index, 'p1', 'carlton', 2021, 2022);
+    expect(reviewed).toBe(true);
+    const stint = aflTradeFirstStint(index, 'p1', 'carlton', 2022, reviewed);
+    expect(stint).toMatchObject({ status: 'closed', seasonsValued: [2022, 2023], pavSum: 10 });
+    expect(ledger.stintValue('p1', 'carlton', 2022)).toMatchObject({
+      total: stint.pavSum,
+      value: Math.max(0, stint.pavSum),
+    });
   });
 });
 
@@ -377,14 +389,19 @@ describe('asset ledger picks', () => {
     });
   });
 
-  it('values a traded pick’s draftee exactly as the grader values its last leg', () => {
-    const leg = gradeAflTradesOnRealizedValue(inputs())
-      .content.trades.flatMap(({ legs }) => legs)
-      .find(({ transferId }) => transferId === 'tr-2')!;
+  it('values a traded pick’s draftee by the shared first-stint rule from the season after the draft', () => {
+    // tr-2: Collingwood received the 2021 pick and used it on p3, whose stint there starts in 2022.
+    const index = indexAflTradeStintInputs(inputs());
+    const reviewed = aflTradeArrivalReviewed(index, 'p3', 'collingwood', 2021, 2022);
+    const stint = aflTradeFirstStint(index, 'p3', 'collingwood', 2022, reviewed);
     const outcome = build().pickOutcome(PICK_TRADED);
-    expect(outcome?.kind === 'selected' && outcome.firstStint?.value).toBe(
-      leg.state === 'valued' ? leg.realizedValue : 'not valued'
-    );
+    expect(outcome?.kind === 'selected' && outcome.firstStint).toMatchObject({
+      startSeason: 2022,
+      status: stint.status,
+      arrivalReviewed: reviewed,
+      total: stint.pavSum,
+      value: Math.max(0, stint.pavSum),
+    });
   });
 
   it('projects a pick of a draft not yet in evidence and leaves a drafted-year gap unresolved', () => {
@@ -433,7 +450,7 @@ describe('asset ledger picks without a clear outcome', () => {
     });
   });
 
-  it('refuses a selection in a draft before the trade, as the grader does', () => {
+  it('refuses a selection in a draft before the trade', () => {
     const ledger = withCandidate((candidate) => ({
       ...candidate,
       transfers: [
@@ -694,6 +711,92 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     });
   });
 
+  it('joins a spent pick with no custody slot to the one pick traded once at the board’s number', () => {
+    // Owner, 2026-10-21: Essendon's pick 34, traded once to the Bulldogs, is the board's spent 34.
+    const tradedAt = (nominalPick: number) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [darcyBid()],
+        transfers: candidate.transfers.map((row) =>
+          row.transferId === 'tr-4'
+            ? ({ ...row, asset: { ...row.asset, nominalPick } } as Transfer)
+            : row
+        ),
+      }));
+    const joined = tradedAt(34);
+    expect(joined.ledger.content.bidMatches[0]!.spentPicks[0]).toMatchObject({
+      link: 'trade_entitlement',
+      pickId: PICK_MATCHED,
+    });
+    expect(joined.pickOutcome(PICK_MATCHED)).toMatchObject({
+      status: 'shared',
+      share: 542 / 2013.6,
+    });
+    // A different trade-stated number joins nothing.
+    expect(tradedAt(35).ledger.content.bidMatches[0]!.spentPicks[0]).toMatchObject({
+      link: 'no_custody',
+      pickId: null,
+    });
+  });
+
+  it('does not let an unjoined spend of the bidding club’s own pick block a pick traded in', () => {
+    const withSpends = (consumedPicks: BidMatch['consumedPicks']) =>
+      withCandidate((candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [darcyBid({ consumedPicks })],
+        pickOutcomes: candidate.pickOutcomes!.map((row) =>
+          row.transferId === 'tr-4'
+            ? outcome('tr-4', {
+                nominationBasis: 'club_took_nominated_player',
+                receivingClubNominatedSelections: 1,
+              })
+            : row
+        ),
+      }));
+    // The Bulldogs' own unnumbered pick cannot be the pick they got from Essendon.
+    expect(
+      withSpends([spent('9001', null, 'western_bulldogs', 400)]).pickOutcome(PICK_MATCHED)
+    ).toEqual({ kind: 'not_used', evidence: 'board_not_spent' });
+    // Hawthorn's unnumbered pick could have reached the Bulldogs some other way: still pending.
+    expect(
+      withSpends([spent('9002', null, 'hawthorn', 400)]).pickOutcome(PICK_MATCHED)
+    ).toMatchObject({ status: 'pending', pendingReason: 'no_bid_spend' });
+  });
+
+  it('joins a reviewed spend only to a pick the bidding club held at the draft', () => {
+    const base = {
+      ...inputs(),
+      candidate: { ...inputs().candidate, draftBoardBidMatches: [darcyBid()] },
+    };
+    const stintValue = createAflTradeAssetLedgerStintValue(base);
+    // Gold Coast's 42, which no custody row or single trade places, reviewed as the Bulldogs' pick.
+    const reviewed = [
+      {
+        bidMatchId: darcyBid().bidMatchId,
+        nativePickId: '6042',
+        pickId: PICK_MATCHED,
+        note: 'test',
+      },
+    ];
+    const held = new Map([[PICK_MATCHED, 'western_bulldogs']]);
+    const [bid] = aflTradeAssetLedgerBidMatches(base.candidate, stintValue, [], held, reviewed);
+    expect(bid!.spentPicks[1]).toMatchObject({ link: 'reviewed', pickId: PICK_MATCHED });
+    expect(() =>
+      aflTradeAssetLedgerBidMatches(
+        base.candidate,
+        stintValue,
+        [],
+        new Map([[PICK_MATCHED, 'essendon']]),
+        reviewed
+      )
+    ).toThrow(/did not hold at the draft/);
+    // The owner's list (2026-10-21) has five reviewed spends, each named once.
+    const keys = AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS.map(
+      ({ bidMatchId, nativePickId }) => `${bidMatchId}|${nativePickId}`
+    );
+    expect(new Set(keys).size).toBe(5);
+  });
+
   it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {
     // On the genuine candidate every matched-bid selection is unresolved: the bid created its pick,
     // so it has no custody slot. Who was drafted is still stated by every provider.
@@ -748,13 +851,12 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     expect(twice.pickOutcome(PICK_MATCHED)).toMatchObject({ pendingReason: 'spent_twice' });
   });
 
-  it('never changes a grade: the grader does not read bid matches', () => {
+  it('never changes the trade structure: it does not read bid matches', () => {
     const base = inputs();
-    const plain = gradeAflTradesOnRealizedValue(base).content.trades;
-    const withBids = gradeAflTradesOnRealizedValue({
+    const withBids: AflTradeGradingInputs = {
       ...base,
       candidate: { ...base.candidate, draftBoardBidMatches: [darcyBid()] },
-    }).content.trades;
-    expect(withBids).toEqual(plain);
+    };
+    expect(buildAflTradeStructure(withBids)).toEqual(buildAflTradeStructure(base));
   });
 });

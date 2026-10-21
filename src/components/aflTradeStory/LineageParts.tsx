@@ -61,20 +61,29 @@ export function Outcome({
   share: AflTradePageBidShare | null;
 }) {
   const { outcome } = asset;
-  if (outcome.kind === 'pending' && outcome.pending === 'matched_bid')
+  const value = knownPav(asset.value);
+  if (
+    outcome.kind === 'bid_share' ||
+    (outcome.kind === 'pending' && outcome.pending === 'matched_bid')
+  )
     return (
       <span className="inline-flex flex-wrap items-center gap-2 ts-body">
         <span className="rounded-md bg-(--ts-bid-soft) px-2 py-0.5 ts-small font-bold tracking-wide text-(--ts-bid)">
           BID MATCH
         </span>
-        {share && share.bid.match.spentPicks[share.spentIndex]?.value != null ? (
-          <a
-            href={`#${bidShareAnchor(asset.assetId)}`}
-            className="text-(--ts-accent) underline underline-offset-2"
-          >
-            Share of {share.bid.nomineeName}:{' '}
-            {formatPav(share.bid.match.spentPicks[share.spentIndex]!.value!, 2)}
-          </a>
+        {outcome.kind === 'bid_share' && value !== null ? (
+          share ? (
+            <a
+              href={`#${bidShareAnchor(asset.assetId)}`}
+              className="text-(--ts-accent) underline underline-offset-2"
+            >
+              Share of {outcome.playerName}: {formatPav(value, 2)}
+            </a>
+          ) : (
+            <span>
+              Share of {outcome.playerName}: {formatPav(value, 2)}
+            </span>
+          )
         ) : (
           <span className="text-(--ts-ink2)">Value pending</span>
         )}
@@ -88,8 +97,15 @@ export function Outcome({
     );
   if (outcome.kind === 'not_used')
     return <span className="ts-body text-(--ts-ink2)">Not used · 0.0</span>;
-  const value = knownPav(asset.value) ?? 0;
+  if (outcome.kind === 'pick')
+    return (
+      <span className="ts-body">
+        {outcome.draftYear} draft to come · pick {outcome.selectionNumber} ·{' '}
+        <span className="font-semibold tabular-nums">{formatPav(value ?? 0)}</span>
+      </span>
+    );
   const away = outcome.clubId !== groupClubId;
+  const shown = value ?? 0;
   return (
     <span className="inline-flex min-w-0 flex-col gap-1">
       <span className="ts-body">
@@ -101,7 +117,7 @@ export function Outcome({
           </span>
         ) : null}
         {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null} ·{' '}
-        <span className="font-semibold tabular-nums">{formatPav(value)}</span>
+        <span className="font-semibold tabular-nums">{formatPav(shown)}</span>
       </span>
       <span aria-hidden="true" className="block h-2.5">
         <span
@@ -110,7 +126,9 @@ export function Outcome({
               ? 'border-dashed border-(--ts-muted) bg-transparent'
               : 'border-(--ts-accent) bg-(--ts-accent)/30'
           }`}
-          style={{ width: `${Math.max(10, maxValue > 0 ? (value / maxValue) * BAR_WIDTH : 0)}px` }}
+          style={{
+            width: `${Math.max(10, maxValue > 0 ? (Math.max(0, shown) / maxValue) * BAR_WIDTH : 0)}px`,
+          }}
         />
       </span>
     </span>

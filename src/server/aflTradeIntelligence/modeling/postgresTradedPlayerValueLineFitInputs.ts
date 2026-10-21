@@ -1,7 +1,7 @@
-import { loadAflTradeRealizedTradeGradeInputs } from '../development/postgresRealizedTradeGradeInputs';
+import { loadAflTradeGradingInputs } from '../development/postgresGradingInputs';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { createAflTradeAssetLedgerStintValue } from '../valuation/assetLedgerStints';
-import type { AflTradeRealizedTradeGradeInputs } from '../valuation/realizedTradeGrade';
+import type { AflTradeGradingInputs } from '../valuation/gradingInputs';
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 import { loadAflTradePlayerSeasonGames } from './postgresPlayerSeasonGames';
 import type {
@@ -11,7 +11,7 @@ import type {
 } from './tradedPlayerValueLineFit';
 
 export interface AflTradeTradedPlayerValueLineFitInputOptions {
-  /** The finalized reconciliation candidate whose trades are read, as the realized grader reads it. */
+  /** The finalized reconciliation candidate whose trades are read, as the grading inputs read it. */
   candidateId: string;
   /** The HPN PAV method whose current per-season calculations are read. */
   methodId: string;
@@ -19,7 +19,7 @@ export interface AflTradeTradedPlayerValueLineFitInputOptions {
   tradeSeasons: readonly number[];
   /** The games read model's seasons: consecutive, from the first career season read to the last. */
   seasons: readonly number[];
-  /** Seasons whose PAV is official, as the grader takes them. */
+  /** Seasons whose PAV is official, as the grading inputs take them. */
   officialSeasons: readonly number[];
   /** Spells recorded after this instant are ignored, so a rerun reads the same spells. */
   spellCutoffAt: string;
@@ -40,7 +40,7 @@ export interface AflTradeTradedPlayerTradeLeg {
  * fit and the value lines' traded-player evaluator read the same legs through this one rule.
  */
 export function aflTradeTradedPlayerTradeLegs(
-  candidate: Pick<AflTradeRealizedTradeGradeInputs['candidate'], 'transactions' | 'transfers'>,
+  candidate: Pick<AflTradeGradingInputs['candidate'], 'transactions' | 'transfers'>,
   tradeSeasons: readonly number[]
 ): {
   legs: AflTradeTradedPlayerTradeLeg[];
@@ -83,22 +83,22 @@ export function aflTradeTradedPlayerTradeLegs(
 }
 
 /**
- * Composes the fit's inputs from the realized grader's inputs (#789): every player leg of a candidate
+ * Composes the fit's inputs from the grading inputs (#789): every player leg of a candidate
  * trade in the trade seasons (`aflTradeTradedPlayerTradeLegs`), with its first stint at the receiving
- * club from Y + 1 by the grader's own rule (`createAflTradeAssetLedgerStintValue`) and the grader's
+ * club from Y + 1 by the shared stint rule (`createAflTradeAssetLedgerStintValue`) and the
  * reviewed-arrival check. A leg with no canonical player or no receiving club is listed as excluded,
  * never dropped.
  */
 export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
-  grader: AflTradeRealizedTradeGradeInputs;
+  grading: AflTradeGradingInputs;
   games: AflTradePlayerSeasonGames;
   draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
   tradeSeasons: readonly number[];
 }): AflTradeTradedPlayerValueLineFitInputs {
-  const { grader, games, draftOrigins, tradeSeasons } = input;
-  const stintValue = createAflTradeAssetLedgerStintValue(grader);
+  const { grading, games, draftOrigins, tradeSeasons } = input;
+  const stintValue = createAflTradeAssetLedgerStintValue(grading);
   const { legs: resolved, excludedLegs } = aflTradeTradedPlayerTradeLegs(
-    grader.candidate,
+    grading.candidate,
     tradeSeasons
   );
   const legs: AflTradeTradedPlayerFitLeg[] = resolved.map((leg) => {
@@ -110,7 +110,7 @@ export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
     legs,
     excludedLegs,
     draftOrigins,
-    stintCalculations: grader.pavCalculations.map(({ season, calculationId }) => ({
+    stintCalculations: grading.pavCalculations.map(({ season, calculationId }) => ({
       season,
       calculationId,
     })),
@@ -232,7 +232,7 @@ export function mergeAflTradeTradedPlayerDraftOrigins(
 }
 
 /**
- * Loads the traded-player fit's inputs, read-only: the realized grader's inputs over the seasons from
+ * Loads the traded-player fit's inputs, read-only: the grading inputs over the seasons from
  * the first trade season to the last season, the player-season games read model over `seasons`, and
  * the draft origins (`mergeAflTradeTradedPlayerDraftOrigins`). Each read is its own repeatable-read, read-only transaction; it writes
  * nothing.
@@ -251,12 +251,12 @@ export async function loadAflTradeTradedPlayerValueLineFitInputs(
   if (lastSeason <= lastTrade)
     throw new Error('Read at least one season after the last trade season.');
   const gradedSeasons = options.seasons.filter((season) => season >= firstTrade);
-  const grader = await loadAflTradeRealizedTradeGradeInputs(sql, {
+  const grading = await loadAflTradeGradingInputs(sql, {
     candidateId: options.candidateId,
     methodId: options.methodId,
     seasons: gradedSeasons,
     officialSeasons: options.officialSeasons,
-    // The fit reads no pick projection; the grader inputs carry the field only for the grader.
+    // The fit reads no pick projection; the grading inputs carry the field for other readers.
     pickProjectionBenchmarkId: 'not-read-by-traded-player-fit',
     spellCutoffAt: options.spellCutoffAt,
     gradedAt: options.spellCutoffAt,
@@ -266,7 +266,7 @@ export async function loadAflTradeTradedPlayerValueLineFitInputs(
     seasons: options.seasons,
   });
   return buildAflTradeTradedPlayerValueLineFitInputs({
-    grader,
+    grading,
     games,
     draftOrigins: mergeAflTradeTradedPlayerDraftOrigins(
       await loadAflTradeTradedPlayerDraftOrigins(sql),

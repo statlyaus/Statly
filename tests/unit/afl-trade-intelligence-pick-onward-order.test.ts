@@ -9,10 +9,8 @@ import {
   type AflTradeOnwardTransaction,
   type AflTradeOnwardTransfer,
 } from '@/server/aflTradeIntelligence/source/pickOnwardTransfer';
-import {
-  gradeAflTradesOnRealizedValue,
-  type AflTradeRealizedTradeGradeInputs,
-} from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
+import type { AflTradeGradingInputs } from '@/server/aflTradeIntelligence/valuation/gradingInputs';
+import { buildAflTradeStructure } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
 
 /**
  * Issue 789 (coordinator decision 2026-10-16): undated hops of one season are ordered by the Draftguru
@@ -159,7 +157,7 @@ describe('ordering undated pick hops into one trail (issue 789)', () => {
 
   it('resolves 2019 #50 by its custody holder once the sequence leaves two trails', () => {
     const { trades, hops } = pick50();
-    // Without a holder, NM → HAW still links back into the Frost trade: the ring the grader blocks.
+    // Without a holder, NM → HAW still links back into the Frost trade: a ring the cycle guard drops.
     expect(onward(trades, hops)[2]).toEqual([hops[0]!.transferId]);
     expect(onward(trades, hops, 'hawthorn')).toEqual([
       [hops[1]!.transferId],
@@ -256,8 +254,8 @@ describe('a pick’s latest custody holder (issue 789)', () => {
   });
 });
 
-describe('the grader follows an ordered trail (issue 789)', () => {
-  type Candidate = AflTradeRealizedTradeGradeInputs['candidate'];
+describe('the trade structure follows an ordered trail (issue 789)', () => {
+  type Candidate = AflTradeGradingInputs['candidate'];
   // 2020 #70 as a candidate from before the ordering rule holds it: every hop stated traded on, each
   // trade returning a player to the club that gave the pick.
   const ring = (withCustody: boolean): Candidate => {
@@ -328,60 +326,32 @@ describe('the grader follows an ordered trail (issue 789)', () => {
         : {}),
     };
   };
-  const grade = (candidate: Candidate) =>
-    gradeAflTradesOnRealizedValue({
+  const legs = (candidate: Candidate) => {
+    const structure = buildAflTradeStructure({
       candidateId: `external-reconciliation:${'a'.repeat(64)}`,
       candidate,
-      pavCalculations: [2021].map((season) => ({
-        season,
-        calculationId: `hpn-pav-season:${season}`,
-        official: true,
-      })),
-      pav: [
-        { playerId: 'q', season: 2021, clubId: 'brisbane_lions', value: 6 },
-        { playerId: 'r', season: 2021, clubId: 'north_melbourne', value: 9 },
-      ],
-      seasonSpells: [
-        { playerId: 'q', season: 2021, clubId: 'brisbane_lions' },
-        { playerId: 'r', season: 2021, clubId: 'north_melbourne' },
-      ],
-      spellSeasons: [2021],
-      reviewedArrivals: [
-        { playerId: 'q', clubId: 'brisbane_lions', season: 2021 },
-        { playerId: 'r', clubId: 'north_melbourne', season: 2021 },
-      ],
-      pickProjectionBenchmarkId: `hpn-pick-benchmark:${'b'.repeat(64)}`,
-      spellCutoffAt: '2026-10-16T00:00:00.000Z',
-      gradedAt: '2026-10-16T01:00:00.000Z',
     });
-  const legs = (candidate: Candidate) => {
-    const batch = grade(candidate);
     return pick70().hops.map(({ transferId }) =>
-      batch.content.trades
+      structure.content.trades
         .flatMap((trade) => trade.legs)
         .find((leg) => leg.transferId === transferId)!
     );
   };
 
-  it('blocks the ring without a custody holder, as before', () => {
-    expect(legs(ring(false)).map(({ reasons }) => reasons)).toEqual([
-      ['traded_on_return_blocked'],
-      ['traded_on_return_blocked'],
-      ['traded_on_return_blocked'],
+  it('links no hop of the ring without a custody holder, as before', () => {
+    expect(legs(ring(false)).map(({ onward }) => onward)).toEqual([
+      undefined,
+      undefined,
+      undefined,
     ]);
   });
 
   it('follows the trail ending at the holder and links the final hop nowhere', () => {
     const [first, second, final] = legs(ring(true));
-    // North Melbourne traded the pick on for r (9); Collingwood for s, who never played.
-    expect(first).toMatchObject({
-      state: 'valued',
-      realizedValue: 9,
-      onward: { transactionId: 'tx:2020-north-collingwood-player' },
+    expect(first!.onward).toMatchObject({ transactionId: 'tx:2020-north-collingwood-player' });
+    expect(second!.onward).toMatchObject({
+      transactionId: 'tx:2020-picks-brisbane_lions-collingwood-36',
     });
-    expect(second).toMatchObject({
-      onward: { transactionId: 'tx:2020-picks-brisbane_lions-collingwood-36' },
-    });
-    expect(final!.reasons).toEqual(['traded_on_return_unlinked']);
+    expect(final).not.toHaveProperty('onward');
   });
 });

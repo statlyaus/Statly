@@ -1,13 +1,13 @@
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import { parseAflTradeExternalReconciliationCandidate } from '../source/externalReconciliationCandidateContracts';
-import type { AflTradeRealizedTradeGradeInputs } from '../valuation/realizedTradeGrade';
+import type { AflTradeGradingInputs } from '../valuation/gradingInputs';
 
 const SEASON_SPELLS = 'afl-trade-acquisition-registration/v3';
 const REVIEWED_ARRIVALS = 'afl-trade-acquisition-registration/v4';
 
-export interface AflTradeRealizedTradeGradeInputOptions {
+export interface AflTradeGradingInputOptions {
   candidateId: string;
-  /** The HPN PAV method whose current per-season calculations the grade uses. */
+  /** The HPN PAV method whose current per-season calculations the readers use. */
   methodId: string;
   seasons: readonly number[];
   /** Seasons whose PAV is official; the rest are graded but flagged. */
@@ -18,7 +18,7 @@ export interface AflTradeRealizedTradeGradeInputOptions {
   gradedAt: string;
 }
 
-export interface AflTradeRealizedTradeGradeRows {
+export interface AflTradeGradingInputRows {
   candidate: { candidate_json: unknown; environment: string; status: string } | undefined;
   heads: readonly {
     season_year: number;
@@ -49,11 +49,11 @@ export interface AflTradeRealizedTradeGradeRows {
   }[];
 }
 
-/** Maps the loaded rows to grader inputs, refusing anything the grade must not silently assume. */
-export function buildAflTradeRealizedTradeGradeInputs(
-  options: AflTradeRealizedTradeGradeInputOptions,
-  rows: AflTradeRealizedTradeGradeRows
-): AflTradeRealizedTradeGradeInputs {
+/** Maps the loaded rows to grading inputs, refusing anything a reader must not silently assume. */
+export function buildAflTradeGradingInputs(
+  options: AflTradeGradingInputOptions,
+  rows: AflTradeGradingInputRows
+): AflTradeGradingInputs {
   if (!rows.candidate) throw new Error(`Unknown candidate ${options.candidateId}.`);
   if (rows.candidate.status !== 'finalized' || rows.candidate.environment !== 'non_production')
     throw new Error(`${options.candidateId} is not a finalized non-production candidate.`);
@@ -133,24 +133,22 @@ export function buildAflTradeRealizedTradeGradeInputs(
 }
 
 /**
- * Loads the grader's inputs in one read-only, repeatable-read transaction. Set-based: one query per
+ * Loads the grading inputs in one read-only, repeatable-read transaction. Set-based: one query per
  * table, no per-spell registration check. A spell is current here when it is approved and nothing
  * recorded by the cutoff supersedes it; the full registration-currency check is Phase 4 work.
  */
-export async function loadAflTradeRealizedTradeGradeInputs(
+export async function loadAflTradeGradingInputs(
   sql: AflOutcomeSqlClient,
-  options: AflTradeRealizedTradeGradeInputOptions
-): Promise<AflTradeRealizedTradeGradeInputs> {
+  options: AflTradeGradingInputOptions
+): Promise<AflTradeGradingInputs> {
   const rows = await sql.transaction(async (transaction) => {
     await transaction.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
-    const candidate = await transaction.query<
-      NonNullable<AflTradeRealizedTradeGradeRows['candidate']>
-    >(
+    const candidate = await transaction.query<NonNullable<AflTradeGradingInputRows['candidate']>>(
       `SELECT candidate_json, environment::text AS environment, status::text AS status
          FROM outcome_external_reconciliation_candidate WHERE candidate_id = $1`,
       [options.candidateId]
     );
-    const heads = await transaction.query<AflTradeRealizedTradeGradeRows['heads'][number]>(
+    const heads = await transaction.query<AflTradeGradingInputRows['heads'][number]>(
       `SELECT h.season_year, h.calculation_id, c.status, c.finalized_at
          FROM outcome_hpn_pav_calculation_head h
          JOIN outcome_hpn_pav_calculation c USING (calculation_id)
@@ -158,14 +156,14 @@ export async function loadAflTradeRealizedTradeGradeInputs(
           AND h.method_id = $1 AND h.season_year = ANY($2::int[])`,
       [options.methodId, options.seasons]
     );
-    const pav = await transaction.query<AflTradeRealizedTradeGradeRows['pav'][number]>(
+    const pav = await transaction.query<AflTradeGradingInputRows['pav'][number]>(
       `SELECT c.season_year, p.spell_version_id, p.player_id, p.team_id, p.total_pav
          FROM outcome_hpn_pav_calculation_player p
          JOIN outcome_hpn_pav_calculation c USING (calculation_id)
         WHERE p.calculation_id = ANY($1::text[])`,
       [heads.rows.map(({ calculation_id }) => calculation_id)]
     );
-    const spells = await transaction.query<AflTradeRealizedTradeGradeRows['spells'][number]>(
+    const spells = await transaction.query<AflTradeGradingInputRows['spells'][number]>(
       // A v3 spell names its season. A v4 arrival's first season is its start date's year, or the next
       // year when it starts after the season ends (October to December, as draft nights do).
       `SELECT s.spell_version_id, s.player_id, s.club_id,
@@ -188,7 +186,7 @@ export async function loadAflTradeRealizedTradeGradeInputs(
     );
     // Rule v7: a special entitlement's custody chain, approved and in this environment only.
     const specialCustody = await transaction.query<
-      NonNullable<AflTradeRealizedTradeGradeRows['specialCustody']>[number]
+      NonNullable<AflTradeGradingInputRows['specialCustody']>[number]
     >(
       `SELECT c.transfer_id, c.entitlement_id, c.predecessor_transfer_id
          FROM outcome_special_entitlement_custody c
@@ -206,5 +204,5 @@ export async function loadAflTradeRealizedTradeGradeInputs(
       specialCustody: specialCustody.rows,
     };
   });
-  return buildAflTradeRealizedTradeGradeInputs(options, rows);
+  return buildAflTradeGradingInputs(options, rows);
 }

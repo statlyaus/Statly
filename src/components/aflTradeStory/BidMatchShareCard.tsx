@@ -1,3 +1,5 @@
+import type { AflTradeStoryValue } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
+
 import {
   formatPav,
   formatPercent,
@@ -11,22 +13,25 @@ export const bidShareAnchor = (assetId: string) =>
 
 /**
  * A pick spent matching a bid, shown as a swap: the pick bought a share of the nominee, in
- * proportion to the points it covered of the AFL price. Every number comes from the asset ledger.
+ * proportion to the points it covered of the AFL price. The price, points and shares come from the
+ * asset ledger; the pick's value is its value line (the share of the nominee's line).
  */
 export function BidMatchShareCard({
   assetId,
   label,
   share: { bid, spentIndex },
+  value,
 }: {
   assetId: string;
   label: string;
   share: AflTradePageBidShare;
+  /** The pick's value line at the story's checkpoint. */
+  value: AflTradeStoryValue;
 }) {
   const { match, nomineeName, clubName, leftoverLabels } = bid;
   const spent = match.spentPicks[spentIndex]!;
   const price = match.pricing.status === 'shared' ? match.pricing.pricePoints : null;
   const leftover = match.pricing.status === 'shared' ? match.pricing.leftover : null;
-  const nomineeValue = match.nominee?.firstStint?.value ?? null;
   const headingId = `${bidShareAnchor(assetId)}-title`;
 
   return (
@@ -49,12 +54,11 @@ export function BidMatchShareCard({
           : `The price was ${formatPoints(price)} points, paid with ${match.spentPicks.length} picks.`}
       </p>
 
-      {spent.share !== null && spent.value !== null ? (
+      {spent.share !== null && value.kind === 'known' ? (
         <p className="mt-3 flex flex-wrap items-baseline gap-x-2">
-          <span className="ts-head font-semibold tabular-nums">{formatPav(spent.value, 2)}</span>
+          <span className="ts-head font-semibold tabular-nums">{formatPav(value.pav, 2)}</span>
           <span className="ts-body text-(--ts-ink2)">
-            {label}&rsquo;s share: {formatPercent(spent.share)} of {nomineeName}
-            {nomineeValue === null ? '' : `’s ${formatPav(nomineeValue, 2)}`}
+            {label}&rsquo;s share: {formatPercent(spent.share)} of {nomineeName}&rsquo;s value
           </span>
         </p>
       ) : (
@@ -88,7 +92,7 @@ export function BidMatchShareCard({
               Points covered
             </th>
             <th scope="col" className="py-1 text-right font-medium">
-              Share (PAV)
+              Share
             </th>
           </tr>
         </thead>
@@ -108,7 +112,7 @@ export function BidMatchShareCard({
                 {pick.countedPoints === null ? '—' : formatPoints(pick.countedPoints)}
               </td>
               <td className="py-1.5 text-right tabular-nums">
-                {pick.value === null ? '—' : formatPav(pick.value, 2)}
+                {pick.share === null ? '—' : formatPercent(pick.share)}
               </td>
             </tr>
           ))}
@@ -125,7 +129,6 @@ export function BidMatchShareCard({
             : ''}
         </p>
       ) : null}
-      <p className="mt-2 ts-body text-(--ts-ink2)">Shares are not in the totals yet.</p>
     </article>
   );
 }

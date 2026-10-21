@@ -263,8 +263,8 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
 - **Legs.** Every player leg of a candidate trade in the 2019 to 2025 trade periods
   (`source/officialAflTradePeriodSourceScope.ts`): a transfer with `asset.kind = 'player'`, a canonical
   player and a receiving club, its trade season `Y`, and its first stint at the receiving club from `Y + 1`
-  by the grader's own rule (`createAflTradeAssetLedgerStintValue`, the asset ledger's stint). A leg is
-  trained on only when its arrival is reviewed (v4), the grader's check. Unreviewed legs, and legs with no
+  by the shared first-stint rule (`valuation/stints.ts` via `createAflTradeAssetLedgerStintValue`, the asset
+  ledger's stint). A leg is trained on only when its arrival is reviewed (v4), the reviewed-arrival check. Unreviewed legs, and legs with no
   canonical player or receiving club, are counted per trade season and left out of training; the
   calculator still values them, flagged. The #869 record has 173 reviewed traded arrivals, Cameron's the
   one unreviewed; re-count on the VM at the next real run.
@@ -304,7 +304,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
   stage stands in for age". Invisible, as in the ledger: delisting and re-signing at the same club, and a
   re-draft through a non-canonical pathway.
 - **Stint.** Seasons and status from the ledger stint (a two-club departure season counts if he played
-  for the receiving club, as the grader counts it), with the pick fit's inactivity closure on top: three
+  for the receiving club, as the ledger stint counts it), with the pick fit's inactivity closure on top: three
   consecutive in-stint seasons with no game close it after the third. Closed reasons: `moved` (the ledger
   closed it) or `inactive`. A ledger closure ending in season `e` is visible at the end of `e` when he also
   played elsewhere in `e`, and otherwise at the end of `e + 1`, so no checkpoint reads a closure early. An
@@ -359,7 +359,7 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
   content), so a value line is reproducible from the stored fit; it takes the player's earlier trade
   seasons, which set his earlier seasons' phases.
 - **Refusals.** A season that is not available or any games discrepancy; a leg whose ledger stint has
-  seasons missing PAV, or whose stint PAV in a season differs from the games read model; a grader PAV
+  seasons missing PAV, or whose stint PAV in a season differs from the games read model; a grading-input PAV
   calculation id that differs from the games read model's for the same season; a draft origin at or after
   the trade season; a trade season with no season, or more than 20 seasons, observed after it.
 - **Back-test.** Leave one trade season out: every trade season with at least two observed seasons (2019 to
@@ -390,7 +390,10 @@ the fit artifact (`afl-trade-traded-player-value-line-fit/v2`, sealed as `traded
 ### Value lines (step 3)
 
 Built in `valuation/valueLines.ts` (pure) and run by `npm run outcomes:grading:value-lines`; the
-artifact is `afl-trade-value-lines/v1`. Every rule is published in it (`rules`). This section fixes how
+artifact is `afl-trade-value-lines/v3`, which reads its trades, legs and onward links from the trade
+structure (`afl-trade-structure/v1`, step 5), never a realized grade, and carries each trade leg's
+points at the trade's checkpoints, so a reader takes a leg's value from the point its nets count. Every rule is published in it
+(`rules`). This section fixes how
 the spec above is applied; it changes none of the owner's rules.
 
 - **Checkpoints.** Each point names its kind: `season_end` (season Y's HPN PAV official), `trade` (the
@@ -427,11 +430,19 @@ the spec above is applied; it changes none of the owner's rules.
   (`unavailable`) only where the fit refuses it: a trade season outside its window, or a draft origin at
   or after his first trade. With no fit given the point is pending (`traded_player_fit_not_stored`) and
   the trade's net is provisional.
-- **Traded-on picks.** A pick leg is followed through each onward trade to its final hop (a special
-  entitlement to its successor pick), so every trade it passed through carries the same line.
-- **Refusals.** The fit, ledger, batch and games read model must pin the same calculation per shared
-  season, the games read model must be of the fit's method with every season available, and the ledger,
-  batch and candidate must be of one candidate.
+- **Traded-on picks.** A pick leg follows the trade structure's onward links (a pick trail, or a special
+  entitlement's reviewed custody successor) to its final hop, so every trade it passed through carries
+  the same line. A link is followed whatever became of the onward trade, even when its other side cannot be
+  valued. A later trade's own assets never change an earlier trade's
+  result (in the orange example, the pears' value leaves trade 1 unchanged; the orange's drafted player
+  moves both).
+- **Refusals.** The fit, ledger and games read model must pin the same calculation per shared season
+  (the structure holds no value, so it pins none), the games read model must be of the fit's method with
+  every season available, the structure must match its content address, and the ledger, structure and
+  candidate must be of one candidate. Each structure leg's clubs must be its candidate transfer's, and
+  each onward link must continue the asset: given on by the club that received it, as the same pick (a
+  pick trail) or as the same special entitlement's next transfer (a successor). Any caller can seal a
+  structure, so a link that names another club's or another pick's transfer is refused, never valued.
 
 ## What this retires
 
@@ -492,10 +503,21 @@ the spec above is applied; it changes none of the owner's rules.
    stints on the fit's own leg inputs. The calculator needs a v2 fit (its per-season `stageDigest` ties the re-read stages to the fit's), so genuine needs a
    refit before the value lines are computed with it.
 4. **Matched bids:** load the AFL points table and calculate each spent pick's share. Done for the asset
-   ledger (#971: prices, shares, leftover picks and deficits); the trade story does not read the shares yet.
+   ledger (#971: prices, shares, leftover picks and deficits); the value lines value each spent pick by its
+   share and the trade story reads them (step 5).
 5. **Retire the old rules:** retire the traded-on-return valuation (grade rules v11 and v13 to v18) and the
-   bundle split, then regrade on intrinsic value lines.
+   bundle split, then regrade on intrinsic value lines. Done (#789 step 5): the trade structure (trades,
+   legs and onward links with no value) is in place, the value lines read it (`afl-trade-value-lines/v3`,
+   with each leg's points), and the trade story reads the structure and value lines: signed values at
+   the latest checkpoint (each leg at the point its trade's net counts), the at-trade view beside them,
+   matched-bid shares and future picks valued, and each club's net on the trade alone as the page
+   headline (owner, 2026-10-21). The realized grade (rules v1 to v19: first-stint legs, traded-on
+   returns, the bundle and hybrid splits, the projected legs and the at-trade views it sealed) and its
+   command are deleted. The regrade is the value lines' per-club nets, which the trade story reads. The
+   pick-slot lookups (`valuation/pickSlots.ts`), the first-stint rule (`valuation/stints.ts`) and the
+   input loader (`development/postgresGradingInputs.ts`) are kept for the asset ledger, the trade
+   structure and the value lines.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
 7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
    is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence
-   architecture); it shows the story's values until value lines exist.
+   architecture); it reads sample value lines until sealed ones are served to it.
