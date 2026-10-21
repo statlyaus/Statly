@@ -143,10 +143,14 @@ export interface AflTradeStoryPlayer extends AflTradeStoryClub {
   /** `ended_with`: a club of this trade holds it; `got_away`: one of them gave it and lost it. */
   readonly group: 'ended_with' | 'got_away';
   readonly assetId: string;
-  /** How the club got it: the trade, the club it came from, and the pick label for a pick. */
+  /**
+   * How the club got it: the trade, the club it came from, the asset's label (a player's name for a
+   * player leg), and the pick label for a pick.
+   */
   readonly acquired: {
     readonly tradeId: string;
     readonly fromClubId: string;
+    readonly label: string;
     readonly pickLabel: string | null;
   };
   readonly outcome: AflTradeStoryOutcome;

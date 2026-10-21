@@ -6,6 +6,7 @@ import {
   type AflTradeStoryAsset,
   type AflTradeStoryNet,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
+import { createAflTradeStructure } from '@/server/aflTradeIntelligence/valuation/tradeStructureContracts';
 
 import {
   CLUB,
@@ -181,7 +182,12 @@ describe('realized trade story: the Cameron trade', () => {
     ]);
     const [cameronCard] = cameron.players;
     expect(cameronCard).toMatchObject({
-      acquired: { tradeId: TRADE.cameron, fromClubId: CLUB.gws, pickLabel: null },
+      acquired: {
+        tradeId: TRADE.cameron,
+        fromClubId: CLUB.gws,
+        label: 'Jeremy Cameron',
+        pickLabel: null,
+      },
       value: { kind: 'known', pav: 95.3 },
       stillAtClub: true,
     });
@@ -189,6 +195,7 @@ describe('realized trade story: the Cameron trade', () => {
     expect(knevitt.acquired).toEqual({
       tradeId: TRADE.geeWbd,
       fromClubId: CLUB.wbd,
+      label: 'Pick 23 · 2021 (ADE)',
       pickLabel: 'Pick 23 · 2021 (ADE)',
     });
     const mcMahon = cameron.players.find(({ assetId }) => assetId === 'pick:2020-30-gws');
@@ -279,6 +286,26 @@ describe('realized trade story invariants', () => {
     }
   });
 
+  it('adds each side up to its net: known received minus given, and the same pending assets', () => {
+    const known = (assets: readonly AflTradeStoryAsset[]) =>
+      assets.reduce((sum, { value }) => sum + (value.kind === 'known' ? value.pav : 0), 0);
+    const pendingOf = (assets: readonly AflTradeStoryAsset[], direction: string) =>
+      assets
+        .filter(({ value }) => value.kind === 'pending')
+        .map(({ assetKey }) => `${direction}|${assetKey}`);
+    for (const { transactionId } of cameronChainLines.structure.content.trades) {
+      const { sides, nets } = story(transactionId);
+      for (const side of sides) {
+        const net = netOf(nets.tradeAlone, side.clubId);
+        expect(known(side.received) - known(side.gave)).toBeCloseTo(net.net, 6);
+        expect(side.receivedValue).toBeCloseTo(known(side.received), 9);
+        expect(
+          [...pendingOf(side.received, 'received'), ...pendingOf(side.gave, 'given')].sort()
+        ).toEqual(net.pending.map(({ assetKey, direction }) => `${direction}|${assetKey}`).sort());
+      }
+    }
+  });
+
   it('fails closed on a missing name instead of guessing', () => {
     const names = { ...cameronChainNames, clubs: new Map([[CLUB.gee, 'Geelong']]) };
     expect(() => buildAflTradeStory(cameronChainLines, TRADE.cameron, names)).toThrow(
@@ -298,13 +325,17 @@ describe('realized trade story invariants', () => {
     expect(() =>
       buildAflTradeStory({ structure, valueLines: tampered }, TRADE.cameron, cameronChainNames)
     ).toThrow('The value lines do not match their content address.');
-    const otherStructure = { ...structure, structureId: `afl-trade-structure:${'0'.repeat(64)}` };
+    // A validly sealed structure of another candidate: only the structure check can refuse it.
+    const otherStructure = createAflTradeStructure({
+      ...structure.content,
+      inputs: { candidateId: `external-reconciliation:${'0'.repeat(64)}` },
+    });
     expect(() =>
       buildAflTradeStory(
         { structure: otherStructure, valueLines },
         TRADE.cameron,
         cameronChainNames
       )
-    ).toThrow();
+    ).toThrow('The value lines were not computed on this trade structure.');
   });
 });

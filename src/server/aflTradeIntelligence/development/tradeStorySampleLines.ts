@@ -22,8 +22,9 @@ import { aflTradeValueLineNetPoint } from '../valuation/valueLines';
 
 /**
  * Seals hand-written sample value lines and their trade structure, for the private trade page's
- * sample source and the story's unit tests (statlyaus/Statly#789). The assets' points are given; the
- * trades' per-club nets are computed from them by the value lines' own net rule, so each sample trade
+ * sample source and the story's unit tests (statlyaus/Statly#789). The assets' points are given; each
+ * trade leg's points are read from them, and the trades' per-club nets from those by the value lines'
+ * own net rule, so each sample trade
  * is zero-sum like a computed one. Sample data only: the fit, ledger and games ids are placeholders,
  * never publication evidence.
  */
@@ -43,13 +44,21 @@ export interface AflTradeStorySampleTrade {
 const byCodeUnit = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
 const placeholder = (prefix: string) => createAflTradeContentAddress(prefix, { sample: prefix });
 
-/** The asset's point at a checkpoint: its own, else its latest earlier one, else the at-trade view. */
+/**
+ * The asset's point at one of its trade's checkpoints: its own, else its latest earlier one after the
+ * trade, else the leg's at-trade view. A point from before the trade is never read, as the value lines
+ * read a pick before its draft at the latest hop's slot, never an earlier hop's.
+ */
 function pointAt(
   asset: AflTradeValueLineAsset,
   checkpoint: AflTradeValueLineCheckpoint,
   atTrade: AflTradeValueLinePoint
 ): AflTradeValueLinePoint {
-  const earlier = asset.points.filter((point) => orderOf(point.checkpoint) <= orderOf(checkpoint));
+  const earlier = asset.points.filter(
+    (point) =>
+      orderOf(point.checkpoint) > orderOf(atTrade.checkpoint) &&
+      orderOf(point.checkpoint) <= orderOf(checkpoint)
+  );
   return { ...(earlier.at(-1) ?? atTrade), checkpoint };
 }
 
@@ -69,13 +78,17 @@ function valueTrade(
         .map((checkpoint) => [orderOf(checkpoint), checkpoint] as const)
     ).values(),
   ].sort((left, right) => orderOf(left) - orderOf(right));
-  const valueLegs = legs.map(({ leg }) => ({
-    transferId: leg.transferId,
-    assetKey: leg.assetKey,
-    sendingClubId: leg.sendingClubId,
-    receivingClubId: leg.receivingClubId,
-    atTrade: { ...leg.atTrade, checkpoint: atTradeCheckpoint },
-  }));
+  const valueLegs = legs.map(({ leg, asset }) => {
+    const atTrade = { ...leg.atTrade, checkpoint: atTradeCheckpoint };
+    return {
+      transferId: leg.transferId,
+      assetKey: leg.assetKey,
+      sendingClubId: leg.sendingClubId,
+      receivingClubId: leg.receivingClubId,
+      atTrade,
+      points: checkpoints.map((checkpoint) => pointAt(asset, checkpoint, atTrade)),
+    };
+  });
   const clubIds = [...new Set(legs.flatMap(({ leg }) => [leg.sendingClubId, leg.receivingClubId]))];
   return {
     transactionId: trade.transactionId,
@@ -88,14 +101,11 @@ function valueTrade(
         clubId,
         valueLegs.map((leg) => ({ leg, point: leg.atTrade }))
       ),
-      points: checkpoints.map((checkpoint) =>
+      points: checkpoints.map((checkpoint, at) =>
         aflTradeValueLineNetPoint(
           checkpoint,
           clubId,
-          valueLegs.map((leg, at) => ({
-            leg,
-            point: pointAt(legs[at]!.asset, checkpoint, leg.atTrade),
-          }))
+          valueLegs.map((leg) => ({ leg, point: leg.points[at]! }))
         )
       ),
     })),

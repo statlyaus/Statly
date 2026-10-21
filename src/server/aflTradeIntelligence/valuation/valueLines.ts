@@ -222,46 +222,45 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
       kind: 'trade',
       season: trade.tradeYear,
     };
-    const legs = trade.legs
-      .map((leg) => {
-        const { assetKey, atTrade } = legKeys.get(`${trade.transactionId}|${leg.transferId}`)!;
-        const spec = specs.get(assetKey)!;
-        return {
-          spec,
-          leg: {
-            transferId: leg.transferId,
-            assetKey,
-            sendingClubId: leg.sendingClubId,
-            receivingClubId: leg.receivingClubId,
-            atTrade: finish(atTradeCheckpoint, atTrade),
-          },
-        };
-      })
-      .sort((left, right) => byCodeUnit(left.leg.transferId, right.leg.transferId));
+    const legSpecs = [...trade.legs]
+      .sort((left, right) => byCodeUnit(left.transferId, right.transferId))
+      .map((leg) => ({ leg, ...legKeys.get(`${trade.transactionId}|${leg.transferId}`)! }));
     const checkpoints = [
       ...new Map(
-        legs
-          .flatMap(({ spec }) => lineCheckpoints(spec, trade.tradeYear))
+        legSpecs
+          .flatMap(({ assetKey }) => lineCheckpoints(specs.get(assetKey)!, trade.tradeYear))
           .map((checkpoint) => [orderOf(checkpoint), checkpoint] as const)
       ).values(),
     ].sort((left, right) => orderOf(left) - orderOf(right));
+    // Each leg carries its line at every checkpoint of the trade, so its nets are its legs' points.
+    const legs = legSpecs.map(({ leg, assetKey, atTrade }) => {
+      const spec = specs.get(assetKey)!;
+      return {
+        transferId: leg.transferId,
+        assetKey,
+        sendingClubId: leg.sendingClubId,
+        receivingClubId: leg.receivingClubId,
+        atTrade: finish(atTradeCheckpoint, atTrade),
+        points: checkpoints.map((checkpoint) => pointAt(spec, checkpoint)),
+      };
+    });
     const clubIds = [...new Set(trade.clubs.map(({ clubId }) => clubId))].sort(byCodeUnit);
     return {
       transactionId: trade.transactionId,
       tradeYear: trade.tradeYear,
-      legs: legs.map(({ leg }) => leg),
+      legs,
       clubs: clubIds.map((clubId) => ({
         clubId,
         atTrade: aflTradeValueLineNetPoint(
           atTradeCheckpoint,
           clubId,
-          legs.map(({ leg }) => ({ leg, point: leg.atTrade }))
+          legs.map((leg) => ({ leg, point: leg.atTrade }))
         ),
-        points: checkpoints.map((checkpoint) =>
+        points: checkpoints.map((checkpoint, at) =>
           aflTradeValueLineNetPoint(
             checkpoint,
             clubId,
-            legs.map(({ spec, leg }) => ({ leg, point: pointAt(spec, checkpoint) }))
+            legs.map((leg) => ({ leg, point: leg.points[at]! }))
           )
         ),
       })),

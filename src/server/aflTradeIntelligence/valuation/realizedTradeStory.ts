@@ -80,27 +80,38 @@ function tradeNet(
 }
 
 /**
- * A club's nets over its chain, summed. A pending asset is counted instead, by its value line, so a
- * pick received then passed on cancels out, as its value does.
+ * A club's net over its chain, per value line: each line it received counts +1 and each it gave -1,
+ * read at the latest chain trade that moved it. A pick received then passed on nets to zero, so it
+ * cancels out whatever slot each trade read it at; a pending line is listed instead of valued.
  */
 function chainNet(index: AflTradeStoryIndex, chain: ClubChain): AflTradeStoryChainNet {
-  let net = 0;
-  const balance = new Map<string, { asset: AflTradeStoryPendingAsset; count: number }>();
-  for (const trade of chain.trades) {
-    const one = tradeNet(index, trade, chain.clubId);
-    net += one.net;
-    for (const asset of one.pending) {
-      const current = balance.get(asset.assetKey) ?? { asset, count: 0 };
-      const count = current.count + (asset.direction === 'received' ? 1 : -1);
-      balance.set(asset.assetKey, { asset: current.asset, count });
-    }
+  const holdings = new Map<string, { asset: AflTradeStoryAsset; count: number }>();
+  for (const ref of chain.trades.flatMap(refsOf)) {
+    const step =
+      ref.leg.receivingClubId === chain.clubId
+        ? 1
+        : ref.leg.sendingClubId === chain.clubId
+          ? -1
+          : 0;
+    if (step === 0) continue;
+    const asset = index.resolve(ref);
+    const count = (holdings.get(asset.assetKey)?.count ?? 0) + step;
+    holdings.set(asset.assetKey, { asset, count });
   }
-  const pending = [...balance.values()]
-    .filter(({ count }) => count !== 0)
-    .map(({ asset, count }) => ({
-      ...asset,
-      direction: count > 0 ? ('received' as const) : ('given' as const),
-    }));
+  const held = [...holdings.values()].filter(({ count }) => count !== 0);
+  const net = held.reduce((total, { asset, count }) => total + count * knownPav(asset), 0);
+  const pending: AflTradeStoryPendingAsset[] = held.flatMap(({ asset, count }) =>
+    asset.value.kind === 'pending'
+      ? [
+          {
+            assetId: asset.assetId,
+            assetKey: asset.assetKey,
+            direction: count > 0 ? ('received' as const) : ('given' as const),
+            reason: asset.value.pending,
+          },
+        ]
+      : []
+  );
   return {
     ...index.club(chain.clubId),
     net: Math.round(net * 1e6) / 1e6,
@@ -146,6 +157,7 @@ function storyPlayer(
     acquired: {
       tradeId: final.trade.transactionId,
       fromClubId: final.leg.sendingClubId,
+      label: asset.label,
       pickLabel: asset.assetKind === 'pick' ? asset.label : null,
     },
     outcome,

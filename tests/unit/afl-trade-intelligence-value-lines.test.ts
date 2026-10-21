@@ -23,6 +23,10 @@ import {
   type AflTradeRealizedTradeGradeInputs,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeGrade';
 import {
+  buildAflTradeStory,
+  type AflTradeStoryAsset,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
+import {
   buildAflTradeStructure,
   type AflTradeStructureInputs,
 } from '@/server/aflTradeIntelligence/valuation/tradeStructure';
@@ -216,6 +220,8 @@ interface Options {
   oldPick?: boolean;
   /** Ledger stint ends by `player|club|fromSeason`, overriding the fixture's. */
   ends?: Record<string, number>;
+  /** The future 2027 pick p5: C gives A it in t4 (2025, slot 10), A gives B it in t5 (2026, slot 15). */
+  retradedFuturePick?: boolean;
 }
 function inputs(options: Options = {}): AflTradeValueLineInputs {
   const rows = options.rows ?? BASE_ROWS;
@@ -298,6 +304,15 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
       },
     },
     { pickId: pickId('p4'), draftYear: 2021, outcome: { kind: 'not_used' } },
+    ...(options.retradedFuturePick
+      ? [
+          {
+            pickId: pickId('p5'),
+            draftYear: 2027,
+            outcome: { kind: 'future', projectedSlot: null },
+          },
+        ]
+      : []),
     ...(options.oldPick
       ? [
           {
@@ -357,7 +372,12 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
     transactionType: 'trade',
   });
   const candidate = {
-    transactions: [transaction('t1', 2019), transaction('t2', 2020), transaction('t3', 2021)],
+    transactions: [
+      transaction('t1', 2019),
+      transaction('t2', 2020),
+      transaction('t3', 2021),
+      ...(options.retradedFuturePick ? [transaction('t4', 2025), transaction('t5', 2026)] : []),
+    ],
     transfers: [
       pickTransfer('l1', 't1', 'a', 'b', 'p1', 2019, 5),
       player('l2', 't1', 'b', 'a', 'x'),
@@ -369,6 +389,13 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
       pickTransfer('l6', 't3', 'a', 'c', 'p3', 2021, 20),
       pickTransfer('l7', 't3', 'c', 'a', 'p4', 2021, 40, 3, 'c'),
       ...(options.oldPick ? [pickTransfer('l9', 't3', 'a', 'c', 'p9', 2005, 5)] : []),
+      ...(options.retradedFuturePick
+        ? [
+            pickTransfer('m1', 't4', 'c', 'a', 'p5', 2027, 10),
+            player('m2', 't4', 'a', 'c', 'x'),
+            pickTransfer('m3', 't5', 'a', 'b', 'p5', 2027, 15),
+          ]
+        : []),
     ],
     pickOutcomes: [
       {
@@ -380,6 +407,19 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
         playerId: null,
         evidenceIds: [],
       },
+      ...(options.retradedFuturePick
+        ? [
+            {
+              outcomeId: 'outcome-m1',
+              transferId: transferId('m1'),
+              disposition: 'traded_on',
+              outcomeStatus: 'stated',
+              selectionId: null,
+              playerId: null,
+              evidenceIds: [],
+            },
+          ]
+        : []),
     ],
     pickCustody: (options.custody ?? [{ draftYear: 2020, recordedPickNumber: 14 }]).map(
       (row, index) => ({
@@ -832,7 +872,7 @@ describe('computeAflTradeValueLines', () => {
     expect(computeAflTradeValueLines(reordered).valueLinesId).toBe(lines.valueLinesId);
     expect(lines.valueLinesId).toMatch(/^value-lines:[0-9a-f]{64}$/);
     expect(lines.content).toMatchObject({
-      schemaVersion: 'afl-trade-value-lines/v2',
+      schemaVersion: 'afl-trade-value-lines/v3',
       publicationEligible: false,
       publicationProhibited: true,
     });
@@ -1126,6 +1166,57 @@ describe('value lines on the trade structure (issue 789, step 5)', () => {
             expect(sum((club) => club.points[index]!.net)).toBeCloseTo(0, 6)
           );
         }
+  });
+});
+
+describe('the trade story on computed value lines (issue 789, step 5)', () => {
+  const retraded = inputs({ retradedFuturePick: true });
+  const lines = computeAflTradeValueLines(retraded);
+  const storyLines = { structure: retraded.structure, valueLines: lines };
+  const names = {
+    clubs: new Map(['a', 'b', 'c'].map((id) => [id, id.toUpperCase()])),
+    players: new Map(['x', 'y', 'd1', 'd2', 'n'].map((id) => [id, `Player ${id}`])),
+    labels: new Map(
+      retraded.structure.content.trades.flatMap(({ legs }) =>
+        legs.map(({ transferId: id }) => [id, `Transfer ${id.slice(18, 21)}`] as const)
+      )
+    ),
+  };
+  const story = (id: string) => buildAflTradeStory(storyLines, id, names);
+  const known = (assets: readonly AflTradeStoryAsset[]) =>
+    assets.reduce((sum, { value }) => sum + (value.kind === 'known' ? value.pav : 0), 0);
+  const pendingKeys = (assets: readonly AflTradeStoryAsset[], direction: string) =>
+    assets
+      .filter(({ value }) => value.kind === 'pending')
+      .map(({ assetKey }) => `${direction}|${assetKey}`);
+
+  it('reads every leg at the point its net counts, so each side adds up to its net', () => {
+    for (const { transactionId } of lines.content.trades) {
+      const { sides, nets } = story(transactionId);
+      for (const side of sides) {
+        const net = nets.tradeAlone.find(({ clubId }) => clubId === side.clubId)!;
+        expect(known(side.received) - known(side.gave)).toBeCloseTo(net.net, 6);
+        expect(
+          [...pendingKeys(side.received, 'received'), ...pendingKeys(side.gave, 'given')].sort()
+        ).toEqual(net.pending.map(({ assetKey, direction }) => `${direction}|${assetKey}`).sort());
+      }
+    }
+  });
+
+  it('values a pick re-traded in the last trade period at its own slot in that trade', () => {
+    const t5 = story('t5');
+    const pick = t5.sides.find(({ clubId }) => clubId === 'b')!.received[0]!;
+    expect(pick.value.kind === 'known' && pick.value.pav).toBeCloseTo(V(15), 6);
+    expect(t5.nets.tradeAlone.find(({ clubId }) => clubId === 'b')!.net).toBeCloseTo(V(15), 6);
+  });
+
+  it('cancels a pick a club received then passed on, whatever slot each trade read', () => {
+    const chain = story('t4').nets.withNextMoves.find(({ clubId }) => clubId === 'a')!;
+    expect(chain.tradeIds).toEqual(['t4', 't5']);
+    expect(chain.net).toBeCloseTo(0, 6);
+    expect(chain.pending.map(({ assetKey, direction }) => [assetKey, direction])).toEqual([
+      [expect.stringContaining('player|x|c|'), 'given'],
+    ]);
   });
 });
 

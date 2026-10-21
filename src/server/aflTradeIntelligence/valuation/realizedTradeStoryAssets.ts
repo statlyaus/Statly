@@ -17,7 +17,6 @@ import { aflTradeValueLineCheckpointOrder as orderOf } from './valueLineAssets';
 import {
   AFL_TRADE_VALUE_LINES_SCHEMA_VERSION,
   type AflTradeValueLineAsset,
-  type AflTradeValueLineCheckpoint,
   type AflTradeValueLineNetPoint,
   type AflTradeValueLinePoint,
   type AflTradeValueLineTrade,
@@ -43,7 +42,7 @@ const valueOf = (point: AflTradeValueLinePoint): AflTradeStoryValue =>
     : { kind: 'known', pav: point.value };
 
 /**
- * Refuses value lines that are not sealed over their content, not v2, or not computed on this
+ * Refuses value lines that are not sealed over their content, not v3, or not computed on this
  * structure: the story never mixes a structure with another structure's values.
  */
 function requireSealed({ structure, valueLines }: AflTradeStoryLines) {
@@ -60,7 +59,8 @@ function requireSealed({ structure, valueLines }: AflTradeStoryLines) {
 /**
  * Follows assets through a trade structure and reads their values from the value lines computed on
  * it. A pick traded on is followed through each onward link to its final leg; its value line is the
- * same in every trade it passed through. No realized grade is read.
+ * same in every trade it passed through, though each trade reads it at its own checkpoint (a pick
+ * before its draft at that trade's slot). No realized grade is read.
  */
 export class AflTradeStoryIndex {
   private readonly trades: ReadonlyMap<string, AflTradeStructureTrade>;
@@ -182,7 +182,7 @@ export class AflTradeStoryIndex {
     if (cached) return cached;
     const valueLeg = this.valueLeg(ref);
     const line = this.lineOf(ref);
-    const point = this.pointAt(line, this.nets(ref.trade.transactionId).checkpoint, valueLeg);
+    const point = this.pointAt(ref.trade.transactionId, valueLeg);
     const value = valueOf(point);
     const asset: AflTradeStoryAsset = {
       transferId: ref.leg.transferId,
@@ -230,14 +230,16 @@ export class AflTradeStoryIndex {
     return required(this.assets.get(assetKey), `value line ${assetKey}`);
   }
 
-  /** The line's point at the checkpoint, else its latest earlier point, else the leg's at-trade view. */
-  private pointAt(
-    line: AflTradeValueLineAsset,
-    checkpoint: AflTradeValueLineCheckpoint,
-    leg: AflTradeValueLineTradeLeg
-  ): AflTradeValueLinePoint {
-    const at = orderOf(checkpoint);
-    return line.points.filter((point) => orderOf(point.checkpoint) <= at).at(-1) ?? leg.atTrade;
+  /**
+   * The leg's own point at the trade's latest checkpoint, else its at-trade view: exactly the point
+   * the trade's nets count, never one derived from the line's points.
+   */
+  private pointAt(tradeId: string, leg: AflTradeValueLineTradeLeg): AflTradeValueLinePoint {
+    const point = leg.points.at(-1) ?? leg.atTrade;
+    const { checkpoint } = this.nets(tradeId);
+    if (orderOf(point.checkpoint) !== orderOf(checkpoint))
+      throw new Error(`The value lines' leg ${leg.transferId} is not read where its nets are.`);
+    return point;
   }
 
   private walk(
