@@ -109,7 +109,7 @@ export async function runTradeStoryBundleCommand(input: {
     const bundle = createAflTradeStoryBundle({
       structure: buildAflTradeStructure(inputs),
       valueLines,
-      ledger: createAflTradeAssetLedger(inputs, labels),
+      ledger: createAflTradeAssetLedger(inputs, labels).ledger,
       labels,
       transfers: inputs.candidate.transfers,
     });
