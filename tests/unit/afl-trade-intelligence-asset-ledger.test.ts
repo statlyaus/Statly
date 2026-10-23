@@ -913,8 +913,8 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
         ...AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS.map(({ pickId }) => pickId),
         ...AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED.map(({ pickId }) => pickId),
       ];
-      expect(ids).toHaveLength(4);
-      expect(new Set(ids).size).toBe(4);
+      expect(ids).toHaveLength(5);
+      expect(new Set(ids).size).toBe(5);
     });
   });
 
