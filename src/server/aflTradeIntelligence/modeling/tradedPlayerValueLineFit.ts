@@ -61,6 +61,13 @@ export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
   horizonSeasons: 20,
   inactivityClosureSeasons: PICK_RULES.inactivityClosureSeasons,
   /**
+   * Form in the exit hazard (2026-10-23, Fable review of the Petracca trade): the survival logit adds a
+   * fitted slope on the player's shrunk PAV-per-game effect (`u_rate`) at the season before, so a
+   * player scoring above his band is less likely to leave or retire. Before this the hazard was
+   * form-blind and the back-test under-predicted high-form players (40-80 calibration bin).
+   */
+  survivalFormCovariate: 'rate_effect_at_previous_season' as const,
+  /**
    * Retirement (2026-10-20, issue 789). An inactivity closure is an exit in the season after his last
    * game in the stint, not after the third empty season, and his empty seasons are out of the games
    * curve. At a checkpoint whose stint ends in an empty run of 1 or 2 seasons, expected remaining is
@@ -136,6 +143,11 @@ export interface AflTradeTradedPlayerCurve {
   stageIntercepts: readonly { band: AflTradeTradedPlayerStageBand; intercept: number }[];
   /** tenure_1 is the reference (0); survival has no pre_trade phase. */
   phaseEffects: readonly { phase: AflTradeTradedPlayerPhase; effect: number }[];
+  /**
+   * Survival only (2026-10-23): the logit's slope on the player's shrunk PAV-per-game effect at the
+   * season before (`u_rate`). Absent on fits before it, read as 0.
+   */
+  rateEffectSlope?: number;
 }
 
 /** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v2 artifact, plus its id. */
@@ -235,6 +247,8 @@ interface Valued {
 interface Curve {
   intercepts: Partial<Record<Band, number>>;
   effects: Partial<Record<Phase, number>>;
+  /** Survival only: the slope on the rate effect (`u_rate`). */
+  slope?: number;
 }
 
 interface Priors {
@@ -421,15 +435,25 @@ const returnProbability = (priors: Pick<Priors, 'inactiveReturn'>, stage: number
   return row.probability;
 };
 
-/** Per tenure 1..horizon along a stint: P(season in stint), expected games, expected PAV per game. */
-function stintCurves(priors: Priors, stageAtTrade: number) {
+/**
+ * Per tenure 1..horizon along a stint: P(season in stint), expected games, expected PAV per game. The
+ * exit hazard reads the player's rate effect as of the checkpoint (`rateEffect`, 0 for the prior alone):
+ * a player scoring above his band's rate is less likely to leave or retire (2026-10-23, Fable review).
+ */
+function stintCurves(priors: Priors, stageAtTrade: number, rateEffect = 0) {
   const survival = [1];
   const games = [0];
   const rate = [0];
   for (let tenure = 1; tenure <= RULES.horizonSeasons; tenure++) {
     const band = bandOf(stageAtTrade - 1 + tenure);
     const phase = tenurePhase(tenure);
-    survival.push(survival[tenure - 1]! * (1 - logistic(linear(priors.survival, band, phase))));
+    survival.push(
+      survival[tenure - 1]! *
+        (1 -
+          logistic(
+            linear(priors.survival, band, phase) + (priors.survival.slope ?? 0) * rateEffect
+          ))
+    );
     games.push(Math.exp(linear(priors.games, band, phase)));
     rate.push(Math.exp(linear(priors.rate, band, phase)));
   }
@@ -497,7 +521,7 @@ function valueAt(
   const closed = leg.closureKnownSeason !== null && checkpoint >= leg.closureKnownSeason;
   const effect = playerEffect(priors, leg, checkpoint, mode);
   if (closed) return { tenure, closed, produced, expectedRemaining: 0, value: produced, effect };
-  const curve = stintCurves(priors, stageAtTradeOf(leg));
+  const curve = stintCurves(priors, stageAtTradeOf(leg), effect.rate);
   let expectedRemaining = 0;
   for (let t = tenure + 1; t <= Math.min(throughTenure, RULES.horizonSeasons); t++)
     expectedRemaining +=
@@ -523,18 +547,22 @@ interface Observation {
   response: number;
   weight: number;
   offset: number;
+  /** The covariate's value, read only by a fit with a covariate (survival: `u_rate`). */
+  covariate?: number;
 }
 
 /**
- * Fits `link(mean) = intercept[band] + effect[phase] + offset` (tenure_1 the reference) by
- * iteratively reweighted least squares: binomial with the logit link, or quasi-Poisson with the log.
+ * Fits `link(mean) = intercept[band] + effect[phase] (+ slope × covariate) + offset` (tenure_1 the
+ * reference) by iteratively reweighted least squares: binomial with the logit link, or quasi-Poisson
+ * with the log.
  */
 function fitCurve(
   family: 'binomial' | 'poisson',
   observations: readonly Observation[],
   bands: readonly Band[],
   phases: readonly Phase[],
-  label: string
+  label: string,
+  withCovariate = false
 ): Curve {
   const free: Phase[] = phases.filter((phase) => phase !== RULES.referencePhase);
   for (const band of bands) {
@@ -545,12 +573,14 @@ function fitCurve(
   for (const phase of free)
     if (!observations.some((observation) => observation.phase === phase))
       throw new Error(`The ${label} fit has no observations in phase ${phase}.`);
-  const size = bands.length + free.length;
-  const columnsOf = (observation: Observation) => {
+  const size = bands.length + free.length + (withCovariate ? 1 : 0);
+  /** The observation's design row: [column, value] pairs. */
+  const columnsOf = (observation: Observation): [number, number][] => {
     const phase = free.indexOf(observation.phase);
-    return phase < 0
-      ? [bands.indexOf(observation.band)]
-      : [bands.indexOf(observation.band), bands.length + phase];
+    const row: [number, number][] = [[bands.indexOf(observation.band), 1]];
+    if (phase >= 0) row.push([bands.length + phase, 1]);
+    if (withCovariate) row.push([size - 1, observation.covariate ?? 0]);
+    return row;
   };
   let beta = new Array<number>(size).fill(0);
   if (family === 'poisson') {
@@ -566,14 +596,16 @@ function fitCurve(
     const vector = new Array<number>(size).fill(0);
     for (const observation of observations) {
       const columns = columnsOf(observation);
-      const eta = columns.reduce((sum, column) => sum + beta[column]!, 0) + observation.offset;
+      const eta =
+        columns.reduce((sum, [column, value]) => sum + beta[column]! * value, 0) +
+        observation.offset;
       const mean = family === 'binomial' ? logistic(eta) : Math.exp(eta);
       const variance = family === 'binomial' ? Math.max(mean * (1 - mean), 1e-12) : mean;
       const working = eta - observation.offset + (observation.response - mean) / variance;
       const weight = observation.weight * variance;
-      for (const a of columns) {
-        vector[a]! += weight * working;
-        for (const b of columns) matrix[a]![b]! += weight;
+      for (const [a, x] of columns) {
+        vector[a]! += weight * working * x;
+        for (const [b, y] of columns) matrix[a]![b]! += weight * x * y;
       }
     }
     const next = solve(matrix, vector);
@@ -588,6 +620,7 @@ function fitCurve(
       return {
         intercepts: Object.fromEntries(bands.map((band, index) => [band, beta[index]!])),
         effects,
+        ...(withCovariate ? { slope: beta[size - 1]! } : {}),
       };
     }
   }
@@ -659,6 +692,53 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
           offset: Math.log(season.games),
         });
     }
+  }
+  const rateGames = {
+    games: fitCurve('poisson', games, ALL_BANDS, ALL_PHASES, 'games'),
+    rate: fitCurve('poisson', rate, ALL_BANDS, ALL_PHASES, 'rate'),
+  };
+  const gamesRows: VarianceRow[][] = [];
+  const rateRows: VarianceRow[][] = [];
+  for (const player of players) {
+    const known = player.active.flatMap((season) => {
+      const band = knownBand(player.stage, season.season);
+      return band === null ? [] : [{ ...season, band }];
+    });
+    gamesRows.push(
+      known.map((season) => ({
+        value: season.games - Math.exp(linear(rateGames.games, season.band, season.phase)),
+        weight: 1,
+      }))
+    );
+    rateRows.push(
+      known
+        .filter(({ games: played }) => played > 0)
+        .map((season) => ({
+          value:
+            season.pav / season.games - Math.exp(linear(rateGames.rate, season.band, season.phase)),
+          weight: season.games,
+        }))
+    );
+  }
+  const gamesComponents = varianceComponents(gamesRows, 'games');
+  const rateComponents = varianceComponents(rateRows, 'PAV per game');
+  const gamesCredibilitySeasons = gamesComponents.within / gamesComponents.between;
+  const rateCredibilityGames = Math.max(
+    RULES.minimumRateCredibilityGames,
+    rateComponents.within / rateComponents.between
+  );
+  // The exit hazard's form covariate (2026-10-23): each stint season's rate effect as of the season
+  // before, from the games and rate curves and both k just fitted, as the value line reads it.
+  const formPriors = {
+    ...rateGames,
+    survival: { intercepts: {}, effects: {} },
+    gamesCredibilitySeasons,
+    rateCredibilityGames,
+    inactiveReturn,
+  } as Priors;
+  const formAt = (valued: Valued, tenure: number) =>
+    playerEffect(formPriors, valued, valued.tradeSeason + tenure - 1, 'full').rate;
+  for (const player of players) {
     for (const { leg, valued } of player.legs) {
       if (!leg.arrivalReviewed) continue;
       const observed = lastSeason - valued.tradeSeason;
@@ -677,6 +757,7 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
           response: tenure === exitAt ? 1 : 0,
           weight: 1,
           offset: 0,
+          covariate: formAt(valued, tenure),
         });
       }
       // An open stint ending in 1 or 2 empty seasons: the season after his last game is an exit with
@@ -696,7 +777,14 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
             [1, 1 - back],
             [0, back],
           ] as const)
-            hazard.push({ band, phase: tenurePhase(tenure), response, weight, offset: 0 });
+            hazard.push({
+              band,
+              phase: tenurePhase(tenure),
+              response,
+              weight,
+              offset: 0,
+              covariate: formAt(valued, tenure),
+            });
       }
     }
   }
@@ -705,43 +793,14 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
       for (const response of [0, 1])
         hazard.push({ band, phase, response, weight: RULES.hazardPseudoCount, offset: 0 });
   const curves = {
-    survival: fitCurve('binomial', hazard, SURVIVAL_BANDS, TENURE_PHASES, 'survival'),
-    games: fitCurve('poisson', games, ALL_BANDS, ALL_PHASES, 'games'),
-    rate: fitCurve('poisson', rate, ALL_BANDS, ALL_PHASES, 'rate'),
+    survival: fitCurve('binomial', hazard, SURVIVAL_BANDS, TENURE_PHASES, 'survival', true),
+    ...rateGames,
   };
-  const gamesRows: VarianceRow[][] = [];
-  const rateRows: VarianceRow[][] = [];
-  for (const player of players) {
-    const known = player.active.flatMap((season) => {
-      const band = knownBand(player.stage, season.season);
-      return band === null ? [] : [{ ...season, band }];
-    });
-    gamesRows.push(
-      known.map((season) => ({
-        value: season.games - Math.exp(linear(curves.games, season.band, season.phase)),
-        weight: 1,
-      }))
-    );
-    rateRows.push(
-      known
-        .filter(({ games: played }) => played > 0)
-        .map((season) => ({
-          value:
-            season.pav / season.games - Math.exp(linear(curves.rate, season.band, season.phase)),
-          weight: season.games,
-        }))
-    );
-  }
-  const gamesComponents = varianceComponents(gamesRows, 'games');
-  const rateComponents = varianceComponents(rateRows, 'PAV per game');
   return {
     ...curves,
     inactiveReturn,
-    gamesCredibilitySeasons: gamesComponents.within / gamesComponents.between,
-    rateCredibilityGames: Math.max(
-      RULES.minimumRateCredibilityGames,
-      rateComponents.within / rateComponents.between
-    ),
+    gamesCredibilitySeasons,
+    rateCredibilityGames,
     varianceComponents: { games: gamesComponents, rate: rateComponents },
   };
 }
@@ -1290,7 +1349,10 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
     },
     legs: legDiagnostics,
     parameters: {
-      survivalHazardLogit: publishCurve(priors.survival, SURVIVAL_BANDS, TENURE_PHASES),
+      survivalHazardLogit: {
+        ...publishCurve(priors.survival, SURVIVAL_BANDS, TENURE_PHASES),
+        rateEffectSlope: round(priors.survival.slope ?? 0, 9),
+      },
       gamesLog: publishCurve(priors.games, ALL_BANDS, ALL_PHASES),
       pavPerGameLog: publishCurve(priors.rate, ALL_BANDS, ALL_PHASES),
       gamesCredibilitySeasons: round(priors.gamesCredibilitySeasons, 6),
@@ -1327,6 +1389,7 @@ const curveOf = (curve: AflTradeTradedPlayerCurve): Curve => ({
     curve.stageIntercepts.map(({ band, intercept }) => [band, intercept])
   ),
   effects: Object.fromEntries(curve.phaseEffects.map(({ phase, effect }) => [phase, effect])),
+  slope: curve.rateEffectSlope ?? 0,
 });
 
 /** Reads and validates the parameters from a sealed fit (refuses another schema version or a fitId mismatch). */
