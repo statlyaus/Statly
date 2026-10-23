@@ -19,9 +19,10 @@ import { TRADE } from '../fixtures/aflTradeStoryCameronChainFixture';
  * imports it.
  */
 
-const { loadStoryMock, listStoriesMock, notFoundMock } = vi.hoisted(() => ({
+const { loadStoryMock, listStoriesMock, loadClubChainsMock, notFoundMock } = vi.hoisted(() => ({
   loadStoryMock: vi.fn(),
   listStoriesMock: vi.fn(),
+  loadClubChainsMock: vi.fn(),
   notFoundMock: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
   }),
@@ -31,7 +32,11 @@ vi.mock('@/server/aflTradeIntelligence/development/privateTradeStoryReads', asyn
   ...(await actual<
     typeof import('@/server/aflTradeIntelligence/development/privateTradeStoryReads')
   >()),
-  privateTradeStoryReads: { loadStory: loadStoryMock, listStories: listStoriesMock },
+  privateTradeStoryReads: {
+    loadStory: loadStoryMock,
+    listStories: listStoriesMock,
+    loadClubChains: loadClubChainsMock,
+  },
 }));
 vi.mock('next/navigation', () => ({ notFound: notFoundMock }));
 // The reader's default wiring reads the request's session; these tests inject their own.
@@ -43,6 +48,9 @@ import PrivateTradeStoryPage, {
 import PrivateTradeStoriesPage, {
   metadata as indexMetadata,
 } from '../../src/app/dev/afl-trade-stories/page';
+import PrivateClubChainsPage, {
+  metadata as clubMetadata,
+} from '../../src/app/dev/afl-trade-stories/clubs/[clubId]/page';
 
 const ENABLED: PrivateTradeStoryReadEnvironment = {
   NODE_ENV: 'development',
@@ -70,6 +78,9 @@ describe('private trade story reader', () => {
       TRADE.geeWbd
     );
     expect(await admitted.loadStory('trade:not-in-the-sample')).toBeNull();
+    const club = await admitted.loadClubChains('club:gws');
+    expect(club?.chains.clubName).toBe('GWS');
+    expect(await admitted.loadClubChains('club:not-in-the-sample')).toBeNull();
   });
 
   it.each([
@@ -80,6 +91,7 @@ describe('private trade story reader', () => {
     const { reads: refused, authenticate } = reads(environment, DEVELOPMENT_AUTH_USER_ID);
     expect(await refused.loadStory(TRADE.cameron)).toBeNull();
     expect(await refused.listStories()).toBeNull();
+    expect(await refused.loadClubChains('club:gws')).toBeNull();
     expect(authenticate).not.toHaveBeenCalled();
   });
 
@@ -90,6 +102,7 @@ describe('private trade story reader', () => {
     const { reads: refused } = reads(ENABLED, userId);
     expect(await refused.loadStory(TRADE.cameron)).toBeNull();
     expect(await refused.listStories()).toBeNull();
+    expect(await refused.loadClubChains('club:gws')).toBeNull();
   });
 });
 
@@ -97,6 +110,20 @@ describe('private trade story routes', () => {
   beforeEach(() => {
     loadStoryMock.mockReset();
     listStoriesMock.mockReset();
+    loadClubChainsMock.mockReset();
+  });
+
+  it('serve a club page only when the reader admits it, and refuse a malformed club id', async () => {
+    loadClubChainsMock.mockResolvedValue(null);
+    await expect(
+      PrivateClubChainsPage({ params: Promise.resolve({ clubId: 'club%3Agws' }) })
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(loadClubChainsMock).toHaveBeenCalledWith('club:gws');
+    loadClubChainsMock.mockReset();
+    await expect(
+      PrivateClubChainsPage({ params: Promise.resolve({ clubId: '..%2F..%2Fsecrets' }) })
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(loadClubChainsMock).not.toHaveBeenCalled();
   });
 
   it('are not found when the reader refuses', async () => {
@@ -127,7 +154,7 @@ describe('private trade story routes', () => {
   });
 
   it('ask search engines not to index them', () => {
-    for (const metadata of [storyMetadata, indexMetadata])
+    for (const metadata of [storyMetadata, indexMetadata, clubMetadata])
       expect(metadata.robots).toEqual({ index: false, follow: false });
   });
 });
@@ -152,6 +179,8 @@ describe('publication boundary', () => {
     // The genuine bundle (#1052): read only by privateTradeStoryReads, exported by its own command.
     /^server\/aflTradeIntelligence\/development\/tradeStoryBundle\.ts$/u,
     /^server\/aflTradeIntelligence\/valuation\/realizedTrade(Story|StoryAssets|StoryContracts|PageContracts)\.ts$/u,
+    // Every chain of one club (#1051), read only by the private sources.
+    /^server\/aflTradeIntelligence\/valuation\/clubTradeChains\.ts$/u,
     // The value lines (#789 step 3) are private output; the story (step 5) reads them.
     /^server\/aflTradeIntelligence\/valuation\/valueLine(s|Specs|Assets|Contracts|Slots)\.ts$/u,
   ];
@@ -171,5 +200,9 @@ describe('publication boundary', () => {
         readFileSync(join(root, 'app', file), 'utf8').includes('AflTradeStoryPage')
       );
     expect(routes).toEqual([join('dev', 'afl-trade-stories', '[tradeId]', 'page.tsx')]);
+    const clubRoutes = files(join(root, 'app'))
+      .map((file) => relative(join(root, 'app'), file))
+      .filter((file) => readFileSync(join(root, 'app', file), 'utf8').includes('ClubChainsPage'));
+    expect(clubRoutes).toEqual([join('dev', 'afl-trade-stories', 'clubs', '[clubId]', 'page.tsx')]);
   });
 });
