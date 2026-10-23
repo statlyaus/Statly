@@ -577,6 +577,33 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
 });
 
 describe('aflTradeTradedPlayerValueAt', () => {
+  it("reads the player's form in his exit hazard through the fitted slope", () => {
+    const slope = parameters.survivalHazardLogit.rateEffectSlope;
+    expect(Number.isFinite(slope)).toBe(true);
+    const at = (rateEffectSlope: number) =>
+      aflTradeTradedPlayerValueAt(
+        {
+          ...parameters,
+          survivalHazardLogit: { ...parameters.survivalHazardLogit, rateEffectSlope },
+        },
+        base,
+        2022
+      );
+    const effect = at(0).effect.rate;
+    expect(effect).not.toBe(0);
+    // A negative slope lowers the hazard of a player above his band's rate, so more of his stint is
+    // expected; a slope of 0 is the form-blind hazard of fits before 2026-10-23.
+    const sign = Math.sign(effect);
+    expect(at(-2 * sign).expectedRemaining).toBeGreaterThan(at(0).expectedRemaining);
+    expect(at(2 * sign).expectedRemaining).toBeLessThan(at(0).expectedRemaining);
+    // A fit stored before the slope existed reads as form-blind.
+    const { rateEffectSlope: _dropped, ...legacy } = parameters.survivalHazardLogit;
+    expect(
+      aflTradeTradedPlayerValueAt({ ...parameters, survivalHazardLogit: legacy }, base, 2022)
+        .expectedRemaining
+    ).toBeCloseTo(at(0).expectedRemaining, 9);
+  });
+
   it('publishes a return probability per empty run and stage group', () => {
     expect(
       parameters.inactiveReturn.map(({ stageFrom, emptySeasons }) => `${stageFrom}:${emptySeasons}`)
