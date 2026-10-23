@@ -10,6 +10,12 @@ import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS,
   type AflTradeAssetLedgerReviewedBidSpend,
 } from './assetLedgerReviewedBidSpends';
+import {
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+  type AflTradeAssetLedgerReviewedPassed,
+  type AflTradeAssetLedgerReviewedSamePick,
+} from './assetLedgerReviewedPickLinks';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
 import { aflTradeMatchedBidShares } from './matchedBidShares';
 import type { AflTradeGradingInputs } from './gradingInputs';
@@ -224,22 +230,54 @@ export interface AflTradeAssetLedgerBidPick {
   readonly firstFromClubId: string | null;
 }
 
+/** Owner-reviewed links for pending matched-bid picks (#1050) and the board rows they cite. */
+export interface AflTradeAssetLedgerPickReview {
+  readonly samePicks: readonly AflTradeAssetLedgerReviewedSamePick[];
+  readonly passed: readonly AflTradeAssetLedgerReviewedPassed[];
+  readonly boardPicks: readonly { boardPickId: string; status: string; clubId: string | null }[];
+}
+
 /**
  * A pending matched-bid pick with its share of the nominee, when exactly one board bid match lists
- * it as spent, prices the bid and names its nominee. A pick no board lists, where the boards show it
- * was not spent, is not used. Otherwise it stays pending, with the reason.
+ * it as spent (or, by owner review, lists the same physical pick under another id), prices the bid
+ * and names its nominee. A pick no board lists, where the boards show it was not spent, is not used;
+ * one the owner reviewed as passed by its holder is passed. Otherwise it stays pending, with the
+ * reason.
  */
 export function aflTradeAssetLedgerShareMatchedBid(
   outcome: Extract<AflTradeAssetLedgerMatchedBidOutcome, { status: 'pending' }>,
   pick: AflTradeAssetLedgerBidPick,
-  bidMatches: readonly AflTradeAssetLedgerBidMatch[]
+  bidMatches: readonly AflTradeAssetLedgerBidMatch[],
+  review: AflTradeAssetLedgerPickReview = {
+    samePicks: AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+    passed: AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
+    boardPicks: [],
+  }
 ): AflTradeAssetLedgerPickOutcome {
+  const same = review.samePicks.find((row) => row.pickId === pick.pickId);
   const spends = bidMatches.flatMap((bid) =>
     bid.spentPicks
-      .filter((spent) => spent.pickId === pick.pickId)
+      .filter(
+        (spent) =>
+          spent.pickId !== null &&
+          (spent.pickId === pick.pickId || spent.pickId === same?.samePickId)
+      )
       .map((spent) => ({ bid, pick: spent }))
   );
+  if (same && spends.some(({ bid }) => bid.clubId !== pick.holderClubId))
+    throw new Error(
+      `Reviewed same pick ${pick.pickId} takes a spend of a club that did not hold it at the draft.`
+    );
   const pending = (pendingReason: typeof outcome.pendingReason) => ({ ...outcome, pendingReason });
+  const passed = review.passed.find((row) => row.pickId === pick.pickId);
+  if (spends.length === 0 && passed) {
+    const board = review.boardPicks.find((row) => row.boardPickId === passed.boardPickId);
+    if (board?.status !== 'passed' || board.clubId !== pick.holderClubId)
+      throw new Error(
+        `Reviewed passed pick ${pick.pickId} cites ${passed.boardPickId}, which is not its holder's pass.`
+      );
+    return { kind: 'passed', boardPickId: passed.boardPickId };
+  }
   if (spends.length === 0)
     return boardShowsNotSpent(outcome, pick, bidMatches)
       ? { kind: 'not_used', evidence: 'board_not_spent' }
