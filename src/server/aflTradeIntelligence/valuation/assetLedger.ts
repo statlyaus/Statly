@@ -18,6 +18,10 @@ import {
   type AflTradeAssetLedgerTradedEntitlement,
 } from './assetLedgerBidMatches';
 import {
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+} from './assetLedgerReviewedPickLinks';
+import {
   aflTradeAssetLedgerPickIdentities,
   aflTradeAssetLedgerPickTrails,
 } from './assetLedgerPickHops';
@@ -166,7 +170,12 @@ function picksOf(
                   holderClubId: trail.hops.at(-1)?.toClubId ?? pick.originalClubId,
                   firstFromClubId: trail.hops[0]?.fromClubId ?? null,
                 },
-                bidMatches
+                bidMatches,
+                {
+                  samePicks: AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+                  passed: AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
+                  boardPicks: inputs.candidate.draftBoardPicks ?? [],
+                }
               )
             : outcome,
       };

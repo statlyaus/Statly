@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAflTradeAssetLedger } from '@/server/aflTradeIntelligence/valuation/assetLedger';
-import { aflTradeAssetLedgerBidMatches } from '@/server/aflTradeIntelligence/valuation/assetLedgerBidMatches';
+import {
+  aflTradeAssetLedgerBidMatches,
+  aflTradeAssetLedgerShareMatchedBid,
+} from '@/server/aflTradeIntelligence/valuation/assetLedgerBidMatches';
 import { AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedBidSpends';
+import {
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+} from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedPickLinks';
 import { createAflTradeAssetLedgerStintValue } from '@/server/aflTradeIntelligence/valuation/assetLedgerStints';
 import type { AflTradeAssetLedgerLabels } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
 import type { AflTradeGradingInputs } from '@/server/aflTradeIntelligence/valuation/gradingInputs';
@@ -790,11 +797,125 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
         reviewed
       )
     ).toThrow(/did not hold at the draft/);
-    // The owner's list (2026-10-21) has five reviewed spends, each named once.
+    // The owner's lists (2026-10-21 "Approve 1-5", 2026-10-23 #1050 B) have six reviewed spends,
+    // each named once.
     const keys = AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS.map(
       ({ bidMatchId, nativePickId }) => `${bidMatchId}|${nativePickId}`
     );
-    expect(new Set(keys).size).toBe(5);
+    expect(new Set(keys).size).toBe(6);
+  });
+
+  describe('owner-reviewed links for pending matched-bid picks (#1050)', () => {
+    const pendingOutcome = {
+      kind: 'matched_bid' as const,
+      status: 'pending' as const,
+      basis: 'nominee_count' as const,
+      matchedBidBoardPickIds: [],
+      pendingReason: 'no_bid_spend' as const,
+    };
+    const spentBid = (clubId: string) =>
+      ({
+        bidMatchId: 'bid-1',
+        draftYear: 2019,
+        draftType: 'national',
+        selectionNumber: 25,
+        clubId,
+        bidClubId: null,
+        basis: 'father_son',
+        nominee: { selectionId: 'sel', playerId: 'mead', firstStint: null },
+        pricing: { status: 'shared', ruleId: 'r', pricePoints: 1, leftover: null, deficit: null },
+        spentPicks: [
+          {
+            nativePickId: '1',
+            label: 'R3 (GEE) - Pick 57',
+            originalNumber: 57,
+            originalClubId: 'geelong',
+            pointsUsed: 207,
+            pickId: 'pick-real',
+            link: 'custody',
+            countedPoints: 207,
+            share: 0.25,
+            use: 'full',
+            value: 10,
+          },
+        ],
+      }) as never;
+    const pick = (holderClubId: string) => ({
+      pickId: 'pick-copy',
+      draftYear: 2019,
+      draftType: 'national',
+      holderClubId,
+      firstFromClubId: 'carlton',
+    });
+    const review = (boardStatus = 'passed', boardClub = 'port') => ({
+      samePicks: [{ pickId: 'pick-copy', samePickId: 'pick-real', note: 't' }],
+      passed: [],
+      boardPicks: [{ boardPickId: 'b', status: boardStatus, clubId: boardClub }],
+    });
+
+    it("gives a reviewed duplicate the bid share of the pick it is, for the holder's bid only", () => {
+      expect(
+        aflTradeAssetLedgerShareMatchedBid(
+          pendingOutcome,
+          pick('port'),
+          [spentBid('port')],
+          review()
+        )
+      ).toMatchObject({ kind: 'matched_bid', status: 'shared', share: 0.25, value: 10 });
+      expect(() =>
+        aflTradeAssetLedgerShareMatchedBid(
+          pendingOutcome,
+          pick('port'),
+          [spentBid('essendon')],
+          review()
+        )
+      ).toThrow(/did not hold it at the draft/);
+      // Without the review the copy reads as not spent: the bid's spend joins the other id.
+      expect(
+        aflTradeAssetLedgerShareMatchedBid(pendingOutcome, pick('port'), [spentBid('port')], {
+          samePicks: [],
+          passed: [],
+          boardPicks: [],
+        })
+      ).toMatchObject({ kind: 'not_used', evidence: 'board_not_spent' });
+    });
+
+    it("marks a reviewed pick passed only when the cited board row is its holder's pass", () => {
+      const passedReview = (status: string, club: string) => ({
+        samePicks: [],
+        passed: [{ pickId: 'pick-copy', boardPickId: 'b', note: 't' }],
+        boardPicks: [{ boardPickId: 'b', status, clubId: club }],
+      });
+      expect(
+        aflTradeAssetLedgerShareMatchedBid(
+          pendingOutcome,
+          pick('fremantle'),
+          [],
+          passedReview('passed', 'fremantle')
+        )
+      ).toEqual({ kind: 'passed', boardPickId: 'b' });
+      for (const [status, club] of [
+        ['selected', 'fremantle'],
+        ['passed', 'adelaide'],
+      ])
+        expect(() =>
+          aflTradeAssetLedgerShareMatchedBid(
+            pendingOutcome,
+            pick('fremantle'),
+            [],
+            passedReview(status!, club!)
+          )
+        ).toThrow(/not its holder's pass/);
+    });
+
+    it('lists each reviewed pick once', () => {
+      const ids = [
+        ...AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS.map(({ pickId }) => pickId),
+        ...AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED.map(({ pickId }) => pickId),
+      ];
+      expect(ids).toHaveLength(4);
+      expect(new Set(ids).size).toBe(4);
+    });
   });
 
   it('names the nominee from a selection whose pick is unresolved, but not from a disputed one', () => {

@@ -49,4 +49,11 @@ export const AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS: readonly AflTradeAssetL
       pickId: 'draft-pick:618caa91c9b1190860f210def54a9719bb2b9cbb74582e8e6f722b61e3364ada',
       note: '2025 Brisbane spent "R1 (CAR) - Pick 22": the pick 22 Hawthorn traded to Brisbane.',
     },
+    {
+      bidMatchId:
+        'external-draft-board-bid-match:73d98b4889ae4fea425e0cf2f4b752d5c5c4e6850b3a1d3665ba21c1eaad2718',
+      nativePickId: '7365',
+      pickId: 'draft-pick:20e765fd58f7d00bb80feabc3a466f147f33950b7bb347c644f18a14faa23a08',
+      note: '2020 Collingwood spent "R3 (HAW) - Pick 46" on Reef McInnes: Hawthorn\'s "#42" from the draft-week swap with "#41" (owner, 2026-10-23, #1050 B).',
+    },
   ];
