@@ -1,6 +1,6 @@
 /**
  * Owner-reviewed links for pending matched-bid picks (statlyaus/Statly#1050; owner, 2026-10-23:
- * "Approve A–D"). Draft-week pick swaps state a live number and no original club, so the swapped pick
+ * "Approve A–D"; and the Petracca trade's pick 24, owner 2026-10-23: "Yes, link it"). Draft-week pick swaps state a live number and no original club, so the swapped pick
  * gets its own pick id, a duplicate of a pick already traded under another id. Draftguru says the
  * duplicate was not used because the receiving club spent it on a bid, and the board's spend joins
  * the other id. Each entry names one pending pick; the ledger refuses an entry whose bid or board row
@@ -37,6 +37,11 @@ export const AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS: readonly AflTradeAssetL
       pickId: 'draft-pick:bb1fe9c841d7ec02e4fa44588da76bddee3d48600a22c910ef892d1c5f4c0033',
       samePickId: 'draft-pick:6d141772c4861edde5fd788893185f2f6ac094657e2e9a6a36418b68c211ce43',
       note: '2019 Sydney→Port Adelaide "#65" (draft-night swap) is North Melbourne\'s R4 pick 65; Port spent "R4 (NTH) - Pick 65" on Jackson Mead.',
+    },
+    {
+      pickId: 'draft-pick:4b36e22a0a21887185c75853a2d3c52659aacee3ccc69279eacf218a1ce5d02a',
+      samePickId: 'draft-pick:1f33de70d85287bed31f2eb0684093925bac2361471a07f777f4b66bf2bed22f',
+      note: '2025 Melbourne→Gold Coast "pick 24" (the Petracca trade) is West Coast\'s R2 pick 24; Gold Coast spent "R2 (WCE) - Pick 24" on Zeke Uwland (owner, 2026-10-23).',
     },
   ];
 
