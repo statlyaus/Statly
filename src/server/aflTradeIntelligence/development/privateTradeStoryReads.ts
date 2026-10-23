@@ -9,6 +9,7 @@ import type { AflTradePageModel } from '../valuation/realizedTradePageContracts'
 import {
   aflTradeStorySamples,
   type AflTradeStorySampleSource,
+  type AflTradeClubChainsModel,
   type AflTradeStorySampleList,
 } from './tradeStorySamples';
 import { createAflTradeStoryBundleSource, verifyAflTradeStoryBundle } from './tradeStoryBundle';
@@ -36,6 +37,8 @@ export interface PrivateTradeStoryReadDependencies {
 export interface PrivateTradeStoryReads {
   listStories(): Promise<AflTradeStorySampleList | null>;
   loadStory(tradeId: string): Promise<AflTradePageModel | null>;
+  /** Every chain of one club (#1051). */
+  loadClubChains(clubId: string): Promise<AflTradeClubChainsModel | null>;
 }
 
 const isTrue = (value: string | undefined) => value?.trim().toLowerCase() === 'true';
@@ -66,6 +69,9 @@ export function createPrivateTradeStoryReads(
     async loadStory(tradeId) {
       return (await admitted()) ? dependencies.source.load(tradeId) : null;
     },
+    async loadClubChains(clubId) {
+      return (await admitted()) ? dependencies.source.loadClub(clubId) : null;
+    },
   };
 }
 
@@ -87,7 +93,11 @@ export function createConfiguredTradeStorySource(
       : aflTradeStorySamples;
     return resolved;
   };
-  return { list: () => source().list(), load: (tradeId) => source().load(tradeId) };
+  return {
+    list: () => source().list(),
+    load: (tradeId) => source().load(tradeId),
+    loadClub: (clubId) => source().loadClub(clubId),
+  };
 }
 
 export const privateTradeStoryReads = createPrivateTradeStoryReads({

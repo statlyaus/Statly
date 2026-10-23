@@ -3,6 +3,7 @@ import type {
   AflTradePageBidMatch,
   AflTradePageModel,
 } from '../valuation/realizedTradePageContracts';
+import { buildAflTradeClubChains, type AflTradeClubChains } from '../valuation/clubTradeChains';
 import { buildAflTradeStory } from '../valuation/realizedTradeStory';
 import {
   CAMERON_CHAIN_THROUGH_SEASON,
@@ -90,6 +91,8 @@ export interface AflTradeStorySampleSummary {
   readonly tradeId: string;
   readonly year: number;
   readonly clubNames: readonly string[];
+  /** The trade's clubs, in the same order as `clubNames`. */
+  readonly clubIds: readonly string[];
 }
 
 export interface AflTradeStorySampleList {
@@ -100,6 +103,13 @@ export interface AflTradeStorySampleList {
 export interface AflTradeStorySampleSource {
   list(): AflTradeStorySampleList;
   load(tradeId: string): AflTradePageModel | null;
+  /** Every chain of one club (#1051), or null for a club the source does not know. */
+  loadClub(clubId: string): AflTradeClubChainsModel | null;
+}
+
+export interface AflTradeClubChainsModel {
+  readonly chains: AflTradeClubChains;
+  readonly source: AflTradePageModel['source'];
 }
 
 const clubName = (clubId: string) => cameronChainNames.clubs.get(clubId) ?? clubId;
@@ -111,8 +121,16 @@ export const aflTradeStorySamples: AflTradeStorySampleSource = {
       tradeId: trade.transactionId,
       year: trade.tradeYear,
       clubNames: trade.clubs.map(({ clubId }) => clubName(clubId)),
+      clubIds: trade.clubs.map(({ clubId }) => clubId),
     })),
   }),
+  loadClub: (clubId) =>
+    cameronChainNames.clubs.has(clubId)
+      ? {
+          chains: buildAflTradeClubChains(cameronChainLines, clubId, cameronChainNames),
+          source: SOURCE,
+        }
+      : null,
   load(tradeId) {
     if (
       !cameronChainLines.structure.content.trades.some((trade) => trade.transactionId === tradeId)

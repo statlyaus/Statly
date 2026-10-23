@@ -7,6 +7,7 @@ import type {
   AflTradePageBidMatch,
   AflTradePageModel,
 } from '../valuation/realizedTradePageContracts';
+import { buildAflTradeClubChains } from '../valuation/clubTradeChains';
 import { buildAflTradeStory } from '../valuation/realizedTradeStory';
 import type { AflTradeStoryNames } from '../valuation/realizedTradeStoryContracts';
 import {
@@ -215,8 +216,13 @@ export function createAflTradeStoryBundleSource(
         tradeId: trade.transactionId,
         year: trade.tradeYear,
         clubNames: trade.clubs.map(({ clubId }) => storyNames.clubs.get(clubId) ?? clubId),
+        clubIds: trade.clubs.map(({ clubId }) => clubId),
       })),
     }),
+    loadClub: (clubId) =>
+      structure.content.trades.some((trade) => trade.clubs.some((club) => club.clubId === clubId))
+        ? { chains: buildAflTradeClubChains({ structure, valueLines }, clubId, storyNames), source }
+        : null,
     load(tradeId) {
       if (!trades.has(tradeId)) return null;
       const story = buildAflTradeStory({ structure, valueLines }, tradeId, storyNames);

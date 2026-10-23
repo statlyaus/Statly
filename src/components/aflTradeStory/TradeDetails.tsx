@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import type {
   AflTradeStory,
   AflTradeStoryAsset,
@@ -10,6 +12,7 @@ import { ClubBadge } from './ClubBadge';
 import {
   becameText,
   bidShareOf,
+  clubChainsHref,
   formatPav,
   formatSigned,
   netText,
@@ -68,7 +71,7 @@ function AssetRow({
   );
 }
 
-function NetRow({ net, note }: { net: AflTradeStoryNet; note?: string }) {
+function NetRow({ net, note, href }: { net: AflTradeStoryNet; note?: string; href?: string }) {
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
       <ClubBadge clubName={net.clubName} />
@@ -76,6 +79,11 @@ function NetRow({ net, note }: { net: AflTradeStoryNet; note?: string }) {
         {netText(net)}
       </span>
       {note ? <span className="ts-small text-(--ts-ink2)">{note}</span> : null}
+      {href ? (
+        <Link href={href} className="ts-small underline underline-offset-2 text-(--ts-ink2)">
+          All {net.clubName} chains
+        </Link>
+      ) : null}
     </li>
   );
 }
@@ -186,6 +194,7 @@ export function TradeDetails({
                       ? 'no later trade'
                       : `${formatSigned(later)} from ${trades} later trade${trades === 1 ? '' : 's'}`
                   }
+                  href={clubChainsHref(net.clubId)}
                 />
               );
             })}

@@ -24,6 +24,10 @@ export interface AflTradePageBidShare {
 export const tradeStoryHref = (tradeId: string) =>
   `/dev/afl-trade-stories/${encodeURIComponent(tradeId)}`;
 
+/** The private reader's page of every chain of one club (#1051). Never a public path. */
+export const clubChainsHref = (clubId: string) =>
+  `/dev/afl-trade-stories/clubs/${encodeURIComponent(clubId)}`;
+
 /** The lineage hash for one trade, so a trade opens from a link. */
 export const tradeHash = (tradeId: string) => `#trade=${encodeURIComponent(tradeId)}`;
 
