@@ -28,6 +28,18 @@ import type { AflTradeStorySampleSource } from './tradeStorySamples';
  */
 
 export const AFL_TRADE_STORY_BUNDLE_SCHEMA_VERSION = 'afl-trade-story-bundle/v1' as const;
+
+/**
+ * A club's name on the page, where its canonical record still carries a historical name (#789 step 7
+ * polish, 2026-10-23). Footscray has been the Western Bulldogs since 1997; the canonical club's
+ * `current_name` is to be corrected in the outcomes data, after which this map can go. Applied when a
+ * bundle is built and again when one is read, so a bundle built before the fix shows the AFL name too.
+ */
+export const AFL_TRADE_STORY_CLUB_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  Footscray: 'Western Bulldogs',
+};
+
+const displayClubName = (name: string) => AFL_TRADE_STORY_CLUB_DISPLAY_NAMES[name] ?? name;
 const BUNDLE_PREFIX = 'trade-story-bundle';
 
 export interface AflTradeStoryBundleContent {
@@ -58,6 +70,7 @@ export interface AflTradeStoryBundleTransfer {
     | { readonly kind: 'player' }
     | {
         readonly kind: 'pick_entitlement';
+        readonly pickId?: string;
         readonly draftYear: number;
         readonly nominalRound: number | null;
         readonly nominalPick: number | null;
@@ -99,10 +112,17 @@ export function createAflTradeStoryBundle(input: {
   ledger: AflTradeAssetLedger;
   labels: AflTradeAssetLedgerLabels;
   transfers: readonly AflTradeStoryBundleTransfer[];
+  /**
+   * The candidate's pick custody: a pick transfer that names no original club is labelled with the one
+   * original club its custody rows name (2026-10-23), never a guess when they name none or several.
+   */
+  custody?: readonly { pickId: string; originalClubId: string | null }[];
 }): AflTradeStoryBundle {
   const { structure, valueLines, ledger, labels } = input;
   verifyLines(structure, valueLines);
-  const clubNames = new Map(labels.clubs.map(({ clubId, name }) => [clubId, name]));
+  const clubNames = new Map(
+    labels.clubs.map(({ clubId, name }) => [clubId, displayClubName(name)])
+  );
   const playerNames = new Map(labels.players.map(({ playerId, name }) => [playerId, name]));
   const clubName = (clubId: string) => {
     const name = clubNames.get(clubId);
@@ -119,13 +139,34 @@ export function createAflTradeStoryBundle(input: {
   const players = new Map<string, string>();
   const pickLabels = new Map<string, string>();
   const transfers = new Map(input.transfers.map((transfer) => [transfer.transferId, transfer]));
+  const custodyClubs = new Map<string, Set<string>>();
+  for (const row of input.custody ?? [])
+    if (row.originalClubId !== null)
+      custodyClubs.set(
+        row.pickId,
+        (custodyClubs.get(row.pickId) ?? new Set()).add(row.originalClubId)
+      );
+  const withCustodyClub = (asset: AflTradeStoryBundleTransfer['asset']) => {
+    if (asset.kind !== 'pick_entitlement') return asset;
+    const pick = asset as Extract<
+      AflTradeStoryBundleTransfer['asset'],
+      { kind: 'pick_entitlement' }
+    >;
+    const clubs = pick.pickId === undefined ? undefined : custodyClubs.get(pick.pickId);
+    return pick.originalClubId === null && clubs?.size === 1
+      ? { ...pick, originalClubId: [...clubs][0]! }
+      : asset;
+  };
   for (const trade of structure.content.trades) {
     for (const { clubId } of trade.clubs) clubs.set(clubId, clubName(clubId));
     for (const leg of trade.legs) {
       if (leg.assetKind !== 'pick') continue;
       const transfer = transfers.get(leg.transferId);
       if (!transfer) throw new Error(`The bundle has no candidate transfer ${leg.transferId}.`);
-      pickLabels.set(leg.transferId, aflTradeStoryPickLabel(transfer.asset, clubName));
+      pickLabels.set(
+        leg.transferId,
+        aflTradeStoryPickLabel(withCustodyClub(transfer.asset), clubName)
+      );
     }
   }
   for (const asset of valueLines.content.assets) {
@@ -199,7 +240,7 @@ export function createAflTradeStoryBundleSource(
 ): AflTradeStorySampleSource {
   const { structure, valueLines, names, bidMatches } = bundle.content;
   const storyNames: AflTradeStoryNames = {
-    clubs: new Map(names.clubs),
+    clubs: new Map(names.clubs.map(([clubId, name]) => [clubId, displayClubName(name)])),
     players: new Map(names.players),
     labels: new Map(names.labels),
   };
