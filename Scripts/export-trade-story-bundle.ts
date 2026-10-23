@@ -112,6 +112,7 @@ export async function runTradeStoryBundleCommand(input: {
       ledger: createAflTradeAssetLedger(inputs, labels).ledger,
       labels,
       transfers: inputs.candidate.transfers,
+      custody: inputs.candidate.pickCustody ?? [],
     });
     const bytes = new TextEncoder().encode(canonicalizeAflTradeJson(bundle));
     if (bytes.byteLength > MAXIMUM_BUNDLE_BYTES)

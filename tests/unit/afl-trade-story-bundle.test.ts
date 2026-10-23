@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   aflTradeStoryPickLabel,
   createAflTradeStoryBundle,
@@ -114,6 +115,78 @@ describe('trade story bundle (#1052)', () => {
     expect(aflTradeStoryPickLabel({ kind: 'special_entitlement' }, club)).toBe(
       'Special draft entitlement'
     );
+  });
+
+  it('shows a club under its AFL name where its record keeps a historical one', () => {
+    const [clubId] = [...cameronChainNames.clubs.keys()];
+    const bundle = sampleBundle();
+    const renamed = JSON.parse(JSON.stringify(bundle));
+    renamed.content.names.clubs = renamed.content.names.clubs.map(([id, name]: [string, string]) =>
+      id === clubId ? [id, 'Footscray'] : [id, name]
+    );
+    renamed.bundleId = createAflTradeContentAddress('trade-story-bundle', renamed.content);
+    const story = createAflTradeStoryBundleSource(verifyAflTradeStoryBundle(renamed))
+      .list()
+      .stories.find(({ clubIds }) => clubIds.includes(clubId!))!;
+    expect(story.clubNames).toContain('Western Bulldogs');
+    expect(story.clubNames).not.toContain('Footscray');
+  });
+
+  it("labels a pick with no stated original club by its custody's one club, never a guess", () => {
+    const trade = cameronChainLines.structure.content.trades[0]!;
+    const leg = trade.legs.find(({ assetKind }) => assetKind === 'pick')!;
+    const [clubId, clubName] = [...cameronChainNames.clubs][0]!;
+    const build = (custody: { pickId: string; originalClubId: string | null }[]) => {
+      const transfers = cameronChainLines.structure.content.trades.flatMap((t) =>
+        t.legs.map((l) => ({
+          transferId: l.transferId,
+          asset:
+            l.transferId === leg.transferId
+              ? {
+                  kind: 'pick_entitlement' as const,
+                  pickId: 'pick-x',
+                  draftYear: 2020,
+                  nominalRound: null,
+                  nominalPick: 13,
+                  originalClubId: null,
+                  recordedLabel: null,
+                }
+              : l.assetKind === 'player'
+                ? { kind: 'player' as const }
+                : {
+                    kind: 'pick_entitlement' as const,
+                    draftYear: t.tradeYear,
+                    nominalRound: null,
+                    nominalPick: null,
+                    originalClubId: null,
+                    recordedLabel: cameronChainNames.labels.get(l.transferId) ?? null,
+                  },
+        }))
+      );
+      const bundle = createAflTradeStoryBundle({
+        structure: cameronChainLines.structure,
+        valueLines: cameronChainLines.valueLines,
+        ledger: { ledgerId: 'x', content: { bidMatches: [] } } as unknown as AflTradeAssetLedger,
+        labels: {
+          clubs: [...cameronChainNames.clubs].map(([id, name]) => ({ clubId: id, name })),
+          players: [...cameronChainNames.players].map(([playerId, name]) => ({ playerId, name })),
+        },
+        transfers,
+        custody,
+      });
+      return new Map(bundle.content.names.labels).get(leg.transferId);
+    };
+    expect(build([{ pickId: 'pick-x', originalClubId: clubId }])).toBe(
+      `2020 pick 13 (${clubName})`
+    );
+    expect(build([])).toBe('2020 pick 13');
+    const [otherClub] = [...cameronChainNames.clubs.keys()].slice(1);
+    expect(
+      build([
+        { pickId: 'pick-x', originalClubId: clubId },
+        { pickId: 'pick-x', originalClubId: otherClub! },
+      ])
+    ).toBe('2020 pick 13');
   });
 
   it('fails, never guesses, when a name the stories need is missing', () => {
