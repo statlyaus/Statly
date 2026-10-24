@@ -1453,8 +1453,8 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
     knownLimitations: [
       "Survival reads own form only through the previous season's shrunk PAV-per-game effect.",
       'The 14+ band pools every veteran from stage 14.',
-      'Stage is real age (birth year + 18) only where outcome_player has a birth date; a player without one is staged by career, so a mature-age draftee without a birth date is still staged young.',
-      'A player with no birth date who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored.',
+      'Stage is real age (birth year + 18) only for a mature-age draftee (drafted the year he turns 21 or later) with a birth date; every other player is staged by career, so a mature-age draftee without a birth date is still staged young.',
+      'A player who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored, birth date or not.',
       'First-game stages are understated for players listed before their debut.',
       'A birth year is a calendar year: players born early and late in one year share a stage.',
       "Recency is not weighted: a veteran's effect is his career average; decline shows only through the stage prior.",
