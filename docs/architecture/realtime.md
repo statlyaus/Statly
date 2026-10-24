@@ -2,13 +2,21 @@
 
 ## Ownership
 
-Socket.IO transports live draft and social updates. Redis supplies multi-process Pub/Sub and ephemeral
+Socket.IO transports live draft, trade and social updates. Redis supplies multi-process Pub/Sub and ephemeral
 coordination. Neither owns durable fantasy state.
 
 Draft commands are accepted only through the server application boundary. That boundary authenticates
 the actor, checks league membership and pick authority, writes the command result and outbox/event state
 through Prisma, and then publishes realtime notification. A successful socket emission without a
 successful persisted command is not a successful pick.
+
+League trade threads and social channels use the same outbox pattern. `tradeService` writes a
+`LeagueTradeOutboxEvent` row in the transaction that records each trade event, so the row is the
+persisted fact. The Socket.IO process drains that outbox on the same tick as the social outbox
+(`server/leagues/trades/tradePublisher.ts`) and emits one `trade:update` event per row to the league
+members' room, the room `social:join` admits after a membership check. The Trade Centre renders its
+snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
+reconnect, it refreshes that snapshot rather than patching browser state.
 
 ## Process model
 

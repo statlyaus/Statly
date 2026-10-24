@@ -42,6 +42,7 @@ import {
   type DraftRealtimeJoinAck,
 } from '@/services/realtime/draftRealtimeV2';
 import { flushSocialOutboxBatch } from '@/server/leagues/social/socialPublisher';
+import { flushTradeOutboxBatch } from '@/server/leagues/trades/tradePublisher';
 import {
   attachLeagueSocialSocketHandlers,
   startLeagueSocialRealtime,
@@ -397,6 +398,8 @@ const drainSocialOutbox = async (): Promise<void> => {
   try {
     await socialRealtimeReady;
     await flushSocialOutboxBatch(io);
+    // Trade threads announce through the same league room, so they drain on the same tick.
+    await flushTradeOutboxBatch(io);
   } catch (error) {
     logger.error('Failed to drain league social outbox', {
       error: error instanceof Error ? error.message : String(error),

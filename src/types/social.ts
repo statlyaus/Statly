@@ -174,7 +174,9 @@ export interface SocialRealtimeEnvelope {
     | 'social:post'
     | 'social:reply'
     | 'social:moderation'
-    | 'social:read-state';
+    | 'social:read-state'
+    // League trade threads share the members' realtime room; see server/leagues/trades/tradePublisher.
+    | 'trade:update';
   payload: SocialMessage | SocialPost | SocialReply | Record<string, unknown>;
   occurredAt: string;
 }
