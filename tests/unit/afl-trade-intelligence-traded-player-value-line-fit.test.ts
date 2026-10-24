@@ -22,6 +22,7 @@ import {
 import {
   AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION,
   aflTradeTradedPlayerBirthYears,
+  aflTradeTradedPlayerEntryGroup,
   aflTradeTradedPlayerFirstDraftOrigins,
   aflTradeTradedPlayerFitLegInputs,
   aflTradeTradedPlayerStage,
@@ -404,7 +405,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       all(backTest.baselines.producedOnly, 0).meanAbsoluteError
     );
     expect(backTest.bySeasonAndCheckpoint.length).toBeGreaterThan(0);
-    // Veterans the read seasons do not start: left-censored, or drafted before the first read season.
+    // Veterans the read seasons do not start: left-censored, or a career begun by the first read season.
     for (const checkpoint of [0, 1, 3]) {
       const entry = (group: string) =>
         backTest.byEntryAndCheckpoint.find(
@@ -939,6 +940,27 @@ describe('aflTradeTradedPlayerStage', () => {
     });
     // A draft origin at or after his first trade is still refused, birth date or not.
     expect(stage(2020, [], 2020, 2011, 2001)).toBeNull();
+  });
+
+  it('groups a back-test leg by when his career began, the same rule for draft and birth', () => {
+    const entry = (...args: Parameters<typeof stage>) =>
+      aflTradeTradedPlayerEntryGroup(stage(...args)!, args[3] ?? 2011);
+    // Born 1990, drafted 2015 at 25, debuting 2016: every season of his career is read.
+    expect(entry(2015, range(2016, 2019), 2019, 2011, 1990)).toBe('entered_from_first_read');
+    // Born 1990, drafted 2012 at 22: his career, from 2013, is read in full.
+    expect(entry(2012, range(2013, 2019), 2019, 2011, 1990)).toBe('entered_from_first_read');
+    // A 2010 draftee born 1992: his career began by the first read season, birth date or not.
+    expect(entry(2010, range(2011, 2019), 2019, 2011, 1992)).toBe('career_began_by_first_read');
+    expect(entry(2010, range(2011, 2019), 2019)).toBe('career_began_by_first_read');
+    // A 2011 draftee, born 1993 or undated: his career starts in 2012, after the first read season.
+    expect(entry(2011, range(2012, 2019), 2019, 2011, 1993)).toBe('entered_from_first_read');
+    expect(entry(2011, range(2012, 2019), 2019)).toBe('entered_from_first_read');
+    // An undated veteran first seen in 2011 is left-censored; dated, his career began by then.
+    expect(entry(null, range(2011, 2019), 2019)).toBe('left_censored');
+    expect(entry(null, range(2011, 2019), 2019, 2011, 1985)).toBe('career_began_by_first_read');
+    // First game after the first read season, or none before the trade: entered from it.
+    expect(entry(null, range(2014, 2019), 2019)).toBe('entered_from_first_read');
+    expect(entry(null, [], 2011)).toBe('entered_from_first_read');
   });
 
   it('refuses two birth years for one player', () => {

@@ -1061,13 +1061,26 @@ const publishComponents = (components: VarianceComponents) => ({
 const VETERAN_BANDS: readonly Band[] = ['10-11', '12-13', '14+'];
 
 const ENTRY_GROUPS = [
-  'drafted_before_first_read',
-  // Birth basis: stage 1 (the season he turned 19) is before the first season read.
-  'of_age_before_first_read',
+  // Draft or birth basis: his career began in or before the first season read.
+  'career_began_by_first_read',
   'left_censored',
   'entered_from_first_read',
 ] as const;
-type EntryGroup = (typeof ENTRY_GROUPS)[number];
+export type AflTradeTradedPlayerEntryGroup = (typeof ENTRY_GROUPS)[number];
+type EntryGroup = AflTradeTradedPlayerEntryGroup;
+
+/**
+ * A back-test leg's entry: left-censored; else, on the draft or birth basis, whether his career (its
+ * first season, not his age) began in or before the first season read; else entered from it. One rule
+ * for both bases, so a player keeps his group whether or not his birth date is known.
+ */
+export function aflTradeTradedPlayerEntryGroup(stage: Stage, firstReadSeason: number): EntryGroup {
+  if (stage.leftCensored) return 'left_censored';
+  if (stage.basis !== 'draft' && stage.basis !== 'birth') return 'entered_from_first_read';
+  return (stage.careerFromSeason ?? stage.originSeason + 1) <= firstReadSeason
+    ? 'career_began_by_first_read'
+    : 'entered_from_first_read';
+}
 
 interface Pair {
   tradeSeason: number;
@@ -1159,13 +1172,7 @@ function backTest(
           tradeSeason: year,
           band,
           basis: basisGroupOf(valued.stage),
-          entry: valued.stage.leftCensored
-            ? 'left_censored'
-            : valued.stage.basis === 'draft' && valued.stage.originSeason < firstReadSeason
-              ? 'drafted_before_first_read'
-              : valued.stage.basis === 'birth' && valued.stage.originSeason + 1 < firstReadSeason
-                ? 'of_age_before_first_read'
-                : 'entered_from_first_read',
+          entry: aflTradeTradedPlayerEntryGroup(valued.stage, firstReadSeason),
           checkpoint,
           predicted,
           producedOnly: full.produced,

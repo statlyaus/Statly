@@ -389,8 +389,10 @@ v3 added the `birth` stage basis, owner decisions 2026-10-24).
   predicted minus realized), MAE, RMSE and the bias's standard error (the residuals' sample SD over √n; until 2026-10-20 it
   was RMSE / √n, which counts the bias itself as noise and understates large biases) per leg, by checkpoint
   and by stage band at trade, bands 10 and up pooled (`byVeteranBandsAndCheckpoint`), by entry
-  (`byEntryAndCheckpoint`: drafted before the first read season, of age before it (`birth`, stage 1
-  before 2011), left-censored, later), by `stageBasis` (`birth` first, `first_game` split by
+  (`byEntryAndCheckpoint`: `career_began_by_first_read` (draft or `birth` basis, his career's first
+  season, not his age, in or before the first season read; one rule for both bases, so a player keeps
+  his group whether or not his birth date is known), `left_censored`, `entered_from_first_read`, and
+  `entered_before_first_read` pooling the first two), by `stageBasis` (`birth` first, `first_game` split by
   left-censoring) and by trade season; the
   baselines produced-only (expected remaining 0: the display the owner rejected), stage-only (own form
   moves nothing) and post-trade-only own form (tests the at-trade use of history); calibration bins
