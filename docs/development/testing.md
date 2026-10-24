@@ -396,7 +396,7 @@ on your PostgreSQL server and point both connection variables at it:
 
 ```sh
 createdb statly_verify_scratch
-export DATABASE_URL="postgresql://statly:change-me@127.0.0.1:55440/statly_verify_scratch"
+export DATABASE_URL="postgresql://statly:change-me@127.0.0.1:5432/statly_verify_scratch"
 export DIRECT_DATABASE_URL="$DATABASE_URL"
 npm run prisma:generate
 npx prisma migrate deploy
