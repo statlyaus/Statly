@@ -33,6 +33,18 @@ The example file groups variables by purpose. Common local flows use:
 - `DATABASE_URL_TEST`: a separate disposable PostgreSQL database for integration tests. Never point
   it at the development database.
 
+The example file points both at a PostgreSQL 16 server on `127.0.0.1:5432`, the port Homebrew's
+`postgresql@16` listens on. There is no shared development server: each machine runs its own.
+
+```sh
+brew install postgresql@16
+brew services start postgresql@16
+psql -d postgres -c "CREATE ROLE statly LOGIN PASSWORD 'change-me' CREATEDB"
+createdb -O statly statly_fantasy_dev
+createdb -O statly statly_fantasy_test
+npx prisma migrate deploy
+```
+
 Apply migrations with `npx prisma migrate deploy`. The history starts at the
 `20261004000000_postgresql_baseline` migration; the earlier SQLite history is archived in
 `prisma/migrations-sqlite-archive/` for reference only and must never be replayed.
