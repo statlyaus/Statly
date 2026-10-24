@@ -487,6 +487,7 @@ function stubEvaluator(
       ['y', [2020]],
     ]),
     draftOrigins: [{ playerId: 'x', draftYear: 2016, draftType: 'national', selectionId: 'sx' }],
+    birthYears: [],
     games: inputs().games,
     ...extra,
     parameters: {
@@ -758,6 +759,11 @@ describe('computeAflTradeValueLines', () => {
         ],
       }).input?.stage
     ).toEqual({ basis: 'draft', originSeason: 2010, leftCensored: false });
+    // A birth date known: his real age, his career from the season after his draft.
+    expect(inputOf({ birthYears: [{ playerId: 'x', birthYear: 1994 }] }).input).toMatchObject({
+      stage: { basis: 'birth', originSeason: 2012, leftCensored: false, careerFromSeason: 2017 },
+      career: [{ season: 2018 }, { season: 2019 }],
+    });
     // No draft: his first game, in the first season read, is a left-censored first game.
     expect(inputOf({ draftOrigins: [] }).input?.stage).toEqual({
       basis: 'first_game',
