@@ -2862,12 +2862,16 @@ describe('AFL trade non-production infrastructure plan policy', () => {
         child.unref();
       });
       const execute = vi.fn(async () => '');
-      const startedAt = performance.now();
+      // A blocking read of the FIFO would wait for a writer that never arrives. The watchdog is that
+      // writer, far later than any runner delay, so it only releases a blocked open and records that
+      // the command needed it. The assertion is on that record, not on elapsed wall-clock time.
+      let watchdogReleasedBlockedOpen = false;
       const unblockTimer = setTimeout(() => {
+        watchdogReleasedBlockedOpen = true;
         void open(fifoPath, constants.O_WRONLY | constants.O_NONBLOCK)
           .then((handle) => handle.close())
           .catch(() => undefined);
-      }, 500);
+      }, 10_000);
 
       try {
         await expect(
@@ -2876,7 +2880,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
             execute,
           })
         ).rejects.toThrow(/must be one regular file, not a link/);
-        expect(performance.now() - startedAt).toBeLessThan(250);
+        expect(watchdogReleasedBlockedOpen).toBe(false);
         expect(execute).not.toHaveBeenCalled();
       } finally {
         clearTimeout(unblockTimer);
