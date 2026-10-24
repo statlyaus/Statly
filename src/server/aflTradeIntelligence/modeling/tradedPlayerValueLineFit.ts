@@ -2,8 +2,8 @@
  * Fits and back-tests the traded-player value line (value-line method, "Traded-player fit";
  * statlyaus/Statly#789, owner decision 2026-10-19): a traded player's open first stint at the
  * receiving club is estimated like a pick's. The prior is what traded players at the same career
- * stage produce from there (stage = his age less 18 where his birth date is known, owner 2026-10-24;
- * else seasons since his draft, standing in for age), his own form is
+ * stage produce from there (stage = his age less 18 for a mature-age draftee whose birth date is
+ * known, owner 2026-10-24; else seasons since his draft, standing in for age), his own form is
  * blended in by the pick fit's credibility rule, and survival at the receiving club is fitted from the
  * same legs. Pure and deterministic: the same legs, draft origins and games give the same fit, byte
  * for byte. It reuses the pick fit's generic pieces (`solve`, `varianceComponents`, `errorRow`,
@@ -39,11 +39,14 @@ const PICK_RULES = AFL_TRADE_VALUE_LINE_FIT_RULES;
 /** Every fixed choice of the traded-player fit; published with the fit. */
 export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
   /**
-   * Stage by real age (owner decision 2026-10-24, issue 789): where his birth date is known, the
-   * origin is his birth year + 18, so season s is stage s - birthYear - 18 and a player drafted the
-   * year he turns 18 keeps his career stage. Never later than the season before his career begins.
+   * Stage by real age (owner decisions 2026-10-24, issue 789): only for a mature-age draftee, one
+   * drafted in or after the year he turns `matureAgeDraftAge`, whose birth date is known. His origin
+   * is his birth year + 18, so season s is stage s - birthYear - 18. Every other player keeps his
+   * career stage ("everyone drafted at 18-20 stays exactly as now"). Never later than the season
+   * before his career begins.
    */
   ageStageOriginOffset: 18,
+  matureAgeDraftAge: 21,
   /** Career stage of season s is s minus the origin; each band has its own intercept. */
   stageBands: [
     { band: '1', from: 1, through: 1 },
@@ -146,7 +149,7 @@ export interface AflTradeTradedPlayerValueLineFitInputs {
   }[];
   /** Every canonical draft row of the players, any draft type and year. */
   draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
-  /** The legs' players' known birth years; a player without one is staged by career. */
+  /** The legs' players' known birth years; they stage only mature-age draftees. */
   birthYears: readonly AflTradeTradedPlayerBirthYear[];
   /** The grader's pinned PAV calculation per season, which the ledger stints read. */
   stintCalculations: readonly { season: number; calculationId: string }[];
@@ -325,9 +328,9 @@ export function aflTradeTradedPlayerBirthYears(
 
 /**
  * The one stage rule, the fit's and the value lines': taken against the player's first trade in the
- * window. Null when his earliest draft origin is at or after that trade, which the fit refuses. Where
- * his birth year is known, his real age (owner decision 2026-10-24): the origin is birthYear + 18,
- * never left-censored, and no later than the season before his career begins (the season after his
+ * window. Null when his earliest draft origin is at or after that trade, which the fit refuses. For a
+ * mature-age draftee (draft year less birth year at least `matureAgeDraftAge`), his real age (owner
+ * decisions 2026-10-24): the origin is birthYear + 18, never left-censored, and no later than the season before his career begins (the season after his
  * draft, his first game through that trade, or that trade season, whichever is first). Else his
  * earliest draft origin; else the season before his first game through that trade, left-censored when
  * that game is in the first season read; else (no draft and no game) assumed youngest, the season
@@ -348,7 +351,11 @@ export function aflTradeTradedPlayerStage(input: {
     Infinity,
     ...[...input.gameSeasons].filter((season) => season <= firstTradeSeason)
   );
-  if (birthYear !== null) {
+  if (
+    birthYear !== null &&
+    draftOrigin !== null &&
+    draftOrigin.draftYear - birthYear >= RULES.matureAgeDraftAge
+  ) {
     const careerFrom = Math.min(
       draftOrigin ? draftOrigin.draftYear + 1 : Infinity,
       firstGame,
