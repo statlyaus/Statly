@@ -6,11 +6,24 @@ import type { LeagueTradeCentreSnapshot } from '@/server/leagues/trades/tradeCon
 
 import { LeagueTradeCentrePanel } from './LeagueTradeCentrePanel';
 
-const { replace, refresh, authenticatedFetch } = vi.hoisted(() => ({
-  replace: vi.fn(),
-  refresh: vi.fn(),
-  authenticatedFetch: vi.fn(),
-}));
+const { replace, refresh, authenticatedFetch, fakeSocket } = vi.hoisted(() => {
+  const handlers = new Map<string, Set<(payload?: unknown) => void>>();
+  const fakeSocket = {
+    connected: true,
+    emit: vi.fn(),
+    on: vi.fn((event: string, handler: (payload?: unknown) => void) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event)!.add(handler);
+    }),
+    off: vi.fn((event: string, handler: (payload?: unknown) => void) => {
+      handlers.get(event)?.delete(handler);
+    }),
+    receive(event: string, payload?: unknown) {
+      handlers.get(event)?.forEach((handler) => handler(payload));
+    },
+  };
+  return { replace: vi.fn(), refresh: vi.fn(), authenticatedFetch: vi.fn(), fakeSocket };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, refresh }),
@@ -19,6 +32,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/authenticatedFetch', () => ({ authenticatedFetch }));
+vi.mock('@/providers/SocketProvider', () => ({ useSocket: () => fakeSocket }));
 vi.mock('@/components/league/LeagueSocialDiscussButton', () => ({
   LeagueSocialDiscussButton: ({
     context,
@@ -139,6 +153,26 @@ describe('LeagueTradeCentrePanel', () => {
     authenticatedFetch.mockResolvedValue(
       new Response(JSON.stringify({ threadId: 'trade-2', status: 'OPEN' }), { status: 201 })
     );
+  });
+
+  it('joins the league room and refreshes the server snapshot on trade events and reconnect', () => {
+    renderOffersPanel();
+
+    expect(fakeSocket.emit).toHaveBeenCalledWith('social:join', { leagueId: 'league-1' });
+    expect(refresh).not.toHaveBeenCalled();
+
+    fakeSocket.receive('trade:update', { leagueId: 'league-2', payload: { threadId: 'other' } });
+    expect(refresh).not.toHaveBeenCalled();
+
+    fakeSocket.receive('trade:update', {
+      leagueId: 'league-1',
+      payload: { threadId: 'trade-1', eventType: 'trade:accepted', status: 'ACCEPTED' },
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    fakeSocket.receive('connect');
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(fakeSocket.emit).toHaveBeenCalledTimes(2);
   });
 
   it('opens a focused proposal workspace for a deep-linked player', () => {
