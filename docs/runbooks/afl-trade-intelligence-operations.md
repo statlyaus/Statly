@@ -3551,16 +3551,17 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   `inputs.structureId` names the trade structure it read (`afl-trade-value-lines/v3`; a v2 file has
   no per-leg points and the trade story refuses it, so recompute).
 - `--traded-player-fit` (optional) is the `--out` file of "Fitting the traded-player value line" (the
-  fit must be `afl-trade-traded-player-value-line-fit/v2`: the stored `044703d9…` is v1, has no per-season
-  stage digest and is refused, so refit on genuine first); its schema and content address are checked
+  fit must be `afl-trade-traded-player-value-line-fit/v3`: the stored `044703d9…` is v1, has no per-season
+  stage digest and is refused, and a v2 fit has no `birth` stage basis and is refused too, so refit on
+  genuine first); its schema and content address are checked
   before the database is opened.
   The command re-reads what the fit read: the candidate's player legs in the fit's trade seasons, every
-  canonical and reviewed Draftguru draft origin, and the games read model over the fit's seasons (from
-  2011). It refuses unless the method and every season's calculation are the fit's, each trade season has
+  canonical and reviewed Draftguru draft origin, the legs' players' birth years
+  (`outcome_player.birth_date`), and the games read model over the fit's seasons (from 2011). It refuses unless the method and every season's calculation are the fit's, each trade season has
   the fit's leg and unresolved counts, and each trade season's legs, re-staged, match the fit's
-  `stageDigest` (every leg's player, stage basis, origin season and censoring: a Draftguru batch or
-  canonical draft row added since the fit that moves any origin, even within one basis, is refused:
-  refit first). `--through-season` may
+  `stageDigest` (every leg's player, stage basis, origin season, censoring and career start: a
+  Draftguru batch, canonical draft row or birth date added or changed since the fit that moves any
+  origin, even within one basis, is refused: refit first). `--through-season` may
   not pass the fit's last season. A traded leg outside the fit's trade seasons, or with a draft origin at
   or after his first trade, stays pending (`unavailable`).
 - Without `--traded-player-fit`, every traded player's open stint is pending
@@ -3598,8 +3599,11 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 `outcomes:grading:traded-player-value-line-fit` fits and back-tests the traded-player value line
 (statlyaus/Statly#789; owner decision 2026-10-19; the architecture doc's "Traded-player value-line fit"
 section and the value-line spec's "Traded-player fit"). It reads one candidate's player trade legs and
-their ledger stints, the player-season games read model and every canonical draft row, and its one write is
-the fit's evidence record in the registered store.
+their ledger stints, the player-season games read model, every canonical draft row and reviewed
+Draftguru 2000 to 2010 row, and the legs' players' birth years (`outcome_player.birth_date`; the stage
+is real age only for a mature-age draftee, drafted at 21 or older with a known birth date; every other
+player keeps career stage, owner decisions 2026-10-24), and its one write is the fit's evidence
+record in the registered store. The arguments are unchanged by v3.
 
 ```sh
 AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<database> \
@@ -3613,6 +3617,11 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   and of players who entered before 2011, is within two standard errors of zero at the trade, year 1 and
   year 3. Fit `044703d9…` (statlyaus/Statly#789, retirement exits): pooled 10+ +2.6 / +1.2 / −0.6 PAV (SE
   3.2 / 2.7 / 1.8); pre-2011 entrants +7.9 / +5.1 / +1.8 (SE 4.3 / 3.1 / 1.3).
+  **One owner exception (2026-10-24):** the mature-age-only v3 fit (10 `birth` legs) was saved with
+  pre-2011 entrants 10.6 (SE 4.9) = 2.17 SE at the trade and 7.5 (SE 3.7) = 2.04 at year 1, against the
+  2.0 gate ("Yes, save it (Recommended)"); pooled 10+ was within 1.6 SE. The gate is unchanged: the
+  exception covers that fit only, so any later fit is held to two standard errors again. Full birth-date
+  age for everyone failed it (pre-2011 entrants 13.3, SE 5.8 = 2.3 SE) and was not stored.
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.
@@ -3626,7 +3635,8 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   back-test by stage band and checkpoint, and the stored `artifactId`.
 - Check before anything reads the fit: `legs` (reviewed and excluded counts against the #869 record, 173
   reviewed traded arrivals with Cameron's unreviewed: re-count them here), `fitWindow.legsByTradeSeason`
-  (counts by stage basis and the `stageDigest` of the staged legs per trade season), `parameters.varianceComponents` (both variances positive,
+  (counts by stage basis, `birth` included, and the `stageDigest` of the staged legs per trade season;
+  only mature-age draftees with a birth date are on `birth`, 10 legs in the 2026-10-24 genuine dry run), `backTest.byStageBasisAndCheckpoint` for `birth` against the career bases, `parameters.varianceComponents` (both variances positive,
   `k_games` their ratio, `k_rate` their ratio or the 10-game guard), the back-test against the
   produced-only, stage-only and post-trade-only baselines, and the calibration bins. Expect 25 to 45 legs
   per fold: judge every bias against its standard error. A bias in one direction in every band at a

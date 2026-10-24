@@ -21,8 +21,8 @@ import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
 /**
  * Fits and back-tests the traded-player value line (#789, owner decision 2026-10-19): the career-stage
  * prior, survival at the receiving club and the credibility weights, from one reconciliation
- * candidate's player trade legs, their ledger stints, the canonical draft rows and the player-season
- * games read model, and stores the sealed fit in the registered artifact store, as the runbook section
+ * candidate's player trade legs, their ledger stints, the canonical draft rows, the players' birth
+ * dates and the player-season games read model, and stores the sealed fit in the registered artifact store, as the runbook section
  * "Fitting the traded-player value line" describes. Reads only; the one write is the fit's evidence
  * record.
  *

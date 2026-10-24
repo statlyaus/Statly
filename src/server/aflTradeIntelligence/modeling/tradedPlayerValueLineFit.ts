@@ -2,7 +2,8 @@
  * Fits and back-tests the traded-player value line (value-line method, "Traded-player fit";
  * statlyaus/Statly#789, owner decision 2026-10-19): a traded player's open first stint at the
  * receiving club is estimated like a pick's. The prior is what traded players at the same career
- * stage produce from there (stage = seasons since his draft, standing in for age), his own form is
+ * stage produce from there (stage = his age less 18 for a mature-age draftee whose birth date is
+ * known, owner 2026-10-24; else seasons since his draft, standing in for age), his own form is
  * blended in by the pick fit's credibility rule, and survival at the receiving club is fitted from the
  * same legs. Pure and deterministic: the same legs, draft origins and games give the same fit, byte
  * for byte. It reuses the pick fit's generic pieces (`solve`, `varianceComponents`, `errorRow`,
@@ -25,10 +26,10 @@ import {
 } from './valueLineFit';
 
 export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION =
-  'afl-trade-traded-player-value-line-fit/v2' as const;
+  'afl-trade-traded-player-value-line-fit/v3' as const;
 const FIT_PREFIX = 'traded-player-value-line-fit';
 
-export type AflTradeTradedPlayerStageBasis = 'draft' | 'first_game' | 'assumed_youngest';
+export type AflTradeTradedPlayerStageBasis = 'birth' | 'draft' | 'first_game' | 'assumed_youngest';
 export type AflTradeTradedPlayerStageBand =
   '1' | '2-3' | '4-5' | '6-7' | '8-9' | '10-11' | '12-13' | '14+';
 export type AflTradeTradedPlayerPhase = 'pre_trade' | 'tenure_1' | 'tenure_2' | 'tenure_3+';
@@ -37,6 +38,15 @@ const PICK_RULES = AFL_TRADE_VALUE_LINE_FIT_RULES;
 
 /** Every fixed choice of the traded-player fit; published with the fit. */
 export const AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_RULES = {
+  /**
+   * Stage by real age (owner decisions 2026-10-24, issue 789): only for a mature-age draftee, one
+   * drafted in or after the year he turns `matureAgeDraftAge`, whose birth date is known. His origin
+   * is his birth year + 18, so season s is stage s - birthYear - 18. Every other player keeps his
+   * career stage ("everyone drafted at 18-20 stays exactly as now"). Never later than the season
+   * before his career begins.
+   */
+  ageStageOriginOffset: 18,
+  matureAgeDraftAge: 21,
   /** Career stage of season s is s minus the origin; each band has its own intercept. */
   stageBands: [
     { band: '1', from: 1, through: 1 },
@@ -120,6 +130,12 @@ export interface AflTradeTradedPlayerDraftOrigin {
   selectionId: string;
 }
 
+/** A player's birth year, from `outcome_player.birth_date`. */
+export interface AflTradeTradedPlayerBirthYear {
+  playerId: string;
+  birthYear: number;
+}
+
 export interface AflTradeTradedPlayerValueLineFitInputs {
   /** The trade periods fitted, ascending and distinct. */
   tradeSeasons: readonly number[];
@@ -133,6 +149,8 @@ export interface AflTradeTradedPlayerValueLineFitInputs {
   }[];
   /** Every canonical draft row of the players, any draft type and year. */
   draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
+  /** The legs' players' known birth years; they stage only mature-age draftees. */
+  birthYears: readonly AflTradeTradedPlayerBirthYear[];
   /** The grader's pinned PAV calculation per season, which the ledger stints read. */
   stintCalculations: readonly { season: number; calculationId: string }[];
   /** The player-season games read model, from the first season read through the last. */
@@ -150,7 +168,7 @@ export interface AflTradeTradedPlayerCurve {
   rateEffectSlope?: number;
 }
 
-/** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v2 artifact, plus its id. */
+/** The `parameters` block of a sealed afl-trade-traded-player-value-line-fit/v3 artifact, plus its id. */
 export interface AflTradeTradedPlayerValueLineParameters {
   fitId: string;
   survivalHazardLogit: AflTradeTradedPlayerCurve;
@@ -215,6 +233,11 @@ export interface AflTradeTradedPlayerStage {
   basis: AflTradeTradedPlayerStageBasis;
   originSeason: number;
   leftCensored: boolean;
+  /**
+   * Birth basis only, and only when it is not originSeason + 1: the first season of his AFL career
+   * (after his draft, or his first game), so the seasons before he was listed are not empty seasons.
+   */
+  careerFromSeason?: number;
 }
 
 type Stage = AflTradeTradedPlayerStage;
@@ -289,29 +312,62 @@ export function aflTradeTradedPlayerFirstDraftOrigins(
   return first;
 }
 
+/** Each player's birth year, refusing two different ones for a player. */
+export function aflTradeTradedPlayerBirthYears(
+  rows: readonly AflTradeTradedPlayerBirthYear[]
+): Map<string, number> {
+  const years = new Map<string, number>();
+  for (const { playerId, birthYear } of rows) {
+    const known = years.get(playerId);
+    if (known !== undefined && known !== birthYear)
+      throw new Error(`Player ${playerId} has two birth years, ${known} and ${birthYear}.`);
+    years.set(playerId, birthYear);
+  }
+  return years;
+}
+
 /**
  * The one stage rule, the fit's and the value lines': taken against the player's first trade in the
- * window. His earliest draft origin when it is before that trade; else the season before his first
- * game through that trade, left-censored when that game is in the first season read; else (no draft
- * and no game) assumed youngest, the season before that trade. Null when the draft origin is at or
- * after his first trade, which the fit refuses.
+ * window. Null when his earliest draft origin is at or after that trade, which the fit refuses. For a
+ * mature-age draftee (draft year less birth year at least `matureAgeDraftAge`), his real age (owner
+ * decisions 2026-10-24): the origin is birthYear + 18, never left-censored, and no later than the season before his career begins (the season after his
+ * draft, his first game through that trade, or that trade season, whichever is first). Else his
+ * earliest draft origin; else the season before his first game through that trade, left-censored when
+ * that game is in the first season read; else (no draft and no game) assumed youngest, the season
+ * before that trade.
  */
 export function aflTradeTradedPlayerStage(input: {
   draftOrigin: { draftYear: number } | null;
+  /** His birth year, or null when his birth date is unknown. */
+  birthYear: number | null;
   /** Read seasons in which he played a game, at any club. */
   gameSeasons: Iterable<number>;
   firstTradeSeason: number;
   firstReadSeason: number;
 }): AflTradeTradedPlayerStage | null {
-  const { draftOrigin, firstTradeSeason, firstReadSeason } = input;
-  if (draftOrigin)
-    return draftOrigin.draftYear >= firstTradeSeason
-      ? null
-      : { basis: 'draft', originSeason: draftOrigin.draftYear, leftCensored: false };
+  const { draftOrigin, birthYear, firstTradeSeason, firstReadSeason } = input;
+  if (draftOrigin && draftOrigin.draftYear >= firstTradeSeason) return null;
   const firstGame = Math.min(
     Infinity,
     ...[...input.gameSeasons].filter((season) => season <= firstTradeSeason)
   );
+  if (
+    birthYear !== null &&
+    draftOrigin !== null &&
+    draftOrigin.draftYear - birthYear >= RULES.matureAgeDraftAge
+  ) {
+    const careerFrom = Math.min(
+      draftOrigin ? draftOrigin.draftYear + 1 : Infinity,
+      firstGame,
+      firstTradeSeason
+    );
+    const originSeason = Math.min(birthYear + RULES.ageStageOriginOffset, careerFrom - 1);
+    return careerFrom === originSeason + 1
+      ? { basis: 'birth', originSeason, leftCensored: false }
+      : { basis: 'birth', originSeason, leftCensored: false, careerFromSeason: careerFrom };
+  }
+  if (draftOrigin)
+    return { basis: 'draft', originSeason: draftOrigin.draftYear, leftCensored: false };
   return firstGame === Infinity
     ? { basis: 'assumed_youngest', originSeason: firstTradeSeason - 1, leftCensored: false }
     : {
@@ -320,6 +376,10 @@ export function aflTradeTradedPlayerStage(input: {
         leftCensored: firstGame === firstReadSeason,
       };
 }
+
+/** The first season of his career read: his career's first season, or the first season read. */
+export const aflTradeTradedPlayerCareerStart = (stage: Stage, firstReadSeason: number) =>
+  Math.max(stage.careerFromSeason ?? stage.originSeason + 1, firstReadSeason);
 
 const bandOf = (stage: number): Band =>
   RULES.stageBands.find(
@@ -805,8 +865,9 @@ function fitPriors(players: readonly FitPlayer[], lastSeason: number): FittedPri
   };
 }
 
-type BasisGroup = 'draft' | 'first_game' | 'first_game_censored' | 'assumed_youngest';
+type BasisGroup = 'birth' | 'draft' | 'first_game' | 'first_game_censored' | 'assumed_youngest';
 const BASIS_GROUPS: readonly BasisGroup[] = [
+  'birth',
   'draft',
   'first_game',
   'first_game_censored',
@@ -824,9 +885,9 @@ export const aflTradeTradedPlayerStageBasisCounts = (stages: readonly Stage[]) =
   ) as Record<BasisGroup, number>;
 
 /**
- * The sha256 of a trade season's legs as staged: each leg's player and stage, sorted. Recorded per trade
- * season in `fitWindow.legsByTradeSeason` (v2), so a re-read whose origins or players moved a stage,
- * even within one basis, cannot pass for the fit's.
+ * The sha256 of a trade season's legs as staged: each leg's player and stage (its career start
+ * included, v3), sorted. Recorded per trade season in `fitWindow.legsByTradeSeason` (v2), so a re-read
+ * whose origins, birth years or players moved a stage, even within one basis, cannot pass for the fit's.
  */
 export const aflTradeTradedPlayerStageDigest = (
   legs: readonly { playerId: string; stage: Stage }[]
@@ -834,7 +895,13 @@ export const aflTradeTradedPlayerStageDigest = (
   sha256AflTradeCanonicalJson(
     legs
       .map(({ playerId, stage }) =>
-        [playerId, stage.basis, stage.originSeason, stage.leftCensored].join('|')
+        [
+          playerId,
+          stage.basis,
+          stage.originSeason,
+          stage.leftCensored,
+          stage.careerFromSeason ?? '',
+        ].join('|')
       )
       .sort(compare)
   );
@@ -887,6 +954,7 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
     seasons.set(row.season, entry);
   }
   const firstDraft = aflTradeTradedPlayerFirstDraftOrigins(inputs.draftOrigins);
+  const birthYears = aflTradeTradedPlayerBirthYears(inputs.birthYears);
 
   const legs = [...inputs.legs].sort((left, right) => compare(left.transferId, right.transferId));
   const transferIds = new Set<string>();
@@ -922,6 +990,7 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
     const draft = firstDraft.get(playerId);
     const stage = aflTradeTradedPlayerStage({
       draftOrigin: draft ?? null,
+      birthYear: birthYears.get(playerId) ?? null,
       gameSeasons: [...seasons].filter(([, row]) => row.games > 0).map(([season]) => season),
       firstTradeSeason: firstTrade,
       firstReadSeason,
@@ -930,7 +999,7 @@ function prepare(inputs: AflTradeTradedPlayerValueLineFitInputs) {
       throw new Error(
         `Player ${playerId}'s draft origin ${draft!.draftYear} is at or after the trade season ${firstTrade}.`
       );
-    const careerStart = Math.max(stage.originSeason + 1, firstReadSeason);
+    const careerStart = aflTradeTradedPlayerCareerStart(stage, firstReadSeason);
     const career = new Map<number, Season>();
     for (let season = careerStart; season <= lastSeason; season++) {
       const row = seasons.get(season);
@@ -999,11 +1068,26 @@ const publishComponents = (components: VarianceComponents) => ({
 const VETERAN_BANDS: readonly Band[] = ['10-11', '12-13', '14+'];
 
 const ENTRY_GROUPS = [
-  'drafted_before_first_read',
+  // Draft or birth basis: his career began in or before the first season read.
+  'career_began_by_first_read',
   'left_censored',
   'entered_from_first_read',
 ] as const;
-type EntryGroup = (typeof ENTRY_GROUPS)[number];
+export type AflTradeTradedPlayerEntryGroup = (typeof ENTRY_GROUPS)[number];
+type EntryGroup = AflTradeTradedPlayerEntryGroup;
+
+/**
+ * A back-test leg's entry: left-censored; else, on the draft or birth basis, whether his career (its
+ * first season, not his age) began in or before the first season read; else entered from it. One rule
+ * for both bases, so a player keeps his group whether or not his birth date is known.
+ */
+export function aflTradeTradedPlayerEntryGroup(stage: Stage, firstReadSeason: number): EntryGroup {
+  if (stage.leftCensored) return 'left_censored';
+  if (stage.basis !== 'draft' && stage.basis !== 'birth') return 'entered_from_first_read';
+  return (stage.careerFromSeason ?? stage.originSeason + 1) <= firstReadSeason
+    ? 'career_began_by_first_read'
+    : 'entered_from_first_read';
+}
 
 interface Pair {
   tradeSeason: number;
@@ -1095,11 +1179,7 @@ function backTest(
           tradeSeason: year,
           band,
           basis: basisGroupOf(valued.stage),
-          entry: valued.stage.leftCensored
-            ? 'left_censored'
-            : valued.stage.basis === 'draft' && valued.stage.originSeason < firstReadSeason
-              ? 'drafted_before_first_read'
-              : 'entered_from_first_read',
+          entry: aflTradeTradedPlayerEntryGroup(valued.stage, firstReadSeason),
           checkpoint,
           predicted,
           producedOnly: full.produced,
@@ -1371,10 +1451,12 @@ export function fitAflTradeTradedPlayerValueLine(inputs: AflTradeTradedPlayerVal
     atTradeCurve,
     backTest: backTest(training, tradeSeasons, firstReadSeason, lastSeason),
     knownLimitations: [
-      'Survival does not read own form, as in the pick fit.',
+      "Survival reads own form only through the previous season's shrunk PAV-per-game effect.",
       'The 14+ band pools every veteran from stage 14.',
-      'A player who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored.',
+      'Stage is real age (birth year + 18) only for a mature-age draftee (drafted the year he turns 21 or later) with a birth date; every other player is staged by career, so a mature-age draftee without a birth date is still staged young.',
+      'A player who entered before 2011 other than through a 2000-2010 national draft (pre-season, rookie or pre-draft listing) stays left-censored, birth date or not.',
       'First-game stages are understated for players listed before their debut.',
+      'A birth year is a calendar year: players born early and late in one year share a stage.',
       "Recency is not weighted: a veteran's effect is his career average; decline shows only through the stage prior.",
       'A retirement is seen only after the stint ends in empty seasons; until then the return probability by empty-run length and stage group stands in for it.',
     ],
@@ -1430,10 +1512,17 @@ export function aflTradeTradedPlayerValueAt(
     throw new Error('A value line has no checkpoint before the trade.');
   if (stage.originSeason >= tradeSeason)
     throw new Error(`The stage origin ${stage.originSeason} is at or after the trade season.`);
+  if (
+    stage.careerFromSeason !== undefined &&
+    (stage.careerFromSeason <= stage.originSeason || stage.careerFromSeason > tradeSeason)
+  )
+    throw new Error(
+      `The career start ${stage.careerFromSeason} is outside the stage origin and the trade.`
+    );
   const earlier = [...(input.earlierTradeSeasons ?? [])];
   if (earlier.some((season) => season >= tradeSeason))
     throw new Error('An earlier trade season must be before the trade season.');
-  const careerStart = Math.max(stage.originSeason + 1, parameters.firstReadSeason);
+  const careerStart = aflTradeTradedPlayerCareerStart(stage, parameters.firstReadSeason);
   const career = new Map<number, Season>();
   for (const row of input.career)
     if (row.season >= careerStart && row.season <= checkpointSeason) career.set(row.season, row);

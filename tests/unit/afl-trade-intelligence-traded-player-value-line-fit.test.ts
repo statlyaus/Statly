@@ -14,12 +14,15 @@ import {
 import {
   aflTradeTradedPlayerTradeLegs,
   buildAflTradeTradedPlayerValueLineFitInputs,
+  loadAflTradeTradedPlayerBirthYears,
   loadAflTradeTradedPlayerDraftOrigins,
   loadAflTradeTradedPlayerDraftguruOrigins,
   mergeAflTradeTradedPlayerDraftOrigins,
 } from '@/server/aflTradeIntelligence/modeling/postgresTradedPlayerValueLineFitInputs';
 import {
   AFL_TRADE_TRADED_PLAYER_VALUE_LINE_FIT_SCHEMA_VERSION,
+  aflTradeTradedPlayerBirthYears,
+  aflTradeTradedPlayerEntryGroup,
   aflTradeTradedPlayerFirstDraftOrigins,
   aflTradeTradedPlayerFitLegInputs,
   aflTradeTradedPlayerStage,
@@ -82,13 +85,17 @@ interface Player {
   playerId: string;
   origin: number;
   drafted: boolean;
+  /** Drafted at 21, three years after his origin (his real age 18): listed from the season after. */
+  matureAge: boolean;
   trades: { season: number; to: string; reviewed: boolean }[];
 }
 
 /**
  * 900 players of origins 2003 to 2022: an older player at the trade leaves sooner and plays less;
  * each has a fixed form multiplier and availability; some are traded twice, some move on by free
- * agency, and every origin from 2011 has a canonical national draft row for most players.
+ * agency, and every origin from 2011 has a canonical national draft row for most players. One in
+ * eight of those draftees with an origin to 2015 is mature-age: born origin - 18, drafted at 21, so
+ * only his real age gives the stage he plays to.
  */
 function fixture(seed = 17) {
   const next = random(seed);
@@ -98,6 +105,8 @@ function fixture(seed = 17) {
     const playerId = `pl-${String(index).padStart(4, '0')}`;
     const origin = 2003 + Math.floor(next() * 20);
     const drafted = origin >= 2011 && next() < 0.85;
+    // Origins to 2015 only, so he is drafted (origin + 3) before the first trade season, 2019.
+    const matureAge = drafted && origin <= 2015 && index % 8 === 1;
     const form = 0.6 + 0.8 * next();
     const availability = 0.6 + 0.4 * next();
     const debutDelay = next() < 0.25 ? 1 : 0;
@@ -114,7 +123,8 @@ function fixture(seed = 17) {
     }
     if (trades.length === 0) continue;
     const freeAgency = next() < 0.15 ? trades[trades.length - 1]!.season + 2 : null;
-    players.push({ playerId, origin, drafted, trades });
+    players.push({ playerId, origin, drafted, matureAge, trades });
+    const listed = origin + (matureAge ? 4 : 1);
     for (let season = Math.max(origin + 1, FIRST_READ); season <= LAST_SEASON; season++) {
       const trade = trades.find((t) => t.season === season - 1);
       if (trade) {
@@ -126,7 +136,8 @@ function fixture(seed = 17) {
       const stage = season - origin;
       if (stage <= debutDelay) continue;
       const games = Math.round(stageGames(stage) * availability * (0.6 + 0.8 * next()));
-      if (games > 0)
+      // Listed only from the season after his draft; the draw is taken anyway, so the seed holds.
+      if (games > 0 && season >= listed)
         rows.push({ season, playerId, clubId: club, games, pav: games * stageRate(stage) * form });
     }
   }
@@ -200,12 +211,17 @@ function inputsOf(players: readonly Player[], rows: readonly Row[]) {
   );
   const draftOrigins: AflTradeTradedPlayerDraftOrigin[] = players
     .filter(({ drafted }) => drafted)
-    .map(({ playerId, origin }) => ({
+    .map(({ playerId, origin, matureAge }) => ({
       playerId,
-      draftYear: origin,
+      draftYear: matureAge ? origin + 3 : origin,
       draftType: 'national',
       selectionId: `selection-${playerId}`,
     }));
+  // Every mature-age draftee and two in three others have a birth date, born origin - 18. Only the
+  // mature-age draftees are staged by it; for the rest, career stage is already the fixture's stage.
+  const birthYears = players
+    .filter(({ playerId, matureAge }) => matureAge || Number(playerId.slice(3)) % 3 !== 0)
+    .map(({ playerId, origin }) => ({ playerId, birthYear: origin - 18 }));
   const inputs: AflTradeTradedPlayerValueLineFitInputs = {
     tradeSeasons: TRADE_SEASONS,
     legs,
@@ -218,6 +234,7 @@ function inputsOf(players: readonly Player[], rows: readonly Row[]) {
       },
     ],
     draftOrigins,
+    birthYears,
     stintCalculations: range(2019, LAST_SEASON).map((season) => ({
       season,
       calculationId: `hpn-pav-season:${season}`,
@@ -337,6 +354,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       expect(row.observedSeasons).toBe(LAST_SEASON - row.tradeSeason);
     }
     const { byStageBasis } = fit.content.legs;
+    expect(byStageBasis.birth).toBeGreaterThan(0);
     expect(byStageBasis.draft).toBeGreaterThan(0);
     expect(byStageBasis.first_game).toBeGreaterThan(0);
     expect(byStageBasis.first_game_censored).toBeGreaterThan(0);
@@ -362,7 +380,8 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
         )
       )
     );
-    expect(backTest.byStageBasisAndCheckpoint.map(({ group }) => group).slice(0, 5)).toEqual([
+    expect(backTest.byStageBasisAndCheckpoint.map(({ group }) => group).slice(0, 6)).toEqual([
+      'birth',
       'draft',
       'first_game',
       'first_game_censored',
@@ -395,7 +414,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       all(backTest.baselines.producedOnly, 0).meanAbsoluteError
     );
     expect(backTest.bySeasonAndCheckpoint.length).toBeGreaterThan(0);
-    // Veterans the read seasons do not start: left-censored, or drafted before the first read season.
+    // Veterans the read seasons do not start: left-censored, or a career begun by the first read season.
     for (const checkpoint of [0, 1, 3]) {
       const entry = (group: string) =>
         backTest.byEntryAndCheckpoint.find(
@@ -429,6 +448,7 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       playerId: 'pl-unreviewed',
       origin: 2008,
       drafted: false,
+      matureAge: false,
       trades: [{ season: 2019, to: 'brisbane', reviewed: false }],
     };
     const extraRows: Row[] = range(2011, 2022).map((season) => ({
@@ -488,13 +508,16 @@ describe('fitAflTradeTradedPlayerValueLine', () => {
       ...inputs,
       legs: [...inputs.legs].reverse(),
       draftOrigins: [...inputs.draftOrigins].reverse(),
+      birthYears: [...inputs.birthYears].reverse(),
       games: model([...rows].reverse()),
     });
     expect(again.fitId).toBe(fit.fitId);
   });
 
   it('takes the first draft as the stage origin and refuses one after the trade', () => {
-    const drafted = players.find(({ drafted, trades }) => drafted && trades[0]!.season > 2020)!;
+    const drafted = players.find(
+      ({ drafted, matureAge, trades }) => drafted && !matureAge && trades[0]!.season > 2020
+    )!;
     const redrafted = fitAflTradeTradedPlayerValueLine({
       ...inputs,
       draftOrigins: [
@@ -665,6 +688,47 @@ describe('aflTradeTradedPlayerValueAt', () => {
     ).toBeGreaterThan(atTrade.value);
   });
 
+  it('values a mature-age draftee by his age, below what career stage expected', () => {
+    // Born 1994, drafted 2016 at 22, traded after 2019, 20 games a season since: Tim Kelly's shape.
+    const gameSeasons = range(2017, 2026);
+    const kelly = (stage: AflTradeTradedPlayerValueInput['stage']) =>
+      aflTradeTradedPlayerValueAt(
+        parameters,
+        {
+          ...base,
+          tradeSeason: 2019,
+          stage,
+          career: range(2011, 2026).map((season) => ({
+            season,
+            games: season >= 2017 ? 20 : 0,
+            pav: season >= 2017 ? 12 : 0,
+          })),
+          stint: {
+            status: 'open',
+            endSeason: null,
+            seasons: range(2020, 2026).map((season) => ({ season, games: 20, pav: 12 })),
+          },
+        },
+        2026
+      );
+    const byStage = (birthYear: number | null) =>
+      aflTradeTradedPlayerStage({
+        draftOrigin: { draftYear: 2016 },
+        birthYear,
+        gameSeasons,
+        firstTradeSeason: 2019,
+        firstReadSeason: 2011,
+      })!;
+    const byAge = kelly(byStage(1994));
+    const byCareer = kelly(byStage(null));
+    expect(byAge).toMatchObject({ stageBasis: 'birth', stageAtTrade: 8, leftCensored: false });
+    expect(byCareer).toMatchObject({ stageBasis: 'draft', stageAtTrade: 4 });
+    // His listed seasons alone are his form: the four before his draft are not empty seasons.
+    expect(byAge.effect.seasons).toBe(byCareer.effect.seasons);
+    expect(byAge.produced).toBe(byCareer.produced);
+    expect(byAge.expectedRemaining).toBeLessThan(byCareer.expectedRemaining);
+  });
+
   it('leaves a left-censored veteran’s unknown-band seasons out of his form', () => {
     // First seen in 2011, so stage >= s - 2010: only 2024 and later are certainly in the top band, 14+.
     const veteran: AflTradeTradedPlayerValueInput = {
@@ -829,14 +893,122 @@ describe('aflTradeTradedPlayerStage', () => {
     draftYear: number | null,
     gameSeasons: number[],
     firstTradeSeason = 2020,
-    firstReadSeason = 2011
+    firstReadSeason = 2011,
+    birthYear: number | null = null
   ) =>
     aflTradeTradedPlayerStage({
       draftOrigin: draftYear === null ? null : { draftYear },
+      birthYear,
       gameSeasons,
       firstTradeSeason,
       firstReadSeason,
     });
+
+  it('takes his real age only for a mature-age draftee: stage 1 is the season he turns 19', () => {
+    // Tim Kelly: born 1994, drafted 2016 at 22, traded 2019. Drafted at 21 or older: stage by age.
+    const kelly = stage(2016, range(2017, 2026), 2019, 2011, 1994)!;
+    expect(kelly).toEqual({
+      basis: 'birth',
+      originSeason: 2012,
+      leftCensored: false,
+      careerFromSeason: 2017,
+    });
+    // At the end of 2026, aged 32: stage 14, the 14+ band, where career stage put him at 10.
+    expect(2026 - kelly.originSeason).toBe(14);
+    expect(2026 - stage(2016, range(2017, 2026), 2019)!.originSeason).toBe(10);
+    // Drafted the year he turns 21, the threshold: by age, three seasons before his draft.
+    expect(stage(2015, [2016, 2017], 2020, 2011, 1994)).toEqual({
+      basis: 'birth',
+      originSeason: 2012,
+      leftCensored: false,
+      careerFromSeason: 2016,
+    });
+    // Drafted at 18, 19 or 20, birth date known: exactly the career stage of an undated draftee.
+    const undated = stage(2015, [2016, 2017])!;
+    expect(undated).toEqual({ basis: 'draft', originSeason: 2015, leftCensored: false });
+    for (const age of [18, 19, 20])
+      expect(stage(2015, [2016, 2017], 2020, 2011, 2015 - age)).toEqual(undated);
+  });
+
+  it('keeps career stage for every player not drafted at 21 or older, dated or not', () => {
+    // No draft origin, a birth date known: the season before his first game, as before.
+    expect(stage(null, [2018, 2019], 2020, 2011, 2000)).toEqual({
+      basis: 'first_game',
+      originSeason: 2017,
+      leftCensored: false,
+    });
+    // A dated veteran first seen in 2011 with no draft origin is left-censored, as before.
+    expect(stage(null, [2011, 2012], 2015, 2011, 1985)).toEqual({
+      basis: 'first_game',
+      originSeason: 2010,
+      leftCensored: true,
+    });
+    // No draft and no game before the trade: assumed youngest, birth date or not.
+    expect(stage(null, [], 2020, 2011, 1990)).toEqual({
+      basis: 'assumed_youngest',
+      originSeason: 2019,
+      leftCensored: false,
+    });
+    // Drafted at 17 (an older eligibility rule): his draft, as before.
+    expect(stage(2017, [2019], 2020, 2011, 2000)).toEqual({
+      basis: 'draft',
+      originSeason: 2017,
+      leftCensored: false,
+    });
+    // A mature-age draftee who played before his draft season ends: never staged at 0 there.
+    expect(stage(2015, [2015, 2016], 2020, 2011, 1990)).toEqual({
+      basis: 'birth',
+      originSeason: 2008,
+      leftCensored: false,
+      careerFromSeason: 2015,
+    });
+    // A draft origin at or after his first trade is still refused, birth date or not.
+    expect(stage(2020, [], 2020, 2011, 1995)).toBeNull();
+  });
+
+  it('groups a back-test leg by when his career began, the same rule for draft and birth', () => {
+    const entry = (...args: Parameters<typeof stage>) =>
+      aflTradeTradedPlayerEntryGroup(stage(...args)!, args[3] ?? 2011);
+    // Born 1990, drafted 2015 at 25, debuting 2016: every season of his career is read.
+    expect(entry(2015, range(2016, 2019), 2019, 2011, 1990)).toBe('entered_from_first_read');
+    // Born 1990, drafted 2012 at 22: his career, from 2013, is read in full.
+    expect(entry(2012, range(2013, 2019), 2019, 2011, 1990)).toBe('entered_from_first_read');
+    // Born 1988, drafted 2010 at 22: his career began by the first read season.
+    expect(entry(2010, range(2011, 2019), 2019, 2011, 1988)).toBe('career_began_by_first_read');
+    // A 2010 draftee born 1992 or undated: career stage, begun by the first read season.
+    expect(entry(2010, range(2011, 2019), 2019, 2011, 1992)).toBe('career_began_by_first_read');
+    expect(entry(2010, range(2011, 2019), 2019)).toBe('career_began_by_first_read');
+    // A 2011 draftee, born 1993 or undated: his career starts in 2012, after the first read season.
+    expect(entry(2011, range(2012, 2019), 2019, 2011, 1993)).toBe('entered_from_first_read');
+    expect(entry(2011, range(2012, 2019), 2019)).toBe('entered_from_first_read');
+    // A veteran first seen in 2011 with no draft origin is left-censored, dated or not.
+    expect(entry(null, range(2011, 2019), 2019)).toBe('left_censored');
+    expect(entry(null, range(2011, 2019), 2019, 2011, 1985)).toBe('left_censored');
+    // First game after the first read season, or none before the trade: entered from it.
+    expect(entry(null, range(2014, 2019), 2019)).toBe('entered_from_first_read');
+    expect(entry(null, [], 2011)).toBe('entered_from_first_read');
+  });
+
+  it('refuses two birth years for one player', () => {
+    expect(
+      aflTradeTradedPlayerBirthYears([
+        { playerId: 'p1', birthYear: 1994 },
+        { playerId: 'p1', birthYear: 1994 },
+        { playerId: 'p2', birthYear: 2001 },
+      ])
+    ).toEqual(
+      new Map([
+        ['p1', 1994],
+        ['p2', 2001],
+      ])
+    );
+    expect(() =>
+      aflTradeTradedPlayerBirthYears([
+        { playerId: 'p1', birthYear: 1994 },
+        { playerId: 'p1', birthYear: 1995 },
+      ])
+    ).toThrow(/two birth years/);
+  });
 
   it('takes the draft origin before his first trade, and refuses one at or after it', () => {
     expect(stage(2015, [2011])).toEqual({
@@ -907,6 +1079,7 @@ describe('createAflTradeTradedPlayerValueEvaluator', () => {
     legs: inputs.legs,
     excludedLegs: inputs.excludedLegs,
     draftOrigins: inputs.draftOrigins,
+    birthYears: inputs.birthYears,
     games: inputs.games,
   };
   const evaluator = createAflTradeTradedPlayerValueEvaluator(evidence);
@@ -966,7 +1139,9 @@ describe('createAflTradeTradedPlayerValueEvaluator', () => {
       /stages of trade season \d{4} are not the fit's/
     );
     // An earlier origin that keeps the basis ('draft' either way) still moves the stage: refused.
-    const drafted = players.find(({ drafted, origin }) => drafted && origin >= 2012)!;
+    const drafted = players.find(
+      ({ drafted, matureAge, origin }) => drafted && !matureAge && origin >= 2012
+    )!;
     refuse(
       {
         draftOrigins: [
@@ -979,6 +1154,21 @@ describe('createAflTradeTradedPlayerValueEvaluator', () => {
           },
         ],
       },
+      /stages of trade season \d{4} are not the fit's/
+    );
+    // A mature-age draftee's changed or missing birth year moves his stage: refused, never re-read.
+    const mature = players.find(({ matureAge }) => matureAge)!;
+    const dated = inputs.birthYears.find(({ playerId }) => playerId === mature.playerId)!;
+    refuse(
+      {
+        birthYears: inputs.birthYears.map((row) =>
+          row === dated ? { ...row, birthYear: row.birthYear - 1 } : row
+        ),
+      },
+      /stages of trade season \d{4} are not the fit's/
+    );
+    refuse(
+      { birthYears: inputs.birthYears.filter((row) => row !== dated) },
       /stages of trade season \d{4} are not the fit's/
     );
     // A leg re-read under another player keeps every count: refused all the same.
@@ -1053,6 +1243,7 @@ describe('createAflTradeTradedPlayerValueEvaluator', () => {
     expect(seen.closed).toBeGreaterThan(100);
     expect([...seen.bases].sort()).toEqual([
       'assumed_youngest',
+      'birth',
       'draft',
       'first_game',
       'first_game:censored',
@@ -1128,8 +1319,10 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
       grading,
       games,
       draftOrigins: [],
+      birthYears: [{ playerId: 'p1', birthYear: 2001 }],
       tradeSeasons: [2024],
     });
+    expect(built.birthYears).toEqual([{ playerId: 'p1', birthYear: 2001 }]);
     expect(built.legs).toHaveLength(1);
     expect(built.legs[0]).toMatchObject({
       tradeSeason: 2024,
@@ -1228,6 +1421,30 @@ describe('buildAflTradeTradedPlayerValueLineFitInputs', () => {
     expect(read.sql).toMatch(/decision\.outcome = 'approved'/);
     expect(read.sql).toMatch(/BETWEEN 2000 AND 2010/);
     expect(read.sql).not.toMatch(/recorded_?[nN]ame|display_name/);
+  });
+
+  it('reads the birth year of each player asked for, and only a known one, read-only', async () => {
+    const statements: { sql: string; values?: unknown[] }[] = [];
+    const query = async (sql: string, values?: unknown[]) => {
+      statements.push({ sql, values });
+      return { rows: [{ player_id: 'p1', birth_year: 1994 }] };
+    };
+    const client = {
+      query,
+      transaction: async <T>(work: (transaction: { query: typeof query }) => Promise<T>) =>
+        work({ query }),
+    } as unknown as AflOutcomeSqlClient;
+    expect(await loadAflTradeTradedPlayerBirthYears(client, ['p2', 'p1', 'p1'])).toEqual([
+      { playerId: 'p1', birthYear: 1994 },
+    ]);
+    expect(statements[0]!.sql).toBe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    const read = statements[1]!;
+    expect(read.values).toEqual([['p1', 'p2']]);
+    expect(read.sql).toMatch(/FROM outcome_player/);
+    expect(read.sql).toMatch(/birth_date IS NOT NULL/);
+    expect(read.sql).toMatch(/player_id = ANY\(\$1::text\[\]\)/);
+    expect(await loadAflTradeTradedPlayerBirthYears(client, [])).toEqual([]);
+    expect(statements).toHaveLength(2);
   });
 
   it('keeps every canonical and Draftguru origin, so the fit takes the earliest', () => {

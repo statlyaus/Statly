@@ -1,11 +1,13 @@
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 import type { AflTradeTradedPlayerValueEvaluator } from './tradedPlayerValueLineContracts';
 import {
+  aflTradeTradedPlayerBirthYears,
   aflTradeTradedPlayerFirstDraftOrigins,
   aflTradeTradedPlayerStage,
   aflTradeTradedPlayerStageDigest,
   aflTradeTradedPlayerValueAt,
   aflTradeTradedPlayerValueLineParameters,
+  type AflTradeTradedPlayerBirthYear,
   type AflTradeTradedPlayerDraftOrigin,
   type AflTradeTradedPlayerStage,
   type AflTradeTradedPlayerValueLineFit,
@@ -14,21 +16,23 @@ import {
 /**
  * Assembles the value lines' traded-player evaluator from a stored fit and the evidence it read
  * (statlyaus/Statly#789): the legs and exclusions of the fit's trade seasons
- * (`aflTradeTradedPlayerTradeLegs`), the merged draft origins and the games read model over the fit's
+ * (`aflTradeTradedPlayerTradeLegs`), the merged draft origins, the legs' players' birth years
+ * (`loadAflTradeTradedPlayerBirthYears`) and the games read model over the fit's
  * seasons. Refuses evidence that is not the fit's own: another schema or content address, another HPN PAV
  * method, other seasons or calculations, other leg counts per trade season, or other staged legs per
  * trade season: any leg whose player or stage (basis, origin season, censoring) is not the fit's, as
- * when a Draftguru batch or canonical draft row added since the fit moves an origin, even within one
- * basis (the fit's `stageDigest`). Pure.
+ * when a Draftguru batch, canonical draft row or birth date added or changed since the fit moves an
+ * origin, even within one basis (the fit's `stageDigest`). Pure.
  */
 export function createAflTradeTradedPlayerValueEvaluator(input: {
   fit: AflTradeTradedPlayerValueLineFit;
   legs: readonly { playerId: string; tradeSeason: number }[];
   excludedLegs: readonly { tradeSeason: number }[];
   draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
+  birthYears: readonly AflTradeTradedPlayerBirthYear[];
   games: AflTradePlayerSeasonGames;
 }): AflTradeTradedPlayerValueEvaluator {
-  const { fit, legs, excludedLegs, draftOrigins, games } = input;
+  const { fit, legs, excludedLegs, draftOrigins, birthYears, games } = input;
   const parameters = aflTradeTradedPlayerValueLineParameters(fit);
   const { fitWindow } = fit.content;
   if (games.methodId !== fit.content.methodId)
@@ -58,12 +62,14 @@ export function createAflTradeTradedPlayerValueEvaluator(input: {
     gameSeasons.set(row.playerId, seasons);
   }
   const origins = aflTradeTradedPlayerFirstDraftOrigins(draftOrigins);
+  const births = aflTradeTradedPlayerBirthYears(birthYears);
   const stages = new Map<string, AflTradeTradedPlayerStage | null>();
   for (const [playerId, seasons] of playerTradeSeasons)
     stages.set(
       playerId,
       aflTradeTradedPlayerStage({
         draftOrigin: origins.get(playerId) ?? null,
+        birthYear: births.get(playerId) ?? null,
         gameSeasons: [...(gameSeasons.get(playerId) ?? [])]
           .filter(([, played]) => played > 0)
           .map(([season]) => season),
@@ -88,7 +94,7 @@ export function createAflTradeTradedPlayerValueEvaluator(input: {
       ) !== recorded.stageDigest
     )
       throw new Error(
-        `The stages of trade season ${recorded.tradeSeason} are not the fit's: its legs, draft origins or games differ.`
+        `The stages of trade season ${recorded.tradeSeason} are not the fit's: its legs, draft origins, birth years or games differ.`
       );
   }
   return {
@@ -97,6 +103,7 @@ export function createAflTradeTradedPlayerValueEvaluator(input: {
     tradeSeasons,
     playerTradeSeasons,
     draftOrigins,
+    birthYears,
     games,
   };
 }

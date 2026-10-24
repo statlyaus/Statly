@@ -14,6 +14,7 @@ import { loadAflTradeGradingInputs } from '../src/server/aflTradeIntelligence/de
 import { loadAflTradePlayerSeasonGames } from '../src/server/aflTradeIntelligence/modeling/postgresPlayerSeasonGames';
 import {
   aflTradeTradedPlayerTradeLegs,
+  loadAflTradeTradedPlayerBirthYears,
   loadAflTradeTradedPlayerDraftguruOrigins,
   loadAflTradeTradedPlayerDraftOrigins,
   mergeAflTradeTradedPlayerDraftOrigins,
@@ -154,7 +155,7 @@ export async function readTradedPlayerValueLineFit(
 /**
  * The traded-player evaluator from the stored fit and the evidence it read, re-read here: the
  * candidate's player legs in the fit's trade seasons, every canonical and reviewed Draftguru draft
- * origin, and the games read model over the fit's seasons. Refused unless they are the fit's.
+ * origin, the legs' players' birth years, and the games read model over the fit's seasons. Refused unless they are the fit's.
  */
 async function loadTradedPlayerEvaluator(
   client: AflOutcomeSqlClient,
@@ -172,6 +173,10 @@ async function loadTradedPlayerEvaluator(
     draftOrigins: mergeAflTradeTradedPlayerDraftOrigins(
       await loadAflTradeTradedPlayerDraftOrigins(client),
       await loadAflTradeTradedPlayerDraftguruOrigins(client)
+    ),
+    birthYears: await loadAflTradeTradedPlayerBirthYears(
+      client,
+      legs.map(({ playerId }) => playerId)
     ),
     games: await loadAflTradePlayerSeasonGames(client, {
       methodId: fit.content.methodId,
