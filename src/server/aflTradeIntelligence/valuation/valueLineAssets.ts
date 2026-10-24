@@ -5,6 +5,8 @@ import type {
   AflTradeTradedPlayerValueInput,
 } from '../modeling/tradedPlayerValueLineContracts';
 import {
+  aflTradeTradedPlayerBirthYears,
+  aflTradeTradedPlayerCareerStart,
   aflTradeTradedPlayerFirstDraftOrigins,
   aflTradeTradedPlayerStage,
 } from '../modeling/tradedPlayerValueLineFit';
@@ -63,6 +65,7 @@ interface TradedEvidence {
   career: Map<string, { games: number; pav: number }>;
   gameSeasons: Map<string, number[]>;
   origins: Map<string, AflTradeTradedPlayerDraftOrigin>;
+  birthYears: Map<string, number>;
 }
 
 /**
@@ -115,6 +118,7 @@ function tradedEvidence(
     career,
     gameSeasons,
     origins: aflTradeTradedPlayerFirstDraftOrigins(evaluator.draftOrigins),
+    birthYears: aflTradeTradedPlayerBirthYears(evaluator.birthYears),
   };
 }
 
@@ -339,8 +343,8 @@ export class AflTradeValueLineReader {
   /**
    * The traded-player fit's input, built as the fit builds a leg's (`aflTradeTradedPlayerFitLegInputs`):
    * his stage by the fit's one rule (`aflTradeTradedPlayerStage`) against his first trade in the
-   * window, from the fit's merged draft origins and games; his career at any club from the stage origin
-   * (or the fit's first read season) through the checkpoint; his earlier trades in the window; and the
+   * window, from the fit's merged draft origins, birth years and games; his career at any club from
+   * his career start (`aflTradeTradedPlayerCareerStart`) through the checkpoint; his earlier trades in the window; and the
    * stint so far. Null where the fit refuses the leg: a trade season it did not fit, or a draft origin
    * at or after his first trade.
    */
@@ -359,6 +363,7 @@ export class AflTradeValueLineReader {
       throw new Error(`The traded-player fit has no ${tradeSeason} trade of ${playerId}.`);
     const stage = aflTradeTradedPlayerStage({
       draftOrigin: evidence.origins.get(playerId) ?? null,
+      birthYear: evidence.birthYears.get(playerId) ?? null,
       gameSeasons: evidence.gameSeasons.get(playerId) ?? [],
       firstTradeSeason: Math.min(...trades),
       firstReadSeason: evidence.firstReadSeason,
@@ -368,7 +373,7 @@ export class AflTradeValueLineReader {
       throw new Error(`The traded-player fit's games do not read season ${checkpointSeason}.`);
     const career = [];
     for (
-      let year = Math.max(stage.originSeason + 1, evidence.firstReadSeason);
+      let year = aflTradeTradedPlayerCareerStart(stage, evidence.firstReadSeason);
       year <= checkpointSeason;
       year++
     )

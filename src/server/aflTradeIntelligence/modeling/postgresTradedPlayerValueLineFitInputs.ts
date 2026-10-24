@@ -5,6 +5,7 @@ import type { AflTradeGradingInputs } from '../valuation/gradingInputs';
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 import { loadAflTradePlayerSeasonGames } from './postgresPlayerSeasonGames';
 import type {
+  AflTradeTradedPlayerBirthYear,
   AflTradeTradedPlayerDraftOrigin,
   AflTradeTradedPlayerFitLeg,
   AflTradeTradedPlayerValueLineFitInputs,
@@ -86,16 +87,17 @@ export function aflTradeTradedPlayerTradeLegs(
  * Composes the fit's inputs from the grading inputs (#789): every player leg of a candidate
  * trade in the trade seasons (`aflTradeTradedPlayerTradeLegs`), with its first stint at the receiving
  * club from Y + 1 by the shared stint rule (`createAflTradeAssetLedgerStintValue`) and the
- * reviewed-arrival check. A leg with no canonical player or no receiving club is listed as excluded,
- * never dropped.
+ * reviewed-arrival check, the draft origins and the players' birth years. A leg with no canonical
+ * player or no receiving club is listed as excluded, never dropped.
  */
 export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
   grading: AflTradeGradingInputs;
   games: AflTradePlayerSeasonGames;
   draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
+  birthYears: readonly AflTradeTradedPlayerBirthYear[];
   tradeSeasons: readonly number[];
 }): AflTradeTradedPlayerValueLineFitInputs {
-  const { grading, games, draftOrigins, tradeSeasons } = input;
+  const { grading, games, draftOrigins, birthYears, tradeSeasons } = input;
   const stintValue = createAflTradeAssetLedgerStintValue(grading);
   const { legs: resolved, excludedLegs } = aflTradeTradedPlayerTradeLegs(
     grading.candidate,
@@ -110,6 +112,7 @@ export function buildAflTradeTradedPlayerValueLineFitInputs(input: {
     legs,
     excludedLegs,
     draftOrigins,
+    birthYears,
     stintCalculations: grading.pavCalculations.map(({ season, calculationId }) => ({
       season,
       calculationId,
@@ -152,6 +155,32 @@ export async function loadAflTradeTradedPlayerDraftOrigins(
           },
         ]
   );
+}
+
+/**
+ * The birth year of each given player whose `outcome_player.birth_date` is known (owner decision
+ * 2026-10-24, issue 789: stage by real age where the birth date is known), ordered by player. A player
+ * with no birth date is left out and staged by career. One read-only, repeatable-read transaction;
+ * no read when no player is asked for.
+ */
+export async function loadAflTradeTradedPlayerBirthYears(
+  sql: AflOutcomeSqlClient,
+  playerIds: readonly string[]
+): Promise<AflTradeTradedPlayerBirthYear[]> {
+  const ids = [...new Set(playerIds)].sort();
+  if (ids.length === 0) return [];
+  const rows = await sql.transaction(async (transaction) => {
+    await transaction.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    const result = await transaction.query<{ player_id: string; birth_year: number }>(
+      `SELECT player_id, EXTRACT(YEAR FROM birth_date)::int AS birth_year
+         FROM outcome_player
+        WHERE player_id = ANY($1::text[]) AND birth_date IS NOT NULL
+        ORDER BY player_id`,
+      [ids]
+    );
+    return result.rows;
+  });
+  return rows.map((row) => ({ playerId: row.player_id, birthYear: Number(row.birth_year) }));
 }
 
 /**
@@ -234,8 +263,9 @@ export function mergeAflTradeTradedPlayerDraftOrigins(
 /**
  * Loads the traded-player fit's inputs, read-only: the grading inputs over the seasons from
  * the first trade season to the last season, the player-season games read model over `seasons`, and
- * the draft origins (`mergeAflTradeTradedPlayerDraftOrigins`). Each read is its own repeatable-read, read-only transaction; it writes
- * nothing.
+ * the draft origins (`mergeAflTradeTradedPlayerDraftOrigins`) and the legs' players' birth years
+ * (`loadAflTradeTradedPlayerBirthYears`). Each read is its own repeatable-read, read-only transaction;
+ * it writes nothing.
  */
 export async function loadAflTradeTradedPlayerValueLineFitInputs(
   sql: AflOutcomeSqlClient,
@@ -265,12 +295,17 @@ export async function loadAflTradeTradedPlayerValueLineFitInputs(
     methodId: options.methodId,
     seasons: options.seasons,
   });
+  const { legs } = aflTradeTradedPlayerTradeLegs(grading.candidate, options.tradeSeasons);
   return buildAflTradeTradedPlayerValueLineFitInputs({
     grading,
     games,
     draftOrigins: mergeAflTradeTradedPlayerDraftOrigins(
       await loadAflTradeTradedPlayerDraftOrigins(sql),
       await loadAflTradeTradedPlayerDraftguruOrigins(sql)
+    ),
+    birthYears: await loadAflTradeTradedPlayerBirthYears(
+      sql,
+      legs.map(({ playerId }) => playerId)
     ),
     tradeSeasons: options.tradeSeasons,
   });

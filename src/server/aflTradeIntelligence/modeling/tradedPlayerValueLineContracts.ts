@@ -10,11 +10,13 @@
 import type { AflTradePlayerSeasonGames } from './playerSeasonGames';
 import type {
   aflTradeTradedPlayerValueAt,
+  AflTradeTradedPlayerBirthYear,
   AflTradeTradedPlayerDraftOrigin,
   AflTradeTradedPlayerValueLineParameters,
 } from './tradedPlayerValueLineFit';
 
 export type {
+  AflTradeTradedPlayerBirthYear,
   AflTradeTradedPlayerCurve,
   AflTradeTradedPlayerDraftOrigin,
   AflTradeTradedPlayerInactiveReturn,
@@ -52,6 +54,8 @@ export interface AflTradeTradedPlayerValueEvaluator {
   readonly playerTradeSeasons: ReadonlyMap<string, readonly number[]>;
   /** The fit's merged draft origins (`mergeAflTradeTradedPlayerDraftOrigins`). */
   readonly draftOrigins: readonly AflTradeTradedPlayerDraftOrigin[];
+  /** The fit's birth years of the legs' players (`loadAflTradeTradedPlayerBirthYears`). */
+  readonly birthYears: readonly AflTradeTradedPlayerBirthYear[];
   /** The fit's games read model, from `parameters.firstReadSeason`: careers before the value lines' seasons. */
   readonly games: AflTradePlayerSeasonGames;
 }
