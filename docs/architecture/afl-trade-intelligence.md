@@ -4251,11 +4251,11 @@ follows the structure's onward links to its final hop, so a link whose onward si
 special entitlement's, say) is still followed. An optional traded-player evaluator (`modeling/tradedPlayerValueLineContracts.ts`,
 whose types are the fit module's own, re-exported) estimates traded players' open stints from the stored
 traded-player fit (`modeling/tradedPlayerValueLineFit.ts`, below) and the evidence it read: its trade
-seasons, each player's trade seasons in that window, its merged draft origins and its games read model.
+seasons, each player's trade seasons in that window, its merged draft origins, its birth years and its games read model.
 `createAflTradeTradedPlayerValueEvaluator` (`modeling/tradedPlayerValueLineEvaluator.ts`) assembles it and
 refuses evidence that is not the fit's (another content address, method, season calculation or leg count
 per trade season, or any leg's player or stage differing from the fit's `stageDigest` for its trade
-season, even within one stage basis). The calculator builds each leg's input as the fit does
+season, even within one stage basis, as when a birth year changed). The calculator builds each leg's input as the fit does
 (`aflTradeTradedPlayerFitLegInputs`): the stage by `aflTradeTradedPlayerStage` against his first trade,
 and his earlier trades for the phases; a unit test holds every fixture leg at every checkpoint to the
 fit's own point. Inputs that pin different calculations for a season (the fit, ledger and games read
@@ -4277,7 +4277,8 @@ same way.
 `modeling/tradedPlayerValueLineFit.ts` fits and back-tests the traded-player value line
 ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), "Traded-player fit"; statlyaus/Statly#789;
 owner decision 2026-10-19: a traded player's open stint is estimated like a pick). The prior is by career
-stage (seasons since the player's first canonical draft, else his first game, else assumed youngest; bands
+stage (his age less 18 where `outcome_player.birth_date` is known, owner decisions 2026-10-24; else seasons
+since the player's first canonical draft, else his first game, else assumed youngest; bands
 1, 2-3, 4-5, 6-7, 8-9, 10-11, 12-13, 14+; a player with no canonical draft row takes his reviewed Draftguru
 2000 to 2010 national selection, owner decision 2026-10-20) and phase (pre-trade, tenure 1, 2, 3+ at the receiving club), with three small
 GLMs (survival, games per season, PAV per game), own form by the pick fit's credibility rule over every
@@ -4286,19 +4287,21 @@ It reuses the pick fit's exported `solve`, `varianceComponents`, `errorRow` and 
 id is unchanged. It is pure and deterministic. `aflTradeTradedPlayerValueAt` values one leg at a checkpoint
 from the published parameters alone.
 
-**Inputs.** `modeling/postgresTradedPlayerValueLineFitInputs.ts` composes three read-only, repeatable-read
+**Inputs.** `modeling/postgresTradedPlayerValueLineFitInputs.ts` composes read-only, repeatable-read
 reads: the grading inputs for one candidate (`loadAflTradeGradingInputs`; its trade
-legs, v3 season spells, v4 reviewed arrivals and PAV), the player-season games read model from 2011, and
-every canonical AFLM draft row of every draft type and year. Each player leg's stint is the asset ledger's
+legs, v3 season spells, v4 reviewed arrivals and PAV), the player-season games read model from 2011,
+every canonical AFLM draft row of every draft type and year, the reviewed Draftguru 2000 to 2010 rows,
+and the birth year of each leg's player whose `outcome_player.birth_date` is known
+(`loadAflTradeTradedPlayerBirthYears`). Each player leg's stint is the asset ledger's
 (`createAflTradeAssetLedgerStintValue`). Unreviewed legs and legs with no canonical player or receiving club
 are counted, not trained on. The fit refuses an unavailable season, any games discrepancy, a stint with
 seasons missing PAV or PAV that differs from the read model, a grading-input calculation id that differs from the
 read model's, and a draft origin at or after the trade season.
 
-**Output.** Sealed under `traded-player-value-line-fit:<sha256>` (`afl-trade-traded-player-value-line-fit/v2`;
+**Output.** Sealed under `traded-player-value-line-fit:<sha256>` (`afl-trade-traded-player-value-line-fit/v3`;
 v2 added the per-season `stageDigest`, so the stored v1 fit `044703d9…` needs a refit before the value lines
-read it). It holds the rules, the fit window (trade seasons, read seasons with calculation ids, legs per trade
-season by review state and stage basis, and `stageDigest`, the sha256 of each leg's player and stage, sorted), leg diagnostics (open, moved, inactive, exclusions, left-censored and
+read it; v3 added the `birth` stage basis and the career start in the digest, so any v2 fit needs a refit too). It holds the rules, the fit window (trade seasons, read seasons with calculation ids, legs per trade
+season by review state and stage basis, and `stageDigest`, the sha256 of each leg's player and stage (basis, origin, censoring, career start), sorted), leg diagnostics (open, moved, inactive, exclusions, left-censored and
 unknown-band seasons), every coefficient, a prior table by band and phase, the expected stint PAV by stage
 at trade, `k` with its variance components, and the leave-one-trade-season-out back-test: bias, MAE, RMSE
 and standard error by checkpoint and stage band, stage basis and trade season, against produced-only,
