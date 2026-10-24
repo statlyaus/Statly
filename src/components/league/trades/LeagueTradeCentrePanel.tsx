@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { useSocket } from '@/providers/SocketProvider';
 import {
   TRADE_VIEWS,
   type LeagueTradeCentreSnapshot,
@@ -66,6 +67,30 @@ export function LeagueTradeCentrePanel({
   const offersHeadingRef = useRef<HTMLHeadingElement>(null);
   const commandKeysRef = useRef(new Map<string, string>());
   const snapshot = initialSnapshot;
+  const socket = useSocket();
+
+  // The server renders the snapshot from Prisma, so a refresh is the catch-up: on every trade event
+  // the socket server publishes for this league (from LeagueTradeOutboxEvent rows) and again after a
+  // reconnect, in case events were missed while offline. The league members' room is the one the
+  // social widget joins; joining twice is harmless.
+  useEffect(() => {
+    if (!socket) return;
+    const join = () => socket.emit('social:join', { leagueId });
+    const handleTradeUpdate = (envelope: { leagueId?: unknown } | undefined) => {
+      if (envelope?.leagueId === leagueId) router.refresh();
+    };
+    const handleConnect = () => {
+      join();
+      router.refresh();
+    };
+    socket.on('trade:update', handleTradeUpdate);
+    socket.on('connect', handleConnect);
+    if (socket.connected) join();
+    return () => {
+      socket.off('trade:update', handleTradeUpdate);
+      socket.off('connect', handleConnect);
+    };
+  }, [socket, leagueId, router]);
 
   useEffect(() => {
     if (composerFocusRequest === 0) return;

@@ -100,7 +100,7 @@ async function main() {
   await prisma.$transaction([
     prisma.teamAction.deleteMany({ where: league }),
     prisma.waiverPriority.deleteMany({ where: league }),
-    prisma.leagueRoster.deleteMany({ where: league }),
+    prisma.leagueRosterPlayer.deleteMany({ where: league }),
     prisma.pick.deleteMany({ where: { draftId: DRAFT_ID } }),
     prisma.draftOrder.deleteMany({ where: { draftId: DRAFT_ID } }),
     prisma.draft.deleteMany({ where: league }),
@@ -209,15 +209,6 @@ async function main() {
       },
     });
   }
-  await prisma.leagueRoster.createMany({
-    data: members.map((member, memberIndex) => ({
-      leagueId: LEAGUE_ID,
-      memberId: member.id,
-      playerIds: JSON.stringify(
-        pickOrder.flatMap((owner, index) => (owner === memberIndex ? [PLAYERS[index][0]] : []))
-      ),
-    })),
-  });
   // Waiver order is the reverse of the final draft pick: the rival picked last, so goes first.
   await prisma.waiverPriority.createMany({
     data: [
