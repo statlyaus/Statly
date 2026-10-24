@@ -259,7 +259,7 @@ Built in `modeling/tradedPlayerValueLineFit.ts` (pure) and run by
 `npm run outcomes:grading:traded-player-value-line-fit`. Owner decision 2026-10-19: a traded player's open
 stint is **estimated** like a pick, not shown as produced-only or pending. Every choice below is published in
 the fit artifact (`afl-trade-traded-player-value-line-fit/v3`, sealed as `traded-player-value-line-fit:<sha256>`;
-v3 added the `birth` stage basis, owner decisions 2026-10-24).
+v3 added the `birth` stage basis for mature-age draftees, owner decisions 2026-10-24).
 
 - **Legs.** Every player leg of a candidate trade in the 2019 to 2025 trade periods
   (`source/officialAflTradePeriodSourceScope.ts`): a transfer with `asset.kind = 'player'`, a canonical
@@ -273,15 +273,17 @@ v3 added the `birth` stage basis, owner decisions 2026-10-24).
   who never moves; season 1 is the season after his draft. A player traded in `Y` starts his stint in
   `Y + 1` at stage `(Y − origin) + 1`; tenure at the receiving club is `t = s − Y`. Origin, in order
   ([Owner decisions, 2026-10-24](#owner-decisions-2026-10-24)):
-  1. `birth`: his real age, where `outcome_player.birth_date` is known: origin = birth year + 18, so stage
-     1 is the season he turns 19 and a player drafted the year he turns 18 keeps the stage `draft` gives
-     him. Never left-censored. The origin is never later than the season before his career begins (the
-     season after his earliest draft, else his first game up to his first trade, else that trade season),
-     so no season he played or was listed in is stage 0 or less. His career (own form, the games curve)
-     is read from that first career season, not from stage 1, so a mature-age draftee's seasons before
-     his draft are not empty seasons (`careerFromSeason` on the stage, set only when it is not
-     `origin + 1`). A draft origin at or after his first trade is still refused. The rules below apply
-     only to a player with no birth date.
+  1. `birth`: his real age, only for a mature-age draftee: a player with a draft origin (origin 2) and a
+     known `outcome_player.birth_date` whose earliest draft year less his birth year is at least 21
+     (`matureAgeDraftAge`). Origin = birth year + 18, so stage 1 is the season he turns 19. Never
+     left-censored. The origin is never later than the season before his career begins (the season after
+     his earliest draft, or his first game up to his first trade if earlier), so no season he played or
+     was listed in is stage 0 or less. His career (own form, the games curve) is read from that first
+     career season, not from stage 1, so his seasons before his draft are not empty seasons
+     (`careerFromSeason` on the stage, set only when it is not `origin + 1`). A draft origin at or after
+     his first trade is still refused. Every other player, including one with a known birth date who was
+     drafted at 18 to 20 and one with no draft origin, takes the rules below exactly as before
+     2026-10-24.
   2. `draft`: his earliest `draft_year` in `outcome_current_canonical_draft_selection_picks('AFLM')`,
      read for every draft type and year (a re-drafted player's first draft, since stage stands in for age).
      With no canonical row, his earliest national selection on the reviewed Draftguru 2000 to 2010 year
@@ -301,15 +303,16 @@ v3 added the `birth` stage basis, owner decisions 2026-10-24).
   was 10+, which valued a stage-18 veteran as a stage-10 one: with the 2000 to 2010 national origins
   read, the back-test put pre-2011 entrants 16 PAV high at the trade under 10+, and 8 under the split
   (genuine dry runs `traded-player-value-line-fit:8b04f9d8…` and `05b9a248…`, issue 789). Position is not used (the outcomes database has none). Birth date is used
-  where known (the `birth` basis, 2026-10-24): `outcome_player.birth_date` is null for more than half of
-  all players, but the 2026-10-24 review counted 150 of the 169 traded players with one; the fit
-  publishes the count per trade season (`byStageBasis.birth`), so re-count it there at the next run.
+  only to stage a mature-age draftee (the `birth` basis, 2026-10-24): the genuine dry run put 10 legs
+  on it. Using it for every dated player (150 of the 169 traded players in the 2026-10-24 review) failed
+  the store gate. The fit publishes the count per trade season (`byStageBasis.birth`), so re-count it
+  there at the next run.
 - **Phase** of a season, relative to his most recent trade before it (a trade in `Y` comes after season
   `Y`): `pre_trade` (before his first trade in the window), `tenure_1`, `tenure_2`, `tenure_3+`.
   `tenure_1` is the reference (effect 0).
 - **Coverage classes**, published per trade season with counts and carried on every value as
-  `stageBasis`: (0) `birth`, every player with a birth date, exact to the calendar year whatever his
-  pathway; then, for players with none: (a) `draft`, national draftees of 2000 to 2025, exact (2000 to 2010 from Draftguru, see
+  `stageBasis`: (0) `birth`, mature-age draftees (drafted at 21 or older) with a birth date, exact to
+  the calendar year; then, for every other player: (a) `draft`, national draftees of 2000 to 2025, exact (2000 to 2010 from Draftguru, see
   origin 2); (b) drafted 1999 or earlier, or outside the national draft, first game in 2011:
   `first_game`, left-censored, in a known band only from 14+; (c) rookie, pre-season, mid-season
   and SSP listings, and pre-2011 draftees who first played in 2012 or later: `first_game`, stage understated
@@ -317,7 +320,8 @@ v3 added the `birth` stage basis, owner decisions 2026-10-24).
   `assumed_youngest`; (e) mature-age draftees with no birth date: `draft`, stage understating age. Until
   2026-10-24 every mature-age draftee was (e), accepted under "career stage stands in for age"; the owner
   review of Tim Kelly (drafted 2016 at 22) found the fit expecting 109 more PAV from his West Coast stint
-  at the end of 2026, aged 32, as if he were 28. Invisible, as in the ledger: delisting and re-signing at the same club, and a
+  at the end of 2026, aged 32, as if he were 28. A dated player drafted at 18 to 20 is (a), staged by his
+  draft, never by his birth date. Invisible, as in the ledger: delisting and re-signing at the same club, and a
   re-draft through a non-canonical pathway.
 - **Stint.** Seasons and status from the ledger stint (a two-club departure season counts if he played
   for the receiving club, as the ledger stint counts it), with the pick fit's inactivity closure on top: three
@@ -402,8 +406,10 @@ v3 added the `birth` stage basis, owner decisions 2026-10-24).
   back-tested; the artifact says so.
 - **Known limitations.** Survival reads own form only through the previous season's shrunk PAV-per-game
   effect (2026-10-23). The 14+ band pools every veteran from stage 14. The mature-age gap is closed where
-  the birth date is known (v3); a player with no birth date is still staged by career, so a mature-age
-  draftee without one is still staged young. A birth year is a calendar year, so players born early and
+  the birth date is known (v3); a mature-age draftee without one is still staged by career, so still
+  staged young. Birth date stages no one else: a player drafted at 19 or 20 is staged as if drafted at
+  18, and a player with no draft origin (rookie, pre-season and SSP listings) by his first game, so
+  either can be staged up to two seasons young or more. A birth year is a calendar year, so players born early and
   late in one year share a stage. Players with no birth date who entered before 2011 through a pre-draft
   zone listing (no pick number) stay left-censored. A retirement is seen only once the stint ends in empty seasons;
   until then the stage prior carries it, so a veteran is still high at the trade (pre-2011 entrants +7.9,
@@ -445,8 +451,9 @@ the spec above is applied; it changes none of the owner's rules.
   (never followed on). A closed stint is what it produced. An open stint takes produced plus expected
   remaining from the stored traded-player fit (`modeling/tradedPlayerValueLineContracts.ts`), on the
   input the fit builds for the same leg: the stage by the fit's one rule (`aflTradeTradedPlayerStage`)
-  against his first trade in the fit's window: his real age where his birth date is known (the fit's
-  birth years, `loadAflTradeTradedPlayerBirthYears`), else from the fit's merged draft origins (every canonical
+  against his first trade in the fit's window: his real age for a mature-age draftee (drafted at 21 or
+  older) whose birth date is known (the fit's birth years, `loadAflTradeTradedPlayerBirthYears`), else
+  from the fit's merged draft origins (every canonical
   AFLM draft type and the reviewed Draftguru 2000 to 2010 rows), else the season before his first game
   (left-censored when it is in the fit's first read season), else assumed youngest (no draft and no
   game: the season before that first trade); his career from the fit's games read model; and his
@@ -513,13 +520,25 @@ the spec above is applied; it changes none of the owner's rules.
 
 1. **Stage by real age where known:** "Fix these two (Recommended)" and "Yes, split them (Recommended)",
    after the review of Tim Kelly (drafted 2016 at 22, so career stage staged him four years young: at the
-   end of 2026, aged 32, the fit expected 109 more PAV from his West Coast stint). Where
-   `outcome_player.birth_date` is known the stage is his age less 18 (the `birth` basis); career stage
-   is the fallback for a player without one ([Traded-player fit](#traded-player-fit)). This refines
-   2026-10-19 item 3 ("career stage", standing in for age) and drops the earlier reason for not using
-   birth date (null for more than half of all players), which does not hold for traded players. The fit and the value lines
-   share the one stage rule, so they cannot disagree; the fit's `stageDigest` refuses a re-read whose
-   birth years moved a stage.
+   end of 2026, aged 32, the fit expected 109 more PAV from his West Coast stint). The first build staged
+   every player with a known `outcome_player.birth_date` by his age less 18, career stage the fallback.
+   Full birth-date age for everyone was tried. Its genuine dry run failed the store gate: pre-2011
+   entrants 13.3 (SE 5.8) = 2.3 SE.
+2. **Mature-age only:** "Yes, try it (Recommended)" to "real age only for players drafted at 21 or
+   older; everyone drafted at 18-20 stays exactly as now". The `birth` basis applies only to a player
+   with a draft origin and a known birth date whose draft year less birth year is at least 21; every
+   other player keeps the career-stage rule exactly (`draft`, `first_game`, `assumed_youngest`)
+   ([Traded-player fit](#traded-player-fit)). Genuine dry run, 10 legs on the `birth` basis: pooled 10+
+   within 1.6 SE; pre-2011 entrants 10.6 (SE 4.9) = 2.17 SE at trade and 7.5 (SE 3.7) = 2.04 at year 1,
+   against the 2.0 gate; RMSE 22.33 / 18.25 / 11.28 versus 22.26 / 18.40 / 11.49; Tim Kelly's line at the
+   end of 2026 goes from 220.9 to 153.3.
+3. **Saved by owner exception:** "Yes, save it (Recommended)" to saving it even though the pre-2011-entrant
+   check is 2.17 SE at the trade and 2.04 at year 1, against the 2.0 gate. This is a one-off exception
+   for this fit, not a change to the gate.
+
+These refine 2026-10-19 item 3 ("career stage", standing in for age) for mature-age draftees only. The
+fit and the value lines share the one stage rule (`aflTradeTradedPlayerStage`), so they cannot disagree;
+the fit's `stageDigest` refuses a re-read whose birth years moved a stage.
 
 ## Implementation order
 

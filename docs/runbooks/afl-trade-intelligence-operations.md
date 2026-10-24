@@ -3601,7 +3601,8 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 section and the value-line spec's "Traded-player fit"). It reads one candidate's player trade legs and
 their ledger stints, the player-season games read model, every canonical draft row and reviewed
 Draftguru 2000 to 2010 row, and the legs' players' birth years (`outcome_player.birth_date`; the stage
-is real age where it is known, owner decisions 2026-10-24), and its one write is the fit's evidence
+is real age only for a mature-age draftee, drafted at 21 or older with a known birth date; every other
+player keeps career stage, owner decisions 2026-10-24), and its one write is the fit's evidence
 record in the registered store. The arguments are unchanged by v3.
 
 ```sh
@@ -3616,6 +3617,11 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   and of players who entered before 2011, is within two standard errors of zero at the trade, year 1 and
   year 3. Fit `044703d9…` (statlyaus/Statly#789, retirement exits): pooled 10+ +2.6 / +1.2 / −0.6 PAV (SE
   3.2 / 2.7 / 1.8); pre-2011 entrants +7.9 / +5.1 / +1.8 (SE 4.3 / 3.1 / 1.3).
+  **One owner exception (2026-10-24):** the mature-age-only v3 fit (10 `birth` legs) was saved with
+  pre-2011 entrants 10.6 (SE 4.9) = 2.17 SE at the trade and 7.5 (SE 3.7) = 2.04 at year 1, against the
+  2.0 gate ("Yes, save it (Recommended)"); pooled 10+ was within 1.6 SE. The gate is unchanged: the
+  exception covers that fit only, so any later fit is held to two standard errors again. Full birth-date
+  age for everyone failed it (pre-2011 entrants 13.3, SE 5.8 = 2.3 SE) and was not stored.
 - Run it on statly-grading-1 from its own checkout, when the VM is up for a real run; never wake it for
   this alone. `AFL_OUTCOMES_DATABASE_URL` must name a loopback database. Never run it in a checkout where a
   pipeline is running.
@@ -3630,8 +3636,7 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
 - Check before anything reads the fit: `legs` (reviewed and excluded counts against the #869 record, 173
   reviewed traded arrivals with Cameron's unreviewed: re-count them here), `fitWindow.legsByTradeSeason`
   (counts by stage basis, `birth` included, and the `stageDigest` of the staged legs per trade season;
-  the 2026-10-24 review counted 150 of 169 traded players with a birth date, so expect most legs on
-  `birth`), `backTest.byStageBasisAndCheckpoint` for `birth` against the career bases, `parameters.varianceComponents` (both variances positive,
+  only mature-age draftees with a birth date are on `birth`, 10 legs in the 2026-10-24 genuine dry run), `backTest.byStageBasisAndCheckpoint` for `birth` against the career bases, `parameters.varianceComponents` (both variances positive,
   `k_games` their ratio, `k_rate` their ratio or the 10-game guard), the back-test against the
   produced-only, stage-only and post-trade-only baselines, and the calibration bins. Expect 25 to 45 legs
   per fold: judge every bias against its standard error. A bias in one direction in every band at a

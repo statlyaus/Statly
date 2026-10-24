@@ -4277,8 +4277,10 @@ same way.
 `modeling/tradedPlayerValueLineFit.ts` fits and back-tests the traded-player value line
 ([afl-trade-value-line-method.md](afl-trade-value-line-method.md), "Traded-player fit"; statlyaus/Statly#789;
 owner decision 2026-10-19: a traded player's open stint is estimated like a pick). The prior is by career
-stage (his age less 18 where `outcome_player.birth_date` is known, owner decisions 2026-10-24; else seasons
-since the player's first canonical draft, else his first game, else assumed youngest; bands
+stage (his age less 18 only for a mature-age draftee, one drafted at 21 or older whose
+`outcome_player.birth_date` is known, owner decisions 2026-10-24; full birth-date age for everyone failed the
+store gate, and this fit was saved by owner exception at 2.17 SE for pre-2011 entrants against the 2.0 gate;
+every other player: seasons since the player's first canonical draft, else his first game, else assumed youngest; bands
 1, 2-3, 4-5, 6-7, 8-9, 10-11, 12-13, 14+; a player with no canonical draft row takes his reviewed Draftguru
 2000 to 2010 national selection, owner decision 2026-10-20) and phase (pre-trade, tenure 1, 2, 3+ at the receiving club), with three small
 GLMs (survival, games per season, PAV per game), own form by the pick fit's credibility rule over every
