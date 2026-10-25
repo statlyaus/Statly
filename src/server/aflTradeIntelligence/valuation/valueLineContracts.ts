@@ -7,6 +7,8 @@
  * the values its nets count.
  */
 
+import { AFL_TRADE_NOT_USED_LATE_WINDOW } from './assetLedgerNotUsedPicks';
+
 export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v3' as const;
 
 /**
@@ -30,8 +32,18 @@ export const AFL_TRADE_VALUE_LINE_RULES = {
   preDraftSlotBetweenTrades: 'latest_hop_at_trade_slot',
   /** From its draft a used pick is the drafted player: the used slot's curve, then his first stint. */
   pickFromDraft: 'used_slot_then_drafted_player_first_stint',
-  /** A pick not used or passed is worth its slot until the draft, then 0. */
-  notUsed: 'slot_until_draft_then_zero',
+  /**
+   * A passed pick, or a not-used pick the ledger shows lapsed (rule R2: within `notUsedLateWindow` of
+   * the draft's last selection, or stating no number), is worth its slot until the draft, then 0. A
+   * not-used pick that stood mid-draft is pending from the draft, never 0 (owner, 2026-10-25).
+   */
+  notUsed: 'slot_until_draft_then_zero_when_lapsed_else_pending',
+  notUsedLateWindow: AFL_TRADE_NOT_USED_LATE_WINDOW,
+  /**
+   * Rule R1 (owner, 2026-10-25): a not-used pick whose holder traded the same number on under a new
+   * pick id follows the structure's `pick_relay` link, so it is that pick's line in every trade.
+   */
+  notUsedRelay: 'follows_structure_pick_relay_link',
   /** A matched-bid spent pick is worth its own slot until the bid, then share × the nominee's line. */
   matchedBid: 'own_slot_until_bid_then_share_of_nominee_line',
   /** A stint closes at the ledger's end, or after this many consecutive in-stint seasons with no game. */
@@ -62,12 +74,19 @@ export interface AflTradeValueLineCheckpoint {
   readonly season: number;
 }
 
-/** Why a point has no value. Never 0, never estimated. */
+/**
+ * Why a point has no value. Never 0, never estimated. `not_used_holder_matched_bid`: stated not used
+ * mid-draft by a holder who matched a bid that draft, so it was likely consumed at a shifted number
+ * the boards do not join. `not_used_mid_draft`: stated not used mid-draft with no bid and no onward
+ * trade in evidence, so a draft-night move the trade-period sources do not show is likely (rule R2).
+ */
 export type AflTradeValueLinePendingReason =
   | 'matched_bid'
   | 'draft_not_in_evidence'
   | 'slot_unknown'
   | 'traded_player_fit_not_stored'
+  | 'not_used_holder_matched_bid'
+  | 'not_used_mid_draft'
   | 'unavailable';
 
 /**

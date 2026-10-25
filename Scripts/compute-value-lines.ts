@@ -29,6 +29,7 @@ import type { AflTradeValueLineFit } from '../src/server/aflTradeIntelligence/mo
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createAflTradeAssetLedger } from '../src/server/aflTradeIntelligence/valuation/assetLedger';
+import { aflTradeAssetLedgerRelayLinks } from '../src/server/aflTradeIntelligence/valuation/assetLedgerNotUsedPicks';
 import { buildAflTradeStructure } from '../src/server/aflTradeIntelligence/valuation/tradeStructure';
 import type { AflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLineContracts';
 import { computeAflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLines';
@@ -246,7 +247,10 @@ export async function runComputeValueLinesCommand(input: {
       }),
       candidateId: inputs.candidateId,
       candidate: inputs.candidate,
-      structure: buildAflTradeStructure(inputs),
+      structure: buildAflTradeStructure({
+        ...inputs,
+        pickRelays: aflTradeAssetLedgerRelayLinks(ledger.ledger),
+      }),
       tradedPlayers,
       throughSeason: parsed.throughSeason,
     });

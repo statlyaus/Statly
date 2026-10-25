@@ -311,3 +311,70 @@ describe('the trade structure (issue 789, value-line method step 5)', () => {
     expect(structureOf({ ...candidate, pickOutcomes: [] }).structureId).not.toBe(first.structureId);
   });
 });
+
+describe('the trade structure relays a stated not-used pick (#1050, rule R1)', () => {
+  const numbered = (transfer: Transfer, nominalPick: number): Transfer =>
+    ({ ...transfer, asset: { ...(transfer as { asset: object }).asset, nominalPick } }) as Transfer;
+  const notUsed = (transferId: string): Outcome =>
+    ({
+      ...tradedOn(transferId),
+      disposition: 'not_used',
+      nominationBasis: 'club_took_no_nominated_player',
+      receivingClubNominatedSelections: 0,
+    }) as unknown as Outcome;
+  // tx-1 (2021): Richmond gives Hawthorn "#22" (pick A), which Draftguru says Hawthorn did not use.
+  // tx-2 (2021, draft night): Hawthorn gives Sydney "#22" under a new pick id (pick B).
+  const relayed = (
+    bYear = 2021,
+    bFrom = 'hawthorn',
+    bNumber = 22,
+    bPick = 'pick-B'
+  ): Candidate => ({
+    transactions: [trade('tx-1', 2021), trade('tx-2', bYear)],
+    transfers: [
+      numbered(pick('tr-1a', 'tx-1', 'richmond', 'hawthorn', 'pick-A'), 22),
+      player('tr-1b', 'tx-1', 'hawthorn', 'richmond', 'p'),
+      numbered(pick('tr-2a', 'tx-2', bFrom, 'sydney', bPick), bNumber),
+      player('tr-2b', 'tx-2', 'sydney', bFrom, 'q'),
+    ],
+    pickOutcomes: [notUsed('tr-1a')],
+  });
+  const relay = {
+    transferId: 'tr-1a',
+    onwardTransactionId: 'tx-2',
+    onwardTransferId: 'tr-2a',
+    selectionNumber: 22,
+  };
+
+  it('links the not-used leg to the onward pick id as a pick relay, and seals it', () => {
+    const structure = structureOf(relayed(), { pickRelays: [relay] });
+    expect(legOf(structure, 'tr-1a').onward).toEqual({
+      kind: 'pick_relay',
+      transactionId: 'tx-2',
+      transferId: 'tr-2a',
+      selectionNumber: 22,
+    });
+    expect(structure.content.summary.onwardLinks).toBe(1);
+    expect(parseAflTradeStructure(JSON.parse(JSON.stringify(structure)))).toEqual(structure);
+    // Without the ledger's relay the leg links nowhere: a not-used outcome is no trail.
+    expect(legOf(structureOf(relayed()), 'tr-1a')).not.toHaveProperty('onward');
+  });
+
+  it('refuses a relay the candidate does not bear out', () => {
+    const linked = (candidate: Candidate, row = relay) =>
+      legOf(structureOf(candidate, { pickRelays: [row] }), 'tr-1a').onward;
+    // The onward trade states another number.
+    expect(linked(relayed(2021, 'hawthorn', 23))).toBeUndefined();
+    // The relay names a number neither trade states.
+    expect(linked(relayed(), { ...relay, selectionNumber: 30 })).toBeUndefined();
+    // Another club hands the number on.
+    expect(linked(relayed(2021, 'richmond'))).toBeUndefined();
+    // The onward trade is in an earlier season.
+    expect(linked(relayed(2020))).toBeUndefined();
+    // The same pick id: that is a trail, never a relay.
+    expect(linked(relayed(2021, 'hawthorn', 22, 'pick-A'))).toBeUndefined();
+    // A traded-on outcome follows its trail, not a relay.
+    const tradedOnward: Candidate = { ...relayed(), pickOutcomes: [tradedOn('tr-1a')] };
+    expect(linked(tradedOnward)).toBeUndefined();
+  });
+});

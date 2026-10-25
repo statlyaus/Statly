@@ -18,6 +18,10 @@ import {
   type AflTradeAssetLedgerTradedEntitlement,
 } from './assetLedgerBidMatches';
 import {
+  aflTradeAssetLedgerSettleNotUsedPicks,
+  type AflTradeAssetLedgerNotUsedRow,
+} from './assetLedgerNotUsedPicks';
+import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
   AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
 } from './assetLedgerReviewedPickLinks';
@@ -149,15 +153,17 @@ function picksOf(
 ): AflTradeAssetLedgerPick[] {
   const trails = aflTradeAssetLedgerPickTrails(inputs);
   const sources = createAflTradeAssetLedgerOutcomeSources(inputs.candidate, stintValue);
-  return [...aflTradeAssetLedgerPickIdentities(inputs.candidate).values()]
+  const stated = [...aflTradeAssetLedgerPickIdentities(inputs.candidate).values()]
     .sort((left, right) => byCodeUnit(left.pickId, right.pickId))
     .map((pick) => {
       const trail = trails.get(pick.pickId) ?? { hopOrder: 'trail' as const, hops: [] };
       const outcome = aflTradeAssetLedgerPickOutcome(sources, pick, trail);
-      return {
-        ...pick,
-        hopOrder: trail.hopOrder,
-        hops: trail.hops,
+      const row: AflTradeAssetLedgerNotUsedRow & { pick: typeof pick } = {
+        pick,
+        pickId: pick.pickId,
+        draftYear: pick.draftYear,
+        draftType: pick.draftType,
+        trail,
         // A pick a board lists as spent on a bid takes its share of the nominee (issue 789).
         outcome:
           outcome.kind === 'matched_bid' && outcome.status === 'pending'
@@ -179,7 +185,17 @@ function picksOf(
               )
             : outcome,
       };
+      return row;
     });
+  // A stated not-used pick relays to the pick its holder traded the number on as, or keeps its fate
+  // (rules R1 and R2, issue 1050).
+  const settled = aflTradeAssetLedgerSettleNotUsedPicks(inputs.candidate, stated);
+  return stated.map(({ pick, trail, outcome }) => ({
+    ...pick,
+    hopOrder: trail.hopOrder,
+    hops: trail.hops,
+    outcome: settled.get(pick.pickId) ?? (outcome as Exclude<typeof outcome, { kind: 'not_used' }>),
+  }));
 }
 
 function summaryOf(
@@ -189,6 +205,7 @@ function summaryOf(
   const outcomes: Record<AflTradeAssetLedgerOutcomeKind, number> = {
     selected: 0,
     not_used: 0,
+    relayed: 0,
     matched_bid: 0,
     passed: 0,
     future: 0,

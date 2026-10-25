@@ -5,7 +5,7 @@
  * from it; public pages never do.
  */
 
-export const AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION = 'afl-trade-asset-ledger/v2' as const;
+export const AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION = 'afl-trade-asset-ledger/v3' as const;
 
 export const AFL_TRADE_ASSET_LEDGER_LIMITATION: string =
   'Private, non-production asset ledger. Stints follow the realized grader: a stint ends in the first ' +
@@ -16,8 +16,10 @@ export const AFL_TRADE_ASSET_LEDGER_LIMITATION: string =
   'signed. Picks are keyed by the draft-pick id the candidate records; ids are never merged. A ' +
   'not-used pick of a club that took a nominee may have been spent matching a bid: it takes its share ' +
   "of the nominee's first stint by the points it covered of the year's AFL price when a Footyinfo " +
-  'board lists it as spent and joins it to its custody slot, and stays pending otherwise. Not for ' +
-  'publication.';
+  'board lists it as spent and joins it to its custody slot, and stays pending otherwise. A not-used ' +
+  'pick whose holder traded the same number on under another pick id in the same draft is relayed ' +
+  "to that pick; one that lapsed at the draft's end is 0; one mid-draft whose fate the evidence " +
+  'does not show is unknown, never 0. Not for publication.';
 
 /** One season of a stint: the player's HPN PAV at the club, 0 when he has no row there. */
 export interface AflTradeAssetLedgerStintSeason {
@@ -188,8 +190,50 @@ export interface AflTradeAssetLedgerBidMatch {
   readonly spentPicks: readonly AflTradeAssetLedgerBidSpentPick[];
 }
 
-/** What became of a pick. Nothing is guessed: missing or conflicting evidence is `unresolved`. */
-export type AflTradeAssetLedgerPickOutcome =
+/** A stated not-used pick, before the ledger settles whether it relayed, lapsed or is unknown. */
+export interface AflTradeAssetLedgerStatedNotUsed {
+  readonly kind: 'not_used';
+  /**
+   * `board_not_spent`: Draftguru says not used and the club took a nominee, but the draft's boards
+   * list the club's bid spends and this pick is not among them (owner, 2026-10-21).
+   */
+  readonly evidence?: 'board_not_spent';
+}
+
+/**
+ * Rule R2 (statlyaus/Statly#1050; owner, 2026-10-25): what the evidence shows of a not-used pick.
+ * `lapsed`: it stood within the late window of the draft's last selection (or states no number), so it
+ * lapsed with the draft and is 0. `unknown`: it stood mid-draft, so it was consumed in a bid at a
+ * shifted number or moved on draft night outside the trade-period sources; never 0.
+ */
+export interface AflTradeAssetLedgerNotUsedFate {
+  readonly fate: 'lapsed' | 'unknown';
+  /** The latest usable Official AFL order number under its pick id, else its last trade's number. */
+  readonly slot: {
+    readonly selectionNumber: number;
+    readonly source: 'order' | 'stated_at_trade';
+  } | null;
+  /** The draft's last selection number in evidence, whatever the selection's status. */
+  readonly lastSelection: number | null;
+}
+
+/**
+ * Rule R1 (statlyaus/Statly#1050; owner, 2026-10-25): Draftguru says not used, but the holder traded
+ * the same stated number on in the same draft under a new pick id (draft-night trades get one). The
+ * pick is that pick from the hop named here; the trade structure links it on as a `pick_relay`.
+ */
+export interface AflTradeAssetLedgerRelayedOutcome {
+  readonly kind: 'relayed';
+  /** The pick id the holder traded the number on as. */
+  readonly pickId: string;
+  readonly transactionId: string;
+  readonly transferId: string;
+  /** The number both trades state. */
+  readonly selectionNumber: number;
+}
+
+/** A pick outcome as the evidence states it: the ledger settles a not-used pick's fate or relay. */
+export type AflTradeAssetLedgerStatedPickOutcome =
   | {
       readonly kind: 'selected';
       readonly selectionId: string | null;
@@ -200,18 +244,17 @@ export type AflTradeAssetLedgerPickOutcome =
       /** The drafted player's first stint at the drafting club, from the season after the draft. */
       readonly firstStint: AflTradeAssetLedgerStint | null;
     }
-  | {
-      readonly kind: 'not_used';
-      /**
-       * `board_not_spent`: Draftguru says not used and the club took a nominee, but the draft's boards
-       * list the club's bid spends and this pick is not among them (owner, 2026-10-21).
-       */
-      readonly evidence?: 'board_not_spent';
-    }
+  | AflTradeAssetLedgerStatedNotUsed
   | AflTradeAssetLedgerMatchedBidOutcome
   | { readonly kind: 'passed'; readonly boardPickId: string }
   | { readonly kind: 'future'; readonly projectedSlot: AflTradeAssetLedgerProjectedSlot | null }
   | { readonly kind: 'unresolved'; readonly reason: AflTradeAssetLedgerUnresolvedReason };
+
+/** What became of a pick. Nothing is guessed: missing or conflicting evidence is `unresolved`. */
+export type AflTradeAssetLedgerPickOutcome =
+  | Exclude<AflTradeAssetLedgerStatedPickOutcome, AflTradeAssetLedgerStatedNotUsed>
+  | (AflTradeAssetLedgerStatedNotUsed & AflTradeAssetLedgerNotUsedFate)
+  | AflTradeAssetLedgerRelayedOutcome;
 
 export type AflTradeAssetLedgerPickIdentityField =
   'draftYear' | 'draftType' | 'round' | 'originalClubId';

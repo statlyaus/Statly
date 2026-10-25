@@ -11,9 +11,10 @@ import { aflTradePublicIdSchema } from '@/types/aflTradeIntelligence/shared';
  * The trade structure (value-line method step 5, statlyaus/Statly#789; "Trade structure" in
  * docs/architecture/afl-trade-intelligence.md): the graded trades of one reconciliation candidate,
  * their legs and each leg's onward link, with no valuation. A leg's onward link is the transfer its
- * receiving club passed the asset on as: a pick's unique trail, or a special entitlement's reviewed
- * custody successor. It is emitted whatever became of the onward trade; only a link whose onward
- * trade leads back to its own trade (the leadsTo cycle guard) is dropped.
+ * receiving club passed the asset on as: a pick's unique trail, a special entitlement's reviewed
+ * custody successor, or (rule R1, statlyaus/Statly#1050) the new pick id a stated not-used pick's
+ * holder traded the same number on as. It is emitted whatever became of the onward trade; only a link
+ * whose onward trade leads back to its own trade (the leadsTo cycle guard) is dropped.
  */
 
 export const AFL_TRADE_STRUCTURE_SCHEMA_VERSION = 'afl-trade-structure/v1' as const;
@@ -39,6 +40,15 @@ const onwardSchema = z.discriminatedUnion('kind', [
       transactionId: idSchema,
       transferId: idSchema,
       entitlementId: idSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('pick_relay'),
+      transactionId: idSchema,
+      transferId: idSchema,
+      /** The number this leg's trade and the onward trade both state for the pick. */
+      selectionNumber: z.number().int().positive(),
     })
     .strict(),
 ]);

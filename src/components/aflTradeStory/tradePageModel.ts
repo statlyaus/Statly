@@ -69,6 +69,8 @@ export const PENDING_TEXT: Record<AflTradeStoryPendingReason, string> = {
   draft_not_in_evidence: 'draft result not in yet',
   slot_unknown: 'pick slot not known yet',
   traded_player_fit_not_stored: 'estimate not in yet',
+  not_used_holder_matched_bid: 'likely spent on a bid at a shifted number, not joined yet',
+  not_used_mid_draft: 'not used mid-draft; its draft-night fate is not in evidence yet',
   unavailable: 'value not available yet',
 };
 

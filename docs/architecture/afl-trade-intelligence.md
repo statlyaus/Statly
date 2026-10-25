@@ -4061,6 +4061,17 @@ one of:
   draft has a spent pick that joins no slot and could be this pick (owner, 2026-10-21: "Yes, count it
   as 0"). An unjoined spend of the bidding club's own pick (its original club is the bidder) can only be
   a pick whose first trade took it from that club, so it blocks no other pick (owner, 2026-10-21).
+  Each carries its `fate` (rule R2 of statlyaus/Statly#1050, `valuation/assetLedgerNotUsedPicks.ts`):
+  `lapsed` when its `slot` (the latest usable Official AFL order number under its own pick id, else the
+  number its last trade stated) is within 12 of the draft's `lastSelection` in evidence (every
+  selection counts, whatever its status) or it states no number; `unknown` otherwise, when the value
+  lines leave it pending instead of 0.
+- `relayed`: stated not used, but the holder traded the same draft's same stated number on in a
+  different trade no earlier than this pick's last, as the first hop of another pick id, with that pick
+  the only such match for this one and this one the only such match for it (rule R1 of #1050). It names
+  that pick, transaction, transfer and number; the trade structure links the leg on as a `pick_relay`
+  and the value lines carry the next pick id's line, so the relayed pick is never a line of its own.
+  Ids stay distinct: a relay is a link in the structure, not a merge.
 - `matched_bid`: a not-used pick of a club that took a nominee. Its `basis` is `board_matched_bid`
   when Footyinfo board picks record the club's matched bid (listed), or `nominee_count` when the
   evidence says only that the club took a nominee in that draft, so the pick may have been spent
@@ -4226,8 +4237,13 @@ candidate id, each graded trade (year, clubs, legs sorted by transfer), the trad
 
 Each leg names its transfer, asset kind and clubs, and its **onward link** when its receiving club passed
 the asset on: a pick's unique trail (`pick_trail`, the pick-onward order of rule v12, with
-`corroboratedBy: 'footyinfo'` when exactly one board pick routes the hop pair), or a special
-entitlement's reviewed custody successor (`special_entitlement_successor`, rule v7). A link is emitted
+`corroboratedBy: 'footyinfo'` when exactly one board pick routes the hop pair), a special
+entitlement's reviewed custody successor (`special_entitlement_successor`, rule v7), or a stated not-used
+pick's relay (`pick_relay`, rule R1 of statlyaus/Statly#1050, with the `selectionNumber` both trades
+state). Relays are the asset ledger's (`aflTradeAssetLedgerRelayLinks`, injected as `pickRelays`); the
+structure links one only when the onward transfer is a pick entitlement of another pick id in the same
+draft, in another graded trade no earlier than the leg's, given by the club that received the leg, and
+both trades state the relay's number. A link is emitted
 whatever became of the onward trade, even when its other side cannot be valued (the retired realized
 grade dropped such a link as `traded_on_return_blocked`). Only the leadsTo cycle guard drops one, a
 link whose onward trade leads back to its own trade.

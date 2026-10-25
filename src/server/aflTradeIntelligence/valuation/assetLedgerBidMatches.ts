@@ -4,7 +4,7 @@ import type {
   AflTradeAssetLedgerBidSpendLink,
   AflTradeAssetLedgerBidSpentPick,
   AflTradeAssetLedgerMatchedBidOutcome,
-  AflTradeAssetLedgerPickOutcome,
+  AflTradeAssetLedgerStatedPickOutcome,
 } from './assetLedgerContracts';
 import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS,
@@ -253,7 +253,7 @@ export function aflTradeAssetLedgerShareMatchedBid(
     passed: AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
     boardPicks: [],
   }
-): AflTradeAssetLedgerPickOutcome {
+): AflTradeAssetLedgerStatedPickOutcome {
   const same = review.samePicks.find((row) => row.pickId === pick.pickId);
   const spends = bidMatches.flatMap((bid) =>
     bid.spentPicks
