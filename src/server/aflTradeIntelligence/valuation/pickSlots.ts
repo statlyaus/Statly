@@ -71,6 +71,28 @@ export function aflTradePickOrderSlotOf(
 }
 
 /**
+ * The number a pick holds in the latest Official AFL order observation under its own pick id, for rule
+ * R1 by order (statlyaus/Statly#1050; owner, 2026-10-25): a pick traded with no stated number (a
+ * round-only future pick) relays by this number. Null when the pick has no order row of its draft, or
+ * its latest observation is unusable or unnumbered: an older usable row never outranks a newer one.
+ */
+export function aflTradePickLatestOrderNumber(
+  custody: readonly Custody[],
+  pick: { pickId: string; draftYear: number; draftType: string }
+): number | null {
+  const latest = latestPickCustodyObservation(
+    custody.filter(
+      (row) =>
+        row.pickId === pick.pickId &&
+        row.draftYear === pick.draftYear &&
+        row.draftType === pick.draftType
+    )
+  );
+  if (!latest || !isAflTradeUsableCustodyStatus(latest.status)) return null;
+  return latest.recordedPickNumber ?? null;
+}
+
+/**
  * Rule v19 (issue 789, owner decision 2026-10-18): the number a reviewed Footyinfo board states an
  * unused pick held before the draft. The board pick is the one passed or removed pick of the pick's
  * entitlement (national draft, round and original club, as the board states them from parser v3);

@@ -556,7 +556,9 @@ draft-night trade's pick never joins the trade-period pick that became it. The o
    hands the same draft's same stated number from the not-used pick's last holder to another club, in a
    different trade no earlier than the not-used pick's last, and each is the only such match for the
    other. Numbers alone never join (owner, 2026-10-24): the holder, the order of trades and uniqueness
-   both ways are all required, and a round-only pick with no stated number never relays. The asset
+   both ways are all required. A round-only pick whose trade states no number relays by its latest
+   usable Official AFL order number under its own pick id (R1 by order; owner, 2026-10-25: "Yes,
+   extend R1"); the next trade must still state the number. The asset
    ledger records the relay (`relayed`), the trade structure links the leg on (`pick_relay`, checked
    against the candidate like a special entitlement's successor), and the value lines follow the link, so
    every trade the pick passed through carries the next pick id's line. 14 of the 109 relay: 9 land on a
@@ -573,11 +575,31 @@ draft-night trade's pick never joins the trade-period pick that became it. The o
    counts toward the draft's last selection, whatever its status: an unresolved status disputes which
    pick or player a selection was, not that it happened.
 
-Checked offline against the Mac export of candidate `4fac3ffd…` (not a genuine run): 14 relays, as the
-analysis listed; the analysis's 12 pending picks all pending; and one more pending that the analysis had
-at 0, Brisbane's 2020 R2 pick given to Gold Coast in the 2019 Ah Chee trade, which the 2020 order held at
-37 and Gold Coast traded on with no stated number (so R1 cannot relay it): 13 pending, 82 at 0. The
-genuine re-store waits for the next VM restore.
+Stored on genuine 2026-10-25 (value lines `e6a321d9…`, bundle `6f34f73b…`, checkout 347cf63c): 14 relays
+as the analysis listed, 13 pending (the analysis's 12 plus Brisbane's 2020 R2 pick given to Gold Coast in
+the 2019 Ah Chee trade, which the 2020 order held at 37 and Gold Coast traded on with no stated number),
+82 at 0. Against the stored 24 Oct lines nothing else moved: 14 legs re-keyed, 13 assets 0 to pending, 50
+club nets changed, every pair zero-sum.
+
+The review of the 13 (owner, 2026-10-25: "Approve all 7", "Yes, extend R1", "Do them in this wake"):
+
+- **7 same-pick links** (`assetLedgerReviewedPickLinks.ts`): each holder-matched-bid pick is a draft-night
+  id of an order pick the holder's board spend already joins by custody, so it takes that share: 2019
+  Sydney→Brisbane "#47" = Sydney R3 44 (Keidean Coleman); 2020 "#29" chain = Fremantle R2 29
+  (Ugle-Hagan); 2020 Fremantle→Brisbane "#35" = Melbourne R2 32 (Blake Coleman); 2020 Gold Coast→Sydney
+  "#37" = Brisbane R2 37 (Campbell); 2023 Carlton→Gold Coast "#26" = Hawthorn R2 26 (Walter); 2023
+  Melbourne→Gold Coast "#35" = Melbourne R2 36 (Read); 2023 Gold Coast→Footscray "#46" = Gold Coast R3 48
+  (Croft).
+- **R1 by order**: the Ah Chee hop relays into Gold Coast→Sydney "#37", so one line carries all three
+  trades.
+- **One reviewed selection** (`AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED`): 2023 North Melbourne→Carlton
+  "#25" (Sydney→North Melbourne "#25" relays into it) is the R1 pick the 2023-11-16 order lists at 22 held
+  by Carlton, used at selection 29 on Ashton Moir; Draftguru says not used only because no selection 25 was
+  Carlton's. The ledger refuses the entry unless the selection, order row and board row all name the holder.
+- **4 stay pending** with no evidence in the system of where the pick went: 2022 GWS→Collingwood "#40"
+  (Bobby Hill trade), 2023 Sydney→Melbourne "#46" (Grundy), 2023 Melbourne→Brisbane "#47" (Fullarton),
+  2025 West Coast→Fremantle→Melbourne "#23" (McVee). They need a draft-night source (the AFL's
+  draft-night trade reports or Draftguru's per-pick pages) captured under a gate decision, not a rule.
 
 ## Implementation order
 

@@ -378,3 +378,61 @@ describe('the trade structure relays a stated not-used pick (#1050, rule R1)', (
     expect(linked(tradedOnward)).toBeUndefined();
   });
 });
+
+describe('the trade structure relays a round-only pick by its order number (#1050, R1 by order)', () => {
+  it('accepts the relay when the latest usable order row under the pick id states the number', () => {
+    const numbered = (transfer: Transfer, nominalPick: number | null): Transfer =>
+      ({
+        ...transfer,
+        asset: { ...(transfer as { asset: object }).asset, nominalPick },
+      }) as Transfer;
+    const notUsed = (transferId: string): Outcome =>
+      ({
+        ...tradedOn(transferId),
+        disposition: 'not_used',
+        nominationBasis: 'club_took_no_nominated_player',
+        receivingClubNominatedSelections: 0,
+      }) as unknown as Outcome;
+    const order = (status: string) =>
+      ({
+        custodyId: 'external-pick-custody:a',
+        pickId: 'pick-A',
+        observedAt: '2021-11-20T00:00:00.000Z',
+        draftYear: 2021,
+        draftType: 'national',
+        roundNumber: 2,
+        recordedPickNumber: 22,
+        originalClubId: 'richmond',
+        currentClubId: 'hawthorn',
+        status,
+        evidenceIds: [],
+      }) as unknown as NonNullable<Candidate['pickCustody']>[number];
+    const candidate = (status: string | null): Candidate => ({
+      transactions: [trade('tx-1', 2020), trade('tx-2', 2021)],
+      transfers: [
+        numbered(pick('tr-1a', 'tx-1', 'richmond', 'hawthorn', 'pick-A'), null),
+        player('tr-1b', 'tx-1', 'hawthorn', 'richmond', 'p'),
+        numbered(pick('tr-2a', 'tx-2', 'hawthorn', 'sydney', 'pick-B'), 22),
+        player('tr-2b', 'tx-2', 'sydney', 'hawthorn', 'q'),
+      ],
+      pickOutcomes: [notUsed('tr-1a')],
+      ...(status ? { pickCustody: [order(status)] } : {}),
+    });
+    const relay = {
+      transferId: 'tr-1a',
+      onwardTransactionId: 'tx-2',
+      onwardTransferId: 'tr-2a',
+      selectionNumber: 22,
+    };
+    const linked = (status: string | null) =>
+      legOf(structureOf(candidate(status), { pickRelays: [relay] }), 'tr-1a').onward;
+    expect(linked('single_source')).toEqual({
+      kind: 'pick_relay',
+      transactionId: 'tx-2',
+      transferId: 'tr-2a',
+      selectionNumber: 22,
+    });
+    expect(linked(null)).toBeUndefined();
+    expect(linked('disputed')).toBeUndefined();
+  });
+});

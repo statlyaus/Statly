@@ -9,6 +9,7 @@ import type {
 } from './assetLedgerContracts';
 import type { AflTradeAssetLedgerPickTrail } from './assetLedgerPickHops';
 import type { AflTradeGradingInputs } from './gradingInputs';
+import { aflTradePickLatestOrderNumber, type AflTradePickCustody } from './pickSlots';
 import type { AflTradeStructurePickRelay } from './tradeStructure';
 
 /**
@@ -51,13 +52,16 @@ const draftKey = (asset: PickAsset, number: number, clubId: string) =>
 
 /**
  * The first or last hop of a pick's ordered trail, with the number that trade states. An unordered
- * trail has no first or last hop, and a hop with an unresolved club or no stated number is none.
+ * trail has no first or last hop, and a hop with an unresolved club is none. A last hop that states no
+ * number (a round-only future pick) takes the pick's latest Official AFL order number under its own id
+ * (R1 by order; owner, 2026-10-25); a first hop must state its number.
  */
 function hopAt(
   row: AflTradeAssetLedgerNotUsedRow,
   at: 0 | -1,
   transfers: ReadonlyMap<string, Transfer>,
-  transactions: ReadonlyMap<string, Transaction>
+  transactions: ReadonlyMap<string, Transaction>,
+  custody: readonly AflTradePickCustody[]
 ): Hop | undefined {
   if (row.trail.hopOrder !== 'trail') return undefined;
   const hop = row.trail.hops.at(at);
@@ -66,8 +70,10 @@ function hopAt(
   const asset = transfer?.asset;
   if (!transfer || !transaction || asset?.kind !== 'pick_entitlement') return undefined;
   if (transfer.fromClubId === null || transfer.toClubId === null) return undefined;
-  if (asset.nominalPick === null || asset.nominalPick === undefined) return undefined;
-  return { pickId: row.pickId, asset, transfer, transaction, number: asset.nominalPick };
+  const number =
+    asset.nominalPick ?? (at === -1 ? aflTradePickLatestOrderNumber(custody, asset) : null);
+  if (number === null) return undefined;
+  return { pickId: row.pickId, asset, transfer, transaction, number };
 }
 
 interface Relay {
@@ -85,11 +91,12 @@ interface Relay {
 function relaysOf(
   rows: readonly AflTradeAssetLedgerNotUsedRow[],
   transfers: ReadonlyMap<string, Transfer>,
-  transactions: ReadonlyMap<string, Transaction>
+  transactions: ReadonlyMap<string, Transaction>,
+  custody: readonly AflTradePickCustody[]
 ): Map<string, Relay> {
   const firstHops = new Map<string, Hop[]>();
   for (const row of rows) {
-    const hop = hopAt(row, 0, transfers, transactions);
+    const hop = hopAt(row, 0, transfers, transactions, custody);
     if (!hop) continue;
     const key = draftKey(hop.asset, hop.number, hop.transfer.fromClubId!);
     firstHops.set(key, [...(firstHops.get(key) ?? []), hop]);
@@ -98,7 +105,7 @@ function relaysOf(
   const sources = new Map<string, number>();
   for (const row of rows) {
     if (row.outcome.kind !== 'not_used') continue;
-    const last = hopAt(row, -1, transfers, transactions);
+    const last = hopAt(row, -1, transfers, transactions, custody);
     if (!last) continue;
     const next = (
       firstHops.get(draftKey(last.asset, last.number, last.transfer.toClubId!)) ?? []
@@ -198,7 +205,7 @@ export function aflTradeAssetLedgerSettleNotUsedPicks(
     candidate.transactions.map((transaction) => [transaction.transactionId, transaction])
   );
   const transfers = new Map(candidate.transfers.map((transfer) => [transfer.transferId, transfer]));
-  const relays = relaysOf(rows, transfers, transactions);
+  const relays = relaysOf(rows, transfers, transactions, candidate.pickCustody ?? []);
   const lastSelections = lastSelectionsOf(candidate);
   const settled = new Map<string, AflTradeAssetLedgerPickOutcome>();
   for (const row of rows) {

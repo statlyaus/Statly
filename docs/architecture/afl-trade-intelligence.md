@@ -4069,10 +4069,16 @@ one of:
   state different numbers. The value lines leave an `unknown` pick pending instead of 0.
 - `relayed`: stated not used, but the holder traded the same draft's same stated number on in a
   different trade no earlier than this pick's last, as the first hop of another pick id, with that pick
-  the only such match for this one and this one the only such match for it (rule R1 of #1050). It names
+  the only such match for this one and this one the only such match for it (rule R1 of #1050). A last
+  hop that states no number takes the pick's latest usable Official AFL order number under its own id
+  (`aflTradePickLatestOrderNumber`, R1 by order; owner 2026-10-25). It names
   that pick, transaction, transfer and number; the trade structure links the leg on as a `pick_relay`
   and the value lines carry the next pick id's line, so the relayed pick is never a line of its own.
   Ids stay distinct: a relay is a link in the structure, not a merge.
+- A stated not-used pick the owner reviewed as used (`AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED` in
+  `assetLedgerReviewedPickLinks.ts`, with the order and board rows it rests on) is `selected` with the
+  reviewed selection; the ledger refuses the entry unless the selection, the cited order row and the cited
+  board row all name the pick's holder.
 - `matched_bid`: a not-used pick of a club that took a nominee. Its `basis` is `board_matched_bid`
   when Footyinfo board picks record the club's matched bid (listed), or `nominee_count` when the
   evidence says only that the club took a nominee in that draft, so the pick may have been spent

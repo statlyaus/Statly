@@ -8,8 +8,13 @@ import {
 import { aflTradeAssetLedgerRelayLinks } from '@/server/aflTradeIntelligence/valuation/assetLedgerNotUsedPicks';
 import { AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedBidSpends';
 import {
+  aflTradeAssetLedgerReviewedSelectedOutcome,
+  createAflTradeAssetLedgerOutcomeSources,
+} from '@/server/aflTradeIntelligence/valuation/assetLedgerPickOutcome';
+import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
   AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED,
 } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedPickLinks';
 import { createAflTradeAssetLedgerStintValue } from '@/server/aflTradeIntelligence/valuation/assetLedgerStints';
 import type { AflTradeAssetLedgerLabels } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
@@ -918,9 +923,14 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
       const ids = [
         ...AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS.map(({ pickId }) => pickId),
         ...AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED.map(({ pickId }) => pickId),
+        ...AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED.map(({ pickId }) => pickId),
       ];
-      expect(ids).toHaveLength(5);
-      expect(new Set(ids).size).toBe(5);
+      // 4 same picks (2026-10-23) + 7 (2026-10-25), 1 passed, 1 reviewed selection.
+      expect(ids).toHaveLength(13);
+      expect(new Set(ids).size).toBe(13);
+      // A same pick never names itself or another reviewed pick as the pick it is.
+      for (const { pickId, samePickId } of AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS)
+        expect(samePickId).not.toBe(pickId);
     });
   });
 
@@ -1229,5 +1239,152 @@ describe('asset ledger not-used picks (#1050, rules R1 and R2)', () => {
         draftSelections: candidate.draftSelections!.filter(({ draftYear }) => draftYear !== 2021),
       }))
     ).toMatchObject({ fate: 'unknown', lastSelection: null });
+  });
+});
+
+describe('asset ledger not-used picks by order and by review (#1050, owner 2026-10-25)', () => {
+  const PICK_A = `draft-pick:${hex('a')}`;
+  const PICK_B = `draft-pick:${hex('b')}`;
+  const numbered = (transfer: Transfer, nominalPick: number | null): Transfer =>
+    ({ ...transfer, asset: { ...(transfer as { asset: object }).asset, nominalPick } }) as Transfer;
+  const notUsed = (transferId: string) =>
+    outcome(transferId, {
+      nominationBasis: 'club_took_no_nominated_player',
+      receivingClubNominatedSelections: 0,
+    });
+  /** tx-a (2020): Essendon gives Hawthorn a round-only 2021 R2 (A). tx-b (2021): Hawthorn gives Brisbane "#22" (B). */
+  const roundOnly = (withOrder: boolean): Candidate => {
+    const base = inputs().candidate;
+    return {
+      ...base,
+      transactions: [...base.transactions, trade('tx-a', 2020), trade('tx-b', 2021)],
+      transfers: [
+        ...base.transfers,
+        numbered(pick('tr-a', 'tx-a', 'essendon', 'hawthorn', PICK_A, 2021), null),
+        player('tr-a2', 'tx-a', 'hawthorn', 'essendon', 'p5'),
+        numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_B, 2021), 22),
+        player('tr-b2', 'tx-b', 'brisbane', 'hawthorn', 'p6'),
+      ],
+      pickOutcomes: [
+        ...base.pickOutcomes!,
+        notUsed('tr-a'),
+        outcome('tr-b', { disposition: 'selected', selectionId: 'sel-22', playerId: 'p4' }),
+      ],
+      draftSelections: [
+        ...base.draftSelections!,
+        selection('sel-22', PICK_B, 'p4', 'brisbane', 22),
+      ],
+      pickCustody: [
+        ...base.pickCustody!,
+        ...(withOrder ? [{ ...custody('cu-a', PICK_A, 2021, 22), currentClubId: 'hawthorn' }] : []),
+      ],
+    };
+  };
+
+  it('relays a round-only pick by its latest Official AFL order number', () => {
+    const ledger = createAflTradeAssetLedger({ ...inputs(), candidate: roundOnly(true) }, labels);
+    expect(ledger.pickOutcome(PICK_A)).toEqual({
+      kind: 'relayed',
+      pickId: PICK_B,
+      transactionId: 'tx-b',
+      transferId: 'tr-b',
+      selectionNumber: 22,
+    });
+    const structure = buildAflTradeStructure({
+      ...inputs(),
+      candidate: roundOnly(true),
+      pickRelays: aflTradeAssetLedgerRelayLinks(ledger.ledger),
+    });
+    expect(
+      structure.content.trades.flatMap(({ legs }) => legs).find((leg) => leg.transferId === 'tr-a')
+        ?.onward
+    ).toMatchObject({ kind: 'pick_relay', transferId: 'tr-b', selectionNumber: 22 });
+    // With no order row the hop states no number, so it cannot relay: lapsed (no number).
+    const unplaced = createAflTradeAssetLedger(
+      { ...inputs(), candidate: roundOnly(false) },
+      labels
+    );
+    expect(unplaced.pickOutcome(PICK_A)).toMatchObject({
+      kind: 'not_used',
+      fate: 'lapsed',
+      slot: null,
+    });
+  });
+
+  it('takes a reviewed selection for a stated not-used pick only when the candidate bears it out', () => {
+    const base = inputs();
+    const candidate: Candidate = {
+      ...base.candidate,
+      draftSelections: [
+        ...base.candidate.draftSelections!,
+        selection('sel-29', `draft-pick:${hex('e')}`, 'p1', 'geelong', 29),
+      ],
+      pickCustody: [
+        ...base.candidate.pickCustody!,
+        { ...custody('cu-r', `draft-pick:${hex('f')}`, 2021, 25), currentClubId: 'geelong' },
+      ],
+      draftBoardPicks: [
+        {
+          boardPickId: `external-draft-board-pick:${hex('1')}`,
+          draftYear: 2021,
+          draftType: 'national',
+          roundNumber: 2,
+          recordedPickNumber: 29,
+          originalNumber: 25,
+          status: 'selected',
+          clubId: 'geelong',
+          originalClubId: 'carlton',
+          routeClubIds: ['carlton', 'geelong'],
+          evidenceIds: [],
+        },
+      ] as unknown as Candidate['draftBoardPicks'],
+    };
+    const sources = createAflTradeAssetLedgerOutcomeSources(
+      candidate,
+      createAflTradeAssetLedgerStintValue({ ...base, candidate })
+    );
+    const pickA = {
+      pickId: PICK_NOT_USED,
+      draftYear: 2021,
+      draftType: 'national',
+      round: 1,
+      originalClubId: 'carlton',
+      identityDisagreements: [],
+    };
+    const review = {
+      pickId: PICK_NOT_USED,
+      selectionId: 'sel-29',
+      custodyId: 'cu-r',
+      boardPickId: `external-draft-board-pick:${hex('1')}`,
+      note: 'test',
+    };
+    // Geelong held the pick, the order row names Geelong, the board shows Geelong's selection 29.
+    expect(
+      aflTradeAssetLedgerReviewedSelectedOutcome(sources, pickA, 'geelong', review, candidate)
+    ).toMatchObject({
+      kind: 'selected',
+      selectionId: 'sel-29',
+      playerId: 'p1',
+      selectionNumber: 29,
+    });
+    // Another holder, a missing selection, or a board row of another club: refused.
+    expect(() =>
+      aflTradeAssetLedgerReviewedSelectedOutcome(sources, pickA, 'carlton', review, candidate)
+    ).toThrow(/does not bear out/);
+    expect(() =>
+      aflTradeAssetLedgerReviewedSelectedOutcome(
+        sources,
+        pickA,
+        'geelong',
+        { ...review, selectionId: 'sel-99' },
+        candidate
+      )
+    ).toThrow(/does not bear out/);
+    expect(() =>
+      aflTradeAssetLedgerReviewedSelectedOutcome(sources, pickA, 'geelong', review, {
+        ...candidate,
+        draftBoardPicks: [],
+      })
+    ).toThrow(/does not bear out/);
   });
 });

@@ -4,6 +4,7 @@ import {
   aflTradeTransactionNotBefore,
   createAflTradePickOnwardTransfers,
 } from '../source/pickOnwardTransfer';
+import { aflTradePickLatestOrderNumber } from './pickSlots';
 import {
   AFL_TRADE_STRUCTURE_LIMITATION,
   AFL_TRADE_STRUCTURE_SCHEMA_VERSION,
@@ -150,6 +151,7 @@ function createPickRelayLink(
   const transfersById = new Map(
     inputs.candidate.transfers.map((transfer) => [transfer.transferId, transfer])
   );
+  const custody = inputs.candidate.pickCustody ?? [];
   return function onwardOfRelay(transfer: Transfer, transaction: Transaction) {
     const relay = relays.get(transfer.transferId);
     const own = transfer.asset;
@@ -166,7 +168,8 @@ function createPickRelayLink(
       next.pickId === own.pickId ||
       next.draftYear !== own.draftYear ||
       next.draftType !== own.draftType ||
-      own.nominalPick !== relay.selectionNumber ||
+      // R1 by order: a leg that states no number relays by its latest Official AFL order number.
+      (own.nominalPick ?? aflTradePickLatestOrderNumber(custody, own)) !== relay.selectionNumber ||
       next.nominalPick !== relay.selectionNumber ||
       !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
     )

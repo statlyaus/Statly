@@ -24,6 +24,7 @@ import {
 import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
   AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED,
 } from './assetLedgerReviewedPickLinks';
 import {
   aflTradeAssetLedgerPickIdentities,
@@ -31,6 +32,7 @@ import {
 } from './assetLedgerPickHops';
 import {
   aflTradeAssetLedgerPickOutcome,
+  aflTradeAssetLedgerReviewedSelectedOutcome,
   createAflTradeAssetLedgerOutcomeSources,
 } from './assetLedgerPickOutcome';
 import {
@@ -157,7 +159,21 @@ function picksOf(
     .sort((left, right) => byCodeUnit(left.pickId, right.pickId))
     .map((pick) => {
       const trail = trails.get(pick.pickId) ?? { hopOrder: 'trail' as const, hops: [] };
-      const outcome = aflTradeAssetLedgerPickOutcome(sources, pick, trail);
+      const stated = aflTradeAssetLedgerPickOutcome(sources, pick, trail);
+      // A stated not-used pick the owner reviewed as used takes its reviewed selection (#1050).
+      const reviewedSelected = AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED.find(
+        (review) => review.pickId === pick.pickId
+      );
+      const outcome =
+        stated.kind === 'not_used' && reviewedSelected
+          ? aflTradeAssetLedgerReviewedSelectedOutcome(
+              sources,
+              pick,
+              trail.hops.at(-1)?.toClubId ?? null,
+              reviewedSelected,
+              inputs.candidate
+            )
+          : stated;
       const row: AflTradeAssetLedgerNotUsedRow & { pick: typeof pick } = {
         pick,
         pickId: pick.pickId,
