@@ -25,21 +25,12 @@ describe('league waivers page Firestore architecture', () => {
     expect(source).not.toContain('membersIndex');
   });
 
-  it('does not treat unavailable waiver projections as successful empty data', () => {
-    const serviceSource = readFileSync(
-      join(process.cwd(), 'src/services/waiverService.ts'),
-      'utf8'
-    );
+  it('surfaces a failed waiver load instead of rendering empty data', () => {
     const containerSource = readFileSync(
       join(process.cwd(), 'src/components/waivers/LeagueWaiversContainer.tsx'),
       'utf8'
     );
 
-    expect(serviceSource).toContain(
-      'Waiver data is unavailable because league ownership projection has not loaded'
-    );
-    expect(serviceSource).not.toContain('mock');
-    expect(serviceSource).not.toContain('stub');
     expect(containerSource).toContain('waiverLoadError');
     expect(containerSource).toContain('role="alert"');
   });

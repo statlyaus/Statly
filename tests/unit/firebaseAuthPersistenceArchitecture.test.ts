@@ -1,9 +1,17 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 function read(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
+}
+
+function listSourceFiles(dir: string): string[] {
+  return readdirSync(join(process.cwd(), dir), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return listSourceFiles(path);
+    return /\.(ts|tsx)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
+  });
 }
 
 describe('Firebase auth persistence architecture', () => {
@@ -51,13 +59,15 @@ describe('Firebase auth persistence architecture', () => {
   });
 
   it('does not recreate a Firebase app inside feature components or expose a combined client', () => {
-    const tradeReview = read('src/components/TradeReview.tsx');
-
     expect(existsSync(join(process.cwd(), 'src/lib/firebaseClient.ts'))).toBe(false);
-    expect(tradeReview).toContain("from '@/lib/firebase/clientAuth'");
-    expect(tradeReview).not.toContain('initializeApp');
-    expect(tradeReview).not.toContain('getAuth');
-    expect(tradeReview).not.toContain('_firebaseApp');
+
+    for (const path of listSourceFiles('src/components')) {
+      const source = read(path);
+      expect(source, path).not.toContain("from 'firebase/app'");
+      expect(source, path).not.toContain('initializeApp(');
+      expect(source, path).not.toContain('getAuth(');
+      expect(source, path).not.toContain('_firebaseApp');
+    }
   });
 
   it('bounds worker token resolution and awaits authenticated fetch failures', () => {

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -37,5 +37,23 @@ describe('tradecentre gateway route ownership', () => {
     expect(leagueTabs).toContain("import('./trades/LeagueTradeCentrePanel')");
     expect(leagueTabs).toContain('module.LeagueTradeCentrePanel');
     expect(leagueTabs).not.toContain('LeagueTradeProposalForm');
+  });
+
+  it('keeps the Firestore-backed fantasy trade routes and shell removed', () => {
+    const removed = [
+      'src/app/api/trades/route.ts',
+      'src/app/api/trades/list/route.ts',
+      'src/app/api/trades/review/route.ts',
+      'src/pages/api/listTrades.ts',
+      'src/pages/api/tradeReview.ts',
+      'src/lib/tradeReviewEngine.ts',
+      'src/state/tradeReviewStore.ts',
+      'src/components/TradeReview.tsx',
+      'src/app/tradecentre/TradeCentreShellClient.tsx',
+    ];
+
+    for (const path of removed) {
+      expect(existsSync(join(process.cwd(), path)), path).toBe(false);
+    }
   });
 });

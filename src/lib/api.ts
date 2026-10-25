@@ -56,7 +56,6 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: FetchJsonIni
 // src/lib/api.ts
 
 import { readStoredDevelopmentAuthUserId } from '@/lib/devAuth';
-import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewStore';
 
 /** Callers such as the draft room choose recovery by status (409 taken, 423 not your turn). */
 function withHttpStatus(error: Error, status: number): Error & { status: number } {
@@ -193,63 +192,3 @@ export async function fetchAllPages<T>(
   }
   return aggregated;
 }
-
-// --- TRADING FUNCTIONS ---
-
-export const fetchTrades = async (): Promise<TradeSummary[]> => {
-  const data = await fetchApi('listTrades');
-  return data.trades;
-};
-
-export const fetchTradeDetails = async (
-  tradeId: string
-): Promise<{
-  state: TradeState;
-  auditLog: Array<{ timestamp: number; action: string; details?: unknown }>;
-  notifications: string[];
-}> => {
-  return fetchApi(`tradeReview?tradeId=${tradeId}`);
-};
-
-export const createTrade = async (tradeName: string): Promise<TradeSummary> => {
-  return fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'create', tradeName }),
-  });
-};
-
-export const acceptTrade = (tradeId: string) =>
-  fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'accept', tradeId }),
-  });
-
-export const vetoTrade = (tradeId: string) =>
-  fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'veto', tradeId }),
-  });
-
-export const processTrade = (tradeId: string) =>
-  fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'process', tradeId }),
-  });
-
-export const deleteTrade = (tradeId: string) =>
-  fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'reset', tradeId }),
-  });
-
-export const archiveTrade = (tradeId: string) =>
-  fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'archive', tradeId }),
-  });
-
-export const overrideTradeStatus = (tradeId: string, overrideStatus: TradeStatus) =>
-  fetchApi('tradeReview', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'adminOverride', tradeId, overrideStatus }),
-  });
