@@ -4064,8 +4064,9 @@ one of:
   Each carries its `fate` (rule R2 of statlyaus/Statly#1050, `valuation/assetLedgerNotUsedPicks.ts`):
   `lapsed` when its `slot` (the latest usable Official AFL order number under its own pick id, else the
   number its last trade stated) is within 12 of the draft's `lastSelection` in evidence (every
-  selection counts, whatever its status) or it states no number; `unknown` otherwise, when the value
-  lines leave it pending instead of 0.
+  selection counts, whatever its status) or it states no number; `unknown` otherwise, when its newest
+  order capture is unusable (older evidence never outranks it), or when an unordered trail's hops
+  state different numbers. The value lines leave an `unknown` pick pending instead of 0.
 - `relayed`: stated not used, but the holder traded the same draft's same stated number on in a
   different trade no earlier than this pick's last, as the first hop of another pick id, with that pick
   the only such match for this one and this one the only such match for it (rule R1 of #1050). It names

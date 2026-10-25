@@ -136,9 +136,10 @@ function lastSelectionsOf(candidate: Candidate): Map<string, number> {
 
 /**
  * Rule R2: where a not-used pick stood. Its latest usable Official AFL order number under its own pick
- * id, else the number its last trade stated. Lapsed when it states no number (a round-only future pick)
- * or stood within the late window of the draft's last selection; unknown otherwise, or when the draft
- * has no selection in evidence.
+ * id, else the number its last trade stated (an unordered trail's hops must agree). Lapsed when it
+ * states no number (a round-only future pick) or stood within the late window of the draft's last
+ * selection; unknown otherwise, when the draft has no selection in evidence, or when its newest order
+ * capture is unusable (older evidence never outranks it).
  */
 function fateOf(
   candidate: Candidate,
@@ -154,18 +155,26 @@ function fateOf(
         custody.draftType === row.draftType
     )
   );
-  const orderNumber =
-    order && isAflTradeUsableCustodyStatus(order.status) ? order.recordedPickNumber : null;
-  const lastHop = row.trail.hops.at(-1);
-  const stated = lastHop && transfers.get(lastHop.transferId)?.asset;
-  const statedNumber = stated?.kind === 'pick_entitlement' ? stated.nominalPick : null;
+  const lastSelection = lastSelections.get(`${row.draftYear}|${row.draftType}`) ?? null;
+  // A newer unusable order capture is never outranked by the older trade statement: unknown.
+  if (order && !isAflTradeUsableCustodyStatus(order.status))
+    return { fate: 'unknown', slot: null, lastSelection };
+  // An ordered trail's last hop states the number; an unordered trail's hops must agree on it.
+  const statedNumbers = new Set(
+    (row.trail.hopOrder === 'trail' ? row.trail.hops.slice(-1) : row.trail.hops).map((hop) => {
+      const asset = transfers.get(hop.transferId)?.asset;
+      return asset?.kind === 'pick_entitlement' ? (asset.nominalPick ?? null) : null;
+    })
+  );
+  if (row.trail.hopOrder !== 'trail' && statedNumbers.size > 1)
+    return { fate: 'unknown', slot: null, lastSelection };
+  const statedNumber = [...statedNumbers][0] ?? null;
   const slot: AflTradeAssetLedgerNotUsedFate['slot'] =
-    orderNumber != null
-      ? { selectionNumber: orderNumber, source: 'order' }
+    order?.recordedPickNumber != null
+      ? { selectionNumber: order.recordedPickNumber, source: 'order' }
       : statedNumber != null
         ? { selectionNumber: statedNumber, source: 'stated_at_trade' }
         : null;
-  const lastSelection = lastSelections.get(`${row.draftYear}|${row.draftType}`) ?? null;
   const fate =
     slot === null
       ? 'lapsed'

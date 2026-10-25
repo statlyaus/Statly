@@ -1077,6 +1077,41 @@ describe('asset ledger not-used picks (#1050, rules R1 and R2)', () => {
     });
   });
 
+  it('relays a board-not-spent pick too: the evidence kind does not matter, the handoff does', () => {
+    // Hawthorn took a nominee in 2021; the draft's boards list Geelong's bid spends, not "#22".
+    const ledger = relayed((candidate) => ({
+      ...candidate,
+      pickOutcomes: candidate.pickOutcomes!.map((row) =>
+        row.transferId === 'tr-a'
+          ? outcome('tr-a', {
+              nominationBasis: 'club_took_nominated_player',
+              receivingClubNominatedSelections: 1,
+            })
+          : row
+      ),
+      draftBoardBidMatches: [
+        {
+          bidMatchId: `external-draft-board-bid-match:${hex('f')}`,
+          draftYear: 2021,
+          draftType: 'national',
+          nativePickId: '5733',
+          selectionNumber: 2,
+          roundNumber: 1,
+          clubId: 'geelong',
+          playerId: 'p2',
+          bidClubId: 'gws',
+          basis: 'father_son',
+          points: 2517,
+          pointsUsed: 1889,
+          consumedPicks: [],
+          leftoverPicks: [],
+          evidenceIds: [`external-evidence:${hex('d')}`],
+        },
+      ] as unknown as Candidate['draftBoardBidMatches'],
+    }));
+    expect(ledger.pickOutcome(PICK_A)).toMatchObject({ kind: 'relayed', pickId: PICK_B });
+  });
+
   it('relays only on one unique match each way, in the same draft, no earlier, from the holder', () => {
     const unknownA = {
       kind: 'not_used',
@@ -1177,6 +1212,16 @@ describe('asset ledger not-used picks (#1050, rules R1 and R2)', () => {
       slot: { selectionNumber: 55, source: 'order' },
       lastSelection: 60,
     });
+    // A newer unusable order capture is never outranked by the trade's number: unknown.
+    expect(
+      fateAt(48, (candidate) => ({
+        ...candidate,
+        pickCustody: [
+          ...(candidate.pickCustody ?? []),
+          { ...custody('cu-a2', PICK_A, 2021, 30), status: 'disputed' },
+        ],
+      }))
+    ).toMatchObject({ fate: 'unknown', slot: null });
     // A draft with no selection in evidence shows nothing: unknown.
     expect(
       fateAt(48, (candidate) => ({

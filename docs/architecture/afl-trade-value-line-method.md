@@ -564,7 +564,8 @@ draft-night trade's pick never joins the trade-period pick that became it. The o
    6.1, Liam Henry 2.1), 5 on another not-used pick whose chain is listed.
 2. **R2, pending instead of 0.** A not-used pick that did not relay is 0 only when the evidence shows it
    lapsed: it stood within 12 selections of the draft's last selection (its latest Official AFL order
-   number under its own pick id, else the number its last trade stated), or it states no number (a
+   number under its own pick id, else the number its last trade stated; an unordered trail's hops must
+   agree, and a newest order capture that is unusable makes the fate unknown), or it states no number (a
    round-only future pick). Every other not-used pick stood mid-draft, so it was consumed matching a bid
    at a shifted number the boards do not join (`not_used_holder_matched_bid`, its holder matched a bid
    that draft) or moved on draft night outside the trade-period sources (`not_used_mid_draft`); it is
