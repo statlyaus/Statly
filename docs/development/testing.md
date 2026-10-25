@@ -153,11 +153,14 @@ provenance, and the live provider-ingestion boundary rejects `statly_local_fixtu
 
 ### Waiver walk-through
 
-Waivers have no browser test yet, so check them by hand on the local full stack. With the fantasy
-`DATABASE_URL` pointing at a development database (the stack applies migrations at start-up), run
+`tests/e2e/waivers-faab.test.ts` covers one FAAB run in the browser. For a fuller walk-through by
+hand, use the local full stack. With the fantasy `DATABASE_URL` pointing at a development database
+(the stack applies migrations at start-up), run
 `npm run dev:seed:waivers` once the stack is up. It refuses anything but a loopback database and the
 Firebase Auth emulator, and re-running it resets the scenario. It creates **Waiver Test League**: a
 completed two-team draft, a FAAB budget of $100 each, one open roster spot each, and two free players.
+Like a league made through the app, it has an active season, so the same two managers can also
+trade with each other from the Trades tab.
 Sign in as `admin@statly.dev` (commissioner) and `rival@statly.dev` in two browser profiles; both use
 the local development phrase (`STATLY_LOCAL_AUTH_PHRASE`, or the default in `src/lib/devAuth.ts`).
 

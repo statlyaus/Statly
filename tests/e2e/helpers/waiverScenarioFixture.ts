@@ -34,6 +34,8 @@ export async function seedWaiverScenario(): Promise<void> {
     await prisma.$transaction(async (tx) => {
       await tx.teamAction.deleteMany({ where: { leagueId } });
       await tx.waiverPriority.deleteMany({ where: { leagueId } });
+      // The season cascades to season-scoped rows (trade threads, social) and blocks the league.
+      await tx.leagueSeason.deleteMany({ where: { leagueId } });
       await tx.leagueRosterPlayer.deleteMany({ where: { leagueId } });
       await tx.pick.deleteMany({ where: { draftId } });
       await tx.draftOrder.deleteMany({ where: { draftId } });
@@ -101,6 +103,19 @@ export async function seedWaiverScenario(): Promise<void> {
           categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
         },
       });
+      // Every real league gets an active season at creation (createLeagueService); trades and
+      // social refuse a league without one.
+      const seasonYear = new Date().getUTCFullYear();
+      const season = await tx.leagueSeason.create({
+        data: {
+          leagueId,
+          label: `${seasonYear} season`,
+          year: seasonYear,
+          startsAt: new Date(Date.UTC(seasonYear, 0, 1)),
+          endsAt: new Date(Date.UTC(seasonYear, 11, 31, 23, 59, 59, 999)),
+        },
+      });
+      await tx.league.update({ where: { id: leagueId }, data: { activeSeasonId: season.id } });
 
       const members = [
         {
