@@ -2,13 +2,42 @@
 
 ## Ownership
 
-Socket.IO transports live draft and social updates. Redis supplies multi-process Pub/Sub and ephemeral
+Socket.IO transports live draft, trade and social updates. Redis supplies multi-process Pub/Sub and ephemeral
 coordination. Neither owns durable fantasy state.
 
 Draft commands are accepted only through the server application boundary. That boundary authenticates
 the actor, checks league membership and pick authority, writes the command result and outbox/event state
 through Prisma, and then publishes realtime notification. A successful socket emission without a
 successful persisted command is not a successful pick.
+
+League trade threads and social channels use the same outbox pattern. `tradeService` writes a
+`LeagueTradeOutboxEvent` row in the transaction that records each trade event, so the row is the
+persisted fact. The Socket.IO process drains that outbox on the same tick as the social outbox
+(`server/leagues/trades/tradePublisher.ts`) and emits one `trade:update` event per row to the league
+members' room, the room `social:join` admits after a membership check. The Trade Centre renders its
+snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
+reconnect, it refreshes that snapshot rather than patching browser state.
+
+### League social catch-up
+
+`socialCommands` writes a `SocialOutboxEvent` row in the transaction of each social write (chat
+message, post, reply, moderation action). The Socket.IO process drains that outbox
+(`server/leagues/social/socialPublisher.ts`) and emits `social:*` envelopes to
+`social:league:<leagueId>`, the room `social:join` admits after a membership check. The browser hook
+(`useLeagueSocial`) loads the REST snapshot first, applies sequenced envelopes, and resyncs after each
+reconnect once the room is rejoined.
+
+While no live room is delivering (no Socket.IO process, a disconnected socket, or a join the server
+never answers), the hook requests `/summary` every 10 seconds while the tab is visible and reloads
+the snapshot only when a channel's latest sequence advanced. An unanswered join is "realtime
+unavailable", not an authorization failure; only a refused join shows one. Until the Socket.IO
+process runs in production, this poll is the only delivery path on the Netlify deployment.
+
+Chat GIFs persist only the GIPHY id (`SocialMessage.giphyId`); the browser resolves renditions with
+the public `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`, and the GIF picker is hidden while that key is unset.
+GIPHY's API terms forbid caching or proxying media URLs, so the server stores none. A beta key is
+limited to 100 calls per hour shared by every member, and each rendered GIF costs one call;
+production needs a GIPHY-approved key.
 
 ## Process model
 

@@ -19,6 +19,7 @@ const SocialEnvelopeSchema = z.object({
     'social:reply',
     'social:moderation',
     'social:read-state',
+    'trade:update',
   ]),
   payload: z.unknown(),
   occurredAt: z.string().min(1),

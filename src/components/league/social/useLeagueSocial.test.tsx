@@ -356,6 +356,95 @@ describe('useLeagueSocial', () => {
     unmount();
   });
 
+  it('catches up by polling the summary while the realtime room is unavailable', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    try {
+      // The join is never acknowledged: no Socket.IO process, or the socket cannot connect.
+      mocks.socket.emit.mockImplementation(() => undefined);
+
+      const { result, unmount } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(4);
+
+      // The unanswered join times out as "unavailable", not as an authorization failure.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      expect(result.current.error).toBeNull();
+
+      // Nothing advanced on the server: one summary request and no snapshot reload.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(5));
+      expect(mocks.authenticatedFetch.mock.lastCall?.[0]).toMatch(/\/summary$/);
+      expect(result.current.messages.map((message) => message.id)).toEqual(['message-1']);
+
+      // Chat advanced: the next tick reloads the snapshot and the new message appears.
+      const laterMessage: SocialMessage = {
+        ...memberMessage,
+        id: 'message-2',
+        content: 'Sent while realtime was down',
+        createdAt: '2026-07-19T10:05:00.000Z',
+      };
+      mocks.authenticatedFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/summary')) {
+          return Promise.resolve(
+            response({ ...summary, latestSequence: { ...summary.latestSequence, chat: 11 } })
+          );
+        }
+        if (url.includes('/messages?')) {
+          return Promise.resolve(
+            response({ items: [memberMessage, laterMessage], nextCursor: null })
+          );
+        }
+        return Promise.resolve(initialResponse(url));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      await waitFor(() =>
+        expect(result.current.messages.map((message) => message.id)).toEqual([
+          'message-1',
+          'message-2',
+        ])
+      );
+      expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(10);
+      expect(result.current.summary?.latestSequence.chat).toBe(11);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not poll while the realtime room is live and resumes after a disconnect', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    try {
+      const { result, unmount } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(8));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(8);
+
+      act(() => {
+        mocks.handlers.get('disconnect')?.();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(9));
+      expect(mocks.authenticatedFetch.mock.lastCall?.[0]).toMatch(/\/summary$/);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('always starts a trailing snapshot after join acknowledgement', async () => {
     let acknowledgeJoin: ((result: { ok: boolean }) => void) | undefined;
     const pendingRequests: Array<{

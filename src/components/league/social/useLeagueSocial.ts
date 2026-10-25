@@ -27,6 +27,14 @@ type ThreadState = SocialCursorPage<SocialReply> & {
 
 export type SocialPostSort = 'latestActivity' | 'createdAt';
 
+// Catch-up cadence while no live room is delivering events (no socket, a disconnected socket, or a
+// join the server never answers). One summary request per tick; the snapshot reloads only when a
+// channel's latest sequence advanced.
+const SOCIAL_CATCH_UP_INTERVAL_MS = 10_000;
+
+// An unanswered join means the socket is not delivering; only a refusal is an authorization failure.
+type SocialJoinOutcome = 'authorized' | 'refused' | 'unavailable';
+
 interface LeagueSocialState {
   summary: LeagueSocialSummary | null;
   messages: SocialMessage[];
@@ -235,6 +243,8 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   const [postSort, setPostSort] = useState<SocialPostSort>('latestActivity');
   const inFlightReadSequences = useRef<Partial<Record<SocialChannel, number>>>({});
   const resyncPromiseRef = useRef<Promise<void> | null>(null);
+  const [realtimeLive, setRealtimeLive] = useState(false);
+  const latestSequenceRef = useRef<LeagueSocialSummary['latestSequence'] | null>(null);
   const basePath = useMemo(() => `/api/leagues/${encodeURIComponent(leagueId)}/social`, [leagueId]);
 
   const apiRequest = useCallback(
@@ -336,6 +346,40 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   }, [resync]);
 
   useEffect(() => {
+    latestSequenceRef.current = state.summary?.latestSequence ?? null;
+  }, [state.summary]);
+
+  const catchUp = useCallback(async (): Promise<void> => {
+    if (resyncPromiseRef.current) return;
+    let summary: LeagueSocialSummary;
+    try {
+      summary = await apiRequest<LeagueSocialSummary>('/summary');
+    } catch {
+      // The next tick retries; a transient failure must not replace content already on screen.
+      return;
+    }
+    const known = latestSequenceRef.current;
+    const channels: SocialChannel[] = ['chat', 'board', 'activity'];
+    const advanced =
+      !known || channels.some((channel) => summary.latestSequence[channel] > known[channel]);
+    if (advanced) {
+      await resync();
+      return;
+    }
+    setState((current) => ({ ...current, summary: reconcileSummary(current.summary, summary) }));
+  }, [apiRequest, resync]);
+
+  useEffect(() => {
+    if (realtimeLive) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void catchUp();
+    }, SOCIAL_CATCH_UP_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [catchUp, realtimeLive]);
+
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && (!socket || socket.connected)) {
         void resync();
@@ -349,16 +393,16 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     if (!socket || !leagueId) return;
 
     let cancelled = false;
-    let joinPromise: Promise<boolean> | null = null;
+    let joinPromise: Promise<SocialJoinOutcome> | null = null;
     let joinTimeoutId: number | null = null;
 
-    const joinLeagueSocial = (): Promise<boolean> => {
+    const joinLeagueSocial = (): Promise<SocialJoinOutcome> => {
       if (joinPromise) return joinPromise;
 
-      const request = new Promise<boolean>((resolve) => {
+      const request = new Promise<SocialJoinOutcome>((resolve) => {
         joinTimeoutId = window.setTimeout(() => {
           joinTimeoutId = null;
-          resolve(false);
+          resolve('unavailable');
         }, 5_000);
         socket.emit(
           'social:join',
@@ -368,7 +412,7 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
               window.clearTimeout(joinTimeoutId);
               joinTimeoutId = null;
             }
-            resolve(acknowledgement?.ok === true);
+            resolve(acknowledgement?.ok === true ? 'authorized' : 'refused');
           }
         );
       }).finally(() => {
@@ -378,16 +422,20 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
       return request;
     };
     const rejoinAndResync = async () => {
-      const authorized = await joinLeagueSocial();
+      const outcome = await joinLeagueSocial();
       if (cancelled) return;
-      if (!authorized) {
-        setState((current) => ({
-          ...current,
-          loading: false,
-          error: 'League social realtime authorization failed.',
-        }));
+      if (outcome !== 'authorized') {
+        setRealtimeLive(false);
+        if (outcome === 'refused') {
+          setState((current) => ({
+            ...current,
+            loading: false,
+            error: 'League social realtime authorization failed.',
+          }));
+        }
         return;
       }
+      setRealtimeLive(true);
 
       const preAuthorizationResync = resyncPromiseRef.current;
       if (preAuthorizationResync) {
@@ -493,6 +541,9 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
       }));
     };
 
+    const handleDisconnect = () => setRealtimeLive(false);
+
+    socket.on('disconnect', handleDisconnect);
     socket.on('social:message', handleMessage);
     socket.on('social:activity', handleActivity);
     socket.on('social:post', handlePost);
@@ -508,6 +559,8 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
         window.clearTimeout(joinTimeoutId);
         joinTimeoutId = null;
       }
+      setRealtimeLive(false);
+      socket.off('disconnect', handleDisconnect);
       socket.off('connect', rejoinAndResync);
       socket.off('social:message', handleMessage);
       socket.off('social:activity', handleActivity);

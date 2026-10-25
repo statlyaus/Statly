@@ -6,11 +6,11 @@ import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategorie
 
 export const E2E_LEAGUE_ID = 'e2e-completed-league';
 export const E2E_DRAFT_ID = 'cme2edraft0000e2etestdraft';
-const E2E_SEASON_ID = 'e2e-completed-season';
+export const E2E_SEASON_ID = 'e2e-completed-season';
 const E2E_SETTINGS_ID = 'e2e-completed-settings';
 const E2E_HUMAN_MEMBER_ID = 'e2e-member-human';
-const E2E_BOT_MEMBER_ID = 'e2e-member-bot';
-const E2E_BOT_USER_ID = 'e2e-bot-user';
+export const E2E_BOT_MEMBER_ID = 'e2e-member-bot';
+export const E2E_BOT_USER_ID = 'e2e-bot-user';
 const E2E_MEMBER_IDS = [E2E_HUMAN_MEMBER_ID, E2E_BOT_MEMBER_ID];
 
 const E2E_PLAYERS = [
