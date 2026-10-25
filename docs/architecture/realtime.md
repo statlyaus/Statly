@@ -18,6 +18,27 @@ members' room, the room `social:join` admits after a membership check. The Trade
 snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
 reconnect, it refreshes that snapshot rather than patching browser state.
 
+### League social catch-up
+
+`socialCommands` writes a `SocialOutboxEvent` row in the transaction of each social write (chat
+message, post, reply, moderation action). The Socket.IO process drains that outbox
+(`server/leagues/social/socialPublisher.ts`) and emits `social:*` envelopes to
+`social:league:<leagueId>`, the room `social:join` admits after a membership check. The browser hook
+(`useLeagueSocial`) loads the REST snapshot first, applies sequenced envelopes, and resyncs after each
+reconnect once the room is rejoined.
+
+While no live room is delivering (no Socket.IO process, a disconnected socket, or a join the server
+never answers), the hook requests `/summary` every 10 seconds while the tab is visible and reloads
+the snapshot only when a channel's latest sequence advanced. An unanswered join is "realtime
+unavailable", not an authorization failure; only a refused join shows one. Until the Socket.IO
+process runs in production, this poll is the only delivery path on the Netlify deployment.
+
+Chat GIFs persist only the GIPHY id (`SocialMessage.giphyId`); the browser resolves renditions with
+the public `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`, and the GIF picker is hidden while that key is unset.
+GIPHY's API terms forbid caching or proxying media URLs, so the server stores none. A beta key is
+limited to 100 calls per hour shared by every member, and each rendered GIF costs one call;
+production needs a GIPHY-approved key.
+
 ## Process model
 
 - Next.js serves pages and HTTP transport routes.

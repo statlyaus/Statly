@@ -55,6 +55,8 @@ Apply migrations with `npx prisma migrate deploy`. The history starts at the
 - `NEXT_PUBLIC_USE_EMULATORS`: explicit client emulator opt-in.
 - `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST`: server emulator endpoints.
 - `REDIS_URL` or the documented Redis host/port fields: realtime and worker coordination.
+- `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`: optional browser-only GIPHY key for league chat GIFs; the GIF
+  button is hidden while it is unset.
 - `INTERNAL_TASK_SECRET` and cron/metrics credentials: server-only; use deployment secret storage.
 
 Variables prefixed `NEXT_PUBLIC_` are included in browser bundles. Never put a private key, service
