@@ -103,6 +103,16 @@ export interface LeagueTradeCentreSnapshot {
   counts: Record<TradeView, number>;
   activeView: TradeView;
   nextCursor: string | null;
+  /**
+   * Changes whenever a trade the viewer can see changes. Read before the rest of the snapshot, so a
+   * change that lands mid-read makes this value stale (one extra refresh) rather than hiding it.
+   */
+  revision: string;
+}
+
+/** Polled by the Trade Centre when no live realtime room is delivering `trade:update` events. */
+export interface LeagueTradeRevision {
+  revision: string;
 }
 
 export interface LeagueTradeDigest {

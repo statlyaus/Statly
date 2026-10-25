@@ -169,6 +169,54 @@ describe.sequential('league trade service transactions', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
   });
 
+  it('changes the trade revision only for managers who can see the trade', async () => {
+    const revisions = async () => {
+      const [commissioner, first, second] = await Promise.all(
+        [ids.commissionerUser, ids.firstUser, ids.secondUser].map(async (userId) => {
+          const result = await readModel.loadAuthorizedLeagueTradeRevision({
+            leagueId: ids.league,
+            userId,
+          });
+          return result.revision;
+        })
+      );
+      return { commissioner, first, second };
+    };
+    await setReviewMode('ADMIN');
+    const initial = await revisions();
+
+    const created = await createTrade();
+    const proposed = await revisions();
+    expect(proposed.first).not.toBe(initial.first);
+    expect(proposed.second).not.toBe(initial.second);
+    // A private offer between two other managers must not reveal itself to the commissioner.
+    expect(proposed.commissioner).toBe(initial.commissioner);
+
+    // The snapshot carries the revision it was read at, so a poll returning it means "no change".
+    const inbox = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: ids.secondUser,
+      view: 'inbox',
+    });
+    expect(inbox.revision).toBe(proposed.second);
+
+    await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      { action: 'accept', expectedVersion: created.version, idempotencyKey: 'accept-rev-0001' },
+      now
+    );
+    const accepted = await revisions();
+    expect(accepted.first).not.toBe(proposed.first);
+    expect(accepted.second).not.toBe(proposed.second);
+    // Now pending commissioner review, so it is in the commissioner's Review view.
+    expect(accepted.commissioner).not.toBe(proposed.commissioner);
+    await expect(
+      readModel.loadAuthorizedLeagueTradeRevision({ leagueId: ids.league, userId: 'not-a-member' })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+  });
+
   it('authorizes cache invalidation only for active members in the active season', async () => {
     await expect(service.authorizeLeagueTradeAccess(ids.league, ids.firstUser)).resolves.toBe(
       ids.league

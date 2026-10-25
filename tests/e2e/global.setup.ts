@@ -8,7 +8,7 @@ export const E2E_LEAGUE_ID = 'e2e-completed-league';
 export const E2E_DRAFT_ID = 'cme2edraft0000e2etestdraft';
 export const E2E_SEASON_ID = 'e2e-completed-season';
 const E2E_SETTINGS_ID = 'e2e-completed-settings';
-const E2E_HUMAN_MEMBER_ID = 'e2e-member-human';
+export const E2E_HUMAN_MEMBER_ID = 'e2e-member-human';
 export const E2E_BOT_MEMBER_ID = 'e2e-member-bot';
 export const E2E_BOT_USER_ID = 'e2e-bot-user';
 const E2E_MEMBER_IDS = [E2E_HUMAN_MEMBER_ID, E2E_BOT_MEMBER_ID];
@@ -57,6 +57,9 @@ async function globalSetup() {
         await tx.draft.deleteMany({ where: { id: { in: fixtureDraftIds } } });
       }
 
+      // The season cascades to season-scoped rows (trade threads, social) that would block deleting
+      // members, and itself blocks deleting the league.
+      await tx.leagueSeason.deleteMany({ where: { leagueId: E2E_LEAGUE_ID } });
       await tx.leagueMember.deleteMany({ where: { leagueId: E2E_LEAGUE_ID } });
       await tx.league.deleteMany({ where: { id: E2E_LEAGUE_ID } });
       await tx.leagueSettings.deleteMany({ where: { id: E2E_SETTINGS_ID } });

@@ -145,6 +145,7 @@ const snapshot: LeagueTradeCentreSnapshot = {
   counts: { inbox: 1, sent: 0, history: 0, review: 0 },
   activeView: 'inbox',
   nextCursor: null,
+  revision: '1.1.1000',
 };
 
 describe('LeagueTradeCentrePanel', () => {
@@ -158,7 +159,11 @@ describe('LeagueTradeCentrePanel', () => {
   it('joins the league room and refreshes the server snapshot on trade events and reconnect', () => {
     renderOffersPanel();
 
-    expect(fakeSocket.emit).toHaveBeenCalledWith('social:join', { leagueId: 'league-1' });
+    expect(fakeSocket.emit).toHaveBeenCalledWith(
+      'social:join',
+      { leagueId: 'league-1' },
+      expect.any(Function)
+    );
     expect(refresh).not.toHaveBeenCalled();
 
     fakeSocket.receive('trade:update', { leagueId: 'league-2', payload: { threadId: 'other' } });

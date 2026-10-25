@@ -18,6 +18,14 @@ members' room, the room `social:join` admits after a membership check. The Trade
 snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
 reconnect, it refreshes that snapshot rather than patching browser state.
 
+The Trade Centre catches up like league chat (`useTradeCentreLiveRefresh`). While no live room is
+delivering (no Socket.IO process, a disconnected socket, or a join the server never answers), it
+requests `GET /api/leagues/<id>/trades/revision` every 10 seconds while the tab is visible and
+refreshes only when the revision changed. The revision covers only the threads in the viewer's own
+views (thread count, plus the count and latest time of their events), so another pair's private offer
+never changes it. Each snapshot carries the revision it was read at, read before the rest of the
+snapshot, so a change that lands mid-read costs one extra refresh rather than being missed.
+
 ### League social catch-up
 
 `socialCommands` writes a `SocialOutboxEvent` row in the transaction of each social write (chat
