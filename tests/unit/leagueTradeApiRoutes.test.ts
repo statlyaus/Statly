@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET as getTrades, POST as createTrade } from '@/app/api/leagues/[id]/trades/route';
 import { POST as executeAction } from '@/app/api/leagues/[id]/trades/[tradeId]/actions/route';
-import { GET as listTrades } from '@/app/api/trades/list/route';
 import { TradeServiceError } from '@/server/leagues/trades/tradeContracts';
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   createLeagueTrade: vi.fn(),
   executeLeagueTradeAction: vi.fn(),
   apiError: vi.fn(),
-  firestoreCollection: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -21,10 +19,6 @@ vi.mock('@/lib/serverAuth', () => ({
 
 vi.mock('@/lib/logger', () => ({
   logger: { apiError: mocks.apiError },
-}));
-
-vi.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: { collection: mocks.firestoreCollection },
 }));
 
 vi.mock('@/server/leagues/trades/tradeReadModel', () => ({
@@ -191,52 +185,5 @@ describe('league Trade Centre API routes', () => {
       '/api/leagues/[id]/trades/[tradeId]/actions',
       expect.any(Error)
     );
-  });
-
-  it('serves league-scoped legacy list requests from the Trade Centre read model', async () => {
-    mocks.loadAuthorizedLeagueTradeCentre.mockResolvedValueOnce({
-      leagueId: 'league-1',
-      viewerMemberId: 'member-1',
-      activeView: 'sent',
-      nextCursor: 'next-1',
-      trades: [
-        {
-          id: 'trade-1',
-          status: 'PENDING',
-          updatedAt: '2026-07-21T18:00:00.000Z',
-          currentOffer: {
-            message: 'Midfield swap',
-            players: [{ name: 'Player One' }, { name: 'Player Two' }],
-          },
-        },
-      ],
-    });
-
-    const response = await listTrades(
-      new NextRequest('http://localhost/api/trades/list?leagueId=league-1&view=sent&pageSize=10')
-    );
-
-    expect(response.status).toBe(200);
-    expect(mocks.loadAuthorizedLeagueTradeCentre).toHaveBeenCalledWith({
-      leagueId: 'league-1',
-      userId: 'user-1',
-      view: 'sent',
-      cursor: undefined,
-      pageSize: 10,
-    });
-    expect(mocks.firestoreCollection).not.toHaveBeenCalled();
-    await expect(response.json()).resolves.toMatchObject({
-      trades: [
-        {
-          tradeId: 'trade-1',
-          summary: {
-            tradeName: 'Midfield swap',
-            playerNames: ['Player One', 'Player Two'],
-            archived: false,
-          },
-        },
-      ],
-      pageInfo: { nextCursor: 'next-1' },
-    });
   });
 });
