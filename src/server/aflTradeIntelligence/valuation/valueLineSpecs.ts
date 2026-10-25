@@ -130,8 +130,23 @@ function pickSpec(
       );
     }
     case 'not_used':
+      // Rule R2: a not-used pick that stood mid-draft is pending from the draft, never 0.
+      if (outcome.fate === 'unknown')
+        return line('pick_pending', () =>
+          pending(
+            outcome.evidence === 'board_not_spent'
+              ? 'not_used_holder_matched_bid'
+              : 'not_used_mid_draft'
+          )
+        );
+      return line('pick_not_used', () => NOT_USED);
     case 'passed':
       return line('pick_not_used', () => NOT_USED);
+    case 'relayed':
+      // Rule R1: the structure links a relayed pick on, so its own line is never read.
+      throw new Error(
+        `The ledger relays pick ${pickId} to ${outcome.pickId}, but the trade structure does not link it on.`
+      );
     case 'future':
       return line('pick_future', () => pending('draft_not_in_evidence'));
     case 'unresolved':
@@ -168,7 +183,8 @@ type Transfer = AflTradeValueLineCandidate['transfers'][number];
 
 /**
  * Whether `next` continues `hop`'s asset: given on by the club that received it, as the same pick (a
- * pick trail) or as the next transfer of the same special entitlement's reviewed custody chain.
+ * pick trail), as another pick id of the same draft with the number both trades state (a relay, rule
+ * R1), or as the next transfer of the same special entitlement's reviewed custody chain.
  */
 function continues(
   transfers: ReadonlyMap<string, Transfer>,
@@ -184,6 +200,16 @@ function continues(
       from.kind === 'pick_entitlement' &&
       to.kind === 'pick_entitlement' &&
       from.pickId === to.pickId
+    );
+  if (onward.kind === 'pick_relay')
+    return (
+      from.kind === 'pick_entitlement' &&
+      to.kind === 'pick_entitlement' &&
+      from.pickId !== to.pickId &&
+      from.draftYear === to.draftYear &&
+      from.draftType === to.draftType &&
+      from.nominalPick === onward.selectionNumber &&
+      to.nominalPick === onward.selectionNumber
     );
   if (from.kind === 'player' || from.kind === 'pick_entitlement' || to.kind === 'player')
     return false;

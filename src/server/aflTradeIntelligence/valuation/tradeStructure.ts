@@ -21,7 +21,21 @@ type PickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
 type Ungraded = AflTradeStructureContent['ungraded'][number];
 type RawOnward =
   | { kind: 'special_entitlement_successor'; transfer: Transfer; entitlementId: string }
-  | { kind: 'pick_trail'; transfer: Transfer };
+  | { kind: 'pick_trail'; transfer: Transfer }
+  | { kind: 'pick_relay'; transfer: Transfer; selectionNumber: number };
+
+/**
+ * Rule R1 (statlyaus/Statly#1050): a stated not-used pick the asset ledger found relayed
+ * (`aflTradeAssetLedgerRelayLinks`): its last transfer, and the transfer its holder traded the same
+ * number on as under a new pick id.
+ */
+export interface AflTradeStructurePickRelay {
+  transferId: string;
+  onwardTransactionId: string;
+  onwardTransferId: string;
+  /** The number both trades state. */
+  selectionNumber: number;
+}
 
 /**
  * What the trade structure reads (value-line method step 5, issue 789). The grading inputs
@@ -41,6 +55,8 @@ export interface AflTradeStructureInputs {
     entitlementId: string;
     predecessorTransferId: string | null;
   }[];
+  /** Rule R1: the not-used picks the asset ledger relays on; each is checked before it links. */
+  pickRelays?: readonly AflTradeStructurePickRelay[];
 }
 
 // The structure's club id format (aflTradePublicIdSchema). A club it cannot name is unresolved.
@@ -121,9 +137,49 @@ function createSpecialEntitlementLink(
 }
 
 /**
+ * Rule R1: the transfer a stated not-used pick was traded on as under a new pick id. The relay row's
+ * onward transfer must be a pick entitlement of another pick id in the same draft, in another graded
+ * trade no earlier than this one, given by the club that received this one, with both trades stating
+ * the relay's number. Anything else leaves it unlinked.
+ */
+function createPickRelayLink(
+  inputs: AflTradeStructureInputs,
+  transactions: ReadonlyMap<string, Transaction>
+) {
+  const relays = new Map((inputs.pickRelays ?? []).map((row) => [row.transferId, row]));
+  const transfersById = new Map(
+    inputs.candidate.transfers.map((transfer) => [transfer.transferId, transfer])
+  );
+  return function onwardOfRelay(transfer: Transfer, transaction: Transaction) {
+    const relay = relays.get(transfer.transferId);
+    const own = transfer.asset;
+    if (!relay || own.kind !== 'pick_entitlement') return undefined;
+    const onward = transfersById.get(relay.onwardTransferId);
+    const next = onward?.asset;
+    if (
+      !onward ||
+      next?.kind !== 'pick_entitlement' ||
+      onward.transactionId !== relay.onwardTransactionId ||
+      !transactions.has(onward.transactionId) ||
+      onward.transactionId === transfer.transactionId ||
+      onward.fromClubId !== transfer.toClubId ||
+      next.pickId === own.pickId ||
+      next.draftYear !== own.draftYear ||
+      next.draftType !== own.draftType ||
+      own.nominalPick !== relay.selectionNumber ||
+      next.nominalPick !== relay.selectionNumber ||
+      !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
+    )
+      return undefined;
+    return { transfer: onward, selectionNumber: relay.selectionNumber };
+  };
+}
+
+/**
  * The structure of every graded trade, as functions the structure artifact
  * reads: the graded and named trades, each trade's transfers, a pick's onward transfer, a special
- * entitlement's custody successor, the leadsTo cycle guard, and route corroboration of a trail.
+ * entitlement's custody successor, a not-used pick's relay, the leadsTo cycle guard, and route
+ * corroboration of a trail.
  */
 export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
   const transfersByTransaction = new Map<string, Transfer[]>();
@@ -142,6 +198,7 @@ export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
     { custodyHolders: aflTradePickCustodyHolders(inputs.candidate.pickCustody ?? []) }
   );
   const onwardOfSpecial = createSpecialEntitlementLink(inputs, transactions);
+  const onwardOfRelay = createPickRelayLink(inputs, transactions);
   const outcomes = new Map<string, PickOutcome>(
     (inputs.candidate.pickOutcomes ?? []).map((outcome) => [outcome.transferId, outcome])
   );
@@ -163,7 +220,11 @@ export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
     const outcome = outcomes.get(transfer.transferId);
     const tradedOn = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'traded_on';
     const onward = tradedOn ? onwardTransferOf(transfer) : undefined;
-    return onward ? { kind: 'pick_trail', transfer: onward } : undefined;
+    if (onward) return { kind: 'pick_trail', transfer: onward };
+    // Rule R1: a stated not-used pick the ledger relays to the pick id its holder traded on.
+    const notUsed = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'not_used';
+    const relay = notUsed ? onwardOfRelay(transfer, transaction) : undefined;
+    return relay ? { kind: 'pick_relay', ...relay } : undefined;
   }
   // Rule v3: the onward trades each trade's traded-on legs read. A leg whose onward trade leads back to
   // its own trade is cut before any grading, so nothing depends on the order trades are read in.
@@ -219,6 +280,8 @@ export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
     const ids = { transactionId: raw.transfer.transactionId, transferId: raw.transfer.transferId };
     if (raw.kind === 'special_entitlement_successor')
       return { kind: raw.kind, ...ids, entitlementId: raw.entitlementId };
+    if (raw.kind === 'pick_relay')
+      return { kind: raw.kind, ...ids, selectionNumber: raw.selectionNumber };
     return {
       kind: 'pick_trail',
       ...ids,
@@ -234,6 +297,7 @@ export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
     outcomes,
     onwardTransferOf,
     onwardOfSpecial,
+    onwardOfRelay,
     leadsTo,
     routeCorroborated,
     onwardLinkOf,

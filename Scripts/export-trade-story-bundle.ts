@@ -17,6 +17,7 @@ import {
 } from '../src/server/aflTradeIntelligence/development/tradeStoryBundle';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createAflTradeAssetLedger } from '../src/server/aflTradeIntelligence/valuation/assetLedger';
+import { aflTradeAssetLedgerRelayLinks } from '../src/server/aflTradeIntelligence/valuation/assetLedgerNotUsedPicks';
 import { buildAflTradeStructure } from '../src/server/aflTradeIntelligence/valuation/tradeStructure';
 import type { AflTradeValueLines } from '../src/server/aflTradeIntelligence/valuation/valueLineContracts';
 import {
@@ -106,10 +107,14 @@ export async function runTradeStoryBundleCommand(input: {
       gradedAt: now,
     });
     const labels = await loadAflTradeAssetLedgerLabels(client);
+    const ledger = createAflTradeAssetLedger(inputs, labels).ledger;
     const bundle = createAflTradeStoryBundle({
-      structure: buildAflTradeStructure(inputs),
+      structure: buildAflTradeStructure({
+        ...inputs,
+        pickRelays: aflTradeAssetLedgerRelayLinks(ledger),
+      }),
       valueLines,
-      ledger: createAflTradeAssetLedger(inputs, labels).ledger,
+      ledger,
       labels,
       transfers: inputs.candidate.transfers,
       custody: inputs.candidate.pickCustody ?? [],

@@ -5,6 +5,7 @@ import {
   aflTradeAssetLedgerBidMatches,
   aflTradeAssetLedgerShareMatchedBid,
 } from '@/server/aflTradeIntelligence/valuation/assetLedgerBidMatches';
+import { aflTradeAssetLedgerRelayLinks } from '@/server/aflTradeIntelligence/valuation/assetLedgerNotUsedPicks';
 import { AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedBidSpends';
 import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
@@ -366,7 +367,13 @@ describe('asset ledger picks', () => {
   it('shows a passed pick, a not-used pick and a matched-bid pick pending', () => {
     const ledger = build();
     expect(ledger.pickOutcome(PICK_PASSED)).toEqual({ kind: 'passed', boardPickId: BOARD_PASSED });
-    expect(ledger.pickOutcome(PICK_NOT_USED)).toEqual({ kind: 'not_used' });
+    // No number stated and no order row: lapsed (rule R2), 0 from the draft.
+    expect(ledger.pickOutcome(PICK_NOT_USED)).toEqual({
+      kind: 'not_used',
+      fate: 'lapsed',
+      slot: null,
+      lastSelection: 9,
+    });
     expect(ledger.pickOutcome(PICK_MATCHED)).toEqual({
       kind: 'matched_bid',
       status: 'pending',
@@ -705,10 +712,9 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
       }));
     const unlisted = darcyBid({ consumedPicks: darcyBid().consumedPicks.slice(1) });
     // Another club's bid: the Bulldogs, who held the pick, spent nothing the boards could not join.
-    expect(nomineeCount({ ...unlisted, clubId: 'geelong' }).pickOutcome(PICK_MATCHED)).toEqual({
-      kind: 'not_used',
-      evidence: 'board_not_spent',
-    });
+    expect(
+      nomineeCount({ ...unlisted, clubId: 'geelong' }).pickOutcome(PICK_MATCHED)
+    ).toMatchObject({ kind: 'not_used', evidence: 'board_not_spent' });
     // The Bulldogs' own bid has spent picks that join no slot: one of them could be this pick.
     expect(nomineeCount(unlisted).pickOutcome(PICK_MATCHED)).toMatchObject({
       kind: 'matched_bid',
@@ -763,7 +769,7 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     // The Bulldogs' own unnumbered pick cannot be the pick they got from Essendon.
     expect(
       withSpends([spent('9001', null, 'western_bulldogs', 400)]).pickOutcome(PICK_MATCHED)
-    ).toEqual({ kind: 'not_used', evidence: 'board_not_spent' });
+    ).toMatchObject({ kind: 'not_used', evidence: 'board_not_spent' });
     // Hawthorn's unnumbered pick could have reached the Bulldogs some other way: still pending.
     expect(
       withSpends([spent('9002', null, 'hawthorn', 400)]).pickOutcome(PICK_MATCHED)
@@ -979,5 +985,249 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
       candidate: { ...base.candidate, draftBoardBidMatches: [darcyBid()] },
     };
     expect(buildAflTradeStructure(withBids)).toEqual(buildAflTradeStructure(base));
+  });
+});
+
+describe('asset ledger not-used picks (#1050, rules R1 and R2)', () => {
+  const PICK_A = `draft-pick:${hex('a')}`;
+  const PICK_B = `draft-pick:${hex('b')}`;
+  const PICK_LAST = `draft-pick:${hex('c')}`;
+  const numbered = (transfer: Transfer, nominalPick: number | null): Transfer =>
+    ({ ...transfer, asset: { ...(transfer as { asset: object }).asset, nominalPick } }) as Transfer;
+  const notUsed = (transferId: string) =>
+    outcome(transferId, {
+      nominationBasis: 'club_took_no_nominated_player',
+      receivingClubNominatedSelections: 0,
+    });
+  /**
+   * 2021 draft, last selection 60. tx-a: Essendon gives Hawthorn "#22" (A); Draftguru says Hawthorn
+   * did not use it. tx-b (draft night): Hawthorn gives Brisbane "#22" under a new pick id (B), used on
+   * p4 at 22. The extra transfers and outcomes let each case bend one condition.
+   */
+  const relayedCandidate = (
+    change: (candidate: Candidate) => Candidate = (candidate) => candidate,
+    bNumber: number | null = 22
+  ) => {
+    const base = inputs().candidate;
+    return change({
+      ...base,
+      transactions: [...base.transactions, trade('tx-a', 2021), trade('tx-b', 2021)],
+      transfers: [
+        ...base.transfers,
+        numbered(pick('tr-a', 'tx-a', 'essendon', 'hawthorn', PICK_A, 2021), 22),
+        player('tr-a2', 'tx-a', 'hawthorn', 'essendon', 'p5'),
+        numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_B, 2021), bNumber),
+        player('tr-b2', 'tx-b', 'brisbane', 'hawthorn', 'p6'),
+      ],
+      pickOutcomes: [
+        ...base.pickOutcomes!,
+        notUsed('tr-a'),
+        outcome('tr-b', { disposition: 'selected', selectionId: 'sel-22', playerId: 'p4' }),
+      ],
+      draftSelections: [
+        ...base.draftSelections!,
+        selection('sel-22', PICK_B, 'p4', 'brisbane', 22),
+        { ...selection('sel-60', PICK_LAST, 'p7', 'geelong', 60), status: 'unresolved' },
+      ],
+    });
+  };
+  const relayed = (
+    change: (candidate: Candidate) => Candidate = (candidate) => candidate,
+    bNumber: number | null = 22
+  ) =>
+    createAflTradeAssetLedger(
+      { ...inputs(), candidate: relayedCandidate(change, bNumber) },
+      labels
+    );
+
+  it('relays a not-used pick to the pick id its holder traded the same number on as', () => {
+    const ledger = relayed();
+    expect(ledger.pickOutcome(PICK_A)).toEqual({
+      kind: 'relayed',
+      pickId: PICK_B,
+      transactionId: 'tx-b',
+      transferId: 'tr-b',
+      selectionNumber: 22,
+    });
+    expect(ledger.pickOutcome(PICK_B)).toMatchObject({ kind: 'selected', selectionNumber: 22 });
+    expect(ledger.ledger.content.summary.outcomes).toMatchObject({ relayed: 1 });
+    // The relay reaches the trade structure as a checked link.
+    const links = aflTradeAssetLedgerRelayLinks(ledger.ledger);
+    expect(links).toEqual([
+      {
+        transferId: 'tr-a',
+        onwardTransactionId: 'tx-b',
+        onwardTransferId: 'tr-b',
+        selectionNumber: 22,
+      },
+    ]);
+    const structure = buildAflTradeStructure({
+      ...inputs(),
+      candidate: relayedCandidate(),
+      pickRelays: links,
+    });
+    const leg = structure.content.trades
+      .flatMap(({ legs }) => legs)
+      .find(({ transferId }) => transferId === 'tr-a')!;
+    expect(leg.onward).toEqual({
+      kind: 'pick_relay',
+      transactionId: 'tx-b',
+      transferId: 'tr-b',
+      selectionNumber: 22,
+    });
+  });
+
+  it('relays a board-not-spent pick too: the evidence kind does not matter, the handoff does', () => {
+    // Hawthorn took a nominee in 2021; the draft's boards list Geelong's bid spends, not "#22".
+    const ledger = relayed((candidate) => ({
+      ...candidate,
+      pickOutcomes: candidate.pickOutcomes!.map((row) =>
+        row.transferId === 'tr-a'
+          ? outcome('tr-a', {
+              nominationBasis: 'club_took_nominated_player',
+              receivingClubNominatedSelections: 1,
+            })
+          : row
+      ),
+      draftBoardBidMatches: [
+        {
+          bidMatchId: `external-draft-board-bid-match:${hex('f')}`,
+          draftYear: 2021,
+          draftType: 'national',
+          nativePickId: '5733',
+          selectionNumber: 2,
+          roundNumber: 1,
+          clubId: 'geelong',
+          playerId: 'p2',
+          bidClubId: 'gws',
+          basis: 'father_son',
+          points: 2517,
+          pointsUsed: 1889,
+          consumedPicks: [],
+          leftoverPicks: [],
+          evidenceIds: [`external-evidence:${hex('d')}`],
+        },
+      ] as unknown as Candidate['draftBoardBidMatches'],
+    }));
+    expect(ledger.pickOutcome(PICK_A)).toMatchObject({ kind: 'relayed', pickId: PICK_B });
+  });
+
+  it('relays only on one unique match each way, in the same draft, no earlier, from the holder', () => {
+    const unknownA = {
+      kind: 'not_used',
+      fate: 'unknown',
+      slot: { selectionNumber: 22, source: 'stated_at_trade' },
+      lastSelection: 60,
+    };
+    // Another number: no relay, and "#22" stood mid-draft, so its fate is unknown.
+    expect(relayed((candidate) => candidate, 23).pickOutcome(PICK_A)).toEqual(unknownA);
+    // A second "#22" out of Hawthorn that draft: ambiguous.
+    expect(
+      relayed((candidate) => ({
+        ...candidate,
+        transactions: [...candidate.transactions, trade('tx-c', 2021)],
+        transfers: [
+          ...candidate.transfers,
+          numbered(pick('tr-c', 'tx-c', 'hawthorn', 'geelong', `draft-pick:${hex('d')}`, 2021), 22),
+          player('tr-c2', 'tx-c', 'geelong', 'hawthorn', 'p8'),
+        ],
+      })).pickOutcome(PICK_A)
+    ).toEqual(unknownA);
+    // Two not-used "#22"s into Hawthorn and one out: neither relays.
+    const twoIn = relayed((candidate) => ({
+      ...candidate,
+      transactions: [...candidate.transactions, trade('tx-d', 2021)],
+      transfers: [
+        ...candidate.transfers,
+        numbered(pick('tr-d', 'tx-d', 'geelong', 'hawthorn', `draft-pick:${hex('e')}`, 2021), 22),
+        player('tr-d2', 'tx-d', 'hawthorn', 'geelong', 'p9'),
+      ],
+      pickOutcomes: [...candidate.pickOutcomes!, notUsed('tr-d')],
+    }));
+    expect(twoIn.pickOutcome(PICK_A)).toEqual(unknownA);
+    expect(twoIn.pickOutcome(`draft-pick:${hex('e')}`)).toMatchObject({ fate: 'unknown' });
+    // The onward trade is in an earlier season.
+    expect(
+      relayed((candidate) => ({
+        ...candidate,
+        transactions: candidate.transactions.map((row) =>
+          row.transactionId === 'tx-b' ? trade('tx-b', 2020) : row
+        ),
+      })).pickOutcome(PICK_A)
+    ).toEqual(unknownA);
+    // B is not the first hop of its pick: Hawthorn received it before handing it on.
+    expect(
+      relayed((candidate) => ({
+        ...candidate,
+        transactions: [...candidate.transactions, trade('tx-e', 2020)],
+        transfers: [
+          ...candidate.transfers,
+          numbered(pick('tr-e', 'tx-e', 'carlton', 'hawthorn', PICK_B, 2021), 22),
+          player('tr-e2', 'tx-e', 'hawthorn', 'carlton', 'p10'),
+        ],
+        pickOutcomes: [...candidate.pickOutcomes!, outcome('tr-e', { disposition: 'traded_on' })],
+      })).pickOutcome(PICK_A)
+    ).toEqual(unknownA);
+  });
+
+  it('settles a not-used pick that did not relay: lapsed near the draft’s end, unknown mid-draft', () => {
+    const fateAt = (
+      nominalPick: number | null,
+      extra: (candidate: Candidate) => Candidate = (c) => c
+    ) =>
+      relayed(
+        (candidate) =>
+          extra({
+            ...candidate,
+            transfers: candidate.transfers.map((row) =>
+              row.transferId === 'tr-a' ? numbered(row, nominalPick) : row
+            ),
+          }),
+        23
+      ).pickOutcome(PICK_A);
+    // Within 12 of selection 60: lapsed, 0 from the draft.
+    expect(fateAt(48)).toEqual({
+      kind: 'not_used',
+      fate: 'lapsed',
+      slot: { selectionNumber: 48, source: 'stated_at_trade' },
+      lastSelection: 60,
+    });
+    expect(fateAt(47)).toMatchObject({ fate: 'unknown' });
+    // No number stated (a round-only pick): lapsed.
+    expect(fateAt(null)).toEqual({
+      kind: 'not_used',
+      fate: 'lapsed',
+      slot: null,
+      lastSelection: 60,
+    });
+    // The latest usable Official AFL order row under its id outranks the number the trade stated.
+    expect(
+      fateAt(22, (candidate) => ({
+        ...candidate,
+        pickCustody: [...(candidate.pickCustody ?? []), custody('cu-a', PICK_A, 2021, 55)],
+      }))
+    ).toEqual({
+      kind: 'not_used',
+      fate: 'lapsed',
+      slot: { selectionNumber: 55, source: 'order' },
+      lastSelection: 60,
+    });
+    // A newer unusable order capture is never outranked by the trade's number: unknown.
+    expect(
+      fateAt(48, (candidate) => ({
+        ...candidate,
+        pickCustody: [
+          ...(candidate.pickCustody ?? []),
+          { ...custody('cu-a2', PICK_A, 2021, 30), status: 'disputed' },
+        ],
+      }))
+    ).toMatchObject({ fate: 'unknown', slot: null });
+    // A draft with no selection in evidence shows nothing: unknown.
+    expect(
+      fateAt(48, (candidate) => ({
+        ...candidate,
+        draftSelections: candidate.draftSelections!.filter(({ draftYear }) => draftYear !== 2021),
+      }))
+    ).toMatchObject({ fate: 'unknown', lastSelection: null });
   });
 });

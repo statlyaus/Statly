@@ -1,7 +1,7 @@
 import { isAflTradeUsableCustodyStatus } from '../source/pickLineageDeferral';
 import type {
   AflTradeAssetLedgerPickHop,
-  AflTradeAssetLedgerPickOutcome,
+  AflTradeAssetLedgerStatedPickOutcome,
   AflTradeAssetLedgerUnresolvedReason,
 } from './assetLedgerContracts';
 import type {
@@ -59,7 +59,7 @@ export function createAflTradeAssetLedgerOutcomeSources(
 
 const unresolved = (
   reason: AflTradeAssetLedgerUnresolvedReason
-): AflTradeAssetLedgerPickOutcome => ({
+): AflTradeAssetLedgerStatedPickOutcome => ({
   kind: 'unresolved',
   reason,
 });
@@ -70,7 +70,7 @@ function selected(
   pick: AflTradeAssetLedgerPickIdentity,
   selection: Selection | undefined,
   fallback: { playerId: string | null; clubId: string | null }
-): AflTradeAssetLedgerPickOutcome {
+): AflTradeAssetLedgerStatedPickOutcome {
   const playerId = selection?.playerId ?? fallback.playerId;
   const clubId = selection?.clubId ?? fallback.clubId;
   const draftYear = selection?.draftYear ?? pick.draftYear;
@@ -102,7 +102,7 @@ const identityAsset = (pick: AflTradeAssetLedgerPickIdentity): AflTradePickAsset
 function future(
   sources: AflTradeAssetLedgerOutcomeSources,
   asset: AflTradePickAsset
-): AflTradeAssetLedgerPickOutcome {
+): AflTradeAssetLedgerStatedPickOutcome {
   const slot = aflTradePickOrderSlotOf(sources.pickCustody, asset);
   return {
     kind: 'future',
@@ -118,7 +118,7 @@ function future(
 }
 
 /** A not-used pick by its nomination basis. */
-function notUsed(outcome: PickOutcome): AflTradeAssetLedgerPickOutcome {
+function notUsed(outcome: PickOutcome): AflTradeAssetLedgerStatedPickOutcome {
   switch (outcome.nominationBasis) {
     case 'club_took_nominated_player':
       // Pending until a board bid match shares it (`assetLedgerBidMatches.ts`).
@@ -145,7 +145,7 @@ function fromHopOutcome(
   pick: AflTradeAssetLedgerPickIdentity,
   outcome: PickOutcome,
   hop: AflTradeAssetLedgerPickHop
-): AflTradeAssetLedgerPickOutcome {
+): AflTradeAssetLedgerStatedPickOutcome {
   const asset = sources.pickAssetsByTransfer.get(hop.transferId) ?? identityAsset(pick);
   if (outcome.outcomeStatus === 'pending') return future(sources, asset);
   if (outcome.disposition === 'not_used') return notUsed(outcome);
@@ -164,7 +164,7 @@ function fromSelections(
   sources: AflTradeAssetLedgerOutcomeSources,
   pick: AflTradeAssetLedgerPickIdentity,
   hopOutcomes: readonly PickOutcome[]
-): AflTradeAssetLedgerPickOutcome {
+): AflTradeAssetLedgerStatedPickOutcome {
   const usable = (sources.selectionsByPick.get(pick.pickId) ?? []).filter(({ status }) =>
     isAflTradeUsableCustodyStatus(status)
   );
@@ -191,7 +191,7 @@ export function aflTradeAssetLedgerPickOutcome(
   sources: AflTradeAssetLedgerOutcomeSources,
   pick: AflTradeAssetLedgerPickIdentity,
   { hopOrder, hops }: AflTradeAssetLedgerPickTrail
-): AflTradeAssetLedgerPickOutcome {
+): AflTradeAssetLedgerStatedPickOutcome {
   const stated = hops.flatMap((hop) => {
     const outcome = sources.outcomesByTransfer.get(hop.transferId);
     return outcome ? [{ hop, outcome }] : [];

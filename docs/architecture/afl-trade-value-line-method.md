@@ -79,7 +79,12 @@ shrinkage tends to 1 and the slot or age prior fades.
   (parser v3, owner decision 2026-10-18), as grade rule v19's at-trade view does.
 - **At the draft:** the pick becomes the player, valued at the same slot expectation. From then on it
   follows the player's value line.
-- **Pick not used (no player taken):** 0 from the draft onward.
+- **Pick not used (no player taken):** 0 from the draft onward when it lapsed with the draft. Draftguru
+  says "not used" of three different things (owner decisions 2026-10-25, rules R1 and R2): a pick the
+  holder traded on on draft night, which Draftguru records under a new pick id, follows that pick (R1,
+  a `pick_relay` link in the trade structure); a pick that stood within 12 of the draft's last
+  selection, or states no number, lapsed and is 0; a pick that stood mid-draft was consumed in a bid at
+  a shifted number or moved outside the trade-period sources, so it is pending, never 0 (R2).
 - **Pick spent matching a bid (Owner):**
   - **Instant realization:** the picks a club spends to match a bid on an academy or father-son nominee
     are realized at the bid.
@@ -437,7 +442,7 @@ the spec above is applied; it changes none of the owner's rules.
   point is pending (`slot_unknown`). A season end between trades takes the slot of the pick's latest hop
   (by year, then trade id).
 - **Picks from the draft.** A used pick is `V(used slot)` at the draft, then the drafted player's first
-  stint at the drafting club. A pick not used or passed is 0, including one the boards show was not spent on a bid (owner, 2026-10-21). A matched-bid spent pick is its share of
+  stint at the drafting club. A passed pick is 0. A pick not used, including one the boards show was not spent on a bid (owner, 2026-10-21), is 0 when the ledger says it lapsed (rule R2: its latest Official AFL order number under its id, else its last trade's stated number, within `notUsedLateWindow` of the draft's last selection, or no number stated) and pending from the draft (`not_used_holder_matched_bid` when its holder matched a bid that draft, else `not_used_mid_draft`) when it stood mid-draft; one the ledger relays (rule R1) is never a line of its own: the structure's `pick_relay` link carries its legs onto the next pick id's line, and a relayed pick the structure does not link is refused. A matched-bid spent pick is its share of
   the nominee's line (at the bid slot) from the bid; before it, its own slot. A pick whose draft is not in
   evidence stays at its slot, and an unresolved outcome is pending.
 - **One evaluator.** A drafted player's point is `aflTradeValueLinePointAt` in `modeling/valueLineFit.ts`,
@@ -539,6 +544,40 @@ the spec above is applied; it changes none of the owner's rules.
 These refine 2026-10-19 item 3 ("career stage", standing in for age) for mature-age draftees only. The
 fit and the value lines share the one stage rule (`aflTradeTradedPlayerStage`), so they cannot disagree;
 the fit's `stageDigest` refuses a re-read whose birth years moved a stage.
+
+## Owner decisions, 2026-10-25
+
+The 24 Oct review of real trades found 109 traded pick ids valued 0 as plain Draftguru "not used"
+(statlyaus/Statly#1050). A pick traded more than once often gets a different pick id per trade, and a
+draft-night trade's pick never joins the trade-period pick that became it. The offline analysis of the
+109 split them, and the owner answered "Yes, both" to the two rules:
+
+1. **R1, relay join.** A stated not-used pick relays to another pick id when that pick's first trade
+   hands the same draft's same stated number from the not-used pick's last holder to another club, in a
+   different trade no earlier than the not-used pick's last, and each is the only such match for the
+   other. Numbers alone never join (owner, 2026-10-24): the holder, the order of trades and uniqueness
+   both ways are all required, and a round-only pick with no stated number never relays. The asset
+   ledger records the relay (`relayed`), the trade structure links the leg on (`pick_relay`, checked
+   against the candidate like a special entitlement's successor), and the value lines follow the link, so
+   every trade the pick passed through carries the next pick id's line. 14 of the 109 relay: 9 land on a
+   valued pick (Annable 35.6, Tom Green 25.4, Maginness 17.1, Ethan Read 11.4, Ashcroft 6.1, Ruscoe
+   6.1, Liam Henry 2.1), 5 on another not-used pick whose chain is listed.
+2. **R2, pending instead of 0.** A not-used pick that did not relay is 0 only when the evidence shows it
+   lapsed: it stood within 12 selections of the draft's last selection (its latest Official AFL order
+   number under its own pick id, else the number its last trade stated; an unordered trail's hops must
+   agree, and a newest order capture that is unusable makes the fate unknown), or it states no number (a
+   round-only future pick). Every other not-used pick stood mid-draft, so it was consumed matching a bid
+   at a shifted number the boards do not join (`not_used_holder_matched_bid`, its holder matched a bid
+   that draft) or moved on draft night outside the trade-period sources (`not_used_mid_draft`); it is
+   pending from the draft, never 0, and stays on #1050 for per-pick review. Every selection in evidence
+   counts toward the draft's last selection, whatever its status: an unresolved status disputes which
+   pick or player a selection was, not that it happened.
+
+Checked offline against the Mac export of candidate `4fac3ffd…` (not a genuine run): 14 relays, as the
+analysis listed; the analysis's 12 pending picks all pending; and one more pending that the analysis had
+at 0, Brisbane's 2020 R2 pick given to Gold Coast in the 2019 Ah Chee trade, which the 2020 order held at
+37 and Gold Coast traded on with no stated number (so R1 cannot relay it): 13 pending, 82 at 0. The
+genuine re-store waits for the next VM restore.
 
 ## Implementation order
 

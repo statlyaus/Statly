@@ -218,6 +218,13 @@ interface Options {
   ends?: Record<string, number>;
   /** The future 2027 pick p5: C gives A it in t4 (2025, slot 10), A gives B it in t5 (2026, slot 15). */
   retradedFuturePick?: boolean;
+  /**
+   * Rule R1: in t6 (2019) D gives A the 2019 "#5" p6 for the lapsed "#30" p7; Draftguru says A did not
+   * use p6, and A gave B "#5" (p1) in t1 under its own pick id, so the ledger relays p6 to p1.
+   */
+  relay?: boolean;
+  /** Rule R2: p4's fate; `lapsed` unless set. */
+  notUsedFate?: 'lapsed' | 'unknown' | 'unknown_bid';
 }
 function inputs(options: Options = {}): AflTradeValueLineInputs {
   const rows = options.rows ?? BASE_ROWS;
@@ -299,7 +306,42 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
         value: null,
       },
     },
-    { pickId: pickId('p4'), draftYear: 2021, outcome: { kind: 'not_used' } },
+    {
+      pickId: pickId('p4'),
+      draftYear: 2021,
+      outcome: {
+        kind: 'not_used',
+        ...(options.notUsedFate === 'unknown_bid' ? { evidence: 'board_not_spent' } : {}),
+        fate: options.notUsedFate === undefined ? 'lapsed' : 'unknown',
+        slot: { selectionNumber: 40, source: 'stated_at_trade' },
+        lastSelection: options.notUsedFate === undefined ? 48 : 65,
+      },
+    },
+    ...(options.relay
+      ? [
+          {
+            pickId: pickId('p6'),
+            draftYear: 2019,
+            outcome: {
+              kind: 'relayed',
+              pickId: pickId('p1'),
+              transactionId: 't1',
+              transferId: transferId('l1'),
+              selectionNumber: 5,
+            },
+          },
+          {
+            pickId: pickId('p7'),
+            draftYear: 2019,
+            outcome: {
+              kind: 'not_used',
+              fate: 'lapsed',
+              slot: { selectionNumber: 30, source: 'stated_at_trade' },
+              lastSelection: 40,
+            },
+          },
+        ]
+      : []),
     ...(options.retradedFuturePick
       ? [
           {
@@ -373,6 +415,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
       transaction('t2', 2020),
       transaction('t3', 2021),
       ...(options.retradedFuturePick ? [transaction('t4', 2025), transaction('t5', 2026)] : []),
+      ...(options.relay ? [transaction('t6', 2019)] : []),
     ],
     transfers: [
       pickTransfer('l1', 't1', 'a', 'b', 'p1', 2019, 5),
@@ -392,8 +435,27 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
             pickTransfer('m3', 't5', 'a', 'b', 'p5', 2027, 15),
           ]
         : []),
+      ...(options.relay
+        ? [
+            pickTransfer('l8', 't6', 'd', 'a', 'p6', 2019, 5, 1, 'd'),
+            pickTransfer('l9', 't6', 'a', 'd', 'p7', 2019, 30, 2, 'a'),
+          ]
+        : []),
     ],
     pickOutcomes: [
+      ...(options.relay
+        ? ['l8', 'l9'].map((name) => ({
+            outcomeId: `outcome-${name}`,
+            transferId: transferId(name),
+            disposition: 'not_used',
+            outcomeStatus: 'stated',
+            nominationBasis: 'club_took_no_nominated_player',
+            receivingClubNominatedSelections: 0,
+            selectionId: null,
+            playerId: null,
+            evidenceIds: [],
+          }))
+        : []),
       {
         outcomeId: 'outcome-l3',
         transferId: transferId('l3'),
@@ -447,6 +509,18 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
     candidateId: CANDIDATE,
     candidate,
     ...(options.special ? { specialEntitlementCustody: SPECIAL_CUSTODY } : {}),
+    ...(options.relay
+      ? {
+          pickRelays: [
+            {
+              transferId: transferId('l8'),
+              onwardTransactionId: 't1',
+              onwardTransferId: transferId('l1'),
+              selectionNumber: 5,
+            },
+          ],
+        }
+      : {}),
   });
   return {
     fit: FIT,
@@ -1313,5 +1387,96 @@ describe('compute-value-lines', () => {
       mediaType: 'application/json',
       maximumObjectBytes: 64 * 1024 * 1024,
     });
+  });
+});
+
+describe('not-used picks on the value lines (#1050, rules R1 and R2)', () => {
+  it('carries a relayed pick on the line of the pick its holder traded the number on as', () => {
+    const lines = computeAflTradeValueLines(inputs({ relay: true }));
+    const l8 = trade(lines, 't6').legs.find(({ transferId: id }) => id === transferId('l8'))!;
+    // D's "#5" to A is p1, which B used at 10 on d1: the same line in t6 as in t1.
+    expect(l8.assetKey).toBe(P('p1'));
+    expect(l8.atTrade.value).toBeCloseTo(V(5), 6);
+    expect(pointOf(lines, P('p1'), at('draft', 2019))).toMatchObject({
+      slot: { selectionNumber: 10, source: 'used_selection' },
+    });
+    // At the 2019 draft A holds p1's line (received) less p7's 0; D the reverse: zero-sum.
+    const netAt = (clubId: string) =>
+      trade(lines, 't6').clubs.find((club) => club.clubId === clubId)!.points[0]!;
+    expect(netAt('a').checkpoint).toEqual(at('draft', 2019));
+    expect(netAt('a').net).toBeCloseTo(pointOf(lines, P('p1'), at('draft', 2019)).value!, 6);
+    expect(netAt('d').net).toBeCloseTo(-netAt('a').net, 6);
+    expect(lines.content.assets.map(({ assetKey }) => assetKey)).not.toContain(P('p6'));
+    expect(lines.content.rules).toMatchObject({
+      notUsedLateWindow: 12,
+      notUsedRelay: 'follows_structure_pick_relay_link',
+    });
+  });
+
+  it('refuses a relayed ledger pick the structure does not link on, and a relay that breaks', () => {
+    const base = inputs({ relay: true });
+    const unlinked = buildAflTradeStructure({
+      candidateId: CANDIDATE,
+      candidate: base.candidate as AflTradeStructureInputs['candidate'],
+    });
+    expect(() => computeAflTradeValueLines({ ...base, structure: unlinked })).toThrow(
+      /does not link it on/
+    );
+    const resealed = (change: (leg: AflTradeStructureLeg) => AflTradeStructureLeg) =>
+      computeAflTradeValueLines({
+        ...base,
+        structure: createAflTradeStructure({
+          ...base.structure.content,
+          trades: base.structure.content.trades.map((row) => ({
+            ...row,
+            legs: row.legs.map(change),
+          })),
+        }),
+      });
+    const relayOf = (leg: AflTradeStructureLeg) => leg.onward?.kind === 'pick_relay';
+    // A relay naming a number the trades do not state.
+    expect(() =>
+      resealed((leg) =>
+        relayOf(leg) ? { ...leg, onward: { ...leg.onward!, selectionNumber: 6 } } : leg
+      )
+    ).toThrow(/does not continue/);
+    // A relay to the same pick id: that is a trail, not a relay.
+    expect(() =>
+      resealed((leg) =>
+        relayOf(leg)
+          ? {
+              ...leg,
+              onward: { ...leg.onward!, transactionId: 't6', transferId: transferId('l9') },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+  });
+
+  it('leaves a not-used pick that stood mid-draft pending from the draft, never 0', () => {
+    const lapsed = computeAflTradeValueLines(inputs());
+    expect(pointOf(lapsed, P('p4'), at('draft', 2021))).toMatchObject({
+      state: 'not_used',
+      value: 0,
+    });
+    for (const [fate, reason] of [
+      ['unknown', 'not_used_mid_draft'],
+      ['unknown_bid', 'not_used_holder_matched_bid'],
+    ] as const) {
+      const lines = computeAflTradeValueLines(inputs({ notUsedFate: fate }));
+      const l7 = trade(lines, 't3').legs.find(({ transferId: id }) => id === transferId('l7'))!;
+      expect(l7.atTrade.value).toBeCloseTo(V(40), 6);
+      expect(asset(lines, P('p4')).basis).toBe('pick_pending');
+      expect(pointOf(lines, P('p4'), at('draft', 2021))).toMatchObject({
+        state: 'pending',
+        value: null,
+        pending: reason,
+      });
+      const a = trade(lines, 't3').clubs.find(({ clubId }) => clubId === 'a')!;
+      expect(a.points.at(-1)).toMatchObject({
+        provisional: true,
+        pending: [{ assetKey: P('p4'), direction: 'received', reason }],
+      });
+    }
   });
 });
