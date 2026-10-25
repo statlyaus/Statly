@@ -124,7 +124,10 @@ head, or incomplete replay requires another authoritative snapshot rather than a
 Waiver ownership is league-scoped and derived from canonical roster/player identity. A draft pick or
 roster mutation must update the same ownership boundary used to calculate availability. Firestore may
 hold a compatibility projection, but relational state remains authoritative and projections must be
-rebuildable from it. The waivers page reads a member's claims, FAAB balance and activity feed from Prisma.
+rebuildable from it. Each league's Waivers tab reads a member's claims, FAAB balance and activity feed
+from Prisma. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
+the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
+the viewer has no league.
 Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
