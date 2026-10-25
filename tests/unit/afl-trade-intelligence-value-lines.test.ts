@@ -226,8 +226,88 @@ interface Options {
   /** Rule R2: p4's fate; `lapsed` unless set. */
   notUsedFate?: 'lapsed' | 'unknown' | 'unknown_bid';
 }
+/** Rule R2: p4 (C to A, "#40", 2021) by its fate; lapsed at a 48-selection draft, unknown at 65. */
+const notUsedP4 = (fate: Options['notUsedFate']) => ({
+  pickId: pickId('p4'),
+  draftYear: 2021,
+  outcome: {
+    kind: 'not_used',
+    ...(fate === 'unknown_bid' ? { evidence: 'board_not_spent' } : {}),
+    fate: fate === undefined ? 'lapsed' : 'unknown',
+    slot: { selectionNumber: 40, source: 'stated_at_trade' },
+    lastSelection: fate === undefined ? 48 : 65,
+  },
+});
+
+/** Rule R1 (`Options.relay`): t6 and its legs, their stated outcomes, the ledger picks and the relay. */
+const RELAY = {
+  transactions: [
+    {
+      transactionId: 't6',
+      providerEventId: 't6',
+      seasonYear: 2019,
+      occurredOn: null,
+      transactionType: 'trade',
+    },
+  ],
+  transfers: [
+    pickTransfer('l8', 't6', 'd', 'a', 'p6', 2019, 5, 1, 'd'),
+    pickTransfer('l9', 't6', 'a', 'd', 'p7', 2019, 30, 2, 'a'),
+  ],
+  pickOutcomes: ['l8', 'l9'].map((name) => ({
+    outcomeId: `outcome-${name}`,
+    transferId: transferId(name),
+    disposition: 'not_used',
+    outcomeStatus: 'stated',
+    nominationBasis: 'club_took_no_nominated_player',
+    receivingClubNominatedSelections: 0,
+    selectionId: null,
+    playerId: null,
+    evidenceIds: [],
+  })),
+  picks: [
+    {
+      pickId: pickId('p6'),
+      draftYear: 2019,
+      outcome: {
+        kind: 'relayed',
+        pickId: pickId('p1'),
+        transactionId: 't1',
+        transferId: transferId('l1'),
+        selectionNumber: 5,
+      },
+    },
+    {
+      pickId: pickId('p7'),
+      draftYear: 2019,
+      outcome: {
+        kind: 'not_used',
+        fate: 'lapsed',
+        slot: { selectionNumber: 30, source: 'stated_at_trade' },
+        lastSelection: 40,
+      },
+    },
+  ],
+  pickRelays: [
+    {
+      transferId: transferId('l8'),
+      onwardTransactionId: 't1',
+      onwardTransferId: transferId('l1'),
+      selectionNumber: 5,
+    },
+  ],
+};
+const NO_RELAY: { [K in keyof typeof RELAY]: never[] } = {
+  transactions: [],
+  transfers: [],
+  pickOutcomes: [],
+  picks: [],
+  pickRelays: [],
+};
+
 function inputs(options: Options = {}): AflTradeValueLineInputs {
   const rows = options.rows ?? BASE_ROWS;
+  const relay = options.relay ? RELAY : NO_RELAY;
   const seasons = options.oldPick ? range(2005, LAST) : range(2018, LAST);
   const games = gamesModel(rows, seasons);
   const stint = (
@@ -306,42 +386,8 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
         value: null,
       },
     },
-    {
-      pickId: pickId('p4'),
-      draftYear: 2021,
-      outcome: {
-        kind: 'not_used',
-        ...(options.notUsedFate === 'unknown_bid' ? { evidence: 'board_not_spent' } : {}),
-        fate: options.notUsedFate === undefined ? 'lapsed' : 'unknown',
-        slot: { selectionNumber: 40, source: 'stated_at_trade' },
-        lastSelection: options.notUsedFate === undefined ? 48 : 65,
-      },
-    },
-    ...(options.relay
-      ? [
-          {
-            pickId: pickId('p6'),
-            draftYear: 2019,
-            outcome: {
-              kind: 'relayed',
-              pickId: pickId('p1'),
-              transactionId: 't1',
-              transferId: transferId('l1'),
-              selectionNumber: 5,
-            },
-          },
-          {
-            pickId: pickId('p7'),
-            draftYear: 2019,
-            outcome: {
-              kind: 'not_used',
-              fate: 'lapsed',
-              slot: { selectionNumber: 30, source: 'stated_at_trade' },
-              lastSelection: 40,
-            },
-          },
-        ]
-      : []),
+    notUsedP4(options.notUsedFate),
+    ...relay.picks,
     ...(options.retradedFuturePick
       ? [
           {
@@ -415,7 +461,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
       transaction('t2', 2020),
       transaction('t3', 2021),
       ...(options.retradedFuturePick ? [transaction('t4', 2025), transaction('t5', 2026)] : []),
-      ...(options.relay ? [transaction('t6', 2019)] : []),
+      ...relay.transactions,
     ],
     transfers: [
       pickTransfer('l1', 't1', 'a', 'b', 'p1', 2019, 5),
@@ -435,27 +481,10 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
             pickTransfer('m3', 't5', 'a', 'b', 'p5', 2027, 15),
           ]
         : []),
-      ...(options.relay
-        ? [
-            pickTransfer('l8', 't6', 'd', 'a', 'p6', 2019, 5, 1, 'd'),
-            pickTransfer('l9', 't6', 'a', 'd', 'p7', 2019, 30, 2, 'a'),
-          ]
-        : []),
+      ...relay.transfers,
     ],
     pickOutcomes: [
-      ...(options.relay
-        ? ['l8', 'l9'].map((name) => ({
-            outcomeId: `outcome-${name}`,
-            transferId: transferId(name),
-            disposition: 'not_used',
-            outcomeStatus: 'stated',
-            nominationBasis: 'club_took_no_nominated_player',
-            receivingClubNominatedSelections: 0,
-            selectionId: null,
-            playerId: null,
-            evidenceIds: [],
-          }))
-        : []),
+      ...relay.pickOutcomes,
       {
         outcomeId: 'outcome-l3',
         transferId: transferId('l3'),
@@ -509,18 +538,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
     candidateId: CANDIDATE,
     candidate,
     ...(options.special ? { specialEntitlementCustody: SPECIAL_CUSTODY } : {}),
-    ...(options.relay
-      ? {
-          pickRelays: [
-            {
-              transferId: transferId('l8'),
-              onwardTransactionId: 't1',
-              onwardTransferId: transferId('l1'),
-              selectionNumber: 5,
-            },
-          ],
-        }
-      : {}),
+    pickRelays: relay.pickRelays,
   });
   return {
     fit: FIT,
