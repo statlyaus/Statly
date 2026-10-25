@@ -23,6 +23,7 @@ import {
   type LeagueTradeCentreSnapshot,
   type LeagueTradeDigest,
   type LeagueTradeDto,
+  type LeagueTradeRevision,
   type TradeOfferStatusDto,
   type TradeOfferDto,
   type TradeReviewModeDto,
@@ -95,6 +96,8 @@ export async function loadAuthorizedLeagueTradeCentre({
   const where = buildViewFilter(access, view);
   const decodedCursor = decodeCursor(cursor);
   const take = Math.min(Math.max(pageSize, 1), 50);
+  // Before the snapshot reads: see LeagueTradeCentreSnapshot.revision.
+  const revision = await loadTradeRevision(access);
 
   const [members, records, counts, sourcePlayers] = await Promise.all([
     prisma.leagueMember.findMany({
@@ -178,7 +181,41 @@ export async function loadAuthorizedLeagueTradeCentre({
       hasNextPage && last
         ? encodeCursor({ updatedAt: last.updatedAt.toISOString(), id: last.id })
         : null,
+    revision,
   };
+}
+
+export async function loadAuthorizedLeagueTradeRevision({
+  leagueId,
+  userId,
+}: {
+  leagueId: string;
+  userId: string | null;
+}): Promise<LeagueTradeRevision> {
+  const access = await requireReadAccess(leagueId, userId);
+  return { revision: await loadTradeRevision(access) };
+}
+
+/**
+ * Scoped to the threads in the viewer's four views, so another pair's private offer never changes it.
+ * Every state change appends a LeagueTradeEvent (the same write that feeds the realtime outbox), and a
+ * thread entering or leaving the viewer's views changes the thread count.
+ */
+async function loadTradeRevision(access: ReadAccess): Promise<string> {
+  const visibleThreads: Prisma.LeagueTradeThreadWhereInput = {
+    OR: (['inbox', 'sent', 'history', 'review'] as const).map((view) =>
+      buildViewFilter(access, view)
+    ),
+  };
+  const [threads, events] = await Promise.all([
+    prisma.leagueTradeThread.count({ where: visibleThreads }),
+    prisma.leagueTradeEvent.aggregate({
+      where: { thread: visibleThreads },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    }),
+  ]);
+  return [threads, events._count._all, events._max.createdAt?.getTime() ?? 0].join('.');
 }
 
 export async function loadAuthorizedLeagueTradeDigest({

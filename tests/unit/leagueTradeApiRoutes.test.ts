@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET as getTrades, POST as createTrade } from '@/app/api/leagues/[id]/trades/route';
 import { POST as executeAction } from '@/app/api/leagues/[id]/trades/[tradeId]/actions/route';
+import { GET as getTradeRevision } from '@/app/api/leagues/[id]/trades/revision/route';
 import { TradeServiceError } from '@/server/leagues/trades/tradeContracts';
 
 const mocks = vi.hoisted(() => ({
   getAuthenticatedUserId: vi.fn(),
   loadAuthorizedLeagueTradeCentre: vi.fn(),
+  loadAuthorizedLeagueTradeRevision: vi.fn(),
   createLeagueTrade: vi.fn(),
   executeLeagueTradeAction: vi.fn(),
   apiError: vi.fn(),
@@ -23,6 +25,7 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/server/leagues/trades/tradeReadModel', () => ({
   loadAuthorizedLeagueTradeCentre: mocks.loadAuthorizedLeagueTradeCentre,
+  loadAuthorizedLeagueTradeRevision: mocks.loadAuthorizedLeagueTradeRevision,
 }));
 
 vi.mock('@/server/leagues/trades/tradeService', () => ({
@@ -100,6 +103,49 @@ describe('league Trade Centre API routes', () => {
     expect(invalidView.status).toBe(400);
     await expect(invalidView.json()).resolves.toMatchObject({ code: 'INVALID_INPUT' });
     expect(mocks.loadAuthorizedLeagueTradeCentre).not.toHaveBeenCalled();
+    expect(mocks.apiError).not.toHaveBeenCalled();
+  });
+
+  it('returns the viewer trade revision privately for the authenticated user', async () => {
+    mocks.loadAuthorizedLeagueTradeRevision.mockResolvedValueOnce({
+      revision: '2.5.1792894700715',
+    });
+
+    const response = await getTradeRevision(
+      new NextRequest('http://localhost/api/leagues/league-1/trades/revision'),
+      params
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    await expect(response.json()).resolves.toEqual({ revision: '2.5.1792894700715' });
+    expect(mocks.loadAuthorizedLeagueTradeRevision).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      userId: 'user-1',
+    });
+  });
+
+  it('rejects an unauthenticated revision request and maps membership errors', async () => {
+    mocks.getAuthenticatedUserId.mockResolvedValueOnce(null);
+    const unauthorized = await getTradeRevision(
+      new NextRequest('http://localhost/api/leagues/league-1/trades/revision'),
+      params
+    );
+    expect(unauthorized.status).toBe(401);
+    expect(mocks.loadAuthorizedLeagueTradeRevision).not.toHaveBeenCalled();
+
+    mocks.loadAuthorizedLeagueTradeRevision.mockRejectedValueOnce(
+      new TradeServiceError('FORBIDDEN', 'League membership is required.', 403)
+    );
+    const forbidden = await getTradeRevision(
+      new NextRequest('http://localhost/api/leagues/league-1/trades/revision'),
+      params
+    );
+    expect(forbidden.status).toBe(403);
+    await expect(forbidden.json()).resolves.toEqual({
+      error: 'League membership is required.',
+      code: 'FORBIDDEN',
+    });
     expect(mocks.apiError).not.toHaveBeenCalled();
   });
 
