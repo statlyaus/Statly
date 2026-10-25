@@ -95,11 +95,14 @@ async function main() {
     });
   }
 
-  // Start clean: rows without foreign keys first, then members, drafts and picks, then the league.
+  // Start clean: rows without foreign keys first, then the season (it cascades to every
+  // season-scoped row, such as trade threads and social messages, that would block deleting
+  // members), then members, drafts and picks, then the league.
   const league = { leagueId: LEAGUE_ID };
   await prisma.$transaction([
     prisma.teamAction.deleteMany({ where: league }),
     prisma.waiverPriority.deleteMany({ where: league }),
+    prisma.leagueSeason.deleteMany({ where: league }),
     prisma.leagueRosterPlayer.deleteMany({ where: league }),
     prisma.pick.deleteMany({ where: { draftId: DRAFT_ID } }),
     prisma.draftOrder.deleteMany({ where: { draftId: DRAFT_ID } }),
@@ -142,6 +145,19 @@ async function main() {
       categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
     },
   });
+  // Every real league gets an active season at creation (createLeagueService). Trades and social
+  // are season-scoped and refuse a league without one, so the scenario needs it too.
+  const seasonYear = new Date().getUTCFullYear();
+  const season = await prisma.leagueSeason.create({
+    data: {
+      leagueId: LEAGUE_ID,
+      label: `${seasonYear} season`,
+      year: seasonYear,
+      startsAt: new Date(Date.UTC(seasonYear, 0, 1)),
+      endsAt: new Date(Date.UTC(seasonYear, 11, 31, 23, 59, 59, 999)),
+    },
+  });
+  await prisma.league.update({ where: { id: LEAGUE_ID }, data: { activeSeasonId: season.id } });
   const members = [
     {
       id: 'waiver-test-commissioner',
