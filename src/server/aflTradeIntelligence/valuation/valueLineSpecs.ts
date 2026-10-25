@@ -1,5 +1,6 @@
 import type { AflTradeAssetLedgerReadModel } from './assetLedger';
 import type { AflTradeAssetLedgerPick } from './assetLedgerContracts';
+import { aflTradePickLatestOrderNumber, type AflTradePickCustody } from './pickSlots';
 import type { AflTradeStructureLeg, AflTradeStructureTrade } from './tradeStructureContracts';
 import {
   aflTradeValueLineCheckpointOrder as orderOf,
@@ -188,6 +189,7 @@ type Transfer = AflTradeValueLineCandidate['transfers'][number];
  */
 function continues(
   transfers: ReadonlyMap<string, Transfer>,
+  custody: readonly AflTradePickCustody[],
   hop: AflTradeStructureLeg,
   next: AflTradeStructureLeg
 ): boolean {
@@ -208,7 +210,9 @@ function continues(
       from.pickId !== to.pickId &&
       from.draftYear === to.draftYear &&
       from.draftType === to.draftType &&
-      from.nominalPick === onward.selectionNumber &&
+      // R1 by order: a leg that states no number relays by its latest Official AFL order number.
+      (from.nominalPick ?? aflTradePickLatestOrderNumber(custody, from)) ===
+        onward.selectionNumber &&
       to.nominalPick === onward.selectionNumber
     );
   if (from.kind === 'player' || from.kind === 'pick_entitlement' || to.kind === 'player')
@@ -227,6 +231,7 @@ function continues(
 function finalHopOf(
   legs: ReadonlyMap<string, AflTradeStructureLeg>,
   transfers: ReadonlyMap<string, Transfer>,
+  custody: readonly AflTradePickCustody[],
   leg: AflTradeStructureLeg
 ): AflTradeStructureLeg {
   let hop = leg;
@@ -236,7 +241,7 @@ function finalHopOf(
     const next = legs.get(hop.onward.transferId);
     if (next === undefined)
       throw new Error(`The trade structure links transfer ${hop.transferId} outside itself.`);
-    if (!continues(transfers, hop, next))
+    if (!continues(transfers, custody, hop, next))
       throw new Error(
         `The trade structure links transfer ${hop.transferId} to ${next.transferId}, which does not continue its asset.`
       );
@@ -317,7 +322,9 @@ export function aflTradeValueLineSpecs(sources: Sources) {
         legs.push({ key, assetKey, tradeYear: trade.tradeYear, slot: null, pick: false });
         continue;
       }
-      const final = transfers.get(finalHopOf(structureLegs, transfers, leg).transferId);
+      const final = transfers.get(
+        finalHopOf(structureLegs, transfers, candidate.pickCustody ?? [], leg).transferId
+      );
       if (final === undefined)
         throw new Error(`The final hop of transfer ${leg.transferId} is not in the candidate.`);
       if (final.asset.kind !== 'pick_entitlement') {

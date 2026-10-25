@@ -8,6 +8,7 @@ import type {
   AflTradeAssetLedgerPickIdentity,
   AflTradeAssetLedgerPickTrail,
 } from './assetLedgerPickHops';
+import type { AflTradeAssetLedgerReviewedSelected } from './assetLedgerReviewedPickLinks';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
 import type { AflTradeGradingInputs } from './gradingInputs';
 import { aflTradePickOrderSlotOf, type AflTradePickAsset } from './pickSlots';
@@ -85,6 +86,42 @@ function selected(
         ? sources.stintValue(playerId, clubId, draftYear + 1)
         : null,
   };
+}
+
+/**
+ * A stated not-used pick the owner reviewed as used (`assetLedgerReviewedPickLinks.ts`,
+ * `AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED`): the named selection, when it is of the pick's draft, the
+ * holder's, and the cited order row names the holder and the cited board row is the holder's selection.
+ * Anything else is refused: a reviewed entry that the candidate no longer bears out must not stand.
+ */
+export function aflTradeAssetLedgerReviewedSelectedOutcome(
+  sources: AflTradeAssetLedgerOutcomeSources,
+  pick: AflTradeAssetLedgerPickIdentity,
+  holderClubId: string | null,
+  review: AflTradeAssetLedgerReviewedSelected,
+  candidate: Pick<Candidate, 'pickCustody' | 'draftBoardPicks'>
+): AflTradeAssetLedgerStatedPickOutcome {
+  const selection = sources.selectionsById.get(review.selectionId);
+  const custody = (candidate.pickCustody ?? []).find(
+    ({ custodyId }) => custodyId === review.custodyId
+  );
+  const board = (candidate.draftBoardPicks ?? []).find(
+    ({ boardPickId }) => boardPickId === review.boardPickId
+  );
+  if (
+    !selection ||
+    selection.draftYear !== pick.draftYear ||
+    selection.draftType !== pick.draftType ||
+    holderClubId === null ||
+    selection.clubId !== holderClubId ||
+    custody?.currentClubId !== holderClubId ||
+    board?.status !== 'selected' ||
+    board.clubId !== holderClubId
+  )
+    throw new Error(
+      `Reviewed selected pick ${pick.pickId} cites selection ${review.selectionId}, which the candidate does not bear out for its holder.`
+    );
+  return selected(sources, pick, selection, { playerId: null, clubId: null });
 }
 
 const identityAsset = (pick: AflTradeAssetLedgerPickIdentity): AflTradePickAsset => ({
