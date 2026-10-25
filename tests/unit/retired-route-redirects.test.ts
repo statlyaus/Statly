@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LeaderboardPage from '@/app/(app)/leaderboard/page';
 import PlayerAnalysisPage from '@/app/(app)/player-analysis/page';
 import PlayerRankingsPage from '@/app/(app)/player-rankings/page';
+import WaiversPage from '@/app/(app)/waivers/page';
 
 const mocks = vi.hoisted(() => ({
   userId: 'user-1' as string | null,
@@ -37,6 +38,10 @@ async function redirectTarget(render: () => unknown): Promise<string> {
     throw error;
   }
   throw new Error('expected a redirect');
+}
+
+function waivers(league?: string) {
+  return () => WaiversPage({ searchParams: Promise.resolve(league ? { league } : {}) });
 }
 
 function leaderboard(league?: string) {
@@ -83,5 +88,23 @@ describe('retired routes redirect on the server', () => {
     await expect(redirectTarget(leaderboard('league-old'))).resolves.toBe(
       '/login?callbackUrl=%2Fleaderboard'
     );
+  });
+
+  it('sends /waivers to the Waivers tab of the requested league, or the most recently joined one', async () => {
+    await expect(redirectTarget(waivers('league-old'))).resolves.toBe(
+      '/leagues/league-old?tab=waivers'
+    );
+    await expect(redirectTarget(waivers())).resolves.toBe('/leagues/league-new?tab=waivers');
+    await expect(redirectTarget(waivers('someone-elses-league'))).resolves.toBe(
+      '/leagues/league-new?tab=waivers'
+    );
+  });
+
+  it('sends /waivers to the dashboard without a league and to sign-in without a session', async () => {
+    mocks.leagues = [];
+    await expect(redirectTarget(waivers())).resolves.toBe('/dashboard');
+
+    mocks.userId = null;
+    await expect(redirectTarget(waivers())).resolves.toBe('/login?next=%2Fwaivers');
   });
 });
