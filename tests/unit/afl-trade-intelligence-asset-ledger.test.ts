@@ -1521,6 +1521,93 @@ describe('asset ledger owner-reviewed relays and traded-on hops (#1050, owner 20
     ).toEqual({ kind: 'pick_relay_reviewed', transactionId: 'tx-b', transferId: 'tr-b' });
   });
 
+  it.each([
+    [
+      'the onward transaction is not the named one',
+      (c: Candidate) => c,
+      { onwardTransactionId: 'tx-a' },
+    ],
+    [
+      'the onward transfer is in the same trade',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? numbered(pick('tr-b', 'tx-a', 'hawthorn', 'brisbane', PICK_B, 2021), 41)
+            : row
+        ),
+      }),
+      { onwardTransactionId: 'tx-a' },
+    ],
+    [
+      'the onward pick is the same pick id',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_A, 2021), 41)
+            : row
+        ),
+      }),
+      {},
+    ],
+    [
+      'the onward pick is of another draft year',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_B, 2022), 41)
+            : row
+        ),
+      }),
+      {},
+    ],
+    [
+      'the onward pick is of another draft type',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? ({
+                ...row,
+                asset: { ...(row as { asset: object }).asset, draftType: 'rookie' },
+              } as Transfer)
+            : row
+        ),
+      }),
+      {},
+    ],
+    [
+      'the onward trade is earlier',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transactions: c.transactions.map((row) =>
+          row.transactionId === 'tx-b' ? trade('tx-b', 2020) : row
+        ),
+      }),
+      {},
+    ],
+    ['the onward transfer is missing', (c: Candidate) => c, { onwardTransferId: 'tr-zz' }],
+    [
+      'the onward transfer is not a pick',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b' ? player('tr-b', 'tx-b', 'hawthorn', 'brisbane', 'p7') : row
+        ),
+      }),
+      {},
+    ],
+  ] as const)('refuses a reviewed relay when %s', (_case, mutate, override) => {
+    const candidate = mutate(shifted());
+    expect(() =>
+      aflTradeAssetLedgerSettleNotUsedPicks(candidate, rowsOf(candidate), [
+        { ...review, ...override },
+      ])
+    ).toThrow(/not borne out/);
+  });
+
   it('reads a reviewed traded-on hop as traded on, so the other hop decides the pick', () => {
     // Pick C: Hawthorn gives Sydney a 2021 R3 in 2020 (Draftguru: not used), gets it back from
     // Brisbane as "#47" in 2021 (not used, Hawthorn took a nominee). The hops do not chain.
