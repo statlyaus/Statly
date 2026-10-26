@@ -1542,7 +1542,7 @@ describe('owner-reviewed relays on the value lines (#1050)', () => {
             }
           : leg
       );
-    // l7 (C to A, p4): A did not hand it on. The club guard alone refuses it.
+    // l7 (C to A, p4, 2021): A did not hand it on. The club guard refuses it before any draft check.
     expect(relinked('t3', 'l7')).toThrow(/does not continue/);
     // l6 (A to C, p3, the 2021 draft): A handed it on, but it is a pick of another draft.
     expect(relinked('t3', 'l6')).toThrow(/does not continue/);
