@@ -228,8 +228,9 @@ export interface AflTradeAssetLedgerRelayedOutcome {
   readonly pickId: string;
   readonly transactionId: string;
   readonly transferId: string;
-  /** The number both trades state. */
-  readonly selectionNumber: number;
+  /** The number both trades state; null for an owner-reviewed relay, which no number joins. */
+  readonly selectionNumber: number | null;
+  readonly reviewed?: true;
 }
 
 /** A pick outcome as the evidence states it: the ledger settles a not-used pick's fate or relay. */

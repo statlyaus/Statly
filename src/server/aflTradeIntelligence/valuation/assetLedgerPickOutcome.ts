@@ -8,7 +8,10 @@ import type {
   AflTradeAssetLedgerPickIdentity,
   AflTradeAssetLedgerPickTrail,
 } from './assetLedgerPickHops';
-import type { AflTradeAssetLedgerReviewedSelected } from './assetLedgerReviewedPickLinks';
+import {
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON,
+  type AflTradeAssetLedgerReviewedSelected,
+} from './assetLedgerReviewedPickLinks';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
 import type { AflTradeGradingInputs } from './gradingInputs';
 import { aflTradePickOrderSlotOf, type AflTradePickAsset } from './pickSlots';
@@ -28,11 +31,14 @@ export interface AflTradeAssetLedgerOutcomeSources {
   selectionsByPick: ReadonlyMap<string, readonly Selection[]>;
   /** The latest draft year the candidate holds a selection in; a later draft has not been run. */
   latestDraftYearInEvidence: number;
+  /** Transfers whose stated "not used" the owner reviewed as traded on (`assetLedgerReviewedPickLinks.ts`). */
+  reviewedTradedOn: ReadonlySet<string>;
 }
 
 export function createAflTradeAssetLedgerOutcomeSources(
   candidate: Candidate,
-  stintValue: AflTradeAssetLedgerStintValue
+  stintValue: AflTradeAssetLedgerStintValue,
+  reviewedTradedOn: readonly { transferId: string }[] = AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON
 ): AflTradeAssetLedgerOutcomeSources {
   const selections = candidate.draftSelections ?? [];
   const selectionsByPick = new Map<string, Selection[]>();
@@ -55,6 +61,7 @@ export function createAflTradeAssetLedgerOutcomeSources(
     selectionsById: new Map(selections.map((selection) => [selection.selectionId, selection])),
     selectionsByPick,
     latestDraftYearInEvidence: Math.max(-Infinity, ...selections.map(({ draftYear }) => draftYear)),
+    reviewedTradedOn: new Set(reviewedTradedOn.map(({ transferId }) => transferId)),
   };
 }
 
@@ -200,7 +207,8 @@ const isTradedOn = (outcome: PickOutcome) =>
 function fromSelections(
   sources: AflTradeAssetLedgerOutcomeSources,
   pick: AflTradeAssetLedgerPickIdentity,
-  hopOutcomes: readonly PickOutcome[]
+  hopOutcomes: readonly PickOutcome[],
+  anyTradedOn: boolean
 ): AflTradeAssetLedgerStatedPickOutcome {
   const usable = (sources.selectionsByPick.get(pick.pickId) ?? []).filter(({ status }) =>
     isAflTradeUsableCustodyStatus(status)
@@ -210,7 +218,7 @@ function fromSelections(
     return selected(sources, pick, usable[0], { playerId: null, clubId: null });
   if (hopOutcomes.some((outcome) => outcome.outcomeStatus === 'unresolved'))
     return unresolved('pick_outcome_unresolved');
-  if (hopOutcomes.some(isTradedOn)) return unresolved('traded_on_unlinked');
+  if (anyTradedOn) return unresolved('traded_on_unlinked');
   // Only a draft after the latest one in evidence is still to come; an earlier one is over.
   if (pick.draftYear > sources.latestDraftYearInEvidence)
     return future(sources, identityAsset(pick));
@@ -233,8 +241,11 @@ export function aflTradeAssetLedgerPickOutcome(
     const outcome = sources.outcomesByTransfer.get(hop.transferId);
     return outcome ? [{ hop, outcome }] : [];
   });
+  // A hop the owner reviewed as traded on says nothing of the end, whatever Draftguru states.
+  const tradedOn = ({ hop, outcome }: (typeof stated)[number]) =>
+    isTradedOn(outcome) || sources.reviewedTradedOn.has(hop.transferId);
   const terminal = stated.filter(
-    ({ outcome }) => outcome.outcomeStatus !== 'unresolved' && !isTradedOn(outcome)
+    (row) => row.outcome.outcomeStatus !== 'unresolved' && !tradedOn(row)
   );
   if (terminal.length > 1) return unresolved('outcome_conflict');
   if (terminal.length === 1) {
@@ -246,6 +257,7 @@ export function aflTradeAssetLedgerPickOutcome(
   return fromSelections(
     sources,
     pick,
-    stated.map(({ outcome }) => outcome)
+    stated.map(({ outcome }) => outcome),
+    stated.some(tradedOn)
   );
 }

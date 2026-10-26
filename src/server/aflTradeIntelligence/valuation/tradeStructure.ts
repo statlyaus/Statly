@@ -23,19 +23,22 @@ type Ungraded = AflTradeStructureContent['ungraded'][number];
 type RawOnward =
   | { kind: 'special_entitlement_successor'; transfer: Transfer; entitlementId: string }
   | { kind: 'pick_trail'; transfer: Transfer }
-  | { kind: 'pick_relay'; transfer: Transfer; selectionNumber: number };
+  | { kind: 'pick_relay'; transfer: Transfer; selectionNumber: number }
+  | { kind: 'pick_relay_reviewed'; transfer: Transfer };
 
 /**
  * Rule R1 (statlyaus/Statly#1050): a stated not-used pick the asset ledger found relayed
  * (`aflTradeAssetLedgerRelayLinks`): its last transfer, and the transfer its holder traded the same
- * number on as under a new pick id.
+ * number on as under a new pick id. A `reviewed` row is an owner-reviewed relay: the number is not
+ * checked, the clubs, draft, pick ids and trade order still are.
  */
 export interface AflTradeStructurePickRelay {
   transferId: string;
   onwardTransactionId: string;
   onwardTransferId: string;
-  /** The number both trades state. */
-  selectionNumber: number;
+  /** The number both trades state; absent on a reviewed relay. */
+  selectionNumber?: number;
+  reviewed?: true;
 }
 
 /**
@@ -168,10 +171,15 @@ function createPickRelayLink(
       next.pickId === own.pickId ||
       next.draftYear !== own.draftYear ||
       next.draftType !== own.draftType ||
+      !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
+    )
+      return undefined;
+    if (relay.reviewed) return { transfer: onward, reviewed: true as const };
+    if (
+      relay.selectionNumber === undefined ||
       // R1 by order: a leg that states no number relays by its latest Official AFL order number.
       (own.nominalPick ?? aflTradePickLatestOrderNumber(custody, own)) !== relay.selectionNumber ||
-      next.nominalPick !== relay.selectionNumber ||
-      !aflTradeTransactionNotBefore(transactions.get(onward.transactionId)!, transaction)
+      next.nominalPick !== relay.selectionNumber
     )
       return undefined;
     return { transfer: onward, selectionNumber: relay.selectionNumber };
@@ -227,7 +235,10 @@ export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
     // Rule R1: a stated not-used pick the ledger relays to the pick id its holder traded on.
     const notUsed = outcome?.outcomeStatus === 'stated' && outcome.disposition === 'not_used';
     const relay = notUsed ? onwardOfRelay(transfer, transaction) : undefined;
-    return relay ? { kind: 'pick_relay', ...relay } : undefined;
+    if (!relay) return undefined;
+    return 'reviewed' in relay
+      ? { kind: 'pick_relay_reviewed', transfer: relay.transfer }
+      : { kind: 'pick_relay', ...relay };
   }
   // Rule v3: the onward trades each trade's traded-on legs read. A leg whose onward trade leads back to
   // its own trade is cut before any grading, so nothing depends on the order trades are read in.
@@ -285,6 +296,7 @@ export function createAflTradeStructureView(inputs: AflTradeStructureInputs) {
       return { kind: raw.kind, ...ids, entitlementId: raw.entitlementId };
     if (raw.kind === 'pick_relay')
       return { kind: raw.kind, ...ids, selectionNumber: raw.selectionNumber };
+    if (raw.kind === 'pick_relay_reviewed') return { kind: raw.kind, ...ids };
     return {
       kind: 'pick_trail',
       ...ids,

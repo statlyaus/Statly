@@ -1498,3 +1498,51 @@ describe('not-used picks on the value lines (#1050, rules R1 and R2)', () => {
     }
   });
 });
+
+describe('owner-reviewed relays on the value lines (#1050)', () => {
+  it('follows a reviewed relay link whatever the numbers, and refuses one that changes club or draft', () => {
+    const base = inputs({ relay: true });
+    const resealed = (change: (leg: AflTradeStructureLeg) => AflTradeStructureLeg) =>
+      computeAflTradeValueLines({
+        ...base,
+        structure: createAflTradeStructure({
+          ...base.structure.content,
+          trades: base.structure.content.trades.map((row) => ({
+            ...row,
+            legs: row.legs.map(change),
+          })),
+        }),
+      });
+    const relayOf = (leg: AflTradeStructureLeg) => leg.onward?.kind === 'pick_relay';
+    // l8 (D to A, p6 "#5") reviewed as relaying to l1 (A to B, p1 "#5"): the same line as by R1.
+    const reviewed = resealed((leg) =>
+      relayOf(leg)
+        ? {
+            ...leg,
+            onward: {
+              kind: 'pick_relay_reviewed',
+              transactionId: 't1',
+              transferId: transferId('l1'),
+            },
+          }
+        : leg
+    );
+    const l8 = trade(reviewed, 't6').legs.find(({ transferId: id }) => id === transferId('l8'))!;
+    expect(l8.assetKey).toBe(P('p1'));
+    // Reviewed as relaying to l7 (C to A, p4): A did not hand it on, and p4 is another club's pick.
+    expect(() =>
+      resealed((leg) =>
+        relayOf(leg)
+          ? {
+              ...leg,
+              onward: {
+                kind: 'pick_relay_reviewed',
+                transactionId: 't3',
+                transferId: transferId('l7'),
+              },
+            }
+          : leg
+      )
+    ).toThrow(/does not continue/);
+  });
+});

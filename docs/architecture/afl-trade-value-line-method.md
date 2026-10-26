@@ -601,6 +601,32 @@ The review of the 13 (owner, 2026-10-25: "Approve all 7", "Yes, extend R1", "Do 
   2025 West Coast→Fremantle→Melbourne "#23" (McVee). They need a draft-night source (the AFL's
   draft-night trade reports or Draftguru's per-pick pages) captured under a gate decision, not a rule.
 
+## Owner decisions, 2026-10-26
+
+The four not-used picks left pending after the 25 Oct review resolve from evidence already in the system,
+once the pick's number is allowed to move between two trades of the same period (the indicative order
+renumbers picks when compensation picks are placed) and a pick id's hops are allowed not to chain. Owner:
+"Approve all four", "Re-store now".
+
+- **Reviewed relays** (`AFL_TRADE_ASSET_LEDGER_REVIEWED_RELAYS`): the holder of a stated not-used pick
+  traded it on as a named transfer under another pick id. No number joins them; the ledger and the
+  structure still require the same draft, another pick id, the holder as the sender and a trade no
+  earlier, and refuse an entry the candidate does not bear out. The structure links one as
+  `pick_relay_reviewed`; the value lines follow it like any relay. 2022 GWS→Collingwood "#40" (the Bobby
+  Hill trade) is GWS's R3, which Collingwood passed to Hawthorn as "#41" (the 2022 order lists #41 R3
+  orig GWS held by Hawthorn; Brisbane spent it on Will Ashcroft). 2025 Fremantle→Melbourne "#23" (McVee)
+  is West Coast's R2, which Melbourne passed to Gold Coast as "pick 24" (Petracca), the reviewed same
+  pick as the order's #24 spent on Zeke Uwland.
+- **A pick id whose hops do not chain.** Hawthorn's 2023 R3 left as Hawthorn→Sydney (2022, round only)
+  and came back as Brisbane→Hawthorn "#47" (the Gunston/Ryan trade), both under one Draftguru pick id;
+  Sydney→Melbourne "#46" (Grundy) and Melbourne→Brisbane "#47" (Fullarton) are the middle under two
+  more ids. Hawthorn held it at #47 in the 2023-11-16 order and spent "R3 (HAW) - Pick 47" on Will
+  McCabe. Three reviewed relays carry the loop, and a **reviewed traded-on hop**
+  (`AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON`, the 2022 Hawthorn→Sydney hop) tells the ledger that
+  Draftguru's "not used" there means traded on, so the pick's end is Hawthorn's own hop back and its bid
+  share. The structure links a reviewed relay from any hop, not only a pick's last, so the loop's four
+  trades all carry the McCabe share.
+
 ## Implementation order
 
 1. **Pre-2019 data:** calculate HPN PAV and games for 2011 to 2018 on the VM with the same governed season

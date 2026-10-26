@@ -203,6 +203,14 @@ function continues(
       to.kind === 'pick_entitlement' &&
       from.pickId === to.pickId
     );
+  if (onward.kind === 'pick_relay_reviewed')
+    return (
+      from.kind === 'pick_entitlement' &&
+      to.kind === 'pick_entitlement' &&
+      from.pickId !== to.pickId &&
+      from.draftYear === to.draftYear &&
+      from.draftType === to.draftType
+    );
   if (onward.kind === 'pick_relay')
     return (
       from.kind === 'pick_entitlement' &&
