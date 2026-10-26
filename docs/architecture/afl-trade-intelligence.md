@@ -4254,8 +4254,8 @@ entitlement's reviewed custody successor (`special_entitlement_successor`, rule 
 pick's relay (`pick_relay`, rule R1 of statlyaus/Statly#1050, with the `selectionNumber` both trades
 state; `pick_relay_reviewed` for an owner-reviewed relay, which no number joins). Relays are the asset ledger's (`aflTradeAssetLedgerRelayLinks`, injected as `pickRelays`); the
 structure links one only when the onward transfer is a pick entitlement of another pick id in the same
-draft, in another graded trade no earlier than the leg's, given by the club that received the leg, and
-both trades state the relay's number. A link is emitted
+draft, in another graded trade no earlier than the leg's, given by the club that received the leg, and,
+unless the relay is owner-reviewed, both trades state the relay's number. A link is emitted
 whatever became of the onward trade, even when its other side cannot be valued (the retired realized
 grade dropped such a link as `traded_on_return_blocked`). Only the leadsTo cycle guard drops one, a
 link whose onward trade leads back to its own trade.
