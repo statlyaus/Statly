@@ -51,6 +51,14 @@ const onwardSchema = z.discriminatedUnion('kind', [
       selectionNumber: z.number().int().positive(),
     })
     .strict(),
+  /** An owner-reviewed relay (`assetLedgerReviewedPickLinks.ts`): no number joins it, the review does. */
+  z
+    .object({
+      kind: z.literal('pick_relay_reviewed'),
+      transactionId: idSchema,
+      transferId: idSchema,
+    })
+    .strict(),
 ]);
 
 const legSchema = z

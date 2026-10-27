@@ -8,6 +8,10 @@ import type {
   AflTradeAssetLedgerStatedPickOutcome,
 } from './assetLedgerContracts';
 import type { AflTradeAssetLedgerPickTrail } from './assetLedgerPickHops';
+import {
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_RELAYS,
+  type AflTradeAssetLedgerReviewedRelay,
+} from './assetLedgerReviewedPickLinks';
 import type { AflTradeGradingInputs } from './gradingInputs';
 import { aflTradePickLatestOrderNumber, type AflTradePickCustody } from './pickSlots';
 import type { AflTradeStructurePickRelay } from './tradeStructure';
@@ -199,17 +203,55 @@ function fateOf(
  */
 export function aflTradeAssetLedgerSettleNotUsedPicks(
   candidate: Candidate,
-  rows: readonly AflTradeAssetLedgerNotUsedRow[]
+  rows: readonly AflTradeAssetLedgerNotUsedRow[],
+  reviewed: readonly AflTradeAssetLedgerReviewedRelay[] = AFL_TRADE_ASSET_LEDGER_REVIEWED_RELAYS
 ): Map<string, AflTradeAssetLedgerPickOutcome> {
   const transactions = new Map(
     candidate.transactions.map((transaction) => [transaction.transactionId, transaction])
   );
   const transfers = new Map(candidate.transfers.map((transfer) => [transfer.transferId, transfer]));
   const relays = relaysOf(rows, transfers, transactions, candidate.pickCustody ?? []);
+  const reviewedRelays = new Map(reviewed.map((relay) => [relay.transferId, relay]));
   const lastSelections = lastSelectionsOf(candidate);
   const settled = new Map<string, AflTradeAssetLedgerPickOutcome>();
   for (const row of rows) {
     if (row.outcome.kind !== 'not_used') continue;
+    const last = row.trail.hops.at(-1);
+    const review = last && reviewedRelays.get(last.transferId);
+    if (review) {
+      const onward = transfers.get(review.onwardTransferId);
+      const own = transfers.get(last.transferId);
+      const next = onward?.asset;
+      if (
+        !onward ||
+        !own ||
+        own.asset.kind !== 'pick_entitlement' ||
+        next?.kind !== 'pick_entitlement' ||
+        onward.transactionId !== review.onwardTransactionId ||
+        !transactions.has(onward.transactionId) ||
+        onward.transactionId === own.transactionId ||
+        onward.fromClubId !== own.toClubId ||
+        next.pickId === own.asset.pickId ||
+        next.draftYear !== own.asset.draftYear ||
+        next.draftType !== own.asset.draftType ||
+        !aflTradeTransactionNotBefore(
+          transactions.get(onward.transactionId)!,
+          transactions.get(own.transactionId)!
+        )
+      )
+        throw new Error(
+          `Reviewed relay of transfer ${review.transferId} to ${review.onwardTransferId} is not borne out by the candidate.`
+        );
+      settled.set(row.pickId, {
+        kind: 'relayed',
+        pickId: next.pickId,
+        transactionId: onward.transactionId,
+        transferId: onward.transferId,
+        selectionNumber: null,
+        reviewed: true,
+      });
+      continue;
+    }
     const relay = relays.get(row.pickId);
     settled.set(
       row.pickId,
@@ -227,20 +269,37 @@ export function aflTradeAssetLedgerSettleNotUsedPicks(
   return settled;
 }
 
-/** The relays a sealed ledger found, as the trade structure's `pickRelays` input. */
+/**
+ * The relays a sealed ledger found (rule R1), plus every owner-reviewed relay, as the trade structure's
+ * `pickRelays` input. A reviewed relay is listed whether or not it is a pick's last hop: a pick id whose
+ * hops do not chain relays from its first hop and ends on its last.
+ */
 export function aflTradeAssetLedgerRelayLinks(
-  ledger: AflTradeAssetLedger
+  ledger: AflTradeAssetLedger,
+  reviewed: readonly AflTradeAssetLedgerReviewedRelay[] = AFL_TRADE_ASSET_LEDGER_REVIEWED_RELAYS
 ): AflTradeStructurePickRelay[] {
-  return ledger.content.picks.flatMap(({ hops, outcome }) =>
-    outcome.kind === 'relayed'
-      ? [
-          {
-            transferId: hops.at(-1)!.transferId,
-            onwardTransactionId: outcome.transactionId,
-            onwardTransferId: outcome.transferId,
-            selectionNumber: outcome.selectionNumber,
-          },
-        ]
-      : []
-  );
+  const reviewedLinks: AflTradeStructurePickRelay[] = reviewed.map((relay) => ({
+    transferId: relay.transferId,
+    onwardTransactionId: relay.onwardTransactionId,
+    onwardTransferId: relay.onwardTransferId,
+    reviewed: true,
+  }));
+  const seen = new Set(reviewedLinks.map(({ transferId }) => transferId));
+  return [
+    ...reviewedLinks,
+    ...ledger.content.picks.flatMap(({ hops, outcome }) =>
+      outcome.kind === 'relayed' &&
+      outcome.selectionNumber !== null &&
+      !seen.has(hops.at(-1)!.transferId)
+        ? [
+            {
+              transferId: hops.at(-1)!.transferId,
+              onwardTransactionId: outcome.transactionId,
+              onwardTransferId: outcome.transferId,
+              selectionNumber: outcome.selectionNumber,
+            },
+          ]
+        : []
+    ),
+  ];
 }

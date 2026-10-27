@@ -83,6 +83,87 @@ export const AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS: readonly AflTradeAssetL
   ];
 
 /**
+ * A relay the owner reviewed (#1050; owner, 2026-10-26: "Approve all four"): the holder of `transferId`'s
+ * pick traded that pick on as `onwardTransferId`, under another pick id and a number rule R1 cannot match
+ * (the indicative order renumbered it between the two trades, or the pick id's hops do not chain). The
+ * ledger and the structure still require the same draft, another pick id, the holder as sender and a
+ * trade no earlier; the number is not checked.
+ */
+export interface AflTradeAssetLedgerReviewedRelay {
+  readonly transferId: string;
+  readonly onwardTransactionId: string;
+  readonly onwardTransferId: string;
+  readonly note: string;
+}
+
+export const AFL_TRADE_ASSET_LEDGER_REVIEWED_RELAYS: readonly AflTradeAssetLedgerReviewedRelay[] = [
+  {
+    transferId:
+      'external-transfer:4189cf8d9db8a6182fb98fadc72d1b546aee35f650f627d62efc7d57fee78384',
+    onwardTransactionId:
+      'external-transaction:f1dc44ea9234f67cd82b13e70bfc10cd704cc2e12162919189e2f7854272ec6f',
+    onwardTransferId:
+      'external-transfer:97bd7277599f2124416d2e15c0cebbb02b6ff521555a0bd4d9fbf861c017e70e',
+    note: '2022 GWS→Collingwood "#40" (the Bobby Hill trade) is GWS\'s R3, which Collingwood passed to Hawthorn as "#41" (the Mitchell/Stephens/Henry trade); the 2022 order lists #41 R3 orig GWS held by Hawthorn, and Hawthorn passed it to Brisbane, who spent it on Will Ashcroft.',
+  },
+  {
+    transferId:
+      'external-transfer:395c527a449a916d76bd07550b351a1c42a708c0bdedc85c86fdf60d03279fa5',
+    onwardTransactionId:
+      'external-transaction:a86bc6839d0409e6a02224310267f0ea6b1ecb7a96590416129b610c0b5ae6b1',
+    onwardTransferId:
+      'external-transfer:a6c87eb1d6520ec79892410303c2e7528e21291a2e57a0ce681ca25b57664871',
+    note: '2025 Fremantle→Melbourne "#23" (the McVee trade; West Coast→Fremantle "#23" relays into it) is West Coast\'s R2, which Melbourne passed to Gold Coast as "pick 24" (the Petracca trade), the reviewed same pick as the order\'s #24 R2 orig West Coast spent on Zeke Uwland.',
+  },
+  {
+    transferId:
+      'external-transfer:33de4b4744beddd5bfee5bed966e479376d929c9ab8f8103e3a720ab6fdee331',
+    onwardTransactionId:
+      'external-transaction:1008dbf3d761a1656b628ca8088f5c06fd67e95d628ff53f3367734abab54ef4',
+    onwardTransferId:
+      'external-transfer:c9d141a4a09d0581f245b5cba0e5e4a2b712b909ac86dc8dfeb9081d0eee8f88',
+    note: '2022 Hawthorn→Sydney (Hawthorn\'s 2023 R3, round only) went on as Sydney→Melbourne "#46" (the Grundy trade). The pick came back to Hawthorn, who held it at #47 in the 2023 order and spent "R3 (HAW) - Pick 47" on Will McCabe.',
+  },
+  {
+    transferId:
+      'external-transfer:c9d141a4a09d0581f245b5cba0e5e4a2b712b909ac86dc8dfeb9081d0eee8f88',
+    onwardTransactionId:
+      'external-transaction:7d935cd8d88256229987bbed18bdc8563a50bc7a5a3f769980435ddfa3c9b198',
+    onwardTransferId:
+      'external-transfer:866918f7bcd24d5732572dde2b1fc81e9a24b5db87db1573cdc5da01a9cd0abc',
+    note: '2023 Sydney→Melbourne "#46" (Grundy) went on as Melbourne→Brisbane "#47" (the Fullarton trade): Hawthorn\'s 2023 R3, renumbered by the indicative order between the two trades.',
+  },
+  {
+    transferId:
+      'external-transfer:866918f7bcd24d5732572dde2b1fc81e9a24b5db87db1573cdc5da01a9cd0abc',
+    onwardTransactionId:
+      'external-transaction:974278ea2c2294f092e405dea42f3074cc16263962c20556744a3382639f93cc',
+    onwardTransferId:
+      'external-transfer:9de85d8d22f0c251b1821cabed672dbdb1aa7f2a5ba6d36f5df3a52ec9d7c6b7',
+    note: '2023 Melbourne→Brisbane "#47" (Fullarton) went on as Brisbane→Hawthorn "#47" (the Gunston/Ryan trade), back to the pick id Draftguru gave Hawthorn\'s R3 in 2022.',
+  },
+];
+
+/**
+ * A hop whose stated "not used" the owner reviewed as traded on: the receiving club passed the pick on,
+ * and the reviewed relay above names where. The ledger reads the hop as traded on, so the pick's end is
+ * its other hop (#1050; owner, 2026-10-26).
+ */
+export interface AflTradeAssetLedgerReviewedTradedOn {
+  readonly transferId: string;
+  readonly note: string;
+}
+
+export const AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON: readonly AflTradeAssetLedgerReviewedTradedOn[] =
+  [
+    {
+      transferId:
+        'external-transfer:33de4b4744beddd5bfee5bed966e479376d929c9ab8f8103e3a720ab6fdee331',
+      note: '2022 Hawthorn→Sydney, Hawthorn\'s 2023 R3: Draftguru says Sydney did not use it because Sydney traded it on as "#46"; the pick\'s end is Hawthorn\'s own hop back (Brisbane→Hawthorn "#47"), spent on Will McCabe.',
+    },
+  ];
+
+/**
  * A stated not-used pick the owner reviewed as used: the holder took the named selection with it under a
  * shifted live number, which the cited Official AFL order row and Footyinfo board row show (#1050;
  * owner, 2026-10-25: "Do them in this wake"). The ledger refuses an entry whose selection is not the

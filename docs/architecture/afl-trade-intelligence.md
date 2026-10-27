@@ -4074,7 +4074,12 @@ one of:
   (`aflTradePickLatestOrderNumber`, R1 by order; owner 2026-10-25). It names
   that pick, transaction, transfer and number; the trade structure links the leg on as a `pick_relay`
   and the value lines carry the next pick id's line, so the relayed pick is never a line of its own.
-  Ids stay distinct: a relay is a link in the structure, not a merge.
+  Ids stay distinct: a relay is a link in the structure, not a merge. An owner-reviewed relay
+  (`AFL_TRADE_ASSET_LEDGER_REVIEWED_RELAYS`) names the onward transfer itself: no number joins it, the
+  same checks apply less the number, `selectionNumber` is null and `reviewed` true, and the ledger
+  refuses an entry the candidate does not bear out. A hop in `AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON`
+  is read as traded on whatever Draftguru states, so a pick id whose hops do not chain ends on its other
+  hop.
 - A stated not-used pick the owner reviewed as used (`AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED` in
   `assetLedgerReviewedPickLinks.ts`, with the order and board rows it rests on) is `selected` with the
   reviewed selection; the ledger refuses the entry unless the selection, the cited order row and the cited
@@ -4247,10 +4252,10 @@ the asset on: a pick's unique trail (`pick_trail`, the pick-onward order of rule
 `corroboratedBy: 'footyinfo'` when exactly one board pick routes the hop pair), a special
 entitlement's reviewed custody successor (`special_entitlement_successor`, rule v7), or a stated not-used
 pick's relay (`pick_relay`, rule R1 of statlyaus/Statly#1050, with the `selectionNumber` both trades
-state). Relays are the asset ledger's (`aflTradeAssetLedgerRelayLinks`, injected as `pickRelays`); the
+state; `pick_relay_reviewed` for an owner-reviewed relay, which no number joins). Relays are the asset ledger's (`aflTradeAssetLedgerRelayLinks`, injected as `pickRelays`); the
 structure links one only when the onward transfer is a pick entitlement of another pick id in the same
-draft, in another graded trade no earlier than the leg's, given by the club that received the leg, and
-both trades state the relay's number. A link is emitted
+draft, in another graded trade no earlier than the leg's, given by the club that received the leg, and,
+unless the relay is owner-reviewed, both trades state the relay's number. A link is emitted
 whatever became of the onward trade, even when its other side cannot be valued (the retired realized
 grade dropped such a link as `traded_on_return_blocked`). Only the leadsTo cycle guard drops one, a
 link whose onward trade leads back to its own trade.

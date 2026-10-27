@@ -7,10 +7,13 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/assetLedgerBidMatches';
 import { aflTradeAssetLedgerRelayLinks } from '@/server/aflTradeIntelligence/valuation/assetLedgerNotUsedPicks';
 import { AFL_TRADE_ASSET_LEDGER_REVIEWED_BID_SPENDS } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedBidSpends';
+import { aflTradeAssetLedgerPickIdentities } from '@/server/aflTradeIntelligence/valuation/assetLedgerPickHops';
 import {
+  aflTradeAssetLedgerPickOutcome,
   aflTradeAssetLedgerReviewedSelectedOutcome,
   createAflTradeAssetLedgerOutcomeSources,
 } from '@/server/aflTradeIntelligence/valuation/assetLedgerPickOutcome';
+import { aflTradeAssetLedgerSettleNotUsedPicks } from '@/server/aflTradeIntelligence/valuation/assetLedgerNotUsedPicks';
 import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
   AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
@@ -1062,7 +1065,7 @@ describe('asset ledger not-used picks (#1050, rules R1 and R2)', () => {
     expect(ledger.pickOutcome(PICK_B)).toMatchObject({ kind: 'selected', selectionNumber: 22 });
     expect(ledger.ledger.content.summary.outcomes).toMatchObject({ relayed: 1 });
     // The relay reaches the trade structure as a checked link.
-    const links = aflTradeAssetLedgerRelayLinks(ledger.ledger);
+    const links = aflTradeAssetLedgerRelayLinks(ledger.ledger, []);
     expect(links).toEqual([
       {
         transferId: 'tr-a',
@@ -1293,7 +1296,7 @@ describe('asset ledger not-used picks by order and by review (#1050, owner 2026-
     const structure = buildAflTradeStructure({
       ...inputs(),
       candidate: roundOnly(true),
-      pickRelays: aflTradeAssetLedgerRelayLinks(ledger.ledger),
+      pickRelays: aflTradeAssetLedgerRelayLinks(ledger.ledger, []),
     });
     expect(
       structure.content.trades.flatMap(({ legs }) => legs).find((leg) => leg.transferId === 'tr-a')
@@ -1386,5 +1389,287 @@ describe('asset ledger not-used picks by order and by review (#1050, owner 2026-
         draftBoardPicks: [],
       })
     ).toThrow(/does not bear out/);
+  });
+});
+
+describe('asset ledger owner-reviewed relays and traded-on hops (#1050, owner 2026-10-26)', () => {
+  const PICK_A = `draft-pick:${hex('a')}`;
+  const PICK_B = `draft-pick:${hex('b')}`;
+  const numbered = (transfer: Transfer, nominalPick: number | null): Transfer =>
+    ({ ...transfer, asset: { ...(transfer as { asset: object }).asset, nominalPick } }) as Transfer;
+  const notUsed = (
+    transferId: string,
+    basis: NonNullable<Outcome['nominationBasis']> = 'club_took_no_nominated_player'
+  ) => outcome(transferId, { nominationBasis: basis, receivingClubNominatedSelections: 0 });
+  /** tx-a (2021): Essendon gives Hawthorn "#40" (A, not used). tx-b (2021): Hawthorn gives Brisbane "#41" (B). */
+  const shifted = (): Candidate => {
+    const base = inputs().candidate;
+    return {
+      ...base,
+      transactions: [...base.transactions, trade('tx-a', 2021), trade('tx-b', 2021)],
+      transfers: [
+        ...base.transfers,
+        numbered(pick('tr-a', 'tx-a', 'essendon', 'hawthorn', PICK_A, 2021), 40),
+        player('tr-a2', 'tx-a', 'hawthorn', 'essendon', 'p5'),
+        numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_B, 2021), 41),
+        player('tr-b2', 'tx-b', 'brisbane', 'hawthorn', 'p6'),
+      ],
+      pickOutcomes: [
+        ...base.pickOutcomes!,
+        notUsed('tr-a'),
+        outcome('tr-b', { disposition: 'selected', selectionId: 'sel-41', playerId: 'p4' }),
+      ],
+      draftSelections: [
+        ...base.draftSelections!,
+        selection('sel-41', PICK_B, 'p4', 'brisbane', 41),
+      ],
+    };
+  };
+  const rowsOf = (candidate: Candidate) => {
+    const trails = new Map(
+      [...aflTradeAssetLedgerPickIdentities(candidate).values()].map((pick) => [
+        pick.pickId,
+        { ...pick, trail: { hopOrder: 'trail' as const, hops: [] as never[] } },
+      ])
+    );
+    // Only the two picks of the fixture matter: one hop each, stated not used (A) or selected (B).
+    const hop = (transferId: string, transactionId: string, from: string, to: string) => ({
+      transactionId,
+      transferId,
+      seasonYear: 2021,
+      fromClubId: from,
+      toClubId: to,
+    });
+    return [
+      {
+        pickId: PICK_A,
+        draftYear: 2021,
+        draftType: 'national',
+        trail: { hopOrder: 'trail' as const, hops: [hop('tr-a', 'tx-a', 'essendon', 'hawthorn')] },
+        outcome: { kind: 'not_used' as const },
+      },
+      {
+        pickId: PICK_B,
+        draftYear: 2021,
+        draftType: 'national',
+        trail: { hopOrder: 'trail' as const, hops: [hop('tr-b', 'tx-b', 'hawthorn', 'brisbane')] },
+        outcome: {
+          kind: 'selected' as const,
+          selectionId: 'sel-41',
+          playerId: 'p4',
+          clubId: 'brisbane',
+          selectionNumber: 41,
+          firstStint: null,
+        },
+      },
+    ].concat(
+      [...trails.values()]
+        .filter((row) => row.pickId !== PICK_A && row.pickId !== PICK_B)
+        .map((row) => ({
+          ...row,
+          outcome: { kind: 'future' as const, projectedSlot: null },
+        })) as never[]
+    );
+  };
+  const review = {
+    transferId: 'tr-a',
+    onwardTransactionId: 'tx-b',
+    onwardTransferId: 'tr-b',
+    note: 'test',
+  };
+
+  it('relays a reviewed hop whatever the numbers, and refuses one the candidate does not bear out', () => {
+    const candidate = shifted();
+    // Rule R1 alone: 40 is not 41, so A stays not used (lapsed: the fixture draft ends at 41).
+    expect(
+      aflTradeAssetLedgerSettleNotUsedPicks(candidate, rowsOf(candidate), []).get(PICK_A)
+    ).toMatchObject({ kind: 'not_used', fate: 'lapsed' });
+    expect(
+      aflTradeAssetLedgerSettleNotUsedPicks(candidate, rowsOf(candidate), [review]).get(PICK_A)
+    ).toEqual({
+      kind: 'relayed',
+      pickId: PICK_B,
+      transactionId: 'tx-b',
+      transferId: 'tr-b',
+      selectionNumber: null,
+      reviewed: true,
+    });
+    // The onward transfer must leave the holder: Brisbane did not receive A.
+    const otherSender: Candidate = {
+      ...candidate,
+      transfers: candidate.transfers.map((row) =>
+        row.transferId === 'tr-b'
+          ? numbered(pick('tr-b', 'tx-b', 'geelong', 'brisbane', PICK_B, 2021), 41)
+          : row
+      ),
+    };
+    expect(() =>
+      aflTradeAssetLedgerSettleNotUsedPicks(otherSender, rowsOf(otherSender), [review])
+    ).toThrow(/not borne out/);
+    // The structure links a reviewed relay as its own kind, and the ledger lists it for the structure.
+    const links = aflTradeAssetLedgerRelayLinks(
+      { ledgerId: 'asset-ledger:test', content: { picks: [] } } as never,
+      [review]
+    );
+    expect(links).toEqual(
+      [{ ...review, note: undefined, reviewed: true }].map(({ note: _n, ...rest }) => rest)
+    );
+    const structure = buildAflTradeStructure({ ...inputs(), candidate, pickRelays: links });
+    expect(
+      structure.content.trades.flatMap(({ legs }) => legs).find((leg) => leg.transferId === 'tr-a')
+        ?.onward
+    ).toEqual({ kind: 'pick_relay_reviewed', transactionId: 'tx-b', transferId: 'tr-b' });
+  });
+
+  it.each([
+    [
+      'the onward transaction is not the named one',
+      (c: Candidate) => c,
+      { onwardTransactionId: 'tx-a' },
+    ],
+    [
+      'the onward transfer is in the same trade',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? numbered(pick('tr-b', 'tx-a', 'hawthorn', 'brisbane', PICK_B, 2021), 41)
+            : row
+        ),
+      }),
+      { onwardTransactionId: 'tx-a' },
+    ],
+    [
+      'the onward pick is the same pick id',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_A, 2021), 41)
+            : row
+        ),
+      }),
+      {},
+    ],
+    [
+      'the onward pick is of another draft year',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? numbered(pick('tr-b', 'tx-b', 'hawthorn', 'brisbane', PICK_B, 2022), 41)
+            : row
+        ),
+      }),
+      {},
+    ],
+    [
+      'the onward pick is of another draft type',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b'
+            ? ({
+                ...row,
+                asset: { ...(row as { asset: object }).asset, draftType: 'rookie' },
+              } as Transfer)
+            : row
+        ),
+      }),
+      {},
+    ],
+    [
+      'the onward trade is earlier',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transactions: c.transactions.map((row) =>
+          row.transactionId === 'tx-b' ? trade('tx-b', 2020) : row
+        ),
+      }),
+      {},
+    ],
+    ['the onward transfer is missing', (c: Candidate) => c, { onwardTransferId: 'tr-zz' }],
+    [
+      'the onward transfer is not a pick',
+      (c: Candidate): Candidate => ({
+        ...c,
+        transfers: c.transfers.map((row) =>
+          row.transferId === 'tr-b' ? player('tr-b', 'tx-b', 'hawthorn', 'brisbane', 'p7') : row
+        ),
+      }),
+      {},
+    ],
+  ] as const)('refuses a reviewed relay when %s', (_case, mutate, override) => {
+    const candidate = mutate(shifted());
+    expect(() =>
+      aflTradeAssetLedgerSettleNotUsedPicks(candidate, rowsOf(candidate), [
+        { ...review, ...override },
+      ])
+    ).toThrow(/not borne out/);
+  });
+
+  it('reads a reviewed traded-on hop as traded on, so the other hop decides the pick', () => {
+    // Pick C: Hawthorn gives Sydney a 2021 R3 in 2020 (Draftguru: not used), gets it back from
+    // Brisbane as "#47" in 2021 (not used, Hawthorn took a nominee). The hops do not chain.
+    const PICK_C = `draft-pick:${hex('c')}`;
+    const base = inputs().candidate;
+    const candidate: Candidate = {
+      ...base,
+      transactions: [...base.transactions, trade('tx-c1', 2020), trade('tx-c2', 2021)],
+      transfers: [
+        ...base.transfers,
+        numbered(pick('tr-c1', 'tx-c1', 'hawthorn', 'sydney', PICK_C, 2021), null),
+        player('tr-c1b', 'tx-c1', 'sydney', 'hawthorn', 'p5'),
+        numbered(pick('tr-c2', 'tx-c2', 'brisbane', 'hawthorn', PICK_C, 2021), 47),
+        player('tr-c2b', 'tx-c2', 'hawthorn', 'brisbane', 'p6'),
+      ],
+      pickOutcomes: [
+        ...base.pickOutcomes!,
+        notUsed('tr-c1', 'club_took_nominated_player'),
+        notUsed('tr-c2', 'club_took_nominated_player'),
+      ],
+    };
+    const stintValue = createAflTradeAssetLedgerStintValue({ ...inputs(), candidate });
+    const pickC = {
+      pickId: PICK_C,
+      draftYear: 2021,
+      draftType: 'national',
+      round: 3,
+      originalClubId: 'hawthorn',
+      identityDisagreements: [],
+    };
+    const hops = [
+      {
+        transactionId: 'tx-c1',
+        transferId: 'tr-c1',
+        seasonYear: 2020,
+        fromClubId: 'hawthorn',
+        toClubId: 'sydney',
+      },
+      {
+        transactionId: 'tx-c2',
+        transferId: 'tr-c2',
+        seasonYear: 2021,
+        fromClubId: 'brisbane',
+        toClubId: 'hawthorn',
+      },
+    ];
+    const trail = { hopOrder: 'unordered' as const, hops };
+    // Two hops both state an end: a conflict.
+    expect(
+      aflTradeAssetLedgerPickOutcome(
+        createAflTradeAssetLedgerOutcomeSources(candidate, stintValue, []),
+        pickC,
+        trail
+      )
+    ).toEqual({ kind: 'unresolved', reason: 'outcome_conflict' });
+    // With the first hop reviewed as traded on, Hawthorn's own hop back decides: a bid to match.
+    expect(
+      aflTradeAssetLedgerPickOutcome(
+        createAflTradeAssetLedgerOutcomeSources(candidate, stintValue, [{ transferId: 'tr-c1' }]),
+        pickC,
+        trail
+      )
+    ).toMatchObject({ kind: 'matched_bid', status: 'pending', basis: 'nominee_count' });
   });
 });

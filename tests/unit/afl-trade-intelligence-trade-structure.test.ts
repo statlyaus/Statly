@@ -436,3 +436,53 @@ describe('the trade structure relays a round-only pick by its order number (#105
     expect(linked('disputed')).toBeUndefined();
   });
 });
+
+describe('the trade structure links an owner-reviewed relay (#1050)', () => {
+  const numbered = (transfer: Transfer, nominalPick: number | null): Transfer =>
+    ({ ...transfer, asset: { ...(transfer as { asset: object }).asset, nominalPick } }) as Transfer;
+  const notUsed = (transferId: string): Outcome =>
+    ({
+      ...tradedOn(transferId),
+      disposition: 'not_used',
+      nominationBasis: 'club_took_no_nominated_player',
+      receivingClubNominatedSelections: 0,
+    }) as unknown as Outcome;
+  // tx-1 (2021): Richmond gives Hawthorn "#40" (pick A, not used). tx-2 (2021): Hawthorn gives Sydney "#41" (B).
+  const candidate = (bPick = 'pick-B', bYear = 2021): Candidate => ({
+    transactions: [trade('tx-1', 2021), trade('tx-2', 2021)],
+    transfers: [
+      numbered(pick('tr-1a', 'tx-1', 'richmond', 'hawthorn', 'pick-A'), 40),
+      player('tr-1b', 'tx-1', 'hawthorn', 'richmond', 'p'),
+      numbered(pick('tr-2a', 'tx-2', 'hawthorn', 'sydney', bPick, bYear), 41),
+      player('tr-2b', 'tx-2', 'sydney', 'hawthorn', 'q'),
+    ],
+    pickOutcomes: [notUsed('tr-1a')],
+  });
+  const reviewed = {
+    transferId: 'tr-1a',
+    onwardTransactionId: 'tx-2',
+    onwardTransferId: 'tr-2a',
+    reviewed: true as const,
+  };
+  const linked = (c: Candidate) =>
+    legOf(structureOf(c, { pickRelays: [reviewed] }), 'tr-1a').onward;
+
+  it('links it as its own kind whatever the numbers, and still refuses the same pick id or another draft', () => {
+    expect(linked(candidate())).toEqual({
+      kind: 'pick_relay_reviewed',
+      transactionId: 'tx-2',
+      transferId: 'tr-2a',
+    });
+    // The same rule-R1 row (no `reviewed`) would need the numbers to match: 40 is not 41.
+    expect(
+      legOf(
+        structureOf(candidate(), {
+          pickRelays: [{ ...reviewed, reviewed: undefined, selectionNumber: 41 }],
+        }),
+        'tr-1a'
+      )
+    ).not.toHaveProperty('onward');
+    expect(linked(candidate('pick-A'))).toBeUndefined();
+    expect(linked(candidate('pick-B', 2022))).toBeUndefined();
+  });
+});
