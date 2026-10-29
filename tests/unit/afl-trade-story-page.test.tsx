@@ -336,3 +336,47 @@ describe('private trade page: the lineage map', () => {
     expect(within(panel).queryByRole('link', { name: /Trade page/u })).toBeNull();
   });
 });
+
+describe('private trade page: this trade over time (#789 step 7)', () => {
+  it('reads each club’s net at the latest checkpoint first, as the chart’s legend', () => {
+    renderPage(TRADE.cameron);
+    const chart = section('This trade over time');
+    const readout = within(chart).getByRole('list', { name: 'Each club’s net at this point' });
+    expect(textOf(readout)).toBe('+50.9 Geelong −50.9 GWS');
+    // The readout names the checkpoint; the values table names it again.
+    expect(within(chart).getAllByText('End of 2026')).toHaveLength(2);
+    const slider = within(chart).getByRole('slider', { name: 'Point in time' });
+    expect(slider).toHaveAttribute('aria-valuetext', 'End of 2026: Geelong +50.9, GWS −50.9');
+  });
+
+  it('steps back to the trade with the keyboard, at-trade net starred', () => {
+    renderPage(TRADE.cameron);
+    const chart = section('This trade over time');
+    const slider = within(chart).getByRole('slider', { name: 'Point in time' });
+    fireEvent.keyDown(slider, { key: 'Home' });
+    expect(slider).toHaveAttribute('aria-valuenow', '0');
+    expect(slider).toHaveAttribute(
+      'aria-valuetext',
+      'At the trade, 2020: Geelong +28.1*, GWS −28.1*'
+    );
+    expect(
+      within(chart).getByText(/A hollow point leaves out values not in yet\./u)
+    ).toBeInTheDocument();
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' });
+    expect(slider).toHaveAttribute('aria-valuenow', '0');
+    fireEvent.keyDown(slider, { key: 'End' });
+    fireEvent.keyDown(slider, { key: 'ArrowRight' });
+    expect(slider).toHaveAttribute('aria-valuetext', 'End of 2026: Geelong +50.9, GWS −50.9');
+  });
+
+  it('lists every checkpoint in the values table, the same nets the story holds', () => {
+    const { story } = model(TRADE.cameron);
+    renderPage(TRADE.cameron);
+    const table = within(section('This trade over time')).getByRole('table');
+    const rows = within(table).getAllByRole('row').slice(1);
+    const geelong = story.nets.tradeAlone[0]!;
+    expect(rows).toHaveLength(geelong.line.length);
+    expect(textOf(rows[0]!)).toBe('At the trade, 2020 +28.1* −28.1*');
+    expect(textOf(rows.at(-1)!)).toBe('End of 2026 +50.9 −50.9');
+  });
+});

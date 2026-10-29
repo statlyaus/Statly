@@ -93,6 +93,10 @@ function luminance(hex: string): number {
 const contrast = (left: number, right: number) =>
   (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
 
+/** The WCAG contrast ratio between two hex colours. */
+export const contrastRatio = (left: string, right: string) =>
+  contrast(luminance(left), luminance(right));
+
 /** Black or white, whichever has the higher contrast on the fill (never below 4.5:1 on a hex). */
 export function inkOn(fill: string): string {
   const fillLuminance = luminance(fill);

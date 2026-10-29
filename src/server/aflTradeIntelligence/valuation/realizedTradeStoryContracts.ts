@@ -121,6 +121,14 @@ export interface AflTradeStoryNet extends AflTradeStoryClub {
   readonly pending: readonly AflTradeStoryPendingAsset[];
 }
 
+/** A club's net on one trade at one checkpoint of the value lines. */
+export interface AflTradeStoryNetPoint {
+  readonly checkpoint: AflTradeValueLineCheckpoint;
+  readonly net: number;
+  /** Pending assets the net leaves out at this checkpoint. */
+  readonly pendingCount: number;
+}
+
 /** A club's net on one trade, with the at-trade view beside it (never subtracted). */
 export interface AflTradeStoryTradeNet extends AflTradeStoryNet {
   readonly atTrade: {
@@ -128,6 +136,11 @@ export interface AflTradeStoryTradeNet extends AflTradeStoryNet {
     readonly pendingCount: number;
     readonly pending: readonly AflTradeStoryPendingAsset[];
   };
+  /**
+   * The club's net on this trade over time, oldest first: the at-trade view, then every checkpoint
+   * the value lines hold for the trade. The last point is `net`.
+   */
+  readonly line: readonly AflTradeStoryNetPoint[];
 }
 
 /**

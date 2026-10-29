@@ -153,7 +153,8 @@ export class AflTradeStoryIndex {
 
   /**
    * The trade's latest checkpoint (its last net point, normally the last season end) and each club's
-   * net there and at the trade, from the value lines: zero-sum by construction.
+   * net there and at the trade, and its line (the at-trade view, then every point), from the value
+   * lines: zero-sum by construction.
    */
   nets(tradeId: string) {
     const cached = this.tradeNets.get(tradeId) ?? this.readNets(tradeId);
@@ -169,7 +170,14 @@ export class AflTradeStoryIndex {
     const clubs = new Map(
       trade.clubs.map((club) => [
         club.clubId,
-        { now: this.net(tradeId, latest(club)), atTrade: this.net(tradeId, club.atTrade) },
+        {
+          now: this.net(tradeId, latest(club)),
+          atTrade: this.net(tradeId, club.atTrade),
+          line: [club.atTrade, ...club.points].map((point) => {
+            const { net, pendingCount } = this.net(tradeId, point);
+            return { checkpoint: point.checkpoint, net, pendingCount };
+          }),
+        },
       ])
     );
     return { checkpoint, clubs };

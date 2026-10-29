@@ -7,6 +7,7 @@ import { TradeDetails } from './TradeDetails';
 import { TradeLineage } from './TradeLineage';
 import { TradePlayerCards } from './TradePlayerCards';
 import { TradeScarf } from './TradeScarf';
+import { TradeValueLine } from './TradeValueLine';
 import {
   bidSharesByPickId,
   checkpointText,
@@ -99,6 +100,8 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           <TradeScarf story={story} throughSeason={throughSeason} />
         </div>
 
+        {/* Keyed by trade: a client navigation to another trade starts at its latest point. */}
+        <TradeValueLine key={story.trade.id} story={story} />
         <TradeDetails story={story} clubNames={clubNames} shares={shares} />
         <TradePlayerCards story={story} clubNames={clubNames} shares={shares} />
         <TradeLineage story={story} bidMatches={bidMatches} />

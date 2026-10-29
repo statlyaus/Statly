@@ -3974,7 +3974,8 @@ It returns, for one trade:
   value at the checkpoint and its value at the trade.
 - **Nets:** each club's net on this trade, with its at-trade net beside it, and secondary, with its next
   moves. Both trade nets come straight from the value lines' per-club net points, so each trade is
-  zero-sum. The linked trades are the trade and, repeatedly, each later trade a club of the trade passed
+  zero-sum. Each club's trade net also carries its line: the at-trade net, then its net at every
+  checkpoint the value lines hold for the trade, oldest first; the last point is the net. The linked trades are the trade and, repeatedly, each later trade a club of the trade passed
   a pick it received into. A club's chain is the linked trades it is a party to. Its chain net is counted
   per value line: each line it received is +1 and each it gave is -1, valued at the latest chain trade
   that moved it, so a pick received and passed on nets to zero and cancels out even when the two trades
@@ -4359,6 +4360,14 @@ code change. Top to bottom:
   club-coloured panels in the order they arrived, each trade, other clubs' deals and draft of the chain
   pinned along it, and each club's net on this trade at the end. It is a static SVG drawn on the server, with the same facts listed for screen readers. Its
   events slot shows the story's sourced events, which are empty for now.
+- **This trade over time** (value-line method step 7): each club's line on this trade as a chart, at the
+  trade, each draft and each season end, symmetric about zero so above the middle line is ahead. A
+  point whose net leaves out a pending value is hollow. A readout above the chart is its legend: it
+  rests on the latest checkpoint and follows the pointer, or the arrow keys on the chart's slider.
+  Every point is also in a values table. Each line is the club's guernsey colour, else its trim, else
+  the page ink, whichever first reaches 3:1 on the theme's surface (`valueLineChart.ts`), and a club
+  whose colour looks like an earlier club's gets its own dash pattern. The chart is drawn at its
+  container's width, so it never scrolls sideways.
 - **Trade details:** what each club gave, what every asset became, its value now and its value at the
   trade beside it, and each club's net on this trade with its at-trade net beside it (never subtracted).
   The net with each club's next moves follows as the secondary view. A net that leaves out a pending

@@ -85,3 +85,14 @@
 .afl-trade-story svg text {
   font-family: inherit;
 }
+
+/* "This trade over time": each club's line colour for the theme (valueLineChart.ts lineStroke). */
+.afl-trade-story .ts-vl {
+  --vl: var(--vl-light);
+}
+
+@media (prefers-color-scheme: dark) {
+  .afl-trade-story .ts-vl {
+    --vl: var(--vl-dark);
+  }
+}

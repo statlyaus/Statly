@@ -76,7 +76,7 @@ function tradeNet(
   const club = index.nets(trade.transactionId).clubs.get(clubId);
   if (!club)
     throw new Error(`The value lines have no net for club ${clubId} on ${trade.transactionId}.`);
-  return { ...index.club(clubId), ...club.now, atTrade: club.atTrade };
+  return { ...index.club(clubId), ...club.now, atTrade: club.atTrade, line: club.line };
 }
 
 /**
