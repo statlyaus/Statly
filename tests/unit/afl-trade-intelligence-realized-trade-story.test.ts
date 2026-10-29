@@ -113,6 +113,27 @@ describe('realized trade story: the Cameron trade', () => {
     expect(cameronLeg!.value).toEqual({ kind: 'known', pav: 95.3 });
   });
 
+  it('gives each club its net at every checkpoint: the at-trade view first, the result last', () => {
+    for (const net of cameron.nets.tradeAlone) {
+      expect(net.line[0]).toEqual({
+        checkpoint: { kind: 'trade', season: 2020 },
+        net: net.atTrade.net,
+        pendingCount: net.atTrade.pendingCount,
+      });
+      expect(net.line.at(-1)).toMatchObject({ net: net.net, pendingCount: net.pendingCount });
+      expect(net.line.at(-1)!.checkpoint).toEqual(cameron.checkpoint);
+    }
+    const [geelong, gws] = [CLUB.gee, CLUB.gws].map((clubId) =>
+      netOf(cameron.nets.tradeAlone, clubId)
+    );
+    // Zero-sum at every checkpoint, not only the last.
+    expect(geelong!.line.map(({ checkpoint }) => checkpoint)).toEqual(
+      gws!.line.map(({ checkpoint }) => checkpoint)
+    );
+    geelong!.line.forEach((point, at) => expect(point.net + gws!.line[at]!.net).toBeCloseTo(0, 9));
+    expect(geelong!.line.length).toBeGreaterThan(2);
+  });
+
   it('follows each club’s next moves (secondary): Geelong −1.6 with pick 34’s share, GWS −57.6', () => {
     const geelong = netOf(cameron.nets.withNextMoves, CLUB.gee);
     expect(geelong.net).toBeCloseTo(50.9 - 51.6 - 9.342878 + 8.4, 5);

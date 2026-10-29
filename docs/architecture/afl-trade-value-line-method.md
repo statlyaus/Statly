@@ -660,6 +660,8 @@ renumbers picks when compensation picks are placed) and a pick id's hops are all
    input loader (`development/postgresGradingInputs.ts`) are kept for the asset ledger, the trade
    structure and the value lines.
 6. **Chains:** build the chain view, linking trades that share an asset, plus the compensation links.
-7. **Preview:** a value line per club per trade over time, with each club's chains. The private page UI
-   is in place on sample data (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence
-   architecture); it reads sample value lines until sealed ones are served to it.
+7. **Preview:** a value line per club per trade over time, with each club's chains. The private page
+   (`/dev/afl-trade-stories`, "Private trade page" in the AFL trade intelligence architecture) reads the
+   stored genuine value lines from a trade story bundle (#1052), lists each club's chains (#1051), and
+   charts each club's net on the trade at every checkpoint ("This trade over time"). A re-stored bundle
+   changes the page with no code change; until one is set it shows the samples.
