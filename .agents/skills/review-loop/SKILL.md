@@ -1,0 +1,110 @@
+---
+name: review-loop
+description: Use when the user says "review loop" (or "sol loop", the upstream name).
+---
+
+# review-loop
+
+A workflow for making a code change more correct before (or sometimes after) filing a pull
+request: a fresh Claude reviewer subagent reviews the change in a loop. Adapted for Claude Code
+from the `sol-loop` skill in `t3dotgg/tstack`, which runs OpenAI's GPT Sol through T3 tooling.
+This version is Statly-owned and runs on Claude models only.
+
+Make the most minimal possible changes to appease the reviewer. Be careful of scope creep and
+don't be scared to push back.
+
+## Budget
+
+- Default: 3 rounds total. Round 1 is full. Later rounds check only changed code and open
+  findings.
+- Extend to 5 only for security, permissions, auth, data loss, or state/concurrency, while a
+  blocker or should stays open with evidence. Or when the user asks.
+- Stop early if a round returns only nits. Declined nits and comment, doc, or format-only fixes
+  need no new round.
+- One reviewer only. The reviewer must not start subagents or other reviewers.
+- Keep a ledger: id, severity, outcome, model, and token usage when the Agent result reports it.
+  Never guess usage.
+
+## 1. Scope
+
+Run `git status --short`. Do not stash, discard, or include unrelated changes. Limit review to
+the change paths if they separate cleanly. Otherwise stop and ask.
+
+Find the base after `git fetch origin`:
+
+- PR: `gh pr view <n> --repo statlyaus/Statly --json baseRefName,headRefOid`. Check out the
+  branch only if clean. Confirm `HEAD` is the PR head, or ahead only by this change. Base:
+  `git merge-base HEAD origin/<baseRefName>`.
+- Local: `git merge-base HEAD origin/main`. No remote: a base the user names, or `HEAD` for
+  uncommitted changes only.
+
+The change is base to working tree in those paths, with untracked files. Use one diff command
+all rounds. State intent and out-of-scope in 1-2 sentences. Run covering checks. Do not send code
+this change breaks. Note missing or pre-failing checks in the brief.
+
+## 2. Start the reviewer
+
+Use the Agent tool. The reviewer is a fresh `general-purpose` agent, never a `fork`: a fork
+inherits this conversation and tends to confirm it. Set `model` to the most capable Claude model
+the tool offers (the session's own model is the safe default) unless the user named one. Do not
+hardcode a model ID, and never pick a smaller model to save cost unless the user says so. Record
+the model in the ledger. Save the agent's ID: later rounds continue it with `SendMessage`, which
+keeps its reading of the code.
+
+Run it in the foreground and wait for its report. Do not edit scoped files while review runs.
+Do not poll or start a second reviewer. An error, a timeout, or no reply is not approval: start a
+fresh reviewer with the ledger.
+
+Round 1 brief (a fresh agent has no history):
+
+```
+Review only. Do not edit, commit, push, comment on PRs, or start subagents.
+Repo: <abs path> Base: <sha> Intent: <intent> Out of scope: <scope> Checks: <results>
+See: git diff <base> [-- <paths>]; git status --short (read untracked).
+Read surrounding code. Find bugs, broken callers, mismatch with intent.
+Skip style unless it hides a bug. Hold to the smallest change. Flag code,
+tests, or guards the intent does not need. Other paths, rare cases, small
+perf, extra compat: nits.
+blocker = intended case wrong. should = real bug callers will hit, in intent. nit = rest.
+Reply:
+VERDICT: APPROVE or CHANGES
+S1 [blocker|should|nit] <file>:<line> <claim>. Fix: <suggestion> (stable ids)
+```
+
+## 3. Answer findings
+
+Check each finding and severity yourself. Another path, rare case, or small cost is a nit,
+whatever label it came with.
+
+- Agree: smallest fix. Prefer delete or narrow over new lock, cache, helper, or option. Fix the
+  case that happened. Add one focused test that fails without the fix, if intent needs it.
+- Disagree: say why, with evidence (file:line, test, output).
+- Out of scope or nit: decline in one line. List as follow-up.
+
+Update the ledger. Re-run checks and `git diff --shortstat <base>`. If review grew the diff, cut
+first. Do not agree just to end the loop.
+
+## 4. Next round
+
+Start one only if budget remains and a blocker or should is open, behavior code changed, or
+approval does not cover the current behavior diff. Send the saved agent a follow-up with
+`SendMessage`, or start a fresh agent with the ledger if it is gone. Send the round 1 brief, the
+ledger (`fixed:` / `disagree:` / `declined:` + evidence), the same base diff, and the change since
+last round. Tell the reviewer: open ids and changed code only. Mark each old id `resolved` or
+`still open: <reason>`.
+
+## 5. Stop and ship
+
+Agreed: APPROVE on the current behavior diff, no blocker or should open, no concern of your own.
+Stuck: an item stays disputed after two replies, or budget ends. Show both sides in 2-3 lines
+each. The user decides. Budget end is not approval.
+
+Do not commit during the loop: this repository's hook pushes every commit, so a commit is a push.
+Commit after agreement, or after the user decides when stuck, then follow
+`statly-engineering-workflow` for push, pull request, and merge. If the change goes to a pull
+request, add above the model blurb:
+
+`Reviewed with review-loop: <N> rounds with <model>. Reviewer verdict: approved`.
+
+Report: rounds, model, what the reviewer changed, diff size before/after, fixed and declined
+findings with reasons, usage if reported (else say not), committed or not.
