@@ -38,15 +38,24 @@ const explicitInvocationSkills = [
 const requiredWorkflowSkills = [
   'code-review',
   'codebase-design',
+  'council',
   'diagnosing-bugs',
   'docs-sweep-loop',
   'domain-modeling',
   'draft-reliability-loop',
+  'file-pr',
+  'full-send',
+  'full-stop',
   'grill-with-docs',
   'grilling',
   'implement',
+  'leaving-pr-comments',
+  'modernize',
+  'pr-findings',
   'product-design-review',
   'prototype',
+  'review-loop',
+  'takeover',
   'tdd',
   'to-spec',
   'to-tickets',
@@ -261,6 +270,10 @@ async function checkStatlyGuidance() {
   assert(
     await exists('docs/development/delivery.md'),
     'Statly engineering workflow references missing delivery guidance'
+  );
+  assert(
+    await exists('docs/agents/delivery-skills.md'),
+    'Statly engineering workflow references missing delivery-skills guidance'
   );
   assert(
     !agents.includes('$gstack-office-hours') && !workflow.includes('$gstack-office-hours'),
