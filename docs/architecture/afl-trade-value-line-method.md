@@ -627,6 +627,29 @@ renumbers picks when compensation picks are placed) and a pick id's hops are all
   share. The structure links a reviewed relay from any hop, not only a pick's last, so the loop's four
   trades all carry the McCabe share.
 
+## Pick-identity repairs, 2026-10-31
+
+The last three `unavailable` picks (#1050 item H; owner, 2026-10-23: "H gets a reviewed repair later")
+are each one pick that a club held, traded on and got back. Draftguru states the end on an earlier hop
+too, so the ledger sees two ends (`outcome_conflict`). One more **reviewed traded-on hop** each marks
+the earlier hop as traded on, so the pick's real last hop decides. No rule changes.
+
+- **2020 Hawthorn R2:** Hawthorn→Melbourne (2019), then "pick 26" Melbourne→North→Collingwood→Bulldogs→
+  GWS, and back to Collingwood as "pick 30". The Footyinfo board shows one pick on exactly that route,
+  used by Collingwood at selection 31 on Liam McMahon. Reviewed hop: North→Collingwood.
+- **2024 Melbourne R3:** Melbourne→St Kilda (2023), St Kilda→Essendon "pick 47", Essendon→St Kilda "pick
+  44" (2024). The board's route is Melbourne, St Kilda, Essendon, St Kilda, used at selection 45 on Hugh
+  Boxshall. Reviewed hop: Melbourne→St Kilda.
+- **2025 Bulldogs R3:** Bulldogs→Brisbane (2024, round only), then Bulldogs→Gold Coast "pick 53" (2025).
+  No trade in the sources sends it back, but the 2025-11-07 Official AFL order lists it at 53 held by
+  the Bulldogs, and Brisbane's round-3 picks there are West Coast's, Collingwood's and Carlton's. Gold
+  Coast spent "R3 (WBD) - Pick 53" matching West Coast's bid on Beau Addinsall (selection 18), so the
+  pick takes its share of Addinsall. Reviewed hop: Bulldogs→Brisbane.
+
+An offline ledger built from the candidate (`4fac3ffd…`, exported 2026-10-25) changes exactly these
+three of 1,106 picks. Two become selected and one becomes a shared matched-bid pick. No `matched_bid`
+pick stays pending except E, F and G, which the owner left pending on 2026-10-23.
+
 ## Implementation order
 
 1. **Pre-2019 data:** calculate HPN PAV and games for 2011 to 2018 on the VM with the same governed season
