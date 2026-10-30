@@ -627,12 +627,12 @@ renumbers picks when compensation picks are placed) and a pick id's hops are all
   share. The structure links a reviewed relay from any hop, not only a pick's last, so the loop's four
   trades all carry the McCabe share.
 
-## Pick-identity repairs, 2026-10-31
+## Owner decisions, 2026-10-31: pick-identity repairs
 
 The last three `unavailable` picks (#1050 item H; owner, 2026-10-23: "H gets a reviewed repair later")
 are each one pick that a club held, traded on and got back. Draftguru states the end on an earlier hop
 too, so the ledger sees two ends (`outcome_conflict`). One more **reviewed traded-on hop** each marks
-the earlier hop as traded on, so the pick's real last hop decides. No rule changes.
+the earlier hop as traded on, so the pick's real last hop decides. No rule changes. Owner: "Approve all three".
 
 - **2020 Hawthorn R2:** Hawthorn→Melbourne (2019), then "pick 26" Melbourne→North→Collingwood→Bulldogs→
   GWS, and back to Collingwood as "pick 30". The Footyinfo board shows one pick on exactly that route,
