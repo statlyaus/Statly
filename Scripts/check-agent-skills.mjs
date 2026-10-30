@@ -24,10 +24,7 @@ const requiredUpstreamSkills = [
   'to-tickets',
 ].sort();
 
-const approvedThirdPartySkills = {
-  ponytail: 'DietrichGebert/ponytail',
-  'sol-loop': 't3dotgg/tstack',
-};
+const approvedThirdPartySkills = { ponytail: 'DietrichGebert/ponytail' };
 
 const explicitInvocationSkills = [
   'ask-matt',

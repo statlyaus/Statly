@@ -26,9 +26,9 @@ Use these supported routes:
 - Documentation drift: `docs-sweep-loop`.
 - Draft-room reliability: `draft-reliability-loop`.
 - Primary-source investigation: `research`.
-- Opt-in review loop against OpenAI's GPT Sol: `sol-loop`, only when the user says "sol loop". It
-  needs a route that runs Sol (T3 tooling or a subagent set up for it); Claude Code has none here,
-  so without one the skill reports the blocker and must not substitute another model.
+- Opt-in reviewer loop: `review-loop`, only when the user says "review loop" (or "sol loop"). A
+  fresh Claude subagent reviews the change in budgeted rounds. Statly-owned, adapted from the
+  `sol-loop` skill in `t3dotgg/tstack`, which needs OpenAI's GPT Sol through T3 tooling.
 
 Where `ponytail` conflicts with `statly-engineering-workflow` (planning gates, `tdd`
 red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its
@@ -43,7 +43,7 @@ Claude Code loads skills only from `.claude/skills/`, which holds one symlink pe
 into `.agents/skills/`. Registered: `statly-engineering-workflow`, `grilling`, `to-spec`,
 `to-tickets`, `ponytail`, `tdd`, `diagnosing-bugs`, `resolving-merge-conflicts`, `codebase-design`,
 `prototype`, `docs-sweep-loop`, `draft-reliability-loop`, `product-design-review`,
-`unslop-design`, and `sol-loop`.
+`unslop-design`, and `review-loop`.
 
 The rest stay installed and locked but unregistered. `code-review` would shadow Claude Code's
 built-in `/code-review`, so load it by path at completion as the workflow says. `ask-matt`,
