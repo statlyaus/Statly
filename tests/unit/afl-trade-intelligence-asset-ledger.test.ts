@@ -18,6 +18,7 @@ import {
   AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED,
   AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS,
   AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED,
+  AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON,
 } from '@/server/aflTradeIntelligence/valuation/assetLedgerReviewedPickLinks';
 import { createAflTradeAssetLedgerStintValue } from '@/server/aflTradeIntelligence/valuation/assetLedgerStints';
 import type { AflTradeAssetLedgerLabels } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
@@ -1671,5 +1672,92 @@ describe('asset ledger owner-reviewed relays and traded-on hops (#1050, owner 20
         trail
       )
     ).toMatchObject({ kind: 'matched_bid', status: 'pending', basis: 'nominee_count' });
+  });
+
+  it('reads a reviewed traded-on hop that states "selected" as traded on, when the club got the pick back', () => {
+    // Pick D: Collingwood gets a 2021 R2 from North (Draftguru: selected, because Collingwood used it
+    // in the end), trades it to the Bulldogs, and gets it back: one pick, used once at selection 31.
+    const PICK_D = `draft-pick:${hex('d')}`;
+    const base = inputs().candidate;
+    const candidate: Candidate = {
+      ...base,
+      transactions: [
+        ...base.transactions,
+        trade('tx-d1', 2020),
+        trade('tx-d2', 2020),
+        trade('tx-d3', 2020),
+      ],
+      transfers: [
+        ...base.transfers,
+        pick('tr-d1', 'tx-d1', 'north', 'collingwood', PICK_D, 2021),
+        pick('tr-d2', 'tx-d2', 'collingwood', 'western_bulldogs', PICK_D, 2021),
+        pick('tr-d3', 'tx-d3', 'western_bulldogs', 'collingwood', PICK_D, 2021),
+      ],
+      draftSelections: [
+        ...base.draftSelections!,
+        selection('sel-d', `draft-pick:${hex('e')}`, 'p5', 'collingwood', 31),
+      ],
+      pickOutcomes: [
+        ...base.pickOutcomes!,
+        outcome('tr-d1', { disposition: 'selected', selectionId: 'sel-d', playerId: 'p5' }),
+        outcome('tr-d2', { disposition: 'traded_on' }),
+        outcome('tr-d3', { disposition: 'selected', selectionId: 'sel-d', playerId: 'p5' }),
+      ],
+    };
+    const stintValue = createAflTradeAssetLedgerStintValue({ ...inputs(), candidate });
+    const pickD = {
+      pickId: PICK_D,
+      draftYear: 2021,
+      draftType: 'national',
+      round: 2,
+      originalClubId: 'north',
+      identityDisagreements: [],
+    };
+    const hop = (transferId: string, fromClubId: string, toClubId: string) => ({
+      transactionId: transferId.replace('tr-', 'tx-'),
+      transferId,
+      seasonYear: 2020,
+      fromClubId,
+      toClubId,
+    });
+    const trail = {
+      hopOrder: 'trail' as const,
+      hops: [
+        hop('tr-d1', 'north', 'collingwood'),
+        hop('tr-d2', 'collingwood', 'western_bulldogs'),
+        hop('tr-d3', 'western_bulldogs', 'collingwood'),
+      ],
+    };
+    // A club that traded the pick on cannot also have used it: a conflict.
+    expect(
+      aflTradeAssetLedgerPickOutcome(
+        createAflTradeAssetLedgerOutcomeSources(candidate, stintValue, []),
+        pickD,
+        trail
+      )
+    ).toEqual({ kind: 'unresolved', reason: 'outcome_conflict' });
+    // With the first hop reviewed as traded on, the last hop decides: selection 31.
+    expect(
+      aflTradeAssetLedgerPickOutcome(
+        createAflTradeAssetLedgerOutcomeSources(candidate, stintValue, [{ transferId: 'tr-d1' }]),
+        pickD,
+        trail
+      )
+    ).toMatchObject({
+      kind: 'selected',
+      selectionId: 'sel-d',
+      clubId: 'collingwood',
+      selectionNumber: 31,
+    });
+  });
+
+  it('lists each reviewed traded-on hop once, with a note', () => {
+    const ids = AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON.map(({ transferId }) => transferId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(4);
+    for (const { transferId, note } of AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON) {
+      expect(transferId).toMatch(/^external-transfer:[0-9a-f]{64}$/u);
+      expect(note.length).toBeGreaterThan(40);
+    }
   });
 });

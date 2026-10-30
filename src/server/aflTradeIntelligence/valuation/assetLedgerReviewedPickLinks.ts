@@ -161,6 +161,21 @@ export const AFL_TRADE_ASSET_LEDGER_REVIEWED_TRADED_ON: readonly AflTradeAssetLe
         'external-transfer:33de4b4744beddd5bfee5bed966e479376d929c9ab8f8103e3a720ab6fdee331',
       note: '2022 Hawthorn→Sydney, Hawthorn\'s 2023 R3: Draftguru says Sydney did not use it because Sydney traded it on as "#46"; the pick\'s end is Hawthorn\'s own hop back (Brisbane→Hawthorn "#47"), spent on Will McCabe.',
     },
+    {
+      transferId:
+        'external-transfer:065d8397aea0ac306264e902153820315ac41546cb967cb6fa3ee1e0a74d77ca',
+      note: '2020 North Melbourne→Collingwood "pick 26 (Hawthorn)", Hawthorn\'s 2020 R2: Draftguru states Collingwood selected it, but Collingwood traded it on to the Bulldogs (then GWS) and got it back from GWS as "pick 30". The Footyinfo board shows one pick on that whole route, used by Collingwood at selection 31 on Liam McMahon; the end is GWS→Collingwood.',
+    },
+    {
+      transferId:
+        'external-transfer:e0fbe7bac03998339192ac045fe17c225400cf911bfedfed77c6c90db4571802',
+      note: '2023 Melbourne→St Kilda "2024 round 3 (Melbourne)": Draftguru states St Kilda selected it, but St Kilda traded it to Essendon as "pick 47" and got it back as "pick 44" in 2024. The Footyinfo board shows one pick on route Melbourne, St Kilda, Essendon, St Kilda, used at selection 45 on Hugh Boxshall; the end is Essendon→St Kilda.',
+    },
+    {
+      transferId:
+        'external-transfer:026e6a3631b7ff0ed7f0a42f5ca9e364063377f2d9f43b1dacdff15ab09aa1b7',
+      note: '2024 Bulldogs→Brisbane "2025 round 3 (Western Bulldogs)": the 2025-11-07 Official AFL order lists the Bulldogs\' R3 at 53 held by the Bulldogs, and Brisbane\'s R3 picks there are West Coast\'s, Collingwood\'s and Carlton\'s, so Brisbane passed it back by a move the trade sources do not hold. The end is the Bulldogs→Gold Coast "pick 53", which Gold Coast spent as "R3 (WBD) - Pick 53" on Beau Addinsall.',
+    },
   ];
 
 /**
