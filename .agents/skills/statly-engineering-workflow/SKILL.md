@@ -44,6 +44,12 @@ skill conflicts with repository policy.
 - At completion, load `code-review` and review against both repository standards and the approved
   request, specification, or tickets. Resolve actionable findings before declaring the work done.
 - For delivery, follow `docs/development/delivery.md` exactly.
+- Delivery skills (`review-loop`, `council`, `file-pr`, `pr-findings`, `modernize`, `takeover`,
+  `leaving-pr-comments`, `full-send`, `full-stop`) are Statly-owned adaptations of
+  `t3dotgg/tstack`; `docs/agents/delivery-skills.md` says what each does and when. Offer the
+  fitting one at its moment in one line with its trigger phrase. Use `review-loop`, `file-pr`,
+  `pr-findings`, `modernize` and `leaving-pr-comments` unprompted when clearly valuable and say
+  so; run `full-send`, `full-stop` and `council` only on the user's word.
 
 Load specialist skills by reading their complete `SKILL.md` files before applying them. Use the
 specialist method only for the phase it covers; this workflow remains the routing authority.

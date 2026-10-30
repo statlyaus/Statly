@@ -36,6 +36,10 @@ over the locked upstream `ask-matt` skill. Do not recommend or invoke upstream r
 installed in this repository, and keep domain, architecture, specification, and delivery records in
 the Statly-owned locations defined there.
 
+Delivery skills (review loop, council, file PR, PR findings, modernize, takeover, full send, full
+stop) are explained in [`docs/agents/delivery-skills.md`](docs/agents/delivery-skills.md); the agent
+offers the fitting one at its moment.
+
 ### Issue tracker
 
 Issues and specifications use `statlyaus/Statly` GitHub Issues only when tracker writes are requested.
