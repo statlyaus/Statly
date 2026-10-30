@@ -1,6 +1,6 @@
 ---
 name: pr-findings
-description: Act on what the app's pull request monitor reports (a failing check, a conflict, a BEHIND branch, a review comment) on a bound pull request. Use on every CI monitor event, and when the user says "babysit".
+description: Act on what the app's pull request monitor reports (a failing check, a merge conflict, a review comment) on a bound pull request, and keep it up to date with main. Use on every CI monitor event, and when the user says "babysit".
 ---
 
 # PR findings
@@ -12,12 +12,17 @@ finding. It is Statly-owned.
 ## Who watches
 
 The desktop app does. With Auto-fix on, it wakes this session on CI failures, merge conflicts and
-review comments, and auto-merge lands the pull request when the gate passes. Never write a watcher,
+review comments, and auto-merge lands the pull request when the gate passes. It does not wake you
+when checks go green or the branch falls BEHIND, so read `get_status` on every wake and every turn,
+and update a BEHIND branch then. Never write a watcher,
 polling loop or `sleep` loop, never schedule a wakeup or a Monitor for CI, and never run upstream's
 `pr-wait`. Every watcher on the GitHub account shares one rate limit.
 
-"Babysit" in this repository means: bind the pull request, turn the switches on, end the turn, and
-act on each wake. If a pull request was opened elsewhere and is not bound, bind it first. A wake is
+"Babysit" in this repository means: bind the pull request, turn on Auto-fix and auto-archive, end
+the turn, and act on each wake. Leave auto-merge as you find it: `file-pr` is the only place that
+turns it on, and a `full-stop` or rebuilt pull request must stay off. If a pull request was opened elsewhere and is not bound here, first check with
+`list_sessions` and `get_status` that no other session owns it; if one does, leave it to that
+session and tell the user. A wake is
 news, not a merge decision: check the merge gate yourself.
 
 ## GitHub rate limits
@@ -28,7 +33,8 @@ request and `gh api repos/statlyaus/Statly/commits/<sha>/check-runs` reads its c
 
 ## Reviews
 
-Only act on checks and comments newer than the latest push. Verify every bot finding against the
+Ignore check results older than the latest push, but act on every unresolved review thread and
+unanswered comment whatever its age: the ruleset will not merge with an open conversation. Verify every bot finding against the
 source before changing code. Fix real findings and CI failures. Distinguish repository failures from
 infrastructure flakes: re-run only the failed jobs (`gh run rerun <id> --failed`), never a full
 re-run or an empty commit.
@@ -52,10 +58,24 @@ code.
 
 ## Base branch
 
-- **BEHIND:** run `gh pr update-branch <n> --repo statlyaus/Statly` without being asked. It adds a
-  merge commit; never rebase or force-push a pushed branch.
-- **DIRTY (conflicts):** merge `origin/main` into the branch locally, resolve with
-  `resolving-merge-conflicts`, commit, push.
+- **Dependabot pull requests:** Dependabot rebases and force-pushes its own branches, which would
+  wipe your commits. Never push to one or run `update-branch` on it; comment `@dependabot rebase`
+  verbatim, with no callout, and let it update itself. For a failing Dependabot pull request,
+  report it to the user; any fix goes on its own branch from `origin/main`.
+- **BEHIND:** update without being asked, by a merge; never rebase or force-push a pushed branch.
+  With the branch checked out here, merge locally and push: in an app-made worktree call
+  `sync_with_base_branch` (the sandbox cannot write `.claude/skills` and the other protected paths
+  a local merge touches), elsewhere `git fetch origin && git merge --no-edit origin/main`. With no
+  local checkout, run `gh pr update-branch <n> --repo statlyaus/Statly`, and before any later
+  commit on that branch run `git pull --no-rebase origin <branch>`. If the sandbox refuses a write
+  to a protected path during a merge, stop and ask the user; never work around it.
+- **DIRTY (conflicts):** check the branch out and merge locally as above (`update-branch` refuses
+  conflicts), resolve with `resolving-merge-conflicts`, commit, push.
+- A live pull request this session owns updates in place however far behind or conflicting. That
+  is the one exception to the owner's rule that such a branch is rebuilt from `origin/main`; any
+  other branch that conflicts or is more than 20 commits behind goes to `modernize`.
+- **A rejected push** means the remote moved, usually by `update-branch`. Run
+  `git pull --no-rebase origin <branch>`, then push again. Never force.
 - Never merge when the pull request is BEHIND or DIRTY, or when base commits that landed after the
   last green run touch this pull request's files. Update, push, and wait for green.
 

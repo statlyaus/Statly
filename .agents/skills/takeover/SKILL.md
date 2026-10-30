@@ -11,7 +11,7 @@ the `takeover` skill in `t3dotgg/tstack`; this version is Statly-owned.
 
 In this repository "someone else" is usually another Claude session, a worktree, or a handoff note
 under `.statly-local/`. Before touching anything, read the linked issue's comments and list the
-running sessions for one still working on it: one session per ticket. A running session owns its
+sessions for one still working on it or bound to its pull request: one session per ticket. A running session owns its
 branch; message it or stop, never race it.
 
 ## Read the handoff
@@ -19,15 +19,20 @@ branch; message it or stop, never race it.
 Read the source pull request, branch, or thread, including review findings and the user's later
 corrections. Resolve the handoff to the actual code and current head, and account for uncommitted
 work in its worktree (`git status --porcelain --ignored`; never remove a worktree that holds
-`.statly-local/` data). Treat the handoff as context, not proof.
+`.statly-local/` data). Treat the handoff as context, not proof. If the source is a `local/*`,
+`backup/*` or `rescue/*` branch, ask the user before carrying anything, as `modernize` says.
 
 ## Continue on a new branch
 
-Create a new branch from `origin/main` and carry the original commits onto it (cherry-pick keeps
-Git authorship and existing co-author trailers), then add your fixes as separate commits. Never
+Check each commit's files as `modernize` says, then create a new branch from `origin/main` and
+carry the original commits onto it with
+`git cherry origin/main <branch> | awk '$1=="+"{print $2}' | xargs git cherry-pick`. It keeps Git authorship and co-author trailers, and skips
+merge commits and patches already on `main`. Then add your fixes as separate commits. Never
 amend, rebase, reset or force-push the original branch. Continue in place only when the user asks
 for it, and then only by adding commits. Do not overwrite unrelated work or change the original
-pull request without authorization.
+pull request without authorization. If the original has auto-merge on
+(`gh pr view <n> --repo statlyaus/Statly --json autoMergeRequest`), ask the user to turn it off:
+two pull requests carrying the same commits must not both be able to merge.
 
 Credit the original contributors in the pull request description and link the original pull request
 when there is one. Name a session by the model that ran it. The squash merge keeps `Co-Authored-By`

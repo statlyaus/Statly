@@ -21,7 +21,7 @@ replaced.
 
 Start three `general-purpose` agents with the Agent tool, in parallel, never as forks. Use the
 most capable Claude model the tool offers unless the user names models. If the user names seats,
-use those. For review or feedback, keep their work read-only: the brief forbids edits, commits,
+use those. Seats are always read-only: the brief forbids edits, commits,
 pushes, pull request comments and subagents. Each seat gets the request, the diff command, the base
 SHA, the intent, and one lens:
 
