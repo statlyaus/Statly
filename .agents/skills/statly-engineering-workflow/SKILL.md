@@ -48,8 +48,9 @@ skill conflicts with repository policy.
   `leaving-pr-comments`, `full-send`, `full-stop`) are Statly-owned adaptations of
   `t3dotgg/tstack`; `docs/agents/delivery-skills.md` says what each does and when. Offer the
   fitting one at its moment in one line with its trigger phrase. Use `review-loop`, `file-pr`,
-  `pr-findings`, `modernize` and `leaving-pr-comments` unprompted when clearly valuable and say
-  so; run `full-send`, `full-stop` and `council` only on the user's word.
+  `pr-findings` and `leaving-pr-comments` unprompted when clearly valuable and say so, and
+  `modernize` unprompted for its disposition report only; run `full-send`, `full-stop`, `council`
+  and a `modernize` update or rebuild only on the user's word.
 
 Load specialist skills by reading their complete `SKILL.md` files before applying them. Use the
 specialist method only for the phase it covers; this workflow remains the routing authority.

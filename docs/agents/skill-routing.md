@@ -32,7 +32,7 @@ Use these supported routes:
   one; `pr-findings` on every CI monitor event; `modernize` for an old pull request; `takeover`
   for another session's work; `leaving-pr-comments` for every GitHub comment; `full-send` and
   `full-stop` when the user walks away. Offer the fitting one at its moment; run `full-send`,
-  `full-stop` and `council` only on the user's word.
+  `full-stop`, `council` and a `modernize` update or rebuild only on the user's word.
 
 Where `ponytail` conflicts with `statly-engineering-workflow` (planning gates, `tdd`
 red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its

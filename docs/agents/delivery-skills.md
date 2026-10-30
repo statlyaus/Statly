@@ -14,7 +14,7 @@ merged": review, filing, findings, old branches, handoffs, and running unattende
 | "review loop" | `review-loop`         | A fresh Claude reviewer reads the diff; the agent fixes blockers, declines nits; up to 3 rounds.    | Before any non-trivial PR. Cheap. The agent runs it unprompted when a change warrants it.                         |
 | "council"     | `council`             | Three fresh Claude reviewers with different lenses score the change out of 10 and loop.             | Security, permissions, auth, data loss, state or concurrency, or an architecture call. Three reviewers per round. |
 | "file a PR"   | `file-pr`             | Files a PR that leads with the problem, then the solution, in this repository's record format.      | Every PR. The agent uses it whenever it opens one.                                                                |
-| "babysit"     | `pr-findings`         | What to do when the app reports a failing check, conflict, BEHIND branch or review comment.         | Every CI monitor event. The app does the watching; this is the handling.                                          |
+| "babysit"     | `pr-findings`         | What to do when the app reports a failing check, conflict or review comment; keeps it current.      | Every CI monitor event. The app does the watching; this is the handling.                                          |
 | "modernize"   | `modernize`           | Updates an old PR or branch and decides MODERNIZE, REWORK or CLOSE.                                 | A PR older than a week, BEHIND with conflicts, or one you are not sure should still exist.                        |
 | "take over"   | `takeover`            | Finishes another session's PR, branch or handoff on a new branch, keeping its credit.               | Another session left work half done, or a handoff note in `.statly-local/` points at a branch.                    |
 | (automatic)   | `leaving-pr-comments` | Formats every GitHub comment the agent posts on your behalf.                                        | Any reply to a bot or reviewer.                                                                                   |
@@ -34,10 +34,16 @@ trigger it, then keeps working. It never blocks on the offer:
   worth landing: `modernize`.
 - You point at another session's branch, worktree, or a handoff note: `takeover`.
 
-**Unprompted use.** The agent may run `review-loop`, `file-pr`, `pr-findings`, `modernize` and
-`leaving-pr-comments` without asking when they are clearly worth it, and says which it used.
-`full-send`, `full-stop` and `council` run only on your word: the first two change whether and when
-a pull request merges, and the third costs three reviewers per round.
+**Unprompted use.** The agent may run `review-loop`, `file-pr`, `pr-findings` and
+`leaving-pr-comments` without asking when they are clearly worth it, and says which it used. It
+may run `modernize` unprompted for the disposition report only. `full-send`, `full-stop`, `council`
+and a `modernize` update or rebuild run only on your word: the first two change whether and when a
+pull request merges, `council` costs three reviewers per round, and a rebuild can land an old pull
+request's content.
+
+**Limits.** The app wakes a session on a failing check, a conflict or a review comment. It does not
+wake one when checks go green or the branch falls BEHIND. A pull request that sits green and BEHIND
+needs one word from you: "babysit".
 
 ## Learning them
 
@@ -50,7 +56,9 @@ a pull request merges, and the third costs three reviewers per round.
   Statly boundaries, product and operations. Scores land in the PR description.
 - "PR 950 has been sitting for two weeks." Say **modernize**. The agent reads what `main` did in
   the meantime and recommends MODERNIZE, REWORK or CLOSE before touching the branch. Here a branch
-  is updated with `gh pr update-branch` or rebuilt from `origin/main`, never rebased or force-pushed.
+  is updated by merging `main` into it or rebuilt from `origin/main`, never rebased or force-pushed.
+  It never carries commits from a `local/*` branch without asking: those hold secrets, and this
+  repository is public.
 - "The other session got halfway through #853." Say **take over**. New branch from `origin/main`,
   original commits carried over with their authorship, fixes on top, credit in the PR.
 - A CI monitor event arrives. No trigger needed: `pr-findings` decides each finding as
@@ -59,16 +67,16 @@ a pull request merges, and the third costs three reviewers per round.
 
 ## What changed from upstream
 
-| Upstream                                                  | Here                                                                                                            |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `sol-loop` reviews with OpenAI's GPT Sol through T3 tools | `review-loop`: a fresh Claude subagent via the Agent tool, continued with `SendMessage` between rounds.         |
-| `council` seats three providers' flagships                | Three Claude seats with different lenses. Independence of reading, not of training; the skill says so.          |
-| `babysit-pr` ships a Python watcher, `pr-wait`            | `pr-findings`: the desktop app's Auto-fix monitor watches; the skill keeps only the handling rules.             |
-| Rebase and `--force-with-lease`                           | `gh pr update-branch`, merge `origin/main` into the branch, or rebuild from `origin/main`. No force-push, ever. |
-| Open a real PR, never a draft                             | A draft only for complex work you want to see rendered first, per `docs/development/delivery.md`.               |
-| Merge when the gate passes, stay until merged             | Auto-merge, Auto-fix and auto-archive via the app; the session ends its turn and is woken on events.            |
-| Ask with the harness's question tool                      | `AskUserQuestion`: one short question, options, recommended first.                                              |
-| `gh` on the current repo                                  | `--repo statlyaus/Statly` everywhere.                                                                           |
+| Upstream                                                  | Here                                                                                                                                                                                                                             |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sol-loop` reviews with OpenAI's GPT Sol through T3 tools | `review-loop`: a fresh Claude subagent via the Agent tool, continued with `SendMessage` between rounds.                                                                                                                          |
+| `council` seats three providers' flagships                | Three Claude seats with different lenses. Independence of reading, not of training; the skill says so.                                                                                                                           |
+| `babysit-pr` ships a Python watcher, `pr-wait`            | `pr-findings`: the desktop app's Auto-fix monitor watches; the skill keeps only the handling rules.                                                                                                                              |
+| Rebase and `--force-with-lease`                           | Merge `main` into the branch (`sync_with_base_branch` in an app worktree), `gh pr update-branch`, or rebuild from `origin/main`. Agents never force-push; Dependabot force-pushes its own branches, so agents leave those to it. |
+| Open a real PR, never a draft                             | A draft only for complex work you want to see rendered first, per `docs/development/delivery.md`.                                                                                                                                |
+| Merge when the gate passes, stay until merged             | Auto-merge, Auto-fix and auto-archive via the app; the session ends its turn and is woken on events.                                                                                                                             |
+| Ask with the harness's question tool                      | `AskUserQuestion`: one short question, options, recommended first.                                                                                                                                                               |
+| `gh` on the current repo                                  | `--repo statlyaus/Statly` everywhere.                                                                                                                                                                                            |
 
 Dependencies between them: `full-send` uses `review-loop`, `file-pr` and `pr-findings`.
 `full-stop` uses `full-send`. `takeover` uses `modernize`, `file-pr`, `pr-findings` and

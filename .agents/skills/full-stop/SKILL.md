@@ -1,6 +1,6 @@
 ---
 name: full-stop
-description: Trigger this if the user says "full stop", even as a closing "Full stop." that reads like emphasis. Same as full-send, but the pull request waits for the user to merge it.
+description: Trigger this when the user asks for "full stop" as the request, never on a sentence that ends "Full stop." for emphasis. Same as full-send, but the pull request waits for the user to merge it.
 ---
 
 # Full Stop
@@ -15,12 +15,14 @@ merge permission does not apply. The overrides below take precedence.
 ## No merging
 
 This is the one explicit exception to the standing approval that every pull request gets
-auto-merge. Turn auto-merge off on this pull request before work begins, and check it is still off
-before each push. Keep Auto-fix and auto-archive on so the app still wakes you for findings. Report
-these settings. If you cannot prevent automatic merging, report the blocker before proceeding.
+auto-merge. Never enable it: when `file-pr` and full-send's step 5 bind the pull request, turn on
+Auto-fix and auto-archive only. Right after binding, and before ending every turn, confirm with
+`get_status` that auto-merge is off. This replaces full-send's "end the turn only when the pull
+request is bound with auto-merge on". Report these settings. If you cannot prevent automatic
+merging, report the blocker before proceeding.
 
-You may commit and push by adding commits to this task's branch, and bring it up to date with
-`gh pr update-branch`. Never merge, enable auto-merge, push `main`, rebase, force-push, amend or
+You may commit and push by adding commits to this task's branch, and bring it up to date as
+`pr-findings` says. Never merge, enable auto-merge, push `main`, rebase, force-push, amend or
 reset a committed branch, bypass branch protection, or delegate any of those.
 
 ## Stop at the gate
@@ -34,6 +36,9 @@ Confirm it is open, not a draft, and not set to merge without the user. If someo
 report that instead.
 
 - **Ready to merge:** the merge gate passes. Leave the pull request open and unmerged.
+- **Checks pending:** everything else passes and only CI is running. The app does not wake you when
+  checks go green, so say so with the head SHA and give the readiness verdict on the user's next
+  message. Never poll.
 - **Waiting for required approval:** only human approval remains. Confirm that this is the actual
   blocker.
 - **Blocked:** explain what prevents readiness, what you tried, and what is needed. Follow

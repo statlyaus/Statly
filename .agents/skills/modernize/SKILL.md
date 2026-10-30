@@ -16,12 +16,20 @@ Statly-owned.
   worktree is dirty or in use. Check free disk and remove a finished worktree first.
 - Modernizing authorizes updating the pull request branch. It does not authorize merging, closing,
   changing the base branch, or expanding scope.
+- Before touching the branch, check with `list_sessions` and `get_status` for a live or bound
+  session that owns it; if one does, leave the branch to that session and tell the user. One
+  session per branch.
 - This repository never rebases or force-pushes a pushed branch and never amends a committed one.
-  A branch updates by `gh pr update-branch` or by merging `origin/main` into it. A branch that
-  conflicts with `main` or is more than 20 commits behind is rebuilt: a new branch from
-  `origin/main`, carrying only the commits not already on `main`.
-- Never build on an `archive/*`, `local/*`, `backup/*` or `rescue/*` branch. Branch from
-  `origin/main` and carry the commits over.
+  A branch with no conflicts and at most 20 commits behind updates in place by a merge, as
+  `pr-findings` says for BEHIND. One that conflicts with `main` or is more than 20 commits behind
+  is rebuilt: a new branch from `origin/main`, carrying only the commits not already on `main`.
+- Never build on an `archive/*`, `local/*`, `backup/*` or `rescue/*` branch. Never carry commits
+  from `local/*`, `backup/*` or `rescue/*` without asking the user first: most are local because
+  they commit `.env.production`, `prisma/dev.db` or a live password, the repository is public, and
+  the push hook publishes a branch on its first commit.
+- Before carrying commits from any branch, list each one's files with
+  `git show --name-only <sha>`. If one touches `.env*` other than `.env.example`, `prisma/dev.db`
+  or a credential, stop and ask the user; never drop it or carry it silently.
 - Do not post a pull request comment unless the user asked for one. Use `leaving-pr-comments` for
   every comment posted on the user's behalf.
 
@@ -70,16 +78,19 @@ a pull request alive.
 
 For a `MODERNIZE` disposition:
 
-1. Work on a disposable local branch or worktree at the recorded head.
-2. Clean and shallowly behind: `gh pr update-branch <n> --repo statlyaus/Statly`. Otherwise merge
-   `origin/main` into the branch and resolve each conflict with `resolving-merge-conflicts`,
-   according to the pull request's intent and `main`'s newer invariants. If a conflict reveals a
-   product or architecture disagreement, stop and reconsider the disposition instead of guessing.
-3. Conflicting with `main` or more than 20 commits behind: rebuild on a new branch from
-   `origin/main` by cherry-picking only the commits not already on `main`, open a new pull request
-   that links the old one, and leave closing the old one to the user.
-4. Compare before and after with `git range-diff` and inspect the final diff. Confirm that no
-   intentional behaviour disappeared and no already-landed behaviour was reintroduced.
+1. Check out the pull request's branch in a clean worktree at the recorded head. If the branch is
+   checked out elsewhere, use a detached worktree there and push with `git push origin HEAD:<branch>`.
+2. No conflicts and at most 20 commits behind: update in place by a merge, as `pr-findings` says
+   for BEHIND, so the local head is the pushed head.
+3. Conflicting with `main` or more than 20 commits behind: check each commit's files as the
+   guardrails say, then rebuild on a new branch from `origin/main` with `git cherry origin/main <branch> | awk '$1=="+"{print $2}' | xargs git cherry-pick`, which skips merge commits and patches already on `main`.
+   Resolve conflicts with `resolving-merge-conflicts`, according to the pull request's intent and
+   `main`'s newer invariants. If a conflict reveals a product or architecture disagreement, stop and
+   reconsider the disposition instead of guessing. File the new pull request with `file-pr`,
+   auto-merge off, linking the old one, and ask the user to close the old one.
+4. Inspect the final diff (`git diff origin/main...HEAD`) against the original pull request's
+   diff; for a rebuild, also `git range-diff` the old and new commits. Confirm that no intentional
+   behaviour disappeared and no already-landed behaviour was reintroduced.
 5. Run the repository's focused checks for the touched boundary. Distinguish real failures from
    pre-existing or infrastructure failures.
 6. Push by adding commits. Never force.

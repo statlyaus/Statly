@@ -33,12 +33,15 @@ resetting a committed branch, pushing `main`, or closing a pull request you did 
 4. **File the PR** with `file-pr`. Add one short line to the description that says how you proved
    the change.
 5. **Hand it to the app's monitor.** Bind the pull request and turn on Auto-fix, auto-merge (squash)
-   and auto-archive, per the standing approval. The app wakes this session on CI failures, merge
-   conflicts and review comments. Never poll, never run a watcher, never schedule a wakeup for CI.
+   and auto-archive, as `file-pr` says. The app wakes this session on CI failures, merge conflicts
+   and review comments, not when checks go green or the branch falls BEHIND. Never poll, never run
+   a watcher, never schedule a wakeup for CI.
 6. **Handle every wake** with `pr-findings`: fix real findings and CI failures, with proof for each
    fix before you push it; decline the rest with a written reason.
 7. **Report** in your final message: the pull request link, the head SHA, your proof, each decision
-   you made for the user, and that auto-merge lands it once the merge gate passes.
+   you made for the user, and that auto-merge lands it once the merge gate passes. Say that if `main`
+   moves first, the pull request goes BEHIND and waits: the monitor does not wake for that, so the
+   user's next message ("babysit" is enough) gets it updated.
 
 End the turn only when the pull request is bound with auto-merge on and nothing is left for you to
 fix. A pending check is not a reason to stay; a wake is. There is no merge commit when the turn
@@ -67,11 +70,13 @@ Full confidence means all of these are true on the latest commit:
 - Review bots have finished, and each finding is fixed or dismissed with a written reason.
   CodeRabbit is advisory: never wait for it and never hold a merge for it.
 - No human review still requests changes.
-- The branch is up to date with `main` and GitHub reports it as mergeable. If it is BEHIND, run
-  `gh pr update-branch <n> --repo statlyaus/Statly`; never rebase or force-push.
+- The branch is up to date with `main` and GitHub reports it as mergeable. If it is BEHIND, update
+  it as `pr-findings` says; never rebase or force-push.
 
 The repository merges by squash auto-merge through branch protection. Never use `--admin` or
-another bypass.
+another bypass. Auto-merge enforces only required checks and resolved conversations; the rest of
+this gate is yours. Check it on every wake, and turn auto-merge off if proof or review cannot be
+completed.
 
 ## Asking the user
 
@@ -87,5 +92,5 @@ Ask only when you cannot continue alone:
 - Another pull request makes this one obsolete.
 
 Decide everything else yourself with sensible defaults, and list those decisions in the report. If
-the question gets no answer, take the safe path: turn auto-merge off, leave the pull request open,
-and start your final message with the question.
+the question gets no answer, take the safe path: commit, file the pull request with auto-merge off
+(or turn it off), leave it open, and start your final message with the question.

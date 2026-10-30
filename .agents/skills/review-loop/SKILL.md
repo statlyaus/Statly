@@ -45,13 +45,15 @@ this change breaks. Note missing or pre-failing checks in the brief.
 ## 2. Start the reviewer
 
 Use the Agent tool. The reviewer is a fresh `general-purpose` agent, never a `fork`: a fork
-inherits this conversation and tends to confirm it. Set `model` to the most capable Claude model
-the tool offers (the session's own model is the safe default) unless the user named one. Do not
+inherits this conversation and tends to confirm it. Set `model` to a Claude model other than the
+one that wrote the change and no less capable, when the tool offers one, else the session's own, unless the
+user named one. A same-model reviewer reads independently but shares the author's training; say
+so in the report. Do not
 hardcode a model ID, and never pick a smaller model to save cost unless the user says so. Record
 the model in the ledger. Save the agent's ID: later rounds continue it with `SendMessage`, which
 keeps its reading of the code.
 
-Run it in the foreground and wait for its report. Do not edit scoped files while review runs.
+Wait for its completion notice and never predict its result. Do not edit scoped files while review runs.
 Do not poll or start a second reviewer. An error, a timeout, or no reply is not approval: start a
 fresh reviewer with the ledger.
 
@@ -100,8 +102,8 @@ Stuck: an item stays disputed after two replies, or budget ends. Show both sides
 each. The user decides. Budget end is not approval.
 
 Do not commit during the loop: this repository's hook pushes every commit, so a commit is a push.
-Commit after agreement, or after the user decides when stuck, then follow
-`statly-engineering-workflow` for push, pull request, and merge. If the change goes to a pull
+Commit after agreement, or after the user decides when stuck, then return to the skill that called
+this one (`full-send` files with `file-pr`), or otherwise follow `statly-engineering-workflow`. If the change goes to a pull
 request, add above the model blurb:
 
 `Reviewed with review-loop: <N> rounds with <model>. Reviewer verdict: approved`.

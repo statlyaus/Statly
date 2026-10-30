@@ -28,8 +28,9 @@ a second attribution.
 
 Apply this format to top-level pull request comments, inline review comments, replies to bots or
 reviewers, and written explanations used before resolving or dismissing feedback. Do not add it to
-pull request descriptions (those end with the repository's attribution footer), commit messages, or
-text the user explicitly asked to post verbatim without attribution.
+pull request descriptions (those end with the repository's attribution footer), commit messages,
+bot commands such as `@dependabot rebase` (posted verbatim, alone), or text the user explicitly
+asked to post verbatim without attribution.
 
 Write the comment itself in a direct style:
 

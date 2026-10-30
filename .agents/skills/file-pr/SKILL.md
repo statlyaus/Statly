@@ -62,9 +62,10 @@ at in the rendered diff first, then mark it ready. Never close and recreate a pu
 update it. If `gh pr create` fails because the GraphQL rate limit is used up, open it through
 REST: `gh api repos/statlyaus/Statly/pulls -f title=... -f head=... -f base=main -F body=@<file>`.
 
-After filing, bind the pull request in the app and turn on Auto-fix, auto-merge (squash) and
-auto-archive, per the standing approval. `full-stop` is the exception: it turns auto-merge off.
-From then on `pr-findings` handles what the app reports.
+After filing, bind the pull request in the app and turn on Auto-fix and auto-archive. Turn on
+auto-merge (squash) too, per the standing approval, except under `full-stop` and for a rebuilt or
+taken-over pull request whose original is still open: there, never enable it. From then on
+`pr-findings` handles what the app reports.
 
 Do not post a follow-up pull request comment unless it serves the user's request. When a comment is
 needed, use the `leaving-pr-comments` skill.
