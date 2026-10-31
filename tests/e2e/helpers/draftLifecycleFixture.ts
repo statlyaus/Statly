@@ -231,7 +231,7 @@ async function createLeagueAndDraft(tx: TxClient, queuedBotPlayerId: string) {
       inviteCode: 'E2ELIFE1',
       ownerId: DEVELOPMENT_AUTH_USER_ID,
       settingsId: DRAFT_LIFECYCLE_FIXTURE.settingsId,
-      categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+      categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
       createdAt: fixtureCreatedAt,
     },
   });

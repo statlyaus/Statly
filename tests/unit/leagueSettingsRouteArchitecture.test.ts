@@ -39,7 +39,7 @@ describe('league settings route architecture', () => {
     expect(source).toContain("scoringFormat: 'nine-category'");
     expect(source).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');
     expect(source).not.toContain('REAL_DATA_CATEGORY_KEYS');
-    expect(source).toContain('categoriesJson: JSON.stringify(categories)');
+    expect(source).toContain('categoriesJson: categories');
     expect(source).toContain('scoringMode');
     expect(source).toContain('fixtureGenerationMode');
     expect(source).toContain('lineupSlotsJson');

@@ -475,16 +475,8 @@ function toOfferStatusDto(status: LeagueTradeOfferStatus): TradeOfferStatusDto {
   return status;
 }
 
-function normalizeStoredCategories(value: string | null): FantasyCategoryKey[] {
-  if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  try {
-    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
-  } catch {
-    return normalizeFantasyCategoryKeys(
-      value.split(',').map((category) => category.trim()),
-      REAL_DATA_NINE_CATEGORY_PRESET
-    );
-  }
+function normalizeStoredCategories(value: unknown): FantasyCategoryKey[] {
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 function readPublicEventReason(eventType: string, payloadJson: string | null): string | null {

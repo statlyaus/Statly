@@ -60,7 +60,7 @@ describe('commissioner authorization', () => {
         inviteCode: 'INTAUTH1',
         ownerId: users.owner,
         settingsId: FIXTURE.settingsId,
-        categoriesJson: '[]',
+        categoriesJson: [],
       },
     });
     await prisma.leagueMember.createMany({

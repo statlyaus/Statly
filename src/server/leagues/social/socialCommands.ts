@@ -629,24 +629,15 @@ export async function updateSocialPreferences(leagueId: string, userId: string, 
   });
   if (!member) throw new SocialError('FORBIDDEN', 'Active league membership is required');
 
-  let existing: Record<string, unknown> = {};
-  if (member.notificationSettingsJson) {
-    try {
-      const parsedExisting = JSON.parse(member.notificationSettingsJson) as unknown;
-      if (parsedExisting && typeof parsedExisting === 'object' && !Array.isArray(parsedExisting)) {
-        existing = parsedExisting as Record<string, unknown>;
-      }
-    } catch {
-      existing = {};
-    }
-  }
+  const stored = member.notificationSettingsJson;
+  const existing = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
   await prisma.leagueMember.update({
     where: { id: member.id },
     data: {
-      notificationSettingsJson: JSON.stringify({
+      notificationSettingsJson: {
         ...existing,
         social: parsed.data,
-      }),
+      },
     },
   });
   return parsed.data;

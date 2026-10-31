@@ -129,12 +129,12 @@ function parseSocialNotificationSettings(value: unknown): SocialNotificationPref
 }
 
 function parseStoredNotificationSettings(
-  value: string | null | undefined
+  value: unknown
 ): LeagueMemberNotificationSettings | undefined {
   if (!value) return undefined;
 
   try {
-    return parseNotificationSettings(JSON.parse(value));
+    return parseNotificationSettings(value);
   } catch {
     return undefined;
   }
@@ -182,7 +182,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       teamLogoPositionX?: number;
       teamLogoPositionY?: number;
       teamLogoZoom?: number;
-      notificationSettingsJson?: string;
+      notificationSettingsJson?: LeagueMemberNotificationSettings;
     } = {};
     const firestorePatch: {
       teamName?: string;
@@ -226,7 +226,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             notificationSettings.social = existingSettings.social;
           }
         }
-        prismaData.notificationSettingsJson = JSON.stringify(notificationSettings);
+        prismaData.notificationSettingsJson = notificationSettings;
         firestorePatch.notificationSettings = notificationSettings;
       }
     } catch (error) {

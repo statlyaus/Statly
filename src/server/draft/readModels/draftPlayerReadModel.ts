@@ -66,17 +66,7 @@ function normalizeLookupPart(value: string | null | undefined): string {
 }
 
 export function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
-  let parsed: unknown = raw;
-
-  if (typeof raw === 'string') {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = raw.split(',').map((value) => value.trim());
-    }
-  }
-
-  return normalizeFantasyCategoryKeys(parsed, []);
+  return normalizeFantasyCategoryKeys(raw, []);
 }
 
 function roundStat(value: number): number {

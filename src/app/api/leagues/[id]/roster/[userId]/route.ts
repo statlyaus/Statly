@@ -25,15 +25,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 function getSelectedLeagueCategories(rawCategories: unknown): FantasyCategoryKey[] {
-  let parsed = rawCategories;
-  if (typeof rawCategories === 'string') {
-    try {
-      parsed = JSON.parse(rawCategories);
-    } catch {
-      parsed = rawCategories.split(',').map((category) => category.trim());
-    }
-  }
-  return normalizeFantasyCategoryKeys(parsed, REAL_DATA_NINE_CATEGORY_PRESET);
+  return normalizeFantasyCategoryKeys(rawCategories, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 const PutSchema = z.object({

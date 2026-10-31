@@ -42,7 +42,7 @@ model League {
   ownerId                 String
   settingsId              String                   @unique
   activeSeasonId          String?                  @unique
-  categoriesJson          String?
+  categoriesJson          Json?
   visibility              LeagueVisibility         @default(PRIVATE)
   description             String?
   owner                   User                     @relation("LeagueOwner", fields: [ownerId], references: [id])
@@ -95,7 +95,7 @@ model LeagueMember {
   teamLogoPositionX         Int?
   teamLogoPositionY         Int?
   teamLogoZoom              Float?
-  notificationSettingsJson  String?
+  notificationSettingsJson  Json?
   socialStandardsAcceptedAt DateTime?
   isActive                  Boolean                  @default(true)
   status                    LeagueMemberStatus       @default(ACTIVE)
@@ -759,7 +759,7 @@ model LeagueMatchupScore {
   matchupId      String
   memberId       String
   round          Int
-  categoriesJson String
+  categoriesJson Json
   categoryWins   Int                 @default(0)
   categoryLosses Int                 @default(0)
   categoryDraws  Int                 @default(0)

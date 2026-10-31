@@ -16,14 +16,8 @@ import {
 } from '@/server/leagues/competitionService';
 import { normalizeFantasyCategoryKeys, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
-function parseCategories(value: string | null): FantasyCategoryKey[] {
-  if (!value) return ['goals'];
-
-  try {
-    return normalizeFantasyCategoryKeys(JSON.parse(value));
-  } catch {
-    return ['goals'];
-  }
+function parseCategories(value: unknown): FantasyCategoryKey[] {
+  return normalizeFantasyCategoryKeys(value, ['goals']);
 }
 
 function missingActorMemberResponse() {

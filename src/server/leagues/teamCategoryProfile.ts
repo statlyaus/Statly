@@ -31,7 +31,7 @@ interface BuildInput {
   members: ReadonlyArray<{ id: string; teamName: string }>;
   categories: readonly FantasyCategoryKey[];
   categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
-  finalizedScores: ReadonlyArray<{ memberId: string; categoriesJson: string | null }>;
+  finalizedScores: ReadonlyArray<{ memberId: string; categoriesJson: unknown }>;
 }
 
 const roundToTenth = (value: number) => Math.round(value * 10) / 10;

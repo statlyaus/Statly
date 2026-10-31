@@ -103,7 +103,7 @@ async function seedFixture(): Promise<void> {
         inviteCode: 'INTFULL1',
         ownerId: userIds[0],
         settingsId: FIXTURE.settingsId,
-        categoriesJson: JSON.stringify([]),
+        categoriesJson: [],
         createdAt: startedAt,
       },
     });
@@ -212,8 +212,8 @@ describe('full draft persistence convergence', () => {
     expect(new Set(selectedPlayerIds)).toHaveLength(FIXTURE.totalPicks);
     expect(selectedPlayerIds.every((playerId) => playerIds.includes(playerId))).toBe(true);
 
-    const [draft, picks, rosterOwnership, waiverPriorities, queueCount, events] =
-      await Promise.all([
+    const [draft, picks, rosterOwnership, waiverPriorities, queueCount, events] = await Promise.all(
+      [
         prisma.draft.findUniqueOrThrow({ where: { id: FIXTURE.draftId } }),
         prisma.pick.findMany({
           where: { draftId: FIXTURE.draftId },
@@ -232,7 +232,8 @@ describe('full draft persistence convergence', () => {
           where: { draftId: FIXTURE.draftId },
           orderBy: { createdAt: 'asc' },
         }),
-      ]);
+      ]
+    );
 
     expect(draft).toMatchObject({
       status: DraftStatus.COMPLETED,

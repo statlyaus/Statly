@@ -50,8 +50,11 @@ path.
   `normalizeCategoryDirections`, `normalizeCompetitionRules`, `normalizeDraftPositionLimits`,
   `normalizeDraftAutoPickRules`) remain the shape authority. Each cohort's migration fails on any
   unparseable stored value, listing the row ids, and carries its manual rollback SQL in a comment.
-  The other JSON-in-text columns (`League.categoriesJson`, `notificationSettingsJson` and the
-  outbox, audit and command payload columns) are still text.
+  Cohort 2 converted `League.categoriesJson`, `LeagueMember.notificationSettingsJson` and
+  `LeagueMatchupScore.categoriesJson` the same way. Category readers pass the stored value to
+  `normalizeFantasyCategoryKeys`, each with its own fallback (an empty list for drafts, `goals` for
+  competition, the nine-category preset elsewhere). The outbox, audit and command payload columns
+  are still text.
 
 The migration history starts at a reviewed PostgreSQL baseline. No user data existed on SQLite, so
 there is no transfer. The SQLite history is archived in `prisma/migrations-sqlite-archive/` and must

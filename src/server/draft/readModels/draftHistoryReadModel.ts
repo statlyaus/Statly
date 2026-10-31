@@ -104,20 +104,10 @@ export function parseDraftHistoryLimit(rawLimit: string | null): number {
 }
 
 function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
-  let parsed: unknown = raw;
-
-  if (typeof raw === 'string') {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = raw.split(',').map((value) => value.trim());
-    }
-  }
-
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(raw)) return [];
 
   const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
+  return raw.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
 function sortByCountThenLabel(
@@ -184,7 +174,10 @@ export function calculateDraftCompletionPct(picksMade: number, totalPicks: numbe
   return Math.min(100, Math.round((picksMade / totalPicks) * 100));
 }
 
-function buildParticipants(record: DraftRecord, picks: DraftHistoryPick[]): DraftHistoryParticipant[] {
+function buildParticipants(
+  record: DraftRecord,
+  picks: DraftHistoryPick[]
+): DraftHistoryParticipant[] {
   const slotByMemberId = new Map(record.orders.map((order) => [order.memberId, order.slot]));
   const picksByMemberId = new Map<string, DraftHistoryPick[]>();
 
@@ -202,7 +195,10 @@ function buildParticipants(record: DraftRecord, picks: DraftHistoryPick[]): Draf
       const positionCounts = new Map<string, number>();
 
       for (const pick of memberPicks) {
-        positionCounts.set(pick.player.position, (positionCounts.get(pick.player.position) ?? 0) + 1);
+        positionCounts.set(
+          pick.player.position,
+          (positionCounts.get(pick.player.position) ?? 0) + 1
+        );
       }
 
       return {

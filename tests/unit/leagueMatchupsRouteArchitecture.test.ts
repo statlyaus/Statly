@@ -54,7 +54,7 @@ describe('league matchup API route architecture', () => {
     mocks.getLeagueMembership.mockReset().mockResolvedValue({ isMember: true });
     mocks.findLeague.mockReset().mockResolvedValue({
       ownerId: 'owner-user',
-      categoriesJson: '["goals"]',
+      categoriesJson: ['goals'],
       settings: {
         id: 'settings-1',
         competitionStatus: 'PUBLISHED',
@@ -164,7 +164,7 @@ describe('league matchup API route architecture', () => {
   it('returns 400 for a non-object rules payload without saving competition settings', async () => {
     mocks.findLeague.mockResolvedValueOnce({
       ownerId: 'owner-user',
-      categoriesJson: '["goals"]',
+      categoriesJson: ['goals'],
       settings: {
         id: 'settings-1',
         competitionStatus: 'SETUP',

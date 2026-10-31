@@ -7,13 +7,13 @@ export type CategoryDirection = 'HIGH_WINS' | 'LOW_WINS';
 
 export type LineupSlotSettings = Record<ActiveLineupSlot, number>;
 
-export interface CategoryScoreResult {
+export type CategoryScoreResult = {
   category: FantasyCategoryKey;
   homeValue: number;
   awayValue: number;
   direction: CategoryDirection;
   winner: 'home' | 'away' | 'draw';
-}
+};
 
 export interface MatchupScoreResult {
   homeCategoryWins: number;

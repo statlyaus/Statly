@@ -10,15 +10,8 @@ process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??= process.env.GOOGLE_CLOUD_PROJECT
 
 const LEGACY_LOCAL_DEVELOPMENT_USER_IDS = ['2qlfdHSCFTPlxoKFSUfNLSlCDRe2'];
 
-function hasStoredJsonArray(value: string | null | undefined): boolean {
-  if (!value) return false;
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.length > 0;
-  } catch {
-    return false;
-  }
+function hasStoredJsonArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
 }
 
 async function main() {
@@ -103,11 +96,8 @@ async function main() {
     );
   }
 
-  const localDevelopmentUserIds = [
-    DEVELOPMENT_AUTH_USER_ID,
-    ...LEGACY_LOCAL_DEVELOPMENT_USER_IDS,
-  ];
-  const categoriesJson = JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]);
+  const localDevelopmentUserIds = [DEVELOPMENT_AUTH_USER_ID, ...LEGACY_LOCAL_DEVELOPMENT_USER_IDS];
+  const categoriesJson = [...REAL_DATA_NINE_CATEGORY_PRESET];
   const positionLimitsJson = LOCAL_TEST_DRAFT_POSITION_LIMITS;
   const autoPickRulesJson = DEFAULT_DRAFT_AUTO_PICK_RULES;
   const rosterSize = getRosterSizeFromPositionLimits(LOCAL_TEST_DRAFT_POSITION_LIMITS);

@@ -39,7 +39,7 @@ describe('canonical league creation', () => {
         name: 'Statly Premier League',
         inviteCode: 'CODE1234',
         ownerId: 'owner-user',
-        categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+        categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
         visibility: 'PRIVATE',
         description: null,
       }),

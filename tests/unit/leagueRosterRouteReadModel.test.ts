@@ -36,7 +36,7 @@ describe('league roster route read model', () => {
     });
     prismaMocks.league.findUnique.mockResolvedValue({
       id: 'league-1',
-      categoriesJson: JSON.stringify(['goals', 'tackles', 'inside50s']),
+      categoriesJson: ['goals', 'tackles', 'inside50s'],
       settings: {
         categoryDirectionsJson: { tackles: 'LOW_WINS' },
       },

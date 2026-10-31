@@ -196,7 +196,7 @@ async function main() {
         inviteCode: 'LOCALSEASON',
         ownerId: DEVELOPMENT_AUTH_USER_ID,
         settingsId: SETTINGS_ID,
-        categoriesJson: JSON.stringify(CATEGORIES.map(([key]) => key)),
+        categoriesJson: CATEGORIES.map(([key]) => key),
       },
     });
     await prisma.leagueSeason.create({
@@ -343,7 +343,7 @@ async function main() {
         });
 
         if (played) {
-          const categoriesJson = JSON.stringify(rows);
+          const categoriesJson = rows;
           for (const [member, wins, losses] of [
             [home, homeWins, awayWins],
             [away, awayWins, homeWins],

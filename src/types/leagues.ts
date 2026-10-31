@@ -81,13 +81,14 @@ export interface LeagueMemberDoc {
   isActive?: boolean;
 }
 
-export interface LeagueMemberNotificationSettings {
+// A type alias, not an interface: Prisma's JSON input type accepts it.
+export type LeagueMemberNotificationSettings = {
   tradePush: boolean;
   waiverPush: boolean;
   draftReminder: boolean;
   scoringAlerts: boolean;
   social?: SocialNotificationPreferences;
-}
+};
 
 // API/UI shape for league members (client-side), dates as ISO strings
 export interface LeagueMember {

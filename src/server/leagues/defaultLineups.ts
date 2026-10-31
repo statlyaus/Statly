@@ -35,13 +35,8 @@ type DefaultLineupClient = Pick<
 /** On-field groups in team-sheet order, then interchange. */
 const FIELD_SLOT_ORDER = ['DEF', 'MID', 'RUC', 'FWD', 'UTIL'] as const;
 
-export function parseLeagueCategories(value: string | null | undefined): FantasyCategoryKey[] {
-  if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  try {
-    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
-  } catch {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  }
+export function parseLeagueCategories(value: unknown): FantasyCategoryKey[] {
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 export function buildLineupSpots(
@@ -102,7 +97,7 @@ export function scoreRosterPlayers({
 }: {
   sourcePlayers: readonly SourcePlayer[];
   roster: ReadonlyArray<{ playerId: string; name: string; club: string }>;
-  categoriesJson: string | null | undefined;
+  categoriesJson: unknown;
   categoryDirectionsJson: unknown;
 }): Map<string, number> {
   if (sourcePlayers.length === 0 || roster.length === 0) return new Map();

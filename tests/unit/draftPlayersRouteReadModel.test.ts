@@ -78,7 +78,7 @@ describe('draft players read model route', () => {
       completedAt: null,
       leagueId: 'league-1',
       league: {
-        categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+        categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
       },
     });
     prismaMocks.player.findMany.mockResolvedValue([
@@ -287,7 +287,7 @@ describe('draft players read model route', () => {
       completedAt: null,
       leagueId: 'league-1',
       league: {
-        categoriesJson: JSON.stringify(['goals']),
+        categoriesJson: ['goals'],
       },
     });
     prismaMocks.player.findMany.mockImplementation(async (args) => {

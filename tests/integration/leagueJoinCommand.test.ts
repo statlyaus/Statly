@@ -76,7 +76,7 @@ async function seedFixture(): Promise<void> {
         inviteCode: FIXTURE.inviteCode,
         ownerId: ownerUserId,
         settingsId: FIXTURE.settingsId,
-        categoriesJson: JSON.stringify([]),
+        categoriesJson: [],
       },
     });
     await tx.leagueMember.createMany({

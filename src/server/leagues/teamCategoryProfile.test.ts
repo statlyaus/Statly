@@ -5,9 +5,11 @@ import { buildTeamCategoryProfile } from './teamCategoryProfile';
 function score(memberId: string, values: Record<string, number>) {
   return {
     memberId,
-    categoriesJson: JSON.stringify(
-      Object.entries(values).map(([category, homeValue]) => ({ category, homeValue, awayValue: 0 }))
-    ),
+    categoriesJson: Object.entries(values).map(([category, homeValue]) => ({
+      category,
+      homeValue,
+      awayValue: 0,
+    })),
   };
 }
 

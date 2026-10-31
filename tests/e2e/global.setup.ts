@@ -122,7 +122,7 @@ async function globalSetup() {
           inviteCode: 'E2ETEST1',
           ownerId: DEVELOPMENT_AUTH_USER_ID,
           settingsId: E2E_SETTINGS_ID,
-          categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+          categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
           createdAt: now,
         },
       });

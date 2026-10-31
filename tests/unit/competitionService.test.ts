@@ -59,7 +59,7 @@ describe('publishCompetition', () => {
       id: 'league-1',
       settingsId: 'settings-1',
       activeSeasonId: 'season-1',
-      categoriesJson: JSON.stringify(['goals']),
+      categoriesJson: ['goals'],
       settings: {
         competitionRulesVersion: 4,
         competitionRulesJson: null,
@@ -149,7 +149,7 @@ describe('publishCompetition', () => {
       settingsId: 'settings-1',
       activeSeasonId: 'season-1',
       activeSeason: { year: 2025 },
-      categoriesJson: JSON.stringify(['goals']),
+      categoriesJson: ['goals'],
       settings: {
         competitionRulesVersion: 4,
         competitionRulesJson: null,

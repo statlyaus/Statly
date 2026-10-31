@@ -43,7 +43,7 @@ const league = {
   id: 'league-1',
   name: 'Statly Premier League',
   inviteCode: 'CODE1234',
-  categoriesJson: JSON.stringify(REAL_DATA_NINE_CATEGORY_PRESET),
+  categoriesJson: REAL_DATA_NINE_CATEGORY_PRESET,
   _count: { members: 1 },
   settings: {
     id: 'settings-1',

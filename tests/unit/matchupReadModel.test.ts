@@ -54,7 +54,7 @@ describe('matchupReadModel helpers', () => {
       [
         {
           memberId: 'home-member',
-          categoriesJson: JSON.stringify([
+          categoriesJson: [
             {
               category: 'goals',
               homeValue: 12,
@@ -69,11 +69,11 @@ describe('matchupReadModel helpers', () => {
               direction: 'HIGH_WINS',
               winner: 'home',
             },
-          ]),
+          ],
         },
         {
           memberId: 'away-member',
-          categoriesJson: JSON.stringify([
+          categoriesJson: [
             {
               category: 'goals',
               homeValue: 8,
@@ -88,11 +88,11 @@ describe('matchupReadModel helpers', () => {
               direction: 'HIGH_WINS',
               winner: 'away',
             },
-          ]),
+          ],
         },
         {
           memberId: 'home-member',
-          categoriesJson: JSON.stringify([
+          categoriesJson: [
             {
               category: 'goals',
               homeValue: 5,
@@ -100,7 +100,7 @@ describe('matchupReadModel helpers', () => {
               direction: 'HIGH_WINS',
               winner: 'away',
             },
-          ]),
+          ],
         },
       ],
       'goals'
