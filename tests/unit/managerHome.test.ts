@@ -39,7 +39,7 @@ function membership(overrides: Record<string, unknown> = {}) {
     league: {
       id: 'league-1',
       name: 'Friday Night League',
-      categoriesJson: JSON.stringify(['goals', 'tackles']),
+      categoriesJson: ['goals', 'tackles'],
       settings: {
         maxTeams: 10,
         timeZone: 'Australia/Melbourne',
@@ -229,10 +229,10 @@ describe('loadManagerHome', () => {
         awayCategoryWins: 1,
         scores: [
           {
-            categoriesJson: JSON.stringify([
+            categoriesJson: [
               { category: 'goals', homeValue: 9, awayValue: 12, winner: 'away' },
               { category: 'tackles', homeValue: 60, awayValue: 50, winner: 'home' },
-            ]),
+            ],
           },
         ],
       },

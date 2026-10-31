@@ -141,7 +141,7 @@ export async function createCanonicalLeague(
           inviteCode,
           ownerId: command.userId,
           settingsId: settings.id,
-          categoriesJson: JSON.stringify(normalized.categories),
+          categoriesJson: normalized.categories,
           visibility: normalized.visibility,
           description,
           createdAt: now,

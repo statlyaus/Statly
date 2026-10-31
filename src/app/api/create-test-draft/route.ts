@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           inviteCode: `TEST${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
           ownerId: DEVELOPMENT_AUTH_USER_ID,
           settingsId: settings.id,
-          categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+          categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
         },
       });
 

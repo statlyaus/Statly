@@ -71,14 +71,6 @@ function getNestedValue(source: Record<string, unknown>, keys: string[]): unknow
 }
 
 function normalizeLeagueCategories(value: unknown): FantasyCategoryKey[] {
-  if (typeof value === 'string' && value.trim()) {
-    try {
-      return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
-    } catch {
-      return [...REAL_DATA_NINE_CATEGORY_PRESET];
-    }
-  }
-
   return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
@@ -212,7 +204,7 @@ function toSettingsResponse(league: {
   id: string;
   name: string;
   inviteCode: string;
-  categoriesJson: string | null;
+  categoriesJson: unknown;
   settings: {
     maxTeams: number;
     rosterSize: number;
@@ -582,7 +574,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           where: { id },
           data: {
             ...(nextName ? { name: nextName } : {}),
-            categoriesJson: JSON.stringify(categories),
+            categoriesJson: categories,
           },
         }),
         prisma.leagueSettings.update({

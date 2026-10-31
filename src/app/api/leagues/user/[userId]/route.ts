@@ -12,17 +12,7 @@ import {
 } from '@/types/fantasyCategories';
 
 function normalizeCategories(value: unknown): FantasyCategoryKey[] {
-  if (Array.isArray(value)) {
-    return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
-  }
-
-  if (typeof value !== 'string') return [...REAL_DATA_NINE_CATEGORY_PRESET];
-
-  try {
-    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
-  } catch {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  }
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 export async function GET(

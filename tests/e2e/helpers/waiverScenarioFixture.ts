@@ -100,7 +100,7 @@ export async function seedWaiverScenario(): Promise<void> {
           inviteCode: 'E2EWAIV',
           ownerId: DEVELOPMENT_AUTH_USER_ID,
           settingsId,
-          categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+          categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
         },
       });
       // Every real league gets an active season at creation (createLeagueService); trades and

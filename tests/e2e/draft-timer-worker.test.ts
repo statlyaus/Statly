@@ -172,7 +172,7 @@ async function seedLiveTimerFixture() {
           inviteCode: 'E2ETIMER',
           ownerId: DEVELOPMENT_AUTH_USER_ID,
           settingsId: FIXTURE.settingsId,
-          categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+          categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
           createdAt: startedAt,
         },
       });

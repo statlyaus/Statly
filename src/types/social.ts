@@ -2,12 +2,7 @@ export type SocialMessageType = 'member' | 'system';
 export type SocialChannel = 'chat' | 'board' | 'activity';
 export type SocialModerationStatus = 'active' | 'removed';
 export type SocialReportReason =
-  | 'harassment'
-  | 'hate'
-  | 'spam'
-  | 'threats'
-  | 'unsafe-link'
-  | 'other';
+  'harassment' | 'hate' | 'spam' | 'threats' | 'unsafe-link' | 'other';
 
 export interface SocialAuthor {
   userId: string;
@@ -122,7 +117,7 @@ export interface SocialPostThread {
   replies: SocialCursorPage<SocialReply>;
 }
 
-export interface SocialNotificationPreferences {
+export type SocialNotificationPreferences = {
   chatInApp: boolean;
   boardPosts: boolean;
   ownPostReplies: boolean;
@@ -130,7 +125,7 @@ export interface SocialNotificationPreferences {
   tradeDiscussions: boolean;
   mentions: boolean;
   systemActivityInApp: boolean;
-}
+};
 
 export const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES: SocialNotificationPreferences = {
   chatInApp: true,

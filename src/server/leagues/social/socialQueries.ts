@@ -136,23 +136,21 @@ export async function getLeagueSocialSummary(
   };
 }
 
-function parseSocialPreferences(value: string | null | undefined) {
-  if (!value) return DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES;
-  try {
-    const stored = JSON.parse(value) as Record<string, unknown>;
-    const social =
-      stored.social && typeof stored.social === 'object' && !Array.isArray(stored.social)
-        ? (stored.social as Record<string, unknown>)
-        : {};
-    return Object.fromEntries(
-      Object.entries(DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES).map(([key, fallback]) => [
-        key,
-        typeof social[key] === 'boolean' ? social[key] : fallback,
-      ])
-    ) as typeof DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES;
-  } catch {
+function parseSocialPreferences(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES;
   }
+  const stored = value as Record<string, unknown>;
+  const social =
+    stored.social && typeof stored.social === 'object' && !Array.isArray(stored.social)
+      ? (stored.social as Record<string, unknown>)
+      : {};
+  return Object.fromEntries(
+    Object.entries(DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES).map(([key, fallback]) => [
+      key,
+      typeof social[key] === 'boolean' ? social[key] : fallback,
+    ])
+  ) as typeof DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES;
 }
 
 async function countUnreadEvents({

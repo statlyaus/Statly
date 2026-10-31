@@ -73,8 +73,9 @@ describe('league detail route architecture', () => {
     expect(loaderSource).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');
     expect(loaderSource).toContain('normalizeFantasyCategoryKeys');
     expect(loaderSource).toContain(
-      'return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);'
+      'return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);'
     );
+    expect(loaderSource).not.toContain('JSON.parse(value)');
     expect(loaderSource).not.toContain(
       "categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s']"
     );

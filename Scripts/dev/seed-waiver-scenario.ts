@@ -142,7 +142,7 @@ async function main() {
       inviteCode: 'WAIVTEST',
       ownerId: commissionerId,
       settingsId: SETTINGS_ID,
-      categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
+      categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
     },
   });
   // Every real league gets an active season at creation (createLeagueService). Trades and social

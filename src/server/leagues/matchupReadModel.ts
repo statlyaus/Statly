@@ -130,46 +130,39 @@ function toIsoString(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
-export function parseStoredCategoryRows(categoriesJson: string | null | undefined): Array<{
+export function parseStoredCategoryRows(categoriesJson: unknown): Array<{
   category: FantasyCategoryKey;
   homeValue: number;
   awayValue: number;
   direction: 'HIGH_WINS' | 'LOW_WINS';
   winner: MatchupTeamSide;
 }> {
-  if (!categoriesJson) return [];
+  if (!Array.isArray(categoriesJson)) return [];
 
-  try {
-    const parsed = JSON.parse(categoriesJson);
-    if (!Array.isArray(parsed)) return [];
+  return categoriesJson.flatMap((row: unknown) => {
+    if (!row || typeof row !== 'object') return [];
+    const source = row as Record<string, unknown>;
+    const category = source.category;
+    if (!isFantasyCategoryKey(category)) return [];
+    const homeValue = Number(source.homeValue ?? 0);
+    const awayValue = Number(source.awayValue ?? 0);
+    const winner = source.winner;
+    const direction = source.direction;
 
-    return parsed.flatMap((row) => {
-      if (!row || typeof row !== 'object') return [];
-      const source = row as Record<string, unknown>;
-      const category = source.category;
-      if (!isFantasyCategoryKey(category)) return [];
-      const homeValue = Number(source.homeValue ?? 0);
-      const awayValue = Number(source.awayValue ?? 0);
-      const winner = source.winner;
-      const direction = source.direction;
-
-      return [
-        {
-          category,
-          homeValue: Number.isFinite(homeValue) ? homeValue : 0,
-          awayValue: Number.isFinite(awayValue) ? awayValue : 0,
-          direction: direction === 'LOW_WINS' ? 'LOW_WINS' : 'HIGH_WINS',
-          winner: winner === 'home' || winner === 'away' || winner === 'draw' ? winner : 'draw',
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
+    return [
+      {
+        category,
+        homeValue: Number.isFinite(homeValue) ? homeValue : 0,
+        awayValue: Number.isFinite(awayValue) ? awayValue : 0,
+        direction: direction === 'LOW_WINS' ? 'LOW_WINS' : 'HIGH_WINS',
+        winner: winner === 'home' || winner === 'away' || winner === 'draw' ? winner : 'draw',
+      },
+    ];
+  });
 }
 
 export function aggregateFinalizedCategoryTotals(
-  scores: ReadonlyArray<{ memberId: string; categoriesJson: string | null }>,
+  scores: ReadonlyArray<{ memberId: string; categoriesJson: unknown }>,
   category: FantasyCategoryKey
 ): Map<string, number> {
   const totalsByMemberId = new Map<string, number>();
@@ -195,7 +188,7 @@ function buildCategoryRows({
 }: {
   categories: FantasyCategoryKey[];
   categoryDirections: ReturnType<typeof normalizeCategoryDirections>;
-  categoriesJson: string | null | undefined;
+  categoriesJson: unknown;
 }): LeagueMatchupCategoryRow[] {
   const storedRowsByCategory = new Map(
     parseStoredCategoryRows(categoriesJson).map((row) => [row.category, row])
@@ -328,7 +321,7 @@ function buildMatchupCard({
     byeMember: { id: string; teamName: string; teamLogoUrl: string | null } | null;
     scores: Array<{
       memberId: string;
-      categoriesJson: string;
+      categoriesJson: unknown;
       categoryWins: number;
       categoryLosses: number;
       categoryDraws: number;
@@ -444,14 +437,8 @@ export function resolveAflRoundForScoring({
   return fixtureVersion === 0 ? fantasyRound : competitionRoundAflRound;
 }
 
-function normalizeLeagueCategories(value: string | null | undefined): FantasyCategoryKey[] {
-  if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
-
-  try {
-    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
-  } catch {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  }
+function normalizeLeagueCategories(value: unknown): FantasyCategoryKey[] {
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 export function resolveRoundPlayerAvailability({
@@ -993,7 +980,7 @@ export async function recalculateLeagueRoundMatchups({
           matchupId: matchup.id,
           memberId: matchup.homeMemberId,
           round,
-          categoriesJson: JSON.stringify(result.categories),
+          categoriesJson: result.categories,
           categoryWins: result.homeCategoryWins,
           categoryLosses: result.awayCategoryWins,
           categoryDraws: result.drawnCategories,
@@ -1006,7 +993,7 @@ export async function recalculateLeagueRoundMatchups({
           finalizedAt,
         },
         update: {
-          categoriesJson: JSON.stringify(result.categories),
+          categoriesJson: result.categories,
           categoryWins: result.homeCategoryWins,
           categoryLosses: result.awayCategoryWins,
           categoryDraws: result.drawnCategories,
@@ -1026,15 +1013,13 @@ export async function recalculateLeagueRoundMatchups({
           matchupId: matchup.id,
           memberId: matchup.awayMemberId,
           round,
-          categoriesJson: JSON.stringify(
-            result.categories.map((category) => ({
-              ...category,
-              homeValue: category.awayValue,
-              awayValue: category.homeValue,
-              winner:
-                category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
-            }))
-          ),
+          categoriesJson: result.categories.map((category) => ({
+            ...category,
+            homeValue: category.awayValue,
+            awayValue: category.homeValue,
+            winner:
+              category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
+          })),
           categoryWins: result.awayCategoryWins,
           categoryLosses: result.homeCategoryWins,
           categoryDraws: result.drawnCategories,
@@ -1047,15 +1032,13 @@ export async function recalculateLeagueRoundMatchups({
           finalizedAt,
         },
         update: {
-          categoriesJson: JSON.stringify(
-            result.categories.map((category) => ({
-              ...category,
-              homeValue: category.awayValue,
-              awayValue: category.homeValue,
-              winner:
-                category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
-            }))
-          ),
+          categoriesJson: result.categories.map((category) => ({
+            ...category,
+            homeValue: category.awayValue,
+            awayValue: category.homeValue,
+            winner:
+              category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
+          })),
           categoryWins: result.awayCategoryWins,
           categoryLosses: result.homeCategoryWins,
           categoryDraws: result.drawnCategories,

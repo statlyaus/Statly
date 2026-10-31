@@ -100,7 +100,7 @@ async function seedFixture() {
       inviteCode: 'INTRAWSQ',
       ownerId: users[0],
       settingsId: SETTINGS,
-      categoriesJson: '[]',
+      categoriesJson: [],
     },
   });
   await prisma.leagueMember.createMany({

@@ -90,18 +90,11 @@ function normalizeLeagueCategories(
   return selected.length ? selected : [...REAL_DATA_NINE_CATEGORY_PRESET];
 }
 
-function parseStoredLeagueCategories(raw: string | null | undefined): FantasyCategoryKey[] {
-  if (!raw) return [];
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parseValidLeagueCategories(parsed.map(String)) : [];
-  } catch {
-    return parseValidLeagueCategories(raw.split(','));
-  }
+function parseStoredLeagueCategories(raw: unknown): FantasyCategoryKey[] {
+  return Array.isArray(raw) ? parseValidLeagueCategories(raw.map(String)) : [];
 }
 
-function hasStoredLeagueCategories(raw: string | null | undefined): boolean {
+function hasStoredLeagueCategories(raw: unknown): boolean {
   return parseStoredLeagueCategories(raw).length > 0;
 }
 
@@ -276,7 +269,7 @@ export async function POST(request: NextRequest) {
         if (!hasStoredLeagueCategories(league.categoriesJson)) {
           await tx.league.update({
             where: { id: league.id },
-            data: { categoriesJson: JSON.stringify(leagueCategories) },
+            data: { categoriesJson: leagueCategories },
           });
         }
 
@@ -377,7 +370,7 @@ export async function POST(request: NextRequest) {
             inviteCode: `DRAFT_${Date.now()}`,
             ownerId: body.leagueData?.ownerId || 'temp_owner', // Will be updated after creating the first user
             settingsId: settings.id,
-            categoriesJson: JSON.stringify(normalizeLeagueCategories(body.leagueData?.categories)),
+            categoriesJson: normalizeLeagueCategories(body.leagueData?.categories),
           },
         });
 

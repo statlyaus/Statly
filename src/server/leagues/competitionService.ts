@@ -78,16 +78,6 @@ type CompetitionFixtureMutationResult =
     }
   | { ok: false; error: string };
 
-function parseStoredCategories(value: string | null): unknown {
-  if (!value) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
 async function rebuildLeagueStandings(
   tx: Prisma.TransactionClient,
   {
@@ -147,9 +137,7 @@ export async function publishCompetition({
   if (!league.activeSeasonId)
     return { ok: false, errors: ['An active league season is required.'] };
 
-  const categories = normalizeFantasyCategoryKeys(parseStoredCategories(league.categoriesJson), [
-    'goals',
-  ]);
+  const categories = normalizeFantasyCategoryKeys(league.categoriesJson, ['goals']);
   const effectiveRules =
     rules ??
     normalizeCompetitionRules(league.settings.competitionRulesJson, categories[0] ?? 'goals');

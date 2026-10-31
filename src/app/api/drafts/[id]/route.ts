@@ -21,20 +21,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
-  let parsed: unknown = raw;
-
-  if (typeof raw === 'string') {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = raw.split(',').map((value) => value.trim());
-    }
-  }
-
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(raw)) return [];
 
   const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
+  return raw.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

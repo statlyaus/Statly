@@ -135,13 +135,8 @@ export function deriveSeasonStatus(seasonState: LeagueSeasonState | null): Manag
   return allFinal ? { kind: 'season_complete' } : { kind: 'season_setup' };
 }
 
-function parseCategories(value: string | null): FantasyCategoryKey[] {
-  if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  try {
-    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
-  } catch {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  }
+function parseCategories(value: unknown): FantasyCategoryKey[] {
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 /** The round a manager cares about now: the live one, else the next, else the most recent. */
