@@ -193,7 +193,7 @@ describe.sequential('player identity consolidation', () => {
         memberId: 'member-a',
         actionType: 'WAIVER_CLAIM',
         status: 'PROCESSED',
-        details: JSON.stringify({ playerId: aliasPlayerId }),
+        details: { playerId: aliasPlayerId },
       },
     });
 
@@ -242,7 +242,7 @@ describe.sequential('player identity consolidation', () => {
         where: { id: 'historical-alias-action' },
         select: { details: true },
       })
-    ).resolves.toEqual({ details: JSON.stringify({ playerId: aliasPlayerId }) });
+    ).resolves.toEqual({ details: { playerId: aliasPlayerId } });
     await expect(resolveCanonicalPlayerId(aliasPlayerId, undefined, prisma)).resolves.toBe(
       canonicalPlayerId
     );

@@ -85,11 +85,11 @@ beforeEach(async () => {
   }
   // One claim's waiver period has ended by 6 am; the other's has not ended at all yet.
   await prisma.teamAction.updateMany({
-    where: { leagueId: LEAGUE, details: { contains: PLAYERS[0] } },
+    where: { leagueId: LEAGUE, details: { path: ['playerId'], equals: PLAYERS[0] } },
     data: { processingAt: new Date(SIX_AM.getTime() - 60_000) },
   });
   await prisma.teamAction.updateMany({
-    where: { leagueId: LEAGUE, details: { contains: PLAYERS[1] } },
+    where: { leagueId: LEAGUE, details: { path: ['playerId'], equals: PLAYERS[1] } },
     // Processing itself judges due-ness by the real clock, so "not yet" must be in the real future.
     data: { processingAt: new Date(Date.now() + 24 * 60 * 60_000) },
   });
@@ -100,7 +100,7 @@ afterAll(removeFixture);
 const statusOf = async (playerId: string) =>
   (
     await prisma.teamAction.findFirstOrThrow({
-      where: { leagueId: LEAGUE, details: { contains: playerId } },
+      where: { leagueId: LEAGUE, details: { path: ['playerId'], equals: playerId } },
       select: { status: true },
     })
   ).status;

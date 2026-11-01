@@ -358,7 +358,7 @@ model DraftEvent {
   draftId       String
   leagueId      String
   event         String
-  payload       String?
+  payload       Json?
   publishState  Boolean   @default(false)
   // Nullable for pre-v2 history; every newly persisted shared event receives a sequence.
   sequence      Int?
@@ -439,7 +439,7 @@ model LobbyActivity {
   draftId   String
   memberId  String
   action    String
-  details   String? // JSON string
+  details   Json? // JSON string
   timestamp DateTime @default(now())
 
   draft  Draft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
@@ -1296,7 +1296,7 @@ model TeamAction {
   memberId       String
   actionType     TeamActionType
   status         ActionStatus   @default(PENDING)
-  details        String // JSON details specific to action type
+  details        Json // Details specific to action type
   targetMemberId String? // For trades
   processingAt   DateTime?
   processedAt    DateTime?

@@ -83,13 +83,10 @@ function getActionHref(
   return `/leagues/${league}?tab=roster&addPlayerId=${player}`;
 }
 
-function readPlayerIdFromDetails(details: string): string | null {
-  try {
-    const parsed = JSON.parse(details) as { playerId?: unknown };
-    return typeof parsed.playerId === 'string' ? parsed.playerId : null;
-  } catch {
-    return null;
-  }
+function readPlayerIdFromDetails(details: unknown): string | null {
+  if (!details || typeof details !== 'object') return null;
+  const playerId = (details as { playerId?: unknown }).playerId;
+  return typeof playerId === 'string' ? playerId : null;
 }
 
 function toDate(value: unknown): Date | null {
@@ -187,11 +184,23 @@ async function loadFirestoreOwnership(input: {
   const leagueRef = adminDb.collection('leagues').doc(input.leagueId);
   const [members, ownershipDocs, availableDocs, rosterSnaps, waiverSnaps] = await Promise.all([
     listActiveLeagueMembers(input.leagueId).catch(() => []),
-    Promise.all(input.playerIds.map((playerId) => leagueRef.collection('playerOwnerships').doc(playerId).get())),
-    Promise.all(input.playerIds.map((playerId) => leagueRef.collection('availablePlayers').doc(playerId).get())),
     Promise.all(
       input.playerIds.map((playerId) =>
-        leagueRef.collection('rosters').where('playerIds', 'array-contains', playerId).limit(1).get()
+        leagueRef.collection('playerOwnerships').doc(playerId).get()
+      )
+    ),
+    Promise.all(
+      input.playerIds.map((playerId) =>
+        leagueRef.collection('availablePlayers').doc(playerId).get()
+      )
+    ),
+    Promise.all(
+      input.playerIds.map((playerId) =>
+        leagueRef
+          .collection('rosters')
+          .where('playerIds', 'array-contains', playerId)
+          .limit(1)
+          .get()
       )
     ),
     Promise.all(
@@ -276,7 +285,12 @@ async function loadFirestoreOwnership(input: {
   return {
     ...(owner ? { owner } : {}),
     ...(pendingClaims > 0 || earliestProcessingAt
-      ? { waiver: { ...(earliestProcessingAt ? { processingAt: earliestProcessingAt } : {}), pendingClaims } }
+      ? {
+          waiver: {
+            ...(earliestProcessingAt ? { processingAt: earliestProcessingAt } : {}),
+            pendingClaims,
+          },
+        }
       : {}),
   };
 }
@@ -310,7 +324,12 @@ function buildAvailabilityRow(input: {
       action: {
         type: actionType,
         label: input.owner.isCurrentUser ? 'View roster' : 'Trade',
-        href: getActionHref(input.league.leagueId, input.playerId, actionType, input.owner.memberId),
+        href: getActionHref(
+          input.league.leagueId,
+          input.playerId,
+          actionType,
+          input.owner.memberId
+        ),
       },
     };
   }
@@ -439,10 +458,10 @@ async function loadPrismaOwnerships(input: {
 
   for (const ownership of ownerships) {
     ownerByLeagueId.set(ownership.leagueId, {
-        memberId: ownership.memberId,
-        userId: ownership.member.userId,
-        teamName: ownership.member.teamName,
-        isCurrentUser: ownership.member.userId === input.userId,
+      memberId: ownership.memberId,
+      userId: ownership.member.userId,
+      teamName: ownership.member.teamName,
+      isCurrentUser: ownership.member.userId === input.userId,
     });
   }
 

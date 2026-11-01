@@ -241,12 +241,12 @@ describe('team actions route', () => {
         leagueId: LEAGUE,
         memberId: members[0],
         actionType: 'TRADE_PROPOSAL',
-        details: '{}',
+        details: {},
         createdAt: new Date(Date.now() - 60_000),
       },
     });
     await prisma.teamAction.create({
-      data: { leagueId: LEAGUE, memberId: members[1], actionType: 'TRADE_PROPOSAL', details: '{}' },
+      data: { leagueId: LEAGUE, memberId: members[1], actionType: 'TRADE_PROPOSAL', details: {} },
     });
     const created = await post({
       actionType: 'WAIVER_CLAIM',

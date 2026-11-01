@@ -198,7 +198,7 @@ async function logPrivateStateActivity(input: {
   draftId: string;
   memberId: string;
   action: string;
-  details: Record<string, unknown>;
+  details: Prisma.InputJsonObject;
 }): Promise<void> {
   try {
     await prisma.lobbyActivity.create({
@@ -206,7 +206,7 @@ async function logPrivateStateActivity(input: {
         draftId: input.draftId,
         memberId: input.memberId,
         action: input.action,
-        details: JSON.stringify(input.details),
+        details: input.details,
       },
     });
   } catch (error) {

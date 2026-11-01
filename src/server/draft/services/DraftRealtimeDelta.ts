@@ -146,8 +146,9 @@ export function buildDraftLifecycleDelta(
   };
 }
 
-function parsePersistedPayload(payload: string | null): unknown {
-  if (!payload) return null;
+// Stored payloads are jsonb objects; a string is still parsed for events published before #955.
+function parsePersistedPayload(payload: unknown): unknown {
+  if (typeof payload !== 'string') return payload ?? null;
 
   try {
     return JSON.parse(payload);
@@ -158,7 +159,7 @@ function parsePersistedPayload(payload: string | null): unknown {
 
 export function toDraftBackfillDelta(event: {
   event: string;
-  payload: string | null;
+  payload: unknown;
   createdAt: Date;
 }): DraftRealtimeDelta | null {
   const payload = parsePersistedPayload(event.payload);

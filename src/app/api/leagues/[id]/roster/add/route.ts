@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           actionType: 'DROP_PLAYER',
           status: 'PENDING',
           processingAt: { gt: new Date() },
-          details: { contains: `"playerId":"${playerId}"` },
+          details: { path: ['playerId'], equals: playerId },
         },
         select: { id: true },
       }),

@@ -77,7 +77,7 @@ type DraftEventRecord = {
   draftId: string;
   leagueId: string;
   event: string;
-  payload: string | null;
+  payload: PrismaNS.JsonValue;
   publishState: boolean;
   sequence: number | null;
   clockRevision: number | null;
@@ -96,12 +96,12 @@ type PickWithRelations = PrismaNS.PickGetPayload<{
   };
 }>;
 
-function parseOutboxPayload(payload: string | null): DraftOutboxPayload {
+function parseOutboxPayload(payload: PrismaNS.JsonValue): DraftOutboxPayload {
   if (!payload) {
     return null;
   }
 
-  return JSON.parse(payload) as Exclude<DraftOutboxPayload, null>;
+  return payload as Exclude<DraftOutboxPayload, null>;
 }
 
 function toOutboxEventRecord(event: DraftEventRecord): DraftOutboxEventRecord {
@@ -746,7 +746,7 @@ export class DraftRepository {
           draftId: item.draftId,
           leagueId: item.leagueId,
           event: item.event,
-          payload: item.payload ? JSON.stringify(item.payload) : null,
+          payload: item.payload ?? PrismaNS.DbNull,
           publishState: item.publishState,
           sequence: firstSequence + index,
           clockRevision: item.clockRevision ?? null,
@@ -985,7 +985,7 @@ export class DraftRepository {
       auto: pick.auto,
       // The persisted time, so a replayed pick reports when it was made, not when it was replayed.
       madeAt: pick.madeAt.toISOString(),
-      timestamp: pick.madeAt,
+      timestamp: pick.madeAt.toISOString(),
     };
   }
 }

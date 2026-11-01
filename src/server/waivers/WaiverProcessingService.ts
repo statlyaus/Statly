@@ -132,12 +132,7 @@ type PrismaTransactionClient = Omit<
 
 type PrismaLike = Pick<
   typeof prisma,
-  | '$transaction'
-  | 'league'
-  | 'leagueMember'
-  | 'leagueRosterPlayer'
-  | 'player'
-  | 'teamAction'
+  '$transaction' | 'league' | 'leagueMember' | 'leagueRosterPlayer' | 'player' | 'teamAction'
 >;
 
 type PrismaWaiverStoreDb = Pick<
@@ -433,11 +428,11 @@ export class WaiverProcessingService {
           memberId: plan.memberId,
           actionType: 'DROP_PLAYER',
           status: 'PENDING',
-          details: JSON.stringify({
+          details: {
             playerId: plan.dropPlayerId,
             source: 'drop-to-waivers',
             waiverClaimId: claim.id,
-          }),
+          },
           processingAt: calculateProcessingAt(waiverSettings),
         },
         select: { id: true },
@@ -782,7 +777,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
           memberId: member.id,
           actionType: 'WAIVER_CLAIM',
           status: 'PENDING',
-          details: JSON.stringify(details),
+          details,
           processingAt,
         },
         select: { id: true },
