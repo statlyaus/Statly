@@ -19,6 +19,6 @@ describe('DraftRepository.toEventPick', () => {
     const event = draftRepository.toEventPick(pick, 5, 1, 5);
 
     expect(event.madeAt).toBe('2024-01-01T00:00:00.000Z');
-    expect(event.timestamp).toEqual(madeAt);
+    expect(event.timestamp).toBe(madeAt.toISOString());
   });
 });

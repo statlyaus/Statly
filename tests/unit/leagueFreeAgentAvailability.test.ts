@@ -514,7 +514,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     expect(prismaMocks.teamAction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          details: expect.stringContaining('"playerId":"free-player"'),
+          details: expect.objectContaining({ playerId: 'free-player' }),
         }),
       })
     );

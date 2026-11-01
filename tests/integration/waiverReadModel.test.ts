@@ -90,7 +90,7 @@ const claimAction = (
   memberId,
   actionType: 'WAIVER_CLAIM' as const,
   status,
-  details: JSON.stringify({ playerId: `${id}-player`, priority: 1, bidAmount: 5 }),
+  details: { playerId: `${id}-player`, priority: 1, bidAmount: 5 },
   createdAt: new Date(createdAt),
   ...(status === 'PENDING' ? {} : { processedAt: new Date(createdAt) }),
 });

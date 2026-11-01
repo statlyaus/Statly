@@ -1,4 +1,4 @@
-import type { TeamActionType } from '@prisma/client';
+import type { Prisma, TeamActionType } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
@@ -49,7 +49,7 @@ export async function GET(
       id: action.id,
       actionType: action.actionType,
       status: action.status,
-      details: JSON.parse(action.details || '{}'),
+      details: action.details,
       targetMemberId: action.targetMemberId,
       processingAt: action.processingAt,
       processedAt: action.processedAt,
@@ -143,7 +143,8 @@ export async function POST(
         leagueId,
         memberId: member.id,
         actionType: actionType as TeamActionType,
-        details: JSON.stringify(canonicalDetails),
+        // The details came from the parsed JSON request body, so they are JSON values.
+        details: canonicalDetails as Prisma.InputJsonObject,
         targetMemberId,
         processingAt,
       },
@@ -154,7 +155,7 @@ export async function POST(
       leagueId,
       memberId: member.id,
       actionType,
-      details: JSON.stringify(canonicalDetails),
+      details: canonicalDetails,
       targetMemberId,
       processingAt,
       createdAt: new Date(),
@@ -178,7 +179,7 @@ export async function POST(
         id: action.id,
         actionType: action.actionType,
         status: action.status,
-        details: JSON.parse(action.details),
+        details: action.details,
         targetMemberId: action.targetMemberId,
         processingAt: action.processingAt,
         createdAt: action.createdAt,
@@ -317,7 +318,10 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
       return;
     }
 
-    const details = JSON.parse(action.details || '{}');
+    const details =
+      action.details && typeof action.details === 'object' && !Array.isArray(action.details)
+        ? action.details
+        : {};
     const playerId = typeof details.playerId === 'string' ? details.playerId : null;
     if (!playerId) {
       throw new Error('Drop action missing playerId');

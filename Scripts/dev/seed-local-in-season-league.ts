@@ -486,7 +486,7 @@ async function main() {
         leagueId: LEAGUE_ID,
         memberId: me.id,
         actionType: 'WAIVER_CLAIM',
-        details: JSON.stringify({ note: 'Local fixture claim' }),
+        details: { note: 'Local fixture claim' },
       },
     });
 

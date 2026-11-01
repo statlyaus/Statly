@@ -59,13 +59,6 @@ type PlannerClient = Pick<
   | 'leagueLineupPlayer'
   | 'leagueLineupAutosub'
   | 'leagueTradePlayer'
-  | 'lobbyActivity'
-  | 'draftEvent'
-  | 'leagueCompetitionAudit'
-  | 'teamAction'
-  | 'leagueTradeEvent'
-  | 'leagueTradeCommand'
-  | 'leagueTradeOutboxEvent'
   | '$queryRaw'
 >;
 
@@ -115,6 +108,8 @@ function containsAnyAlias(value: string | null, aliasIds: ReadonlySet<string>): 
 const PLANNER_BATCH_SIZE = 250;
 
 type JsonbDocumentColumn =
+  | { table: 'LobbyActivity'; column: 'details' }
+  | { table: 'DraftEvent'; column: 'payload' }
   | { table: 'LeagueCompetitionAudit'; column: 'payloadJson' }
   | { table: 'LeagueTradeEvent'; column: 'payloadJson' }
   | { table: 'LeagueTradeCommand'; column: 'responseJson' }
@@ -124,6 +119,19 @@ type JsonbDocumentColumn =
  * Prisma cannot substring-filter a jsonb column, so these pages match the column's text form in
  * SQL. `id > cursor` under `ORDER BY id` pages exactly like the Prisma cursor pages above.
  */
+function jsonbAliasPageFilter(
+  columnSql: Prisma.Sql,
+  aliasIds: readonly string[],
+  cursor: string | undefined
+): Prisma.Sql {
+  const matchesAlias = Prisma.join(
+    aliasIds.map((aliasId) => Prisma.sql`position(${aliasId} in ${columnSql}::text) > 0`),
+    ' OR '
+  );
+  const afterCursor = cursor === undefined ? Prisma.empty : Prisma.sql`AND "id" > ${cursor}`;
+  return Prisma.sql`WHERE (${matchesAlias}) ${afterCursor} ORDER BY "id" ASC LIMIT ${PLANNER_BATCH_SIZE}`;
+}
+
 function loadJsonbDocumentPage(
   client: PlannerClient,
   { table, column }: JsonbDocumentColumn,
@@ -131,18 +139,26 @@ function loadJsonbDocumentPage(
   cursor: string | undefined
 ): Promise<Array<{ id: string; document: string | null }>> {
   if (aliasIds.length === 0) return Promise.resolve([]);
-  const tableSql = Prisma.raw(`"${table}"`);
   const columnSql = Prisma.raw(`"${column}"`);
-  const matchesAlias = Prisma.join(
-    aliasIds.map((aliasId) => Prisma.sql`position(${aliasId} in ${columnSql}::text) > 0`),
-    ' OR '
-  );
-  const afterCursor = cursor === undefined ? Prisma.empty : Prisma.sql`AND "id" > ${cursor}`;
   return client.$queryRaw<Array<{ id: string; document: string | null }>>`
-    SELECT "id", ${columnSql}::text AS "document" FROM ${tableSql}
-    WHERE (${matchesAlias}) ${afterCursor}
-    ORDER BY "id" ASC
-    LIMIT ${PLANNER_BATCH_SIZE}`;
+    SELECT "id", ${columnSql}::text AS "document" FROM ${Prisma.raw(`"${table}"`)}
+    ${jsonbAliasPageFilter(columnSql, aliasIds, cursor)}`;
+}
+
+/** Team actions also carry the league and status the pending-action blocker reports on. */
+function loadTeamActionPage(
+  client: PlannerClient,
+  aliasIds: readonly string[],
+  cursor: string | undefined
+): Promise<Array<{ id: string; leagueId: string; status: string; document: string }>> {
+  if (aliasIds.length === 0) return Promise.resolve([]);
+  const columnSql = Prisma.raw('"details"');
+  return client.$queryRaw<
+    Array<{ id: string; leagueId: string; status: string; document: string }>
+  >`
+    SELECT "id", "leagueId", "status"::text AS "status", "details"::text AS "document"
+    FROM "TeamAction"
+    ${jsonbAliasPageFilter(columnSql, aliasIds, cursor)}`;
 }
 
 async function collectBatchedRows<T extends { id: string }>(
@@ -255,8 +271,6 @@ export async function planPlayerIdentityConsolidation(
 
   const referencedPlayerIds = [...new Set([...aliasIds, ...canonicalIds])];
   const aliasIdList = [...aliasIds];
-  const cursorPage = (cursor: string | undefined): { cursor?: { id: string }; skip?: number } =>
-    cursor ? { cursor: { id: cursor }, skip: 1 } : {};
   const [
     picks,
     watchlists,
@@ -290,22 +304,15 @@ export async function planPlayerIdentityConsolidation(
     }),
     client.leagueTradePlayer.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     collectBatchedRows((cursor) =>
-      client.lobbyActivity.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ details: { contains: aliasId } })) },
-        select: { id: true, details: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
+      loadJsonbDocumentPage(
+        client,
+        { table: 'LobbyActivity', column: 'details' },
+        aliasIdList,
+        cursor
+      )
     ),
     collectBatchedRows((cursor) =>
-      client.draftEvent.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ payload: { contains: aliasId } })) },
-        select: { id: true, payload: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
+      loadJsonbDocumentPage(client, { table: 'DraftEvent', column: 'payload' }, aliasIdList, cursor)
     ),
     collectBatchedRows((cursor) =>
       loadJsonbDocumentPage(
@@ -315,15 +322,7 @@ export async function planPlayerIdentityConsolidation(
         cursor
       )
     ),
-    collectBatchedRows((cursor) =>
-      client.teamAction.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ details: { contains: aliasId } })) },
-        select: { id: true, leagueId: true, status: true, details: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
-    ),
+    collectBatchedRows((cursor) => loadTeamActionPage(client, aliasIdList, cursor)),
     collectBatchedRows((cursor) =>
       loadJsonbDocumentPage(
         client,
@@ -476,21 +475,21 @@ export async function planPlayerIdentityConsolidation(
   }
 
   for (const action of teamActions) {
-    if (action.status !== 'PENDING' || !containsAnyAlias(action.details, aliasIds)) continue;
+    if (action.status !== 'PENDING' || !containsAnyAlias(action.document, aliasIds)) continue;
     blockers.push({
       code: 'PENDING_ACTION_REFERENCE',
       canonicalPlayerId: '',
       scopeId: action.id,
-      aliasIds: [...aliasIds].filter((aliasId) => action.details.includes(aliasId)),
+      aliasIds: [...aliasIds].filter((aliasId) => action.document.includes(aliasId)),
       message: `Pending team action ${action.id} in league ${action.leagueId} must be resolved before consolidation.`,
     });
   }
 
   const jsonDocuments = [
-    ...lobbyActivities.map((row) => row.details),
-    ...draftEvents.map((row) => row.payload),
+    ...lobbyActivities.map((row) => row.document),
+    ...draftEvents.map((row) => row.document),
     ...competitionAudits.map((row) => row.document),
-    ...teamActions.map((row) => row.details),
+    ...teamActions.map((row) => row.document),
     ...tradeEvents.map((row) => row.document),
     ...tradeCommands.map((row) => row.document),
     ...tradeOutboxEvents.map((row) => row.document),

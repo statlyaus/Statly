@@ -115,7 +115,7 @@ export interface DraftPlayerSnapshot {
   active: boolean;
 }
 
-export interface DraftPickEventPayload {
+export type DraftPickEventPayload = {
   id: string;
   overall: number;
   round: number;
@@ -132,7 +132,7 @@ export interface DraftPickEventPayload {
   };
   auto: boolean;
   madeAt: string;
-  timestamp: Date;
+  timestamp: string;
   currentPick?: number;
   status?: DraftStatus;
   nextRound?: number;
@@ -143,9 +143,9 @@ export interface DraftPickEventPayload {
   durationSeconds?: number;
   serverNow?: string;
   isComplete?: boolean;
-}
+};
 
-export interface DraftLifecycleEventPayload {
+export type DraftLifecycleEventPayload = {
   status: DraftStatus;
   schedulingVersion: number;
   durationSeconds: number;
@@ -153,7 +153,7 @@ export interface DraftLifecycleEventPayload {
   pickStartedAt: string | null;
   pickDeadlineAt: string | null;
   pausedRemainingSeconds: number | null;
-}
+};
 
 export type DraftCommandEventType =
   | 'draft:pick-made'

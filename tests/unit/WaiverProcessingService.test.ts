@@ -181,7 +181,7 @@ describe('WaiverProcessingService', () => {
         memberId: 'member-1',
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
-        details: expect.stringContaining('"playerId":"old-player"'),
+        details: expect.objectContaining({ playerId: 'old-player' }),
         processingAt: expect.any(Date),
       }),
       select: { id: true },
@@ -297,7 +297,7 @@ describe('WaiverProcessingService', () => {
     });
     expect(tx.teamAction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        details: expect.stringContaining('"playerId":"old-player"'),
+        details: expect.objectContaining({ playerId: 'old-player' }),
       }),
       select: { id: true },
     });
@@ -606,12 +606,12 @@ describe('PrismaWaiverClaimStore', () => {
             memberId: 'member-1',
             actionType: 'WAIVER_CLAIM',
             status: 'PENDING',
-            details: JSON.stringify({
+            details: {
               playerId: 'free-player',
               dropPlayerId: 'old-player',
               priority: 2,
               bidAmount: 7,
-            }),
+            },
             processingAt,
             createdAt,
           },
@@ -685,7 +685,7 @@ describe('PrismaWaiverClaimStore', () => {
           leagueId: 'league-1',
           memberId: 'member-1',
           actionType: 'WAIVER_CLAIM',
-          details: expect.stringContaining('"playerId":"free-player"'),
+          details: expect.objectContaining({ playerId: 'free-player' }),
         }),
       })
     );

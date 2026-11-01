@@ -59,7 +59,12 @@ path.
   `SocialOutboxEvent.payloadJson`, `LeagueTradeEvent.payloadJson`, `LeagueTradeCommand.responseJson`,
   `LeagueTradeOutboxEvent.payloadJson`). Write SQL `NULL` to a nullable one with `Prisma.DbNull`.
   Prisma cannot substring-filter jsonb, so the player-identity planner matches those columns' text
-  form in raw SQL. The competition route's audit `payload` is now an object, not a string.
+  form in raw SQL. The competition route's audit `payload` is now an object, not a string. Cohort 4
+  converted `TeamAction.details` (waiver claims, drops and trades), `DraftEvent.payload` and
+  `LobbyActivity.details`. Filter a jsonb field with a Prisma JSON path filter
+  (`details: { path: ['playerId'], equals: id }`), never a text match: jsonb's text form puts a
+  space after each colon. The planner's pending-action blocker reads `TeamAction.details` as text in
+  raw SQL too.
 
 The migration history starts at a reviewed PostgreSQL baseline. No user data existed on SQLite, so
 there is no transfer. The SQLite history is archived in `prisma/migrations-sqlite-archive/` and must

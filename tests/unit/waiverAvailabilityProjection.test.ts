@@ -126,7 +126,7 @@ describe('WaiverAvailabilityProjectionService', () => {
       teamAction: {
         findMany: vi.fn().mockResolvedValue([
           {
-            details: JSON.stringify({ playerId: 'dropped-1', source: 'drop-to-waivers' }),
+            details: { playerId: 'dropped-1', source: 'drop-to-waivers' },
             processingAt,
           },
         ]),

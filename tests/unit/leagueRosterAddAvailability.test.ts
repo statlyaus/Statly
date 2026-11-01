@@ -126,7 +126,7 @@ describe('league roster free-agent add eligibility', () => {
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
         processingAt: { gt: expect.any(Date) },
-        details: { contains: '"playerId":"held-player"' },
+        details: { path: ['playerId'], equals: 'held-player' },
       },
       select: { id: true },
     });
@@ -145,7 +145,7 @@ describe('league roster free-agent add eligibility', () => {
     expect(response.status).toBe(409);
     expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ details: { contains: '"playerId":"held-player"' } }),
+        where: expect.objectContaining({ details: { path: ['playerId'], equals: 'held-player' } }),
       })
     );
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
