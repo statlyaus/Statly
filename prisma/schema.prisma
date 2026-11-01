@@ -743,7 +743,7 @@ model LeagueCompetitionAudit {
   leagueId      String
   actorMemberId String?
   eventType     LeagueCompetitionAuditEventType
-  payloadJson   String
+  payloadJson   Json
   createdAt     DateTime                        @default(now())
 
   league      League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
@@ -836,7 +836,7 @@ model SocialMessage {
   authorMemberId    String?
   type              SocialMessageType      @default(MEMBER)
   content           String
-  contextJson       String?
+  contextJson       Json?
   giphyId           String?
   relatedEntityType String?
   relatedEntityId   String?
@@ -960,7 +960,7 @@ model SocialModerationRecord {
   contentId           String
   action              String
   reason              String?
-  retainedContentJson String?
+  retainedContentJson Json?
   createdAt           DateTime      @default(now())
   league              League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   season              LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
@@ -1035,7 +1035,7 @@ model SocialCommand {
   requestHash    String
   resultType     String?
   resultId       String?
-  responseJson   String?
+  responseJson   Json?
   createdAt      DateTime      @default(now())
   expiresAt      DateTime?
   league         League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
@@ -1057,7 +1057,7 @@ model SocialOutboxEvent {
   eventType     String
   aggregateType String
   aggregateId   String
-  payloadJson   String
+  payloadJson   Json
   status        SocialOutboxStatus @default(PENDING)
   attempts      Int                @default(0)
   availableAt   DateTime           @default(now())
@@ -1227,7 +1227,7 @@ model LeagueTradeEvent {
   previousStatus String?
   nextStatus     String
   reasonCode     String?
-  payloadJson    String?
+  payloadJson    Json?
   createdAt      DateTime             @default(now())
   thread         LeagueTradeThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
   offer          LeagueTradeOffer?    @relation(fields: [offerId], references: [id], onDelete: SetNull)
@@ -1249,7 +1249,7 @@ model LeagueTradeCommand {
   requestHash    String
   resultThreadId String?
   resultOfferId  String?
-  responseJson   String?
+  responseJson   Json?
   createdAt      DateTime      @default(now())
   expiresAt      DateTime?
   league         League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
@@ -1269,7 +1269,7 @@ model LeagueTradeOutboxEvent {
   threadId    String
   offerId     String?
   eventType   String
-  payloadJson String
+  payloadJson Json
   status      SocialOutboxStatus @default(PENDING)
   attempts    Int                @default(0)
   availableAt DateTime           @default(now())

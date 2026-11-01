@@ -68,7 +68,7 @@ export async function createSocialMessage(
           authorUserId: userId,
           authorMemberId: access.memberId,
           content: parsed.data.content,
-          contextJson: parsed.data.context ? JSON.stringify(parsed.data.context) : null,
+          contextJson: parsed.data.context ?? Prisma.DbNull,
           giphyId: parsed.data.gif?.id ?? null,
         },
         include: socialMessageInclude,
@@ -805,7 +805,7 @@ async function moderateSocialMute(
   return { action: 'unmute', userId: action.userId };
 }
 
-async function executeIdempotentCommand<T>(
+async function executeIdempotentCommand<T extends Prisma.InputJsonValue>(
   access: LeagueSocialAccess,
   idempotencyKey: string,
   commandType: string,
@@ -844,7 +844,7 @@ async function executeIdempotentCommand<T>(
         data: {
           resultType: result.resultType,
           resultId: result.resultId,
-          responseJson: JSON.stringify(result.value),
+          responseJson: result.value,
         },
       });
       return result.value;
@@ -869,7 +869,7 @@ function readIdempotentResult<T>(
   command: {
     commandType: string;
     requestHash: string;
-    responseJson: string | null;
+    responseJson: Prisma.JsonValue;
   },
   commandType: string,
   requestHash: string
@@ -880,7 +880,7 @@ function readIdempotentResult<T>(
   if (!command.responseJson) {
     throw new SocialError('CONFLICT', 'The original request is still being processed');
   }
-  return JSON.parse(command.responseJson) as T;
+  return command.responseJson as T;
 }
 
 async function enqueueSocialEvent(
@@ -890,7 +890,7 @@ async function enqueueSocialEvent(
   event: SocialRealtimeEnvelope['event'],
   aggregateType: string,
   aggregateId: string,
-  payload: SocialRealtimeEnvelope['payload']
+  payload: SocialMessage | SocialPost | SocialReply | Record<string, Prisma.InputJsonValue>
 ): Promise<void> {
   await tx.socialOutboxEvent.create({
     data: {
@@ -901,7 +901,7 @@ async function enqueueSocialEvent(
       eventType: event,
       aggregateType,
       aggregateId,
-      payloadJson: JSON.stringify(payload),
+      payloadJson: payload,
     },
   });
 }
@@ -916,7 +916,7 @@ async function retainModerationRecord(
     reason?: string;
     targetUserId?: string | null;
     targetMemberId?: string | null;
-    retainedContent?: unknown;
+    retainedContent?: Prisma.InputJsonValue;
   }
 ): Promise<void> {
   await tx.socialModerationRecord.create({
@@ -931,8 +931,7 @@ async function retainModerationRecord(
       contentId: input.contentId,
       action: input.action,
       reason: input.reason,
-      retainedContentJson:
-        input.retainedContent === undefined ? undefined : JSON.stringify(input.retainedContent),
+      retainedContentJson: input.retainedContent,
     },
   });
 }

@@ -51,7 +51,7 @@ describe('league social outbox publisher', () => {
         eventType: 'social:activity',
         aggregateType: 'activity',
         aggregateId: 'message-1',
-        payloadJson: JSON.stringify({
+        payloadJson: {
           id: 'legacy-id',
           sequence: 2,
           leagueId: 'wrong-league',
@@ -64,7 +64,7 @@ describe('league social outbox publisher', () => {
             content: 'Jordan Example was drafted.',
           },
           occurredAt: '2025-01-01T00:00:00.000Z',
-        }),
+        },
         status: 'PROCESSING',
         attempts: 1,
         availableAt: createdAt,

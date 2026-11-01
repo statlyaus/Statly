@@ -17,11 +17,11 @@ export type FinalsBracketKey =
   | 'PF_WINNER_QF_2_V_3_V_WINNER_SF_1'
   | 'GF';
 
-export interface FinalsParticipantAssignment {
+export type FinalsParticipantAssignment = {
   bracketKey: FinalsBracketKey;
   homeMemberId: string;
   awayMemberId: string;
-}
+};
 
 export interface FinalizedFinalsMatchup extends FinalsParticipantAssignment {
   homeCategoryWins: number;

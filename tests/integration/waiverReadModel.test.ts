@@ -232,10 +232,10 @@ describe('waivers page read model', () => {
       content: id,
       relatedEntityType: type,
       relatedEntityId: id,
-      contextJson: JSON.stringify({
+      contextJson: {
         type: type === 'WAIVER_FAILED' ? 'waiver-failed' : 'waiver-successful',
         claimId: id,
-      }),
+      },
       createdAt: new Date(at),
     });
     await prisma.socialMessage.createMany({

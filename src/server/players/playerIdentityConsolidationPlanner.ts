@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { containsPlayerIdentityReference } from './playerIdentityJsonReferences';
 
@@ -66,6 +66,7 @@ type PlannerClient = Pick<
   | 'leagueTradeEvent'
   | 'leagueTradeCommand'
   | 'leagueTradeOutboxEvent'
+  | '$queryRaw'
 >;
 
 function normalizeMappings(input: readonly PlayerAliasMapping[]): PlayerAliasMapping[] {
@@ -112,6 +113,37 @@ function containsAnyAlias(value: string | null, aliasIds: ReadonlySet<string>): 
 }
 
 const PLANNER_BATCH_SIZE = 250;
+
+type JsonbDocumentColumn =
+  | { table: 'LeagueCompetitionAudit'; column: 'payloadJson' }
+  | { table: 'LeagueTradeEvent'; column: 'payloadJson' }
+  | { table: 'LeagueTradeCommand'; column: 'responseJson' }
+  | { table: 'LeagueTradeOutboxEvent'; column: 'payloadJson' };
+
+/**
+ * Prisma cannot substring-filter a jsonb column, so these pages match the column's text form in
+ * SQL. `id > cursor` under `ORDER BY id` pages exactly like the Prisma cursor pages above.
+ */
+function loadJsonbDocumentPage(
+  client: PlannerClient,
+  { table, column }: JsonbDocumentColumn,
+  aliasIds: readonly string[],
+  cursor: string | undefined
+): Promise<Array<{ id: string; document: string | null }>> {
+  if (aliasIds.length === 0) return Promise.resolve([]);
+  const tableSql = Prisma.raw(`"${table}"`);
+  const columnSql = Prisma.raw(`"${column}"`);
+  const matchesAlias = Prisma.join(
+    aliasIds.map((aliasId) => Prisma.sql`position(${aliasId} in ${columnSql}::text) > 0`),
+    ' OR '
+  );
+  const afterCursor = cursor === undefined ? Prisma.empty : Prisma.sql`AND "id" > ${cursor}`;
+  return client.$queryRaw<Array<{ id: string; document: string | null }>>`
+    SELECT "id", ${columnSql}::text AS "document" FROM ${tableSql}
+    WHERE (${matchesAlias}) ${afterCursor}
+    ORDER BY "id" ASC
+    LIMIT ${PLANNER_BATCH_SIZE}`;
+}
 
 async function collectBatchedRows<T extends { id: string }>(
   loadPage: (cursor: string | undefined) => Promise<T[]>
@@ -276,13 +308,12 @@ export async function planPlayerIdentityConsolidation(
       })
     ),
     collectBatchedRows((cursor) =>
-      client.leagueCompetitionAudit.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ payloadJson: { contains: aliasId } })) },
-        select: { id: true, payloadJson: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
+      loadJsonbDocumentPage(
+        client,
+        { table: 'LeagueCompetitionAudit', column: 'payloadJson' },
+        aliasIdList,
+        cursor
+      )
     ),
     collectBatchedRows((cursor) =>
       client.teamAction.findMany({
@@ -294,31 +325,28 @@ export async function planPlayerIdentityConsolidation(
       })
     ),
     collectBatchedRows((cursor) =>
-      client.leagueTradeEvent.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ payloadJson: { contains: aliasId } })) },
-        select: { id: true, payloadJson: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
+      loadJsonbDocumentPage(
+        client,
+        { table: 'LeagueTradeEvent', column: 'payloadJson' },
+        aliasIdList,
+        cursor
+      )
     ),
     collectBatchedRows((cursor) =>
-      client.leagueTradeCommand.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ responseJson: { contains: aliasId } })) },
-        select: { id: true, responseJson: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
+      loadJsonbDocumentPage(
+        client,
+        { table: 'LeagueTradeCommand', column: 'responseJson' },
+        aliasIdList,
+        cursor
+      )
     ),
     collectBatchedRows((cursor) =>
-      client.leagueTradeOutboxEvent.findMany({
-        where: { OR: aliasIdList.map((aliasId) => ({ payloadJson: { contains: aliasId } })) },
-        select: { id: true, payloadJson: true },
-        orderBy: { id: 'asc' },
-        take: PLANNER_BATCH_SIZE,
-        ...cursorPage(cursor),
-      })
+      loadJsonbDocumentPage(
+        client,
+        { table: 'LeagueTradeOutboxEvent', column: 'payloadJson' },
+        aliasIdList,
+        cursor
+      )
     ),
   ]);
 
@@ -461,11 +489,11 @@ export async function planPlayerIdentityConsolidation(
   const jsonDocuments = [
     ...lobbyActivities.map((row) => row.details),
     ...draftEvents.map((row) => row.payload),
-    ...competitionAudits.map((row) => row.payloadJson),
+    ...competitionAudits.map((row) => row.document),
     ...teamActions.map((row) => row.details),
-    ...tradeEvents.map((row) => row.payloadJson),
-    ...tradeCommands.map((row) => row.responseJson),
-    ...tradeOutboxEvents.map((row) => row.payloadJson),
+    ...tradeEvents.map((row) => row.document),
+    ...tradeCommands.map((row) => row.document),
+    ...tradeOutboxEvents.map((row) => row.document),
   ].filter((value) => containsAnyAlias(value, aliasIds)).length;
 
   return {

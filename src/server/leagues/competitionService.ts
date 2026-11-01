@@ -254,13 +254,13 @@ export async function publishCompetition({
           leagueId,
           actorMemberId,
           eventType: 'RULES_PUBLISHED',
-          payloadJson: JSON.stringify({
+          payloadJson: {
             fixtureVersion,
             rules: effectiveRules,
             roundCount: schedule.length,
             resetDerivedCompetitionData: true,
             resetSummary,
-          }),
+          },
         },
       });
     });
@@ -433,14 +433,14 @@ export async function saveCompetitionFixture({
         leagueId,
         actorMemberId,
         eventType: 'FIXTURE_EDITED',
-        payloadJson: JSON.stringify({
+        payloadJson: {
           round,
           fixtureId: savedFixture.id,
           previousFixture,
           fixture: { homeMemberId, awayMemberId, byeMemberId },
           removedScores: removedScores.count,
           rebuiltStandings,
-        }),
+        },
       },
     });
 
@@ -520,14 +520,14 @@ export async function deleteCompetitionFixture({
         leagueId,
         actorMemberId,
         eventType: 'FIXTURE_EDITED',
-        payloadJson: JSON.stringify({
+        payloadJson: {
           round,
           fixtureId: matchupId,
           fixtureDeleted: true,
           affectedMemberIds,
           removedScores: removedScores.count,
           rebuiltStandings,
-        }),
+        },
       },
     });
     return { ok: true as const };
@@ -605,7 +605,7 @@ export async function setCompetitionRoundFallbackDeadline({
         leagueId,
         actorMemberId,
         eventType: 'DEADLINE_OVERRIDDEN',
-        payloadJson: JSON.stringify({ round, fallbackLockAt: fallbackLockAt.toISOString() }),
+        payloadJson: { round, fallbackLockAt: fallbackLockAt.toISOString() },
       },
     });
     return { ok: true as const };

@@ -143,12 +143,8 @@ export function toSocialReply(record: ReplyRecord, currentUserId: string): Socia
   };
 }
 
-function parseSocialDiscussionContext(value: string | null): SocialDiscussionContext | null {
+function parseSocialDiscussionContext(value: unknown): SocialDiscussionContext | null {
   if (!value) return null;
-  try {
-    const parsed = socialDiscussionContextSchema.safeParse(JSON.parse(value));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  const parsed = socialDiscussionContextSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }

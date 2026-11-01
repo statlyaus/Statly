@@ -97,9 +97,7 @@ describe('publishCompetition', () => {
       txMocks.leagueMatchupScore.deleteMany.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     );
 
-    const auditPayload = JSON.parse(
-      txMocks.leagueCompetitionAudit.create.mock.calls[0]?.[0].data.payloadJson as string
-    );
+    const auditPayload = txMocks.leagueCompetitionAudit.create.mock.calls[0]?.[0].data.payloadJson;
     expect(auditPayload.resetSummary).toEqual({
       matchupScores: 8,
       standings: 4,

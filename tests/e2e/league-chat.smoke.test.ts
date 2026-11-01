@@ -53,7 +53,7 @@ test('league chat sends a message and shows another member’s message without a
           eventType: 'social:message',
           aggregateType: 'message',
           aggregateId: record.id,
-          payloadJson: JSON.stringify({
+          payloadJson: {
             id: record.id,
             leagueId: E2E_LEAGUE_ID,
             seasonId: E2E_SEASON_ID,
@@ -63,7 +63,7 @@ test('league chat sends a message and shows another member’s message without a
             createdAt: record.createdAt.toISOString(),
             moderationStatus: 'active',
             isOwn: false,
-          }),
+          },
         },
       });
     });

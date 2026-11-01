@@ -21,14 +21,14 @@ export interface ResolveAutosubsInput {
   confirmedDidNotPlayPlayerIds: readonly string[];
 }
 
-export interface AutosubDecision {
+export type AutosubDecision = {
   outgoingPlayerId: string;
   originalSlot: AutosubActiveSlot;
   originalSlotIndex: number;
   replacementPlayerId: string;
   reason: AutosubReason;
   interchangeIndex: number;
-}
+};
 
 export interface AutosubResolution {
   activeAssignments: AutosubActiveAssignment[];

@@ -80,7 +80,7 @@ export async function synchronizeFinalsFixtures({
         data: {
           leagueId,
           eventType: 'FINALS_RESEEDED',
-          payloadJson: JSON.stringify({ fixtureVersion, assignments, updated }),
+          payloadJson: { fixtureVersion, assignments, updated },
         },
       });
     }

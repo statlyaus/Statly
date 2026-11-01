@@ -4,29 +4,29 @@ export type SocialModerationStatus = 'active' | 'removed';
 export type SocialReportReason =
   'harassment' | 'hate' | 'spam' | 'threats' | 'unsafe-link' | 'other';
 
-export interface SocialAuthor {
+export type SocialAuthor = {
   userId: string;
   memberId?: string;
   teamId?: string;
   displayName: string;
   teamName: string;
   avatarUrl?: string;
-}
+};
 
-export interface SocialDiscussionContext {
+export type SocialDiscussionContext = {
   type: 'player' | 'trade' | 'activity';
   id: string;
   title: string;
   subtitle?: string;
   metadata?: Record<string, string>;
-}
+};
 
-export interface SocialGif {
+export type SocialGif = {
   provider: 'giphy';
   id: string;
-}
+};
 
-export interface SocialMessage {
+export type SocialMessage = {
   id: string;
   leagueId: string;
   seasonId: string;
@@ -41,16 +41,16 @@ export interface SocialMessage {
   deletedAt?: string;
   moderationStatus: SocialModerationStatus;
   isOwn: boolean;
-}
+};
 
-export interface SocialBoardCategory {
+export type SocialBoardCategory = {
   id: string;
   key: string;
   name: string;
   position: number;
-}
+};
 
-export interface SocialPost {
+export type SocialPost = {
   id: string;
   leagueId: string;
   seasonId: string;
@@ -69,9 +69,9 @@ export interface SocialPost {
   deletedAt?: string;
   moderationStatus: SocialModerationStatus;
   isOwn: boolean;
-}
+};
 
-export interface SocialReply {
+export type SocialReply = {
   id: string;
   postId: string;
   leagueId: string;
@@ -84,7 +84,7 @@ export interface SocialReply {
   deletedAt?: string;
   moderationStatus: SocialModerationStatus;
   isOwn: boolean;
-}
+};
 
 export interface SocialCursorPage<T> {
   items: T[];

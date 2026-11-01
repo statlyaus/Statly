@@ -80,11 +80,11 @@ describe('invalidateConflictingTrades', () => {
           threadId: 'thread-b',
           offerId: 'offer-b',
           eventType: 'trade:invalidated',
-          payloadJson: JSON.stringify({
+          payloadJson: {
             threadId: 'thread-b',
             offerId: 'offer-b',
             status: 'INVALIDATED',
-          }),
+          },
         },
       ],
     });
