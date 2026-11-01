@@ -116,7 +116,7 @@ describe('league social system activity', () => {
         eventType: 'social:activity',
         aggregateType: 'activity',
         actorUserId: null,
-        payloadJson: expect.stringContaining('"type":"system"'),
+        payloadJson: expect.objectContaining({ type: 'system' }),
       }),
     });
   });

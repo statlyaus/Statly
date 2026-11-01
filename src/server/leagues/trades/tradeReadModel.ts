@@ -479,20 +479,14 @@ function normalizeStoredCategories(value: unknown): FantasyCategoryKey[] {
   return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
-function readPublicEventReason(eventType: string, payloadJson: string | null): string | null {
-  if (eventType !== 'REJECTED' || !payloadJson) return null;
+function readPublicEventReason(eventType: string, payload: unknown): string | null {
+  if (eventType !== 'REJECTED') return null;
+  if (!payload || typeof payload !== 'object' || !('reason' in payload)) return null;
+  const reason = (payload as { reason?: unknown }).reason;
+  if (typeof reason !== 'string') return null;
 
-  try {
-    const payload = JSON.parse(payloadJson) as unknown;
-    if (!payload || typeof payload !== 'object' || !('reason' in payload)) return null;
-    const reason = (payload as { reason?: unknown }).reason;
-    if (typeof reason !== 'string') return null;
-
-    const sanitized = reason.replace(/\s+/g, ' ').trim().slice(0, 500);
-    return sanitized || null;
-  } catch {
-    return null;
-  }
+  const sanitized = reason.replace(/\s+/g, ' ').trim().slice(0, 500);
+  return sanitized || null;
 }
 
 function encodeCursor(cursor: { updatedAt: string; id: string }): string {

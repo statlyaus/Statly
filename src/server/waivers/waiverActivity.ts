@@ -144,12 +144,6 @@ export async function loadWaiverOutcomes(
   });
 }
 
-function parseContext(raw: string | null): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
+function parseContext(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 }

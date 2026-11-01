@@ -203,7 +203,7 @@ async function insertBotOffer(prisma: PrismaClient): Promise<string> {
         threadId: thread.id,
         offerId: offer.id,
         eventType: 'trade:proposed',
-        payloadJson: JSON.stringify({ threadId: thread.id, offerId: offer.id, status: 'OPEN' }),
+        payloadJson: { threadId: thread.id, offerId: offer.id, status: 'OPEN' },
       },
     });
     return thread.id;

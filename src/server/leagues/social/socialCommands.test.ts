@@ -57,7 +57,7 @@ vi.mock('./socialDto', () => ({
     seasonId: record.seasonId,
     type: 'member',
     content: record.content,
-    context: record.contextJson ? JSON.parse(record.contextJson) : undefined,
+    context: record.contextJson ?? undefined,
     gif: record.giphyId ? { provider: 'giphy', id: record.giphyId } : undefined,
     author: null,
     createdAt: record.createdAt.toISOString(),
@@ -149,7 +149,7 @@ describe('league social Activity commands', () => {
         leagueId: 'league-1',
         seasonId: 'season-1',
         authorUserId: 'user-1',
-        contextJson: JSON.stringify(context),
+        contextJson: context,
       }),
       include: {},
     });
@@ -173,9 +173,9 @@ describe('league social Activity commands', () => {
       data: expect.objectContaining({
         channel: 'CHAT',
         eventType: 'social:message',
-        payloadJson: expect.stringContaining(
-          '"gif":{"provider":"giphy","id":"xT9IgG50Fb7Mi0prBC"}'
-        ),
+        payloadJson: expect.objectContaining({
+          gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+        }),
       }),
     });
   });
@@ -207,7 +207,7 @@ describe('league social Activity commands', () => {
       data: expect.objectContaining({
         channel: 'ACTIVITY',
         eventType: 'social:read-state',
-        payloadJson: expect.stringContaining('"channel":"activity"'),
+        payloadJson: expect.objectContaining({ channel: 'activity' }),
       }),
     });
   });

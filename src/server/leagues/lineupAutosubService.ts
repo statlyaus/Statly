@@ -168,7 +168,7 @@ export async function resolveAndPersistLineupAutosubs({
       data: {
         leagueId,
         eventType: 'AUTOSUB_RESOLVED',
-        payloadJson: JSON.stringify({ lineupId, decisions: resolution.decisions }),
+        payloadJson: { lineupId, decisions: resolution.decisions },
       },
     });
   });

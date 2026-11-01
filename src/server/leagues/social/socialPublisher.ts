@@ -130,8 +130,7 @@ function buildEnvelope(event: SocialOutboxEvent): SocialRealtimeEnvelope {
   };
 }
 
-function parseStoredPayload(value: string): SocialRealtimeEnvelope['payload'] {
-  const parsed = JSON.parse(value) as unknown;
+function parseStoredPayload(parsed: unknown): SocialRealtimeEnvelope['payload'] {
   if (
     parsed &&
     typeof parsed === 'object' &&

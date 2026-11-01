@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import type { Prisma } from '@prisma/client';
+
 import { prisma } from '@/lib/prisma';
 import type { SocialMessage } from '@/types/social';
 
@@ -20,7 +22,7 @@ export async function publishLeagueSystemMessage({
   relatedEntityId: string;
   content: string;
   /** Structured detail for readers that render the event themselves, stored as contextJson. */
-  context?: Record<string, unknown>;
+  context?: Record<string, Prisma.InputJsonValue>;
 }): Promise<SocialMessage> {
   const normalizedContent = content.trim();
   if (!normalizedContent || normalizedContent.length > SOCIAL_MESSAGE_MAX_LENGTH) {
@@ -78,7 +80,7 @@ export async function publishLeagueSystemMessage({
         content: normalizedContent,
         relatedEntityType: eventType,
         relatedEntityId,
-        ...(context ? { contextJson: JSON.stringify(context) } : {}),
+        ...(context ? { contextJson: context } : {}),
       },
       include: socialMessageInclude,
     });
@@ -92,7 +94,7 @@ export async function publishLeagueSystemMessage({
         eventType: 'social:activity',
         aggregateType: 'activity',
         aggregateId: record.id,
-        payloadJson: JSON.stringify(message),
+        payloadJson: message,
       },
     });
     await tx.socialCommand.update({
@@ -100,7 +102,7 @@ export async function publishLeagueSystemMessage({
       data: {
         resultType: 'message',
         resultId: record.id,
-        responseJson: JSON.stringify(message),
+        responseJson: message,
       },
     });
     return message;

@@ -41,7 +41,7 @@ function outboxRow(overrides: Record<string, unknown> = {}) {
     threadId: 'thread-1',
     offerId: 'offer-1',
     eventType: 'trade:proposed',
-    payloadJson: JSON.stringify({ threadId: 'thread-1', offerId: 'offer-1', status: 'PENDING' }),
+    payloadJson: { threadId: 'thread-1', offerId: 'offer-1', status: 'PENDING' },
     status: 'PROCESSING',
     attempts: 1,
     availableAt: createdAt,
@@ -72,7 +72,9 @@ describe('league trade outbox publisher', () => {
   });
 
   it('publishes a claimed row as a league-scoped trade:update and marks it published', async () => {
-    mocks.outboxFindMany.mockResolvedValueOnce([{ sequence: 7 }]).mockResolvedValueOnce([outboxRow()]);
+    mocks.outboxFindMany
+      .mockResolvedValueOnce([{ sequence: 7 }])
+      .mockResolvedValueOnce([outboxRow()]);
 
     await expect(flushTradeOutboxBatch({} as never)).resolves.toBe(1);
 

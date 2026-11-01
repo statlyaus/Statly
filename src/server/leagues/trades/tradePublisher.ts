@@ -120,11 +120,6 @@ export function buildTradeRealtimeEnvelope(event: LeagueTradeOutboxEvent): Socia
 
 const buildEnvelope = buildTradeRealtimeEnvelope;
 
-function parseStoredPayload(value: string): { status?: unknown } {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' ? (parsed as { status?: unknown }) : {};
-  } catch {
-    return {};
-  }
+function parseStoredPayload(value: unknown): { status?: unknown } {
+  return value && typeof value === 'object' ? (value as { status?: unknown }) : {};
 }

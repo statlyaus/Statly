@@ -53,8 +53,13 @@ path.
   Cohort 2 converted `League.categoriesJson`, `LeagueMember.notificationSettingsJson` and
   `LeagueMatchupScore.categoriesJson` the same way. Category readers pass the stored value to
   `normalizeFantasyCategoryKeys`, each with its own fallback (an empty list for drafts, `goals` for
-  competition, the nine-category preset elsewhere). The outbox, audit and command payload columns
-  are still text.
+  competition, the nine-category preset elsewhere). Cohort 3 converted the outbox, audit and
+  command payload columns (`LeagueCompetitionAudit.payloadJson`, `SocialMessage.contextJson`,
+  `SocialModerationRecord.retainedContentJson`, `SocialCommand.responseJson`,
+  `SocialOutboxEvent.payloadJson`, `LeagueTradeEvent.payloadJson`, `LeagueTradeCommand.responseJson`,
+  `LeagueTradeOutboxEvent.payloadJson`). Write SQL `NULL` to a nullable one with `Prisma.DbNull`.
+  Prisma cannot substring-filter jsonb, so the player-identity planner matches those columns' text
+  form in raw SQL. The competition route's audit `payload` is now an object, not a string.
 
 The migration history starts at a reviewed PostgreSQL baseline. No user data existed on SQLite, so
 there is no transfer. The SQLite history is archived in `prisma/migrations-sqlite-archive/` and must

@@ -53,12 +53,12 @@ interface TradePlayerSnapshot {
   position: string;
 }
 
-export interface TradeCommandResult {
+export type TradeCommandResult = {
   threadId: string;
   offerId: string;
   status: string;
   version: number;
-}
+};
 
 export async function authorizeLeagueTradeAccess(
   leagueId: string,
@@ -636,7 +636,6 @@ async function moveRosterPlayers(
       ],
     },
   });
-
 }
 
 export async function invalidateConflictingTrades(
@@ -687,11 +686,11 @@ export async function invalidateConflictingTrades(
       threadId: conflict.id,
       offerId: conflict.currentOfferId,
       eventType: 'trade:invalidated',
-      payloadJson: JSON.stringify({
+      payloadJson: {
         threadId: conflict.id,
         offerId: conflict.currentOfferId,
         status: 'INVALIDATED',
-      }),
+      },
     })),
   });
 }
@@ -704,7 +703,7 @@ async function resolveThread(
   actorMemberId: string | null,
   now: Date,
   reasonCode?: string,
-  payload?: unknown
+  payload?: Prisma.InputJsonValue
 ): Promise<TradeCommandResult> {
   await claimThreadVersion(tx, thread.id, thread.version, thread.status, {
     status: threadStatus,
@@ -1014,7 +1013,7 @@ async function claimThreadVersion(
   }
 }
 
-async function executeIdempotentTradeCommand<T>(
+async function executeIdempotentTradeCommand<T extends Prisma.InputJsonValue>(
   access: TradeAccess,
   idempotencyKey: string,
   commandType: string,
@@ -1053,7 +1052,7 @@ async function executeIdempotentTradeCommand<T>(
         data: {
           resultThreadId: tradeResult.threadId,
           resultOfferId: tradeResult.offerId,
-          responseJson: JSON.stringify(result),
+          responseJson: result,
         },
       });
       return result;
@@ -1075,7 +1074,7 @@ async function executeIdempotentTradeCommand<T>(
 }
 
 function readIdempotentResult<T>(
-  command: { commandType: string; requestHash: string; responseJson: string | null },
+  command: { commandType: string; requestHash: string; responseJson: Prisma.JsonValue },
   commandType: string,
   requestHash: string
 ): T {
@@ -1089,7 +1088,7 @@ function readIdempotentResult<T>(
   if (!command.responseJson) {
     throw new TradeServiceError('IDEMPOTENCY_CONFLICT', 'The original request is processing.', 409);
   }
-  return JSON.parse(command.responseJson) as T;
+  return command.responseJson as T;
 }
 
 const tradeMutationInclude = {
@@ -1135,7 +1134,7 @@ async function recordTradeEvent(
     previousStatus: string | null;
     nextStatus: string;
     reasonCode?: string;
-    payload?: unknown;
+    payload?: Prisma.InputJsonValue;
   }
 ): Promise<void> {
   await tx.leagueTradeEvent.create({
@@ -1147,7 +1146,7 @@ async function recordTradeEvent(
       previousStatus: event.previousStatus,
       nextStatus: event.nextStatus,
       reasonCode: event.reasonCode,
-      payloadJson: event.payload === undefined ? null : JSON.stringify(event.payload),
+      payloadJson: event.payload === undefined ? Prisma.DbNull : event.payload,
     },
   });
   await tx.leagueTradeOutboxEvent.create({
@@ -1157,11 +1156,11 @@ async function recordTradeEvent(
       threadId: event.threadId,
       offerId: event.offerId,
       eventType: `trade:${event.type.toLowerCase()}`,
-      payloadJson: JSON.stringify({
+      payloadJson: {
         threadId: event.threadId,
         offerId: event.offerId,
         status: event.nextStatus,
-      }),
+      },
     },
   });
 }
