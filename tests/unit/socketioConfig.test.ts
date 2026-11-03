@@ -27,7 +27,7 @@ describe('getSocketIoConfig', () => {
   });
 
   it('keeps the browser client fallback aligned with the socket server default port', () => {
-    const socketClientSource = read('src/lib/socketioClient.ts');
+    const socketClientSource = read('src/providers/SocketProvider.tsx');
 
     expect(getSocketIoConfig().server.port).toBe(3002);
     expect(socketClientSource).toContain("'http://localhost:3002'");
