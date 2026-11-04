@@ -510,7 +510,7 @@ export default function MainNavigation(): ReactNode {
                 alt="Statly"
                 width={122}
                 height={36}
-                priority
+                loading="eager"
                 className="h-auto w-24 sm:w-28"
               />
             </Link>
