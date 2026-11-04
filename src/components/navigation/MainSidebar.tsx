@@ -107,7 +107,7 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
             alt="Statly"
             width={122}
             height={40}
-            priority
+            loading="eager"
             className="h-auto w-24"
           />
         </Link>
