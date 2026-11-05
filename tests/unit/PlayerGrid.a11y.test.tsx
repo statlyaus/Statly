@@ -372,6 +372,33 @@ describe('PlayerGrid accessibility', () => {
     }
   });
 
+  it('keeps Select on screen at phone width by pinning the actions column', () => {
+    const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
+
+    expect(source).toContain('const MOBILE_PLAYER_COLUMN_WIDTH = 136');
+    expect(source).toContain('const MOBILE_ACTIONS_COLUMN_WIDTH = 200');
+    expect(source).toContain('w-[var(--draft-player-col)] sm:w-[var(--draft-player-col-sm)]');
+    expect(source).toContain('w-[var(--draft-actions-col)] sm:w-[var(--draft-actions-col-sm)]');
+    expect(source).toContain('sticky right-0 z-[1] bg-card');
+    expect(source).toContain('sticky right-0 z-20 bg-[color:var(--draft-broadcast-panel)]');
+    expect(source).toContain('grid grid-cols-[44px_44px_1fr] items-center gap-2 sm:grid-cols-3');
+  });
+
+  it('keeps Watch and Queue named when their labels are hidden at phone width', () => {
+    render(<PlayerGrid {...defaultProps} />);
+
+    const row = screen
+      .getAllByRole('row')
+      .find((r) => within(r).queryByText('Marcus Bontempelli'))!;
+    expect(
+      within(row).getByRole('button', { name: /add marcus bontempelli to watchlist/i })
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByRole('button', { name: /add marcus bontempelli to queue/i })
+    ).toBeInTheDocument();
+    expect(within(row).getByText('Watch')).toHaveClass('sr-only', 'sm:not-sr-only');
+  });
+
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
@@ -396,7 +423,7 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain("onClick={() => onSortChange('statlyZ')}");
     expect(source).toContain('onClick={() => onSortChange(getCategorySortKey(category))}');
     expect(source).not.toContain('className="max-h-[680px] overflow-auto"');
-    expect(source).toContain('grid grid-cols-3 items-center gap-2');
+    expect(source).toContain('grid grid-cols-[44px_44px_1fr] items-center gap-2 sm:grid-cols-3');
     expect(source).toContain('h-11 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
     expect(source).not.toContain('font-mono');

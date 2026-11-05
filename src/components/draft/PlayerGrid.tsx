@@ -46,6 +46,10 @@ const PLAYER_COLUMN_WIDTH = 340;
 const Z_SCORE_COLUMN_WIDTH = 144;
 const STAT_COLUMN_WIDTH = 88;
 const ACTIONS_COLUMN_WIDTH = 236;
+// Below `sm` the identity and actions columns both stay pinned, so they must fit a 390px phone
+// together; the Statly Z and stat columns scroll between them.
+const MOBILE_PLAYER_COLUMN_WIDTH = 136;
+const MOBILE_ACTIONS_COLUMN_WIDTH = 200;
 const FALLBACK_TABLE_VIEWPORT_HEIGHT = 680;
 const FALLBACK_VIRTUALIZED_ROW_HEIGHT = 112;
 const VIRTUALIZED_ROW_OVERSCAN = 6;
@@ -155,7 +159,7 @@ function PlayerIdentityCell({
       className="sticky left-0 z-[1] bg-card px-4 py-4 font-normal shadow-[1px_0_0_0_var(--draft-broadcast-border-soft)] transition-colors group-hover:bg-[color:var(--draft-broadcast-table-row-hover)] sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-[color:var(--draft-broadcast-field)] p-1.5 shadow-sm">
+        <span className="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-[color:var(--draft-broadcast-field)] p-1.5 shadow-sm sm:flex">
           <Image
             src={teamLogo}
             alt=""
@@ -300,8 +304,8 @@ function PlayerRowActions({
   const selectDisabled = !canMakePick || actionDisabled;
 
   return (
-    <td className="border-l border-border/60 px-3 py-4 align-middle">
-      <div className="grid grid-cols-3 items-center gap-2">
+    <td className="sticky right-0 z-[1] bg-card border-l border-border/60 px-3 py-4 align-middle shadow-[-1px_0_0_0_var(--draft-broadcast-border-soft)] transition-colors group-hover:bg-[color:var(--draft-broadcast-table-row-hover)]">
+      <div className="grid grid-cols-[44px_44px_1fr] items-center gap-2 sm:grid-cols-3">
         {isArmed ? (
           <button
             type="button"
@@ -313,7 +317,7 @@ function PlayerRowActions({
             aria-label={`Cancel pick: ${player.name}`}
           >
             <X className="h-4 w-4" aria-hidden="true" />
-            <span>Cancel</span>
+            <span className="sr-only sm:not-sr-only">Cancel</span>
           </button>
         ) : (
           <button
@@ -331,7 +335,7 @@ function PlayerRowActions({
               aria-hidden="true"
               fill={isWatched ? 'currentColor' : 'none'}
             />
-            <span>{isWatched ? 'Watched' : 'Watch'}</span>
+            <span className="sr-only sm:not-sr-only">{isWatched ? 'Watched' : 'Watch'}</span>
           </button>
         )}
         <button
@@ -345,7 +349,7 @@ function PlayerRowActions({
           aria-label={isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`}
         >
           <ListPlus className="h-4 w-4" aria-hidden="true" />
-          <span>{isQueued ? 'Queued' : 'Queue'}</span>
+          <span className="sr-only sm:not-sr-only">{isQueued ? 'Queued' : 'Queue'}</span>
         </button>
         <button
           type="button"
@@ -361,7 +365,7 @@ function PlayerRowActions({
           className={getSelectActionClass(selectDisabled, isArmed)}
           aria-label={isArmed ? `Confirm pick: ${player.name}` : `Select ${player.name}`}
         >
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          <CheckCircle2 className="hidden h-4 w-4 sm:block" aria-hidden="true" />
           <span>
             {isLoading || pendingSelectionId === player.id
               ? 'Selecting'
@@ -668,7 +672,7 @@ interface PlayerGridTableProps {
   visiblePlayers: DraftPlayer[];
   visibleCategories: FantasyCategoryKey[];
   visibleRange: VisibleRowRange;
-  tableMinWidth: number;
+  tableMinWidth: { mobile: number; desktop: number };
   statColumnCount: number;
   shouldWindowRows: boolean;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -734,8 +738,17 @@ function PlayerGridTable({
         }}
       >
         <table
-          className="w-full table-fixed border-collapse text-left"
-          style={{ minWidth: tableMinWidth }}
+          className="w-full min-w-[var(--draft-table-min)] table-fixed border-collapse text-left sm:min-w-[var(--draft-table-min-sm)]"
+          style={
+            {
+              '--draft-player-col': `${MOBILE_PLAYER_COLUMN_WIDTH}px`,
+              '--draft-player-col-sm': `${PLAYER_COLUMN_WIDTH}px`,
+              '--draft-actions-col': `${MOBILE_ACTIONS_COLUMN_WIDTH}px`,
+              '--draft-actions-col-sm': `${ACTIONS_COLUMN_WIDTH}px`,
+              '--draft-table-min': `${tableMinWidth.mobile}px`,
+              '--draft-table-min-sm': `${tableMinWidth.desktop}px`,
+            } as React.CSSProperties
+          }
           aria-rowcount={filteredPlayers.length + (visibleCategories.length > 0 ? 2 : 1)}
           aria-label="Available draft players"
         >
@@ -743,7 +756,7 @@ function PlayerGridTable({
             Available draft players with Statly Z, league stats, and draft actions.
           </caption>
           <colgroup>
-            <col style={{ width: PLAYER_COLUMN_WIDTH }} />
+            <col className="w-[var(--draft-player-col)] sm:w-[var(--draft-player-col-sm)]" />
             <col style={{ width: Z_SCORE_COLUMN_WIDTH }} />
             {visibleCategories.length > 0 ? (
               visibleCategories.map((category) => (
@@ -752,7 +765,7 @@ function PlayerGridTable({
             ) : (
               <col style={{ width: STAT_COLUMN_WIDTH }} />
             )}
-            <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
+            <col className="w-[var(--draft-actions-col)] sm:w-[var(--draft-actions-col-sm)]" />
           </colgroup>
           <thead className="sticky top-0 z-10 border-b border-border bg-[color:var(--draft-broadcast-panel)] text-sm font-medium text-muted-foreground backdrop-blur">
             <tr>
@@ -805,7 +818,7 @@ function PlayerGridTable({
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="px-4 py-3 text-center font-semibold sm:px-5"
+                className="sticky right-0 z-20 bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-center font-semibold shadow-[-1px_0_0_0_var(--draft-broadcast-border-soft)] sm:px-5"
               >
                 Actions
               </th>
@@ -958,11 +971,11 @@ export default function PlayerGrid({
     searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'statlyZ';
   const selectionInFlight = pendingSelectionId !== null;
   const statColumnCount = Math.max(visibleCategories.length, 1);
-  const tableMinWidth =
-    PLAYER_COLUMN_WIDTH +
-    Z_SCORE_COLUMN_WIDTH +
-    statColumnCount * STAT_COLUMN_WIDTH +
-    ACTIONS_COLUMN_WIDTH;
+  const scrollingColumnsWidth = Z_SCORE_COLUMN_WIDTH + statColumnCount * STAT_COLUMN_WIDTH;
+  const tableMinWidth = {
+    mobile: MOBILE_PLAYER_COLUMN_WIDTH + scrollingColumnsWidth + MOBILE_ACTIONS_COLUMN_WIDTH,
+    desktop: PLAYER_COLUMN_WIDTH + scrollingColumnsWidth + ACTIONS_COLUMN_WIDTH,
+  };
   const shouldWindowRows = filteredPlayers.length > VIRTUALIZED_ROW_THRESHOLD;
   const visibleRange = useMemo<VisibleRowRange>(() => {
     if (!shouldWindowRows) {
