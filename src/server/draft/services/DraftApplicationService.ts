@@ -72,8 +72,6 @@ function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEve
   return events;
 }
 
-const DRAFT_MANAGER_ROLES = new Set(['OWNER', 'MANAGER', 'COMMISSIONER', 'ADMIN']);
-
 type PickResult = DraftCommandResult<PickCommandData>;
 type FilledPick = NonNullable<Awaited<ReturnType<typeof draftRepository.findPickByOverall>>>;
 
@@ -118,10 +116,6 @@ async function transactPick(
   }
 }
 
-function isDraftManagerRole(role: string | null | undefined): boolean {
-  return DRAFT_MANAGER_ROLES.has(String(role ?? '').toUpperCase());
-}
-
 function assertCanManageDraftCommand(
   draft: DraftAggregate,
   actorUserId: string | undefined,
@@ -132,7 +126,7 @@ function assertCanManageDraftCommand(
   }
 
   const actor = draft.participants.find((participant) => participant.userId === actorUserId);
-  if (!actor || !isDraftManagerRole(actor.role)) {
+  if (!actor || !actor.canManageDraft) {
     throw new Error(`forbidden:Commissioner access required to ${action}`);
   }
 }

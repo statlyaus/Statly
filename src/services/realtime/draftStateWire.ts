@@ -52,6 +52,7 @@ const DraftRoomSnapshotParticipantSchema = z.object({
   displayName: z.string(),
   teamName: z.string().optional(),
   draftOrder: z.number().int().positive(),
+  canManageDraft: z.boolean().optional(),
 });
 
 const DraftRoomSnapshotPickSchema = z.object({

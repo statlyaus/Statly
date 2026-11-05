@@ -226,6 +226,7 @@ function normalizeParticipant(participant: any, index: number): DraftParticipant
     ),
     teamName: firstPresent(member.teamName, participantRecord.teamName),
     draftOrder,
+    canManageDraft: firstPresent(member.canManageDraft, participantRecord.canManageDraft) === true,
     isOnline: Boolean(firstPresent(participantRecord.isOnline, member.isOnline, false)),
     lastSeen: new Date(firstPresent(participantRecord.lastSeen, member.lastSeen, 0)),
     isCurrentTurn: Boolean(
