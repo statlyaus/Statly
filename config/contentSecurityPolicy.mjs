@@ -91,3 +91,24 @@ export function buildContentSecurityPolicy(env) {
     .map(([name, sources]) => [name, ...new Set(sources)].join(' '))
     .join('; ');
 }
+
+const REPORT_ENDPOINT_NAME = 'csp-endpoint';
+
+/**
+ * Report-Only headers, or none: a report-only policy with nowhere to report has no effect, and
+ * WebKit logs a console error for it.
+ * @param {Record<string, string | undefined>} env
+ * @returns {Array<{ key: string; value: string }>}
+ */
+export function buildContentSecurityPolicyReportOnlyHeaders(env) {
+  const { reportUri } = sentryEndpoints(env.NEXT_PUBLIC_SENTRY_DSN);
+  if (!reportUri) return [];
+
+  return [
+    { key: 'Reporting-Endpoints', value: `${REPORT_ENDPOINT_NAME}="${reportUri}"` },
+    {
+      key: 'Content-Security-Policy-Report-Only',
+      value: `${buildContentSecurityPolicy(env)}; report-to ${REPORT_ENDPOINT_NAME}`,
+    },
+  ];
+}

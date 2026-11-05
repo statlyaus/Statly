@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildContentSecurityPolicy } from '../../config/contentSecurityPolicy.mjs';
+import {
+  buildContentSecurityPolicy,
+  buildContentSecurityPolicyReportOnlyHeaders,
+} from '../../config/contentSecurityPolicy.mjs';
 
 function directives(policy: string) {
   return new Map(
@@ -61,6 +64,23 @@ describe('buildContentSecurityPolicy', () => {
 
     expect(production).not.toContain("'unsafe-eval'");
     expect(development).toContain("'unsafe-eval'");
+  });
+
+  it('sends report-only headers with both report-uri and report-to', () => {
+    const headers = buildContentSecurityPolicyReportOnlyHeaders(productionEnv);
+    const endpoint = 'https://o123.ingest.us.sentry.io/api/456/security/?sentry_key=publickey';
+
+    expect(headers).toEqual([
+      { key: 'Reporting-Endpoints', value: `csp-endpoint="${endpoint}"` },
+      {
+        key: 'Content-Security-Policy-Report-Only',
+        value: expect.stringMatching(/; report-uri \S+; report-to csp-endpoint$/),
+      },
+    ]);
+  });
+
+  it('sends no report-only policy when there is nowhere to report', () => {
+    expect(buildContentSecurityPolicyReportOnlyHeaders({ NODE_ENV: 'production' })).toEqual([]);
   });
 
   it('omits optional origins and reporting when they are not configured', () => {
