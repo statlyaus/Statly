@@ -571,7 +571,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     : '/dashboard#leagues';
   const rosterHref = activeDraft.leagueId
     ? `/leagues/${encodeURIComponent(activeDraft.leagueId)}?tab=roster`
-    : '/rosters';
+    : '/dashboard#leagues';
   const historyHref = isCompletedDraft
     ? `/drafts/history/${encodeURIComponent(activeDraft.id)}${leagueHistoryQuery}`
     : activeDraft.leagueId

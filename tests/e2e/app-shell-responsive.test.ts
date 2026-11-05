@@ -33,7 +33,7 @@ test.describe('shared app shell at 390px', () => {
       `/players/${E2E_PLAYER_ID}`,
       '/live-scoring',
       '/commissioner',
-      '/rosters',
+      '/rankings',
     ];
 
     for (const route of protectedRoutes) {
