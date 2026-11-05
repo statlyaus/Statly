@@ -294,7 +294,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   // Derive "me", ownership, and your slot once
   const me = useMemo(() => participants.find((p) => p.userId === userId), [participants, userId]);
   const yourSlot = me?.draftOrder;
-  const isOwner = (me as any)?.role === 'OWNER' || (yourSlot ?? 0) === 1;
+  const isOwner = me?.canManageDraft === true;
 
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
