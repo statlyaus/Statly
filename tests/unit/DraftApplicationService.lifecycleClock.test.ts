@@ -56,6 +56,7 @@ function aggregate(overrides: Record<string, unknown> = {}) {
         slot: 1,
         displayName: 'Owner',
         role: 'OWNER',
+        canManageDraft: true,
       },
     ],
     picks: [],
@@ -216,5 +217,35 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
         ],
       })
     );
+  });
+
+  it('refuses start, pause and resume from a league member who is not the owner', async () => {
+    const withMember = {
+      participants: [
+        ...aggregate().participants,
+        { memberId: 'member-2', userId: 'manager-2', slot: 2, displayName: 'Manager', role: 'MANAGER' },
+      ],
+    };
+    const service = new DraftApplicationService();
+
+    draftRepository.getDraftAggregate.mockResolvedValue(
+      aggregate({ ...withMember, status: DraftStatus.SCHEDULED })
+    );
+    await expect(
+      service.startDraft({ draftId: 'draft-1', actorUserId: 'manager-2' })
+    ).rejects.toThrow('forbidden:');
+
+    draftRepository.getDraftAggregate.mockResolvedValue(aggregate(withMember));
+    await expect(
+      service.pauseDraft({ draftId: 'draft-1', actorUserId: 'manager-2' })
+    ).rejects.toThrow('forbidden:');
+
+    draftRepository.getDraftAggregate.mockResolvedValue(
+      aggregate({ ...withMember, status: DraftStatus.PAUSED, pausedRemainingSeconds: 37 })
+    );
+    await expect(
+      service.resumeDraft({ draftId: 'draft-1', actorUserId: 'manager-2' })
+    ).rejects.toThrow('forbidden:');
+    expect(draftRepository.transitionDraftClock).not.toHaveBeenCalled();
   });
 });

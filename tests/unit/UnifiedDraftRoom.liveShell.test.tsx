@@ -33,6 +33,7 @@ const draftContext = vi.hoisted<{
   canMakePick: boolean;
   isYourTurn: boolean;
   startFeedback: { message: string } | null;
+  firstSlotCanManage: boolean;
   pickFeedback: {
     status: 'submitting' | 'failed';
     playerId: string;
@@ -46,6 +47,7 @@ const draftContext = vi.hoisted<{
   canMakePick: false,
   isYourTurn: false,
   startFeedback: null,
+  firstSlotCanManage: true,
   pickFeedback: null,
   availablePlayers: [
     {
@@ -159,7 +161,9 @@ vi.mock('@/components/draft/DraftAnalytics', () => ({
 }));
 
 vi.mock('@/components/draft/DraftControls', () => ({
-  default: () => <div>Draft controls</div>,
+  default: ({ isLeagueOwner }: { isLeagueOwner: boolean }) => (
+    <div>{isLeagueOwner ? 'Draft controls' : null}</div>
+  ),
 }));
 
 vi.mock('@/components/draft/DraftQueue', () => ({
@@ -239,6 +243,7 @@ vi.mock('@/contexts/DraftContext', () => ({
         userId: 'statly-dev-tester',
         draftOrder: 1,
         role: 'OWNER',
+        canManageDraft: draftContext.firstSlotCanManage,
         queue: [],
       },
       {
@@ -295,6 +300,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
     draftContext.isYourTurn = false;
     draftContext.pickFeedback = null;
     draftContext.startFeedback = null;
+    draftContext.firstSlotCanManage = true;
     startDraftSpy.mockReset();
     dismissStartFeedbackSpy.mockReset();
     makePickSpy.mockReset();
@@ -673,5 +679,15 @@ describe('UnifiedDraftRoom live shell composition', () => {
       'data-your-turn',
       'true'
     );
+  });
+
+  it('shows draft controls to the league owner only, not to whoever drafts first', () => {
+    const { unmount } = render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+    expect(screen.getByText('Draft controls')).toBeInTheDocument();
+    unmount();
+
+    draftContext.firstSlotCanManage = false;
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+    expect(screen.queryByText('Draft controls')).not.toBeInTheDocument();
   });
 });

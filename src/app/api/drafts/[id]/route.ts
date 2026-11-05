@@ -67,6 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             league: {
               select: {
                 name: true,
+                ownerId: true,
                 categoriesJson: true,
                 settings: { select: { draftType: true, pickSeconds: true } },
               },
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                   select: {
                     id: true,
                     userId: true,
+                    isCoCommissioner: true,
                     user: { select: { displayName: true } },
                   },
                 },
@@ -224,6 +226,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           id: order.member.id,
           userId: order.member.userId,
           displayName: order.member.user.displayName,
+          canManageDraft:
+            order.member.userId === draft.league?.ownerId || order.member.isCoCommissioner,
         },
       })),
       // Summaries instead of heavy arrays
