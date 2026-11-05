@@ -82,7 +82,7 @@ export default function RankingsPage() {
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
           <p className="text-lg text-gray-600">
-            Player rankings based on 9 AFL statistical categories
+            Player rankings on the nine stat categories of the default league
           </p>
 
           {/* Legend */}
@@ -122,7 +122,7 @@ export default function RankingsPage() {
             </div>
             <p className="text-xs text-gray-500 mt-2">
               Numbers show per-game averages. Icons and colors indicate strength relative to league
-              average (Z-score).
+              average (Z-score). A dash means the source has no data for that stat.
             </p>
           </div>
         </header>

@@ -2,16 +2,12 @@
 
 import React from 'react';
 
-export type RankingCategory =
-  | 'goals'
-  | 'goal_assists'
-  | 'tackles'
-  | 'clearances'
-  | 'inside_50s'
-  | 'rebound_50s'
-  | 'hitouts'
-  | 'intercepts'
-  | 'marks';
+import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+import {
+  RANKING_CATEGORIES,
+  type CategoryScore,
+  type RankingCategory,
+} from '@/lib/rankings/categoryRankings';
 
 export interface PlayerCategoryRanking {
   playerId: string;
@@ -21,31 +17,16 @@ export interface PlayerCategoryRanking {
   games: number;
   overall: number;
   rank: number;
-  categories: Record<
-    RankingCategory,
-    {
-      perGame: number;
-      zScore: number;
-    }
-  >;
+  categories: Record<RankingCategory, CategoryScore>;
 }
 
 interface Props {
   players: PlayerCategoryRanking[];
 }
 
-// Hoisted category columns to avoid re-creating on each render
-export const CATEGORY_COLUMNS: ReadonlyArray<readonly [string, RankingCategory]> = [
-  ['G', 'goals'],
-  ['GA', 'goal_assists'],
-  ['T', 'tackles'],
-  ['CL', 'clearances'],
-  ['I50', 'inside_50s'],
-  ['R50', 'rebound_50s'],
-  ['HO', 'hitouts'],
-  ['I', 'intercepts'],
-  ['M', 'marks'],
-];
+// Columns follow the default league preset
+export const CATEGORY_COLUMNS: ReadonlyArray<readonly [string, RankingCategory]> =
+  RANKING_CATEGORIES.map((key) => [FANTASY_CATEGORIES[key].shortLabel ?? key, key] as const);
 
 function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
   const getStatColor = (zScore: number) => {
@@ -149,8 +130,18 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
                 </td>
 
                 {CATEGORY_COLUMNS.map(([_, cat]) => {
-                  const perGame = player.categories?.[cat]?.perGame ?? 0;
-                  const z = player.categories?.[cat]?.zScore ?? 0;
+                  const perGame = player.categories?.[cat]?.perGame ?? null;
+                  const z = player.categories?.[cat]?.zScore ?? null;
+                  if (perGame === null || z === null) {
+                    return (
+                      <td key={cat} className="px-2 py-4 whitespace-nowrap text-center">
+                        <span aria-hidden="true" className="text-xs text-gray-400">
+                          —
+                        </span>
+                        <span className="sr-only">No data</span>
+                      </td>
+                    );
+                  }
                   return (
                     <td key={cat} className="px-2 py-4 whitespace-nowrap text-center">
                       <div className={`text-xs px-1 py-1 rounded ${getStatColor(z)}`}>
