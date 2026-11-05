@@ -260,6 +260,8 @@ export class DraftProjectionService {
           displayName: order.member.user.displayName || order.member.user.email || 'Unknown',
           teamName: order.member.teamName,
           draftOrder: order.slot,
+          canManageDraft:
+            order.member.userId === draft.league.ownerId || order.member.isCoCommissioner,
         })),
         picks: draft.picks.map((pick) => ({
           id: pick.id,
