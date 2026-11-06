@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
+import { getDraftRoomTimerState } from '@/lib/draftRoomSequencing';
 
 type DraftRoomPlayerFixture = {
   id: string;
@@ -17,6 +18,7 @@ const playerGridSpy = vi.hoisted(() => vi.fn());
 const draftLeftRailSpy = vi.hoisted(() => vi.fn());
 const pickFeedSpy = vi.hoisted(() => vi.fn());
 const draftWatchlistSpy = vi.hoisted(() => vi.fn());
+const livePickHeaderSpy = vi.hoisted(() => vi.fn());
 const openLeagueSocialSpy = vi.hoisted(() => vi.fn());
 const setLeagueContextSpy = vi.hoisted(() => vi.fn());
 const updateQueueSpy = vi.hoisted(() => vi.fn());
@@ -28,6 +30,8 @@ const dismissStartFeedbackSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
+  connectionStatus: 'connected' | 'reconnecting' | 'disconnected';
+  needsResync: boolean;
   availablePlayers: DraftRoomPlayerFixture[];
   isSaving: boolean;
   canMakePick: boolean;
@@ -43,6 +47,8 @@ const draftContext = vi.hoisted<{
   } | null;
 }>(() => ({
   status: 'LIVE',
+  connectionStatus: 'connected',
+  needsResync: false,
   isSaving: false,
   canMakePick: false,
   isYourTurn: false,
@@ -97,11 +103,18 @@ vi.mock('@/components/ui/ErrorBoundary', () => ({
 }));
 
 vi.mock('@/components/LivePickHeader', () => ({
-  default: ({ isYourTurn }: { isYourTurn: boolean }) => (
-    <section role="banner" aria-label="Live draft status" data-your-turn={String(isYourTurn)}>
-      Live pick header
-    </section>
-  ),
+  default: (props: { isYourTurn: boolean; draftData: unknown }) => {
+    livePickHeaderSpy(props);
+    return (
+      <section
+        role="banner"
+        aria-label="Live draft status"
+        data-your-turn={String(props.isYourTurn)}
+      >
+        Live pick header
+      </section>
+    );
+  },
 }));
 
 vi.mock('@/components/PickFeed', () => ({
@@ -213,7 +226,7 @@ vi.mock('@/contexts/DraftContext', () => ({
     startFeedback: draftContext.startFeedback,
     dismissStartFeedback: dismissStartFeedbackSpy,
     startDraft: startDraftSpy,
-    connection: { status: 'disconnected' },
+    connection: { status: draftContext.connectionStatus, needsResync: draftContext.needsResync },
     draft: {
       id: 'draft-1',
       name: 'Test AFL Champions League - LIVE',
@@ -221,6 +234,7 @@ vi.mock('@/contexts/DraftContext', () => ({
       status: draftContext.status,
       currentPick: 1,
       totalPicks: 264,
+      pickDeadlineAt: new Date(Date.now() + 60_000),
       round: 1,
       settings: {
         timePerPick: 60,
@@ -290,11 +304,14 @@ describe('UnifiedDraftRoom live shell composition', () => {
     draftLeftRailSpy.mockClear();
     pickFeedSpy.mockClear();
     draftWatchlistSpy.mockClear();
+    livePickHeaderSpy.mockClear();
     openLeagueSocialSpy.mockClear();
     setLeagueContextSpy.mockClear();
     updateQueueSpy.mockReset();
     updateQueueSpy.mockResolvedValue(undefined);
     draftContext.status = 'LIVE';
+    draftContext.connectionStatus = 'connected';
+    draftContext.needsResync = false;
     draftContext.isSaving = false;
     draftContext.canMakePick = false;
     draftContext.isYourTurn = false;
@@ -689,5 +706,82 @@ describe('UnifiedDraftRoom live shell composition', () => {
     draftContext.firstSlotCanManage = false;
     render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
     expect(screen.queryByText('Draft controls')).not.toBeInTheDocument();
+  });
+  function renderedClockPhase(): string {
+    const { draftData } = livePickHeaderSpy.mock.calls.at(-1)?.[0] as {
+      draftData: Parameters<typeof getDraftRoomTimerState>[0] & { status: string };
+    };
+    return getDraftRoomTimerState({ ...draftData, timePerPick: 60 }).phase;
+  }
+
+  it.each([
+    ['reconnecting', false],
+    ['disconnected', false],
+    ['connected', true],
+  ] as const)(
+    'pauses picks and shows a syncing clock while the board may be out of date (%s, resync pending: %s)',
+    (connectionStatus, needsResync) => {
+      draftContext.canMakePick = true;
+      draftContext.isYourTurn = true;
+      draftContext.connectionStatus = connectionStatus;
+      draftContext.needsResync = needsResync;
+      render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+      expect(screen.getByRole('status', { name: 'Pick availability' })).toHaveTextContent(
+        'Reconnecting. Picks are paused until the board is up to date.'
+      );
+      expect(playerGridSpy.mock.calls.at(-1)?.[0].canMakePick).toBe(false);
+      expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].canDraft).toBe(false);
+      expect(renderedClockPhase()).toBe('SYNCING');
+    }
+  );
+
+  it('does not offer Retry pick while the board is resyncing', () => {
+    draftContext.canMakePick = true;
+    draftContext.connectionStatus = 'reconnecting';
+    draftContext.pickFeedback = {
+      status: 'failed',
+      playerId: 'player-1',
+      playerName: 'Caleb Daniel',
+      message: 'Failed to make pick',
+      recovery: 'retry',
+    };
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('button', { name: 'Retry pick' })).not.toBeInTheDocument();
+  });
+
+  it('lets the manager pick and shows the live clock once the board is up to date', () => {
+    draftContext.canMakePick = true;
+    draftContext.isYourTurn = true;
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('status', { name: 'Pick availability' })).not.toBeInTheDocument();
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].canMakePick).toBe(true);
+    expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].canDraft).toBe(true);
+    expect(renderedClockPhase()).toBe('LIVE');
+  });
+
+  it('keeps keyboard focus inside the mobile pick feed and returns it to the trigger on close', async () => {
+    const user = userEvent.setup();
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    const trigger = screen.getByRole('button', { name: 'Open Pick Feed' });
+    await user.click(trigger);
+
+    const dialog = screen.getByRole('dialog', { name: 'Pick Feed' });
+    const closeButton = screen.getByRole('button', { name: 'Close Pick Feed' });
+    const lastControl = screen.getAllByRole('button', { name: 'Feed filter' }).at(-1);
+    expect(closeButton).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(lastControl).toHaveFocus();
+    await user.tab();
+    expect(closeButton).toHaveFocus();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    await user.click(closeButton);
+    expect(screen.queryByRole('dialog', { name: 'Pick Feed' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import DraftWatchlist from '@/components/DraftWatchlist';
@@ -163,5 +163,77 @@ describe('DraftWatchlist', () => {
     expect(
       screen.getByRole('button', { name: 'Remove Positive Score from watchlist' })
     ).not.toBeDisabled();
+  });
+  it('asks for confirmation before drafting, like the player grid Select', () => {
+    const onDraftPlayer = vi.fn();
+    render(
+      <DraftWatchlist
+        players={availablePlayers}
+        draftedPlayerIds={['drafted']}
+        onDraftPlayer={onDraftPlayer}
+        canDraft
+        watchlistItems={watchlistItems}
+        onRemoveFromWatchlist={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft Positive Score' }));
+    expect(onDraftPlayer).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel pick: Positive Score' }));
+    expect(onDraftPlayer).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Draft Positive Score' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft Positive Score' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick: Positive Score' }));
+    expect(onDraftPlayer).toHaveBeenCalledTimes(1);
+    expect(onDraftPlayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'positive' }));
+  });
+
+  it('drops an armed pick when the manager can no longer draft', () => {
+    const onDraftPlayer = vi.fn();
+    const props = {
+      players: availablePlayers,
+      draftedPlayerIds: ['drafted'],
+      onDraftPlayer,
+      watchlistItems,
+      onRemoveFromWatchlist: vi.fn(),
+    };
+    const { rerender } = render(<DraftWatchlist {...props} canDraft />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft Positive Score' }));
+    rerender(<DraftWatchlist {...props} canDraft={false} />);
+    rerender(<DraftWatchlist {...props} canDraft />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Confirm pick: Positive Score' })
+    ).not.toBeInTheDocument();
+    expect(onDraftPlayer).not.toHaveBeenCalled();
+  });
+
+  it('gives every row action a 44px touch target', () => {
+    render(
+      <DraftWatchlist
+        players={availablePlayers}
+        draftedPlayerIds={['drafted']}
+        onDraftPlayer={vi.fn()}
+        canDraft
+        watchlistItems={watchlistItems}
+        onAddToQueue={vi.fn()}
+        onRemoveFromWatchlist={vi.fn()}
+      />
+    );
+
+    for (const name of [
+      'Add Positive Score to draft queue',
+      'Draft Positive Score',
+      'Remove Positive Score from watchlist',
+    ]) {
+      expect(screen.getByRole('button', { name }).className).toMatch(/(^|\s)h-11(\s|$)/);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Draft Positive Score' }));
+    for (const name of ['Confirm pick: Positive Score', 'Cancel pick: Positive Score']) {
+      expect(screen.getByRole('button', { name }).className).toMatch(/(^|\s)h-11(\s|$)/);
+    }
   });
 });
