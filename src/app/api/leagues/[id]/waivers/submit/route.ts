@@ -84,6 +84,9 @@ export const POST = withMetrics(
         validatedBid = bidAmount;
       }
 
+      const storedDropPlayerId = dropPlayerId
+        ? ((await resolveCanonicalPlayerId(String(dropPlayerId))) ?? String(dropPlayerId))
+        : undefined;
       const submittedClaim = await new PrismaWaiverClaimStore().submitClaim({
         leagueId,
         userId,
@@ -91,12 +94,7 @@ export const POST = withMetrics(
         playerId: canonicalPlayerId,
         priority: Number(priority) || 1,
         waiverSettings: ws,
-        ...(dropPlayerId
-          ? {
-              dropPlayerId:
-                (await resolveCanonicalPlayerId(String(dropPlayerId))) ?? String(dropPlayerId),
-            }
-          : {}),
+        ...(storedDropPlayerId ? { dropPlayerId: storedDropPlayerId } : {}),
         ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
       });
       const claimId = submittedClaim.id;
@@ -120,7 +118,17 @@ export const POST = withMetrics(
       } catch (e) {
         logger.warn('Revalidation error after waiver submit', { leagueId, error: e });
       }
-      return NextResponse.json({ id: claimId }, { status: 201 });
+      // Echo the stored claim so the client confirms what persisted, not what it sent.
+      return NextResponse.json(
+        {
+          id: claimId,
+          playerId: canonicalPlayerId,
+          ...(storedDropPlayerId ? { dropPlayerId: storedDropPlayerId } : {}),
+          ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
+          processingAt: submittedClaim.processingAt.toISOString(),
+        },
+        { status: 201 }
+      );
     } catch (err) {
       if (err instanceof Error) {
         if (err.message === 'PLAYER_OWNED') {

@@ -643,7 +643,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   const ladderLeague = leagues.find((league) => league.ladder && league.ladder.length > 0) ?? null;
 
   return (
-    <main className="min-h-screen bg-muted">
+    <div className="min-h-screen bg-muted">
       <div className="mx-auto flex max-w-[var(--app-shell-max-width)] flex-col gap-5 px-4 pb-12 pt-6 sm:px-6 lg:px-8 2xl:px-10">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <h1 className="font-display text-3xl font-bold text-foreground">Your leagues</h1>
@@ -716,6 +716,6 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
           </div>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }

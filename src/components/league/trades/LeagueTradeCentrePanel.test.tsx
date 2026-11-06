@@ -718,6 +718,42 @@ describe('LeagueTradeCentrePanel', () => {
     });
   });
 
+  it.each([
+    ['COMPLETED', 'Trade accepted and completed.'],
+    ['PENDING_ADMIN_REVIEW', 'Accepted. Waiting for commissioner review.'],
+    ['PENDING_VETO_REVIEW', 'Accepted. Other teams can veto it until the review period ends.'],
+    ['INVALIDATED', 'This trade can no longer go through, so it was closed.'],
+    ['EXPIRED', 'This offer had expired, so it was closed.'],
+    [undefined, 'Request saved. The offers list is updating.'],
+  ])('announces the persisted %s outcome after accepting', async (status, message) => {
+    const user = userEvent.setup();
+    authenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify({ threadId: 'trade-1', status }), { status: 200 })
+    );
+    renderOffersPanel();
+
+    await user.click(screen.getByRole('button', { name: 'Accept' }));
+    await user.click(screen.getByRole('button', { name: 'Accept trade' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText('Trade accepted.')).not.toBeInTheDocument();
+  });
+
+  it('does not report a decline when the server expired the offer instead', async () => {
+    const user = userEvent.setup();
+    authenticatedFetch.mockResolvedValue(
+      new Response(JSON.stringify({ threadId: 'trade-1', status: 'EXPIRED' }), { status: 200 })
+    );
+    renderOffersPanel();
+
+    await user.click(screen.getByRole('button', { name: 'Decline' }));
+
+    expect(
+      await screen.findByText('This offer had expired, so it was closed.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Trade declined.')).not.toBeInTheDocument();
+  });
+
   it('reuses an action idempotency key when a committed response must be retried', async () => {
     const user = userEvent.setup();
     authenticatedFetch
