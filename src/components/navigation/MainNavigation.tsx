@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -317,6 +317,8 @@ function NavDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const isActive =
     isNavActive(pathname, item.href) ||
     (item.submenu?.some((subItem) => isNavActive(pathname, subItem.href)) ?? false);
@@ -328,17 +330,31 @@ function NavDropdown({
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
     }
   }, [isOpen]);
 
   return (
     <div ref={dropdownRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
+        aria-expanded={isOpen}
+        aria-controls={menuId}
         className={`inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
           isActive
             ? 'bg-white text-brand-bar'
@@ -360,6 +376,7 @@ function NavDropdown({
       <AnimatePresence>
         {isOpen ? (
           <motion.div
+            id={menuId}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -516,7 +533,7 @@ export default function MainNavigation(): ReactNode {
             </Link>
           </div>
 
-          <div className="hidden min-w-0 items-center justify-center lg:flex">
+          <nav aria-label="Main" className="hidden min-w-0 items-center justify-center lg:flex">
             <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto [scrollbar-width:none]">
               {desktopNavigationItems.map((item) => {
                 const isActive = isNavActive(pathname, item.href);
@@ -538,7 +555,7 @@ export default function MainNavigation(): ReactNode {
               })}
               {user ? <NavDropdown item={toolsNavigationItem} pathname={pathname} /> : null}
             </div>
-          </div>
+          </nav>
 
           <div className="hidden min-w-0 items-center justify-self-end gap-2 lg:flex">
             {user ? (
@@ -674,8 +691,9 @@ export default function MainNavigation(): ReactNode {
 
         <AnimatePresence>
           {isMobileOpen ? (
-            <motion.div
+            <motion.nav
               id="mobile-main-navigation"
+              aria-label="Main"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -837,7 +855,7 @@ export default function MainNavigation(): ReactNode {
                   </div>
                 )}
               </div>
-            </motion.div>
+            </motion.nav>
           ) : null}
         </AnimatePresence>
       </header>
