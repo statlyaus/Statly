@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { Clock3, Sparkles, User, Star } from 'lucide-react';
 
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { getTeamLogo } from '@/lib/teamLogos';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +47,8 @@ interface PickFeedProps {
   watchlistPlayerIds?: string[];
   className?: string;
   contentId?: string;
+  /** The league's IANA timezone; pick times are shown in it. */
+  timeZone?: string;
 }
 
 type FilterType = 'all' | 'my-picks' | 'watchlist';
@@ -57,6 +60,7 @@ export default function PickFeed({
   watchlistPlayerIds = [],
   className = '',
   contentId = 'pick-feed-content',
+  timeZone,
 }: PickFeedProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -304,10 +308,7 @@ export default function PickFeed({
                       {formatTimeAgo(pick.madeAt)}
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      {new Date(pick.madeAt).toLocaleTimeString([], {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
+                      {formatLeagueTime(pick.madeAt, timeZone, 'time')}
                     </div>
                   </div>
                 </div>

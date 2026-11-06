@@ -50,7 +50,10 @@ immersive route that skips the shell, such as the live draft room, renders its o
 
 - Distinguish persisted state, pending mutation, reconnecting/catching-up state, and failure.
 - Do not imply a pick, trade, waiver, or lineup save succeeded before server confirmation.
-- Keep timestamps deterministic and show the relevant league timezone.
+- Keep timestamps deterministic and show the relevant league timezone. League times (draft starts,
+  picks, lineup locks, matchup starts, waiver runs and claims) go through `formatLeagueTime` in
+  `src/lib/leagueTime.ts`, which formats in the league's `LeagueSettings.timeZone` and always prints
+  the zone abbreviation. Relative times ("3m ago") and real AFL fixture times are not league times.
 - Explain comparison bases, sample sizes, directionality, and limitations; do not label an estimate as
   objective fairness.
 - Use loading, empty, error, unauthorized, and stale-data states deliberately.

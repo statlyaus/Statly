@@ -9,7 +9,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 
-import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import {
@@ -91,6 +91,7 @@ interface WaiverFAABSystemProps {
   loadingMorePlayers?: boolean;
   hasMorePlayers?: boolean;
   initialPlayerId?: string | null;
+  timeZone?: string;
 }
 
 type WaiverSortKey = 'statlyZ' | 'name' | 'position' | 'club';
@@ -595,7 +596,7 @@ function MyClaimsPanel({
   onCancelClaim,
 }: {
   claims: WaiverClaim[];
-  timeZone: string;
+  timeZone?: string;
   onCancelClaim?: (id: string) => void;
 }): React.JSX.Element {
   return (
@@ -629,7 +630,7 @@ function MyClaimsPanel({
                       {claim.dropPlayerName ? ` - drop ${claim.dropPlayerName}` : ''}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Submitted {formatInTimezone(claim.submittedAt, timeZone, 'PP p')}
+                      Submitted {formatLeagueTime(claim.submittedAt, timeZone)}
                     </div>
                   </div>
                 </div>
@@ -671,7 +672,7 @@ function ActivityPanel({
   timeZone,
 }: {
   activityItems: ActivityFeedItem[];
-  timeZone: string;
+  timeZone?: string;
 }): React.JSX.Element {
   return (
     <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
@@ -692,7 +693,7 @@ function ActivityPanel({
                   {describeActivity(item.type, teamText, playerText)}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {formatInTimezone(item.timestamp, timeZone, 'PP p')}
+                  {formatLeagueTime(item.timestamp, timeZone)}
                   {typeof item.bidAmount === 'number' ? ` - $${item.bidAmount}` : ''}
                   {item.dropPlayerName ? ` - drop ${item.dropPlayerName}` : ''}
                   {item.type === 'waiver-failed' && item.reason ? ` - ${item.reason}` : ''}
@@ -724,8 +725,8 @@ export default function WaiverFAABSystem({
   loadingMorePlayers,
   hasMorePlayers,
   initialPlayerId,
+  timeZone,
 }: WaiverFAABSystemProps): React.JSX.Element {
-  const timeZone = useMemo(() => getBrowserTimeZone(), []);
   const [searchTerm, setSearchTerm] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<WaiverSortKey>('statlyZ');

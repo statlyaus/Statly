@@ -13,10 +13,10 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
 import ModularDashboard, {
   buildNeedsYou,
   sortLeagues,
-  formatLeagueTime,
   leagueStatusLabel,
   matchupResultLine,
 } from '@/components/ModularDashboard';
+import { formatLeagueTime } from '@/lib/leagueTime';
 
 const now = new Date('2026-09-26T10:00:00.000Z');
 

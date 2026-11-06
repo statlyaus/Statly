@@ -553,6 +553,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     userMemberId,
     watchlistPlayerIds: watchlistItems.map((item) => item.playerId),
     className: 'h-full min-h-0 border-0 shadow-none',
+    timeZone: activeDraft.settings.timeZone,
   };
   const desktopPickFeed = (
     <PickFeed {...pickFeedProps} contentId={`pick-feed-content:${activeDraft.id}:desktop`} />
