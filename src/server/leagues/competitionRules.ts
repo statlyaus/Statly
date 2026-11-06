@@ -30,7 +30,7 @@ export type CompetitionRules = {
   regularSeasonRounds: number;
   finalsTeams: (typeof SUPPORTED_FINALS_TEAM_COUNTS)[number];
   fixtureGenerationMode: LeagueFixtureGenerationMode;
-  /** THURSDAY_7PM_AEST locks at Thursday 7:00 pm in the league's `LeagueSettings.timeZone`. */
+  /** THURSDAY_7PM_AEST locks at Thursday 7:00 pm Australia/Sydney, whatever the league's display timezone. */
   lockPolicy: CompetitionLockPolicy;
   interchangeSlots: number;
   standingsTieBreakCategory: FantasyCategoryKey;
