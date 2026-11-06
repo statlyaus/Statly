@@ -43,27 +43,60 @@ describe('calculateStatlyZScores', () => {
     expect(scores.get('p1')?.score).toBe(0);
   });
 
-  it('inverts lower-is-better categories in score and breakdown contributions', () => {
+  it('lowers the score of the higher value in a LOW_WINS category and keeps the raw value', () => {
     const scores = calculateStatlyZScores(
       [
-        { id: 'clean', stats: { turnovers: 2 } },
-        { id: 'loose', stats: { turnovers: 6 } },
+        { id: 'clean', stats: { goals: 1, turnovers: 2 } },
+        { id: 'loose', stats: { goals: 1, turnovers: 6 } },
       ],
-      ['turnovers']
+      ['goals', 'turnovers'],
+      { goals: 'HIGH_WINS', turnovers: 'LOW_WINS' }
     );
 
     expect(scores.get('clean')?.score).toBe(1);
-    expect(scores.get('clean')?.breakdown[0]).toMatchObject({
+    expect(scores.get('clean')?.breakdown[1]).toMatchObject({
       category: 'turnovers',
       value: 2,
       zScore: 1,
     });
     expect(scores.get('loose')?.score).toBe(-1);
-    expect(scores.get('loose')?.breakdown[0]).toMatchObject({
+    expect(scores.get('loose')?.breakdown[1]).toMatchObject({
       category: 'turnovers',
       value: 6,
       zScore: -1,
     });
+  });
+
+  it('applies the league direction to any category, so a LOW_WINS goals league ranks fewer goals higher', () => {
+    const scores = calculateStatlyZScores(players, categories, { goals: 'LOW_WINS' });
+
+    const p1 = scores.get('p1');
+    const p2 = scores.get('p2');
+    expect(p1?.breakdown[0]).toMatchObject({ category: 'goals', value: 3 });
+    expect(p1?.breakdown[0]?.zScore).toBeLessThan(0);
+    expect(p2?.breakdown[0]?.zScore).toBeGreaterThan(0);
+    // goals flips sign, tackles and inside 50s stay HIGH_WINS.
+    const highWins = calculateStatlyZScores(players, categories);
+    expect(p1?.breakdown[0]?.zScore).toBe(-(highWins.get('p1')?.breakdown[0]?.zScore ?? 0));
+    expect(p1?.breakdown.slice(1)).toEqual(highWins.get('p1')?.breakdown.slice(1));
+    expect(p1?.score).toBeLessThan(highWins.get('p1')?.score ?? 0);
+    expect(p1?.score).toBeCloseTo(
+      p1?.breakdown.reduce((total, entry) => total + entry.zScore, 0) ?? NaN,
+      1
+    );
+  });
+
+  it('treats every category as HIGH_WINS when the league stores no direction', () => {
+    const scores = calculateStatlyZScores(
+      [
+        { id: 'few', stats: { turnovers: 2 } },
+        { id: 'many', stats: { turnovers: 6 } },
+      ],
+      ['turnovers']
+    );
+
+    expect(scores.get('few')?.score).toBe(-1);
+    expect(scores.get('many')?.score).toBe(1);
   });
 
   it('gives a draft player the stats of its own club when another player shares the name', () => {

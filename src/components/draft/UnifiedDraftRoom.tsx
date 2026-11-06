@@ -12,13 +12,13 @@ import { useLeagueSocialWidget } from '@/components/league/social';
 import { useConfirmation } from '@/components/ui/Modal';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useDraft, type DraftPickFeedback } from '@/contexts/DraftContext';
+import { useFocusTrap } from '@/hooks/useAccessibility';
 import {
   toLivePickHeaderData,
   toFeedPicks,
   toFeedParticipants,
 } from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer, DraftParticipant, DraftPick, DraftSettings } from '@/types/draft';
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 import ConnectionStatus from './ConnectionStatus';
 import DraftControls from './DraftControls';
@@ -26,40 +26,18 @@ import DraftLeftRail, { type DraftLeftRailRosterSlot } from './DraftLeftRail';
 import DraftQueue from './DraftQueue';
 import DraftStatusBanner from './DraftStatusBanner';
 import PlayerGrid from './PlayerGrid';
+import { sortDraftPlayers, type PlayerSortKey } from './sortDraftPlayers';
 
 interface UnifiedDraftRoomProps {
   draftId: string;
   userId: string;
 }
 
-type PlayerSortKey =
-  'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
-
 type QueueMutationFeedback =
   { kind: 'error'; message: string; retryQueue: string[] } | { kind: 'success'; message: string };
 
 function getPositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}
-
-function getCategorySortValue(player: DraftPlayer, sortBy: PlayerSortKey): number | null {
-  if (!sortBy.startsWith('category:')) return null;
-
-  const category = sortBy.slice('category:'.length) as FantasyCategoryKey;
-  const value = player.stats?.[category];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function compareNullableScoreDesc(
-  aValue: number | null,
-  bValue: number | null,
-  aName: string,
-  bName: string
-): number {
-  if (aValue === null && bValue === null) return aName.localeCompare(bName);
-  if (aValue === null) return 1;
-  if (bValue === null) return -1;
-  return bValue - aValue || aName.localeCompare(bName);
 }
 
 function filterDraftPlayers(
@@ -78,32 +56,6 @@ function filterDraftPlayers(
     const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
 
     return matchesQuery && matchesPosition;
-  });
-}
-
-function sortDraftPlayers(players: DraftPlayer[], sortBy: PlayerSortKey): DraftPlayer[] {
-  return [...players].sort((a, b) => {
-    if (sortBy === 'statlyZ') {
-      const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
-      const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
-      return compareNullableScoreDesc(aScore, bScore, a.name, b.name);
-    }
-
-    if (sortBy === 'adp') {
-      return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
-    }
-
-    if (sortBy.startsWith('category:')) {
-      return compareNullableScoreDesc(
-        getCategorySortValue(a, sortBy),
-        getCategorySortValue(b, sortBy),
-        a.name,
-        b.name
-      );
-    }
-
-    const textSort = sortBy as 'name' | 'position' | 'club';
-    return a[textSort].localeCompare(b[textSort]);
   });
 }
 
@@ -274,11 +226,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   );
   const [queueAnnouncement, setQueueAnnouncement] = useState('');
 
-  // Desktop FAB ref + modal focus mgmt refs
-  const openFeedBtnRef = useRef<HTMLButtonElement | null>(null);
-  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const lastFocusedRef = useRef<HTMLElement | null>(null);
-  const hasOpenedPickFeedRef = useRef(false);
+  // The trap moves focus into the mobile pick feed and returns it to the trigger on close.
+  const pickFeedDialogRef = useFocusTrap<HTMLDivElement>(isPickFeedOpen);
   const queueMutationInFlightRef = useRef(false);
 
   // Participants/picks/players are guaranteed arrays by DraftContext
@@ -287,6 +236,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const playersList = draft.availablePlayers as DraftPlayer[];
   const watchlistItems = draft.watchlistItems || [];
   const selectedCategories = draft.selectedCategories || [];
+  const categoryDirections = draft.categoryDirections;
   const emptyPlayerMessage =
     draft.draftReadiness?.blockers.find((blocker) => blocker.code === 'player_pool_empty')
       ?.message ?? undefined;
@@ -296,10 +246,20 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const yourSlot = me?.draftOrder;
   const isOwner = me?.canManageDraft === true;
 
+  // While the room may be showing an out-of-date board, the server may already have moved on: picks
+  // pause and the clock shows as syncing until a persisted baseline is applied.
+  const isBoardStale =
+    draft.connection.status !== 'connected' || draft.connection.needsResync === true;
+  const canMakePick = draft.canMakePick && !isBoardStale;
+
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
-    return sortDraftPlayers(filterDraftPlayers(playersList, deferredQuery, positionFilter), sortBy);
-  }, [playersList, deferredQuery, positionFilter, sortBy]);
+    return sortDraftPlayers(
+      filterDraftPlayers(playersList, deferredQuery, positionFilter),
+      sortBy,
+      categoryDirections
+    );
+  }, [playersList, deferredQuery, positionFilter, sortBy, categoryDirections]);
 
   // Unique positions for the filter dropdown
   const availablePositions = useMemo(() => {
@@ -310,18 +270,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   // Handle player selection. makePick reports failures through draft.pickFeedback, not by throwing.
   const handlePlayerSelect = useCallback(
     async (player: DraftPlayer) => {
-      if (!draft.canMakePick) return;
+      if (!canMakePick) return;
       await draft.makePick(player.id);
     },
-    [draft]
+    [canMakePick, draft]
   );
 
   const handlePlayerSelectById = useCallback(
     async (playerId: string) => {
-      if (!draft.canMakePick) return;
+      if (!canMakePick) return;
       await draft.makePick(playerId);
     },
-    [draft]
+    [canMakePick, draft]
   );
 
   const commitQueue = useCallback(
@@ -445,24 +405,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         'bg-[color:var(--draft-broadcast-alert-soft)] text-[color:var(--draft-broadcast-alert)] ring-1 ring-[color:var(--draft-broadcast-alert)]',
     }[draftStatus] ??
     'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]';
-
-  // Modal focus management
-  useEffect(() => {
-    if (isPickFeedOpen) {
-      hasOpenedPickFeedRef.current = true;
-      // Save last focused element & move focus into dialog
-      lastFocusedRef.current = (document.activeElement as HTMLElement) ?? null;
-      // Delay to end of paint so ref exists
-      requestAnimationFrame(() => {
-        closeBtnRef.current?.focus();
-      });
-    } else if (hasOpenedPickFeedRef.current) {
-      // Restore focus to the element that opened the feed, or fallback to the FAB.
-      requestAnimationFrame(() => {
-        (lastFocusedRef.current || openFeedBtnRef.current)?.focus();
-      });
-    }
-  }, [isPickFeedOpen]);
 
   useEffect(() => {
     const leagueId = draft.draft?.leagueId;
@@ -595,7 +537,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       onDraftPlayer={(player) => {
         void handlePlayerSelectById(player.id);
       }}
-      canDraft={draft.canMakePick}
+      canDraft={canMakePick}
       watchlistItems={watchlistItems}
       onAddToQueue={handleAddWatchlistPlayerToQueue}
       queuedPlayerIds={queuePlayerIds}
@@ -685,7 +627,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           {/* Draft Pick Header */}
           <LivePickHeader
-            draftData={toLivePickHeaderData(activeDraft, participants, picks, draft.liveState)}
+            draftData={
+              isBoardStale
+                ? // No clock anchor renders as syncing; a stale anchor would keep counting.
+                  {
+                    ...toLivePickHeaderData(activeDraft, participants, picks, draft.liveState),
+                    pickDeadlineAt: null,
+                    clock: undefined,
+                    clockReceivedAt: undefined,
+                  }
+                : toLivePickHeaderData(activeDraft, participants, picks, draft.liveState)
+            }
             timePerPick={timePerPick}
             isYourTurn={Boolean(draft.isYourTurn)}
             yourSlot={yourSlot}
@@ -804,10 +756,21 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           )}
 
           <div className={DRAFT_BROADCAST_TOKEN_SCOPE}>
+            {isBoardStale && activeDraft.status === 'LIVE' ? (
+              <p
+                role="status"
+                aria-label="Pick availability"
+                aria-live="polite"
+                className="mt-4 rounded-lg border border-[color:var(--draft-broadcast-caution)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-3 text-sm font-medium text-[color:var(--draft-broadcast-text)]"
+              >
+                Reconnecting. Picks are paused until the board is up to date.
+              </p>
+            ) : null}
+
             {!isCompletedDraft && draft.pickFeedback ? (
               <PickStatusBanner
                 feedback={draft.pickFeedback}
-                canRetry={draft.canMakePick}
+                canRetry={canMakePick}
                 onRetry={(playerId) => void handlePlayerSelectById(playerId)}
                 onRefresh={() => {
                   draft.dismissPickFeedback();
@@ -903,11 +866,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   onPlayerSelect={handlePlayerSelect}
                   onAddToQueue={handleAddToQueue}
                   onToggleWatchlist={handleToggleWatchlist}
-                  canMakePick={draft.canMakePick}
+                  canMakePick={canMakePick}
                   queuedPlayerIds={me?.queue || []}
                   watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
                   pendingWatchlistPlayerIds={draft.pendingWatchlistPlayerIds}
                   selectedCategories={selectedCategories}
+                  categoryDirections={categoryDirections}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
                   positionFilter={positionFilter}
@@ -937,7 +901,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
         {/* Mobile Pick Feed Toggle */}
         <button
-          ref={openFeedBtnRef}
+          type="button"
           onClick={() => setIsPickFeedOpen(true)}
           className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Open Pick Feed"
@@ -969,6 +933,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             }}
           >
             <div
+              ref={pickFeedDialogRef}
               className="absolute right-0 top-0 h-full w-80 overflow-y-auto border-l border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-30px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]"
               role="dialog"
               aria-modal="true"
@@ -977,9 +942,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             >
               <div className="mb-3 flex justify-end">
                 <button
-                  ref={closeBtnRef}
+                  type="button"
                   onClick={() => setIsPickFeedOpen(false)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] hover:text-[color:var(--draft-broadcast-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] hover:text-[color:var(--draft-broadcast-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Close Pick Feed"
                 >
                   <svg

@@ -275,11 +275,38 @@ describe('ModularDashboard', () => {
       'href',
       '/leagues/league-1?tab=matchups'
     );
+    const liveBadge = within(card).getByText('Live');
+    expect(liveBadge).toHaveClass('text-status-live');
+    expect(liveBadge).not.toHaveClass('text-destructive');
     expect(screen.getByText('Nothing needs you right now.')).toBeInTheDocument();
     expect(fetchJsonMock).toHaveBeenCalledWith(
       '/api/dashboard/home',
       expect.objectContaining({ userId: 'user-1' })
     );
+  });
+
+  it('marks a live draft with the live status token, not the destructive one', async () => {
+    fetchJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        generatedAt: now.toISOString(),
+        leagues: [
+          league({
+            status: { kind: 'draft_live', draftId: 'draft-1', currentPick: 12, totalPicks: 220 },
+          }),
+        ],
+      },
+    });
+
+    render(<ModularDashboard user={user} />);
+
+    const card = await screen.findByRole('article', { name: 'Ball Magnets' });
+    const liveBadge = within(card)
+      .getAllByText('Draft live')
+      .find((element) => element.classList.contains('uppercase'));
+    expect(liveBadge).toHaveClass('text-status-live');
+    expect(liveBadge).not.toHaveClass('text-destructive');
+    expect(liveBadge?.querySelector('[aria-hidden="true"]')).toHaveClass('bg-status-live');
   });
 
   it('offers joining or creating when the user has no leagues', async () => {

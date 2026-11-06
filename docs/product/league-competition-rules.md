@@ -17,7 +17,12 @@ tests, and this document together.
 ## Category scoring
 
 Each matchup aggregates the selected categories for active lineup players. Category direction decides
-whether higher or lower wins; equal values are draws.
+whether higher or lower wins; equal values are draws. Screens follow the stored direction: the draft
+room's category sort puts the best value first (lowest for `LOW_WINS`), and the matchup totals mark
+each `LOW_WINS` category as "lower wins". Statly Z, the default draft and waiver ranking and the
+auto-pick choice, sums each selected category's z-score against the available pool, negated for a
+`LOW_WINS` category, so a higher value there lowers the score. Its breakdown shows the raw stat and
+the signed z-score, so the entries add up to the total.
 
 - `H2H_EACH_CATEGORY` adds each category win/loss/draw to standings.
 - `H2H_MOST_CATEGORIES` awards the weekly matchup to the team winning more categories; equal category
@@ -42,8 +47,7 @@ Active scoring slots are `DEF`, `MID`, `RUC`, `FWD`, and optional `UTIL`. `INTER
 `BENCH` state do not score unless a persisted lineup/autosub transition makes the player active.
 
 Lineups autosave through authenticated, league-scoped server commands and expose saving, saved,
-unsaved, failed, and locked states. After a save the screen shows the lineup the server stored, not
-the one it sent; a failed save keeps the unsaved changes and shows why. The latest saved lineup may carry to the next playable round under
+unsaved, failed, and locked states. The latest saved lineup may carry to the next playable round under
 the current competition rules.
 
 The default lock policy is the official start of each player's AFL match. A configured round deadline

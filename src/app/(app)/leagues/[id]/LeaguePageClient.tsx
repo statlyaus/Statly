@@ -155,7 +155,7 @@ export default function LeaguePageClient({
   }
 
   return (
-    <main className="min-h-screen bg-muted px-4 py-6 text-foreground sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-muted px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[var(--app-shell-max-width)]">
         <LeagueTabs
           league={curLeague}
@@ -168,6 +168,6 @@ export default function LeaguePageClient({
           initialTab={initialTab}
         />
       </div>
-    </main>
+    </div>
   );
 }

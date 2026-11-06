@@ -25,6 +25,7 @@ import type {
   DraftOutboxPayload,
   DraftPickEventPayload,
   DraftPlayerSnapshot,
+  DraftSettingsSnapshot,
 } from '../domain/draftTypes';
 
 type PickCommandData = {
@@ -136,6 +137,7 @@ async function selectHighestStatlyZAvailablePlayer(
   input: {
     excludedPlayerIds: string[];
     selectedCategories: readonly string[];
+    categoryDirections?: DraftSettingsSnapshot['categoryDirections'];
   }
 ): Promise<DraftPlayerSnapshot | null> {
   const candidates = await draftRepository.listAvailableAutoPickCandidates(
@@ -158,7 +160,11 @@ async function selectHighestStatlyZAvailablePlayer(
       statsLookup
     )
   );
-  const zScores = calculateStatlyZScores(projectedCandidates, input.selectedCategories);
+  const zScores = calculateStatlyZScores(
+    projectedCandidates,
+    input.selectedCategories,
+    input.categoryDirections
+  );
 
   return [...candidates].sort((a, b) => {
     const aScore = zScores.get(a.id)?.score;
@@ -606,6 +612,7 @@ export class DraftApplicationService {
         selectedPlayer = await selectHighestStatlyZAvailablePlayer(tx, {
           excludedPlayerIds,
           selectedCategories: draft.settings.selectedCategories,
+          categoryDirections: draft.settings.categoryDirections,
         });
       }
 
