@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-const { captureError } = vi.hoisted(() => ({ captureError: vi.fn() }));
-vi.mock('@/lib/sentry-utils', () => ({ captureError }));
+const { captureError, captureException } = vi.hoisted(() => ({
+  captureError: vi.fn(),
+  captureException: vi.fn(),
+}));
+vi.mock('@/lib/sentry-utils', () => ({ captureError, captureException }));
 
 import AppRouteError from '@/app/(app)/error';
+import GlobalError from '@/app/global-error';
 import NotFound from '@/app/not-found';
 
 describe('app route error boundary', () => {
@@ -25,6 +29,29 @@ describe('app route error boundary', () => {
       'href',
       '/dashboard'
     );
+  });
+});
+
+describe('global error page', () => {
+  it('reports the error, uses a top-level heading and retries through reset', () => {
+    const reset = vi.fn();
+    const error = Object.assign(new Error('root layout failed'), { digest: 'def456' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // global-error renders its own <html> and <body>; jsdom warns about nesting them in a div.
+    render(<GlobalError error={error} reset={reset} />);
+
+    expect(captureException).toHaveBeenCalledWith(error);
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Something went wrong' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/root layout failed/)).not.toBeInTheDocument();
+    expect(screen.getByText('Reference: def456')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(reset).toHaveBeenCalledOnce();
+    expect(screen.getByRole('link', { name: 'Go home' })).toHaveAttribute('href', '/');
+    consoleError.mockRestore();
   });
 });
 

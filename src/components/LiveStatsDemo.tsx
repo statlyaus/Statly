@@ -3,13 +3,12 @@
 import { useState, useMemo } from 'react';
 import { useLivePlayerStats, useTimeSinceUpdate } from '@/hooks/useLivePlayerStats';
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
-import { DEFAULT_UID } from '@/constants';
 
 export default function LiveStatsDemo() {
-  // Input vs committed UID to prevent request storms while typing
-  const defaultUid = DEFAULT_UID;
-  const [inputUid, setInputUid] = useState(defaultUid);
-  const [matchUid, setMatchUid] = useState(defaultUid);
+  // Input vs committed UID to prevent request storms while typing. Nothing loads until a manager
+  // enters a match, so the page never shows a hardcoded match as if it were current.
+  const [inputUid, setInputUid] = useState('');
+  const [matchUid, setMatchUid] = useState<string | null>(null);
   const [pollInterval, setPollInterval] = useState(30000);
 
   const {
@@ -27,18 +26,23 @@ export default function LiveStatsDemo() {
   const timeSinceText = useTimeSinceUpdate(timeSinceUpdate);
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
 
+  const commitUid = () => {
+    const trimmed = inputUid.trim();
+    setMatchUid(trimmed === '' ? null : trimmed);
+  };
+
   // Commit UID on Enter key
   const onUidKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (inputUid !== matchUid) setMatchUid(inputUid);
+      commitUid();
     }
   };
 
   // Refresh: commit if UID changed, else trigger refresh
   const onRefreshClick = () => {
-    if (inputUid !== matchUid) {
-      setMatchUid(inputUid);
+    if (inputUid.trim() !== (matchUid ?? '')) {
+      commitUid();
     } else {
       refresh();
     }
@@ -67,11 +71,11 @@ export default function LiveStatsDemo() {
             />
             <button
               onClick={onRefreshClick}
-              disabled={isLoading}
+              disabled={isLoading || inputUid.trim() === ''}
               className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
               aria-busy={isLoading}
             >
-              {isLoading ? 'Loading...' : inputUid !== matchUid ? 'Load' : 'Refresh'}
+              {isLoading ? 'Loading...' : inputUid.trim() !== matchUid ? 'Load' : 'Refresh'}
             </button>
           </div>
 
@@ -129,6 +133,16 @@ export default function LiveStatsDemo() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <h3 className="font-medium text-red-800 mb-2">Error</h3>
           <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* No match chosen yet */}
+      {matchUid === null && (
+        <div className="mb-6 rounded-lg border border-border bg-card p-4 text-card-foreground">
+          <h2 className="mb-2 font-medium">No match selected</h2>
+          <p className="text-muted-foreground">
+            Enter a match UID above and press Load to see its live player statistics.
+          </p>
         </div>
       )}
 
