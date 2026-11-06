@@ -1,3 +1,4 @@
+import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,25 +20,35 @@ vi.mock('@/components/ui/LoadingSpinner', () => ({
 }));
 
 vi.mock('@/components/waivers/WaiverFAABSystem', () => ({
-  default: (props: {
+  default: function MockWaiverSystem(props: {
     availablePlayers: Array<{ id: string; name: string }>;
     rosterDropOptions: Array<{ id: string; name: string }>;
     userClaims: Array<{ id: string; playerName: string }>;
     selectedCategories: string[];
     currentBalance?: number;
-    onSubmitClaim?: (claim: { playerId: string; bidAmount: number }) => void;
-  }) => {
+    onSubmitClaim?: (claim: {
+      playerId: string;
+      bidAmount: number;
+    }) => Promise<{ ok: boolean; error?: string; claim?: { playerName: string } }>;
+  }) {
     waiverSystemSpy(props);
+    const [result, setResult] = React.useState('');
 
     return (
       <section aria-label="Waiver system">
         <span>{props.availablePlayers.length} players</span>
         <button
           type="button"
-          onClick={() => props.onSubmitClaim?.({ playerId: 'player-1', bidAmount: 1 })}
+          onClick={async () => {
+            const outcome = await props.onSubmitClaim?.({ playerId: 'player-1', bidAmount: 1 });
+            setResult(
+              outcome?.ok ? `stored ${outcome.claim?.playerName}` : `error ${outcome?.error}`
+            );
+          }}
         >
           Submit claim
         </button>
+        <output>{result}</output>
       </section>
     );
   },
@@ -302,7 +313,7 @@ describe('LeagueWaiversContainer', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        json: async () => ({ id: 'claim-1', playerId: 'player-1', bidAmount: 1 }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -364,5 +375,55 @@ describe('LeagueWaiversContainer', () => {
         })
       );
     });
+    expect(await screen.findByText('stored Darcy Cameron')).toBeInTheDocument();
+  });
+
+  it('returns the server error for a rejected claim without refreshing or a page-level banner', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          claims: [],
+          roster: {
+            id: 'member-1',
+            userId: 'statly-dev-tester',
+            teamName: 'Robbo Rockers',
+            playerIds: [],
+            bench: [],
+            emergencies: [],
+            leagueId: 'league-1',
+            updatedAt: '2026-06-22T00:00:00.000Z',
+            createdAt: '2026-06-22T00:00:00.000Z',
+          },
+          activity: [],
+          remainingFAAB: 0,
+          selectedCategories: ['goals'],
+          availablePlayers: [],
+          playersIndex: {},
+          nextPlayersCursor: null,
+          activityNextCursor: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'Insufficient FAAB remaining' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeagueWaiversContainer leagueId="league-1" membersIndex={{}} />);
+
+    await waitFor(() => {
+      expect(waiverSystemSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ currentBalance: 0 })
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Submit claim' }));
+
+    expect(await screen.findByText('error Insufficient FAAB remaining')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
