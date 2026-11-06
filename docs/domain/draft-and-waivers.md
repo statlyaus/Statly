@@ -51,7 +51,9 @@ ownership uses the canonical ID.
 
 Queues and watchlists are user- and draft-scoped. Server commands validate membership, player identity,
 duplicates, and visibility. Auto-pick consumes the current eligible priority list and records the same
-command path as a manual pick; it must not write a separate roster shortcut. Shared room snapshots,
+command path as a manual pick; it must not write a separate roster shortcut. Drafting from the
+watchlist takes the same two steps as the player grid's Select: the first press arms the pick and the
+second confirms it. Shared room snapshots,
 state broadcasts, and Pub/Sub events never contain queue contents or queue size. The authenticated
 actor-scoped queue and watchlist APIs are the only browser hydration boundaries for that private
 strategy. `DraftPrivateStateService` resolves the active draft member from the authenticated user;
@@ -94,7 +96,11 @@ HTTP hydration and Socket.IO reconnects expose the same discriminated clock payl
 - every payload includes the scheduling revision and a server-time anchor.
 
 The browser interpolates a LIVE deadline once per second for display. Missing clock anchors render as
-syncing, local zero renders as finalizing, and neither state initiates an auto-pick. Pause freezes the
+syncing, local zero renders as finalizing, and neither state initiates an auto-pick. While the room's
+connection is not `connected` or a resync is pending, the board may be out of date: the room treats the
+clock anchors as missing, so the clock renders as syncing rather than counting, and it disables Select
+and Draft with the reason "Reconnecting. Picks are paused until the board is up to date." The server
+clock is unaffected and keeps running. Pause freezes the
 persisted remainder. A reconnect snapshot is applied by revision without clearing an already hydrated
 player catalogue, then events after the snapshot boundary are replayed. Revision gaps force a fresh
 persisted snapshot.
