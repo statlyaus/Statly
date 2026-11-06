@@ -9,7 +9,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 
-import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import {
@@ -58,6 +58,14 @@ interface PlayerOption {
   statlyZMissingCategories?: FantasyCategoryKey[];
 }
 
+// What the server reports after a claim submit: the stored claim, or why nothing was stored.
+export type WaiverClaimSubmitResult =
+  | {
+      ok: true;
+      claim: { id: string; playerName: string; bidAmount?: number; dropPlayerName?: string };
+    }
+  | { ok: false; error: string };
+
 type ActivityFeedItem = LeagueActivityItem & {
   playerName?: string;
   dropPlayerName?: string;
@@ -68,19 +76,22 @@ interface WaiverFAABSystemProps {
   currentBalance?: number;
   pendingBids?: number;
   totalBudget?: number;
+  // 'loading' until the first waiver snapshot answers; 'failed' when it never did.
+  balanceStatus?: 'loading' | 'loaded' | 'failed';
   userTeamName?: string;
   minimumBid?: number;
   userClaims?: WaiverClaim[];
   availablePlayers?: PlayerOption[];
   rosterDropOptions?: PlayerOption[];
   selectedCategories?: FantasyCategoryKey[];
-  onSubmitClaim?: (claim: Partial<WaiverClaim>) => void;
+  onSubmitClaim?: (claim: Partial<WaiverClaim>) => Promise<WaiverClaimSubmitResult>;
   onCancelClaim?: (id: string) => void;
   activityItems?: ActivityFeedItem[];
   onLoadMorePlayers?: () => void;
   loadingMorePlayers?: boolean;
   hasMorePlayers?: boolean;
   initialPlayerId?: string | null;
+  timeZone?: string;
 }
 
 type WaiverSortKey = 'statlyZ' | 'name' | 'position' | 'club';
@@ -286,6 +297,9 @@ function WaiverPlayerTable({
   dropPlayerId,
   minimumBid,
   rosterDropOptions,
+  submitting,
+  submitError,
+  bidBlockedReason,
   onSelectPlayer,
   onBidChange,
   onDropChange,
@@ -298,6 +312,9 @@ function WaiverPlayerTable({
   dropPlayerId: string;
   minimumBid: number;
   rosterDropOptions: PlayerOption[];
+  submitting: boolean;
+  submitError: string | null;
+  bidBlockedReason: string | null;
   onSelectPlayer: (playerId: string | null) => void;
   onBidChange: (value: number) => void;
   onDropChange: (value: string) => void;
@@ -510,21 +527,35 @@ function WaiverPlayerTable({
                           <button
                             type="button"
                             onClick={() => onSubmitClaim?.(player)}
-                            disabled={!onSubmitClaim || bidAmount < minimumBid}
+                            disabled={
+                              !onSubmitClaim ||
+                              submitting ||
+                              bidBlockedReason !== null ||
+                              bidAmount < minimumBid
+                            }
                             aria-label={`Submit claim for ${player.name}`}
                             className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
                           >
-                            Submit
+                            {submitting ? 'Submitting...' : 'Submit'}
                           </button>
                           <button
                             type="button"
                             onClick={() => onSelectPlayer(null)}
+                            disabled={submitting}
                             aria-label={`Cancel claim setup for ${player.name}`}
                             className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
                             Cancel
                           </button>
                         </div>
+                        {bidBlockedReason && (
+                          <p className="text-xs text-muted-foreground">{bidBlockedReason}</p>
+                        )}
+                        {submitError && (
+                          <p role="alert" className="text-xs text-[color:var(--league-danger)]">
+                            {submitError}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -565,7 +596,7 @@ function MyClaimsPanel({
   onCancelClaim,
 }: {
   claims: WaiverClaim[];
-  timeZone: string;
+  timeZone?: string;
   onCancelClaim?: (id: string) => void;
 }): React.JSX.Element {
   return (
@@ -599,7 +630,7 @@ function MyClaimsPanel({
                       {claim.dropPlayerName ? ` - drop ${claim.dropPlayerName}` : ''}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Submitted {formatInTimezone(claim.submittedAt, timeZone, 'PP p')}
+                      Submitted {formatLeagueTime(claim.submittedAt, timeZone)}
                     </div>
                   </div>
                 </div>
@@ -641,7 +672,7 @@ function ActivityPanel({
   timeZone,
 }: {
   activityItems: ActivityFeedItem[];
-  timeZone: string;
+  timeZone?: string;
 }): React.JSX.Element {
   return (
     <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
@@ -662,7 +693,7 @@ function ActivityPanel({
                   {describeActivity(item.type, teamText, playerText)}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {formatInTimezone(item.timestamp, timeZone, 'PP p')}
+                  {formatLeagueTime(item.timestamp, timeZone)}
                   {typeof item.bidAmount === 'number' ? ` - $${item.bidAmount}` : ''}
                   {item.dropPlayerName ? ` - drop ${item.dropPlayerName}` : ''}
                   {item.type === 'waiver-failed' && item.reason ? ` - ${item.reason}` : ''}
@@ -687,14 +718,15 @@ export default function WaiverFAABSystem({
   currentBalance,
   pendingBids = 0,
   totalBudget,
+  balanceStatus = 'loaded',
   userTeamName,
   minimumBid = 1,
   onLoadMorePlayers,
   loadingMorePlayers,
   hasMorePlayers,
   initialPlayerId,
+  timeZone,
 }: WaiverFAABSystemProps): React.JSX.Element {
-  const timeZone = useMemo(() => getBrowserTimeZone(), []);
   const [searchTerm, setSearchTerm] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<WaiverSortKey>('statlyZ');
@@ -702,6 +734,9 @@ export default function WaiverFAABSystem({
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [dropPlayerId, setDropPlayerId] = useState('');
   const [bidAmount, setBidAmount] = useState(minimumBid);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
   const visibleCategories = useMemo(
     () => normalizeCategories(selectedCategories),
     [selectedCategories]
@@ -738,17 +773,34 @@ export default function WaiverFAABSystem({
     () => availablePlayers.find((player) => player.id === selectedPlayerId) ?? null,
     [availablePlayers, selectedPlayerId]
   );
+  // Never stand the league budget in for a balance that did not load.
+  // A league with no budget does not use FAAB; one whose settings never loaded is unknown.
+  const hasBalance = typeof currentBalance === 'number';
+  const balanceUnavailable =
+    !hasBalance &&
+    balanceStatus !== 'loading' &&
+    (typeof totalBudget === 'number' || balanceStatus === 'failed');
   const balanceLabel =
-    typeof currentBalance === 'number'
-      ? `$${currentBalance}`
-      : typeof totalBudget === 'number'
-        ? `$${totalBudget}`
-        : '-';
+    balanceStatus === 'loading' && !hasBalance
+      ? 'Loading…'
+      : hasBalance
+        ? `$${currentBalance}`
+        : balanceUnavailable
+          ? 'Unavailable'
+          : 'Not used';
+  const bidBlockedReason = hasBalance
+    ? null
+    : balanceStatus === 'loading'
+      ? 'Loading your FAAB balance…'
+      : balanceUnavailable
+        ? 'Your FAAB balance is unavailable. Reload before bidding.'
+        : null;
 
   const handleSelectPlayer = (playerId: string | null) => {
     setSelectedPlayerId(playerId);
     setDropPlayerId('');
     setBidAmount(minimumBid);
+    setSubmitError(null);
   };
 
   useEffect(() => {
@@ -776,23 +828,47 @@ export default function WaiverFAABSystem({
         .join(' '),
       confirmLabel: 'Place bid',
     });
-    if (!confirmed) return;
+    if (!confirmed || !onSubmitClaim) return;
 
-    onSubmitClaim?.({
-      playerId: player.id,
-      playerName: player.name,
-      playerPosition: player.position || '',
-      playerTeam: readPlayerTeam(player),
-      action: 'add',
-      dropPlayerId: dropPlayerId || undefined,
-      dropPlayerName,
-      bidAmount,
-      priority: userClaims.length + 1,
-      status: 'pending',
-      submittedAt: new Date(),
-      userId: '',
-      userName: 'You',
-    });
+    setSubmitting(true);
+    setSubmitError(null);
+    setConfirmation(null);
+    let result: WaiverClaimSubmitResult;
+    try {
+      result = await onSubmitClaim({
+        playerId: player.id,
+        playerName: player.name,
+        playerPosition: player.position || '',
+        playerTeam: readPlayerTeam(player),
+        action: 'add',
+        dropPlayerId: dropPlayerId || undefined,
+        dropPlayerName,
+        bidAmount,
+        priority: userClaims.length + 1,
+        status: 'pending',
+        submittedAt: new Date(),
+        userId: '',
+        userName: 'You',
+      });
+    } catch {
+      result = { ok: false, error: 'Failed to submit waiver claim' };
+    } finally {
+      setSubmitting(false);
+    }
+
+    if (!result.ok) {
+      setSubmitError(result.error);
+      return;
+    }
+    const stored = result.claim;
+    setConfirmation(
+      [
+        `Claim stored: ${stored.playerName}`,
+        typeof stored.bidAmount === 'number' ? `, bid $${stored.bidAmount}` : '',
+        stored.dropPlayerName ? `, drop ${stored.dropPlayerName}` : '',
+        '.',
+      ].join('')
+    );
     handleSelectPlayer(null);
   };
 
@@ -805,7 +881,9 @@ export default function WaiverFAABSystem({
           <div>
             <h2 className="text-lg font-semibold text-foreground">Waiver Wire</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {userTeamName ? `${userTeamName} can claim available free agents.` : 'Claim available free agents.'}
+              {userTeamName
+                ? `${userTeamName} can claim available free agents.`
+                : 'Claim available free agents.'}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
@@ -823,6 +901,15 @@ export default function WaiverFAABSystem({
             </div>
           </div>
         </div>
+
+        {confirmation && (
+          <p
+            role="status"
+            className="border-b border-border bg-[color:var(--league-success-soft)] px-4 py-3 text-sm font-medium text-[color:var(--league-success)] sm:px-5"
+          >
+            {confirmation}
+          </p>
+        )}
 
         <WaiverToolbar
           searchTerm={searchTerm}
@@ -849,6 +936,9 @@ export default function WaiverFAABSystem({
             dropPlayerId={dropPlayerId}
             minimumBid={minimumBid}
             rosterDropOptions={rosterDropOptions}
+            submitting={submitting}
+            submitError={submitError}
+            bidBlockedReason={bidBlockedReason}
             onSelectPlayer={handleSelectPlayer}
             onBidChange={setBidAmount}
             onDropChange={setDropPlayerId}

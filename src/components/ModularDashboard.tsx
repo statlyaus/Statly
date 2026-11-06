@@ -14,6 +14,7 @@ import {
   TeamMark,
 } from '@/components/scores/MatchupScore';
 import { fetchJson } from '@/lib/api';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { logger } from '@/lib/logger';
 import type {
@@ -41,24 +42,6 @@ export interface NeedsYouItem {
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
-
-/** Format an instant in the league's own timezone, e.g. "Sat, 3 Oct, 7:30 pm AEST". */
-export function formatLeagueTime(iso: string, timeZone: string): string {
-  const date = new Date(iso);
-  const options: Intl.DateTimeFormatOptions = {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  };
-  try {
-    return new Intl.DateTimeFormat('en-AU', { ...options, timeZone }).format(date);
-  } catch {
-    return new Intl.DateTimeFormat('en-AU', { ...options, timeZone: 'UTC' }).format(date);
-  }
-}
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
@@ -264,8 +247,8 @@ function FormGuide({ form }: { form: FormResult[] }) {
 
 function LiveLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase text-destructive">
-      <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+    <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase text-status-live">
+      <span className="size-1.5 rounded-full bg-status-live" aria-hidden="true" />
       {children}
     </span>
   );

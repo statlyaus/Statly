@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { ArrowDown } from 'lucide-react';
+
 import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
 import {
   MatchupScoreLine,
@@ -9,6 +11,7 @@ import {
   type CategoryResult,
 } from '@/components/scores/MatchupScore';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { formatLeagueTime } from '@/lib/leagueTime';
 
 interface LeagueMatchupsPanelProps {
   leagueId: string;
@@ -17,6 +20,8 @@ interface LeagueMatchupsPanelProps {
   categories?: readonly string[];
   /** Lets someone who can manage the league jump to where fixtures are set up. */
   onOpenSettings?: () => void;
+  /** The league's IANA timezone; start times are shown in it. */
+  timeZone?: string;
 }
 
 interface MatchupModel {
@@ -89,16 +94,11 @@ function formatStatValue(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function formatDateTime(value: string | null | undefined): string | null {
+function formatDateTime(value: string | null | undefined, timeZone?: string): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
+  return formatLeagueTime(date, timeZone);
 }
 
 export function LeagueMatchupsPanel({
@@ -106,6 +106,7 @@ export function LeagueMatchupsPanel({
   currentUserId,
   categories = [],
   onOpenSettings,
+  timeZone,
 }: LeagueMatchupsPanelProps) {
   const [data, setData] = useState<MatchupReadModel | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -207,7 +208,7 @@ export function LeagueMatchupsPanel({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <MatchupHeadToHeadCard matchup={matchup} />
+                  <MatchupHeadToHeadCard matchup={matchup} timeZone={timeZone} />
                   <CategoryTotalsGrid matchup={matchup} />
                   <TeamBoxScores matchup={matchup} />
                 </div>
@@ -237,10 +238,10 @@ export function LeagueMatchupsPanel({
   );
 }
 
-function matchupStatusLabel(matchup: MatchupModel): string {
+function matchupStatusLabel(matchup: MatchupModel, timeZone?: string): string {
   if (matchup.status === 'LIVE') return 'Live';
   if (matchup.status === 'FINAL') return 'Final';
-  const startsAt = formatDateTime(matchup.startsAt);
+  const startsAt = formatDateTime(matchup.startsAt, timeZone);
   return startsAt ? `Starts ${startsAt}` : 'Not started';
 }
 
@@ -264,7 +265,13 @@ function matchupResultLine(matchup: MatchupModel): string {
 }
 
 /** Same score line as the league overview: teams either side, categories won, one result line. */
-function MatchupHeadToHeadCard({ matchup }: { matchup: MatchupModel }) {
+function MatchupHeadToHeadCard({
+  matchup,
+  timeZone,
+}: {
+  matchup: MatchupModel;
+  timeZone?: string;
+}) {
   return (
     <div className="border-b border-[color:var(--league-border)] pb-4">
       <p className="mb-3 flex items-center gap-2 text-xs text-[color:var(--league-text-muted)]">
@@ -274,7 +281,7 @@ function MatchupHeadToHeadCard({ matchup }: { matchup: MatchupModel }) {
         <span
           className={matchup.status === 'LIVE' ? 'font-bold text-status-live' : 'font-semibold'}
         >
-          {matchupStatusLabel(matchup)}
+          {matchupStatusLabel(matchup, timeZone)}
         </span>
       </p>
       <MatchupScoreLine
@@ -309,9 +316,18 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             </th>
             {categoryRows.map((row) => (
               <th key={row.category} scope="col" className="px-3 py-2 text-center">
-                <abbr title={row.label} className="no-underline">
+                <abbr
+                  title={row.direction === 'LOW_WINS' ? `${row.label} (lower wins)` : row.label}
+                  className="no-underline"
+                >
                   {row.shortLabel}
                 </abbr>
+                {row.direction === 'LOW_WINS' ? (
+                  <span className="ml-0.5 inline-flex align-middle">
+                    <ArrowDown aria-hidden="true" className="size-3" />
+                    <span className="sr-only"> lower wins</span>
+                  </span>
+                ) : null}
               </th>
             ))}
             <th scope="col" className="w-20 px-3 py-2 text-center">

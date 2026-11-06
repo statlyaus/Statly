@@ -372,6 +372,25 @@ describe('PlayerGrid accessibility', () => {
     }
   });
 
+  it('announces a LOW_WINS category sort as ascending, best first', () => {
+    render(
+      <PlayerGrid
+        {...defaultProps}
+        sortBy="category:tackles"
+        categoryDirections={{ goals: 'HIGH_WINS', tackles: 'LOW_WINS' }}
+      />
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Tackles' })).toHaveAttribute(
+      'aria-sort',
+      'ascending'
+    );
+    expect(screen.getByRole('columnheader', { name: 'Goals' })).toHaveAttribute(
+      'aria-sort',
+      'none'
+    );
+  });
+
   it('keeps Select on screen at phone width by pinning the actions column', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 

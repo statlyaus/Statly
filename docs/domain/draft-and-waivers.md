@@ -51,7 +51,9 @@ ownership uses the canonical ID.
 
 Queues and watchlists are user- and draft-scoped. Server commands validate membership, player identity,
 duplicates, and visibility. Auto-pick consumes the current eligible priority list and records the same
-command path as a manual pick; it must not write a separate roster shortcut. Shared room snapshots,
+command path as a manual pick; it must not write a separate roster shortcut. Drafting from the
+watchlist takes the same two steps as the player grid's Select: the first press arms the pick and the
+second confirms it. Shared room snapshots,
 state broadcasts, and Pub/Sub events never contain queue contents or queue size. The authenticated
 actor-scoped queue and watchlist APIs are the only browser hydration boundaries for that private
 strategy. `DraftPrivateStateService` resolves the active draft member from the authenticated user;
@@ -94,7 +96,11 @@ HTTP hydration and Socket.IO reconnects expose the same discriminated clock payl
 - every payload includes the scheduling revision and a server-time anchor.
 
 The browser interpolates a LIVE deadline once per second for display. Missing clock anchors render as
-syncing, local zero renders as finalizing, and neither state initiates an auto-pick. Pause freezes the
+syncing, local zero renders as finalizing, and neither state initiates an auto-pick. While the room's
+connection is not `connected` or a resync is pending, the board may be out of date: the room treats the
+clock anchors as missing, so the clock renders as syncing rather than counting, and it disables Select
+and Draft with the reason "Reconnecting. Picks are paused until the board is up to date." The server
+clock is unaffected and keeps running. Pause freezes the
 persisted remainder. A reconnect snapshot is applied by revision without clearing an already hydrated
 player catalogue, then events after the snapshot boundary are replayed. Revision gaps force a fresh
 persisted snapshot.
@@ -127,13 +133,20 @@ hold a compatibility projection, but relational state remains authoritative and 
 rebuildable from it. Each league's Waivers tab reads a member's claims, FAAB balance and activity feed
 from Prisma. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
 the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
-the viewer has no league.
+the viewer has no league. `/rosters` does the same for the league's Roster tab; it no longer reads
+Firestore free agents or offers its own claim buttons.
 Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
 Claims validate membership, league settings, player availability, optional drop ownership, roster
 capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
+The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
+waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
+reason. FAAB Remaining shows a loading state until the first waiver snapshot answers, "Not used" in a
+league with no budget, and "Unavailable" when a FAAB league's balance (or, after a failed first load,
+the league's settings) did not load. Bids are refused while the balance is loading or unavailable,
+rather than standing in the league budget.
 
 Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each
 member's budget); otherwise a `ROLLING` league uses priority order. Commissioners set or clear the

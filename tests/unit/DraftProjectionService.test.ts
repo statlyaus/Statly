@@ -48,6 +48,7 @@ describe('DraftProjectionService', () => {
         settings: {
           pickSeconds: 120,
           draftType: DraftType.LINEAR,
+          timeZone: 'Australia/Perth',
         },
       },
       orders: [
@@ -103,6 +104,7 @@ describe('DraftProjectionService', () => {
       state: {
         status: 'LIVE',
         draftType: 'LINEAR',
+        timeZone: 'Australia/Perth',
         onClockMemberId: 'member-1',
         clock: {
           status: 'LIVE',

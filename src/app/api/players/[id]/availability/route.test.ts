@@ -100,4 +100,33 @@ describe('GET /api/players/[id]/availability', () => {
     );
     expect(mocks.loggerError).not.toHaveBeenCalled();
   });
+
+  it('states when waiver claims process in the league timezone, labelled', async () => {
+    mocks.leagueMemberFindMany.mockResolvedValue([
+      {
+        id: 'member-1',
+        leagueId: 'league-1',
+        teamName: 'Test Team',
+        league: { id: 'league-1', name: 'Test League', settings: { timeZone: 'Australia/Perth' } },
+      },
+    ]);
+    mocks.teamActionFindMany.mockResolvedValue([
+      {
+        leagueId: 'league-1',
+        details: { playerId: 'player-1' },
+        processingAt: new Date('2099-10-03T09:30:00.000Z'),
+      },
+    ]);
+
+    const response = await GET(
+      new NextRequest('http://localhost/api/players/player-1/availability'),
+      { params: Promise.resolve({ id: 'player-1' }) }
+    );
+    const body = await response.json();
+    const [league] = body.data.leagues;
+
+    expect(league.status).toBe('waiver');
+    expect(league.timeZone).toBe('Australia/Perth');
+    expect(league.statusDetail).toMatch(/^Claims process Sat,? 3 Oct,? 5:30\spm AWST$/);
+  });
 });
