@@ -325,14 +325,36 @@ export function LeagueMyTeamPanel({
         );
         const payload = (await response.json().catch(() => null)) as {
           success?: boolean;
+          data?: { players?: MyTeamData['players'] } | null;
           error?: string;
           details?: string[];
         } | null;
         if (!response.ok || !payload?.success) {
           throw new Error(payload?.details?.join(' ') || payload?.error || 'Save failed.');
         }
+        // Show what the server stored (it keeps locked players where they were), never what we sent.
+        let storedPlayers = payload.data?.players;
+        if (!Array.isArray(storedPlayers)) {
+          const reload = await authenticatedFetch(
+            `/api/leagues/${encodeURIComponent(leagueId)}/lineups/${round}`,
+            { signal: controller.signal },
+            currentUserId
+          );
+          const reloaded = (await reload.json().catch(() => null)) as {
+            success?: boolean;
+            data?: MyTeamData;
+          } | null;
+          storedPlayers = reloaded?.data?.players;
+          if (!reload.ok || !reloaded?.success || !Array.isArray(storedPlayers)) {
+            // Saved, but unseen: reload the whole panel, which reports its own load error.
+            if (!controller.signal.aborted) setReloadKey((key) => key + 1);
+            return;
+          }
+        }
         if (controller.signal.aborted) return;
-        setBaseline([...next]);
+        const stored = toAssignments(storedPlayers);
+        setBaseline(stored);
+        setAssignments(stored);
         setData((current) => (current ? { ...current, savedRound: round } : current));
         setSaveState({ kind: 'saved', at: new Date() });
       } catch (error) {
