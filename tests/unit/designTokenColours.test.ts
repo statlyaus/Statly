@@ -8,7 +8,7 @@ import {
   FUNCTION_LITERAL,
   HEX_LITERAL,
   PALETTE_CLASS,
-} from '../../scripts/design/count-raw-colours.mjs';
+} from '../../Scripts/design/count-raw-colours.mjs';
 
 // Files whose colours all come from the design tokens in src/index.css. Add a file here once its
 // raw palette classes and colour literals are gone, so it cannot regress.
