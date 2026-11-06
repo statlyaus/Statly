@@ -123,7 +123,7 @@ export default function DraftHistoryDetailPage() {
 
   if (!user) {
     return (
-        <main className="min-h-screen bg-background px-4 py-10 text-foreground">
+        <div className="min-h-screen bg-background px-4 py-10 text-foreground">
           <section className="mx-auto max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-sm">
             <Trophy className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
             <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
@@ -137,12 +137,12 @@ export default function DraftHistoryDetailPage() {
               Sign in
             </Link>
           </section>
-        </main>
+        </div>
     );
   }
 
   return (
-      <main className="min-h-screen bg-background text-foreground">
+      <div className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
           <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
             <Link
@@ -263,7 +263,7 @@ export default function DraftHistoryDetailPage() {
             </>
           )}
         </div>
-      </main>
+      </div>
   );
 }
 
