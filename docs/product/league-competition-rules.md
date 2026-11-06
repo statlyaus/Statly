@@ -44,7 +44,8 @@ Active scoring slots are `DEF`, `MID`, `RUC`, `FWD`, and optional `UTIL`. `INTER
 `BENCH` state do not score unless a persisted lineup/autosub transition makes the player active.
 
 Lineups autosave through authenticated, league-scoped server commands and expose saving, saved,
-unsaved, failed, and locked states. The latest saved lineup may carry to the next playable round under
+unsaved, failed, and locked states. After a save the screen shows the lineup the server stored, not
+the one it sent; a failed save keeps the unsaved changes and shows why. The latest saved lineup may carry to the next playable round under
 the current competition rules.
 
 The default lock policy is the official start of each player's AFL match. A configured round deadline
