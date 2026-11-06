@@ -127,7 +127,8 @@ hold a compatibility projection, but relational state remains authoritative and 
 rebuildable from it. Each league's Waivers tab reads a member's claims, FAAB balance and activity feed
 from Prisma. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
 the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
-the viewer has no league.
+the viewer has no league. `/rosters` does the same for the league's Roster tab; it no longer reads
+Firestore free agents or offers its own claim buttons.
 Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
