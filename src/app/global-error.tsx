@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
+// global-error replaces the root layout, so it must load the global styles and tokens itself.
+import '@/index.css';
 import { captureException } from '@/lib/sentry-utils';
 
 export default function GlobalError({
@@ -16,47 +19,41 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en">
-      <body>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
-              <svg
-                className="w-6 h-6 text-red-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
+    <html lang="en" data-theme="light">
+      <body className="font-sans">
+        <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+          <div className="max-w-md text-center">
+            <div className="mx-auto mb-4 h-12 w-12 text-destructive">
+              <ExclamationTriangleIcon aria-hidden="true" />
             </div>
-            <div className="mt-4 text-center">
-              <h3 className="text-lg font-medium text-gray-900">Something went wrong!</h3>
-              <p className="mt-2 text-sm text-gray-500">
-                {"We've been notified and are working to fix the issue."}
+            <h1 className="mb-2 text-2xl font-semibold">Something went wrong</h1>
+            <p className="mb-4 text-muted-foreground">
+              We have been notified. Try again, or head back to the home page.
+            </p>
+            {error.digest && (
+              <p className="mb-4 font-mono text-xs text-muted-foreground">
+                Reference: {error.digest}
               </p>
-              <div className="mt-4 space-x-3">
-                <button
-                  onClick={reset}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  Try again
-                </button>
-                <button
-                  onClick={() => (window.location.href = '/')}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                >
-                  Go home
-                </button>
-              </div>
+            )}
+            <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={reset}
+                className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <ArrowPathIcon aria-hidden="true" className="mr-2 h-4 w-4" />
+                Try again
+              </button>
+              {/* A full page load, because the root layout itself failed. */}
+              <a
+                href="/"
+                className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Go home
+              </a>
             </div>
           </div>
-        </div>
+        </main>
       </body>
     </html>
   );

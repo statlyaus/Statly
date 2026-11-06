@@ -116,7 +116,7 @@ export default function DraftSettingsPage() {
   }
 
   return (
-      <main className="mx-auto max-w-4xl p-6">
+      <div className="mx-auto max-w-4xl p-6">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Draft Settings</h1>
           <p className="text-gray-600 mt-2">Customize your draft experience and preferences.</p>
@@ -331,6 +331,6 @@ export default function DraftSettingsPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
   );
 }
