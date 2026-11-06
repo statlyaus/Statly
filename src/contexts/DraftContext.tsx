@@ -448,6 +448,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       round: snapshot.state.round,
       direction: snapshot.state.direction,
       draftType: snapshot.state.draftType,
+      settings: { timeZone: snapshot.state.timeZone },
       schedulingVersion: snapshot.revision,
       serverNow: snapshot.serverNow,
       clock,

@@ -160,6 +160,23 @@ describe('LeagueMyTeamPanel', () => {
     expect(within(injured).getByTitle('Hamstring (2-3 weeks)')).toBeInTheDocument();
   });
 
+  it('shows the lineup lock time in the league timezone, labelled', async () => {
+    const lockAt = '2099-10-03T09:30:00.000Z';
+    authenticatedFetchMock.mockImplementation(() =>
+      respond(
+        payload({
+          lockPolicy: 'ROUND_START',
+          context: { ...payload().data.context, lockAt },
+        })
+      )
+    );
+    render(
+      <LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" timeZone="Australia/Perth" />
+    );
+
+    expect(await screen.findByText(/^Locks Sat,? 3 Oct,? 5:30\spm AWST$/)).toBeInTheDocument();
+  });
+
   it('fills empty spots with fit players, then saves only when the change is confirmed', async () => {
     authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) =>
       init?.method === 'PATCH' ? respond({ success: true, data: {} }) : respond(payload())

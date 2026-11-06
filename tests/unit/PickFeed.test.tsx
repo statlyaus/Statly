@@ -122,6 +122,17 @@ describe('PickFeed', () => {
     expect(screen.queryByText('View context')).not.toBeInTheDocument();
   });
 
+  it('shows when each pick was made in the league timezone, labelled', () => {
+    render(<PickFeed {...defaultProps} timeZone="Australia/Perth" />);
+
+    const latestPick = within(screen.getByLabelText('Pick feed'))
+      .getByText('Errol Gulden')
+      .closest<HTMLElement>('[data-pick-state]');
+
+    expect(latestPick).not.toBeNull();
+    expect(within(latestPick!).getByText(/^8:10\sam AWST$/)).toBeInTheDocument();
+  });
+
   it('filters to my picks', () => {
     render(<PickFeed {...defaultProps} />);
 

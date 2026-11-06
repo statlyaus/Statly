@@ -53,6 +53,7 @@ interface Props {
   selectedCategories?: FantasyCategoryKey[];
   initialPlayersCursor?: string | null;
   initialPlayerId?: string | null;
+  timeZone?: string;
 }
 
 // Minimal shape matching WaiverFAABSystem's expected userClaims prop
@@ -162,6 +163,7 @@ export default function LeagueWaiversContainer({
   selectedCategories: _selectedCategories,
   initialPlayersCursor,
   initialPlayerId,
+  timeZone,
 }: Props): React.JSX.Element | null {
   const { user, loading } = useAuth();
   const effectiveUserId = user?.uid ?? currentUserId ?? null;
@@ -584,6 +586,7 @@ export default function LeagueWaiversContainer({
         loadingMorePlayers={loadingMorePlayers}
         hasMorePlayers={hasMorePlayers}
         initialPlayerId={initialPlayerId}
+        timeZone={timeZone}
       />
 
       {/* Load older activity */}
