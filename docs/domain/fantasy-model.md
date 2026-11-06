@@ -75,7 +75,8 @@ totals for deterministic secondary ordering and display.
 
 League settings own the fantasy schedule, selected AFL window, lock policy, lineup slots, fixture
 generation, and finals format. A fantasy bye/no-matchup week is different from an AFL club bye. Player
-locks follow the configured policy and must not be inferred from browser time alone.
+locks follow the configured policy and must not be inferred from browser time alone. A round-deadline
+lock is calculated in `LeagueSettings.timeZone`, the league's only timezone.
 
 Autosubs are resolved from saved lineup state and participation evidence. They must be deterministic,
 persisted, and auditable; a player contributes at most once. Commissioner changes to published

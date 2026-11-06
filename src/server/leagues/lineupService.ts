@@ -213,13 +213,26 @@ function resolveThursdayLock(startsAt: Date | null, timeZone: string): Date | nu
   );
 }
 
+/** `LeagueSettings.timeZone` is the only league timezone; an unusable value falls back to its `UTC` default. */
+function resolveLeagueTimeZone(timeZone: string | null | undefined): string {
+  const trimmed = timeZone?.trim();
+  if (!trimmed) return 'UTC';
+  try {
+    Intl.DateTimeFormat('en-AU', { timeZone: trimmed });
+    return trimmed;
+  } catch {
+    return 'UTC';
+  }
+}
+
 function resolveRoundLockAt(
   rules: CompetitionRules,
+  leagueTimeZone: string | null | undefined,
   competitionRound: { startsAt: Date | null; fallbackLockAt: Date | null }
 ) {
   if (competitionRound.fallbackLockAt) return competitionRound.fallbackLockAt;
   if (rules.lockPolicy === 'THURSDAY_7PM_AEST') {
-    return resolveThursdayLock(competitionRound.startsAt, rules.leagueTimeZone);
+    return resolveThursdayLock(competitionRound.startsAt, resolveLeagueTimeZone(leagueTimeZone));
   }
   return null;
 }
@@ -271,7 +284,9 @@ export async function loadMemberLineupRoundContext({
         ? matchup.homeMember
         : null;
   const rules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
-  const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
+  const lockAt =
+    competitionRound.lockedAt ??
+    resolveRoundLockAt(rules, league.settings.timeZone, competitionRound);
   const lockState = deriveLineupLockState(competitionRound, lockAt, now);
 
   return {
@@ -332,7 +347,9 @@ export async function loadLineupRoundSummaries(
     orderBy: { round: 'asc' },
   });
   return rounds.map((competitionRound) => {
-    const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
+    const lockAt =
+      competitionRound.lockedAt ??
+      resolveRoundLockAt(rules, league.settings.timeZone, competitionRound);
     return {
       round: competitionRound.round,
       aflRound: competitionRound.aflRound,
@@ -835,7 +852,7 @@ export async function saveMemberLineup({
   const initialRules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const initialRoundLockAt = initialCompetitionRound
     ? (initialCompetitionRound.lockedAt ??
-      resolveRoundLockAt(initialRules, initialCompetitionRound))
+      resolveRoundLockAt(initialRules, league.settings.timeZone, initialCompetitionRound))
     : null;
   if (
     initialCompetitionRound?.status === 'NO_MATCHUP' ||
@@ -942,7 +959,7 @@ export async function saveMemberLineup({
     );
     const currentRoundLockAt = currentCompetitionRound
       ? (currentCompetitionRound.lockedAt ??
-        resolveRoundLockAt(currentRules, currentCompetitionRound))
+        resolveRoundLockAt(currentRules, currentLeague.settings.timeZone, currentCompetitionRound))
       : null;
     const saveNow = new Date();
     if (

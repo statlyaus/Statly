@@ -46,8 +46,11 @@ unsaved, failed, and locked states. After a save the screen shows the lineup the
 the one it sent; a failed save keeps the unsaved changes and shows why. The latest saved lineup may carry to the next playable round under
 the current competition rules.
 
-The default lock policy is the official start of each player's AFL match. A configured round deadline
-is the alternative. Locked players cannot be moved, removed, or replaced manually. Official fixture
+The default lock policy is the official start of each player's AFL match. The alternative locks the
+whole round at Thursday 7:00 pm in the league timezone, unless a configured round deadline applies.
+A league has one timezone, `LeagueSettings.timeZone` (default `UTC`): it sets every displayed league
+time and the Thursday lock. Competition rules carry no timezone of their own; a `leagueTimeZone` key
+left in older stored rules is ignored. Locked players cannot be moved, removed, or replaced manually. Official fixture
 updates can change an unlocked player's lock time; an unknown start time remains explicitly pending.
 
 ## Interchange autosubs

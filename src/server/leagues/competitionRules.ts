@@ -23,16 +23,15 @@ export type CompetitionRulesIssueCode =
   | 'TIE_BREAK_CATEGORY'
   | 'INTERCHANGE_COUNT'
   | 'ROSTER_CAPACITY'
-  | 'AFL_START_ROUND'
-  | 'TIME_ZONE';
+  | 'AFL_START_ROUND';
 
 export type CompetitionRules = {
   seasonStartAflRound: number;
   regularSeasonRounds: number;
   finalsTeams: (typeof SUPPORTED_FINALS_TEAM_COUNTS)[number];
   fixtureGenerationMode: LeagueFixtureGenerationMode;
+  /** THURSDAY_7PM_AEST locks at Thursday 7:00 pm in the league's `LeagueSettings.timeZone`. */
   lockPolicy: CompetitionLockPolicy;
-  leagueTimeZone: string;
   interchangeSlots: number;
   standingsTieBreakCategory: FantasyCategoryKey;
   excludedAflRounds: number[];
@@ -57,7 +56,6 @@ export const DEFAULT_COMPETITION_RULES: CompetitionRules = {
   finalsTeams: 0,
   fixtureGenerationMode: 'AUTOMATIC',
   lockPolicy: 'INDIVIDUAL_GAME_START',
-  leagueTimeZone: 'Australia/Sydney',
   interchangeSlots: 3,
   standingsTieBreakCategory: 'goals',
   excludedAflRounds: [],
@@ -127,10 +125,6 @@ export function normalizeCompetitionRules(
       source.lockPolicy === 'THURSDAY_7PM_AEST'
         ? 'THURSDAY_7PM_AEST'
         : DEFAULT_COMPETITION_RULES.lockPolicy,
-    leagueTimeZone:
-      typeof source.leagueTimeZone === 'string' && source.leagueTimeZone.trim()
-        ? source.leagueTimeZone.trim()
-        : DEFAULT_COMPETITION_RULES.leagueTimeZone,
     interchangeSlots,
     standingsTieBreakCategory: isFantasyCategoryKey(source.standingsTieBreakCategory)
       ? source.standingsTieBreakCategory
@@ -237,15 +231,6 @@ export function validateCompetitionRules({
     issues.push({
       code: 'ROSTER_CAPACITY',
       message: 'The active lineup plus interchange cannot exceed the configured roster size.',
-    });
-  }
-
-  try {
-    Intl.DateTimeFormat('en-AU', { timeZone: rules.leagueTimeZone });
-  } catch {
-    issues.push({
-      code: 'TIME_ZONE',
-      message: 'Choose a valid IANA timezone for the league.',
     });
   }
 
