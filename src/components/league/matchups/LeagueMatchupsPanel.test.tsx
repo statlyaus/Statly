@@ -95,7 +95,7 @@ describe('LeagueMatchupsPanel category totals', () => {
     authenticatedFetchMock.mockImplementation(async () => {
       const response = await scheduled();
       const body = await response.json();
-      body.data.matchups[0].startsAt = '2026-10-03T09:30:00.000Z';
+      (body.data.matchups[0] as Record<string, unknown>).startsAt = '2026-10-03T09:30:00.000Z';
       return { ok: true, json: async () => body };
     });
     render(
