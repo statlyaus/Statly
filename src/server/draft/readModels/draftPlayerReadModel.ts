@@ -7,17 +7,13 @@ import {
   type PlayerStats,
 } from '@/types/fantasyCategories';
 import type { Player } from '@/types/players';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import type { CategoryDirection } from '@/server/leagues/scoringTypes';
 import {
   getLeaguePlayerStatSeasonOptions,
   projectLeaguePlayerStatLine,
   readPlayerSeasonStatAverage,
 } from '@/server/players/readModels/leaguePlayerStatReadModel';
-
-const LOWER_IS_BETTER_CATEGORIES = new Set<FantasyCategoryKey>([
-  'clangers',
-  'freesAgainst',
-  'turnovers',
-]);
 
 type DraftPlayerStatsProjection = {
   avgPoints?: number;
@@ -94,9 +90,12 @@ function readFinitePlayerStat(
 
 export function calculateStatlyZScores(
   players: readonly StatlyZPlayerInput[],
-  selectedCategories: readonly (FantasyCategoryKey | string)[]
+  selectedCategories: readonly (FantasyCategoryKey | string)[],
+  categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>> | null
 ): Map<string, StatlyZScore> {
   const categories = validSelectedCategories(selectedCategories);
+  // The league's direction decides the sign: a high value in a LOW_WINS category lowers the score.
+  const directions = normalizeCategoryDirections(categories, categoryDirections);
   const categoryStats = new Map<FantasyCategoryKey, { mean: number; stdDev: number }>();
 
   for (const category of categories) {
@@ -132,7 +131,7 @@ export function calculateStatlyZScores(
 
         const stats = categoryStats.get(category);
         const rawZScore = stats && stats.stdDev !== 0 ? (value - stats.mean) / stats.stdDev : 0;
-        const zScore = LOWER_IS_BETTER_CATEGORIES.has(category) ? -rawZScore : rawZScore;
+        const zScore = directions[category] === 'LOW_WINS' ? -rawZScore : rawZScore;
         const roundedZScore = roundStatlyZ(zScore);
 
         score += zScore;

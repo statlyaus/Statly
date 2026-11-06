@@ -212,7 +212,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const statlyZCohortPlayers = availablePlayersForStatlyZ.map((player) =>
       buildAvailableDraftPlayer(player, statsLookup)
     );
-    const statlyZScores = calculateStatlyZScores(statlyZCohortPlayers, selectedCategories);
+    const statlyZScores = calculateStatlyZScores(
+      statlyZCohortPlayers,
+      selectedCategories,
+      categoryDirections
+    );
 
     const data = {
       draftId: id,

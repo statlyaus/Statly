@@ -1,5 +1,7 @@
 import type { DraftDirection, DraftStatus } from '@prisma/client';
 import type { DraftAutoPickRules, DraftPositionLimits } from '@/lib/draftSettings';
+import type { CategoryDirection } from '@/server/leagues/scoringTypes';
+import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export type DraftTypeValue = 'SNAKE' | 'LINEAR';
 
@@ -28,6 +30,8 @@ export interface DraftSettingsSnapshot {
   pickSeconds: number;
   allowAutoPick: boolean;
   selectedCategories: string[];
+  /** The league's HIGH_WINS or LOW_WINS direction for each selected category. */
+  categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
   positionLimits?: DraftPositionLimits;
   autoPickRules?: DraftAutoPickRules;
   draftType: DraftTypeValue;

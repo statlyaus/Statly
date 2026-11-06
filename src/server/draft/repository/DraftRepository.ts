@@ -15,6 +15,7 @@ import type {
   DraftSettingsSnapshot,
 } from '../domain/draftTypes';
 import { parseSelectedCategories } from '../readModels/draftPlayerReadModel';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 
 type TxClient = PrismaNS.TransactionClient;
 
@@ -125,6 +126,7 @@ function toOutboxEventRecord(event: DraftEventRecord): DraftOutboxEventRecord {
 
 function toSettingsSnapshot(settings: {
   selectedCategories?: unknown;
+  categoryDirectionsJson?: PrismaNS.JsonValue;
   rosterSize: number;
   benchSize: number;
   pickSeconds: number;
@@ -133,12 +135,17 @@ function toSettingsSnapshot(settings: {
   autoPickRulesJson: PrismaNS.JsonValue;
   draftType: 'SNAKE' | 'LINEAR';
 }): DraftSettingsSnapshot {
+  const selectedCategories = parseSelectedCategories(settings.selectedCategories);
   return {
     rosterSize: settings.rosterSize,
     benchSize: settings.benchSize,
     pickSeconds: settings.pickSeconds,
     allowAutoPick: settings.allowAutoPick,
-    selectedCategories: parseSelectedCategories(settings.selectedCategories),
+    selectedCategories,
+    categoryDirections: normalizeCategoryDirections(
+      selectedCategories,
+      settings.categoryDirectionsJson
+    ),
     positionLimits: normalizeDraftPositionLimits(settings.positionLimitsJson),
     autoPickRules: normalizeDraftAutoPickRules(settings.autoPickRulesJson),
     draftType: settings.draftType as DraftSettingsSnapshot['draftType'],
