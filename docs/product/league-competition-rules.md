@@ -17,7 +17,9 @@ tests, and this document together.
 ## Category scoring
 
 Each matchup aggregates the selected categories for active lineup players. Category direction decides
-whether higher or lower wins; equal values are draws.
+whether higher or lower wins; equal values are draws. Screens follow the stored direction: the draft
+room's category sort puts the best value first (lowest for `LOW_WINS`), and the matchup totals mark
+each `LOW_WINS` category as "lower wins".
 
 - `H2H_EACH_CATEGORY` adds each category win/loss/draw to standings.
 - `H2H_MOST_CATEGORIES` awards the weekly matchup to the team winning more categories; equal category

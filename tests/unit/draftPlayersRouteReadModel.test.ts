@@ -263,6 +263,27 @@ describe('draft players read model route', () => {
     expect(unknownPlayer.avgPoints).toBeUndefined();
   });
 
+  it("returns the league's direction for each selected category", async () => {
+    prismaMocks.draft.findUnique.mockResolvedValueOnce({
+      id: 'cmq29ngg50004ux5s39ya2azu',
+      createdAt: new Date('2026-06-06T10:00:00.000Z'),
+      startedAt: null,
+      completedAt: null,
+      leagueId: 'league-1',
+      league: {
+        categoriesJson: ['goals', 'tackles'],
+        settings: { categoryDirectionsJson: { tackles: 'LOW_WINS', inside50s: 'LOW_WINS' } },
+      },
+    });
+
+    const response = await GET(request(), {
+      params: Promise.resolve({ id: 'cmq29ngg50004ux5s39ya2azu' }),
+    });
+    const body = await response.json();
+
+    expect(body.data.categoryDirections).toEqual({ goals: 'HIGH_WINS', tackles: 'LOW_WINS' });
+  });
+
   it('calculates Statly Z from the full available cohort before pagination and filters', async () => {
     const draftId = 'cmq29ngg50004ux5s39ya2azu';
     const pagePlayer = {
