@@ -26,7 +26,7 @@ export default async function LeagueSocialPage({
   if (!result.ok) {
     if (result.status === 404) notFound();
     return (
-        <main className="min-h-screen bg-background px-4 py-10 text-foreground">
+        <div className="min-h-screen bg-background px-4 py-10 text-foreground">
           <section className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-6 text-center">
             <h1 className="text-xl font-semibold">League social is unavailable</h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -39,7 +39,7 @@ export default async function LeagueSocialPage({
               View your leagues
             </Link>
           </section>
-        </main>
+        </div>
     );
   }
   if (!result.league) notFound();

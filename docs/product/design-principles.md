@@ -40,6 +40,12 @@ while identity and action context remain discoverable.
 Full-screen draft/broadcast experiences can opt out of the standard shell, but that ownership must be
 explicit at the route/layout boundary. Do not make each page remember to reconstruct a shared shell.
 
+The shell (`src/components/navigation/AppLayout.tsx`) owns the landmarks: the header's primary links
+sit in `<nav aria-label="Main">`, and the shell renders the page's only `<main id="main-content">`,
+which the skip link targets. Pages under `src/app/(app)` wrap their content in a `<div>` or
+`<section>`, never `<main>`; `tests/unit/app-shell-landmarks.test.tsx` enforces this. Only an
+immersive route that skips the shell, such as the live draft room, renders its own `<main>`.
+
 ## Realtime and data-rich UI
 
 - Distinguish persisted state, pending mutation, reconnecting/catching-up state, and failure.
