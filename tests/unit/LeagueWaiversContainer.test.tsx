@@ -251,9 +251,15 @@ describe('LeagueWaiversContainer', () => {
 
     render(<LeagueWaiversContainer leagueId="league-1" membersIndex={{}} />);
 
+    expect(waiverSystemSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ balanceStatus: 'loading' })
+    );
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Waiver data temporarily unavailable');
     });
+    expect(waiverSystemSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ balanceStatus: 'failed' })
+    );
 
     await user.click(screen.getByRole('button', { name: 'Retry waiver data' }));
 
@@ -267,6 +273,7 @@ describe('LeagueWaiversContainer', () => {
       expect.objectContaining({
         availablePlayers: [player],
         currentBalance: 91,
+        balanceStatus: 'loaded',
       })
     );
   });

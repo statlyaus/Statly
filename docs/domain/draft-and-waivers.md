@@ -136,7 +136,9 @@ capacity, and priority/FAAB rules at the server boundary. Processing must be det
 retry; failures do not partially assign the same player to multiple teams.
 The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
 waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
-reason. When a FAAB league's balance did not load, the tab shows it as unavailable and refuses bids,
+reason. FAAB Remaining shows a loading state until the first waiver snapshot answers, "Not used" in a
+league with no budget, and "Unavailable" when a FAAB league's balance (or, after a failed first load,
+the league's settings) did not load. Bids are refused while the balance is loading or unavailable,
 rather than standing in the league budget.
 
 Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each

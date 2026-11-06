@@ -198,6 +198,7 @@ export default function LeagueWaiversContainer({
     () => Object.values(waiverLoadErrors)[0] ?? null,
     [waiverLoadErrors]
   );
+  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
   const [retryingWaiverSnapshot, setRetryingWaiverSnapshot] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -276,6 +277,7 @@ export default function LeagueWaiversContainer({
       if (data.playersIndex) {
         setPlayersIdx((prev) => ({ ...prev, ...data.playersIndex }));
       }
+      setSnapshotLoaded(true);
       setWaiverLoadErrors((prev) => {
         if (!prev.snapshot) return prev;
         const next = { ...prev };
@@ -604,6 +606,7 @@ export default function LeagueWaiversContainer({
         currentBalance={remainingFAAB}
         pendingBids={pendingBids}
         totalBudget={totalBudget}
+        balanceStatus={snapshotLoaded ? 'loaded' : waiverLoadErrors.snapshot ? 'failed' : 'loading'}
         userTeamName={roster?.teamName}
         minimumBid={minimumBid}
         selectedCategories={selectedCategories}

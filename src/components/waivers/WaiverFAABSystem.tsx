@@ -76,6 +76,8 @@ interface WaiverFAABSystemProps {
   currentBalance?: number;
   pendingBids?: number;
   totalBudget?: number;
+  // 'loading' until the first waiver snapshot answers; 'failed' when it never did.
+  balanceStatus?: 'loading' | 'loaded' | 'failed';
   userTeamName?: string;
   minimumBid?: number;
   userClaims?: WaiverClaim[];
@@ -296,7 +298,7 @@ function WaiverPlayerTable({
   rosterDropOptions,
   submitting,
   submitError,
-  balanceUnavailable,
+  bidBlockedReason,
   onSelectPlayer,
   onBidChange,
   onDropChange,
@@ -311,7 +313,7 @@ function WaiverPlayerTable({
   rosterDropOptions: PlayerOption[];
   submitting: boolean;
   submitError: string | null;
-  balanceUnavailable: boolean;
+  bidBlockedReason: string | null;
   onSelectPlayer: (playerId: string | null) => void;
   onBidChange: (value: number) => void;
   onDropChange: (value: string) => void;
@@ -527,7 +529,7 @@ function WaiverPlayerTable({
                             disabled={
                               !onSubmitClaim ||
                               submitting ||
-                              balanceUnavailable ||
+                              bidBlockedReason !== null ||
                               bidAmount < minimumBid
                             }
                             aria-label={`Submit claim for ${player.name}`}
@@ -545,10 +547,8 @@ function WaiverPlayerTable({
                             Cancel
                           </button>
                         </div>
-                        {balanceUnavailable && (
-                          <p className="text-xs text-muted-foreground">
-                            Your FAAB balance is unavailable. Reload before bidding.
-                          </p>
+                        {bidBlockedReason && (
+                          <p className="text-xs text-muted-foreground">{bidBlockedReason}</p>
                         )}
                         {submitError && (
                           <p role="alert" className="text-xs text-[color:var(--league-danger)]">
@@ -717,6 +717,7 @@ export default function WaiverFAABSystem({
   currentBalance,
   pendingBids = 0,
   totalBudget,
+  balanceStatus = 'loaded',
   userTeamName,
   minimumBid = 1,
   onLoadMorePlayers,
@@ -772,8 +773,27 @@ export default function WaiverFAABSystem({
     [availablePlayers, selectedPlayerId]
   );
   // Never stand the league budget in for a balance that did not load.
-  const balanceLabel = typeof currentBalance === 'number' ? `$${currentBalance}` : 'Unavailable';
-  const balanceUnavailable = typeof totalBudget === 'number' && typeof currentBalance !== 'number';
+  // A league with no budget does not use FAAB; one whose settings never loaded is unknown.
+  const hasBalance = typeof currentBalance === 'number';
+  const balanceUnavailable =
+    !hasBalance &&
+    balanceStatus !== 'loading' &&
+    (typeof totalBudget === 'number' || balanceStatus === 'failed');
+  const balanceLabel =
+    balanceStatus === 'loading' && !hasBalance
+      ? 'Loading…'
+      : hasBalance
+        ? `$${currentBalance}`
+        : balanceUnavailable
+          ? 'Unavailable'
+          : 'Not used';
+  const bidBlockedReason = hasBalance
+    ? null
+    : balanceStatus === 'loading'
+      ? 'Loading your FAAB balance…'
+      : balanceUnavailable
+        ? 'Your FAAB balance is unavailable. Reload before bidding.'
+        : null;
 
   const handleSelectPlayer = (playerId: string | null) => {
     setSelectedPlayerId(playerId);
@@ -917,7 +937,7 @@ export default function WaiverFAABSystem({
             rosterDropOptions={rosterDropOptions}
             submitting={submitting}
             submitError={submitError}
-            balanceUnavailable={balanceUnavailable}
+            bidBlockedReason={bidBlockedReason}
             onSelectPlayer={handleSelectPlayer}
             onBidChange={setBidAmount}
             onDropChange={setDropPlayerId}

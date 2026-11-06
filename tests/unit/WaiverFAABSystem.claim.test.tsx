@@ -131,4 +131,60 @@ describe('WaiverFAABSystem claim submission', () => {
     expect(within(table).getByText(/FAAB balance is unavailable/)).toBeInTheDocument();
     expect(onSubmitClaim).not.toHaveBeenCalled();
   });
+
+  it('says FAAB is not used in a league with no budget and still allows claims', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <WaiverFAABSystem
+        availablePlayers={[player]}
+        selectedCategories={['goals', 'tackles', 'inside50s']}
+        onSubmitClaim={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Not used')).toBeInTheDocument();
+    expect(screen.queryByText('Unavailable')).toBeNull();
+
+    const table = screen.getByRole('table', { name: 'Available waiver players' });
+    await user.click(within(table).getByRole('button', { name: 'Claim Darcy Cameron' }));
+    expect(
+      within(table).getByRole('button', { name: 'Submit claim for Darcy Cameron' })
+    ).toBeEnabled();
+  });
+
+  it('shows the loading state, not Unavailable, while the first balance load is in flight', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <WaiverFAABSystem
+        availablePlayers={[player]}
+        selectedCategories={['goals', 'tackles', 'inside50s']}
+        balanceStatus="loading"
+        onSubmitClaim={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByText('Unavailable')).toBeNull();
+    expect(screen.queryByText('Not used')).toBeNull();
+
+    const table = screen.getByRole('table', { name: 'Available waiver players' });
+    await user.click(within(table).getByRole('button', { name: 'Claim Darcy Cameron' }));
+    expect(
+      within(table).getByRole('button', { name: 'Submit claim for Darcy Cameron' })
+    ).toBeDisabled();
+  });
+
+  it('shows Unavailable when the waiver data failed before the league settings loaded', () => {
+    render(
+      <WaiverFAABSystem
+        availablePlayers={[player]}
+        selectedCategories={['goals', 'tackles', 'inside50s']}
+        balanceStatus="failed"
+      />
+    );
+
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+  });
 });
