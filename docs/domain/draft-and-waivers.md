@@ -127,13 +127,20 @@ hold a compatibility projection, but relational state remains authoritative and 
 rebuildable from it. Each league's Waivers tab reads a member's claims, FAAB balance and activity feed
 from Prisma. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
 the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
-the viewer has no league.
+the viewer has no league. `/rosters` does the same for the league's Roster tab; it no longer reads
+Firestore free agents or offers its own claim buttons.
 Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
 Claims validate membership, league settings, player availability, optional drop ownership, roster
 capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
+The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
+waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
+reason. FAAB Remaining shows a loading state until the first waiver snapshot answers, "Not used" in a
+league with no budget, and "Unavailable" when a FAAB league's balance (or, after a failed first load,
+the league's settings) did not load. Bids are refused while the balance is loading or unavailable,
+rather than standing in the league budget.
 
 Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each
 member's budget); otherwise a `ROLLING` league uses priority order. Commissioners set or clear the
