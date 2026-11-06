@@ -148,7 +148,7 @@ export default function DraftHistoryPage() {
 
   if (!user) {
     return (
-        <main className="min-h-screen bg-background px-4 py-10 text-foreground">
+        <div className="min-h-screen bg-background px-4 py-10 text-foreground">
           <section className="mx-auto max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
               <Archive className="h-5 w-5" aria-hidden="true" />
@@ -164,7 +164,7 @@ export default function DraftHistoryPage() {
               Sign in
             </Link>
           </section>
-        </main>
+        </div>
     );
   }
 
@@ -177,7 +177,7 @@ export default function DraftHistoryPage() {
   };
 
   return (
-      <main className="min-h-screen bg-background text-foreground">
+      <div className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
           <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
             <Link
@@ -281,7 +281,7 @@ export default function DraftHistoryPage() {
             </section>
           )}
         </div>
-      </main>
+      </div>
   );
 }
 
