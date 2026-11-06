@@ -161,8 +161,8 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse"></div>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-destructive">
+        <div className="h-2.5 w-2.5 rounded-full bg-status-live animate-pulse"></div>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-status-live">
           Draft live
         </span>
       </div>

@@ -264,8 +264,8 @@ function FormGuide({ form }: { form: FormResult[] }) {
 
 function LiveLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase text-destructive">
-      <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+    <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase text-status-live">
+      <span className="size-1.5 rounded-full bg-status-live" aria-hidden="true" />
       {children}
     </span>
   );
