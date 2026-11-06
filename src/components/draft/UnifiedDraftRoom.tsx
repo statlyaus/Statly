@@ -18,7 +18,6 @@ import {
   toFeedParticipants,
 } from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer, DraftParticipant, DraftPick, DraftSettings } from '@/types/draft';
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 import ConnectionStatus from './ConnectionStatus';
 import DraftControls from './DraftControls';
@@ -26,40 +25,18 @@ import DraftLeftRail, { type DraftLeftRailRosterSlot } from './DraftLeftRail';
 import DraftQueue from './DraftQueue';
 import DraftStatusBanner from './DraftStatusBanner';
 import PlayerGrid from './PlayerGrid';
+import { sortDraftPlayers, type PlayerSortKey } from './sortDraftPlayers';
 
 interface UnifiedDraftRoomProps {
   draftId: string;
   userId: string;
 }
 
-type PlayerSortKey =
-  'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
-
 type QueueMutationFeedback =
   { kind: 'error'; message: string; retryQueue: string[] } | { kind: 'success'; message: string };
 
 function getPositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}
-
-function getCategorySortValue(player: DraftPlayer, sortBy: PlayerSortKey): number | null {
-  if (!sortBy.startsWith('category:')) return null;
-
-  const category = sortBy.slice('category:'.length) as FantasyCategoryKey;
-  const value = player.stats?.[category];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function compareNullableScoreDesc(
-  aValue: number | null,
-  bValue: number | null,
-  aName: string,
-  bName: string
-): number {
-  if (aValue === null && bValue === null) return aName.localeCompare(bName);
-  if (aValue === null) return 1;
-  if (bValue === null) return -1;
-  return bValue - aValue || aName.localeCompare(bName);
 }
 
 function filterDraftPlayers(
@@ -78,32 +55,6 @@ function filterDraftPlayers(
     const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
 
     return matchesQuery && matchesPosition;
-  });
-}
-
-function sortDraftPlayers(players: DraftPlayer[], sortBy: PlayerSortKey): DraftPlayer[] {
-  return [...players].sort((a, b) => {
-    if (sortBy === 'statlyZ') {
-      const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
-      const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
-      return compareNullableScoreDesc(aScore, bScore, a.name, b.name);
-    }
-
-    if (sortBy === 'adp') {
-      return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
-    }
-
-    if (sortBy.startsWith('category:')) {
-      return compareNullableScoreDesc(
-        getCategorySortValue(a, sortBy),
-        getCategorySortValue(b, sortBy),
-        a.name,
-        b.name
-      );
-    }
-
-    const textSort = sortBy as 'name' | 'position' | 'club';
-    return a[textSort].localeCompare(b[textSort]);
   });
 }
 
@@ -287,6 +238,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const playersList = draft.availablePlayers as DraftPlayer[];
   const watchlistItems = draft.watchlistItems || [];
   const selectedCategories = draft.selectedCategories || [];
+  const categoryDirections = draft.categoryDirections;
   const emptyPlayerMessage =
     draft.draftReadiness?.blockers.find((blocker) => blocker.code === 'player_pool_empty')
       ?.message ?? undefined;
@@ -298,8 +250,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
-    return sortDraftPlayers(filterDraftPlayers(playersList, deferredQuery, positionFilter), sortBy);
-  }, [playersList, deferredQuery, positionFilter, sortBy]);
+    return sortDraftPlayers(
+      filterDraftPlayers(playersList, deferredQuery, positionFilter),
+      sortBy,
+      categoryDirections
+    );
+  }, [playersList, deferredQuery, positionFilter, sortBy, categoryDirections]);
 
   // Unique positions for the filter dropdown
   const availablePositions = useMemo(() => {
@@ -907,6 +863,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
                   pendingWatchlistPlayerIds={draft.pendingWatchlistPlayerIds}
                   selectedCategories={selectedCategories}
+                  categoryDirections={categoryDirections}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
                   positionFilter={positionFilter}

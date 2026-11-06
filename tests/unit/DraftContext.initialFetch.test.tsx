@@ -98,6 +98,7 @@ function DraftStateProbe() {
     <div>
       <div data-testid="loading">{String(draft.isLoading)}</div>
       <div data-testid="draft-name">{draft.draft?.name ?? 'missing'}</div>
+      <div data-testid="category-directions">{JSON.stringify(draft.categoryDirections)}</div>
       <div data-testid="league-id">{draft.draft?.leagueId ?? 'missing'}</div>
       <div data-testid="draft-type">{draft.draft?.settings.draftType ?? 'missing'}</div>
       <div data-testid="current-pick">{draft.draft?.currentPick ?? 'missing'}</div>
@@ -311,6 +312,57 @@ describe('DraftProvider initial hydration', () => {
         'Test AFL Champions League - LIVE'
       );
       expect(screen.getByTestId('player-count')).toHaveTextContent('1');
+    });
+  });
+
+  it("keeps the league's category directions from the player pool response", async () => {
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'drafts/cmevh14aq001lux1gottrhp3a') {
+        return {
+          success: true,
+          data: {
+            id: 'cmevh14aq001lux1gottrhp3a',
+            name: 'Directions League',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 264,
+            round: 1,
+            direction: 'FORWARD',
+            participants: [],
+            selectedCategories: [],
+            draftReadiness: null,
+            liveState: {},
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/cmevh14aq001lux1gottrhp3a/players?page=1&pageSize=100') {
+        return {
+          success: true,
+          data: {
+            players: [{ id: 'caleb_daniel', name: 'Caleb Daniel', position: 'DEF', club: 'NM' }],
+            pagination: { hasMore: false },
+            selectedCategories: ['goals', 'tackles'],
+            categoryDirections: { goals: 'HIGH_WINS', tackles: 'LOW_WINS', inside50s: 'SIDEWAYS' },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider draftId="cmevh14aq001lux1gottrhp3a" userId="user-1">
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(JSON.parse(screen.getByTestId('category-directions').textContent ?? '{}')).toEqual({
+        goals: 'HIGH_WINS',
+        tackles: 'LOW_WINS',
+      });
     });
   });
 

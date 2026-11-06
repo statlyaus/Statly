@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { ArrowDown } from 'lucide-react';
+
 import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
 import {
   MatchupScoreLine,
@@ -309,9 +311,18 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             </th>
             {categoryRows.map((row) => (
               <th key={row.category} scope="col" className="px-3 py-2 text-center">
-                <abbr title={row.label} className="no-underline">
+                <abbr
+                  title={row.direction === 'LOW_WINS' ? `${row.label} (lower wins)` : row.label}
+                  className="no-underline"
+                >
                   {row.shortLabel}
                 </abbr>
+                {row.direction === 'LOW_WINS' ? (
+                  <span className="ml-0.5 inline-flex align-middle">
+                    <ArrowDown aria-hidden="true" className="size-3" />
+                    <span className="sr-only"> lower wins</span>
+                  </span>
+                ) : null}
               </th>
             ))}
             <th scope="col" className="w-20 px-3 py-2 text-center">

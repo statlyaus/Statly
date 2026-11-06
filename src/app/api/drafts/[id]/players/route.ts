@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { prisma } from '@/lib/prisma';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { getDraftMembershipAccess } from '@/server/leagues/membership';
 import {
   buildAvailableDraftPlayer,
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           league: {
             select: {
               categoriesJson: true,
+              settings: { select: { categoryDirectionsJson: true } },
             },
           },
         },
@@ -103,6 +105,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const selectedCategories = parseSelectedCategories(draftMeta.league?.categoriesJson);
+    const categoryDirections = normalizeCategoryDirections(
+      selectedCategories,
+      draftMeta.league?.settings?.categoryDirectionsJson
+    );
     const statSeasonOptions = await loadDraftStatSeasonOptions(statSeason);
     const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, {
       leagueId: draftMeta.leagueId,
@@ -115,7 +121,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lastUpdated = new Date(Math.max(...timestamps));
 
     // Build weak ETag including filters and pagination window
-    const etagBase = `${id}|players|${lastUpdated.toISOString()}|${draftReadiness.playerPool.availableCount}|${draftReadiness.status}|${selectedCategories.join(',')}|${statSeasonOptions.selectedSeason}|${q || ''}|${position || ''}|${page}|${pageSize}`;
+    const etagBase = `${id}|players|${lastUpdated.toISOString()}|${draftReadiness.playerPool.availableCount}|${draftReadiness.status}|${selectedCategories.map((category) => `${category}:${categoryDirections[category]}`).join(',')}|${statSeasonOptions.selectedSeason}|${q || ''}|${position || ''}|${page}|${pageSize}`;
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
     // Fast 304 on If-None-Match (supports comma-separated ETags and wildcard "*")
@@ -228,6 +234,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         position: position || null,
       },
       selectedCategories,
+      categoryDirections,
       statSeason: statSeasonOptions.selectedSeason,
       statSeasons: statSeasonOptions.availableSeasons,
       draftReadiness,

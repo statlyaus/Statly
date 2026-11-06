@@ -31,6 +31,7 @@ function respond(status: Status) {
                 row('goals', 'Goals', 'G', 14, 11, 'home'),
                 row('tackles', 'Tackles', 'T', 68, 74, 'away'),
                 row('intercepts', 'Intercepts', 'ITC', 58, 58, 'draw'),
+                row('clangers', 'Clangers', 'CL', 40, 44, 'home', 'LOW_WINS'),
               ],
             },
           ],
@@ -45,9 +46,10 @@ function row(
   shortLabel: string,
   homeValue: number,
   awayValue: number,
-  winner: 'home' | 'away' | 'draw'
+  winner: 'home' | 'away' | 'draw',
+  direction: 'HIGH_WINS' | 'LOW_WINS' = 'HIGH_WINS'
 ) {
-  return { category, label, shortLabel, homeValue, awayValue, direction: 'HIGH_WINS', winner };
+  return { category, label, shortLabel, homeValue, awayValue, direction, winner };
 }
 
 async function totalsTable() {
@@ -80,6 +82,16 @@ describe('LeagueMatchupsPanel category totals', () => {
 
     const table = await totalsTable();
     expect(table.getByTitle('Intercepts')).toHaveTextContent('ITC');
+  });
+
+  it('marks a category the lower total wins, and only that one', async () => {
+    authenticatedFetchMock.mockImplementation(respond('LIVE'));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+
+    const table = await totalsTable();
+    expect(table.getByRole('columnheader', { name: /^CL.*lower wins/i })).toBeInTheDocument();
+    expect(table.getByRole('columnheader', { name: /^G$/ })).toBeInTheDocument();
+    expect(table.getAllByText(/lower wins/i)).toHaveLength(1);
   });
 
   it('shows no result before the matchup starts', async () => {

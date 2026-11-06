@@ -12,6 +12,8 @@ import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
+import type { CategoryDirections } from './sortDraftPlayers';
+
 type PlayerGridSortKey =
   'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
 
@@ -26,6 +28,8 @@ interface PlayerGridProps {
   watchedPlayerIds: string[];
   pendingWatchlistPlayerIds?: string[];
   selectedCategories: FantasyCategoryKey[];
+  /** The league's direction per category; a LOW_WINS category sorts lowest first. */
+  categoryDirections?: CategoryDirections;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   positionFilter: string;
@@ -689,6 +693,7 @@ interface PlayerGridTableProps {
   pendingSelectionId: string | null;
   sortBy: PlayerGridSortKey;
   onSortChange: (sort: PlayerGridSortKey) => void;
+  categoryDirections: CategoryDirections;
   setScrollTop: (scrollTop: number) => void;
   onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
   onFocusChange: (index: number | null) => void;
@@ -719,6 +724,7 @@ function PlayerGridTable({
   pendingSelectionId,
   sortBy,
   onSortChange,
+  categoryDirections,
   setScrollTop,
   onKeyDown,
   onFocusChange,
@@ -833,7 +839,13 @@ function PlayerGridTable({
                       key={category}
                       scope="col"
                       aria-label={categoryData.label}
-                      aria-sort={sortBy === getCategorySortKey(category) ? 'descending' : 'none'}
+                      aria-sort={
+                        sortBy !== getCategorySortKey(category)
+                          ? 'none'
+                          : categoryDirections[category] === 'LOW_WINS'
+                            ? 'ascending'
+                            : 'descending'
+                      }
                       className="border-l border-border/70 px-3 py-2 text-center text-[11px] font-semibold uppercase text-muted-foreground first:border-l"
                       title={categoryData.label}
                     >
@@ -928,6 +940,7 @@ export default function PlayerGrid({
   watchedPlayerIds,
   pendingWatchlistPlayerIds = [],
   selectedCategories,
+  categoryDirections = {},
   searchQuery,
   onSearchChange,
   positionFilter,
@@ -1257,6 +1270,7 @@ export default function PlayerGrid({
         pendingSelectionId={pendingSelectionId}
         sortBy={sortBy}
         onSortChange={onSortChange}
+        categoryDirections={categoryDirections}
         setScrollTop={handleScrollTopChange}
         onKeyDown={handleKeyDown}
         onFocusChange={setFocusedRow}
