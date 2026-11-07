@@ -39,6 +39,10 @@ Firebase identity establishes who the user is. Prisma membership and role data d
 may see or change in a league. Owner, commissioner, member, roster owner, draft participant, and waiver
 claimant permissions are domain decisions, not client navigation decisions.
 
+Every league is created in Prisma, so a league with no Prisma row is legacy data and is treated as not
+found. The user league list (`GET /api/leagues/user/[userId]`) and the league draft read
+(`GET /api/leagues/[id]/draft`) answer from Prisma only and never read Firestore league documents.
+
 Membership changes run as Prisma commands in `src/server/leagues/memberCommands.ts`, which check the
 persisted owner and active membership in the same transaction as the write. The owner may remove a
 manager, and a manager may leave, only until the draft starts; removal renumbers the remaining draft
