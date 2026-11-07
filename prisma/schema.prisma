@@ -1403,7 +1403,8 @@ model NbaPlayer {
   fullName  String
   firstName String?
   lastName  String?
-  /// Positions as the provider lists them, e.g. ["PG"] or ["G", "F"]. Drives lineup eligibility.
+  /// Positions as the provider lists them, e.g. ["PG"] or ["G"]. The engine expands generic G/F into
+  /// slot eligibility. Providers list fewer positions than Yahoo grants, so eligibility is conservative.
   positions String[]
   teamId    String?
   birthDate DateTime? @db.Date
@@ -1438,6 +1439,8 @@ model NbaPlayerIdentity {
 /// One regular-season NBA game. `season` is the year the season ends (2026-27 is 2027). `gameDate` is
 /// the US Eastern calendar date, which is what fantasy weeks count. The natural key
 /// (season, gameDate, home, away) lets a second provider write into the same rows.
+/// Invariant held by the ingest: regular-season games only (ESPN season type 2). Preseason, play-in,
+/// playoff games and the NBA Cup final (whose stats do not count in season totals) are never stored.
 model NbaGame {
   id                  String        @id @default(cuid())
   provider            String
@@ -1568,6 +1571,9 @@ model BasketballLeague {
   /// Monday (or the league's first day) of fantasy week 1, as a US Eastern date.
   weekOneStartsOn     DateTime                @db.Date
   regularSeasonEndsOn DateTime                @db.Date
+  /// Fantasy week numbers that span 14 Eastern dates instead of 7 (e.g. Yahoo's All-Star break
+  /// matchup). Every later week shifts by seven days.
+  twoWeekMatchups     Int[]                   @default([])
   auctionBudget       Int?
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
