@@ -90,31 +90,4 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
     reason:
       'Development-only surface: it reads through privateLocalWorkbookReads, which carries local test-fixture custody and cannot operate against a production environment.',
   },
-
-  // Covered by the in-flight API authorization change; remove each entry once that change is merged.
-  {
-    route: '/admin/queue',
-    reason:
-      'ADMIN_SECRET operator check is added by the in-flight API authorization change. Remove once merged.',
-  },
-  {
-    route: '/admin/workers',
-    reason:
-      'ADMIN_SECRET operator check is added by the in-flight API authorization change. Remove once merged.',
-  },
-  {
-    route: '/user/watchlists',
-    reason:
-      'Verified-identity requirement is added by the in-flight API authorization change. Remove once merged.',
-  },
-  {
-    route: '/user/leagues',
-    reason:
-      'Verified-identity requirement is added by the in-flight API authorization change. Remove once merged.',
-  },
-  {
-    route: '/user/leagues/[id]/settings',
-    reason:
-      'Verified-identity requirement is added by the in-flight API authorization change. Remove once merged.',
-  },
 ];
