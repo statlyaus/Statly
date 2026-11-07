@@ -14,6 +14,8 @@ interface LineupPlayerAssignment {
   playerId: string;
   slot: LeagueLineupSlot;
   slotIndex: number;
+  /** The player's listing; autosubs only bring on a candidate listed for the vacated slot. */
+  player?: { position: string | null } | null;
 }
 
 const ACTIVE_SLOTS = new Set<LeagueLineupSlot>(AUTOSUB_ACTIVE_SLOT_ORDER);
@@ -56,6 +58,9 @@ export async function resolveAndPersistLineupAutosubs({
     activeAssignments,
     interchangeAssignments,
     confirmedDidNotPlayPlayerIds: [...nonPlayingReasonByPlayerId.keys()],
+    positionByPlayerId: new Map(
+      players.map((player) => [player.playerId, player.player?.position ?? null])
+    ),
   });
   if (!resolution.decisions.length) return [...players];
 
