@@ -62,7 +62,9 @@ code.
   wipe your commits. Never push to one or run `update-branch` on it; comment `@dependabot rebase`
   verbatim, with no callout, and let it update itself. For a failing Dependabot pull request,
   report it to the user; any fix goes on its own branch from `origin/main`.
-- **BEHIND:** update without being asked, by a merge; never rebase or force-push a pushed branch.
+- **BEHIND:** a green one with auto-merge on is the PR queue workflow's job, one at a time; leave it
+  (see "Pull request queue" in `docs/development/delivery.md`). Otherwise update without being
+  asked, by a merge; never rebase or force-push a pushed branch.
   With the branch checked out here, merge locally and push: in an app-made worktree call
   `sync_with_base_branch` (the sandbox cannot write `.claude/skills` and the other protected paths
   a local merge touches), elsewhere `git fetch origin && git merge --no-edit origin/main`. With no

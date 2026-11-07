@@ -161,7 +161,7 @@ export default function LeagueSwitcher() {
         </PopoverTrigger>
         <PopoverContent
           aria-label="Select league"
-          className="min-w-[20rem] rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
+          className="min-w-[20rem] border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)]"
         >
           <Command className="bg-[color:var(--league-surface)] text-[color:var(--league-text)]">
             <div className="p-2">

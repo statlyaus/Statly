@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/AuthContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from './ui';
 
@@ -17,6 +18,7 @@ interface PlayerLeagueAvailability {
   leagueName: string;
   teamName: string;
   source?: LeagueAvailabilitySource;
+  timeZone?: string;
   status: AvailabilityStatus;
   statusLabel: string;
   statusDetail?: string;
@@ -60,16 +62,12 @@ function isAvailabilityResponse(value: unknown): value is AvailabilityResponse {
   );
 }
 
-function formatProcessingAt(value?: string): string | null {
+function formatProcessingAt(value?: string, timeZone?: string): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
 
-  return new Intl.DateTimeFormat('en-AU', {
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
+  return formatLeagueTime(date, timeZone);
 }
 
 function getStatusClass(status: AvailabilityStatus): string {
@@ -275,7 +273,7 @@ export function PlayerLeagueAvailabilityPanel({
           )}
           <div className="divide-y divide-border">
             {rows.map((row) => {
-            const processingAt = formatProcessingAt(row.waiver?.processingAt);
+            const processingAt = formatProcessingAt(row.waiver?.processingAt, row.timeZone);
             const detail = row.statusDetail
               ? row.statusDetail
               : row.owner

@@ -160,6 +160,23 @@ describe('LeagueMyTeamPanel', () => {
     expect(within(injured).getByTitle('Hamstring (2-3 weeks)')).toBeInTheDocument();
   });
 
+  it('shows the lineup lock time in the league timezone, labelled', async () => {
+    const lockAt = '2099-10-03T09:30:00.000Z';
+    authenticatedFetchMock.mockImplementation(() =>
+      respond(
+        payload({
+          lockPolicy: 'ROUND_START',
+          context: { ...payload().data.context, lockAt },
+        })
+      )
+    );
+    render(
+      <LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" timeZone="Australia/Perth" />
+    );
+
+    expect(await screen.findByText(/^Locks Sat,? 3 Oct,? 5:30\spm AWST$/)).toBeInTheDocument();
+  });
+
   it('fills empty spots with fit players, then saves only when the change is confirmed', async () => {
     authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) =>
       init?.method === 'PATCH' ? respond({ success: true, data: {} }) : respond(payload())
@@ -198,6 +215,69 @@ describe('LeagueMyTeamPanel', () => {
     );
     expect(await screen.findByText(/^Confirmed /)).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Unconfirmed changes' })).not.toBeInTheDocument();
+  });
+
+  it('shows the lineup the server stored, not the one it was sent', async () => {
+    // The server kept Dee Fender in DEF 1 and stored no midfielder.
+    const stored = [{ playerId: 'def-1', slot: 'DEF', slotIndex: 0, lockedAt: null }];
+    authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? respond({ success: true, data: { round: 5, players: stored } })
+        : respond(payload())
+    );
+
+    render(<LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill empty spots' }));
+    expect(screen.getByRole('row', { name: 'MID 1: Wing Man' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm lineup' }));
+
+    expect(await screen.findByText(/^Confirmed /)).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'DEF 1: Dee Fender' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'DEF 2: empty' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'MID 1: empty' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Unconfirmed changes' })).not.toBeInTheDocument();
+  });
+
+  it('reloads the stored lineup when the save response does not include it', async () => {
+    let gets = 0;
+    authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return respond({ success: true, data: null });
+      gets += 1;
+      return respond(
+        gets === 1
+          ? payload()
+          : payload({ players: [{ playerId: 'mid-2', slot: 'MID', slotIndex: 0, lockedAt: null }] })
+      );
+    });
+
+    render(<LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill empty spots' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm lineup' }));
+
+    expect(await screen.findByText(/^Confirmed /)).toBeInTheDocument();
+    expect(gets).toBe(2);
+    expect(screen.getByRole('row', { name: 'DEF 1: empty' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: 'MID 1: Wing Man' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Unconfirmed changes' })).not.toBeInTheDocument();
+  });
+
+  it('keeps unconfirmed changes and shows the error when the save fails', async () => {
+    authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? Promise.resolve({
+            ok: false,
+            json: async () => ({ error: 'Invalid lineup', details: ['This round is locked.'] }),
+          })
+        : respond(payload())
+    );
+
+    render(<LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill empty spots' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm lineup' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not saved: This round is locked.');
+    expect(screen.getByRole('row', { name: 'MID 1: Wing Man' })).toBeInTheDocument();
+    expect(screen.getByText('2 changes to confirm')).toBeInTheDocument();
   });
 
   it('fills with a player listed as Test, keeping his injury label', async () => {

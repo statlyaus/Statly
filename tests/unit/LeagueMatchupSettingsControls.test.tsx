@@ -17,7 +17,6 @@ const automaticRules = {
   finalsTeams: 4 as const,
   fixtureGenerationMode: 'AUTOMATIC' as const,
   lockPolicy: 'INDIVIDUAL_GAME_START' as const,
-  leagueTimeZone: 'Australia/Melbourne',
   interchangeSlots: 3,
   standingsTieBreakCategory: 'goals' as const,
   excludedAflRounds: [],

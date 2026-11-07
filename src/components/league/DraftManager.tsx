@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
 import { fetchApi } from '@/lib/api';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import {
   draftScheduleFromInstant,
   resolveDraftSchedule,
@@ -469,14 +470,6 @@ export default function DraftManager({
     );
   };
 
-  const formatDateTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleString('en-AU', {
-      timeZone: draftSettings.timeZone,
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  };
-
   const draftSchedule = toDraftScheduleValue(draftSettings);
   const rosterSize = getRosterSizeFromPositionLimits(draftSettings.positionLimits);
   const benchSize = getBenchSizeFromPositionLimits(draftSettings.positionLimits);
@@ -562,7 +555,7 @@ export default function DraftManager({
                 Draft ID: <span className="font-mono text-xs">{existingDraft.id}</span>
               </p>
               <p className="text-sm text-muted-foreground">
-                Scheduled: {formatDateTime(existingDraft.startAt)}
+                Scheduled: {formatLeagueTime(existingDraft.startAt, draftSettings.timeZone)}
               </p>
             </div>
             <button
