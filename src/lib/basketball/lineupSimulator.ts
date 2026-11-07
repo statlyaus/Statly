@@ -69,20 +69,16 @@ function starterSlotList(slots: BasketballRosterSlotCounts): BasketballRosterSlo
 /**
  * Adds candidates in order, keeping a player only if he raises the maximum matching between
  * players and starter slots (Kuhn's augmenting paths). Greedy is optimal here: the sets of players
- * that can all start form a matroid.
+ * that can all start form a matroid. `slotIndices` are the starter slots each candidate can fill.
  */
 function chooseStarters(
-  candidates: readonly LineupRosterEntry[],
-  slotList: readonly BasketballRosterSlot[]
+  candidates: readonly { playerId: string; slotIndices: readonly number[] }[],
+  slotCount: number
 ): string[] {
-  const eligible = candidates.map((candidate) => {
-    const allowed = new Set(eligibleSlots(candidate.positions));
-    return slotList.flatMap((slot, index) => (allowed.has(slot) ? [index] : []));
-  });
-  const slotHolder: number[] = slotList.map(() => -1);
+  const slotHolder: number[] = Array.from({ length: slotCount }, () => -1);
 
   const assign = (player: number, seen: boolean[]): boolean => {
-    for (const slot of eligible[player]) {
+    for (const slot of candidates[player].slotIndices) {
       if (seen[slot]) continue;
       seen[slot] = true;
       if (slotHolder[slot] === -1 || assign(slotHolder[slot], seen)) {
@@ -93,14 +89,10 @@ function chooseStarters(
     return false;
   };
 
-  return candidates.flatMap((candidate, index) =>
-    assign(
-      index,
-      slotList.map(() => false)
-    )
-      ? [candidate.playerId]
-      : []
-  );
+  return candidates.flatMap((candidate, index) => {
+    const seen = Array.from({ length: slotCount }, () => false);
+    return assign(index, seen) ? [candidate.playerId] : [];
+  });
 }
 
 /**
@@ -113,7 +105,13 @@ export function simulateLineups(input: {
   days: readonly LineupDay[];
 }): DailyLineup[] {
   const slotList = starterSlotList(input.slots);
-  const byValue = [...input.roster].sort((a, b) => b.value - a.value);
+  const byValue = [...input.roster]
+    .sort((a, b) => b.value - a.value)
+    .map((player) => {
+      const allowed = new Set(eligibleSlots(player.positions));
+      const slotIndices = slotList.flatMap((slot, index) => (allowed.has(slot) ? [index] : []));
+      return { ...player, slotIndices };
+    });
   return input.days.map((day) => {
     const playing = day.playing instanceof Set ? day.playing : new Set(day.playing);
     const candidates = byValue.filter(
@@ -123,7 +121,7 @@ export function simulateLineups(input: {
         !player.out &&
         player.acquiredOn <= day.date
     );
-    return { date: day.date, starters: chooseStarters(candidates, slotList) };
+    return { date: day.date, starters: chooseStarters(candidates, slotList.length) };
   });
 }
 
