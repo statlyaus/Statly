@@ -37,10 +37,6 @@ vi.mock('@/components/navigation/LeagueSwitcher', () => ({
   default: () => <div>League switcher</div>,
 }));
 
-vi.mock('@/contexts/TeamContext', () => ({
-  TeamProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 function renderShell() {
   return render(
     <AppLayout>
