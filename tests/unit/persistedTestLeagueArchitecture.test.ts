@@ -8,7 +8,6 @@ const canonicalRuntimeFiles = [
   'src/app/api/leagues/[id]/draft/route.ts',
   'src/app/api/leagues/[id]/settings/route.ts',
   'src/components/league/DraftManager.tsx',
-  'src/hooks/useDraftManager.ts',
 ];
 
 describe('persisted development league architecture', () => {
