@@ -83,8 +83,8 @@ function ThisWeek({ overview, leagueId }: { overview: BasketballOverview; league
             </div>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            NBA games still to play this week by players not on the injured list. The Matchup page
-            counts only the games that fit your starting slots.
+            NBA games still to play this week, leaving out players on the injured list or ruled out.
+            The Matchup page counts only the games that fit your starting slots.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
@@ -127,9 +127,7 @@ function MyRoster({
   players: BasketballOverviewPlayer[];
   leagueId: string;
 }) {
-  const rows = [...players].sort(
-    (left, right) => Number(left.onInjuredList) - Number(right.onInjuredList)
-  );
+  const rows = [...players].sort((left, right) => Number(right.counted) - Number(left.counted));
   return (
     <section aria-labelledby="bb-my-roster-title" className="flex min-w-0 flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
@@ -178,7 +176,7 @@ function MyRoster({
               {rows.map((player) => (
                 <tr
                   key={player.playerId}
-                  className={`h-14 border-b border-border last:border-b-0 ${player.onInjuredList ? 'bg-muted/40' : ''}`}
+                  className={`h-14 border-b border-border last:border-b-0 ${player.counted ? '' : 'bg-muted/40'}`}
                 >
                   <th scope="row" className="px-3 text-left font-normal">
                     <PlayerIdentity
@@ -189,8 +187,13 @@ function MyRoster({
                       onInjuredList={player.onInjuredList}
                     />
                   </th>
-                  <td className="px-3 text-right font-display text-lg font-bold tabular-nums text-foreground">
+                  <td
+                    className={`px-3 text-right font-display text-lg font-bold tabular-nums ${
+                      player.counted ? 'text-foreground' : 'text-muted-foreground/60'
+                    }`}
+                  >
                     {player.gamesLeft}
+                    {player.counted ? null : <span className="sr-only">, not counted</span>}
                   </td>
                   <td className="px-3 text-right tabular-nums text-muted-foreground">
                     {player.gamesThisWeek}
@@ -201,6 +204,11 @@ function MyRoster({
           </table>
         </div>
       )}
+      {rows.some((player) => !player.counted) ? (
+        <p className="text-xs text-muted-foreground">
+          Greyed games are not counted: the player is on the injured list or ruled out.
+        </p>
+      ) : null}
     </section>
   );
 }

@@ -198,15 +198,26 @@ describe('loadBasketballOverview', () => {
     ]);
   });
 
-  it("names this week's opponent and leaves injured-list players out of the team's games left", async () => {
+  it("names this week's opponent", async () => {
     const overview = await loadBasketballOverview(league(), { prisma: fakeClient(), now: NOW });
 
-    expect(overview.me).toMatchObject({ teamId: 'mine', name: 'My Team', gamesLeft: 4 });
+    expect(overview.me).toMatchObject({ teamId: 'mine', name: 'My Team' });
     expect(overview.opponent).toMatchObject({ teamId: 'opp', name: 'Rival', gamesLeft: 2 });
-    expect(overview.me.players.find((player) => player.playerId === 'p-out')?.injury).toEqual({
-      status: 'OUT',
-      detail: 'Ankle',
-      expectedReturnOn: '2026-11-20',
+  });
+
+  it("leaves injured-list and ruled-out players out of the team's games left, but keeps their rows", async () => {
+    const overview = await loadBasketballOverview(league(), { prisma: fakeClient(), now: NOW });
+
+    // p-bos has 2 left; p-out (OUT on the injury report) and p-il (on the injured list) have 2 each
+    // but are not counted.
+    expect(overview.me.gamesLeft).toBe(2);
+    const counted = Object.fromEntries(
+      overview.me.players.map((player) => [player.playerId, player.counted])
+    );
+    expect(counted).toEqual({ 'p-bos': true, 'p-out': false, 'p-il': false });
+    expect(overview.me.players.find((player) => player.playerId === 'p-out')).toMatchObject({
+      gamesLeft: 2,
+      injury: { status: 'OUT', detail: 'Ankle', expectedReturnOn: '2026-11-20' },
     });
   });
 

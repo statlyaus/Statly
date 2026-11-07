@@ -44,13 +44,15 @@ export interface BasketballOverviewPlayer {
   gamesThisWeek: number;
   /** Games this week from today on that have not finished. */
   gamesLeft: number;
+  /** False when on the injured list or ruled OUT: his games are left out of the team's total. */
+  counted: boolean;
 }
 
 export interface BasketballOverviewSide {
   teamId: string;
   name: string;
   players: BasketballOverviewPlayer[];
-  /** Games left this week from players not on the injured list. */
+  /** Games left this week from counted players (not on the injured list, not ruled OUT). */
   gamesLeft: number;
 }
 
@@ -181,6 +183,7 @@ export async function loadBasketballOverview(
           injury: spot.player.injury,
           gamesThisWeek: counts.thisWeek,
           gamesLeft: counts.left,
+          counted: !spot.onInjuredList && spot.player.injury?.status !== 'OUT',
         };
       });
     return {
@@ -188,7 +191,7 @@ export async function loadBasketballOverview(
       name: team.name,
       players,
       gamesLeft: players
-        .filter((player) => !player.onInjuredList)
+        .filter((player) => player.counted)
         .reduce((total, player) => total + player.gamesLeft, 0),
     };
   };
