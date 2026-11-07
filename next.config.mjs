@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { buildContentSecurityPolicyReportOnlyHeaders } from './config/contentSecurityPolicy.mjs';
+
 const sentryClientAdapterModule = '@/lib/sentry/clientInstrumentation';
 const sentryClientAdapterPath =
   process.env.NODE_ENV === 'production'
@@ -60,10 +62,8 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin',
           },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
+          // Report-Only until the Sentry CSP reports are clean, then switch to enforce.
+          ...buildContentSecurityPolicyReportOnlyHeaders(process.env),
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), payment=()',
