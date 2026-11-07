@@ -72,6 +72,10 @@ request gates before merging them.
 - `src/types/fantasyCategories.ts` defines valid categories and the default preset.
 - `src/server/leagues` owns league scoring, standings, fixtures, and competition rules.
 - `src/server/draft` owns draft commands, persisted picks, projections, and realtime publication.
+- Fantasy basketball is a separate track: `src/types/basketball.ts` defines its categories,
+  `src/server/basketball/ingest` owns the global `Nba*` reference tables, and
+  `src/server/basketball/leagues` owns the private, owner-scoped `Basketball*` league profiles. See
+  [fantasy basketball](docs/domain/basketball.md).
 
 See [documentation index](docs/README.md), [runtime boundaries](docs/architecture/data-platform.md),
 and [fantasy model](docs/domain/fantasy-model.md). Draft-room reliability work may use
