@@ -158,7 +158,7 @@ describe('Health API', () => {
 
     it('should stay operational but degraded when optional local Redis is unavailable', async () => {
       const { redisClient } = await import('@/lib/redis');
-      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+      vi.mocked(redisClient.ping).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const response = await GET(mockRequest);
       const data = await response.json();
@@ -210,7 +210,7 @@ describe('Health API', () => {
 
     it('should return 200 when optional local Redis is not ready', async () => {
       const { redisClient } = await import('@/lib/redis');
-      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+      vi.mocked(redisClient.ping).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const response = await PATCH(mockRequest);
       const data = await response.json();
@@ -223,7 +223,7 @@ describe('Health API', () => {
     it('should return 503 when production Redis is not ready', async () => {
       vi.stubEnv('NODE_ENV', 'production');
       const { redisClient } = await import('@/lib/redis');
-      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+      vi.mocked(redisClient.ping).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const response = await PATCH(mockRequest);
       const data = await response.json();
@@ -235,10 +235,13 @@ describe('Health API', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle database errors gracefully', async () => {
-      const { adminDb } = await import('@/lib/firebaseAdmin');
-      vi.mocked(adminDb.collection).mockImplementation(() => {
-        throw new Error('Database connection failed');
+    it('reports the database from Prisma, the authoritative store', async () => {
+      const { checkRelationalDatabase } = await import('@/server/health/relationalDatabaseHealth');
+      vi.mocked(checkRelationalDatabase).mockResolvedValueOnce({
+        status: 'unhealthy',
+        responseTime: 5,
+        error: 'Relational database connectivity issue',
+        lastChecked: new Date().toISOString(),
       });
 
       const response = await GET(mockRequest);
@@ -247,6 +250,35 @@ describe('Health API', () => {
       expect(response.status).toBe(503);
       expect(data.data.status).toBe('unhealthy');
       expect(data.data.services.database).toBe('unhealthy');
+      expect(data.data.services.relationalDatabase).toBe('unhealthy');
+      expect(JSON.stringify(data)).not.toContain('connectivity issue');
+    });
+
+    it('treats a Firestore projection failure as degraded, not a database outage', async () => {
+      const { adminDb } = await import('@/lib/firebaseAdmin');
+      vi.mocked(adminDb.collection).mockImplementationOnce(() => {
+        throw new Error('Firestore unavailable');
+      });
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('degraded');
+      expect(data.data.services.database).toBe('healthy');
+      expect(data.data.services.firestoreProjection).toBe('degraded');
+    });
+
+    it('waits for production Redis that is still connecting on a cold start', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const { redisClient } = await import('@/lib/redis');
+      vi.mocked(redisClient.isConnected).mockReturnValue(false);
+
+      const response = await GET(mockRequest);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data.services.redis).toBe('healthy');
     });
 
     it('should handle configured Redis errors gracefully', async () => {
