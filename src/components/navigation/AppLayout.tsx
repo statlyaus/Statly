@@ -4,8 +4,6 @@ import { createContext, useContext } from 'react';
 import type React from 'react';
 import { usePathname } from 'next/navigation';
 
-import { TeamProvider } from '@/contexts/TeamContext';
-
 import { SectionErrorBoundary } from '../ui/ErrorBoundary';
 import MainNavigation from './MainNavigation';
 
@@ -49,9 +47,7 @@ export default function AppLayout({ children, mode = 'auto' }: AppLayoutProps): 
 
   return (
     <SectionErrorBoundary name="AppLayout">
-      <TeamProvider>
-        <AppLayoutContext.Provider value>{content}</AppLayoutContext.Provider>
-      </TeamProvider>
+      <AppLayoutContext.Provider value>{content}</AppLayoutContext.Provider>
     </SectionErrorBoundary>
   );
 }
