@@ -47,8 +47,11 @@ still shown in matchup projections.
 
 - An NBA season is identified by the year it ends: 2026-27 is `2027`, as ESPN numbers it.
 - Game dates are US Eastern calendar dates. Fantasy weeks count Eastern dates too.
-- Fantasy week `n` is the seven Eastern dates starting `weekOneStartsOn + 7 × (n − 1)`. A week with
-  fewer games (the All-Star break) is simply a week with fewer games.
+- Fantasy weeks are seven Eastern dates, starting on `weekOneStartsOn`. A league can mark weeks that
+  span 14 dates instead (`twoWeekMatchups`, commonly the All-Star break on Yahoo and ESPN); every later
+  week starts seven days later than it otherwise would.
+- Only regular-season games are stored. Preseason, play-in and playoff games and the NBA Cup final
+  (whose stats do not count in season totals) are excluded.
 
 ## Entities and authority
 
@@ -61,7 +64,11 @@ still shown in matchup projections.
 | `BasketballLeague` and its teams, spots and matchups | `src/server/basketball/leagues` | Private to `ownerId`. Every query filters by owner and league; non-owners get 404. A profile is bound to one season. |
 
 A roster spot with no team means the player is rostered by a team the user has not entered, which
-removes him from the free-agent list. A roster spot's `acquiredOn` date is the first Eastern game date
+removes him from the free-agent list.
+
+Player positions are stored as the data provider lists them. Providers list fewer positions than
+Yahoo or ESPN fantasy grant, so lineup eligibility in projections is conservative: a player may count
+for fewer slots than in the user's real league. A roster spot's `acquiredOn` date is the first Eastern game date
 it counts for that team.
 
 Adding players from a pasted list is an explicit, reviewed operation: the server proposes candidate

@@ -6,7 +6,10 @@
  * See docs/domain/basketball.md.
  */
 
-/** Raw per-game box-score counts stored for every player-game. */
+/**
+ * The box-score counts that feed categories. Minutes, rebound splits, fouls and plus-minus are stored
+ * too (`NbaPlayerGameStat`) but are not category inputs.
+ */
 export const NBA_STAT_KEYS = [
   'points',
   'rebounds',

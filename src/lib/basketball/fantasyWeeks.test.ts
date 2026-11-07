@@ -69,6 +69,24 @@ describe('fantasyWeekRange', () => {
   });
 });
 
+describe('two-week matchups', () => {
+  it('stretches a listed week to 14 dates and shifts every later week', () => {
+    const allStar = [17];
+    const week17 = fantasyWeekRange(17, WEEK_ONE, allStar);
+    expect(week17.dates).toHaveLength(14);
+    expect(week17.start).toBe('2027-02-08');
+    expect(week17.end).toBe('2027-02-21');
+    expect(fantasyWeekOf('2027-02-20', WEEK_ONE, allStar)).toBe(17);
+    expect(fantasyWeekRange(18, WEEK_ONE, allStar).start).toBe('2027-02-22');
+    expect(fantasyWeekOf('2027-02-22', WEEK_ONE, allStar)).toBe(18);
+    expect(lastFantasyWeek(WEEK_ONE, '2027-04-11', allStar)).toBe(24);
+  });
+
+  it('leaves earlier weeks alone', () => {
+    expect(fantasyWeekRange(16, WEEK_ONE, [17]).start).toBe(fantasyWeekRange(16, WEEK_ONE).start);
+  });
+});
+
 describe('lastFantasyWeek', () => {
   it('is the week containing the final regular-season date', () => {
     expect(lastFantasyWeek(WEEK_ONE, '2027-04-11')).toBe(25);

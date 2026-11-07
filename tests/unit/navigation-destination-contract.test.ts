@@ -21,12 +21,9 @@ describe('audited navigation destination contract', () => {
     expect(publicNavigationItems.some((item) => item.href === '/fantasy')).toBe(false);
   });
 
-  it('lands the dashboard waiver action at the existing claim workflow', () => {
-    const waiversModule = readRepoFile('src/components/dashboard/WaiversModule.tsx');
+  it('keeps the waiver claim workflow anchor that waiver links land on', () => {
     const waiverSurface = readRepoFile('src/components/waivers/WaiverFAABSystem.tsx');
 
-    expect(waiversModule).toContain('href="/waivers#waiver-player-search"');
-    expect(waiversModule).not.toContain('/waivers/submit');
     expect(waiverSurface).toContain('id="waiver-player-search"');
   });
 

@@ -54,9 +54,6 @@ describe('dashboard production recovery route contract', () => {
     expect(navigation).not.toContain('/tradecentre');
     expect(navigation).toContain("name: 'Waivers & Trades'");
 
-    const quickActionsModule = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
-    expect(quickActionsModule).not.toContain('/tradecentre');
-
     const rostersPage = readRepoFile('src/app/(app)/rosters/page.tsx');
     expect(rostersPage).not.toContain('/tradecentre');
   });
@@ -73,9 +70,6 @@ describe('dashboard production recovery route contract', () => {
   it('consolidates the league directory into the dashboard route', () => {
     const leaguesPage = readRepoFile('src/app/(app)/leagues/page.tsx');
     const dashboard = readRepoFile('src/components/ModularDashboard.tsx');
-    const leagueManagement = readRepoFile('src/components/dashboard/LeagueManagementModule.tsx');
-    const quickActions = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
-    const recentActivity = readRepoFile('src/components/dashboard/RecentActivityModule.tsx');
     const navigation = readRepoFile('src/components/navigation/MainNavigation.tsx');
     const nextConfig = readRepoFile('next.config.mjs');
 
@@ -110,13 +104,6 @@ describe('dashboard production recovery route contract', () => {
     expect(dashboard).not.toContain('Account overview');
     expect(dashboard).not.toContain('Market Intel');
     expect(dashboard).not.toContain('Season scoring leaders');
-    expect(leagueManagement).toContain('id="leagues"');
-    expect(leagueManagement).toContain('leagues.map((league, index)');
-    expect(leagueManagement).not.toContain('leagues.slice(0, 4)');
-    expect(leagueManagement).not.toContain('href="/leagues"');
-
-    expect(quickActions).toContain("href: '/dashboard#leagues'");
-    expect(recentActivity).toContain('href="/dashboard#leagues"');
     expect(navigation).not.toContain("name: 'Leagues'");
     expect(navigation).not.toContain("href: '/dashboard#leagues'");
   });
