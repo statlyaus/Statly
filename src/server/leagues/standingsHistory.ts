@@ -4,6 +4,7 @@
  */
 
 import { simulateFinalsOdds, type FinalsOdds } from './finalsOdds';
+import type { LeagueScoringMode } from './scoringTypes';
 
 export type { FinalsOdds };
 
@@ -45,6 +46,7 @@ export interface TeamRoundResult {
   result: ResultLetter | null;
   categoriesFor: number;
   categoriesAgainst: number;
+  categoriesDrawn: number;
 }
 
 export interface StandingsTeam extends StandingsLadderInput {
@@ -103,15 +105,24 @@ function pct(numerator: number, denominator: number): number | null {
   return denominator > 0 ? numerator / denominator : null;
 }
 
+/**
+ * `scoringMode` decides what a ladder win is, as in `calculateStandingsRows`: a matchup result, or
+ * each category result in `H2H_EACH_CATEGORY`. Rank history and finals odds use the same unit.
+ */
 export function buildStandingsHistory({
   ladder,
   matchups,
   finalsTeams,
+  scoringMode,
+  categoryCount,
 }: {
   ladder: readonly StandingsLadderInput[];
   matchups: readonly StandingsMatchupInput[];
   finalsTeams: number;
+  scoringMode: LeagueScoringMode;
+  categoryCount: number;
 }): StandingsHistory {
+  const eachCategory = scoringMode === 'H2H_EACH_CATEGORY';
   const byRound = new Map<number, StandingsMatchupInput[]>();
   for (const matchup of matchups) {
     byRound.set(matchup.round, [...(byRound.get(matchup.round) ?? []), matchup]);
@@ -142,6 +153,7 @@ export function buildStandingsHistory({
           result: null,
           categoriesFor: 0,
           categoriesAgainst: 0,
+          categoriesDrawn: 0,
         });
       }
       for (const side of ['home', 'away'] as const) {
@@ -155,6 +167,7 @@ export function buildStandingsHistory({
           result: resultFor(matchup, memberId),
           categoriesFor: side === 'home' ? matchup.homeCategoryWins : matchup.awayCategoryWins,
           categoriesAgainst: side === 'home' ? matchup.awayCategoryWins : matchup.homeCategoryWins,
+          categoriesDrawn: matchup.drawnCategories,
         });
       }
     }
@@ -174,7 +187,11 @@ export function buildStandingsHistory({
         for (const result of resultsByMember.get(memberId) ?? []) {
           if (result.phase !== 'REGULAR' || result.round > completedRound || !result.result)
             continue;
-          if (result.result === 'W') record.wins += 1;
+          if (eachCategory) {
+            record.wins += result.categoriesFor;
+            record.losses += result.categoriesAgainst;
+            record.draws += result.categoriesDrawn;
+          } else if (result.result === 'W') record.wins += 1;
           else if (result.result === 'L') record.losses += 1;
           else record.draws += 1;
           record.categoryDiff += result.categoriesFor - result.categoriesAgainst;
@@ -243,7 +260,11 @@ export function buildStandingsHistory({
   });
 
   const clampedFinalsTeams = Math.min(Math.max(0, finalsTeams), ladder.length);
-  const odds = simulateFinalsOdds({ teams, finalsTeams: clampedFinalsTeams });
+  const odds = simulateFinalsOdds({
+    teams,
+    finalsTeams: clampedFinalsTeams,
+    pointsPerGame: eachCategory ? categoryCount : 1,
+  });
   for (const team of teams) team.finals = odds.get(team.memberId) ?? null;
 
   return {

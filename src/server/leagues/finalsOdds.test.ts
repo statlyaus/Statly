@@ -6,7 +6,9 @@ function team(
   memberId: string,
   wins: number,
   losses: number,
-  games: Array<[round: number, opponentId: string, status?: 'SCHEDULED' | 'LIVE', lead?: number]> = []
+  games: Array<
+    [round: number, opponentId: string, status?: 'SCHEDULED' | 'LIVE', lead?: number]
+  > = []
 ): FinalsOddsTeamInput {
   return {
     memberId,
@@ -58,10 +60,22 @@ describe('simulateFinalsOdds', () => {
 
   it('shares the finals places out across teams and is repeatable', () => {
     const teams = [
-      team('a', 2, 1, [[4, 'b'], [5, 'c']]),
-      team('b', 2, 1, [[4, 'a'], [5, 'd']]),
-      team('c', 1, 2, [[4, 'd'], [5, 'a']]),
-      team('d', 1, 2, [[4, 'c'], [5, 'b']]),
+      team('a', 2, 1, [
+        [4, 'b'],
+        [5, 'c'],
+      ]),
+      team('b', 2, 1, [
+        [4, 'a'],
+        [5, 'd'],
+      ]),
+      team('c', 1, 2, [
+        [4, 'd'],
+        [5, 'a'],
+      ]),
+      team('d', 1, 2, [
+        [4, 'c'],
+        [5, 'b'],
+      ]),
     ];
     const odds = simulateFinalsOdds({ teams, finalsTeams: 2 });
     const total = [...odds.values()].reduce((sum, entry) => sum + entry.chance, 0);
@@ -82,6 +96,44 @@ describe('simulateFinalsOdds', () => {
       finalsTeams: 1,
     });
     expect(odds.get('a')!.chance).toBeGreaterThan(0.75);
+  });
+
+  it('counts every category still to play when each category is a ladder win', () => {
+    const categoryTeam = (memberId: string, wins: number, opponentId: string) => ({
+      memberId,
+      wins,
+      draws: 0,
+      categoryWins: wins,
+      categoryLosses: 27 - wins,
+      categoryDraws: 0,
+      results: [
+        {
+          round: 4,
+          phase: 'REGULAR' as const,
+          status: 'SCHEDULED' as const,
+          opponentId,
+          result: null,
+          categoriesFor: 0,
+          categoriesAgainst: 0,
+        },
+      ],
+    });
+    const odds = simulateFinalsOdds({
+      teams: [
+        categoryTeam('a', 30, 'b'),
+        categoryTeam('b', 25, 'a'),
+        categoryTeam('c', 24, 'd'),
+        categoryTeam('d', 20, 'c'),
+      ],
+      finalsTeams: 2,
+      pointsPerGame: 9,
+    });
+    // Nine categories are still to play, so b and c can pass a and d can pass b and c.
+    expect(odds.get('a')?.status).toBeNull();
+    expect(odds.get('d')?.status).toBeNull();
+    expect(odds.get('d')!.chance).toBeGreaterThan(0);
+    expect(odds.get('a')!.winsHigh).toBeLessThanOrEqual(39);
+    expect(odds.get('a')!.projectedWins).toBeGreaterThan(31);
   });
 
   it('has nothing to say without finals', () => {

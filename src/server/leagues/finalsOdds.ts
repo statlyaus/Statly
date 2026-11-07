@@ -33,7 +33,10 @@ export interface FinalsOdds {
   status: FinalsStatus;
   /** Regular-season games still to finish, the live one included. */
   gamesLeft: number;
-  /** Final wins (draws as half): average and the middle 80% of simulations. */
+  /**
+   * Final ladder wins (draws as half), in the ladder's own unit: matchups, or categories in
+   * `H2H_EACH_CATEGORY`. Average and the middle 80% of simulations.
+   */
   projectedWins: number;
   winsLow: number;
   winsHigh: number;
@@ -127,10 +130,11 @@ function remainingGames(teams: readonly FinalsOddsTeamInput[]): Game[] {
 /**
  * Clinched when too few teams can still reach this team's current wins; out when enough teams
  * are already beyond anything this team can reach. Ties count against the team, so both are safe.
+ * `maxGain` is the most ladder wins each team can still add.
  */
 function certainty(
   points: readonly number[],
-  gamesLeft: readonly number[],
+  maxGain: readonly number[],
   team: number,
   finalsTeams: number
 ): FinalsStatus {
@@ -138,8 +142,8 @@ function certainty(
   let alreadyBeyond = 0;
   points.forEach((value, other) => {
     if (other === team) return;
-    if (value + gamesLeft[other] >= points[team]) canCatch += 1;
-    if (value > points[team] + gamesLeft[team]) alreadyBeyond += 1;
+    if (value + maxGain[other] >= points[team]) canCatch += 1;
+    if (value > points[team] + maxGain[team]) alreadyBeyond += 1;
   });
   if (canCatch < finalsTeams) return 'CLINCHED';
   if (alreadyBeyond >= finalsTeams) return 'OUT';
@@ -148,16 +152,20 @@ function certainty(
 
 /**
  * Simulates the remaining games. Teams arrive in ladder order; ties on wins fall to category
- * difference, then at random.
+ * difference, then at random. `pointsPerGame` is how many ladder wins one game hands out: 1 when
+ * the ladder counts matchups, the league's category count in `H2H_EACH_CATEGORY`, where each
+ * category is simulated on its own.
  */
 export function simulateFinalsOdds({
   teams,
   finalsTeams,
+  pointsPerGame = 1,
   simulations = FINALS_SIMULATIONS,
   seed = 20260927,
 }: {
   teams: readonly FinalsOddsTeamInput[];
   finalsTeams: number;
+  pointsPerGame?: number;
   simulations?: number;
   seed?: number;
 }): Map<string, FinalsOdds> {
@@ -172,15 +180,15 @@ export function simulateFinalsOdds({
     gamesLeft[game.home] += 1;
     gamesLeft[game.away] += 1;
   }
+  const perGame = Math.max(1, Math.floor(pointsPerGame));
+  const maxGain = gamesLeft.map((count) => count * perGame);
 
   const runs = games.length === 0 ? 1 : simulations;
   const next = random(seed);
   const made = teams.map(() => 0);
   const winsTotal = teams.map(() => 0);
   // Final wins are counted in half-win steps.
-  const winCounts = teams.map((_, team) =>
-    Array.from({ length: gamesLeft[team] * 2 + 1 }, () => 0)
-  );
+  const winCounts = teams.map((_, team) => Array.from({ length: maxGain[team] * 2 + 1 }, () => 0));
   const finishCounts = teams.map(() => Array.from({ length: teams.length }, () => 0));
   const order = teams.map((_, team) => team);
   const final = [...points];
@@ -193,8 +201,10 @@ export function simulateFinalsOdds({
       tieBreak[team] = games.length > 0 ? next() : teams.length - team;
     }
     for (const game of games) {
-      if (next() < game.homeChance) final[game.home] += 1;
-      else final[game.away] += 1;
+      for (let point = 0; point < perGame; point += 1) {
+        if (next() < game.homeChance) final[game.home] += 1;
+        else final[game.away] += 1;
+      }
     }
     order.sort(
       (left, right) =>
@@ -213,7 +223,7 @@ export function simulateFinalsOdds({
   }
 
   teams.forEach((team, index) => {
-    const status = certainty(points, gamesLeft, index, finalsTeams);
+    const status = certainty(points, maxGain, index, finalsTeams);
     const low = percentile(winCounts[index], runs, 0.1) / 2 + points[index];
     const high = percentile(winCounts[index], runs, 0.9) / 2 + points[index];
     odds.set(team.memberId, {

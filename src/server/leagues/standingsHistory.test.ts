@@ -64,7 +64,13 @@ const ladder = [
 ];
 
 describe('buildStandingsHistory', () => {
-  const history = buildStandingsHistory({ ladder, matchups, finalsTeams: 2 });
+  const history = buildStandingsHistory({
+    ladder,
+    matchups,
+    finalsTeams: 2,
+    scoringMode: 'H2H_MOST_CATEGORIES',
+    categoryCount: 9,
+  });
   const byId = new Map(history.teams.map((entry) => [entry.memberId, entry]));
 
   it('classifies rounds and keeps ladder order', () => {
@@ -139,6 +145,8 @@ describe('buildStandingsHistory', () => {
         },
       ],
       finalsTeams: 8,
+      scoringMode: 'H2H_MOST_CATEGORIES',
+      categoryCount: 9,
     });
     expect(empty.finalsTeams).toBe(2);
     expect(empty.teams[0]).toMatchObject({
@@ -151,5 +159,68 @@ describe('buildStandingsHistory', () => {
     expect(empty.teams[0].results).toEqual([
       expect.objectContaining({ round: 1, status: 'BYE', opponentId: null }),
     ]);
+  });
+});
+
+describe('buildStandingsHistory in H2H_EACH_CATEGORY', () => {
+  // Round 1: a beats b 5-4; c beats d 3-2 with 4 categories drawn. Round 2: every category drawn.
+  const eachMatchups = [
+    game(1, 'a', 'b', 5, 4),
+    game(1, 'c', 'd', 3, 2),
+    game(2, 'a', 'c', 0, 0),
+    game(2, 'b', 'd', 0, 0),
+  ];
+  // The ladder ranks by category wins in this mode: a 5, b 4, c 3, d 2.
+  const eachLadder = [
+    team('a', {
+      wins: 5,
+      losses: 4,
+      draws: 9,
+      categoryWins: 5,
+      categoryLosses: 4,
+      categoryDraws: 9,
+    }),
+    team('b', {
+      wins: 4,
+      losses: 5,
+      draws: 9,
+      categoryWins: 4,
+      categoryLosses: 5,
+      categoryDraws: 9,
+    }),
+    team('c', {
+      wins: 3,
+      losses: 2,
+      draws: 13,
+      categoryWins: 3,
+      categoryLosses: 2,
+      categoryDraws: 13,
+    }),
+    team('d', {
+      wins: 2,
+      losses: 3,
+      draws: 13,
+      categoryWins: 2,
+      categoryLosses: 3,
+      categoryDraws: 13,
+    }),
+  ];
+  const history = buildStandingsHistory({
+    ladder: eachLadder,
+    matchups: eachMatchups,
+    finalsTeams: 2,
+    scoringMode: 'H2H_EACH_CATEGORY',
+    categoryCount: 9,
+  });
+  const byId = new Map(history.teams.map((entry) => [entry.memberId, entry]));
+
+  it('ranks earlier rounds by category results, as the ladder does', () => {
+    // By matchup wins b (lost round 1) would have been third after round 1, behind c.
+    expect(byId.get('b')!.rankHistory).toEqual([
+      { round: 1, rank: 2 },
+      { round: 2, rank: 2 },
+    ]);
+    expect(byId.get('b')!.movement).toBe(0);
+    expect(byId.get('c')!.movement).toBe(0);
   });
 });
