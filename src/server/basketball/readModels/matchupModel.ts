@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import {
   fantasyWeekOf,
   lastFantasyWeek,
@@ -166,7 +168,19 @@ export async function loadMatchupContext(
 ): Promise<MatchupContext> {
   const client = options.client ?? prisma;
   const today = options.today ?? toEasternDate(new Date());
-  const { week, lastWeek } = resolveWeek(league, options.week, today);
+  const { week } = resolveWeek(league, options.week, today);
+  // Resolved to primitives first so the overview's matchup and pickups loads share one build.
+  return buildMatchupContext(league, week, today, client);
+}
+
+/** One build per (league, week, date, client) per request: the overview loads it twice. */
+const buildMatchupContext = cache(async function buildMatchupContext(
+  league: BasketballLeagueDetail,
+  requestedWeek: number,
+  today: EasternDate,
+  client: NbaReadClient
+): Promise<MatchupContext> {
+  const { week, lastWeek } = resolveWeek(league, requestedWeek, today);
   const teamName = new Map(league.teams.map((team) => [team.id, team.name]));
   const opponentId = league.matchups.find(
     (matchup) => matchup.week === week && matchup.teamId === league.myTeamId
@@ -255,7 +269,7 @@ export async function loadMatchupContext(
     opponent: opponentId ? buildSide(opponentId) : null,
     teamIdByPlayer,
   };
-}
+});
 
 function sideView(
   inputs: SideInputs,

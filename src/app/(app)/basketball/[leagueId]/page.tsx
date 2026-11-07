@@ -24,7 +24,8 @@ export default async function BasketballOverviewPage({
   const league = await loadOwnedBasketballLeague(userId, leagueId);
   if (!league) notFound();
   const now = new Date();
-  // The matchup and pickups models share one cached player pool per request.
+  // The matchup and pickups models share one cached matchup context (pool, schedule, box scores)
+  // per request.
   const [overview, matchup, pickups] = await Promise.all([
     loadBasketballOverview(league, { now }),
     loadMatchup(league),
