@@ -48,7 +48,9 @@ persisted owner and active membership in the same transaction as the write. The 
 manager, and a manager may leave, only until the draft starts; removal renumbers the remaining draft
 slots and rebuilds the draft order. After the draft, rosters, fixtures, and standings depend on every
 team, so managers are not removed. Ownership transfer makes the previous owner a manager.
-Firestore member documents are written afterwards as a compatibility projection.
+Firestore member documents are written afterwards as a compatibility projection. The member list,
+member update and team settings routes treat a league with no Prisma row as not found; they never
+decide existence, membership or a write from Firestore.
 
 ## League creation defaults
 
