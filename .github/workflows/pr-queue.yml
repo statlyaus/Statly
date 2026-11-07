@@ -1,0 +1,41 @@
+name: PR queue
+
+# Keeps green auto-merge pull requests moving under the ruleset's up-to-date requirement: updates
+# the oldest green BEHIND one with main when nothing else is in flight, then dispatches CI on it.
+# See Scripts/ci/pr-queue.mjs and "Pull request queue" in docs/development/delivery.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pr-queue
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  advance:
+    name: Advance the queue
+    if: github.repository == 'statlyaus/Statly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      pull-requests: write
+      statuses: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: node Scripts/ci/pr-queue.mjs
