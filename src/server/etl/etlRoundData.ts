@@ -46,7 +46,8 @@ export async function getRoundPlayerStatsResult(
     const snapshot = await adminDb
       .collection('player_match_stats')
       .where('season', '==', season)
-      .where('round_number', '==', round)
+      // etl/processFootywireData.ts writes `round` (not `round_number`) on player match stats.
+      .where('round', '==', round)
       .get();
     return { ok: true, stats: snapshot.docs.map((doc) => doc.data() as ETLPlayerStats) };
   } catch (error) {
