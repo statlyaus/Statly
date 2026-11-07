@@ -75,7 +75,9 @@ removing the current file does not remove it from history.
 
 The browser signs in through the Firebase Web SDK. Statly's generated auth service worker attaches a
 current Firebase ID token to eligible same-origin app requests. Server boundaries verify the token and
-then authorize membership/role against canonical domain state.
+then authorize membership/role against canonical domain state. If the worker cannot start (an
+insecure origin, an unsupported or private browser), sign-in signs the Firebase user back out and says
+so, rather than leaving a Firebase session the app ignores.
 
 The legacy `statly_session` cookie remains a compatibility fallback where implemented. New code must
 not treat middleware routing checks or cookie presence as domain authorization.

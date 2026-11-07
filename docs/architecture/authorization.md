@@ -23,6 +23,11 @@ Each tier above Public resolves identity at the transport boundary and then call
 that owns league, season, and membership scope. A verified Firebase UID never implies membership,
 commissioner rights, roster ownership, or waiver eligibility.
 
+`src/lib/serverAuth.ts` resolves a credential Firebase rejects (expired, revoked, malformed, or
+belonging to a disabled or deleted user) to no identity. A verification that could not run, such as
+Firebase Admin being unreachable or misconfigured, rejects instead: pages show the error boundary and
+routes fail with a server error, rather than sending a signed-in browser to `/login` and back.
+
 ## League roles
 
 `LeagueRole` has two values: `OWNER` and `MANAGER`. `MANAGER` is the ordinary participant, the team

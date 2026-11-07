@@ -130,6 +130,17 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
     }
   };
 
+  // A signed-in Firebase user the app cannot carry to the server is signed out again, so the
+  // client never keeps a Firebase session that every page treats as signed out.
+  const prepareSignedInNavigation = async (): Promise<void> => {
+    try {
+      await ensureAuthServiceWorkerReady();
+    } catch (error) {
+      if (auth) await signOut(auth).catch(() => undefined);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -144,27 +155,27 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       }
       await authEmulatorReady;
       await signInWithEmailAndPassword(auth, email, pass);
-      await ensureAuthServiceWorkerReady();
+      await prepareSignedInNavigation();
     },
     signup: async (email: string, pass: string) => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
       await createUserWithEmailAndPassword(auth, email, pass);
-      await ensureAuthServiceWorkerReady();
+      await prepareSignedInNavigation();
     },
     loginWithGoogle: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      await ensureAuthServiceWorkerReady();
+      await prepareSignedInNavigation();
     },
     loginWithFacebook: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
       const provider = new FacebookAuthProvider();
       await signInWithPopup(auth, provider);
-      await ensureAuthServiceWorkerReady();
+      await prepareSignedInNavigation();
     },
     loginWithApple: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
@@ -173,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       provider.addScope('email');
       provider.addScope('name');
       await signInWithPopup(auth, provider);
-      await ensureAuthServiceWorkerReady();
+      await prepareSignedInNavigation();
     },
     logout: async () => {
       if (!auth && isDevelopmentAuthEnabled()) {
