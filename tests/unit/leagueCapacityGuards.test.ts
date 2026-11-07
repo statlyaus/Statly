@@ -41,15 +41,6 @@ const draftSetupMocks = vi.hoisted(() => ({
   ensureLeagueDraftSetupConverged: vi.fn(),
 }));
 
-const prismaBridgeMocks = vi.hoisted(() => ({
-  syncPrismaLeagueMember: vi.fn(),
-}));
-
-const memberCommandMocks = vi.hoisted(() => ({
-  findPrismaLeagueIdByInviteCode: vi.fn(),
-  joinLeague: vi.fn(),
-}));
-
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
   getUserIdFromRequest: authMocks.getUserIdFromRequest,
@@ -116,18 +107,6 @@ vi.mock('../../src/server/draft/services/DraftSetupConvergenceService', () => ({
   ensureLeagueDraftSetupConverged: draftSetupMocks.ensureLeagueDraftSetupConverged,
 }));
 
-vi.mock('@/lib/prismaLeagueBridge', () => ({
-  syncPrismaLeagueMember: prismaBridgeMocks.syncPrismaLeagueMember,
-}));
-
-vi.mock('../../src/lib/prismaLeagueBridge', () => ({
-  syncPrismaLeagueMember: prismaBridgeMocks.syncPrismaLeagueMember,
-}));
-
-vi.mock('@/server/leagues/memberCommands', () => memberCommandMocks);
-
-vi.mock('../../src/server/leagues/memberCommands', () => memberCommandMocks);
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -191,14 +170,6 @@ describe('league capacity guards', () => {
         set: firestoreMocks.transactionSet,
       })
     );
-    prismaBridgeMocks.syncPrismaLeagueMember.mockResolvedValue({ synced: true });
-    // The join case is a Firestore-only legacy league with no Prisma row.
-    memberCommandMocks.findPrismaLeagueIdByInviteCode.mockResolvedValue(null);
-    memberCommandMocks.joinLeague.mockResolvedValue({
-      ok: false,
-      code: 'league-not-found',
-      message: 'League not found.',
-    });
   });
 
   it('rejects reducing Prisma league maxTeams below the active member count', async () => {
@@ -265,69 +236,6 @@ describe('league capacity guards', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('Max teams cannot be less than the current team count');
     expect(update).not.toHaveBeenCalled();
-  });
-
-  it('rejects joining a Firestore league that is already at capacity', async () => {
-    const leagueData = {
-      name: 'Full League',
-      code: 'FULL1234',
-      type: 'private',
-      status: 'preseason',
-      maxTeams: 12,
-      draftDate: '2026-06-01T10:00:00.000Z',
-    };
-    const leagueQueryGet = vi.fn().mockResolvedValue({
-      empty: false,
-      size: 1,
-      docs: [
-        {
-          id: 'league-1',
-          data: () => leagueData,
-        },
-      ],
-    });
-    const leagueDocRef = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        id: 'league-1',
-        data: () => leagueData,
-      }),
-    };
-    const leaguesCollection = {
-      doc: vi.fn(() => leagueDocRef),
-      where: vi.fn(() => ({
-        limit: vi.fn(() => ({ get: leagueQueryGet })),
-      })),
-    };
-
-    firestoreMocks.collection.mockImplementation((collectionName: string) => {
-      if (collectionName === 'leagues') return leaguesCollection;
-      throw new Error(`Unexpected collection access: ${collectionName}`);
-    });
-    membershipMocks.listActiveLeagueMembers.mockResolvedValue(
-      Array.from({ length: 12 }, (_, index) => ({
-        id: `member-${index + 1}`,
-        leagueId: 'league-1',
-        userId: `user-${index + 1}`,
-        role: index === 0 ? 'owner' : 'member',
-        teamName: `Team ${index + 1}`,
-        isActive: true,
-        source: 'embedded',
-      }))
-    );
-
-    const { POST } = await import('../../src/app/api/leagues/join/route');
-    const response = await POST(
-      jsonRequest('/api/leagues/join', { code: 'full-1234', teamName: 'Overflow Team' })
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(body.error).toBe('League is full');
-    expect(firestoreMocks.runTransaction).toHaveBeenCalled();
-    expect(firestoreMocks.transactionSet).not.toHaveBeenCalled();
-    expect(firestoreMocks.batch).not.toHaveBeenCalled();
-    expect(membershipMocks.queueLeagueMembershipSet).not.toHaveBeenCalled();
   });
 });
 

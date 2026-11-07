@@ -7,15 +7,11 @@ const mocks = vi.hoisted(() => ({
   batchCommit: vi.fn(),
   batchUpdate: vi.fn(),
   collection: vi.fn(),
-  leagueQueryGet: vi.fn(),
+  leagueDoc: vi.fn(),
   runTransaction: vi.fn(),
-  transactionGet: vi.fn(),
-  transactionSet: vi.fn(),
-  listActiveLeagueMembers: vi.fn(),
   queueLeagueMembershipSet: vi.fn(),
   findPrismaLeagueIdByInviteCode: vi.fn(),
   joinLeague: vi.fn(),
-  syncPrismaLeagueMember: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({ getUserIdFromRequest: mocks.getUserIdFromRequest }));
@@ -27,24 +23,12 @@ vi.mock('@/lib/firebaseAdmin', () => ({
   },
 }));
 vi.mock('@/lib/leagueMembership', () => ({
-  listActiveLeagueMembers: mocks.listActiveLeagueMembers,
   queueLeagueMembershipSet: mocks.queueLeagueMembershipSet,
 }));
 vi.mock('@/server/leagues/memberCommands', () => ({
   findPrismaLeagueIdByInviteCode: mocks.findPrismaLeagueIdByInviteCode,
   joinLeague: mocks.joinLeague,
 }));
-vi.mock('@/lib/prismaLeagueBridge', () => ({
-  syncPrismaLeagueMember: mocks.syncPrismaLeagueMember,
-}));
-
-const LEGACY_LEAGUE = {
-  name: 'Legacy League',
-  code: 'LEGACY12',
-  type: 'private',
-  status: 'preseason',
-  maxTeams: 2,
-};
 
 const JOINED = {
   ok: true as const,
@@ -73,7 +57,6 @@ describe('join league route membership authority', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
@@ -81,28 +64,12 @@ describe('join league route membership authority', () => {
     mocks.findPrismaLeagueIdByInviteCode.mockResolvedValue(null);
     mocks.joinLeague.mockResolvedValue(JOINED);
     mocks.queueLeagueMembershipSet.mockReturnValue('league-1_joining-user');
-    mocks.syncPrismaLeagueMember.mockResolvedValue({ synced: false, reason: 'no-prisma-league' });
     mocks.batchCommit.mockResolvedValue(undefined);
     mocks.batch.mockReturnValue({ commit: mocks.batchCommit, update: mocks.batchUpdate });
-    mocks.leagueQueryGet.mockResolvedValue({
-      empty: false,
-      size: 1,
-      docs: [{ id: 'league-1', data: () => LEGACY_LEAGUE }],
-    });
-    mocks.runTransaction.mockImplementation((callback) =>
-      callback({ get: mocks.transactionGet, set: mocks.transactionSet })
-    );
-    mocks.transactionGet.mockResolvedValue({
-      exists: true,
-      id: 'league-1',
-      data: () => LEGACY_LEAGUE,
-    });
+    mocks.leagueDoc.mockReturnValue({ id: 'league-1' });
     mocks.collection.mockImplementation((name: string) => {
       if (name !== 'leagues') throw new Error(`Unexpected collection access: ${name}`);
-      return {
-        doc: vi.fn(() => ({ id: 'league-1' })),
-        where: vi.fn(() => ({ limit: vi.fn(() => ({ get: mocks.leagueQueryGet })) })),
-      };
+      return { doc: mocks.leagueDoc };
     });
   });
 
@@ -138,10 +105,8 @@ describe('join league route membership authority', () => {
       expect.objectContaining({ memberCount: 3 })
     );
     expect(mocks.batchCommit).toHaveBeenCalled();
-    expect(mocks.leagueQueryGet).not.toHaveBeenCalled();
+    expect(mocks.leagueDoc).toHaveBeenCalledWith('league-1');
     expect(mocks.runTransaction).not.toHaveBeenCalled();
-    expect(mocks.listActiveLeagueMembers).not.toHaveBeenCalled();
-    expect(mocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
   });
 
   it('keeps a committed Prisma join successful when the Firestore projection fails', async () => {
@@ -170,43 +135,35 @@ describe('join league route membership authority', () => {
     expect(mocks.batchCommit).not.toHaveBeenCalled();
   });
 
-  it('joins through Prisma when the Firestore code belongs to a league Prisma owns', async () => {
-    const response = await join({ code: 'LEGACY12', teamName: 'New Team' });
+  it('reports an unknown code as not found without consulting Firestore', async () => {
+    const response = await join({ code: 'nope-1234', teamName: 'New Team' });
+    const body = await response.json();
 
-    expect(response.status).toBe(201);
-    expect(mocks.joinLeague).toHaveBeenCalledWith(
-      expect.objectContaining({ leagueId: 'league-1' })
-    );
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ success: false, error: 'League with code "NOPE1234" not found.' });
+    expect(mocks.findPrismaLeagueIdByInviteCode).toHaveBeenCalledWith('NOPE1234');
+    expect(mocks.joinLeague).not.toHaveBeenCalled();
+    expect(mocks.collection).not.toHaveBeenCalled();
+    expect(mocks.batch).not.toHaveBeenCalled();
     expect(mocks.runTransaction).not.toHaveBeenCalled();
   });
 
-  it('keeps the Firestore join for legacy leagues without a Prisma row', async () => {
+  it('reports a league that left Prisma mid-join as not found without consulting Firestore', async () => {
+    mocks.findPrismaLeagueIdByInviteCode.mockResolvedValue('league-1');
     mocks.joinLeague.mockResolvedValue({
       ok: false,
       code: 'league-not-found',
       message: 'League not found.',
     });
-    mocks.listActiveLeagueMembers.mockResolvedValue([
-      firestoreMember('owner-user', 'Owner Team'),
-      firestoreMember('second-user', 'Second Team'),
-    ]);
 
-    const response = await join({ code: 'LEGACY12', teamName: 'New Team' });
+    const response = await join({ code: 'PRISMA12', teamName: 'New Team' });
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe('League is full');
-    expect(mocks.runTransaction).toHaveBeenCalled();
-    expect(mocks.listActiveLeagueMembers).toHaveBeenCalledWith('league-1');
-  });
-
-  it('reports an unknown code', async () => {
-    mocks.leagueQueryGet.mockResolvedValue({ empty: true, size: 0, docs: [] });
-
-    const response = await join({ code: 'NOPE1234' });
-
-    expect(response.status).toBe(400);
-    expect(mocks.joinLeague).not.toHaveBeenCalled();
+    expect(body).toEqual({ success: false, error: 'League with code "PRISMA12" not found.' });
+    expect(mocks.collection).not.toHaveBeenCalled();
+    expect(mocks.batch).not.toHaveBeenCalled();
+    expect(mocks.runTransaction).not.toHaveBeenCalled();
   });
 });
 
@@ -219,16 +176,4 @@ async function join(body: unknown) {
       body: JSON.stringify(body),
     }) as NextRequest
   );
-}
-
-function firestoreMember(userId: string, teamName: string) {
-  return {
-    id: `league-1_${userId}`,
-    leagueId: 'league-1',
-    userId,
-    role: 'member',
-    teamName,
-    isActive: true,
-    source: 'embedded',
-  };
 }
