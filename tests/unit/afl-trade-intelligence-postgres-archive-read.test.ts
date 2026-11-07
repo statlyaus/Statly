@@ -218,6 +218,20 @@ describe('PostgreSQL AFL draft and trade archive reads', () => {
     expect(archiveRepository.listAllRecords).not.toHaveBeenCalled();
   });
 
+  it('reports why no governed archive is active instead of looking like an empty import', async () => {
+    const repository = createPostgresDraftTradeReadRepository({
+      archiveSelector: activeSelector(false),
+      archiveRepository: archiveReader(),
+    });
+    await expect(repository.releaseAvailability()).resolves.toBe('source_blocked');
+
+    const active = createPostgresDraftTradeReadRepository({
+      archiveSelector: activeSelector(),
+      archiveRepository: archiveReader(),
+    });
+    await expect(active.releaseAvailability()).resolves.toBe('active');
+  });
+
   it('maps sealed facts into trade/detail/club views and resolves the selected player', async () => {
     const archiveRepository = archiveReader();
     const repository = createPostgresDraftTradeReadRepository({
