@@ -88,6 +88,8 @@ vi.mock('@/server/health/relationalDatabaseHealth', () => ({
 
 describe('Health API', () => {
   let mockRequest: NextRequest;
+  // The route shares one round of checks for 10 seconds, so each test starts a minute later.
+  let clock = Date.UTC(2026, 0, 1);
 
   function useOptionalLocalRedisEnv() {
     vi.stubEnv('NODE_ENV', 'development');
@@ -101,9 +103,13 @@ describe('Health API', () => {
     mockRequest = new NextRequest('http://localhost:3000/api/health');
     vi.clearAllMocks();
     useOptionalLocalRedisEnv();
+    clock += 60_000;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(clock);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
@@ -121,22 +127,17 @@ describe('Health API', () => {
       expect(data.data.services).toHaveProperty('memory');
       expect(data.data.services).toHaveProperty('redis');
       expect(data.data.services).toHaveProperty('metrics');
-      expect(data.data.metrics).toBeDefined();
     });
 
-    it('should include comprehensive metrics', async () => {
+    it('should not expose application metrics, uptime or per-service timings', async () => {
+      const { metricsCollector } = await import('@/lib/metrics');
       const response = await GET(mockRequest);
       const data = await response.json();
 
-      expect(data.data.metrics).toEqual(
-        expect.objectContaining({
-          totalRequests: expect.any(Number),
-          errorRate: expect.any(Number),
-          averageResponseTime: expect.any(Number),
-          memoryUsage: expect.any(Object),
-          redis: expect.any(Object),
-        })
-      );
+      expect(data.data.metrics).toBeUndefined();
+      expect(data.data.uptime).toBeUndefined();
+      expect(data.data.services.database).toBe('healthy');
+      expect(metricsCollector.collectAllMetrics).not.toHaveBeenCalled();
     });
 
     it('should include proper trace headers', async () => {
@@ -152,7 +153,7 @@ describe('Health API', () => {
       // Should return healthy status with our mocked services
       expect(response.status).toBe(200);
       expect(data.data.status).toBe('healthy');
-      expect(data.data.services.memory.status).toBe('healthy');
+      expect(data.data.services.memory).toBe('healthy');
     });
 
     it('should stay operational but degraded when optional local Redis is unavailable', async () => {
@@ -164,8 +165,8 @@ describe('Health API', () => {
 
       expect(response.status).toBe(200);
       expect(data.data.status).toBe('degraded');
-      expect(data.data.services.redis.status).toBe('degraded');
-      expect(data.data.services.redis.error).toContain('Optional local Redis unavailable');
+      expect(data.data.services.redis).toBe('degraded');
+      expect(JSON.stringify(data)).not.toContain('Optional local Redis unavailable');
     });
 
     it('should treat development heap pressure as degraded instead of unhealthy', async () => {
@@ -182,7 +183,7 @@ describe('Health API', () => {
 
       expect(response.status).toBe(200);
       expect(data.data.status).toBe('degraded');
-      expect(data.data.services.memory.status).toBe('degraded');
+      expect(data.data.services.memory).toBe('degraded');
     });
   });
 
@@ -245,7 +246,7 @@ describe('Health API', () => {
 
       expect(response.status).toBe(503);
       expect(data.data.status).toBe('unhealthy');
-      expect(data.data.services.database.status).toBe('unhealthy');
+      expect(data.data.services.database).toBe('unhealthy');
     });
 
     it('should handle configured Redis errors gracefully', async () => {
@@ -256,7 +257,7 @@ describe('Health API', () => {
       const response = await GET(mockRequest);
       const data = await response.json();
 
-      expect(data.data.services.redis.status).toBe('unhealthy');
+      expect(data.data.services.redis).toBe('unhealthy');
     });
   });
 });

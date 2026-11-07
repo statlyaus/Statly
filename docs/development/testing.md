@@ -530,10 +530,6 @@ shared or production PostgreSQL database.
 - Focused architecture tests assert durable source-of-truth and safety rules that are cheaper and more
   reliable than prose review.
 
-`npm run test:race` is reserved for a future focused concurrency suite. It currently fails when
-`tests/race` has no test files, so it must not be advertised as coverage or added to aggregate CI until
-real race specifications exist.
-
 ## Timeout budgets
 
 The unit configuration keeps a 30 second default so ordinary tests stay bounded. Tests that build the

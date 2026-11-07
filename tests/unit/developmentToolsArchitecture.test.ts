@@ -4,20 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 const guardedRoutes = [
   {
-    path: 'src/app/api/add-test-data/route.ts',
-    firstSensitiveOperation: 'const db = adminDb',
-  },
-  {
     path: 'src/app/api/create-test-draft/route.ts',
     firstSensitiveOperation: 'request.json()',
   },
   {
     path: 'src/app/api/test-lobby/route.ts',
     firstSensitiveOperation: 'loadLobbySchemaDiagnostic()',
-  },
-  {
-    path: 'src/app/api/dev/test-user/route.ts',
-    firstSensitiveOperation: "await import('@/lib/firebaseAdmin')",
   },
   {
     path: 'src/app/api/drafts/[id]/debug/route.ts',
