@@ -12,16 +12,32 @@ describe('league draft route architecture', () => {
     expect(source).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(source).toContain('getLeagueMembershipAccess');
     expect(source).not.toContain('verifyLeagueMembership(');
-    expect(source).toContain('authorizeLeagueDraftRead(req, leagueId)');
-    expect(source).toContain('const userId = await getAuthenticatedUserId(request);');
+    expect(source).toContain('const userId = await getAuthenticatedUserId(req);');
     expect(source).toContain('const access = await getLeagueMembershipAccess(leagueId, userId);');
     expect(source).toContain('!access.isMember');
     expect(source).toContain('canManage: access.canManage');
     expect(source).toContain('memberCount');
     expect(source).toContain('maxTeams');
-    expect(source.indexOf('authorizeLeagueDraftRead(req, leagueId)')).toBeLessThan(
+    expect(source.indexOf('getAuthenticatedUserId(req)')).toBeLessThan(
       source.indexOf('prisma.league.findUnique')
     );
+    expect(source.indexOf('prisma.league.findUnique')).toBeLessThan(
+      source.indexOf('getLeagueMembershipAccess(leagueId, userId)')
+    );
+    expect(source.indexOf('!access.isMember')).toBeLessThan(
+      source.indexOf('getLeagueDraftOperationalReadiness(prisma')
+    );
+  });
+
+  it('decides the league from Prisma only and exposes no legacy POST', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/app/api/leagues/[id]/draft/route.ts'),
+      'utf8'
+    );
+
+    expect(source).not.toContain('firebaseAdmin');
+    expect(source).not.toContain('adminDb');
+    expect(source).not.toMatch(/export async function POST/);
   });
 
   it('keeps draft creation league-scoped without hidden link reconciliation', () => {
