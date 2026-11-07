@@ -265,7 +265,6 @@ describe('buildRotation alerts', () => {
     expect(alertOf(rows, 'z')).toEqual({
       level: 'RED',
       text: 'DNP-CD 31 Oct',
-      marker: '▼ DNP-CD',
       roleUp: null,
     });
     expect(alertOf(rows, 'k')).toBeNull();
@@ -283,13 +282,11 @@ describe('buildRotation alerts', () => {
     expect(alertOf(rows, 'x')).toEqual({
       level: 'RED',
       text: 'Benched 29 Oct',
-      marker: '▼ Benched',
       roleUp: null,
     });
     expect(alertOf(rows, 'y')).toEqual({
       level: 'GREEN',
       text: 'New starter 29 Oct',
-      marker: '▲ New starter',
       roleUp: 'EARNED',
     });
   });
@@ -310,7 +307,6 @@ describe('buildRotation alerts', () => {
     expect(alertOf(lal, 'v', info)).toEqual({
       level: 'GREEN',
       text: 'Starting for Walker (back 20 Nov)',
-      marker: '▲ Starter (cover)',
       roleUp: 'INJURY_COVER',
     });
     expect(alertOf(lal, 'w', info)).toBeNull();
@@ -357,7 +353,6 @@ describe('buildRotation alerts', () => {
     expect(alertOf(rows, 'm')).toEqual({
       level: 'GREEN',
       text: 'Min 27 last 3 (avg 18)',
-      marker: '▲ Min 27 (avg 18)',
       roleUp: 'MINUTES_UP',
     });
   });
@@ -373,9 +368,27 @@ describe('buildRotation alerts', () => {
     expect(alertOf(rows, 'a')).toEqual({
       level: 'AMBER',
       text: 'Bench risk ↑',
-      marker: '⚠ Bench risk',
       roleUp: null,
     });
+  });
+
+  it('gives no bench risk to a starter who was out or not dressed for the last game', () => {
+    const shooting = { fieldGoalsMade: 3, fieldGoalsAttempted: 10, freeThrowsAttempted: 0 };
+    const rows = (lastEntry: string | null) =>
+      season(
+        'CHA',
+        7,
+        (index) => {
+          if (index < 6) return FIVE;
+          const { a: _a, ...others } = FIVE;
+          return lastEntry ? { ...others, f: 'S30', a: lastEntry } : { ...others, f: 'S30' };
+        },
+        () => ({ a: shooting })
+      );
+
+    // Deliberately unlike the sheet: an absent starter is not at risk of losing his spot.
+    expect(alertOf(rows(null), 'a')).toBeNull();
+    expect(alertOf(rows('INJ'), 'a')).toBeNull();
   });
 
   it('keeps the two most important items: DNP risk, then minutes down', () => {
@@ -390,7 +403,6 @@ describe('buildRotation alerts', () => {
     expect(alertOf(rows, 'n')).toEqual({
       level: 'AMBER',
       text: 'DNP risk ↑ · Min 20 last 3 (avg 28)',
-      marker: '⚠ DNP risk',
       roleUp: null,
     });
   });

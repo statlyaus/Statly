@@ -73,8 +73,6 @@ export interface RotationAlert {
   level: AlertLevel;
   /** Up to two items, most important first, e.g. "DNP-CD 2 Nov · DNP risk ↑". */
   text: string;
-  /** The first item's symbol and short label, e.g. "▼ DNP-CD" or "▲ New starter". */
-  marker: string;
   /** A bigger role and why, for the free-agent radar. */
   roleUp: 'EARNED' | 'INJURY_COVER' | 'MINUTES_UP' | null;
 }
@@ -113,6 +111,11 @@ export interface RotationPlayerInfo {
   position: string | null;
   /** Expected return from the injury report. */
   returnOn: EasternDate | null;
+}
+
+/** A bigger role worth a pickup: new starter, injury cover or minutes up, and no red alert. */
+export function isRoleUp(alert: RotationAlert | null): boolean {
+  return !!alert?.roleUp && alert.level !== 'RED';
 }
 
 export interface RotationResult {
@@ -276,13 +279,13 @@ function buildAlert(
   info: ReadonlyMap<string, RotationPlayerInfo>
 ): RotationAlert | null {
   const LEVELS = [null, 'GREEN', 'AMBER', 'RED'] as const;
-  const items: { text: string; level: 1 | 2 | 3; marker: string }[] = [];
-  const add = (text: string, level: 1 | 2 | 3, marker: string) =>
-    items.push({ text, level, marker });
+  const items: { text: string; level: 1 | 2 | 3 }[] = [];
+  const add = (text: string, level: 1 | 2 | 3) => items.push({ text, level });
   let roleUp: RotationAlert['roleUp'] = null;
   const n = games.length;
   const rowIn = (game: TeamGame) => game.box.get(playerId);
-  const startedLast = !!rowIn(games[n - 1])?.starter;
+  const lastRow = rowIn(games[n - 1]);
+  const startedLast = !!lastRow?.starter;
 
   // 1. A coach DNP in the last two team games, for a rotation player (12+ minutes over the last 10).
   const played10 = games.slice(-10).flatMap((game) => {
@@ -294,7 +297,7 @@ function buildAlert(
     .slice(-2)
     .filter((game) => isCoachDnp(rowIn(game)))
     .at(-1);
-  if (coachDnp && minutes10 >= 12) add(`DNP-CD ${shortDate(coachDnp.gameDate)}`, 3, '▼ DNP-CD');
+  if (coachDnp && minutes10 >= 12) add(`DNP-CD ${shortDate(coachDnp.gameDate)}`, 3);
 
   // 2. Benched: an established starter (4 of the 5 games before) sent to the bench in the last 3.
   const recent = changes.filter((change) => change.index >= n - 3);
@@ -310,7 +313,7 @@ function buildAlert(
     games.slice(Math.max(0, out.index - 5), out.index).filter((game) => rowIn(game)?.starter)
       .length >= 4;
   if (out && established && !startedLast && !coachDnp) {
-    add(`Benched ${shortDate(out.gameDate)}`, 3, '▼ Benched');
+    add(`Benched ${shortDate(out.gameDate)}`, 3);
   }
 
   // 3. Into the five in the last 3 and still there; not a starter back from an absence.
@@ -348,12 +351,11 @@ function buildAlert(
         const back = info.get(coverFor)?.returnOn;
         add(
           `Starting for ${surname(info.get(coverFor)?.name ?? coverFor)}${back ? ` (back ${shortDate(back)})` : ''}`,
-          1,
-          '▲ Starter (cover)'
+          1
         );
         roleUp = 'INJURY_COVER';
       } else {
-        add(`New starter ${shortDate(into.gameDate)}`, 1, '▲ New starter');
+        add(`New starter ${shortDate(into.gameDate)}`, 1);
         roleUp = 'EARNED';
       }
     }
@@ -374,8 +376,11 @@ function buildAlert(
     const plusMinusPer48 = (total(last10, (row) => row.plusMinus) / minutesTotal) * 48;
     const attempts10 = total(last10, (row) => row.fieldGoalsAttempted);
     const fieldGoal10 = attempts10 ? total(last10, (row) => row.fieldGoalsMade) / attempts10 : 1;
-    if (startsLast5 >= 4 && freeThrowsPer36 <= 2.45 && effective5 <= 0.509 && !out) {
-      add('Bench risk ↑', 2, '⚠ Bench risk');
+    // Unlike the sheet, a starter who was out or not dressed for the last game is not flagged:
+    // an absent player is not about to lose his spot for his shooting.
+    const absent = !lastRow || lastGameStatus(lastRow) === 'OUT';
+    if (startsLast5 >= 4 && freeThrowsPer36 <= 2.45 && effective5 <= 0.509 && !out && !absent) {
+      add('Bench risk ↑', 2);
     }
     if (
       startsLast5 <= 2 &&
@@ -385,7 +390,7 @@ function buildAlert(
       fieldGoal10 <= 0.425 &&
       !coachDnp
     ) {
-      add('DNP risk ↑', 2, '⚠ DNP risk');
+      add('DNP risk ↑', 2);
     }
   }
 
@@ -401,13 +406,12 @@ function buildAlert(
       .map(minutes)
       .sort((a, b) => a - b)[1];
     const swing = median - average;
-    const shortText = `Min ${Math.round(median)} (avg ${Math.round(average)})`;
     const text = `Min ${Math.round(median)} last 3 (avg ${Math.round(average)})`;
     if (swing >= 5 && average < 30 && !into) {
-      add(text, 1, `▲ ${shortText}`);
+      add(text, 1);
       roleUp ??= 'MINUTES_UP';
     } else if (swing <= (played.length <= 12 ? -10 : -7) && average >= 15 && !out && !coachDnp) {
-      add(text, 2, `▼ ${shortText}`);
+      add(text, 2);
     }
   }
 
@@ -418,7 +422,6 @@ function buildAlert(
       .slice(0, 2)
       .map((item) => item.text)
       .join(' · '),
-    marker: items[0].marker,
     roleUp,
   };
 }
