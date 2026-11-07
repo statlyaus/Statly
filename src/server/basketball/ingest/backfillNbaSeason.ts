@@ -16,8 +16,9 @@ import { type NbaScheduleSummary, syncNbaSchedule } from './syncNbaSchedule';
 /**
  * A whole season through the normal jobs, for `Scripts/basketball/backfill-nba-season.ts`: PLAYERS,
  * SCHEDULE for `season`, then BOX_SCORES in batches (no scoreboard) until every FINAL game has a box
- * score, then a check of the stored sums against the provider's own season totals. Resumable:
- * ingested games are never fetched again. Recorded as one BACKFILL run around the jobs' own runs.
+ * score, PLAYERS again (so only rostered players stay active), then a check of the stored sums
+ * against the provider's own season totals. Resumable: ingested games are never fetched again.
+ * Recorded as one BACKFILL run around the jobs' own runs.
  *
  * A totals mismatch fails the run. It is also what would catch a game that must not be stored, such
  * as the NBA Cup final, whose stats are not part of season totals.
@@ -156,6 +157,10 @@ export async function backfillNbaSeason(
       log(`Box scores: ${ingested} ingested, ${skipped.length} skipped, ${pending} pending`);
       if (summary.ingested === 0 && summary.skipped.length === 0) break;
     }
+    // Box scores create every player they list as active on that game's team. Rosters again leave
+    // only currently rostered players active, which matters after a past season.
+    const rosters = (await syncNbaPlayers(jobOptions)).summary;
+    log(`Players after box scores: ${JSON.stringify(rosters)}`);
 
     let verification: NbaBackfillSummary['verification'] = null;
     if (pending === 0) {

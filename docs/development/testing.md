@@ -334,7 +334,7 @@ npm run nba:sync -- --job schedule
 npm run nba:sync -- --job injuries
 npm run nba:sync -- --job boxscores --limit 20
 npm run nba:backfill -- --season 2026            # dry run: what is stored
-npm run nba:backfill -- --season 2026 --apply    # 2025-26, about 1,260 requests at 1 per second
+npm run nba:backfill -- --season 2026 --apply    # 2025-26, about 1,300 requests at 1 per second
 ```
 
 The backfill is resumable and exits non-zero if ESPN refuses it or any season total differs. Both
