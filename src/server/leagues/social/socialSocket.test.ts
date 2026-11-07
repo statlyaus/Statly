@@ -4,6 +4,7 @@ import type { Server as SocketIOServer, Socket as SocketIOSocket } from 'socket.
 import type { SocialRealtimeEnvelope } from '@/types/social';
 
 const mocks = vi.hoisted(() => ({
+  ensureActiveLeagueSeason: vi.fn(),
   getLeagueMembershipAccess: vi.fn(),
   loggerError: vi.fn(),
   pubSubPublish: vi.fn(),
@@ -12,6 +13,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/server/leagues/membership', () => ({
   getLeagueMembershipAccess: mocks.getLeagueMembershipAccess,
+}));
+
+vi.mock('./socialAccess', () => ({
+  ensureActiveLeagueSeason: mocks.ensureActiveLeagueSeason,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -27,27 +32,35 @@ vi.mock('./socialPubSub', () => ({
   },
 }));
 
+import { leagueSeasonSocialRoom } from '@/server/realtime/roomNames';
+
 import {
   attachLeagueSocialSocketHandlers,
   broadcastLeagueSocialEvent,
-  getLeagueSocialRoom,
   publishLeagueSocialRealtimeEvent,
   type SocialSocketAcknowledgement,
 } from './socialSocket';
 
+const SEASON_2026_ROOM = 'social:league:league-1:season:season-2026';
+
 type EventHandler = (...args: any[]) => unknown;
 
-function createSocket(userId: string | null = 'user-1') {
+function createSocket(userId: string | null = 'user-1', rooms: string[] = []) {
   const handlers = new Map<string, EventHandler>();
   const socket = {
     id: 'socket-1',
     data: userId ? { userId } : {},
+    rooms: new Set<string>(rooms),
     on: vi.fn((event: string, handler: EventHandler) => {
       handlers.set(event, handler);
       return socket;
     }),
-    join: vi.fn(async () => undefined),
-    leave: vi.fn(async () => undefined),
+    join: vi.fn(async (room: string) => {
+      socket.rooms.add(room);
+    }),
+    leave: vi.fn(async (room: string) => {
+      socket.rooms.delete(room);
+    }),
     emit: vi.fn(),
   };
 
@@ -63,6 +76,17 @@ function createSocket(userId: string | null = 'user-1') {
 function localIo(sockets: SocketIOSocket[]) {
   return {
     local: { in: () => ({ fetchSockets: async () => sockets }) },
+  } as unknown as SocketIOServer;
+}
+
+/** Like the Socket.IO adapter: a room holds exactly the sockets that joined it. */
+function roomAwareIo(sockets: SocketIOSocket[]) {
+  return {
+    local: {
+      in: (room: string) => ({
+        fetchSockets: async () => sockets.filter((socket) => socket.rooms.has(room)),
+      }),
+    },
   } as unknown as SocketIOServer;
 }
 
@@ -116,10 +140,11 @@ describe('league social socket sidecar', () => {
       isMember: true,
       canManage: false,
     });
+    mocks.ensureActiveLeagueSeason.mockResolvedValue('season-2026');
     mocks.pubSubPublish.mockResolvedValue(undefined);
   });
 
-  it('rechecks current membership on every join and joins only the league social room', async () => {
+  it('rechecks current membership on every join and joins only the active league season room', async () => {
     const socketState = createSocket();
     attachSocket(socketState.socket);
 
@@ -133,12 +158,14 @@ describe('league social socket sidecar', () => {
     expect(mocks.getLeagueMembershipAccess).toHaveBeenCalledTimes(2);
     expect(mocks.getLeagueMembershipAccess).toHaveBeenNthCalledWith(1, 'league-1', 'user-1');
     expect(mocks.getLeagueMembershipAccess).toHaveBeenNthCalledWith(2, 'league-1', 'user-1');
+    expect(mocks.ensureActiveLeagueSeason).toHaveBeenCalledWith('league-1');
     expect(socketState.join).toHaveBeenCalledTimes(2);
-    expect(socketState.join).toHaveBeenCalledWith('social:league:league-1');
+    expect(socketState.join).toHaveBeenCalledWith(SEASON_2026_ROOM);
     expect(first).toEqual({
       ok: true,
       leagueId: 'league-1',
-      room: 'social:league:league-1',
+      seasonId: 'season-2026',
+      room: SEASON_2026_ROOM,
     });
     expect(second).toEqual(first);
   });
@@ -186,20 +213,88 @@ describe('league social socket sidecar', () => {
     expect(authenticated.join).not.toHaveBeenCalled();
   });
 
-  it('leaves the scoped room and exposes no socket handlers for social writes', async () => {
+  it('accepts a client-named season only when it is the season the member belongs to', async () => {
     const socketState = createSocket();
+    attachSocket(socketState.socket);
+
+    await expect(
+      invokeWithAcknowledgement(socketState.handlers.get('social:join'), {
+        leagueId: 'league-1',
+        seasonId: 'season-2025',
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: { code: 'FORBIDDEN', message: 'Membership of that league season is required' },
+    });
+    expect(socketState.join).not.toHaveBeenCalled();
+
+    await expect(
+      invokeWithAcknowledgement(socketState.handlers.get('social:join'), {
+        leagueId: 'league-1',
+        seasonId: 'bad:season',
+      })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    expect(socketState.join).not.toHaveBeenCalled();
+
+    await expect(
+      invokeWithAcknowledgement(socketState.handlers.get('social:join'), {
+        leagueId: 'league-1',
+        seasonId: 'season-2026',
+      })
+    ).resolves.toMatchObject({ ok: true, room: SEASON_2026_ROOM });
+  });
+
+  it('refuses a join for a league with no Prisma season instead of failing internally', async () => {
+    const { SocialError } = await import('./socialErrors');
+    mocks.ensureActiveLeagueSeason.mockRejectedValueOnce(
+      new SocialError('NOT_FOUND', 'League not found')
+    );
+    const socketState = createSocket();
+    attachSocket(socketState.socket);
+
+    await expect(
+      invokeWithAcknowledgement(socketState.handlers.get('social:join'), { leagueId: 'league-1' })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+    expect(socketState.join).not.toHaveBeenCalled();
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  it('moves a rejoining socket out of an earlier season room of the same league', async () => {
+    const otherLeagueRoom = leagueSeasonSocialRoom('league-2', 'season-x');
+    const earlierSeasonRoom = leagueSeasonSocialRoom('league-1', 'season-2025');
+    const socketState = createSocket('user-1', [earlierSeasonRoom, otherLeagueRoom]);
+    attachSocket(socketState.socket);
+
+    await invokeWithAcknowledgement(socketState.handlers.get('social:join'), {
+      leagueId: 'league-1',
+    });
+
+    expect([...socketState.socket.rooms].sort()).toEqual(
+      [otherLeagueRoom, SEASON_2026_ROOM].sort()
+    );
+  });
+
+  it('leaves every season room of the league and exposes no socket handlers for social writes', async () => {
+    const otherLeagueRoom = leagueSeasonSocialRoom('league-2', 'season-x');
+    const earlierSeasonRoom = leagueSeasonSocialRoom('league-1', 'season-2025');
+    const socketState = createSocket('user-1', [
+      SEASON_2026_ROOM,
+      earlierSeasonRoom,
+      otherLeagueRoom,
+      'draft:draft-1',
+    ]);
     attachSocket(socketState.socket);
 
     const result = await invokeWithAcknowledgement(socketState.handlers.get('social:leave'), {
       leagueId: 'league-1',
     });
 
-    expect(socketState.leave).toHaveBeenCalledWith('social:league:league-1');
     expect(result).toEqual({
       ok: true,
       leagueId: 'league-1',
-      room: 'social:league:league-1',
+      rooms: [SEASON_2026_ROOM, earlierSeasonRoom],
     });
+    expect([...socketState.socket.rooms].sort()).toEqual(['draft:draft-1', otherLeagueRoom].sort());
     expect(Array.from(socketState.handlers.keys()).sort()).toEqual(['social:join', 'social:leave']);
   });
 
@@ -227,7 +322,7 @@ describe('league social socket sidecar', () => {
     expect(socketState.join).toHaveBeenCalledTimes(10);
   });
 
-  it('broadcasts typed envelopes only to current members in their league social room', async () => {
+  it('broadcasts typed envelopes only to current members in their league season room', async () => {
     const socketState = createSocket();
     const ioState = attachSocket(socketState.socket);
     const envelope: SocialRealtimeEnvelope = {
@@ -243,8 +338,7 @@ describe('league social socket sidecar', () => {
 
     await broadcastLeagueSocialEvent(ioState.io, envelope);
 
-    expect(getLeagueSocialRoom('league-1')).toBe('social:league:league-1');
-    expect(ioState.inRoom).toHaveBeenCalledWith('social:league:league-1');
+    expect(ioState.inRoom).toHaveBeenCalledWith(SEASON_2026_ROOM);
     expect(ioState.globalInRoom).not.toHaveBeenCalled();
     expect(socketState.emit).toHaveBeenCalledWith('social:message', envelope);
   });
@@ -271,8 +365,28 @@ describe('league social socket sidecar', () => {
 
     await broadcastLeagueSocialEvent(ioState.io, envelope);
 
-    expect(socketState.leave).toHaveBeenCalledWith('social:league:league-1');
+    expect(socketState.leave).toHaveBeenCalledWith(SEASON_2026_ROOM);
     expect(socketState.emit).not.toHaveBeenCalled();
+  });
+
+  it('never delivers a season A event to a socket in the season B room of the same league', async () => {
+    const seasonA = createSocket('user-1', [leagueSeasonSocialRoom('league-1', 'season-a')]);
+    const seasonB = createSocket('user-2', [leagueSeasonSocialRoom('league-1', 'season-b')]);
+    const envelope: SocialRealtimeEnvelope = {
+      id: 'event-a',
+      sequence: 1,
+      leagueId: 'league-1',
+      seasonId: 'season-a',
+      channel: 'activity',
+      event: 'trade:update',
+      payload: { threadId: 'thread-1' },
+      occurredAt: '2026-07-19T10:00:00.000Z',
+    };
+
+    await broadcastLeagueSocialEvent(roomAwareIo([seasonA.socket, seasonB.socket]), envelope);
+
+    expect(seasonA.emit).toHaveBeenCalledWith('trade:update', envelope);
+    expect(seasonB.emit).not.toHaveBeenCalled();
   });
 
   it('keeps delivering to other sockets when one membership lookup fails', async () => {

@@ -9,6 +9,7 @@ import {
   draftRealtimeReplayService,
 } from '@/server/draft/services/DraftRealtimeReplayService';
 import { draftRoomStore } from '@/server/roomStore';
+import { draftRoom } from '@/server/realtime/roomNames';
 import {
   DraftRealtimeJoinAckSchema,
   DraftRealtimeSnapshotV2Schema,
@@ -199,7 +200,7 @@ export class DraftSocketV2Session {
       this.assertCurrent(epoch);
       if (!reservation.accepted) throw new RoomFullError();
 
-      await this.awaitCurrent(epoch, Promise.resolve(this.socket.join(`draft:${request.draftId}`)));
+      await this.awaitCurrent(epoch, Promise.resolve(this.socket.join(draftRoom(request.draftId))));
 
       const baseline = await this.buildCompleteBaseline(epoch, request.draftId);
       const participant = baseline.snapshot.state.participants.find(
@@ -367,7 +368,7 @@ export class DraftSocketV2Session {
 
   private async cleanupSubscription(draftId: string): Promise<void> {
     const results = await Promise.allSettled([
-      Promise.resolve(this.socket.leave(`draft:${draftId}`)),
+      Promise.resolve(this.socket.leave(draftRoom(draftId))),
       this.rooms.removeParticipant(draftId, this.socket.id),
     ]);
     const failure = results.find((result) => result.status === 'rejected');
@@ -415,7 +416,7 @@ export class DraftSocketV2Session {
     ];
     await Promise.allSettled(
       uniqueDraftIds.flatMap((draftId) => [
-        Promise.resolve(this.socket.leave(`draft:${draftId}`)),
+        Promise.resolve(this.socket.leave(draftRoom(draftId))),
         this.rooms.removeParticipant(draftId, this.socket.id),
       ])
     );

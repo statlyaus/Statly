@@ -47,6 +47,7 @@ import {
   attachLeagueSocialSocketHandlers,
   startLeagueSocialRealtime,
 } from '@/server/leagues/social/socialSocket';
+import { draftRoom, legacyDraftRoom } from '@/server/realtime/roomNames';
 import { draftRoomStore } from '@/server/roomStore';
 import { DraftSocketV2Session } from '@/server/realtime/DraftSocketV2Session';
 import {
@@ -440,8 +441,8 @@ io.on('connection', (socket) => {
 
   const removeDraftSubscription = async (draftId: string): Promise<number> => {
     const results = await Promise.allSettled([
-      socket.leave(draftId),
-      socket.leave(`draft:${draftId}`),
+      socket.leave(legacyDraftRoom(draftId)),
+      socket.leave(draftRoom(draftId)),
       draftRoomStore.removeParticipant(draftId, socket.id),
     ]);
 
@@ -628,7 +629,7 @@ io.on('connection', (socket) => {
         typeof socket.data.draftId === 'string' ? socket.data.draftId : undefined;
       if (previousDraftId && previousDraftId !== draftId) {
         const previousParticipantCount = await removeDraftSubscription(previousDraftId);
-        socket.to(previousDraftId).emit('participant:leave', {
+        socket.to(legacyDraftRoom(previousDraftId)).emit('participant:leave', {
           socketId: socket.id,
           timestamp: new Date().toISOString(),
           participantCount: previousParticipantCount,
@@ -636,8 +637,8 @@ io.on('connection', (socket) => {
       }
 
       // Join the room
-      await socket.join(draftId);
-      await socket.join(`draft:${draftId}`);
+      await socket.join(legacyDraftRoom(draftId));
+      await socket.join(draftRoom(draftId));
 
       // Read the canonical baseline after subscription. A transition racing this read is either in
       // the snapshot or delivered live; client revision guards prevent an older snapshot rollback.
@@ -693,7 +694,7 @@ io.on('connection', (socket) => {
       socket.emit('draft:backfill', deltas);
 
       // Notify other participants that someone joined
-      socket.to(draftId).emit('participant:join', {
+      socket.to(legacyDraftRoom(draftId)).emit('participant:join', {
         socketId: socket.id,
         userId: authenticatedUserId,
         timestamp: new Date().toISOString(),
@@ -841,7 +842,7 @@ io.on('connection', (socket) => {
       const participantCount = await removeDraftSubscription(draftId);
 
       if (participantCount > 0) {
-        socket.to(draftId).emit('participant:leave', {
+        socket.to(legacyDraftRoom(draftId)).emit('participant:leave', {
           socketId: socket.id,
           timestamp: new Date().toISOString(),
           participantCount,
@@ -893,7 +894,7 @@ io.on('connection', (socket) => {
         const participantCount = await removeDraftSubscription(draftId);
 
         if (participantCount > 0) {
-          socket.to(draftId).emit('participant:disconnect', {
+          socket.to(legacyDraftRoom(draftId)).emit('participant:disconnect', {
             socketId: socket.id,
             reason,
             timestamp: new Date().toISOString(),

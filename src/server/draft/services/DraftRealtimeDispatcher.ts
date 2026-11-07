@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { draftRoom, legacyDraftRoom } from '@/server/realtime/roomNames';
 import {
   draftPubSub,
   type DraftRealtimeEnvelope,
@@ -131,12 +132,12 @@ export class DraftRealtimeDispatcher {
       return;
     }
 
-    this.io.local.to(`draft:${envelope.draftId}`).emit('draft:event:v2', envelope);
+    this.io.local.to(draftRoom(envelope.draftId)).emit('draft:event:v2', envelope);
   }
 
   private emitToDraftRooms(draftId: string, event: string, payload: unknown): void {
     // One broadcast to both rooms: Socket.IO delivers once per socket, so a socket in both gets each event once.
-    this.io?.local.to([draftId, `draft:${draftId}`]).emit(event, payload);
+    this.io?.local.to([legacyDraftRoom(draftId), draftRoom(draftId)]).emit(event, payload);
   }
 
   private emitCompatDelta(draftId: string, delta: DraftRealtimeDelta): void {

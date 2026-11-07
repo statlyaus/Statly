@@ -14,7 +14,7 @@ League trade threads and social channels use the same outbox pattern. `tradeServ
 `LeagueTradeOutboxEvent` row in the transaction that records each trade event, so the row is the
 persisted fact. The Socket.IO process drains that outbox on the same tick as the social outbox
 (`server/leagues/trades/tradePublisher.ts`) and emits one `trade:update` event per row to the league
-members' room, the room `social:join` admits after a membership check. The Trade Centre renders its
+season's social room, the room `social:join` admits after a membership check. The Trade Centre renders its
 snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
 reconnect, it refreshes that snapshot rather than patching browser state.
 
@@ -31,7 +31,8 @@ snapshot, so a change that lands mid-read costs one extra refresh rather than be
 `socialCommands` writes a `SocialOutboxEvent` row in the transaction of each social write (chat
 message, post, reply, moderation action). The Socket.IO process drains that outbox
 (`server/leagues/social/socialPublisher.ts`) and emits `social:*` envelopes to
-`social:league:<leagueId>`, the room `social:join` admits after a membership check. The browser hook
+`social:league:<leagueId>:season:<seasonId>`, the room `social:join` admits after a membership check
+(see [Room names](#room-names)). The browser hook
 (`useLeagueSocial`) loads the REST snapshot first, applies sequenced envelopes, and resyncs after each
 reconnect once the room is rejoined.
 
@@ -46,6 +47,35 @@ the public `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`, and the GIF picker is hidden while t
 GIPHY's API terms forbid caching or proxying media URLs, so the server stores none. A beta key is
 limited to 100 calls per hour shared by every member, and each rendered GIF costs one call;
 production needs a GIPHY-approved key.
+
+### Room names
+
+`server/realtime/roomNames.ts` is the only place room names are built, and every name carries league
+and season scope. Ids containing `:` are refused, so one name can never spell another.
+
+| Room                         | Name                                         | Scope                                                                           |
+| ---------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| Draft (canonical, v1 and v2) | `draft:<draftId>`                            | One league's one draft (`Draft.leagueId` is unique), so it cannot span seasons. |
+| Draft (v1 compatibility)     | `<draftId>`                                  | As above; only v1 clients join it.                                              |
+| League social and trades     | `social:league:<leagueId>:season:<seasonId>` | One league season.                                                              |
+
+League social and trade threads are per season (`SocialMessage`, `SocialPost`,
+`LeagueTradeThread` and their outboxes all carry `seasonId`), so their room is too: an event for one
+season never reaches a socket in another season's room of the same league. Membership is
+league-level (`LeagueMember` has no season), and it admits a member to the league's active season,
+the season every social and trade read serves. `social:join` therefore resolves the season on the
+server (`ensureActiveLeagueSeason`, as the social HTTP routes do). A client may name the season it is
+showing; the join is refused unless that is the active season, never trusted. A rejoin moves the
+socket out of any earlier season room of the league, and `social:leave` leaves every season room of
+the league. The cross-instance Redis channel is `social-events:<leagueId>:<seasonId>`.
+
+Nothing changes the active season of an existing league today. When season rollover lands, a socket
+joined before it stays in the earlier season's room until it reconnects or rejoins; the REST summary
+already carries `seasonId`, so the browser sees the new season on its next resync.
+
+There are no league-only rooms. Waivers, matchups and rosters have no Socket.IO room; trades share
+the season social room. `Draft` has no `seasonId`: if a league ever gets a draft per season, the
+draft needs one before its room name can stay season-safe.
 
 ## Process model
 

@@ -37,8 +37,8 @@ function channelPrefix(): string {
   return process.env.SOCIAL_REALTIME_CHANNEL_PREFIX || 'social-events';
 }
 
-function channelForLeague(leagueId: string): string {
-  return `${channelPrefix()}:${leagueId}`;
+function channelForLeagueSeason(leagueId: string, seasonId: string): string {
+  return `${channelPrefix()}:${leagueId}:${seasonId}`;
 }
 
 type RedisPubSubClient = IORedisClient | IORedisCluster;
@@ -84,7 +84,7 @@ class SocialPubSub {
     if (shouldDisableRedisClients()) return;
     const publisher = (this.publisher ??= getPublisherClient());
     await publisher.publish(
-      channelForLeague(event.leagueId),
+      channelForLeagueSeason(event.leagueId, event.seasonId),
       JSON.stringify({
         version: 1,
         instanceId: INSTANCE_ID,

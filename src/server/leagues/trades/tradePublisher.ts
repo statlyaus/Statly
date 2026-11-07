@@ -26,7 +26,7 @@ export interface TradeRealtimePayload {
  * Delivers pending `LeagueTradeOutboxEvent` rows to league members as `trade:update` events.
  *
  * `tradeService` writes a row in the same transaction as every trade event, so the row is the
- * persisted fact and this publisher only announces it. Delivery reuses the league members' realtime
+ * persisted fact and this publisher only announces it. Delivery reuses the league season's social
  * room (joined with `social:join`), its membership re-check and its cross-instance pub/sub.
  * Claim, retry and backoff mirror the league social publisher.
  */

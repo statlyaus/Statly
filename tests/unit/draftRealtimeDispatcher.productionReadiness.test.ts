@@ -214,7 +214,7 @@ describe('draft realtime dispatcher production readiness', () => {
 
     // One broadcast to both rooms, so a socket joined to both receives each event once.
     expect(source).toContain(
-      'this.io?.local.to([draftId, `draft:${draftId}`]).emit(event, payload)'
+      'this.io?.local.to([legacyDraftRoom(draftId), draftRoom(draftId)]).emit(event, payload)'
     );
     expect(source).not.toContain('this.io?.local.to(draftId).emit(event, payload)');
     expect(source).not.toContain('this.io?.to(draftId).emit(event, payload)');
