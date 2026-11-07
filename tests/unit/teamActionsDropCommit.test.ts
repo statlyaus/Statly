@@ -33,7 +33,7 @@ vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
 
 async function drop(): Promise<Response> {
   const { POST } = await import('@/app/api/leagues/[id]/actions/[userId]/route');
-  return POST(
+  const response = await POST(
     new Request('https://statly.test/api/leagues/league-1/actions/user-1', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -41,6 +41,8 @@ async function drop(): Promise<Response> {
     }) as NextRequest,
     { params: Promise.resolve({ id: 'league-1', userId: 'user-1' }) }
   );
+  if (!response) throw new Error('POST returned no response');
+  return response;
 }
 
 describe('team action drop commit', () => {
