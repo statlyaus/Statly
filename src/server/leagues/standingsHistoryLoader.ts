@@ -38,7 +38,8 @@ export async function loadLeagueStandingsHistory(
 
   const [members, standings, finalizedScores, matchups] = await Promise.all([
     prisma.leagueMember.findMany({
-      where: { leagueId },
+      // Removed managers keep their rows but no longer have a team on the ladder.
+      where: { leagueId, isActive: true },
       select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
     }),
     prisma.leagueStanding.findMany({ where: { leagueId } }),
