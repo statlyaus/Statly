@@ -28,18 +28,12 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
     reason: "Clears the caller's own session cookie; same-origin checked and reads nothing.",
   },
   {
-    route: 'GET /leagues',
-    reason:
-      'Lists leagues whose Firestore projection is marked public. REVIEW: Firestore is not the league authority.',
-  },
-  {
     route: 'POST /leagues/[id]/draft',
     reason: 'Disabled legacy endpoint; always returns 409 and touches no state.',
   },
 
   // Operational probes. No user or league data is returned.
   { route: '/ping', reason: 'Liveness probe; reads nothing.' },
-  { route: '/auth/health', reason: 'Authentication subsystem probe; reports status only.' },
   {
     route: '/health',
     reason:
