@@ -27,6 +27,8 @@ authority when a document and implementation disagree; fix the document in the s
   default categories.
 - [Drafts and waivers](domain/draft-and-waivers.md) — draft commands, persistence, roster projection,
   and waiver availability.
+- [Fantasy basketball](domain/basketball.md) — the separate NBA category track: categories, weeks,
+  owner-only league profiles, NBA reference data, and data-source licensing.
 
 ## Development
 

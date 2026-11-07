@@ -137,6 +137,22 @@ const primaryNavigationItems: NavigationItem[] = [
       </svg>
     ),
   },
+  {
+    name: 'Basketball',
+    href: '/basketball',
+    description: 'Fantasy basketball league tools',
+    icon: (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" strokeWidth={2} />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M3 12h18M12 3v18M5.6 5.6c2.4 2.4 2.4 10.4 0 12.8M18.4 5.6c-2.4 2.4-2.4 10.4 0 12.8"
+        />
+      </svg>
+    ),
+  },
 ];
 
 const toolsNavigationItem: NavigationItem = {
@@ -275,6 +291,7 @@ function isNavActive(pathname: string | null | undefined, href: string): boolean
   if (href === '/leagues') return p.startsWith('/leagues');
   if (href === '/players') return p.startsWith('/players');
   if (href === '/drafts') return p.startsWith('/drafts');
+  if (href === '/basketball') return p === '/basketball' || p.startsWith('/basketball/');
   if (href === '/matches') return p.startsWith('/matches');
   if (href === '/live-scoring') return p.startsWith('/live-scoring');
   if (href === '/waivers') return p.startsWith('/waivers');
@@ -494,7 +511,7 @@ export default function MainNavigation(): ReactNode {
           : typeof error === 'string'
             ? error
             : 'An unexpected error occurred';
-      showError('Sign out failed', message, { variant: 'light', autoHideDuration: 7000 });
+      showError('Sign out failed', message, { autoHideDuration: 7000 });
     } finally {
       setIsLoggingOut(false);
     }
@@ -511,7 +528,7 @@ export default function MainNavigation(): ReactNode {
 
   return (
     <>
-      <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+      <AlertContainer alerts={alerts} onRemove={removeAlert} />
 
       <header
         className={`sticky top-0 z-50 border-b border-brand-bar bg-brand-bar text-brand-bar-foreground ${
