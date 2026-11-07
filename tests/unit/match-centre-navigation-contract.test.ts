@@ -10,7 +10,6 @@ function readRepoFile(path: string): string {
 describe('live scoring and AFL match route ownership', () => {
   it('keeps Live Scoring primary and leaves AFL matches separate from league matchups', () => {
     const navigation = readRepoFile('src/components/navigation/MainNavigation.tsx');
-    const dashboardQuickActions = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
     const matchesPage = readRepoFile('src/app/(app)/matches/page.tsx');
     const liveScoringPage = readRepoFile('src/app/(app)/live-scoring/page.tsx');
 
@@ -23,9 +22,6 @@ describe('live scoring and AFL match route ownership', () => {
     expect(navigation).toContain(
       "if (href === '/live-scoring') return p.startsWith('/live-scoring')"
     );
-
-    expect(dashboardQuickActions).toContain("title: 'Live Scoring'");
-    expect(dashboardQuickActions).toContain("href: '/live-scoring'");
 
     expect(matchesPage).toContain('RealTimeMatchCenter');
     expect(liveScoringPage).toContain('LeagueMatchupsPanel');

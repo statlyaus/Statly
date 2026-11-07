@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { auth, authEmulatorReady } from '@/lib/firebase/clientAuth';
 import { ensureAuthServiceWorkerReady } from '@/lib/authServiceWorker';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
   clearDevelopmentAuthUser,
   createDevelopmentAuthUser,

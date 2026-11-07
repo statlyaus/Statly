@@ -29,13 +29,3 @@ export const RealTimeMatchCenter = dynamic(() => import('./RealTimeMatchCenter')
   loading: makePlaceholder(480),
   ssr: false,
 });
-
-export const SmartTradeAnalyzer = dynamic(() => import('./SmartTradeAnalyzer'), {
-  loading: makePlaceholder(480),
-  ssr: false,
-});
-
-export const LeagueAnalyticsDashboard = dynamic(() => import('./LeagueAnalyticsDashboard'), {
-  loading: makePlaceholder(560),
-  ssr: false,
-});

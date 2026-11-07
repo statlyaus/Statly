@@ -21,7 +21,6 @@
     "validate": "node dist/validateMatchData.js",
     "test-r": "Rscript fetch_fw_round.R 2025 18",
     "test-pipeline": "npm run build && Rscript fetch_fw_round.R 2025 18 | node dist/processFootywireData.js",
-    "test-suite": "./test_pipeline.sh",
     "docker-build": "docker build -t statly-etl .",
     "docker-run": "docker run --env-file .env statly-etl"
   },

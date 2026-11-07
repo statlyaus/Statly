@@ -16,8 +16,7 @@
     "tests/**/*.tsx",
     "playwright.config.ts",
     "vitest.config*.ts",
-    "vitest.setup.*",
-    "src/testUtils/setupTests.ts"
+    "vitest.setup.*"
   ],
   "exclude": ["node_modules", "dist"]
 }

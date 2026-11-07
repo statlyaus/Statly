@@ -1,4 +1,4 @@
-import type { Prisma, TeamActionType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
@@ -87,13 +87,18 @@ export async function POST(
 
     const body = await request.json();
 
-    const { actionType, details, targetMemberId } = body;
+    const { actionType, details } = body;
 
     if (!actionType || !details) {
       return errorResponse('Action type and details are required', 400);
     }
     if (typeof details !== 'object' || Array.isArray(details)) {
       return errorResponse('Action details must be an object', 400);
+    }
+    // Waiver claims go through WaiverProcessingService (FAAB reservation, priority, schedule) and
+    // trades through the trade service. A row written here would skip both, so only drops land.
+    if (actionType !== 'DROP_PLAYER') {
+      return errorResponse('Only DROP_PLAYER actions are accepted here', 400);
     }
     const canonicalDetails = await resolveTeamActionPlayerIds(details);
 
@@ -109,43 +114,24 @@ export async function POST(
       return errorResponse('User is not a member of this league', 404);
     }
 
-    // Validate action based on type
-    const validationResult = await validateTeamAction(
-      actionType,
-      canonicalDetails,
-      leagueId,
-      member.id,
-      targetMemberId
-    );
+    // The player must be on this member's roster in this league.
+    const validationResult = await validateDropPlayerAction(canonicalDetails, leagueId, member.id);
     if (!validationResult.valid) {
       return errorResponse(validationResult.error || 'Invalid action', 400);
     }
 
-    // Calculate processing time based on action type
-    let processingAt: Date | null = null;
-    if (actionType === 'WAIVER_CLAIM') {
-      // Waivers process at next waiver period (typically daily)
-      processingAt = new Date();
-      processingAt.setHours(23, 59, 59, 999); // End of day
-    } else if (actionType === 'DROP_PLAYER') {
-      // Dropped players leave the roster now, then stay on waivers before free agency.
-      processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    } else if (actionType === 'TRADE_PROPOSAL') {
-      // Trades can be processed immediately if no review period
-      processingAt = new Date();
-    }
+    // Dropped players leave the roster now, then stay on waivers before free agency.
+    const processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    // validateTeamAction above accepts only TeamActionType values.
     await prisma.teamAction.create({
       data: {
         id: actionId,
         leagueId,
         memberId: member.id,
-        actionType: actionType as TeamActionType,
+        actionType: 'DROP_PLAYER',
         // The details came from the parsed JSON request body, so they are JSON values.
         details: canonicalDetails as Prisma.InputJsonObject,
-        targetMemberId,
         processingAt,
       },
     });
@@ -156,16 +142,13 @@ export async function POST(
       memberId: member.id,
       actionType,
       details: canonicalDetails,
-      targetMemberId,
+      targetMemberId: null,
       processingAt,
       createdAt: new Date(),
       status: 'PENDING',
     };
 
-    // Process immediate actions
-    if (actionType === 'DROP_PLAYER') {
-      await processDropPlayerAction(action.id);
-    }
+    await processDropPlayerAction(action.id);
 
     logger.info('Created team action', {
       leagueId,
@@ -252,63 +235,29 @@ async function authorizeTeamActionRequest(
   return { userId: authenticatedUserId };
 }
 
-// Validation logic for different action types
-async function validateTeamAction(
-  actionType: string,
+async function validateDropPlayerAction(
   details: Record<string, unknown>,
   leagueId: string,
-  memberId: string,
-  targetMemberId?: string
+  memberId: string
 ): Promise<{ valid: boolean; error?: string }> {
-  switch (actionType) {
-    case 'TRADE_PROPOSAL': {
-      if (!details.offeredPlayers || !details.requestedPlayers || !targetMemberId) {
-        return {
-          valid: false,
-          error: 'Trade must include offered players, requested players, and target member',
-        };
-      }
-
-      // Additional trade validation would go here
-      return { valid: true };
-    }
-
-    case 'WAIVER_CLAIM': {
-      if (!details.playerId || !details.dropPlayerId) {
-        return {
-          valid: false,
-          error: 'Waiver claim must include player to claim and player to drop',
-        };
-      }
-
-      // Additional waiver validation would go here
-      return { valid: true };
-    }
-
-    case 'DROP_PLAYER': {
-      if (!details.playerId) {
-        return { valid: false, error: 'Player ID is required' };
-      }
-
-      const ownership = await prisma.leagueRosterPlayer.findFirst({
-        where: {
-          leagueId,
-          memberId,
-          playerId: String(details.playerId),
-        },
-        select: { playerId: true },
-      });
-
-      if (!ownership) {
-        return { valid: false, error: 'Player is not in your roster' };
-      }
-
-      return { valid: true };
-    }
-
-    default:
-      return { valid: false, error: 'Unknown action type' };
+  if (!details.playerId) {
+    return { valid: false, error: 'Player ID is required' };
   }
+
+  const ownership = await prisma.leagueRosterPlayer.findFirst({
+    where: {
+      leagueId,
+      memberId,
+      playerId: String(details.playerId),
+    },
+    select: { playerId: true },
+  });
+
+  if (!ownership) {
+    return { valid: false, error: 'Player is not in your roster' };
+  }
+
+  return { valid: true };
 }
 
 async function processDropPlayerAction(actionId: string): Promise<void> {
