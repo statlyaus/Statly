@@ -482,6 +482,7 @@ jobs:
     timeout-minutes: 40
     env:
       DATABASE_URL: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test
+      DIRECT_DATABASE_URL: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test
     services:
       postgres:
         image: postgres:16-alpine
@@ -513,10 +514,14 @@ jobs:
         run: docker build --target socket --tag statly-socket:ci .
       - name: Build worker image
         run: docker build --target worker --tag statly-worker:ci .
+      - name: Migrate disposable smoke database
+        run: >-
+          npx --yes prisma@$(node -p "require('./package-lock.json').packages['node_modules/prisma'].version")
+          migrate deploy --schema prisma/schema.prisma
       - name: Socket.IO image serves /health
         run: |
           docker run --detach --name statly-socket --network host \
-            --env REDIS_HOST=127.0.0.1 --env REDIS_PORT=6379 \
+            --env REDIS_HOST=127.0.0.1 --env REDIS_PORT=6379 --env DATABASE_URL \
             --env SOCKET_IO_CORS_ORIGINS=http://localhost:3000 \
             --env FIREBASE_ADMIN_DISABLED=true --env SENTRY_DISABLED=true \
             statly-socket:ci
@@ -529,11 +534,11 @@ jobs:
       - name: Worker image starts the draft worker
         run: |
           docker run --detach --name statly-worker --network host \
-            --env REDIS_HOST=127.0.0.1 --env REDIS_PORT=6379 \
+            --env REDIS_HOST=127.0.0.1 --env REDIS_PORT=6379 --env DATABASE_URL \
             --env FIREBASE_ADMIN_DISABLED=true --env SENTRY_DISABLED=true \
             statly-worker:ci
           for attempt in $(seq 1 30); do
-            if docker logs statly-worker 2>&1 | grep --quiet 'Worker connection ready'; then
+            if docker logs statly-worker 2>&1 | grep --quiet 'Enhanced Draft Worker started'; then
               sleep 5
               test "$(docker inspect --format '{{.State.Running}}' statly-worker)" = true && exit 0
               break

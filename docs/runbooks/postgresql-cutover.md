@@ -85,8 +85,9 @@ Deploy in this order, each against the production database:
 ### Container images
 
 The root `Dockerfile` builds one image per Cloud Run process. CI's Container images job builds all
-three on every pull request, starts the Socket.IO and worker images against a throwaway Redis, and
-runs a query through the worker image's Prisma client against a throwaway PostgreSQL. It never pushes.
+three on every pull request and starts the Socket.IO and worker images against a throwaway Redis and
+a freshly migrated throwaway PostgreSQL. It never pushes. The draft worker refuses to start without a
+reachable database, because it reconciles live draft timers on startup.
 
 | Image     | Build command                                                          | Runs                                                                    | Port                                                            |
 | --------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------- |
