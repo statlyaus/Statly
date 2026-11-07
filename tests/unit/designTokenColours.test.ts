@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -10,11 +10,23 @@ import {
   PALETTE_CLASS,
 } from '../../Scripts/design/count-raw-colours.mjs';
 
+// Folders where every source file must stay token-clean: the fantasy basketball section was built
+// on tokens from the start, so each new file is checked without being listed.
+const tokenisedFolders = ['src/components/basketball', 'src/app/(app)/basketball'];
+
+function sourceFilesUnder(folder: string): string[] {
+  return readdirSync(join(process.cwd(), folder), { recursive: true, encoding: 'utf8' })
+    .filter((path) => /\.(tsx?|jsx?)$/.test(path) && !/\.(test|spec)\.[^.]+$/.test(path))
+    .map((path) => join(folder, path))
+    .sort();
+}
+
 // Files whose colours all come from the design tokens in src/index.css. Add a file here once its
 // raw palette classes and colour literals are gone, so it cannot regress.
 const tokenisedFiles = [
   'src/components/stats/PlayerComparison.tsx',
   'src/components/stats/PlayerStatsTable.tsx',
+  ...tokenisedFolders.flatMap(sourceFilesUnder),
 ];
 
 describe('design token colours', () => {
@@ -29,6 +41,10 @@ describe('design token colours', () => {
         ].join('\n')
       )
     ).toEqual({ palette: 3, hex: 1, functions: 1, total: 5 });
+  });
+
+  it('finds the basketball source files it checks', () => {
+    expect(tokenisedFolders.map((folder) => sourceFilesUnder(folder).length)).not.toContain(0);
   });
 
   it.each(tokenisedFiles)('%s uses only design token colours', (path) => {
