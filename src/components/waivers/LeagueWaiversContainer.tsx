@@ -7,11 +7,7 @@ import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import WaiverFAABSystem, {
   type WaiverClaimSubmitResult,
 } from '@/components/waivers/WaiverFAABSystem';
-import type {
-  LeagueWaiverClaim,
-  LeagueRoster,
-  LeagueActivityItem,
-} from '@/services/leagueDataService';
+import type { LeagueWaiverClaim, LeagueRoster, LeagueActivityItem } from '@/types/waivers';
 import type { FantasyCategoryKey, PlayerStats } from '@/types/fantasyCategories';
 
 interface Props {

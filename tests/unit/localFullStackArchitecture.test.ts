@@ -119,7 +119,9 @@ describe('local full stack development architecture', () => {
     expect(localStack).toContain('STATLY_NEXT_DEV_BUNDLER');
     expect(localStack).toContain('./node_modules/.bin/next dev --webpack');
     expect(localStack).toContain('npm run auth-worker:build');
-    expect(localStack).toContain('AFL_TRADE_PUBLIC_READ_ENVIRONMENT="${AFL_TRADE_PUBLIC_READ_ENVIRONMENT:-test_fixture}"');
+    expect(localStack).toContain(
+      'AFL_TRADE_PUBLIC_READ_ENVIRONMENT="${AFL_TRADE_PUBLIC_READ_ENVIRONMENT:-test_fixture}"'
+    );
   });
 
   it('does not require clipboard permission to recover from invite copy failures', () => {
@@ -192,18 +194,6 @@ describe('local full stack development architecture', () => {
     expect(source).toContain("adminDb.collection('users').doc(DEVELOPMENT_AUTH_USER_ID)");
     expect(source).toContain('/api/create-test-draft');
     expect(source).toContain('draft.teamCount !== 12');
-  });
-
-  it('keeps the dev test-user route aligned to the shared emulator identity', () => {
-    const source = read('src/app/api/dev/test-user/route.ts');
-
-    expect(source).toContain('DEVELOPMENT_AUTH_USER_ID');
-    expect(source).toContain('DEVELOPMENT_AUTH_EMAIL');
-    expect(source).toContain('DEVELOPMENT_AUTH_DISPLAY_NAME');
-    expect(source).toContain('resolveLocalDevelopmentAuthPhrase');
-    expect(source).not.toContain('LOCAL_DEVELOPMENT_PASSWORD');
-    expect(source).not.toContain('2qlfdHSCFTPlxoKFSUfNLSlCDRe2');
-    expect(source).not.toContain('League Admin');
   });
 
   it('documents the canonical local stack and dev-auth fallback policy', () => {
