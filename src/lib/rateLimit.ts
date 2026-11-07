@@ -107,7 +107,7 @@ export async function countRateLimitHit({
  */
 export function getTrustedClientIp(
   headers: Pick<Headers, 'get'>,
-  env: NodeJS.ProcessEnv = process.env
+  env: Readonly<Record<string, string | undefined>> = process.env
 ): string | null {
   if (env.NETLIFY === 'true') {
     const netlifyIp = headers.get('x-nf-client-connection-ip')?.trim();
