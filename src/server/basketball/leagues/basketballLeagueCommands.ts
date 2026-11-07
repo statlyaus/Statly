@@ -333,7 +333,7 @@ export async function addBasketballRosterSpots(
     // Spots that change the same way are updated in one statement.
     const updates = new Map<
       string,
-      { ids: string[]; data: Prisma.BasketballRosterSpotUpdateManyMutationInput }
+      { ids: string[]; data: Prisma.BasketballRosterSpotUncheckedUpdateManyInput }
     >();
     const skips: BasketballRosterSkip[] = [];
     for (const entry of entries) {
@@ -360,13 +360,13 @@ export async function addBasketballRosterSpots(
         continue;
       }
       const moved = spot.teamId !== entry.teamId;
-      const data = {
+      const data: Prisma.BasketballRosterSpotUncheckedUpdateManyInput = {
         teamId: entry.teamId,
         onInjuredList: entry.onInjuredList ?? (moved ? false : undefined),
         acquiredOn: acquiredOn ?? (moved ? weekStart : undefined),
       };
       const key = JSON.stringify(data);
-      const update = updates.get(key) ?? { ids: [], data };
+      const update = updates.get(key) ?? { ids: [] as string[], data };
       update.ids.push(spot.id);
       updates.set(key, update);
     }
