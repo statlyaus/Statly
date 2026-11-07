@@ -43,7 +43,7 @@ function createDbMock() {
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
-        settings: { rosterSize: 2 },
+        settings: { rosterSize: 2, benchSize: 0 },
       }),
     },
     leagueMember: {
@@ -331,6 +331,69 @@ describe('WaiverProcessingService', () => {
     expect(projection.projectLeague).not.toHaveBeenCalled();
   });
 
+  it('counts the bench in roster capacity, as the draft does', async () => {
+    // A default league drafts rosterSize + benchSize players, so a full team holds 22.
+    const { db, tx } = createDbMock();
+    tx.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settings: { rosterSize: 18, benchSize: 4 },
+    });
+    tx.leagueRosterPlayer.count.mockResolvedValue(21);
+    const service = new WaiverProcessingService(db as never, createClaimStoreMock(), {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim()],
+    });
+
+    expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+  });
+
+  it('awards an add-with-drop claim to a team holding a full drafted roster and bench', async () => {
+    const { db, tx } = createDbMock();
+    tx.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settings: { rosterSize: 18, benchSize: 4 },
+    });
+    tx.leagueRosterPlayer.count.mockResolvedValue(22);
+    const service = new WaiverProcessingService(db as never, createClaimStoreMock(), {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ dropPlayerId: 'old-player' })],
+    });
+
+    expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+  });
+
+  it('refuses an add with no drop when the roster and bench are full', async () => {
+    const { db, tx } = createDbMock();
+    tx.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settings: { rosterSize: 18, benchSize: 4 },
+    });
+    tx.leagueRosterPlayer.count.mockResolvedValue(22);
+    const service = new WaiverProcessingService(db as never, createClaimStoreMock(), {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim()],
+    });
+
+    expect(result.results).toEqual([
+      { id: 'claim-1', status: 'FAILED', reason: 'Roster limit reached' },
+    ]);
+  });
+
   it('does not debit FAAB when canonical roster validation fails', async () => {
     const { db, tx } = createDbMock();
     const claimStore = createClaimStoreMock();
@@ -524,7 +587,10 @@ describe('WaiverProcessingService', () => {
 
   it('moves the successful team to the bottom before choosing the next pending claim', async () => {
     const { db, tx } = createDbMock();
-    tx.league.findUnique.mockResolvedValue({ id: 'league-1', settings: { rosterSize: 10 } });
+    tx.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      settings: { rosterSize: 10, benchSize: 0 },
+    });
     tx.leagueRosterPlayer.count.mockResolvedValue(0);
     tx.player.findMany.mockResolvedValue([
       { id: 'player-1', name: 'Player One', club: 'Test Club', position: 'MID' },

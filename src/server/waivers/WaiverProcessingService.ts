@@ -4,6 +4,10 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
+import {
+  evaluateRosterExchangeCapacity,
+  getLeagueRosterCapacity,
+} from '@/server/rosters/rosterCapacity';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 import { publishWaiverOutcome } from '@/server/waivers/waiverActivity';
@@ -465,7 +469,7 @@ export class WaiverProcessingService {
   ): Promise<CanonicalRosterPlan> {
     const league = await tx.league.findUnique({
       where: { id: leagueId },
-      select: { settings: { select: { rosterSize: true } } },
+      select: { settings: { select: { rosterSize: true, benchSize: true } } },
     });
 
     if (!league) {
@@ -517,11 +521,9 @@ export class WaiverProcessingService {
       return { status: 'FAILED', reason: 'Player already owned' };
     }
 
-    const rosterSize = league.settings.rosterSize;
     const currentRosterCount = await tx.leagueRosterPlayer.count({
       where: { leagueId, memberId },
     });
-    let nextRosterCount = currentRosterCount + 1;
     const canonicalDropPlayerId = claim.dropPlayerId
       ? ((await resolveCanonicalPlayerId(claim.dropPlayerId, undefined, tx)) ?? claim.dropPlayerId)
       : undefined;
@@ -556,10 +558,16 @@ export class WaiverProcessingService {
 
       // The stored id is what the drop deletes, so it must be the row that actually exists.
       storedDropPlayerId = dropOwnership.playerId;
-      nextRosterCount -= 1;
     }
 
-    if (nextRosterCount > rosterSize) {
+    // The draft fills rosterSize + benchSize, so the waiver limit is the same shared capacity.
+    const capacity = evaluateRosterExchangeCapacity({
+      currentCount: currentRosterCount,
+      outgoingCount: storedDropPlayerId ? 1 : 0,
+      incomingCount: 1,
+      capacity: getLeagueRosterCapacity(league.settings),
+    });
+    if (!capacity.isAllowed) {
       return { status: 'FAILED', reason: 'Roster limit reached' };
     }
 
