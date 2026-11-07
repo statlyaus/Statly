@@ -2,6 +2,51 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const WRITE_OPERATIONS = new Set(['write', 'create', 'update', 'delete']);
+
+interface AllowStatement {
+  path: string;
+  operations: string[];
+  condition: string;
+}
+
+/** Reads every `allow` statement in `firestore.rules` with the full match path it sits under. */
+function parseAllowStatements(source: string): AllowStatement[] {
+  const scopes: (string | null)[] = [];
+  const statements: AllowStatement[] = [];
+  let pending: { operations: string[]; condition: string } | null = null;
+
+  for (const line of source.split('\n')) {
+    const trimmed = line.trim();
+
+    if (pending) {
+      pending.condition += ` ${trimmed}`;
+    } else if (trimmed.startsWith('allow ')) {
+      const [, operations, condition] = trimmed.match(/^allow ([a-z, ]+): if (.*)$/) ?? [];
+      if (!operations) throw new Error(`Unparsed allow statement: ${trimmed}`);
+      pending = { operations: operations.split(',').map((op) => op.trim()), condition };
+    }
+
+    if (pending?.condition.endsWith(';')) {
+      const path = scopes.filter((scope): scope is string => scope !== null).join('');
+      statements.push({
+        path: path.replace('/databases/{database}/documents', ''),
+        operations: pending.operations,
+        condition: pending.condition.slice(0, -1).trim(),
+      });
+      pending = null;
+      continue;
+    }
+
+    const matchScope = trimmed.match(/^match (\S+) \{$/);
+    if (matchScope) scopes.push(matchScope[1]);
+    else if (trimmed.endsWith('{')) scopes.push(null);
+    else if (trimmed === '}') scopes.pop();
+  }
+
+  return statements;
+}
+
 describe('Firestore rules architecture', () => {
   it('keeps root league document mutations behind server routes', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
@@ -15,45 +60,41 @@ describe('Firestore rules architecture', () => {
     expect(leagueRootBlock).not.toContain('allow write: if isLeagueManager(leagueId);');
   });
 
-  it('keeps roster player ownership fields server-owned', () => {
-    const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const rosterBlock = source.match(/match \/rosters\/\{teamId\} \{[\s\S]*?\n\s{6}\}/)?.[0];
-    const lineupUpdateFunction = source.match(
-      /function isRosterLineupUpdate\(leagueId\) \{[\s\S]*?\n\s{4}\}/
-    )?.[0];
+  it('grants clients no write to any path except their own user documents', () => {
+    const rules = parseAllowStatements(
+      readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8')
+    );
+    const writeGrants = rules.filter(
+      (rule) =>
+        rule.operations.some((operation) => WRITE_OPERATIONS.has(operation)) &&
+        rule.condition !== 'false'
+    );
 
-    expect(rosterBlock).toBeDefined();
-    expect(rosterBlock).toContain('allow create: if false;');
-    expect(rosterBlock).toContain('allow update: if isLeagueMember(leagueId)');
-    expect(rosterBlock).toContain('isRosterLineupUpdate(leagueId)');
-    expect(rosterBlock).toContain('allow delete: if false;');
-
-    expect(lineupUpdateFunction).toBeDefined();
-    expect(lineupUpdateFunction).not.toContain("'playerIds'");
-    expect(lineupUpdateFunction).not.toContain("'leagueId'");
-    expect(lineupUpdateFunction).not.toContain("'userId'");
-    expect(lineupUpdateFunction).not.toContain("'memberId'");
+    expect(rules.length).toBeGreaterThan(20);
+    expect(writeGrants.map((rule) => rule.path)).toEqual([
+      '/users/{userId}',
+      '/users/{userId}/{document=**}',
+    ]);
   });
 
-  it('keeps member administration behind server routes', () => {
-    const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const memberBlock = source.match(/match \/members\/\{userId\} \{[\s\S]*?\n\s{6}\}/)?.[0];
-    const selfPreferenceFunction = source.match(
-      /function isSelfMemberPreferenceUpdate\(userId\) \{[\s\S]*?\n\s{4}\}/
-    )?.[0];
+  it('keeps roster lineups and member documents server-owned', () => {
+    const rules = parseAllowStatements(
+      readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8')
+    );
 
-    expect(memberBlock).toBeDefined();
-    expect(memberBlock).toContain('allow create: if false;');
-    expect(memberBlock).toContain('allow update: if isSelfMemberPreferenceUpdate(userId);');
-    expect(memberBlock).not.toContain('isLeagueManager(leagueId) ||');
-    expect(memberBlock).toContain('allow delete: if false;');
-
-    expect(selfPreferenceFunction).toBeDefined();
-    expect(selfPreferenceFunction).not.toContain("'teamName'");
-    expect(selfPreferenceFunction).not.toContain("'role'");
-    expect(selfPreferenceFunction).not.toContain("'status'");
-    expect(selfPreferenceFunction).not.toContain("'isActive'");
-    expect(selfPreferenceFunction).not.toContain("'leagueId'");
+    for (const path of [
+      '/leagues/{leagueId}/rosters/{teamId}',
+      '/leagues/{leagueId}/members/{userId}',
+    ]) {
+      const pathRules = rules.filter((rule) => rule.path === path);
+      expect(pathRules).toContainEqual({
+        path,
+        operations: ['read'],
+        condition: 'isLeagueMember(leagueId)',
+      });
+      expect(pathRules).toContainEqual({ path, operations: ['write'], condition: 'false' });
+      expect(pathRules).toHaveLength(2);
+    }
   });
 
   it('keeps waiver mutations behind server routes', () => {
