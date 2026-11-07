@@ -525,14 +525,14 @@ export async function POST(request: NextRequest) {
       if (body.scheduledTime) {
         // User specified a time - schedule lobby to open 5 minutes before
         await scheduleDraftStart(
-          result.league.id,
+          { draftId: result.draft.id, leagueId: result.league.id },
           scheduledStartTime,
           body.timePerPick * 1000 // Convert seconds to milliseconds
         );
       } else {
         // No time specified - lobby is already open, schedule draft to start in 5 minutes
         await scheduleDraftStart(
-          result.league.id,
+          { draftId: result.draft.id, leagueId: result.league.id },
           scheduledStartTime, // This is already set to 5 minutes from now
           body.timePerPick * 1000,
           true // Flag to indicate this should start the draft immediately (no lobby delay)

@@ -394,9 +394,9 @@ export class DraftRepository {
     };
   }
 
-  async findDraftScheduleByLeagueId(tx: TxClient, leagueId: string) {
+  async findDraftScheduleById(tx: TxClient, draftId: string) {
     return tx.draft.findUnique({
-      where: { leagueId },
+      where: { id: draftId },
       include: {
         league: {
           include: {

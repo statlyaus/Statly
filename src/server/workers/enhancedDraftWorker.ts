@@ -177,12 +177,30 @@ class EnhancedDraftWorker {
   private getStartJobData(
     job: Job<DraftJobData>,
     inferredKind: 'draft:start-lobby' | 'draft:start'
-  ) {
-    if ('leagueId' in job.data && 'pickClock' in job.data) {
-      return job.data as DraftStartJobData;
+  ): DraftStartJobData | null {
+    const data = job.data as Partial<DraftStartJobData>;
+    if (typeof data.leagueId !== 'string' || typeof data.pickClock !== 'number') {
+      throw new Error(`Invalid ${inferredKind} job payload`);
     }
 
-    throw new Error(`Invalid ${inferredKind} job payload`);
+    // Jobs enqueued before start jobs were keyed by draft carry only a league id. Resolving "the
+    // league's draft" is the ambiguity draft-keyed jobs remove: it could act on a newer draft at an
+    // older draft's time. Refuse them; rescheduling the draft enqueues a draft-keyed job.
+    if (typeof data.draftId !== 'string' || data.draftId.length === 0) {
+      logger.warn('Refusing draft start job without a draft id', {
+        jobId: job.id,
+        kind: inferredKind,
+        leagueId: data.leagueId,
+      });
+      return null;
+    }
+
+    return {
+      kind: inferredKind,
+      draftId: data.draftId,
+      leagueId: data.leagueId,
+      pickClock: data.pickClock,
+    };
   }
 
   private getPickExpiryJobData(job: Job<DraftJobData>): DraftPickExpiryJobData {
@@ -261,26 +279,26 @@ class EnhancedDraftWorker {
           break;
         }
         case 'draft:start-lobby': {
-          const { leagueId, pickClock } = this.getStartJobData(job, inferredKind);
-          const result = await draftApplicationService.openScheduledLobby({
-            leagueId,
-          });
+          const startJob = this.getStartJobData(job, inferredKind);
+          if (!startJob) break;
+          const { draftId, leagueId, pickClock } = startJob;
+          const result = await draftApplicationService.openScheduledLobby({ draftId, leagueId });
 
           await draftRealtimePublisher.publishDraftState(result.draftId);
 
           if (result.data.scheduledStartAt) {
             const runAt = new Date(result.data.scheduledStartAt);
             const delay = Math.max(0, runAt.getTime() - Date.now());
-            const jobId = getDraftStartJobId(leagueId);
+            const jobId = getDraftStartJobId(draftId);
 
             await draftQueue.remove(jobId).catch(() => 0);
             await draftQueue.add(
               'start-draft',
               {
                 kind: 'draft:start',
+                draftId,
                 leagueId,
                 pickClock,
-                draftId: result.draftId,
               },
               {
                 delay,
@@ -291,29 +309,16 @@ class EnhancedDraftWorker {
           break;
         }
         case 'draft:start': {
-          const { draftId, leagueId } = this.getStartJobData(job, inferredKind);
-          const scheduledDraft =
-            draftId ||
-            (await draftRepository.transaction(async (tx) => {
-              const draft = await draftRepository.findDraftScheduleByLeagueId(tx, leagueId);
-              return draft?.id ?? null;
-            }));
-
-          if (!scheduledDraft) {
-            logger.warn('Skipping scheduled draft start for missing draft', {
-              leagueId,
-              jobId: job.id,
-            });
-            break;
-          }
-
+          const startJob = this.getStartJobData(job, inferredKind);
+          if (!startJob) break;
+          const { draftId, leagueId } = startJob;
           const aggregate = await draftRepository.transaction((tx) =>
-            draftRepository.getDraftAggregate(tx, scheduledDraft)
+            draftRepository.getDraftAggregate(tx, draftId)
           );
 
-          if (!aggregate) {
-            logger.warn('Skipping scheduled draft start for missing aggregate', {
-              draftId: scheduledDraft,
+          if (!aggregate || aggregate.leagueId !== leagueId) {
+            logger.warn('Skipping scheduled draft start for missing draft', {
+              draftId,
               leagueId,
               jobId: job.id,
             });
@@ -322,7 +327,7 @@ class EnhancedDraftWorker {
 
           if (aggregate.status !== 'SCHEDULED') {
             logger.info('Skipping scheduled draft start for non-scheduled draft', {
-              draftId: scheduledDraft,
+              draftId,
               leagueId,
               status: aggregate.status,
               jobId: job.id,
@@ -330,7 +335,7 @@ class EnhancedDraftWorker {
             break;
           }
 
-          const result = await draftApplicationService.startDraft({ draftId: scheduledDraft });
+          const result = await draftApplicationService.startDraft({ draftId });
           await draftRealtimePublisher.publishCommandResult(result);
           break;
         }
