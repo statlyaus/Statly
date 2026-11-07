@@ -182,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
         return;
       }
       if (!auth) throw new Error('Firebase Auth not available');
-      void clearLegacyServerSession();
+      await clearLegacyServerSession();
       return signOut(auth);
     },
   };
