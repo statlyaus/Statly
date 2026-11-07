@@ -93,7 +93,7 @@ describe('draft command routes', () => {
     expect(service).toContain('input.actorUserId');
     expect(worker).toContain('expectedSchedulingVersion: schedulingVersion');
     expect(worker).toContain('requireExpired: true');
-    expect(worker).toContain('draftApplicationService.startDraft({ draftId: scheduledDraft })');
+    expect(worker).toContain('draftApplicationService.startDraft({ draftId })');
     expect(service).toContain('schedulingVersion: nextSchedulingVersion');
   });
 
