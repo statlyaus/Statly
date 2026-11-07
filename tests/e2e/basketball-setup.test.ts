@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { NEW_LEAGUE_DEFAULTS } from '../../src/components/basketball/setup/newLeagueDefaults';
 import { E2E_BASKETBALL_CREATED_LEAGUE_PREFIX, E2E_BASKETBALL_LEAGUE_ID } from './global.setup';
 import {
   authenticateAsDevelopmentUser,
@@ -21,7 +22,7 @@ test('sets up a basketball league, builds the roster and keeps it after a reload
     await expect(
       page.getByRole('heading', { level: 1, name: 'Set up a basketball league' })
     ).toBeVisible();
-    await expect(page.getByLabel('Week 1 starts')).toHaveValue('2026-10-19');
+    await expect(page.getByLabel('Week 1 starts')).toHaveValue(NEW_LEAGUE_DEFAULTS.weekOneStartsOn);
 
     await page.getByLabel('League name').fill(leagueName);
     await page.getByLabel('Your team name').fill('Setup Squad');
@@ -64,6 +65,13 @@ test('sets up a basketball league, builds the roster and keeps it after a reload
     await page.getByLabel(/Opponent for Week/).selectOption({ label: 'Paste Patrol' });
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText(/Paste Patrol is your opponent for week \d+\./)).toBeVisible();
+  });
+
+  await test.step('remove a player, then undo it', async () => {
+    await page.getByRole('button', { name: 'Remove Nikolai Petrov', exact: true }).click();
+    await expect(page.getByText('Removed Nikolai Petrov from Setup Squad.')).toBeVisible();
+    await page.getByRole('button', { name: 'Undo removing Nikolai Petrov' }).click();
+    await expect(page.getByText('Put Nikolai Petrov back on Setup Squad.')).toBeVisible();
   });
 
   await test.step('reload and see everything persisted', async () => {
@@ -116,9 +124,34 @@ test.describe('basketball pages at 390px', () => {
       await expectNoAppErrorBoundary(page);
       await expectNoPageLevelHorizontalOverflow(page);
     }
+    // On a phone, held-since and move sit behind each player's Edit disclosure.
+    await page.goto(`/basketball/${E2E_BASKETBALL_LEAGUE_ID}/roster`);
+    const heldSince = page
+      .getByLabel('Marcus Hale Held since', { exact: true })
+      .filter({ visible: true });
+    await expect(heldSince).toHaveCount(0);
+    await page.getByRole('button', { name: 'Edit Marcus Hale' }).click();
+    await expect(heldSince).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: 'Remove Marcus Hale', exact: true })
+    ).toBeVisible();
+
     await page.goto('/basketball/new');
     await expectNoPageLevelHorizontalOverflow(page);
     expect(runtimeErrors).toEqual([]);
+  });
+
+  test('shows a missing page inside the league, under its tabs', async ({ page }) => {
+    await authenticateAsDevelopmentUser(page);
+    await page.goto(`/basketball/${E2E_BASKETBALL_LEAGUE_ID}/no-such-section`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Basketball league sections' })
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to the overview' })).toHaveAttribute(
+      'href',
+      `/basketball/${E2E_BASKETBALL_LEAGUE_ID}`
+    );
   });
 
   test("shows not found for a league that is not the user's", async ({ page }) => {
