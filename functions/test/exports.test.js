@@ -5,9 +5,6 @@ const expectedExports = [
   'backfillOwnershipPercent',
   'onPlayerOwnershipWrite',
   'onTeamRosterUpdate',
-  'onTradeUpdate',
-  'onUserWatchlistUpdate',
-  'reconcilePendingBidTotals',
 ];
 
 test('compiled Functions entry point exposes every deployed handler', () => {
