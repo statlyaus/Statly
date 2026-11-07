@@ -7,11 +7,13 @@ const authMocks = vi.hoisted(() => ({
 
 const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn(),
+  $executeRaw: vi.fn(),
   leagueMember: {
     findFirst: vi.fn(),
   },
   player: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
   },
   playerExternalIdentity: {
     findUnique: vi.fn(),
@@ -20,6 +22,7 @@ const prismaMocks = vi.hoisted(() => ({
     findFirst: vi.fn(),
     create: vi.fn(),
     findMany: vi.fn(),
+    count: vi.fn(),
   },
   teamAction: {
     findFirst: vi.fn(),
@@ -72,8 +75,16 @@ describe('league roster free-agent add eligibility', () => {
     vi.clearAllMocks();
 
     authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
-    prismaMocks.leagueMember.findFirst.mockResolvedValue({ id: 'member-1' });
+    prismaMocks.$executeRaw.mockResolvedValue(1);
+    prismaMocks.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      isActive: true,
+      status: 'ACTIVE',
+      league: { settings: { rosterSize: 22, benchSize: 4 } },
+    });
     prismaMocks.player.findUnique.mockResolvedValue({ id: 'held-player' });
+    prismaMocks.player.findMany.mockResolvedValue([]);
+    prismaMocks.leagueRosterPlayer.count.mockResolvedValue(0);
     prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue(null);
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
     prismaMocks.leagueRosterPlayer.findMany.mockResolvedValue([]);
@@ -101,7 +112,7 @@ describe('league roster free-agent add eligibility', () => {
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.error).toEqual({ message: 'Player is on waivers' });
+    expect(body.error).toEqual({ message: 'Player is on waivers', code: 'PLAYER_ON_WAIVERS' });
     expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
@@ -112,6 +123,40 @@ describe('league roster free-agent add eligibility', () => {
       },
       select: { id: true },
     });
+    expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an add to a full roster with 422 instead of exceeding rosterSize + benchSize', async () => {
+    prismaMocks.teamAction.findFirst.mockResolvedValue(null);
+    prismaMocks.leagueRosterPlayer.count.mockResolvedValue(26);
+    const { POST } = await import('../../src/app/api/leagues/[id]/roster/add/route');
+
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/roster/add', { playerId: 'held-player' }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(body.error.code).toBe('ROSTER_FULL');
+    expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a removed manager with 403', async () => {
+    prismaMocks.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      isActive: false,
+      status: 'REMOVED',
+      league: { settings: { rosterSize: 22, benchSize: 4 } },
+    });
+    const { POST } = await import('../../src/app/api/leagues/[id]/roster/add/route');
+
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/roster/add', { playerId: 'held-player' }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(403);
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 
