@@ -181,7 +181,7 @@ function teamGames(rows: readonly RotationGameRow[]): Map<string, TeamGame[]> {
   for (const row of rows) {
     const games = byTeam.get(row.teamCode) ?? new Map<string, TeamGame>();
     byTeam.set(row.teamCode, games);
-    const game = games.get(row.gameId) ?? {
+    const game: TeamGame = games.get(row.gameId) ?? {
       gameId: row.gameId,
       gameDate: row.gameDate,
       starters: [],
