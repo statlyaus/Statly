@@ -706,7 +706,8 @@ export async function loadLeagueMatchupReadModel({
       select: { memberId: true, categoriesJson: true },
     }),
     prisma.leagueMember.findMany({
-      where: { leagueId },
+      // Removed managers keep their rows but no longer have a team on the ladder.
+      where: { leagueId, isActive: true },
       select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
     }),
   ]);
@@ -828,7 +829,8 @@ export async function recalculateLeagueRoundMatchups({
       include: { players: { include: { player: true } } },
     }),
     prisma.leagueMember.findMany({
-      where: { leagueId },
+      // Removed managers keep their rows but no longer have a team on the ladder.
+      where: { leagueId, isActive: true },
       select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
     }),
   ]);
