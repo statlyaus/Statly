@@ -29,6 +29,25 @@ interface LogEntry {
   };
 }
 
+// Server only: send logged failures to Sentry so caught cron, outbox and route errors reach
+// alerting. `typeof window` is compiled to a constant, so the browser bundle never loads this path.
+// Sentry keeps its client on a global, so this sees the instance `instrumentation.ts` initialised and
+// stays a no-op in processes that never initialise it. Free-form log context is not sent.
+function forwardErrorToSentry(message: string, error: unknown): void {
+  if (typeof window !== 'undefined') return;
+
+  void import('@sentry/nextjs')
+    .then((Sentry) => {
+      if (!Sentry.isInitialized()) return;
+      if (error instanceof Error) {
+        Sentry.captureException(error, { extra: { logMessage: message } });
+      } else {
+        Sentry.captureMessage(message, 'error');
+      }
+    })
+    .catch(() => undefined);
+}
+
 class Logger {
   private isDevelopment = process.env.NODE_ENV === 'development';
   private isTest = process.env.NODE_ENV === 'test';
@@ -125,6 +144,7 @@ class Logger {
       const entry = this.createLogEntry('error', message, context, error);
       console.error(this.serializeEntry(entry));
       this.addToBuffer(entry);
+      forwardErrorToSentry(message, error);
     }
   }
 
