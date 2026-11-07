@@ -1,6 +1,6 @@
 'use client';
 
-import { onCLS, onFID, onFCP, onINP, onLCP, onTTFB } from 'web-vitals';
+import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals';
 
 interface PerformanceMetric {
   name: string;
@@ -11,7 +11,7 @@ interface PerformanceMetric {
   navigationType: string;
 }
 
-const WEB_VITAL_METRIC_NAMES = new Set(['CLS', 'FID', 'FCP', 'INP', 'LCP', 'TTFB']);
+const WEB_VITAL_METRIC_NAMES = new Set(['CLS', 'FCP', 'INP', 'LCP', 'TTFB']);
 
 export function isWebVitalMetricName(name: string): boolean {
   return WEB_VITAL_METRIC_NAMES.has(name);
@@ -55,7 +55,6 @@ class PerformanceMonitor {
 
     // Core Web Vitals
     onCLS(this.handleMetric.bind(this));
-    onFID(this.handleMetric.bind(this));
     onFCP(this.handleMetric.bind(this));
     onINP(this.handleMetric.bind(this));
     onLCP(this.handleMetric.bind(this));
