@@ -326,8 +326,9 @@ async function loadAllPlayers(): Promise<Player[]> {
     const latestSeason = availableStatSeasons[0];
     const latestSeasonStats = latestSeason ? statsBySeason[String(latestSeason)] : undefined;
 
-    const { status, injury: rawInjury, ...rest } = latestRow as AnyObj;
-    const injury = (rawInjury ?? status) as string | undefined;
+    // Footywire's `status` is the side of the ground (Home/Away), not an injury, so it is dropped.
+    const { status: _groundSide, injury: rawInjury, ...rest } = latestRow as AnyObj;
+    const injury = rawInjury as string | undefined;
 
     return {
       id,
