@@ -114,5 +114,36 @@ function normalizePlayerRow(input: unknown): PlayerRow {
   };
 }
 
-export { normalizePlayerRow };
-export type { PlayerRow };
+// Footywire names for the default nine-category preset (REAL_DATA_NINE_CATEGORY_PRESET in
+// src/types/fantasyCategories.ts). A row missing any of them cannot be scored, so it is refused.
+const REQUIRED_CATEGORY_FIELDS = [
+  'goals',
+  'tackles',
+  'inside_50s',
+  'intercepts',
+  'contested_marks',
+  'rebound_50s',
+  'contested_possessions',
+  'effective_disposals',
+  'score_involvements',
+] as const satisfies readonly PlayerNumericField[];
+
+type ProcessedStats = Record<PlayerNumericField, number | null>;
+
+/**
+ * Maps a normalized row to the stored stats. A stat Footywire did not report stays `null`; it is
+ * never written as a zero, because a zero reads as a real result and wins LOW_WINS categories.
+ */
+function toProcessedStats(row: PlayerRow): ProcessedStats {
+  const missing = REQUIRED_CATEGORY_FIELDS.filter((field) => row[field] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`${row.player_name} is missing category stats: ${missing.join(', ')}`);
+  }
+
+  return Object.fromEntries(
+    PLAYER_NUMERIC_FIELDS.map((field) => [field, row[field] ?? null])
+  ) as ProcessedStats;
+}
+
+export { normalizePlayerRow, toProcessedStats, REQUIRED_CATEGORY_FIELDS };
+export type { PlayerRow, ProcessedStats };

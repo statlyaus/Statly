@@ -4,7 +4,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import * as readline from 'readline';
 
-import { normalizePlayerRow, type PlayerRow } from './normalizePlayerRow';
+import { normalizePlayerRow, toProcessedStats, type PlayerRow } from './normalizePlayerRow';
 
 // Initialize Firebase Admin using same pattern as main project
 if (getApps().length === 0) {
@@ -100,35 +100,6 @@ function addJitter(baseMs: number, jitterMs: number = 6000): number {
   return baseMs + Math.random() * jitterMs;
 }
 
-interface ProcessedStats {
-  kicks: number;
-  handballs: number;
-  disposals: number;
-  marks: number;
-  tackles: number;
-  goals: number;
-  behinds: number;
-  hit_outs: number;
-  clearances: number;
-  inside_50s: number;
-  rebound_50s: number;
-  clangers: number;
-  contested_possessions: number;
-  uncontested_possessions: number;
-  frees_for: number;
-  frees_against: number;
-  one_percenters: number;
-  goal_assists: number;
-  turnovers: number;
-  intercepts: number;
-  metres_gained: number;
-  contested_marks: number;
-  effective_disposals: number;
-  score_involvements: number;
-  minutes: number;
-  tog_pct: number;
-}
-
 async function checkMatchStatus(matchUid: string): Promise<string> {
   try {
     const matchDoc = await db.collection('matches').doc(matchUid).get();
@@ -174,35 +145,8 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
     }
   }
 
-  // Map to processed stats (default to 0 for missing values)
-  const stats: ProcessedStats = {
-    kicks: row.kicks || 0,
-    handballs: row.handballs || 0,
-    disposals: row.disposals || 0,
-    marks: row.marks || 0,
-    tackles: row.tackles || 0,
-    goals: row.goals || 0,
-    behinds: row.behinds || 0,
-    hit_outs: row.hit_outs || 0,
-    clearances: row.clearances || 0,
-    inside_50s: row.inside_50s || 0,
-    rebound_50s: row.rebound_50s || 0,
-    clangers: row.clangers || 0,
-    contested_possessions: row.contested_possessions || 0,
-    uncontested_possessions: row.uncontested_possessions || 0,
-    frees_for: row.frees_for || 0,
-    frees_against: row.frees_against || 0,
-    one_percenters: row.one_percenters || 0,
-    goal_assists: row.goal_assists || 0,
-    turnovers: row.turnovers || 0,
-    intercepts: row.intercepts || 0,
-    metres_gained: row.metres_gained || 0,
-    contested_marks: row.contested_marks || 0,
-    effective_disposals: row.effective_disposals || 0,
-    score_involvements: row.score_involvements || 0,
-    minutes: row.minutes || 0,
-    tog_pct: row.tog_pct || 0,
-  };
+  // Missing stats stay null; a row missing a category stat throws before anything is written.
+  const stats = toProcessedStats(row);
 
   // Prepare document for upsert
   const documentData = {
