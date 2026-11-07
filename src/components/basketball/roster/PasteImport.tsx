@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { buttonStyles, fieldStyles } from '@/components/ui/controlStyles';
 import type { PastedRosterLine } from '@/server/basketball/leagues/basketballLeagueDto';
@@ -39,6 +39,14 @@ export function PasteImport({
   const [lines, setLines] = useState<PastedRosterLine[] | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
+  // Set on a confirmed paste; the effect below focuses the box once React has rendered it again.
+  const refocusBox = useRef(false);
+
+  useEffect(() => {
+    if (lines !== null || !refocusBox.current) return;
+    refocusBox.current = false;
+    document.getElementById(id)?.focus();
+  }, [lines, id]);
 
   async function findPlayers() {
     setPending(true);
@@ -64,10 +72,10 @@ export function PasteImport({
       setError(message);
       return;
     }
+    // The review and its buttons are gone: put focus back on the empty box, not on the page body.
+    refocusBox.current = true;
     setLines(null);
     setText('');
-    // The review and its buttons are gone: put focus back on the empty box, not on the page body.
-    requestAnimationFrame(() => document.getElementById(id)?.focus());
   }
 
   if (lines) {
