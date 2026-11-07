@@ -51,7 +51,7 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
-  const protectedPrefixes = ['/dashboard', '/app', '/league', '/leagues'];
+  const protectedPrefixes = ['/dashboard', '/app', '/league', '/leagues', '/basketball'];
   const isProtected = protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
