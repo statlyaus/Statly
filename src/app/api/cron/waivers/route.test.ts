@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const processDueLeagueWaiversMock = vi.fn();
 
+const loggerErrorMock = vi.fn();
 vi.mock('@/lib/logger', () => ({
-  logger: { info: vi.fn(), error: vi.fn() },
+  logger: { info: vi.fn(), error: (...args: unknown[]) => loggerErrorMock(...args) },
 }));
 
 vi.mock('@/server/waivers/waiverSchedule', () => ({
@@ -18,7 +19,7 @@ const URL_BASE = 'http://localhost/api/cron/waivers';
 
 describe('/api/cron/waivers', () => {
   beforeEach(() => {
-    processDueLeagueWaiversMock.mockResolvedValue({ ran: true, leagues: [] });
+    processDueLeagueWaiversMock.mockResolvedValue({ ran: true, leagues: [], failedLeagueIds: [] });
   });
 
   afterEach(() => {
@@ -63,5 +64,30 @@ describe('/api/cron/waivers', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     await expect(response.json()).resolves.toMatchObject({ ok: true, ran: true, leagues: [] });
     expect(processDueLeagueWaiversMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails the scheduled run, logging an error, when any league failed', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+    processDueLeagueWaiversMock.mockResolvedValue({
+      ran: true,
+      leagues: [{ leagueId: 'league-b', processed: 1, results: [] }],
+      failedLeagueIds: ['league-a'],
+    });
+
+    const response = await GET(
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer cron-secret' } })
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      failedLeagueIds: ['league-a'],
+    });
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      'Scheduled waiver processing failed for some leagues',
+      expect.objectContaining({ failedLeagueIds: ['league-a'] })
+    );
   });
 });
