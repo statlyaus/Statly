@@ -350,6 +350,12 @@ describe('WaiverProcessingService', () => {
     });
 
     expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+    expect(tx.leagueRosterPlayer.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ memberId: 'member-1', playerId: 'free-player' }),
+      })
+    );
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
   });
 
   it('awards an add-with-drop claim to a team holding a full drafted roster and bench', async () => {
