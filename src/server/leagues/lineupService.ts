@@ -53,6 +53,8 @@ export interface MemberLineupRoundContext {
   source: 'PUBLISHED' | 'SETUP_FALLBACK';
   round: number;
   aflRound: number | null;
+  /** AFL season year of the round's `LeagueSeason`; null when the round is not linked to one. */
+  seasonYear: number | null;
   phase: 'REGULAR' | 'FINALS';
   roundStatus: 'SCHEDULED' | 'NO_MATCHUP' | 'PENDING' | 'LOCKED' | 'FINAL';
   startsAt: Date | null;
@@ -94,6 +96,7 @@ export function createSetupLineupRoundContext(round: number): MemberLineupRoundC
     source: 'SETUP_FALLBACK',
     round,
     aflRound: null,
+    seasonYear: null,
     phase: 'REGULAR',
     roundStatus: 'PENDING',
     startsAt: null,
@@ -219,6 +222,12 @@ function resolveThursdayLock(startsAt: Date | null, timeZone: string): Date | nu
  */
 const AFL_LOCK_TIME_ZONE = 'Australia/Sydney';
 
+/**
+ * AFL fixtures and match times are read for the season the competition round belongs to, the
+ * same year scoring uses, rather than the calendar year the request happens to run in.
+ */
+const ROUND_SEASON_YEAR = { season: { select: { year: true } } } as const;
+
 function resolveRoundLockAt(
   rules: CompetitionRules,
   competitionRound: { startsAt: Date | null; fallbackLockAt: Date | null }
@@ -255,6 +264,7 @@ export async function loadMemberLineupRoundContext({
         round,
       },
     },
+    include: ROUND_SEASON_YEAR,
   });
   if (!competitionRound) return null;
 
@@ -284,6 +294,7 @@ export async function loadMemberLineupRoundContext({
     source: 'PUBLISHED',
     round: competitionRound.round,
     aflRound: competitionRound.aflRound,
+    seasonYear: competitionRound.season?.year ?? null,
     phase: competitionRound.phase,
     roundStatus: competitionRound.status,
     startsAt: competitionRound.startsAt,
@@ -313,6 +324,7 @@ function deriveLineupLockState(
 export interface LineupRoundSummary {
   round: number;
   aflRound: number | null;
+  seasonYear: number | null;
   phase: 'REGULAR' | 'FINALS';
   status: MemberLineupRoundContext['roundStatus'];
   startsAt: Date | null;
@@ -336,12 +348,14 @@ export async function loadLineupRoundSummaries(
   const rounds = await prisma.leagueCompetitionRound.findMany({
     where: { leagueId, fixtureVersion: league.settings.competitionRulesVersion },
     orderBy: { round: 'asc' },
+    include: ROUND_SEASON_YEAR,
   });
   return rounds.map((competitionRound) => {
     const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
     return {
       round: competitionRound.round,
       aflRound: competitionRound.aflRound,
+      seasonYear: competitionRound.season?.year ?? null,
       phase: competitionRound.phase,
       status: competitionRound.status,
       startsAt: competitionRound.startsAt,
@@ -829,6 +843,7 @@ export async function saveMemberLineup({
             round,
           },
         },
+        include: ROUND_SEASON_YEAR,
       });
   if (!initialCompetitionRound && !initialIsSetupFallback) {
     return {
@@ -856,6 +871,7 @@ export async function saveMemberLineup({
     initialRules.lockPolicy === 'INDIVIDUAL_GAME_START'
       ? await loadRoundPlayerGameStarts({
           aflRound: initialCompetitionRound?.aflRound ?? null,
+          season: initialCompetitionRound?.season?.year ?? undefined,
           players: initialRosterPlayers.map((row) => ({
             playerId: row.playerId,
             club: row.player.club,
