@@ -67,4 +67,60 @@ describe('GET /api/players/[id]/matches', () => {
       { playerId: 'player-1' }
     );
   });
+
+  it('returns ETL rows, whose stats are nested under `stats`', async () => {
+    mocks.firebaseAdminDisabled = false;
+    // Shape written by etl/processFootywireData.ts: no venue or date, stats nested.
+    mocks.getMatchStats.mockResolvedValue({
+      docs: [
+        {
+          id: '2025-R5-ADE-GEE-matt-crouch',
+          data: () => ({
+            season: 2025,
+            round: 5,
+            team: 'Adelaide',
+            opposition: 'Geelong',
+            player_name: 'Test Player',
+            stats: {
+              kicks: 10,
+              handballs: 18,
+              disposals: 28,
+              goals: 0,
+              tackles: 2,
+              hit_outs: 3,
+              inside_50s: 4,
+              contested_possessions: 14,
+              effective_disposals: 20,
+              score_involvements: 4,
+              tog_pct: 63,
+            },
+          }),
+        },
+      ],
+    });
+
+    const response = await GET(new NextRequest('http://localhost/api/players/player-1/matches'), {
+      params: Promise.resolve({ id: 'player-1' }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({
+      season: 2025,
+      round: 5,
+      opponent: 'Geelong',
+      stats: {
+        kicks: 10,
+        disposals: 28,
+        tackles: 2,
+        hitouts: 3,
+        inside_50s: 4,
+        contested_possessions: 14,
+        effective_disposals: 20,
+        score_involvements: 4,
+        time_on_ground_percentage: 63,
+      },
+    });
+  });
 });
