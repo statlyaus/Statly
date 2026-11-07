@@ -192,11 +192,11 @@ export function PlayerLeagueAvailabilityPanel({
       const body = (await response.json().catch(() => ({}))) as unknown;
 
       if (!response.ok) {
-        const message =
-          typeof (body as { error?: unknown })?.error === 'string'
-            ? ((body as { error: string }).error as string)
-            : 'Failed to add player.';
-        throw new Error(message);
+        // The add route answers { error: { message, code } }; show its reason, not a generic one.
+        const error = (body as { error?: unknown })?.error;
+        const reason =
+          typeof error === 'string' ? error : (error as { message?: unknown } | undefined)?.message;
+        throw new Error(typeof reason === 'string' && reason ? reason : 'Failed to add player.');
       }
 
       await refreshAvailability();
