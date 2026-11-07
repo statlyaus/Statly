@@ -64,6 +64,11 @@ in-memory shadow stores must not restore stale strategy state.
 ## Scheduling
 
 Draft start times are stored as instants with an explicit league timezone for display and scheduling.
+The lobby-open and draft-start BullMQ jobs are keyed by draft id and carry it with the league id; the
+worker acts on that draft only after checking it still belongs to the league and is `SCHEDULED`.
+Rescheduling or cancelling replaces only that draft's jobs, never another draft's in the same league.
+A start job without a draft id (enqueued before this keying) is refused and logged rather than
+resolved to "the league's draft"; rescheduling the draft enqueues a keyed job.
 Clock commands commit Prisma timing state and an outbox event without depending on Redis. Outbox
 delivery and the worker's startup/periodic repair loop both reconcile the latest persisted LIVE clock
 into an immutable, revision-addressed BullMQ job. They never schedule from stale event data. Missing
