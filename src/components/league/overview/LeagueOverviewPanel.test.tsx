@@ -69,6 +69,64 @@ describe('LeagueOverviewPanel first-run checklist', () => {
     expect(await within(checklist()).findByRole('button', { name: /copied/i })).toBeInTheDocument();
   });
 
+  describe('when the Clipboard API is unavailable or denied', () => {
+    const inviteLink = () => `${window.location.origin}/leagues/join?code=JOIN1234`;
+
+    afterEach(() => {
+      Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+      Object.defineProperty(document, 'execCommand', { value: undefined, configurable: true });
+    });
+
+    it('copies through the legacy fallback and says so', async () => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: vi.fn().mockRejectedValue(new Error('NotAllowedError')) },
+        configurable: true,
+      });
+      let copied = '';
+      const execCommand = vi.fn(() => {
+        copied = (document.activeElement as HTMLTextAreaElement).value;
+        return true;
+      });
+      Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+      renderPanel();
+
+      fireEvent.click(within(checklist()).getByRole('button', { name: /copy invite link/i }));
+
+      expect(
+        await within(checklist()).findByRole('button', { name: /copied/i })
+      ).toBeInTheDocument();
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(copied).toBe(inviteLink());
+      expect(screen.getByRole('status')).toHaveTextContent('Invite link copied');
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    });
+
+    it('shows the link selected for copying by hand when both copies fail', async () => {
+      Object.defineProperty(document, 'execCommand', {
+        value: vi.fn(() => false),
+        configurable: true,
+      });
+      renderPanel();
+
+      fireEvent.click(within(checklist()).getByRole('button', { name: /copy invite link/i }));
+
+      const input = await within(checklist()).findByRole('textbox', {
+        name: 'Copy failed — select and copy the link',
+      });
+      expect(input).toHaveValue(inviteLink());
+      expect(input).toHaveAttribute('readonly');
+      expect(input).toHaveFocus();
+      expect((input as HTMLInputElement).selectionStart).toBe(0);
+      expect((input as HTMLInputElement).selectionEnd).toBe(inviteLink().length);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Copy failed — select and copy the link'
+      );
+      expect(
+        within(checklist()).getByRole('button', { name: /copy invite link/i })
+      ).toBeInTheDocument();
+    });
+  });
+
   it('offers the native share sheet only where the browser has one', () => {
     renderPanel();
     expect(within(checklist()).queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument();
