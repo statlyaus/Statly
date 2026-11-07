@@ -51,8 +51,8 @@ export interface NbaBoxScoresSummary {
   ingested: number;
   finalised: number;
   playersCreated: number;
-  /** Did-not-play rows dropped because the provider gave no player identity. */
-  unidentifiedDidNotPlay: number;
+  /** Rows dropped because the provider gave no player identity and they record nothing. */
+  unidentifiedEmptyRows: number;
   skipped: Array<{ gameExternalId: string; reason: string }>;
   /** FINAL games of this season still without a box score after this run. */
   pending: number;
@@ -357,7 +357,7 @@ export async function syncNbaBoxScores(
       ingested,
       finalised,
       playersCreated,
-      unidentifiedDidNotPlay: fetched.reduce((sum, { box }) => sum + box.unidentifiedDidNotPlay, 0),
+      unidentifiedEmptyRows: fetched.reduce((sum, { box }) => sum + box.unidentifiedEmptyRows, 0),
       skipped,
       pending,
     };

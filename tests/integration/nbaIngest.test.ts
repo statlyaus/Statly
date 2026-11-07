@@ -95,7 +95,7 @@ function boxScoreFor(externalId: string, homeListed = 10): NbaProviderBoxScore {
         secondsPlayed: 0,
       },
     ],
-    unidentifiedDidNotPlay: 0,
+    unidentifiedEmptyRows: 0,
   };
 }
 

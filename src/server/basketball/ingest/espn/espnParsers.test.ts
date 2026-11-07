@@ -365,7 +365,25 @@ describe('parseBoxScore', () => {
     const box = parseBoxScore(response);
 
     expect(box.lines.map((entry) => entry.player.externalId)).toEqual(['1']);
-    expect(box.unidentifiedDidNotPlay).toBe(1);
+    expect(box.unidentifiedEmptyRows).toBe(1);
+  });
+
+  it('drops and counts an unidentified row whose stats are all zero', () => {
+    const zeros = ['--', '0', '0-0', '0-0', '0-0', '0', '0', '0', '0', '0', '0', '0', '0', '0'];
+    const response = summaryResponse({
+      ...base,
+      homeAthletes: [{ id: '1' }, { id: 'x', stats: zeros }],
+      awayAthletes: [],
+    });
+    response.boxscore.players[1].statistics[0].athletes[1].athlete = {
+      links: [],
+      shortName: 'Olbrich',
+    } as never;
+
+    const box = parseBoxScore(response);
+
+    expect(box.lines).toHaveLength(1);
+    expect(box.unidentifiedEmptyRows).toBe(1);
   });
 
   it('rejects a row with stats but no athlete record', () => {

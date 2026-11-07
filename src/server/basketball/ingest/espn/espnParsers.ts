@@ -438,7 +438,7 @@ export function parseBoxScore(response: unknown): NbaProviderBoxScore {
     );
   }
 
-  let unidentifiedDidNotPlay = 0;
+  let unidentifiedEmptyRows = 0;
   const lines = data.boxscore.players.flatMap((team) => {
     const teamCode = standardTeamCode(team.team.abbreviation);
     const { keys, athletes } = team.statistics[0];
@@ -446,10 +446,14 @@ export function parseBoxScore(response: unknown): NbaProviderBoxScore {
       const { id, displayName } = line.athlete;
       const who = `game ${header.id} athlete ${id}`;
       if (!id || !displayName) {
-        // No identity to link, and never a name match: a did-not-play row with no stats is
-        // dropped and counted; a row with stats would lose real numbers, so the game fails.
-        if (line.stats.length > 0) parseFailed(`${who} has stats but no athlete id or name`);
-        unidentifiedDidNotPlay += 1;
+        // No identity to link, and never a name match. ESPN lists some unsigned two-way players
+        // this way. A row that records nothing (no stats, or all zeros) is dropped and counted;
+        // one with real numbers would lose them, so the game fails.
+        const values = line.stats.length > 0 ? statValues(keys, line.stats, who) : ZERO_STATS;
+        if (Object.values(values).some((value) => value !== 0)) {
+          parseFailed(`${who} has stats but no athlete id or name`);
+        }
+        unidentifiedEmptyRows += 1;
         return [];
       }
       // Rows with no stats (did not play) carry zeros. ESPN fills `reason` for players who played
@@ -472,7 +476,7 @@ export function parseBoxScore(response: unknown): NbaProviderBoxScore {
     });
   });
 
-  return { game, lines, unidentifiedDidNotPlay };
+  return { game, lines, unidentifiedEmptyRows };
 }
 
 // ---- Injuries ---------------------------------------------------------------------------------

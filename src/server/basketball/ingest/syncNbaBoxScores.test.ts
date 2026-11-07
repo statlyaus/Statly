@@ -61,7 +61,7 @@ function box(
       ...Array.from({ length: home }, (_, index) => line(`h${index}`, 'GSW')),
       ...Array.from({ length: away }, (_, index) => line(`a${index}`, 'MIA')),
     ],
-    unidentifiedDidNotPlay: 0,
+    unidentifiedEmptyRows: 0,
   };
 }
 
