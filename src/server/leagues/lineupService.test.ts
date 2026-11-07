@@ -125,33 +125,37 @@ describe('lineup setup compatibility', () => {
 describe('authoritative lineup timing', () => {
   it.each([
     {
-      label: 'Sydney standard time',
-      leagueTimeZone: 'Australia/Sydney',
+      label: 'a Perth league in Sydney standard time',
+      timeZone: 'Australia/Perth',
       roundStartsAt: '2026-07-18T09:00:00.000Z',
       expectedLockAt: '2026-07-16T09:00:00.000Z',
     },
     {
-      label: 'Sydney daylight time',
-      leagueTimeZone: 'Australia/Sydney',
+      label: 'a UTC league in Sydney standard time',
+      timeZone: 'UTC',
+      roundStartsAt: '2026-07-18T09:00:00.000Z',
+      expectedLockAt: '2026-07-16T09:00:00.000Z',
+    },
+    {
+      label: 'a Sydney league in Sydney standard time',
+      timeZone: 'Australia/Sydney',
+      roundStartsAt: '2026-07-18T09:00:00.000Z',
+      expectedLockAt: '2026-07-16T09:00:00.000Z',
+    },
+    {
+      label: 'a Sydney league in Sydney daylight time',
+      timeZone: 'Australia/Sydney',
       roundStartsAt: '2026-12-19T08:00:00.000Z',
       expectedLockAt: '2026-12-17T08:00:00.000Z',
     },
-    {
-      label: 'New York daylight time',
-      leagueTimeZone: 'America/New_York',
-      roundStartsAt: '2026-07-18T23:00:00.000Z',
-      expectedLockAt: '2026-07-16T23:00:00.000Z',
-    },
   ])(
-    'locks at Thursday 7:00 pm in $label',
-    async ({ leagueTimeZone, roundStartsAt, expectedLockAt }) => {
+    'locks at Thursday 7:00 pm Sydney time for $label',
+    async ({ timeZone, roundStartsAt, expectedLockAt }) => {
       mocks.prisma.league.findUnique.mockResolvedValue({
         settings: {
           ...settings,
-          competitionRulesJson: {
-            lockPolicy: 'THURSDAY_7PM_AEST',
-            leagueTimeZone,
-          },
+          timeZone,
+          competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
         },
       });
       mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
@@ -172,14 +176,39 @@ describe('authoritative lineup timing', () => {
     }
   );
 
+  it('ignores the retired competition-rules timezone that older rule rows still carry', async () => {
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      settings: {
+        ...settings,
+        timeZone: 'Australia/Perth',
+        competitionRulesJson: {
+          lockPolicy: 'THURSDAY_7PM_AEST',
+          leagueTimeZone: 'America/New_York',
+        },
+      },
+    });
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2026-07-18T09:00:00.000Z'),
+    });
+    mocks.prisma.leagueMatchup.findFirst.mockResolvedValue(null);
+
+    const context = await loadMemberLineupRoundContext({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      now: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    expect(context?.lockAt?.toISOString()).toBe('2026-07-16T09:00:00.000Z');
+  });
+
   it('locks a Monday to Wednesday round at its own start, not the previous Thursday', async () => {
     mocks.prisma.league.findUnique.mockResolvedValue({
       settings: {
         ...settings,
-        competitionRulesJson: {
-          lockPolicy: 'THURSDAY_7PM_AEST',
-          leagueTimeZone: 'Australia/Sydney',
-        },
+        timeZone: 'Australia/Sydney',
+        competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
       },
     });
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
