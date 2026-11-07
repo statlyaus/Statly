@@ -37,7 +37,7 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
   {
     route: '/health',
     reason:
-      'Operational health probe. REVIEW: it performs a live Firestore read plus Redis and relational checks on every call with no caching, so it is also an unauthenticated cost surface.',
+      'Operational health probe. Returns per-service status only; one round of checks serves all callers for 10 seconds.',
   },
 
   // Public AFL statistics and match read models.
