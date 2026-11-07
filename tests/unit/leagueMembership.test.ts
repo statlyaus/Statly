@@ -9,6 +9,7 @@ const adminMocks = vi.hoisted(() => ({
 
 const prismaMocks = vi.hoisted(() => ({
   leagueFindUnique: vi.fn(),
+  leagueMemberFindMany: vi.fn(),
 }));
 
 vi.mock('../../src/lib/firebaseAdmin', () => ({
@@ -24,13 +25,15 @@ vi.mock('../../src/lib/prisma', () => ({
     league: {
       findUnique: prismaMocks.leagueFindUnique,
     },
+    leagueMember: {
+      findMany: prismaMocks.leagueMemberFindMany,
+    },
   },
 }));
 
 import {
   getLeagueMembership,
   isActiveMembershipData,
-  isLeagueManagerRole,
   listActiveFirestoreLeagueMembers,
   listActiveLeagueMembers,
   listActiveUserLeagueMemberships,
@@ -44,6 +47,7 @@ describe('leagueMembership architecture helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMocks.leagueFindUnique.mockResolvedValue(null);
+    prismaMocks.leagueMemberFindMany.mockResolvedValue([]);
   });
 
   it('treats removed or inactive membership data as unauthorized', () => {
@@ -51,14 +55,6 @@ describe('leagueMembership architecture helpers', () => {
     expect(isActiveMembershipData({ status: 'REMOVED' })).toBe(false);
     expect(isActiveMembershipData({ status: 'inactive' })).toBe(false);
     expect(isActiveMembershipData({ isActive: true, status: 'ACTIVE' })).toBe(true);
-  });
-
-  it('normalizes league manager roles case-insensitively', () => {
-    expect(isLeagueManagerRole('OWNER')).toBe(true);
-    expect(isLeagueManagerRole('commissioner')).toBe(true);
-    expect(isLeagueManagerRole('Admin')).toBe(true);
-    expect(isLeagueManagerRole('member')).toBe(false);
-    expect(isLeagueManagerRole(undefined)).toBe(false);
   });
 
   it('does not treat a removed member as belonging to the league', async () => {
@@ -84,7 +80,7 @@ describe('leagueMembership architecture helpers', () => {
     expect(adminMocks.doc).not.toHaveBeenCalled();
   });
 
-  it('reads active Prisma league membership before Firestore fallback', async () => {
+  it('reads active Prisma league membership without touching Firestore', async () => {
     prismaMocks.leagueFindUnique.mockResolvedValue({
       ownerId: 'owner-user',
       members: [
@@ -274,317 +270,128 @@ describe('leagueMembership architecture helpers', () => {
     );
   });
 
-  it('does not fall back to legacy membership when the embedded member is inactive', async () => {
-    adminMocks.doc.mockReturnValue({
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        id: 'user-1',
-        data: () => ({ isActive: false }),
-      }),
+  it('does not treat a Firestore-only member as a member when the league has no Prisma row', async () => {
+    const firestoreMember = {
+      exists: true,
+      id: 'user-1',
+      data: () => ({ leagueId: 'league-1', userId: 'user-1', role: 'owner', isActive: true }),
+    };
+    adminMocks.doc.mockReturnValue({ get: vi.fn().mockResolvedValue(firestoreMember) });
+    adminMocks.collection.mockImplementation(() => {
+      throw new Error('Firestore must not decide membership');
     });
 
-    const result = await verifyLeagueMembership('league-1', 'user-1');
-
-    expect(result).toEqual({ isMember: false, source: 'embedded', memberDocId: 'user-1' });
-    expect(adminMocks.collection).not.toHaveBeenCalled();
-  });
-
-  it('does not return stale legacy role data when embedded membership is inactive', async () => {
-    adminMocks.doc.mockReturnValue({
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        id: 'user-1',
-        data: () => ({ isActive: false, role: 'owner' }),
-      }),
-    });
-
-    const result = await getLeagueMembership('league-1', 'user-1');
-
-    expect(result).toEqual({
+    await expect(verifyLeagueMembership('league-1', 'user-1')).resolves.toEqual({
       isMember: false,
-      source: 'embedded',
-      memberDocId: 'user-1',
+      source: 'none',
     });
+    await expect(getLeagueMembership('league-1', 'user-1')).resolves.toEqual({
+      isMember: false,
+      source: 'none',
+    });
+    expect(adminMocks.doc).not.toHaveBeenCalled();
     expect(adminMocks.collection).not.toHaveBeenCalled();
   });
 
-  it('uses only active legacy memberships when no embedded member exists', async () => {
-    const get = vi.fn().mockResolvedValue({
-      empty: false,
-      docs: [
-        { id: 'inactive-member', data: () => ({ isActive: false }) },
-        { id: 'active-member', data: () => ({ isActive: true }) },
-      ],
+  it('does not treat a Firestore-only member as a member of a Prisma league', async () => {
+    prismaMocks.leagueFindUnique.mockResolvedValue({ ownerId: 'owner-user', members: [] });
+
+    await expect(verifyLeagueMembership('league-1', 'firestore-user')).resolves.toEqual({
+      isMember: false,
+      source: 'none',
     });
-    const query = {
-      where: vi.fn(() => query),
-      limit: vi.fn(() => ({ get })),
-    };
-
-    adminMocks.doc.mockReturnValue({
-      get: vi.fn().mockResolvedValue({
-        exists: false,
-        data: () => undefined,
-      }),
-    });
-    adminMocks.collection.mockReturnValue(query);
-
-    const result = await verifyLeagueMembership('league-1', 'user-1');
-
-    expect(query.where).toHaveBeenCalledWith('leagueId', '==', 'league-1');
-    expect(query.where).toHaveBeenCalledWith('userId', '==', 'user-1');
-    expect(query.limit).toHaveBeenCalledWith(10);
-    expect(result).toEqual({ isMember: true, source: 'legacy', memberDocId: 'active-member' });
+    expect(adminMocks.doc).not.toHaveBeenCalled();
+    expect(adminMocks.collection).not.toHaveBeenCalled();
   });
 
-  it('lists active embedded members without reading the top-level mirror', async () => {
-    const embeddedGet = vi.fn().mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'removed-user',
-          data: () => ({
-            leagueId: 'league-1',
-            userId: 'removed-user',
-            teamName: 'Removed Team',
-            role: 'member',
-            isActive: false,
-            joinedAt: '2026-05-31T02:00:00.000Z',
-          }),
-        },
-        {
-          id: 'user-2',
-          data: () => ({
-            leagueId: 'league-1',
-            userId: 'user-2',
-            teamName: 'Second Team',
-            role: 'member',
-            isActive: true,
-            joinedAt: '2026-05-31T02:00:00.000Z',
-          }),
-        },
-        {
-          id: 'user-1',
-          data: () => ({
-            leagueId: 'league-1',
-            userId: 'user-1',
-            teamName: 'First Team',
-            role: 'owner',
-            isActive: true,
-            joinedAt: '2026-05-31T01:00:00.000Z',
-          }),
-        },
-      ],
+  it('lists no members for a league with no Prisma row, without reading Firestore', async () => {
+    adminMocks.collection.mockImplementation(() => {
+      throw new Error('Firestore must not decide the member list');
     });
-    const embeddedMembers = {
-      get: embeddedGet,
-      orderBy: vi.fn(),
-    };
-    const leagueDoc = {
-      collection: vi.fn(() => embeddedMembers),
-    };
-    const leaguesCollection = {
-      doc: vi.fn(() => leagueDoc),
-    };
 
-    adminMocks.collection.mockReturnValue(leaguesCollection);
+    await expect(listActiveLeagueMembers('league-1')).resolves.toEqual([]);
+    expect(adminMocks.collection).not.toHaveBeenCalled();
+  });
 
-    const result = await listActiveLeagueMembers('league-1');
-
-    expect(adminMocks.collection).toHaveBeenCalledTimes(1);
-    expect(adminMocks.collection).toHaveBeenCalledWith('leagues');
-    expect(leaguesCollection.doc).toHaveBeenCalledWith('league-1');
-    expect(leagueDoc.collection).toHaveBeenCalledWith('members');
-    expect(embeddedMembers.orderBy).not.toHaveBeenCalled();
-    expect(result.map((member) => member.userId)).toEqual(['user-1', 'user-2']);
-    expect(result[0]).toMatchObject({
-      id: 'user-1',
-      source: 'embedded',
-      role: 'owner',
+  it("lists a user's active league memberships from Prisma only", async () => {
+    const joinedAt = new Date('2026-06-01T00:00:00.000Z');
+    const row = {
+      teamLogoUrl: null,
+      teamLogoPositionX: null,
+      teamLogoPositionY: null,
+      teamLogoZoom: null,
+      joinedAt,
+      leftAt: null,
       isActive: true,
-    });
-  });
-
-  it('falls back to active legacy members only when embedded members are absent', async () => {
-    const embeddedGet = vi.fn().mockResolvedValue({
-      empty: true,
-      docs: [],
-    });
-    const embeddedMembers = {
-      get: embeddedGet,
-      orderBy: vi.fn(),
+      status: 'ACTIVE',
+      isCoCommissioner: false,
     };
-    const leagueDoc = {
-      collection: vi.fn(() => embeddedMembers),
-    };
-    const leaguesCollection = {
-      doc: vi.fn(() => leagueDoc),
-    };
-    const legacyGet = vi.fn().mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'inactive-legacy',
-          data: () => ({ leagueId: 'league-1', userId: 'old-user', isActive: false }),
-        },
-        {
-          id: 'active-legacy',
-          data: () => ({
-            leagueId: 'league-1',
-            userId: 'legacy-user',
-            role: 'member',
-            teamName: 'Legacy Team',
-            isActive: true,
-            joinedAt: '2026-05-31T01:00:00.000Z',
-          }),
-        },
-      ],
-    });
-    const legacyQuery = {
-      where: vi.fn(() => legacyQuery),
-      get: legacyGet,
-      orderBy: vi.fn(),
-    };
-
-    adminMocks.collection.mockImplementation((collectionName: string) => {
-      if (collectionName === 'leagues') return leaguesCollection;
-      if (collectionName === 'leagueMembers') return legacyQuery;
-      throw new Error(`Unexpected collection ${collectionName}`);
-    });
-
-    const result = await listActiveLeagueMembers('league-1');
-
-    expect(adminMocks.collection).toHaveBeenCalledWith('leagueMembers');
-    expect(legacyQuery.where).toHaveBeenCalledWith('leagueId', '==', 'league-1');
-    expect(legacyQuery.orderBy).not.toHaveBeenCalled();
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      id: 'active-legacy',
-      userId: 'legacy-user',
-      source: 'legacy',
-      isActive: true,
-    });
-  });
-
-  it('lists active embedded user memberships without reading the top-level mirror', async () => {
-    const embeddedGet = vi.fn().mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-1',
-          ref: { parent: { parent: { id: 'league-removed' } } },
-          data: () => ({
-            userId: 'user-1',
-            teamName: 'Removed Team',
-            role: 'member',
-            isActive: false,
-            joinedAt: '2026-05-31T03:00:00.000Z',
-          }),
-        },
-        {
-          id: 'user-1',
-          ref: { parent: { parent: { id: 'league-2' } } },
-          data: () => ({
-            leagueId: 'league-2',
-            userId: 'user-1',
-            teamName: 'Second Team',
-            role: 'member',
-            isActive: true,
-            joinedAt: '2026-05-31T02:00:00.000Z',
-          }),
-        },
-        {
-          id: 'user-1',
-          ref: { parent: { parent: { id: 'league-1' } } },
-          data: () => ({
-            userId: 'user-1',
-            teamName: 'First Team',
-            role: 'owner',
-            isActive: true,
-            joinedAt: '2026-05-31T01:00:00.000Z',
-          }),
-        },
-      ],
-    });
-    const collectionGroupQuery = {
-      where: vi.fn(() => ({ get: embeddedGet })),
-    };
-
-    adminMocks.collectionGroup.mockReturnValue(collectionGroupQuery);
-
-    const result = await listActiveUserLeagueMemberships('user-1');
-
-    expect(adminMocks.collectionGroup).toHaveBeenCalledWith('members');
-    expect(collectionGroupQuery.where).toHaveBeenCalledWith('userId', '==', 'user-1');
-    expect(adminMocks.collection).not.toHaveBeenCalledWith('leagueMembers');
-    expect(result.map((member) => member.leagueId)).toEqual(['league-1', 'league-2']);
-    expect(result[0]).toMatchObject({
-      id: 'user-1',
-      source: 'embedded',
-      role: 'owner',
-      isActive: true,
-    });
-  });
-
-  it('falls back to active top-level user memberships only when embedded user memberships are absent', async () => {
-    const embeddedGet = vi.fn().mockResolvedValue({
-      empty: true,
-      docs: [],
-    });
-    const collectionGroupQuery = {
-      where: vi.fn(() => ({ get: embeddedGet })),
-    };
-    const legacyGet = vi.fn().mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'inactive-legacy',
-          data: () => ({
-            leagueId: 'league-old',
-            userId: 'user-1',
-            role: 'member',
-            teamName: 'Old Team',
-            isActive: false,
-            joinedAt: '2026-05-31T01:00:00.000Z',
-          }),
-        },
-        {
-          id: 'active-legacy',
-          data: () => ({
-            leagueId: 'league-active',
-            userId: 'user-1',
-            role: 'member',
-            teamName: 'Active Team',
-            isActive: true,
-            joinedAt: '2026-05-31T02:00:00.000Z',
-          }),
-        },
-      ],
-    });
-    const legacyQuery = {
-      where: vi.fn(() => legacyQuery),
-      get: legacyGet,
-    };
-
-    adminMocks.collectionGroup.mockReturnValue(collectionGroupQuery);
-    adminMocks.collection.mockImplementation((collectionName: string) => {
-      if (collectionName === 'leagueMembers') return legacyQuery;
-      throw new Error(`Unexpected collection ${collectionName}`);
+    prismaMocks.leagueMemberFindMany.mockResolvedValue([
+      {
+        ...row,
+        id: 'm-1',
+        leagueId: 'league-1',
+        userId: 'user-1',
+        role: 'OWNER',
+        teamName: 'Owned FC',
+        league: { ownerId: 'user-1' },
+      },
+      {
+        ...row,
+        id: 'm-2',
+        leagueId: 'league-2',
+        userId: 'user-1',
+        role: 'MANAGER',
+        teamName: 'Gone FC',
+        isActive: false,
+        status: 'REMOVED',
+        leftAt: joinedAt,
+        league: { ownerId: 'someone-else' },
+      },
+      {
+        ...row,
+        id: 'm-3',
+        leagueId: 'league-3',
+        userId: 'user-1',
+        role: 'MANAGER',
+        teamName: 'Co FC',
+        isCoCommissioner: true,
+        league: { ownerId: 'someone-else' },
+      },
+    ]);
+    adminMocks.collectionGroup.mockImplementation(() => {
+      throw new Error('Firestore must not decide memberships');
     });
 
     const result = await listActiveUserLeagueMemberships('user-1');
 
-    expect(adminMocks.collectionGroup).toHaveBeenCalledWith('members');
-    expect(collectionGroupQuery.where).toHaveBeenCalledWith('userId', '==', 'user-1');
-    expect(adminMocks.collection).toHaveBeenCalledWith('leagueMembers');
-    expect(legacyQuery.where).toHaveBeenCalledWith('userId', '==', 'user-1');
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      id: 'active-legacy',
-      leagueId: 'league-active',
-      source: 'legacy',
-      isActive: true,
-    });
+    expect(prismaMocks.leagueMemberFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1' } })
+    );
+    expect(result).toEqual([
+      {
+        id: 'm-1',
+        leagueId: 'league-1',
+        userId: 'user-1',
+        role: 'owner',
+        teamName: 'Owned FC',
+        joinedAt,
+        isActive: true,
+        source: 'prisma',
+      },
+      {
+        id: 'm-3',
+        leagueId: 'league-3',
+        userId: 'user-1',
+        role: 'admin',
+        teamName: 'Co FC',
+        joinedAt,
+        isActive: true,
+        source: 'prisma',
+      },
+    ]);
+    expect(adminMocks.collectionGroup).not.toHaveBeenCalled();
+    expect(adminMocks.collection).not.toHaveBeenCalled();
   });
 
   it('lists members of a Prisma league from Prisma, skipping removed rows', async () => {
