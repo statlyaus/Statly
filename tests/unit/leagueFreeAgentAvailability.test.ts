@@ -214,24 +214,6 @@ vi.mock('../../src/lib/logger', () => ({
   withTiming: vi.fn((_label: string, work: () => unknown) => work()),
 }));
 
-vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
-}));
-
-vi.mock('@/lib/cacheTags', () => ({
-  tags: {
-    league: (leagueId: string) => `league:${leagueId}`,
-    waivers: (leagueId: string) => `waivers:${leagueId}`,
-  },
-}));
-
-vi.mock('../../src/lib/cacheTags', () => ({
-  tags: {
-    league: (leagueId: string) => `league:${leagueId}`,
-    waivers: (leagueId: string) => `waivers:${leagueId}`,
-  },
-}));
-
 vi.mock('@/lib/metrics', () => ({
   withMetrics: (handler: unknown) => handler,
 }));

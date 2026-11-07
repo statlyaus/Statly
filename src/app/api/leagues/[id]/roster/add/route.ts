@@ -2,11 +2,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import type { NextRequest } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 
 import { createErrorResponse, errorResponse, successResponse } from '@/lib/apiResponse';
-import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -75,8 +73,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await Promise.allSettled([
       new WaiverAvailabilityProjectionService().projectLeague({ leagueId }),
-      revalidateTag(tags.league(leagueId), { expire: 0 }),
-      revalidateTag(tags.waivers(leagueId), { expire: 0 }),
     ]);
 
     return successResponse({
