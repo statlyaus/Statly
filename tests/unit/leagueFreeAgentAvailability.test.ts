@@ -270,6 +270,8 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       userId: 'statly-dev-tester',
+      isActive: true,
+      status: 'ACTIVE',
     });
     prismaMocks.leagueMember.findMany.mockResolvedValue([
       { id: 'member-1', userId: 'statly-dev-tester', draftSlot: 1, joinedAt: new Date() },
