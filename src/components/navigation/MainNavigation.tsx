@@ -503,6 +503,8 @@ export default function MainNavigation(): ReactNode {
     try {
       setIsLoggingOut(true);
       await logout();
+      // A full load leaves the protected page and drops its client and router-cached data.
+      window.location.assign('/login');
     } catch (error) {
       logger.error('Logout failed', error);
       const message =
