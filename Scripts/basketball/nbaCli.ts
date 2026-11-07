@@ -28,11 +28,17 @@ export function positiveInteger(
   return parsed;
 }
 
-/** Refuses a non-local DATABASE_URL unless --allow-remote was passed. */
+/**
+ * Refuses a non-local DATABASE_URL unless --allow-remote was passed. A remote database may be
+ * production, so it is treated as production: the licensing guard (`assertNbaProviderAllowed`)
+ * then refuses an unlicensed provider unless NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true.
+ */
 export function assertLocalDatabase(allowRemote: boolean): void {
   const url = process.env.DATABASE_URL ?? '';
   const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
-  if (!local && !allowRemote) {
+  if (local) return;
+  if (!allowRemote) {
     throw new Error('Refusing to use a non-local DATABASE_URL without --allow-remote.');
   }
+  Object.assign(process.env, { NODE_ENV: 'production' });
 }
