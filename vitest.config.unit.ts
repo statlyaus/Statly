@@ -25,13 +25,7 @@ export default defineConfig({
       'src/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
       'src/**/__tests__/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs,mts,cts}',
     ],
-    exclude: [
-      '**/node_modules/**',
-      '**/tmp/**',
-      // Starts a real HTTP server and fetches it, which the unit setup blocks by stubbing fetch.
-      // It belongs in the integration suite; tracked as a follow-up on #626.
-      'src/server/app.test.ts',
-    ],
+    exclude: ['**/node_modules/**', '**/tmp/**'],
     globals: true,
     clearMocks: true,
     // Ordinary tests stay bounded; the heavy retained native-PAV graph tests declare an explicit
