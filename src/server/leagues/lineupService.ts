@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 
+import { activeSeasonIdOf, requireActiveSeasonId } from './activeSeason';
 import { normalizeCompetitionRules, type CompetitionRules } from './competitionRules';
 import { normalizeLineupSlots } from './lineupSettings';
 import type { ActiveLineupSlot, LeagueLineupSlot, LineupSlotSettings } from './scoringTypes';
@@ -747,8 +748,9 @@ export async function loadMemberLineup({
   round: number;
 }) {
   return prisma.$transaction(async (tx) => {
+    const seasonId = await requireActiveSeasonId(tx, leagueId);
     const query = {
-      where: { leagueId_memberId_round: { leagueId, memberId, round } },
+      where: { leagueId_seasonId_memberId_round: { leagueId, seasonId, memberId, round } },
       include: {
         players: {
           include: { player: true },
@@ -960,8 +962,9 @@ export async function saveMemberLineup({
       return { ok: false, code: 'INVALID_LINEUP', errors: ['This round is locked.'] };
     }
 
+    const seasonId = activeSeasonIdOf(currentLeague);
     const existingLineup = await tx.leagueLineup.findUnique({
-      where: { leagueId_memberId_round: { leagueId, memberId, round } },
+      where: { leagueId_seasonId_memberId_round: { leagueId, seasonId, memberId, round } },
       include: { players: true },
     });
     const normalizedExistingPlayers = existingLineup
@@ -1009,8 +1012,8 @@ export async function saveMemberLineup({
     }
 
     const upserted = await tx.leagueLineup.upsert({
-      where: { leagueId_memberId_round: { leagueId, memberId, round } },
-      create: { leagueId, memberId, round },
+      where: { leagueId_seasonId_memberId_round: { leagueId, seasonId, memberId, round } },
+      create: { leagueId, seasonId, memberId, round },
       update: {},
     });
 

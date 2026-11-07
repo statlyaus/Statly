@@ -52,6 +52,7 @@ function buildClient({
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
+        activeSeasonId: 'season-1',
         categoriesJson: null,
         settings: {
           lineupSlotsJson: lineupSlots,
@@ -144,6 +145,33 @@ describe('ensureDefaultLineups', () => {
       ])
     );
     expect(createdPlayers(client).players.create).toHaveLength(5);
+  });
+
+  it('reads, carries and writes lineups of the active season only', async () => {
+    const client = buildClient({
+      previousByMember: {
+        'member-1': { round: 3, players: [{ playerId: 'mid', slot: 'MID', slotIndex: 0 }] },
+      },
+      roster: [{ memberId: 'member-1', playerId: 'mid', position: 'MID' }],
+    });
+
+    await ensureDefaultLineups({
+      leagueId: 'league-1',
+      round: 4,
+      memberIds: ['member-1'],
+      client: client as never,
+    });
+
+    const season = { leagueId: 'league-1', seasonId: 'season-1' };
+    expect(client.leagueLineup.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining(season) })
+    );
+    expect(client.leagueLineup.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining(season) })
+    );
+    expect(client.leagueLineup.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ ...season, memberId: 'member-1', round: 4 }),
+    });
   });
 
   it('builds a lineup by position for a team that never set one, leaving out byes and injuries', async () => {

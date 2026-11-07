@@ -30,6 +30,7 @@ import {
 function leagueWithFixtureVersion(competitionRulesVersion: number) {
   return {
     id: 'league-1',
+    activeSeasonId: 'season-1',
     categoriesJson: ['goals'],
     settings: {
       scoringMode: 'H2H_EACH_CATEGORY',

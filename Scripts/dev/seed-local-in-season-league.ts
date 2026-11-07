@@ -416,6 +416,7 @@ async function main() {
         await prisma.leagueLineup.create({
           data: {
             leagueId: LEAGUE_ID,
+            seasonId: SEASON_ID,
             memberId: member.id,
             round,
             lockedAt: new Date(now.getTime() - DAY),
