@@ -112,7 +112,7 @@ const sentryWebpackPluginOptions = {
 let exportedConfig = nextConfig;
 
 if (process.env.NODE_ENV === 'production') {
-  const { withSentryConfig } = await import('@sentry/nextjs');
+  const { withSentryConfig } = await import('@sentry/nextjs/config');
   exportedConfig = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
 }
 
