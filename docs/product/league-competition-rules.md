@@ -9,6 +9,9 @@ tests, and this document together.
 - Competition state is scoped to a league and `LeagueSeason`.
 - Commissioners configure scoring, fixtures, lineup slots, locks, and finals before publication.
 - Publication records the rules/version used to calculate the competition.
+- Publication happens once, from setup. Published rules are read-only: the server refuses another
+  save or publish (409), so a live season's scores, standings, and lineups are never reset. Later
+  changes go through commissioner overrides.
 - Commissioner overrides are authorized at the server boundary and retained in the competition audit
   history.
 - Missing official AFL fixture data is represented as pending state; the UI must not invent a reliable
