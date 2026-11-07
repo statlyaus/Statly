@@ -138,7 +138,7 @@ export default function DraftQueue({
               type="button"
               onClick={() => setIsEditing(!isEditing)}
               disabled={controlsDisabled}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={isEditing ? 'Finish editing draft queue' : 'Edit draft queue'}
               title={isEditing ? 'Done' : 'Edit'}
             >
@@ -148,7 +148,7 @@ export default function DraftQueue({
               type="button"
               onClick={handleClearQueue}
               disabled={queueEntries.length === 0 || controlsDisabled}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Clear draft queue"
               title="Clear"
             >
@@ -231,7 +231,7 @@ export default function DraftQueue({
                                 type="button"
                                 onClick={() => handleRemovePlayer(playerId)}
                                 disabled={controlsDisabled}
-                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                 aria-label={`Remove ${player?.name ?? 'queued player'} from queue`}
                               >
                                 <X className="h-4 w-4" />
@@ -291,7 +291,7 @@ export default function DraftQueue({
                     type="button"
                     onClick={() => handleAddToQueue(player)}
                     disabled={controlsDisabled}
-                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add
                   </button>

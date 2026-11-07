@@ -25,7 +25,7 @@ export default async function LeagueTeamRosterPage({
   const standingsHref = `/leagues/${encodeURIComponent(leagueId)}?tab=standings`;
 
   return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[var(--app-shell-max-width)]">
           <Link
             href={standingsHref}
@@ -85,6 +85,6 @@ export default async function LeagueTeamRosterPage({
             )}
           </section>
         </div>
-      </main>
+      </div>
   );
 }

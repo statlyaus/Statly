@@ -42,13 +42,10 @@ describe('draft room runtime source of truth', () => {
     expect(sourceOfTruth).toContain('waiver/free-agent surfaces');
   });
 
-  it('marks older available-player tables as reference-only surfaces', () => {
+  it('marks the older available-player table as a reference-only surface', () => {
     const legacyTable = read('src/components/AvailablePlayersTable.tsx');
-    const legacyNewTable = read('src/components/AvailablePlayersTable_new.tsx');
 
     expect(legacyTable).toContain('Legacy reference table only');
     expect(legacyTable).toContain('src/components/draft/PlayerGrid.tsx');
-    expect(legacyNewTable).toContain('Legacy reference table only');
-    expect(legacyNewTable).toContain('src/components/draft/PlayerGrid.tsx');
   });
 });

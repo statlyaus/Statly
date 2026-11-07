@@ -7,7 +7,7 @@ import * as functions from 'firebase-functions/v1';
 import type { EventContext } from 'firebase-functions/v1';
 import type { DocumentData, DocumentSnapshot } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import crypto from 'node:crypto';
 
@@ -15,58 +15,6 @@ import crypto from 'node:crypto';
 initializeApp();
 const db = getFirestore();
 const REGION = 'australia-southeast1';
-
-interface DraftPreferences {
-  watchlist: string[];
-  autoDraftEnabled: boolean;
-  draftStrategy: 'BALANCED' | 'OFFENSE' | 'DEFENSE' | 'VALUE';
-  priorityPositions: string[];
-  maxDraftTime: number; // seconds
-}
-
-interface Player {
-  id: string;
-  name: string;
-  position: string;
-  team: string;
-  averagePoints: number;
-  projectedPoints: number;
-  adp: number; // Average Draft Position
-  tier: number;
-}
-
-/**
- * League-specific trade update listener
- * Triggers only for trades within the specific league
- */
-export const onTradeUpdate = functions
-  .region(REGION)
-  .runWith({ failurePolicy: true, timeoutSeconds: 120, memory: '256MB' })
-  .firestore.document('leagues/{leagueId}/trades/{tradeId}')
-  .onWrite(async (change: functions.Change<DocumentSnapshot>, context: EventContext) => {
-    const { leagueId, tradeId } = context.params as { leagueId: string; tradeId: string };
-    const tradeData = change.after.data() ?? null;
-
-    if (!tradeData) return;
-
-    functions.logger.info(`Processing league-specific trade update in league ${leagueId}`);
-
-    try {
-      switch (tradeData.status) {
-        case 'PROPOSED':
-          await handleLeagueTradeProposal(leagueId, tradeId);
-          break;
-        case 'ACCEPTED':
-          await processAcceptedLeagueTrade(leagueId, tradeId, tradeData);
-          break;
-        case 'REJECTED':
-          await notifyLeagueTradeRejection(leagueId);
-          break;
-      }
-    } catch (error) {
-      functions.logger.error(`League-scoped trade processing failed for ${tradeId}:`, error);
-    }
-  });
 
 /**
  * Team-specific roster write listener.
@@ -100,185 +48,9 @@ export const onTeamRosterUpdate = functions
     }
   });
 
-/**
- * User-specific watchlist update listener
- * Triggers only for watchlist changes for a specific user in a league
- */
-export const onUserWatchlistUpdate = functions
-  .region(REGION)
-  .runWith({ failurePolicy: true, timeoutSeconds: 120, memory: '256MB' })
-  .firestore.document('leagues/{leagueId}/members/{userId}')
-  .onUpdate(async (change: functions.Change<DocumentSnapshot>, context: EventContext) => {
-    const { leagueId, userId } = context.params as { leagueId: string; userId: string };
-    const beforeData = change.before.data() ?? {};
-    const afterData = change.after.data() ?? {};
-
-    const oldWatchlist: string[] = beforeData.draftPreferences?.watchlist || [];
-    const newWatchlist: string[] = afterData.draftPreferences?.watchlist || [];
-
-    const oldSet = new Set(oldWatchlist);
-    const newSet = new Set(newWatchlist);
-    const changed = oldSet.size !== newSet.size || [...oldSet].some((id) => !newSet.has(id));
-
-    if (changed) {
-      functions.logger.info(`User watchlist updated: ${userId} in league ${leagueId}`);
-
-      try {
-        // Validate watchlist players are still available in this league
-        await validateUserWatchlistForLeague(leagueId, userId, newWatchlist);
-
-        // Update draft recommendations cache for this user in this league
-        await updateUserDraftRecommendations(leagueId, userId);
-      } catch (error) {
-        functions.logger.error(`User watchlist processing failed for ${userId}:`, error);
-      }
-    }
-  });
-
-async function getAvailablePlayersByStrategy(
-  leagueId: string,
-  strategy: string,
-  priorityPositions: string[],
-  round: number
-): Promise<Player[]> {
-  // Query per-league availability index for scalable filtering
-  let query = db
-    .collection('leagues')
-    .doc(leagueId)
-    .collection('availablePlayers')
-    .where('available', '==', true)
-    .orderBy('tier')
-    .orderBy('averagePoints', 'desc');
-
-  if (round <= 3) {
-    query = query.where('tier', '<=', 2);
-  } else if (round <= 8) {
-    query = query.where('tier', '<=', 4);
-  }
-
-  if (priorityPositions.length > 0 && round <= 10) {
-    query = query.where('position', 'in', priorityPositions.slice(0, 10));
-  }
-
-  const snapshot = await query.limit(50).get();
-  const playerIds = snapshot.docs.map((d) => d.id);
-  if (playerIds.length === 0) return [];
-
-  const playerDocs = await Promise.all(
-    playerIds.map((id) => db.collection('players').doc(id).get())
-  );
-  return playerDocs
-    .filter((d) => d.exists)
-    .map((d) => ({ id: d.id, ...(d.data() as any) })) as Player[];
-}
-
-async function isPlayerAvailable(leagueId: string, playerId: string): Promise<boolean> {
-  const indexDoc = await db
-    .collection('leagues')
-    .doc(leagueId)
-    .collection('availablePlayers')
-    .doc(playerId)
-    .get();
-  if (indexDoc.exists) {
-    const available = (indexDoc.data() as any)?.available;
-    return available === true;
-  }
-  // Fallback to legacy field
-  const doc = await db.collection('players').doc(playerId).get();
-  const data = doc.data();
-  return data?.leagueAvailability?.[leagueId] !== false;
-}
-
 // League-specific trade processing functions
 
-async function handleLeagueTradeProposal(leagueId: string, tradeId: string): Promise<void> {
-  // Validate trade within league context
-  const isValid = await validateTradeForLeague(leagueId);
-
-  if (!isValid) {
-    await db.collection('leagues').doc(leagueId).collection('trades').doc(tradeId).update({
-      status: 'REJECTED',
-      rejectionReason: 'Invalid trade configuration for this league',
-      updatedAt: Timestamp.now(),
-    });
-    return;
-  }
-
-  // Set expiration (72 hours default)
-  const tradeExpiresAt = Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-
-  await db.collection('leagues').doc(leagueId).collection('trades').doc(tradeId).update({
-    expiresAt: tradeExpiresAt,
-    updatedAt: Timestamp.now(),
-  });
-
-  // Notify trade partner within league
-  await notifyLeagueTradePartner(leagueId);
-}
-
-async function processAcceptedLeagueTrade(
-  leagueId: string,
-  tradeId: string,
-  tradeData: any
-): Promise<void> {
-  const batch = db.batch();
-
-  // Update rosters within league scope
-  const fromRosterRef = db
-    .collection('leagues')
-    .doc(leagueId)
-    .collection('rosters')
-    .doc(tradeData.fromTeamId);
-
-  const toRosterRef = db
-    .collection('leagues')
-    .doc(leagueId)
-    .collection('rosters')
-    .doc(tradeData.toTeamId);
-
-  // Remove players from sending team
-  batch.update(fromRosterRef, {
-    playerIds: FieldValue.arrayRemove(...tradeData.fromPlayerIds),
-    updatedAt: Timestamp.now(),
-  });
-
-  // Remove players from receiving team who are being sent away
-  batch.update(toRosterRef, {
-    playerIds: FieldValue.arrayRemove(...tradeData.toPlayerIds),
-    updatedAt: Timestamp.now(),
-  });
-
-  // Add players to receiving team
-  batch.update(toRosterRef, {
-    playerIds: FieldValue.arrayUnion(...tradeData.fromPlayerIds),
-    updatedAt: Timestamp.now(),
-  });
-
-  // Mark trade as processed within league
-  const tradeRef = db.collection('leagues').doc(leagueId).collection('trades').doc(tradeId);
-
-  batch.update(tradeRef, {
-    status: 'PROCESSED',
-    processedAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-  });
-
-  await batch.commit();
-
-  functions.logger.info(`League trade ${tradeId} processed successfully in league ${leagueId}`);
-}
-
 // League-specific notification functions
-
-async function notifyLeagueTradePartner(leagueId: string): Promise<void> {
-  // Implement league-scoped trade proposal notification
-  functions.logger.info(`Notifying trade partner in league ${leagueId}`);
-}
-
-async function notifyLeagueTradeRejection(leagueId: string): Promise<void> {
-  // Implement league-scoped trade rejection notification
-  functions.logger.info(`Notifying trade rejection in league ${leagueId}`);
-}
 
 // Team-specific notification functions
 
@@ -361,13 +133,6 @@ function stringOrUndefined(value: unknown): string | undefined {
 
 // League-specific validation functions
 
-async function validateTradeForLeague(leagueId: string): Promise<boolean> {
-  // Implement league-specific trade validation logic
-  // Check league roster limits, position requirements, etc.
-  functions.logger.info(`Validating trade for league ${leagueId}`);
-  return true;
-}
-
 // League-specific player availability functions
 
 async function updatePlayerAvailabilityForLeague(
@@ -420,94 +185,6 @@ async function updatePlayerAvailabilityForLeague(
 }
 
 // User-specific functions
-
-async function validateUserWatchlistForLeague(
-  leagueId: string,
-  userId: string,
-  watchlist: string[]
-): Promise<void> {
-  // Validate that watchlist players are available in this specific league
-  const unavailablePlayers: string[] = [];
-
-  for (const playerId of watchlist) {
-    const isAvailable = await isPlayerAvailable(leagueId, playerId);
-    if (!isAvailable) {
-      unavailablePlayers.push(playerId);
-    }
-  }
-
-  if (unavailablePlayers.length > 0) {
-    // Update user's watchlist to remove unavailable players
-    await db
-      .collection('leagues')
-      .doc(leagueId)
-      .collection('members')
-      .doc(userId)
-      .update({
-        'draftPreferences.watchlist': FieldValue.arrayRemove(...unavailablePlayers),
-        updatedAt: Timestamp.now(),
-      });
-
-    functions.logger.info(
-      `Removed ${unavailablePlayers.length} unavailable players from ${userId}'s watchlist in league ${leagueId}`
-    );
-  }
-}
-
-async function updateUserDraftRecommendations(leagueId: string, userId: string): Promise<void> {
-  // Generate fresh draft recommendations for user in specific league
-  try {
-    const preferences = await getUserDraftPreferences(leagueId, userId);
-    const recommendations = await generateDraftRecommendations(leagueId, preferences);
-
-    await db.collection('leagues').doc(leagueId).collection('members').doc(userId).update({
-      draftRecommendations: recommendations,
-      recommendationsUpdatedAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-
-    functions.logger.info(`Updated draft recommendations for user ${userId} in league ${leagueId}`);
-  } catch (error) {
-    functions.logger.error(`Failed to update draft recommendations for ${userId}:`, error);
-  }
-}
-
-async function generateDraftRecommendations(
-  leagueId: string,
-  preferences: DraftPreferences
-): Promise<any[]> {
-  // Generate league-specific draft recommendations based on user preferences
-  const availablePlayers = await getAvailablePlayersByStrategy(
-    leagueId,
-    preferences.draftStrategy,
-    preferences.priorityPositions,
-    1 // Current round approximation
-  );
-
-  return availablePlayers.slice(0, 10).map((player) => ({
-    playerId: player.id,
-    reason: `Recommended based on ${preferences.draftStrategy} strategy`,
-    priority: player.tier,
-    estimatedValue: player.averagePoints,
-  }));
-}
-
-async function getUserDraftPreferences(
-  leagueId: string,
-  userId: string
-): Promise<DraftPreferences> {
-  const doc = await db.collection('leagues').doc(leagueId).collection('members').doc(userId).get();
-  const data = doc.data();
-  return (
-    data?.draftPreferences || {
-      watchlist: [],
-      autoDraftEnabled: true,
-      draftStrategy: 'BALANCED',
-      priorityPositions: ['MID', 'FWD', 'DEF', 'RUC'],
-      maxDraftTime: 90,
-    }
-  );
-}
 
 /**
  * Firestore trigger to maintain ownershipPercent and available flag in availablePlayers

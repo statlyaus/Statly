@@ -15,6 +15,7 @@ import {
 import { TeamMark } from '@/components/scores/MatchupScore';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { autoFillLineup, scorePlayersByStats } from '@/lib/leagues/lineupAutoFill';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import type { LineupSlotSettings } from '@/server/leagues/scoringTypes';
@@ -158,17 +159,11 @@ function formatGameTime(value: string | null | undefined): string | null {
   }).format(date);
 }
 
-function formatWhen(value: string | null | undefined): string | null {
+function formatWhen(value: string | null | undefined, timeZone?: string): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
-  return new Intl.DateTimeFormat('en-AU', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
+  return formatLeagueTime(date, timeZone);
 }
 
 function formatStat(value: number | null | undefined): string {
@@ -201,9 +196,12 @@ function roundStateLabel(summary: RoundSummary, now: Date): string {
 export function LeagueMyTeamPanel({
   leagueId,
   currentUserId,
+  timeZone,
 }: {
   leagueId: string;
   currentUserId?: string;
+  /** The league's IANA timezone; the lineup lock time is shown in it. */
+  timeZone?: string;
 }): React.JSX.Element {
   const [requestedRound, setRequestedRound] = useState<string>('next');
   const [data, setData] = useState<MyTeamData | null>(null);
@@ -325,14 +323,36 @@ export function LeagueMyTeamPanel({
         );
         const payload = (await response.json().catch(() => null)) as {
           success?: boolean;
+          data?: { players?: MyTeamData['players'] } | null;
           error?: string;
           details?: string[];
         } | null;
         if (!response.ok || !payload?.success) {
           throw new Error(payload?.details?.join(' ') || payload?.error || 'Save failed.');
         }
+        // Show what the server stored (it keeps locked players where they were), never what we sent.
+        let storedPlayers = payload.data?.players;
+        if (!Array.isArray(storedPlayers)) {
+          const reload = await authenticatedFetch(
+            `/api/leagues/${encodeURIComponent(leagueId)}/lineups/${round}`,
+            { signal: controller.signal },
+            currentUserId
+          );
+          const reloaded = (await reload.json().catch(() => null)) as {
+            success?: boolean;
+            data?: MyTeamData;
+          } | null;
+          storedPlayers = reloaded?.data?.players;
+          if (!reload.ok || !reloaded?.success || !Array.isArray(storedPlayers)) {
+            // Saved, but unseen: reload the whole panel, which reports its own load error.
+            if (!controller.signal.aborted) setReloadKey((key) => key + 1);
+            return;
+          }
+        }
         if (controller.signal.aborted) return;
-        setBaseline([...next]);
+        const stored = toAssignments(storedPlayers);
+        setBaseline(stored);
+        setAssignments(stored);
         setData((current) => (current ? { ...current, savedRound: round } : current));
         setSaveState({ kind: 'saved', at: new Date() });
       } catch (error) {
@@ -757,6 +777,7 @@ export function LeagueMyTeamPanel({
               canFill={canFill}
               unfillableSlots={editable ? unfillableSlots : []}
               onGoToRound={(value) => goToRound(String(value))}
+              timeZone={timeZone}
             />
           </section>
 
@@ -1358,6 +1379,7 @@ function ReadinessRow({
   canFill,
   unfillableSlots,
   onGoToRound,
+  timeZone,
 }: {
   data: MyTeamData;
   summary: ReturnType<typeof summarizeLineup>;
@@ -1371,13 +1393,14 @@ function ReadinessRow({
   firstEditableRound: number | null;
   onFill: () => void;
   onGoToRound: (round: number) => void;
+  timeZone?: string;
 }) {
   const lockState = data.context?.lockState ?? null;
   const flagged = data.rosterPlayers.filter(
     (player) => selectedIds.has(player.playerId) && (player.bye || player.injury?.blocksSelection)
   ).length;
   const lockText = data.context?.lockAt
-    ? `Locks ${formatWhen(data.context.lockAt)}`
+    ? `Locks ${formatWhen(data.context.lockAt, timeZone)}`
     : data.lockPolicy === 'INDIVIDUAL_GAME_START'
       ? 'Each player locks at their game start'
       : 'Lock time to be confirmed';

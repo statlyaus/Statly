@@ -108,6 +108,37 @@ Native GitHub auto-merge is the only automatic merger. Enable squash auto-merge 
 
 Auto-merge waits for branch protection; it is not permission to bypass it.
 
+### Pull request queue
+
+The ruleset requires a branch to be up to date with `main`, and a personal-account repository has no
+merge queue, so a green auto-merge pull request goes BEHIND every time something else merges. The `PR
+queue` workflow (`.github/workflows/pr-queue.yml`, logic in `Scripts/ci/pr-queue.mjs`) updates them one
+at a time. It runs on every push to `main`, after every `CI` run and every 15 minutes:
+
+- when an auto-merge pull request is already running CI, or is green, up to date and about to merge,
+  it waits;
+- otherwise it merges `main` into the oldest green BEHIND auto-merge pull request (`update-branch`) and
+  dispatches `CI` on that branch, because a push made with `GITHUB_TOKEN` starts no workflows; the
+  dispatched run's `CI Gate` lands on the new head commit and satisfies the ruleset;
+- a pull request with failed checks, conflicts, an unresolved review thread, a draft, a fork or no
+  auto-merge is skipped, and stays the job of whoever owns it;
+- an up-to-date auto-merge pull request whose head has had no CI run for ten minutes gets CI dispatched;
+- on the schedule, a `main` tip with no CI run gets one, which covers merges that `GITHUB_TOKEN`
+  enabled.
+
+That is one CI run per move of `main`, not one per open pull request, which is why the 2026-10-04
+poller that updated every BEHIND pull request was dropped. Sessions leave a green BEHIND auto-merge
+pull request to the queue. An update that would bring a `.github/workflows` change into the branch
+fails, because `GITHUB_TOKEN` may not push workflow files; the queue moves to the next pull request
+and that one needs `gh pr update-branch` by hand.
+
+### Dependabot auto-merge
+
+`.github/workflows/dependabot-auto-merge.yml` turns on squash auto-merge for Dependabot's minor and
+patch pull requests. Majors (which only security updates open) and unknown update types stay manual.
+The queue updates them like any other auto-merge pull request; if Dependabot later rebases one, it
+only replaces the queue's merge commit.
+
 ## Shipping with `/ship`
 
 Agents commit, push the feature branch, open the pull request and turn on auto-merge without waiting
@@ -138,7 +169,7 @@ A re-run uses the same commit, so it only answers a flaky or infrastructure fail
 empty commit or dispatch a new run to retry a flake: both start every job again. When the failure is
 real, fix it and push; the new commit needs a full run anyway. When `main` has moved and the ruleset
 needs the branch updated, `gh pr update-branch` starts a full run as well, so do that instead of a
-re-run, not as well as one. A flake that needs a re-run more than once is a defect: record it as an
+re-run, not as well as one; for a green auto-merge pull request the PR queue does it. A flake that needs a re-run more than once is a defect: record it as an
 issue instead of retrying until it passes.
 
 ## Repository settings

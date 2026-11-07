@@ -26,6 +26,7 @@ import {
 } from '@/services/realtime/draftRealtimeV2Client';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { CategoryDirection } from '@/types/leagues';
 import type {
   DraftState as DraftCore,
   DraftPlayer,
@@ -95,6 +96,8 @@ interface DraftState {
   availablePlayers: DraftPlayer[];
   draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
+  /** The league's direction per selected category, from the player pool response. */
+  categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
   statSeason: number | null;
   statSeasons: number[];
   watchlistItems: DraftWatchlistItem[];
@@ -226,6 +229,7 @@ function normalizeParticipant(participant: any, index: number): DraftParticipant
     ),
     teamName: firstPresent(member.teamName, participantRecord.teamName),
     draftOrder,
+    canManageDraft: firstPresent(member.canManageDraft, participantRecord.canManageDraft) === true,
     isOnline: Boolean(firstPresent(participantRecord.isOnline, member.isOnline, false)),
     lastSeen: new Date(firstPresent(participantRecord.lastSeen, member.lastSeen, 0)),
     isCurrentTurn: Boolean(
@@ -447,6 +451,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       round: snapshot.state.round,
       direction: snapshot.state.direction,
       draftType: snapshot.state.draftType,
+      settings: { timeZone: snapshot.state.timeZone },
       schedulingVersion: snapshot.revision,
       serverNow: snapshot.serverNow,
       clock,
@@ -819,10 +824,22 @@ function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null
 type AvailablePlayersHydration = {
   players: DraftPlayer[];
   selectedCategories: FantasyCategoryKey[];
+  categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
   statSeason: number | null;
   statSeasons: number[];
   draftReadiness: DraftOperationalReadiness | null;
 };
+
+function toCategoryDirections(
+  value: unknown
+): Partial<Record<FantasyCategoryKey, CategoryDirection>> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([, direction]) => direction === 'HIGH_WINS' || direction === 'LOW_WINS'
+    )
+  ) as Partial<Record<FantasyCategoryKey, CategoryDirection>>;
+}
 
 async function loadAvailablePlayersHydration({
   draftId,
@@ -839,6 +856,7 @@ async function loadAvailablePlayersHydration({
   const hydration: AvailablePlayersHydration = {
     players: [],
     selectedCategories: [],
+    categoryDirections: {},
     statSeason: statSeason ?? null,
     statSeasons: [],
     draftReadiness: null,
@@ -862,6 +880,7 @@ async function loadAvailablePlayersHydration({
       hydration.selectedCategories = toArray<FantasyCategoryKey>(
         res?.data?.selectedCategories ?? res?.selectedCategories
       );
+      hydration.categoryDirections = toCategoryDirections(res?.data?.categoryDirections);
       hydration.statSeason =
         typeof res?.data?.statSeason === 'number' ? res.data.statSeason : hydration.statSeason;
       hydration.statSeasons = toArray<number>(res?.data?.statSeasons);
@@ -889,6 +908,7 @@ type Action =
       type: 'SET_AVAILABLE_PLAYERS';
       players: DraftPlayer[];
       selectedCategories?: FantasyCategoryKey[];
+      categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
       statSeason?: number | null;
       statSeasons?: number[];
       draftReadiness?: DraftOperationalReadiness | null;
@@ -1319,6 +1339,7 @@ function reducer(state: DraftState, action: Action): DraftState {
         availablePlayers: excludeDraftedAvailablePlayers(action.players, state.picks),
         draftReadiness: action.draftReadiness ?? state.draftReadiness,
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
+        categoryDirections: action.categoryDirections ?? state.categoryDirections,
         statSeason: action.statSeason ?? state.statSeason,
         statSeasons: action.statSeasons ?? state.statSeasons,
         error: null,
@@ -1687,6 +1708,7 @@ export function DraftProvider({
       availablePlayers: excludeDraftedAvailablePlayers(snap.availablePlayers, snap.picks),
       draftReadiness: snap.draftReadiness,
       selectedCategories: snap.selectedCategories,
+      categoryDirections: {},
       statSeason: snap.statSeason,
       statSeasons: snap.statSeasons,
       watchlistItems: [],
