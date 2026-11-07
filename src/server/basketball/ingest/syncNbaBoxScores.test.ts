@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { Prisma } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { fakeIngestPrisma, fakeProvider } from './__fixtures__/fakes';
@@ -88,19 +89,74 @@ describe('boxScoreProblem', () => {
   });
 });
 
-/** A database with `pending` FINAL games waiting for their box score. */
-function pendingDatabase(pending: number) {
+interface PriorRun {
+  startedAt: Date;
+  skipped: Array<{ gameExternalId: string; reason: string }>;
+}
+
+/**
+ * A database with `pending` FINAL games (g0, g1, …) waiting for their box score, earlier
+ * BOX_SCORES runs, and, when `writes` is set, transactions that succeed unless `failWrite` throws.
+ */
+function pendingDatabase(
+  pending: number,
+  {
+    priorRuns = [],
+    writes = false,
+    failWrite,
+  }: { priorRuns?: PriorRun[]; writes?: boolean; failWrite?: (externalId: string) => void } = {}
+) {
   const rows = Array.from({ length: pending }, (_, index) => ({
     id: `game-${index}`,
     externalId: `g${index}`,
     startsAt: new Date(Date.UTC(2026, 10, 1, index)),
   }));
-  return fakeIngestPrisma({
-    nbaGame: {
-      findMany: (async (args: { where: { boxScoreIngestedAt?: unknown } }) =>
-        args.where.boxScoreIngestedAt === null ? rows : []) as never,
+  type GameWhere = { boxScoreIngestedAt?: unknown; externalId?: { notIn?: string[] } };
+  type RunWhere = { startedAt: { gte: Date } };
+  let created = 0;
+  return fakeIngestPrisma(
+    {
+      nbaGame: {
+        findMany: (async (args: { where: GameWhere }) =>
+          args.where.boxScoreIngestedAt === null
+            ? rows.filter((row) => !args.where.externalId?.notIn?.includes(row.externalId))
+            : []) as never,
+      },
+      nbaTeam: {
+        findMany: (async () => [
+          { id: 'team-gsw', code: 'GSW' },
+          { id: 'team-mia', code: 'MIA' },
+        ]) as never,
+      },
+      nbaIngestRun: {
+        findMany: (async (args: { where: RunWhere }) =>
+          priorRuns
+            .filter((run) => run.startedAt >= args.where.startedAt.gte)
+            .map((run) => ({ summaryJson: { skipped: run.skipped } }))) as never,
+      },
     },
-  });
+    {
+      transaction: writes
+        ? (model, method, args: { where?: { provider_externalId?: { externalId: string } } }) => {
+            if (model === 'nbaGame' && method === 'upsert') {
+              const externalId = args.where?.provider_externalId?.externalId ?? '';
+              failWrite?.(externalId);
+              return { id: `game-${externalId}` };
+            }
+            if (method === 'findMany') return [];
+            if (model === 'nbaPlayer' && method === 'create') return { id: `player-${++created}` };
+            return { count: 0 };
+          }
+        : undefined,
+    }
+  );
+}
+
+/** The games whose player lines a run wrote, read from the recorded transaction calls. */
+function writtenGames(calls: Array<{ model: string; method: string; args: unknown }>) {
+  return calls
+    .filter((call) => call.model === 'nbaPlayerGameStat' && call.method === 'createMany')
+    .map((call) => (call.args as { data: Array<{ gameId: string }> }).data[0].gameId);
 }
 
 async function rejected(run: Promise<unknown>) {
@@ -161,6 +217,76 @@ describe('syncNbaBoxScores', () => {
     expect(fetchBoxScore).toHaveBeenCalledTimes(5);
     expect(fetchBoxScore.mock.calls.map(([id]) => id)).toEqual(['g0', 'g1', 'g2', 'g3', 'g4']);
     expect(forbiddenWrites).toEqual([]);
+  });
+
+  it('skips a game that fails its check, writes the others and still succeeds', async () => {
+    const { prisma, runs, transactionCalls } = pendingDatabase(3, { writes: true });
+    const provider = fakeProvider({
+      fetchScoreboard: async () => [],
+      fetchBoxScore: async (id) =>
+        id === 'g1' ? box(7, 10, { externalId: id }) : box(10, 10, { externalId: id }),
+    });
+
+    const { summary } = await syncNbaBoxScores({ prisma, provider, season: 2027, now: NOW });
+
+    expect(summary).toMatchObject({ ingested: 2, skipped: [{ gameExternalId: 'g1' }] });
+    expect(writtenGames(transactionCalls)).toEqual(['game-g0', 'game-g2']);
+    expect(runs[0]).toMatchObject({ outcome: 'SUCCEEDED' });
+  });
+
+  it('records a unique-constraint clash from an overlapping run as concurrent_write', async () => {
+    const { prisma, runs, transactionCalls } = pendingDatabase(3, {
+      writes: true,
+      failWrite: (externalId) => {
+        if (externalId === 'g1') {
+          throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+            code: 'P2002',
+            clientVersion: 'test',
+          });
+        }
+      },
+    });
+    const provider = fakeProvider({
+      fetchScoreboard: async () => [],
+      fetchBoxScore: async (id) => box(10, 10, { externalId: id }),
+    });
+
+    const { summary } = await syncNbaBoxScores({ prisma, provider, season: 2027, now: NOW });
+
+    expect(summary).toMatchObject({
+      ingested: 2,
+      skipped: [{ gameExternalId: 'g1', reason: 'concurrent_write' }],
+    });
+    expect(writtenGames(transactionCalls)).toEqual(['game-g0', 'game-g2']);
+    expect(runs[0]).toMatchObject({ outcome: 'SUCCEEDED' });
+  });
+
+  it('defers for 24 hours a game skipped by two runs, but retries a single or old failure', async () => {
+    const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000);
+    const fails = { reason: 'parse_failed: bad row' };
+    const { prisma } = pendingDatabase(4, {
+      writes: true,
+      priorRuns: [
+        // g0 kept failing: deferred.
+        { startedAt: hoursAgo(1), skipped: [{ gameExternalId: 'g0', ...fails }] },
+        { startedAt: hoursAgo(2), skipped: [{ gameExternalId: 'g0', ...fails }] },
+        // g1 failed once: retried.
+        { startedAt: hoursAgo(1), skipped: [{ gameExternalId: 'g1', ...fails }] },
+        // g2 failed twice, but more than 24 hours ago: retried.
+        { startedAt: hoursAgo(25), skipped: [{ gameExternalId: 'g2', ...fails }] },
+        { startedAt: hoursAgo(30), skipped: [{ gameExternalId: 'g2', ...fails }] },
+        // g3 lost two write races: not a failing box score, retried.
+        { startedAt: hoursAgo(1), skipped: [{ gameExternalId: 'g3', reason: 'concurrent_write' }] },
+        { startedAt: hoursAgo(2), skipped: [{ gameExternalId: 'g3', reason: 'concurrent_write' }] },
+      ],
+    });
+    const fetchBoxScore = vi.fn(async (id: string) => box(10, 10, { externalId: id }));
+    const provider = fakeProvider({ fetchScoreboard: async () => [], fetchBoxScore });
+
+    const { summary } = await syncNbaBoxScores({ prisma, provider, season: 2027, now: NOW });
+
+    expect(fetchBoxScore.mock.calls.map(([id]) => id)).toEqual(['g1', 'g2', 'g3']);
+    expect(summary).toMatchObject({ deferred: 1, ingested: 3 });
   });
 
   it.each([403, 429])(

@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client';
+
 import { addDays, toEasternDate } from '@/lib/basketball/fantasyWeeks';
 
 import {
@@ -24,7 +26,10 @@ import { loadTeamIds, nbaGameData } from './syncNbaSchedule';
  *
  * Rejected, writing nothing but the run row, when a scoreboard cannot be read, when every box score
  * fetch fails, or when the provider answers 401/403/429 (blocked or rate-limited). A single game
- * that cannot be fetched, parsed or fails its sanity check is skipped and listed in the summary.
+ * that cannot be fetched, parsed or fails its sanity check is skipped and listed in the summary, as
+ * is a game whose write clashes with an overlapping run (`concurrent_write`). A game skipped by two
+ * runs in the last 24 hours is deferred (not fetched) until one of those skips is 24 hours old, so
+ * a box score that keeps failing cannot use up every run's budget.
  */
 
 export const DEFAULT_BOX_SCORE_GAMES = 8;
@@ -35,12 +40,17 @@ export const ALREADY_FINAL_AFTER_MS = 24 * 60 * 60 * 1000;
 export const MIN_LISTED_PLAYERS_PER_TEAM = 8;
 export const MAX_LISTED_PLAYERS_PER_TEAM = 20;
 const BLOCKED_STATUSES = new Set([401, 403, 429]);
+export const DEFER_WINDOW_MS = 24 * 60 * 60 * 1000;
+const DEFER_AFTER_SKIPS = 2;
+export const CONCURRENT_WRITE = 'concurrent_write';
 
 export interface SyncNbaBoxScoresOptions extends NbaIngestJobOptions {
   /** Read the scoreboards for game status first. Default true; the backfill passes false. */
   refreshStatuses?: boolean;
   /** Games this run must not fetch (the backfill passes the ones it already skipped). */
   excludeExternalIds?: ReadonlySet<string>;
+  /** Hold back games that earlier runs kept skipping. Default true; the backfill passes false. */
+  deferFailingGames?: boolean;
 }
 
 export interface NbaBoxScoresSummary {
@@ -54,6 +64,8 @@ export interface NbaBoxScoresSummary {
   /** Rows dropped because the provider gave no player identity and they record nothing. */
   unidentifiedEmptyRows: number;
   skipped: Array<{ gameExternalId: string; reason: string }>;
+  /** Games held back because two runs in the last 24 hours skipped them. */
+  deferred: number;
   /** FINAL games of this season still without a box score after this run. */
   pending: number;
 }
@@ -83,6 +95,41 @@ export function boxScoreProblem(
     return 'a player is listed twice';
   }
   return null;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+/**
+ * Games skipped (for any reason but `concurrent_write`) by at least two BOX_SCORES runs that started
+ * in the last 24 hours. Read from the runs' summaries, so no extra column is needed.
+ */
+async function repeatedlySkippedGames(
+  prisma: NbaIngestPrisma,
+  providerId: string,
+  now: Date
+): Promise<Set<string>> {
+  const runs = await prisma.nbaIngestRun.findMany({
+    where: {
+      job: 'BOX_SCORES',
+      provider: providerId,
+      startedAt: { gte: new Date(now.getTime() - DEFER_WINDOW_MS) },
+    },
+    select: { summaryJson: true },
+  });
+  const skips = new Map<string, number>();
+  for (const { summaryJson } of runs) {
+    const skipped = (summaryJson as { skipped?: unknown } | null)?.skipped;
+    if (!Array.isArray(skipped)) continue;
+    for (const entry of skipped as Array<{ gameExternalId?: unknown; reason?: unknown }>) {
+      if (typeof entry?.gameExternalId !== 'string' || entry.reason === CONCURRENT_WRITE) continue;
+      skips.set(entry.gameExternalId, (skips.get(entry.gameExternalId) ?? 0) + 1);
+    }
+  }
+  return new Set(
+    [...skips].filter(([, count]) => count >= DEFER_AFTER_SKIPS).map(([gameId]) => gameId)
+  );
 }
 
 interface Candidate {
@@ -274,6 +321,7 @@ export async function syncNbaBoxScores(
     now = new Date(),
     refreshStatuses = true,
     excludeExternalIds = new Set<string>(),
+    deferFailingGames = true,
   } = options;
   const limit = options.limits?.games ?? DEFAULT_BOX_SCORE_GAMES;
 
@@ -289,10 +337,13 @@ export async function syncNbaBoxScores(
           .filter((game) => game.season === season)
       : [];
 
+    const deferred = deferFailingGames
+      ? await repeatedlySkippedGames(prisma, provider.id, now)
+      : new Set<string>();
     const candidates = await selectCandidates(prisma, provider.id, season, scoreboard, {
       limit,
       now,
-      exclude: excludeExternalIds,
+      exclude: new Set([...excludeExternalIds, ...deferred]),
     });
     const results = await Promise.allSettled(
       candidates.map((candidate) => provider.fetchBoxScore(candidate.externalId))
@@ -339,10 +390,18 @@ export async function syncNbaBoxScores(
     let finalised = 0;
     let playersCreated = 0;
     for (const { candidate, box } of fetched) {
-      playersCreated += await writeBoxScore(prisma, provider.id, box, teamIds, {
-        recheck: candidate.recheck,
-        now,
-      });
+      try {
+        playersCreated += await writeBoxScore(prisma, provider.id, box, teamIds, {
+          recheck: candidate.recheck,
+          now,
+        });
+      } catch (error) {
+        // An overlapping run wrote the same game or created the same player first. Its write
+        // stands; this run reports the game and moves on.
+        if (!isUniqueViolation(error)) throw error;
+        skipped.push({ gameExternalId: candidate.externalId, reason: CONCURRENT_WRITE });
+        continue;
+      }
       if (candidate.recheck) finalised += 1;
       else ingested += 1;
     }
@@ -359,6 +418,7 @@ export async function syncNbaBoxScores(
       playersCreated,
       unidentifiedEmptyRows: fetched.reduce((sum, { box }) => sum + box.unidentifiedEmptyRows, 0),
       skipped,
+      deferred: deferred.size,
       pending,
     };
   });

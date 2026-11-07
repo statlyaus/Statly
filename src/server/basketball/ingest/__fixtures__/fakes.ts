@@ -1,16 +1,22 @@
 import type { NbaIngestPrisma } from '../nbaIngestRun';
 import type { NbaStatsProvider } from '../nbaStatsProvider';
 
+type TransactionHandler = (model: string, method: string, args: never) => unknown;
+
 /**
  * A recording stand-in for the Prisma client in unit tests. `nbaIngestRun` writes are kept in
- * `runs`; every other write or transaction is recorded in `forbiddenWrites` and throws, so a test can
- * prove a rejected run wrote nothing but its run row. Reads answer from `reads`, else empty.
+ * `runs`; every other write is recorded in `forbiddenWrites` and throws, so a test can prove a
+ * rejected run wrote nothing but its run row. Reads answer from `reads`, else empty. A transaction
+ * throws too, unless `transaction` is given: then each call inside it is recorded in
+ * `transactionCalls` and answered by the handler.
  */
 export function fakeIngestPrisma(
-  reads: Record<string, Record<string, (...args: never[]) => unknown>> = {}
+  reads: Record<string, Record<string, (...args: never[]) => unknown>> = {},
+  { transaction }: { transaction?: TransactionHandler } = {}
 ) {
   const runs: Array<Record<string, unknown>> = [];
   const forbiddenWrites: string[] = [];
+  const transactionCalls: Array<{ model: string; method: string; args: unknown }> = [];
   const isWrite = (method: string) =>
     /^(create|createMany|update|updateMany|upsert|delete|deleteMany)$/.test(method);
 
@@ -26,7 +32,29 @@ export function fakeIngestPrisma(
       Object.assign(row, data);
       return row;
     },
+    findMany: reads.nbaIngestRun?.findMany ?? (async () => []),
   };
+
+  const transactionClient = new Proxy(
+    {},
+    {
+      get(_target, model) {
+        if (typeof model === 'symbol' || model === 'then') return undefined;
+        return new Proxy(
+          {},
+          {
+            get(_modelTarget, method) {
+              if (typeof method === 'symbol' || method === 'then') return undefined;
+              return async (args: never) => {
+                transactionCalls.push({ model, method, args });
+                return transaction?.(model, method, args);
+              };
+            },
+          }
+        );
+      },
+    }
+  );
 
   const emptyRead = (method: string) => {
     if (method === 'findMany') return [];
@@ -42,9 +70,12 @@ export function fakeIngestPrisma(
         if (typeof model === 'symbol' || model === 'then') return undefined;
         if (model === 'nbaIngestRun') return runModel;
         if (model === '$transaction') {
-          return async () => {
-            forbiddenWrites.push('$transaction');
-            throw new Error('unexpected transaction');
+          return async (work: (client: unknown) => Promise<unknown>) => {
+            if (!transaction) {
+              forbiddenWrites.push('$transaction');
+              throw new Error('unexpected transaction');
+            }
+            return work(transactionClient);
           };
         }
         return new Proxy(
@@ -68,7 +99,12 @@ export function fakeIngestPrisma(
     }
   );
 
-  return { prisma: prisma as unknown as NbaIngestPrisma, runs, forbiddenWrites };
+  return {
+    prisma: prisma as unknown as NbaIngestPrisma,
+    runs,
+    forbiddenWrites,
+    transactionCalls,
+  };
 }
 
 /** A provider whose every method throws unless overridden. */
