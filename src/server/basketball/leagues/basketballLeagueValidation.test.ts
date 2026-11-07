@@ -4,6 +4,7 @@ import { YAHOO_DEFAULT_ROSTER_SLOTS } from '@/types/basketball';
 
 import {
   createLeagueSchema,
+  leaguePatchSchema,
   leagueSettingsSchema,
   parseInput,
   playerSearchSchema,
@@ -131,7 +132,10 @@ describe('createLeagueSchema', () => {
     ).toHaveProperty('rosterSlots.BN');
     expect(
       fieldErrorsOf(() =>
-        parseInput(createLeagueSchema, { ...validCreate, rosterSlots: { BN: 10, IL: 3 } })
+        parseInput(createLeagueSchema, {
+          ...validCreate,
+          rosterSlots: { PG: 0, SG: 0, G: 0, SF: 0, PF: 0, F: 0, C: 0, UTIL: 0, BN: 10, IL: 3 },
+        })
       )
     ).toHaveProperty('rosterSlots');
     expect(
@@ -152,23 +156,15 @@ describe('createLeagueSchema', () => {
     ).toHaveProperty('rosterSlots');
   });
 
-  it('fills missing roster slot types with zero', () => {
-    const parsed = parseInput(createLeagueSchema, {
-      ...validCreate,
-      rosterSlots: { UTIL: 10, BN: 3 },
-    });
-    expect(parsed.rosterSlots).toEqual({
-      PG: 0,
-      SG: 0,
-      G: 0,
-      SF: 0,
-      PF: 0,
-      F: 0,
-      C: 0,
-      UTIL: 10,
-      BN: 3,
-      IL: 0,
-    });
+  it('needs every roster slot type, so a partial update cannot zero the rest', () => {
+    const errors = fieldErrorsOf(() =>
+      parseInput(createLeagueSchema, { ...validCreate, rosterSlots: { UTIL: 10, BN: 3 } })
+    );
+    expect(errors).toHaveProperty(['rosterSlots.PG']);
+    expect(errors).toHaveProperty(['rosterSlots.IL']);
+    expect(
+      fieldErrorsOf(() => parseInput(leaguePatchSchema, { rosterSlots: { PG: 2 } }))
+    ).toHaveProperty(['rosterSlots.SG']);
   });
 
   it('needs real dates with week one before the season end, at most 200 days apart', () => {
