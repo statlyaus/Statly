@@ -172,7 +172,10 @@ one adapter today, `espn/`, reads ESPN's public site API, validates every respon
 converts it to provider-neutral values: standard team codes (GSW, NYK, SAS, NOP, UTA, WAS), seconds
 played, a did-not-play reason enum and US Eastern game dates. It sends at most four requests at a
 time. Only regular-season games are stored; the NBA Cup final, preseason, play-in and playoff games
-are dropped by the adapter.
+are dropped by the adapter. That invariant rests on where box scores come from: a box score
+(`summary`) carries no competition type, so it cannot tell a Cup final from a standard game.
+Box-score candidates come only from the filtered schedule and scoreboard. Do not add a path that
+fetches box scores by event id from anywhere else.
 
 `/api/cron/nba?job=…` runs one bounded job per call, each from its own Netlify scheduled function:
 
@@ -187,7 +190,12 @@ Box scores are fetched for FINAL games never ingested (oldest first), then once 
 hours after the first ingest to pick up stat corrections (`boxScoreFinalisedAt`); a game first
 ingested more than 24 hours after tip-off is final at once. Each game is one transaction: the game
 row, any player the provider has not seen before (created from the box score; identity is the
-provider ID, never a name match) and the game's complete set of player lines.
+provider ID, never a name match) and the game's complete set of player lines. A write that clashes
+with an overlapping run on a unique key is left to that run and listed as `concurrent_write`. A game
+skipped (for any other reason) by two runs in the last 24 hours is deferred, not fetched, until one
+of those skips is a day old, so a box score that keeps failing cannot use up every run's budget; the
+run summary counts it as `deferred`. The players job creates new players and their identities in a
+few batched statements inside one transaction.
 
 Ingestion fails closed. Every fetch and check runs before the first write, and a rejected run
 (`fetch_failed`, `parse_failed`, `out_of_bounds`, `unlicensed_provider`) writes only its
@@ -206,10 +214,25 @@ provider with `unlicensed_provider` when `NODE_ENV=production` unless
 `NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true` is set deliberately. A licensed feed is an owner decision
 before any public launch. Netlify's access to ESPN is untested.
 
+Every invocation writes an `NbaIngestRun` row first and sets `finishedAt` and `outcome` when it ends.
+A row with `finishedAt` still null more than an hour after `startedAt` means the function was killed
+part-way, almost always by the hosting time limit; whatever it wrote before then is complete per
+game or per list, and the next run carries on.
+
+Production is seeded once, before the Netlify schedules are enabled, from an operator's machine:
+`npm run nba:sync -- --job players --allow-remote`, then `--job schedule`, with `DATABASE_URL` and
+`DIRECT_DATABASE_URL` naming the production database. The scripts treat any remote database as
+production, so the licensing guard applies: `NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true` is needed
+while the provider is unlicensed. The scheduled box-score runs then catch up eight games at a
+time.
+
 Season backfills run locally through `npm run nba:backfill` (see
 [testing](../development/testing.md#secured-endpoint-testing)), never through cron. They reuse the
 same jobs at one request per second, then compare the stored points, rebounds and assists of ESPN's
-top 50 scorers with ESPN's own season totals and fail on any difference.
+top 50 scorers with ESPN's own season totals and fail on any difference. `--tolerance N` accepts a
+difference of up to N per stat, for when ESPN's totals feed disagrees with its own box scores: in
+2026-27 it is one assist off for RJ Barrett and Kyshawn George after game 401909846, whose box score
+and game logs match the stored rows. The default is 0.
 
 ## Rejected alternatives
 

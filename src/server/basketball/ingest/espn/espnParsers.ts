@@ -56,7 +56,8 @@ const STANDARD_TEAM_CODES: Readonly<Record<string, string>> = {
 
 const REGULAR_SEASON = 2;
 // The standard competition type. The NBA Cup final is type 2 too but competition "CC": its stats do
-// not count in season totals, so it is never stored.
+// not count in season totals, so it is never stored. Only the schedule and scoreboard carry the
+// competition type, so they are the only sources of box-score candidates (see parseBoxScore).
 const STANDARD_COMPETITION = 'STD';
 
 function parseFailed(message: string, cause?: unknown): never {
@@ -422,6 +423,12 @@ function statValues(keys: string[], stats: string[], who: string): StatValues {
   };
 }
 
+/**
+ * A summary's header has no competition type, so this parser cannot tell an NBA Cup final from a
+ * standard game. The regular-season invariant holds only because box-score candidates come from
+ * the filtered schedule and scoreboard (`parseSchedule`, `parseScoreboard`). Do not add a path that
+ * fetches box scores by event id from anywhere else.
+ */
 export function parseBoxScore(response: unknown): NbaProviderBoxScore {
   const data = validate(summarySchema, response, 'summary');
   const header = data.header;

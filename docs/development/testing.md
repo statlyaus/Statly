@@ -337,8 +337,11 @@ npm run nba:backfill -- --season 2026            # dry run: what is stored
 npm run nba:backfill -- --season 2026 --apply    # 2025-26, about 1,300 requests at 1 per second
 ```
 
-The backfill is resumable and exits non-zero if ESPN refuses it or any season total differs. Both
-scripts refuse a non-local `DATABASE_URL` without `--allow-remote`.
+The backfill is resumable and exits non-zero if ESPN refuses it or any season total differs.
+`--tolerance N` accepts a per-stat difference of up to N from ESPN's season totals (default 0); use
+it only after checking the affected games' box scores against the stored rows, because ESPN's totals
+feed can be one off its own box scores. Both scripts refuse a non-local `DATABASE_URL` without
+`--allow-remote`, and treat a remote database as production for the licensing guard.
 
 Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
 succeed. The admin and user contracts are enforced by
