@@ -34,7 +34,7 @@ import {
 import { calculateStandingsRows } from './standingsService';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
 import { normalizeLineupSlots } from './lineupSettings';
-import type { LeagueScoringMode } from './scoringTypes';
+import type { LeagueLineupSlot, LeagueScoringMode } from './scoringTypes';
 
 type MatchupTeamSide = 'home' | 'away' | 'draw';
 
@@ -83,6 +83,8 @@ export interface LeagueMatchupCard {
   id: string;
   round: number;
   status: 'SCHEDULED' | 'LIVE' | 'FINAL';
+  /** True when the totals come from live stats and the matchup is not final yet. */
+  provisional: boolean;
   startsAt: string | null;
   endsAt: string | null;
   finalizedAt: string | null;
@@ -308,12 +310,45 @@ function buildPlayerContributions({
   );
 }
 
-function buildMatchupCard({
+type MatchupCardLineup = {
+  players: Array<{
+    playerId: string;
+    slot: string;
+    slotIndex: number;
+    player: { name: string; position: string };
+  }>;
+};
+
+function aggregateCardLineupTotals(
+  lineup: MatchupCardLineup | undefined,
+  categories: FantasyCategoryKey[],
+  totalsByPlayerId: Map<string, CategoryTotals>
+): CategoryTotals {
+  return aggregateLineupCategoryTotals({
+    categories,
+    players:
+      lineup?.players.map((player) => ({
+        playerId: player.playerId,
+        slot: player.slot as LeagueLineupSlot,
+        totals: totalsByPlayerId.get(player.playerId) ?? {},
+      })) ?? [],
+  });
+}
+
+/**
+ * Until a matchup is final, its card is scored from the same live stats as its player rows, so the
+ * headline cannot claim every category is drawn while the rows show real numbers. The result is
+ * provisional: autosubs and finalization can still change it. When live stats cannot be loaded the
+ * stored state is shown as before.
+ */
+export function buildMatchupCard({
   matchup,
   categories,
   categoryDirections,
+  scoringMode,
   lineupsByMemberId,
   totalsByPlayerId,
+  liveRound,
 }: {
   matchup: Awaited<ReturnType<typeof prisma.leagueMatchup.findMany>>[number] & {
     homeMember: { id: string; teamName: string; teamLogoUrl: string | null } | null;
@@ -334,19 +369,33 @@ function buildMatchupCard({
   };
   categories: FantasyCategoryKey[];
   categoryDirections: ReturnType<typeof normalizeCategoryDirections>;
-  lineupsByMemberId: Map<
-    string,
-    {
-      players: Array<{
-        playerId: string;
-        slot: string;
-        slotIndex: number;
-        player: { name: string; position: string };
-      }>;
-    }
-  >;
+  scoringMode: LeagueScoringMode;
+  lineupsByMemberId: Map<string, MatchupCardLineup>;
   totalsByPlayerId: Map<string, CategoryTotals>;
+  /** Whether the round's live stats loaded, and whether any AFL game in it has started. */
+  liveRound: { available: boolean; started: boolean };
 }): LeagueMatchupCard {
+  const provisionalResult =
+    matchup.status !== 'FINAL' &&
+    matchup.homeMemberId &&
+    matchup.awayMemberId &&
+    liveRound.available
+      ? scoreHeadToHeadCategories({
+          categories,
+          categoryDirections,
+          homeTotals: aggregateCardLineupTotals(
+            lineupsByMemberId.get(matchup.homeMemberId),
+            categories,
+            totalsByPlayerId
+          ),
+          awayTotals: aggregateCardLineupTotals(
+            lineupsByMemberId.get(matchup.awayMemberId),
+            categories,
+            totalsByPlayerId
+          ),
+          scoringMode,
+        })
+      : null;
   const homeScore = matchup.scores.find((score) => score.memberId === matchup.homeMemberId);
   const awayScore = matchup.scores.find((score) => score.memberId === matchup.awayMemberId);
   const homePlayers = matchup.homeMemberId
@@ -367,7 +416,8 @@ function buildMatchupCard({
   return {
     id: matchup.id,
     round: matchup.round,
-    status: matchup.status,
+    status: provisionalResult ? (liveRound.started ? 'LIVE' : 'SCHEDULED') : matchup.status,
+    provisional: provisionalResult !== null && liveRound.started,
     startsAt: toIsoString(matchup.startsAt),
     endsAt: toIsoString(matchup.endsAt),
     finalizedAt: toIsoString(matchup.finalizedAt),
@@ -389,13 +439,13 @@ function buildMatchupCard({
           teamLogoUrl: matchup.byeMember.teamLogoUrl,
         }
       : null,
-    homeCategoryWins: matchup.homeCategoryWins,
-    awayCategoryWins: matchup.awayCategoryWins,
-    drawnCategories: matchup.drawnCategories,
+    homeCategoryWins: provisionalResult?.homeCategoryWins ?? matchup.homeCategoryWins,
+    awayCategoryWins: provisionalResult?.awayCategoryWins ?? matchup.awayCategoryWins,
+    drawnCategories: provisionalResult?.drawnCategories ?? matchup.drawnCategories,
     categoryRows: buildCategoryRows({
       categories,
       categoryDirections,
-      categoriesJson: homeScore?.categoriesJson,
+      categoriesJson: provisionalResult?.categories ?? homeScore?.categoriesJson,
     }),
   };
 }
@@ -730,8 +780,15 @@ export async function loadLeagueMatchupReadModel({
         matchup,
         categories: settings.categories,
         categoryDirections: settings.categoryDirections,
+        scoringMode: settings.scoringMode,
         lineupsByMemberId,
         totalsByPlayerId: liveTotals.totalsByPlayerId,
+        liveRound: {
+          available: liveTotals.available,
+          started: liveTotals.roundStatus.matches.some(
+            (match) => match.status === 'live' || match.status === 'final'
+          ),
+        },
       })
     ),
     standings: buildLeagueStandings({

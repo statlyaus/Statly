@@ -102,6 +102,19 @@ describe('LeagueMatchupsPanel category totals', () => {
     expect(table.queryByText(/ (won|lost|drawn)$/)).not.toBeInTheDocument();
   });
 
+  it('labels live totals as provisional until the round is final', async () => {
+    const live = respond('LIVE');
+    authenticatedFetchMock.mockImplementation(async () => {
+      const response = await live();
+      const body = await response.json();
+      (body.data.matchups[0] as Record<string, unknown>).provisional = true;
+      return { ok: true, json: async () => body };
+    });
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+
+    expect(await screen.findByText('Live · provisional')).toBeInTheDocument();
+  });
+
   it('shows the start time in the league timezone, labelled', async () => {
     const scheduled = respond('SCHEDULED');
     authenticatedFetchMock.mockImplementation(async () => {
