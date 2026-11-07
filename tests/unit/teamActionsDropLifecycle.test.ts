@@ -12,7 +12,7 @@ describe('team action drop lifecycle', () => {
     const source = readRepoFile('src/app/api/leagues/[id]/actions/[userId]/route.ts');
 
     expect(source).toContain('processDropPlayerAction(action.id)');
-    expect(source).toContain('actionType === \'DROP_PLAYER\'');
+    expect(source).toContain("actionType !== 'DROP_PLAYER'");
     expect(source).toContain('leagueRosterPlayer.deleteMany');
     expect(source).toContain("status: 'PENDING'");
     expect(source).toContain('WaiverAvailabilityProjectionService');

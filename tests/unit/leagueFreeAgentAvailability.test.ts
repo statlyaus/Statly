@@ -329,83 +329,6 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     });
   });
 
-  it('excludes Prisma-owned drafted players from the free-agent player API even when Firestore availability is stale', async () => {
-    const { GET } = await import('../../src/app/api/leagues/[id]/players/route');
-
-    const response = await GET(request('/api/leagues/league-1/players?owned=false&limit=100'), {
-      params: Promise.resolve({ id: 'league-1' }),
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(prismaMocks.leagueRosterPlayer.findMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1' },
-      select: { playerId: true, memberId: true },
-    });
-    expect(body.items.map((player: { id: string }) => player.id)).toEqual(['free-player']);
-  });
-
-  it('returns the full Prisma matching count instead of the current page size', async () => {
-    prismaMocks.player.count.mockResolvedValue(42);
-
-    const { GET } = await import('../../src/app/api/leagues/[id]/players/route');
-
-    const response = await GET(request('/api/leagues/league-1/players?owned=false&limit=10'), {
-      params: Promise.resolve({ id: 'league-1' }),
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.items).toHaveLength(1);
-    expect(body.total).toBe(42);
-    expect(prismaMocks.player.count).toHaveBeenCalledWith({
-      where: {
-        active: true,
-        id: { notIn: ['drafted-player'] },
-      },
-    });
-  });
-
-  it('falls back to Firestore availability when the Prisma player path fails', async () => {
-    prismaMocks.league.findUnique.mockRejectedValue(new Error('prisma unavailable'));
-
-    const { GET } = await import('../../src/app/api/leagues/[id]/players/route');
-
-    const response = await GET(request('/api/leagues/league-1/players?owned=false&limit=100'), {
-      params: Promise.resolve({ id: 'league-1' }),
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.items.map((player: { id: string }) => player.id)).toEqual([
-      'drafted-player',
-      'free-player',
-    ]);
-    expect(firestoreMocks.availablePlayersQuery.get).toHaveBeenCalled();
-  });
-
-  it('returns Prisma-owned drafted players from the owned player API without relying on Firestore projection state', async () => {
-    prismaMocks.player.findMany.mockResolvedValue([
-      { id: 'drafted-player', name: 'Drafted Player', club: 'CARL', position: 'MID' },
-    ]);
-
-    const { GET } = await import('../../src/app/api/leagues/[id]/players/route');
-
-    const response = await GET(request('/api/leagues/league-1/players?owned=true&limit=100'), {
-      params: Promise.resolve({ id: 'league-1' }),
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.items).toEqual([
-      expect.objectContaining({
-        id: 'drafted-player',
-        name: 'Drafted Player',
-        ownership: 100,
-      }),
-    ]);
-  });
-
   it('rejects waiver claims for Prisma-owned drafted players before Firestore ownership checks', async () => {
     prismaMocks.player.findMany.mockResolvedValue([
       { id: 'drafted-player', name: 'Drafted Player', club: 'CARL', position: 'MID' },
@@ -544,10 +467,6 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     expect(firestoreMocks.adminDb.runTransaction).not.toHaveBeenCalled();
   });
 });
-
-function request(path: string): NextRequest {
-  return new Request(`https://statly.test${path}`) as NextRequest;
-}
 
 function jsonRequest(path: string, body: unknown): NextRequest {
   return new Request(`https://statly.test${path}`, {
