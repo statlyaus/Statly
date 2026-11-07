@@ -13,7 +13,6 @@ type CompetitionRules = {
   finalsTeams: 0 | 4 | 6 | 8;
   fixtureGenerationMode: 'AUTOMATIC' | 'MANUAL';
   lockPolicy: 'INDIVIDUAL_GAME_START' | 'THURSDAY_7PM_AEST';
-  leagueTimeZone: string;
   interchangeSlots: number;
   standingsTieBreakCategory: FantasyCategoryKey;
   excludedAflRounds: number[];
@@ -575,14 +574,6 @@ export function CompetitionSettingsPanel({
             <option value="INDIVIDUAL_GAME_START">Each player at AFL game start</option>
             <option value="THURSDAY_7PM_AEST">Thursday 7:00 pm in league timezone</option>
           </select>
-        </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-          League timezone
-          <input
-            value={rules.leagueTimeZone}
-            onChange={(event) => setRules({ ...rules, leagueTimeZone: event.target.value })}
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
-          />
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
           Interchange slots

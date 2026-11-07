@@ -179,4 +179,29 @@ describe('DraftQueue component', () => {
       )
     );
   });
+  it('gives the queue controls a 44px touch target', async () => {
+    const user = userEvent.setup();
+    render(
+      <DraftQueue
+        queue={[knownPlayer.id]}
+        availablePlayers={[knownPlayer, availablePlayer]}
+        onQueueUpdate={vi.fn()}
+        isLoading={false}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit draft queue' }));
+    const controls = [
+      screen.getByRole('button', { name: 'Finish editing draft queue' }),
+      screen.getByRole('button', { name: 'Clear draft queue' }),
+      screen.getByRole('button', { name: 'Remove Known Player from queue' }),
+      within(screen.getByRole('region', { name: 'Available players for queue' })).getByRole(
+        'button',
+        { name: 'Add' }
+      ),
+    ];
+    for (const control of controls) {
+      expect(control.className).toMatch(/(^|\s)h-11(\s|$)/);
+    }
+  });
 });

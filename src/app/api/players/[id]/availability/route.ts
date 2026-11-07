@@ -12,6 +12,7 @@ import {
 } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
+import { formatLeagueTime } from '@/lib/leagueTime';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
@@ -25,6 +26,7 @@ interface UserLeagueContext {
   teamName: string;
   memberId: string;
   source: LeagueAvailabilitySource;
+  timeZone?: string;
 }
 
 interface AvailabilityOwner {
@@ -49,6 +51,8 @@ interface PlayerLeagueAvailability {
   leagueName: string;
   teamName: string;
   source: LeagueAvailabilitySource;
+  /** The league's IANA timezone; league times in this row are shown in it. */
+  timeZone?: string;
   status: AvailabilityStatus;
   statusLabel: string;
   statusDetail: string;
@@ -121,6 +125,7 @@ async function loadUserLeagueContexts(userId: string): Promise<UserLeagueContext
           select: {
             id: true,
             name: true,
+            settings: { select: { timeZone: true } },
           },
         },
       },
@@ -141,6 +146,7 @@ async function loadUserLeagueContexts(userId: string): Promise<UserLeagueContext
       teamName: membership.teamName,
       memberId: membership.id,
       source: 'prisma',
+      timeZone: membership.league.settings?.timeZone,
     });
   }
 
@@ -315,6 +321,7 @@ function buildAvailabilityRow(input: {
       leagueName: input.league.leagueName,
       teamName: input.league.teamName,
       source: input.league.source,
+      timeZone: input.league.timeZone,
       status: input.owner.isCurrentUser ? 'your-roster' : 'owned',
       statusLabel: input.owner.isCurrentUser ? 'On your roster' : 'Owned',
       statusDetail: input.owner.isCurrentUser
@@ -340,10 +347,11 @@ function buildAvailabilityRow(input: {
       leagueName: input.league.leagueName,
       teamName: input.league.teamName,
       source: input.league.source,
+      timeZone: input.league.timeZone,
       status: 'waiver',
       statusLabel: 'Waivers',
       statusDetail: input.waiver.processingAt
-        ? `Claims process ${input.waiver.processingAt.toISOString()}`
+        ? `Claims process ${formatLeagueTime(input.waiver.processingAt, input.league.timeZone)}`
         : `${input.waiver.pendingClaims} pending claim${input.waiver.pendingClaims === 1 ? '' : 's'}`,
       waiver: serializeWaiver(input.waiver),
       action: {
@@ -359,6 +367,7 @@ function buildAvailabilityRow(input: {
     leagueName: input.league.leagueName,
     teamName: input.league.teamName,
     source: input.league.source,
+    timeZone: input.league.timeZone,
     status: 'free-agent',
     statusLabel: 'Free agent',
     statusDetail: 'Not rostered in this league',

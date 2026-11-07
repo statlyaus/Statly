@@ -96,7 +96,7 @@ export function LeagueTradeCentrePanel({
   async function postCommand(
     path: string,
     body: Record<string, unknown>,
-    successMessage: string,
+    action: TradeActionName | 'propose',
     setRequestError: (message: string | null) => void = setMutationError
   ): Promise<boolean> {
     setRequestError(null);
@@ -117,7 +117,7 @@ export function LeagueTradeCentrePanel({
       if (!response.ok) {
         throw new Error(payload?.error || `Trade request failed (${response.status}).`);
       }
-      setAnnouncement(successMessage);
+      setAnnouncement(describeTradeOutcome(action, payload?.status));
       router.refresh();
       return true;
     } catch (error) {
@@ -149,7 +149,7 @@ export function LeagueTradeCentrePanel({
             message: submission.message,
             idempotencyKey: getCommandKey(commandSignature, 'counter'),
           },
-          'Counter sent.',
+          'counter',
           setComposerError
         );
         if (saved) {
@@ -167,7 +167,7 @@ export function LeagueTradeCentrePanel({
           ...submission,
           idempotencyKey: getCommandKey(commandSignature, 'proposal'),
         },
-        'Offer sent.',
+        'propose',
         setComposerError
       );
       if (saved) {
@@ -236,7 +236,7 @@ export function LeagueTradeCentrePanel({
           idempotencyKey: getCommandKey(commandSignature, action),
           ...(reason ? { reason } : {}),
         },
-        actionSuccessMessage(action)
+        action
       );
       if (saved) commandKeysRef.current.delete(commandSignature);
     } finally {
@@ -511,16 +511,37 @@ function createIdempotencyKey(action: string): string {
   return `trade:${action}:${suffix}`;
 }
 
-function actionSuccessMessage(action: Exclude<TradeActionName, 'counter'>): string {
-  const messages: Record<Exclude<TradeActionName, 'counter'>, string> = {
-    accept: 'Trade accepted.',
-    decline: 'Trade declined.',
-    withdraw: 'Trade withdrawn.',
-    approve: 'Trade approved.',
-    reject: 'Trade rejected.',
-    veto: 'Veto recorded.',
-  };
-  return messages[action];
+// Announce the status the server persisted, not the action requested: an accept can complete the
+// trade, start a review, or close an offer that expired or can no longer go through.
+function describeTradeOutcome(action: TradeActionName | 'propose', status?: string): string {
+  switch (status) {
+    case 'OPEN':
+      return action === 'counter' ? 'Counter sent.' : 'Offer sent.';
+    case 'COMPLETED':
+      return action === 'approve'
+        ? 'Trade approved and completed.'
+        : 'Trade accepted and completed.';
+    case 'PENDING_ADMIN_REVIEW':
+      return 'Accepted. Waiting for commissioner review.';
+    case 'PENDING_VETO_REVIEW':
+      return action === 'veto'
+        ? 'Veto recorded.'
+        : 'Accepted. Other teams can veto it until the review period ends.';
+    case 'DECLINED':
+      return 'Trade declined.';
+    case 'WITHDRAWN':
+      return 'Trade withdrawn.';
+    case 'REJECTED':
+      return 'Trade rejected.';
+    case 'VETOED':
+      return action === 'veto' ? 'Veto recorded. The trade is vetoed.' : 'Trade vetoed.';
+    case 'EXPIRED':
+      return 'This offer had expired, so it was closed.';
+    case 'INVALIDATED':
+      return 'This trade can no longer go through, so it was closed.';
+    default:
+      return 'Request saved. The offers list is updating.';
+  }
 }
 
 const secondaryButtonClasses =

@@ -19,7 +19,7 @@ export default function SocialPageClient({
   initialPostId?: string;
 }): React.JSX.Element {
   return (
-      <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <Link
             href={`/leagues/${encodeURIComponent(leagueId)}`}
@@ -36,6 +36,6 @@ export default function SocialPageClient({
             title={`${leagueName} social`}
           />
         </div>
-      </main>
+      </div>
   );
 }

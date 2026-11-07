@@ -4,7 +4,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
-import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
+import WaiverFAABSystem, {
+  type WaiverClaimSubmitResult,
+} from '@/components/waivers/WaiverFAABSystem';
 import type {
   LeagueWaiverClaim,
   LeagueRoster,
@@ -53,6 +55,7 @@ interface Props {
   selectedCategories?: FantasyCategoryKey[];
   initialPlayersCursor?: string | null;
   initialPlayerId?: string | null;
+  timeZone?: string;
 }
 
 // Minimal shape matching WaiverFAABSystem's expected userClaims prop
@@ -162,6 +165,7 @@ export default function LeagueWaiversContainer({
   selectedCategories: _selectedCategories,
   initialPlayersCursor,
   initialPlayerId,
+  timeZone,
 }: Props): React.JSX.Element | null {
   const { user, loading } = useAuth();
   const effectiveUserId = user?.uid ?? currentUserId ?? null;
@@ -196,6 +200,7 @@ export default function LeagueWaiversContainer({
     () => Object.values(waiverLoadErrors)[0] ?? null,
     [waiverLoadErrors]
   );
+  const [snapshotLoaded, setSnapshotLoaded] = useState(false);
   const [retryingWaiverSnapshot, setRetryingWaiverSnapshot] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -274,6 +279,7 @@ export default function LeagueWaiversContainer({
       if (data.playersIndex) {
         setPlayersIdx((prev) => ({ ...prev, ...data.playersIndex }));
       }
+      setSnapshotLoaded(true);
       setWaiverLoadErrors((prev) => {
         if (!prev.snapshot) return prev;
         const next = { ...prev };
@@ -434,25 +440,26 @@ export default function LeagueWaiversContainer({
     }));
   }, [activity, playersIdx, membersIndex]);
 
-  const handleSubmitClaim = async (claim: Partial<UIWaiverClaim>) => {
-    if (!effectiveUserId || !leagueId) return;
+  // Reports only what the server stored; the form keeps the bid on any failure.
+  const handleSubmitClaim = async (
+    claim: Partial<UIWaiverClaim>
+  ): Promise<WaiverClaimSubmitResult> => {
+    if (!effectiveUserId || !leagueId) {
+      return { ok: false, error: 'Sign in to submit a waiver claim' };
+    }
 
     // Validate required fields
     if (!claim.playerId) {
-      const msg = 'Please select a player';
-      setSubmitError(msg);
       console.error('[handleSubmitClaim] Missing required playerId');
-      return;
+      return { ok: false, error: 'Please select a player' };
     }
     if (!roster?.id) {
-      const msg = 'No roster found for your account';
-      setSubmitError(msg);
       console.error('[handleSubmitClaim] No roster found for user');
-      return;
+      return { ok: false, error: 'No roster found for your account' };
     }
 
+    let stored: { id?: string; playerId?: string; dropPlayerId?: string; bidAmount?: number };
     try {
-      setSubmitError(null);
       const res = await authenticatedFetch(
         `/api/leagues/${leagueId}/waivers/submit`,
         {
@@ -470,18 +477,42 @@ export default function LeagueWaiversContainer({
         effectiveUserId
       );
 
+      const j = (await res.json().catch(() => ({}))) as typeof stored & { error?: string };
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}) as { error?: string });
-        const msg = j?.error || 'Failed to submit waiver claim';
-        setSubmitError(msg);
         console.error('[handleSubmitClaim] Failed:', j);
-        return;
+        return { ok: false, error: j?.error || 'Failed to submit waiver claim' };
       }
-      await loadWaiverSnapshot({ includePlayers: false });
+      stored = j;
     } catch (err) {
-      setSubmitError('Failed to submit waiver claim');
       console.error('[handleSubmitClaim] Error:', err);
+      return { ok: false, error: 'Failed to submit waiver claim' };
     }
+
+    // The claim is stored; a failed refresh must not report it as lost.
+    await loadWaiverSnapshot({ includePlayers: false }).catch((error: unknown) => {
+      console.error('Waiver refresh after claim failed', error);
+    });
+
+    if (!stored.id || !stored.playerId) {
+      return {
+        ok: false,
+        error: 'The server did not confirm the claim. Check My Claims before bidding again.',
+      };
+    }
+    return {
+      ok: true,
+      claim: {
+        id: stored.id,
+        playerName:
+          playersIdx?.[stored.playerId]?.name || claim.playerName || `Player ${stored.playerId}`,
+        bidAmount: stored.bidAmount,
+        dropPlayerName: stored.dropPlayerId
+          ? playersIdx?.[stored.dropPlayerId]?.name ||
+            claim.dropPlayerName ||
+            `Player ${stored.dropPlayerId}`
+          : undefined,
+      },
+    };
   };
 
   const handleCancelClaim = async (id: string) => {
@@ -577,6 +608,7 @@ export default function LeagueWaiversContainer({
         currentBalance={remainingFAAB}
         pendingBids={pendingBids}
         totalBudget={totalBudget}
+        balanceStatus={snapshotLoaded ? 'loaded' : waiverLoadErrors.snapshot ? 'failed' : 'loading'}
         userTeamName={roster?.teamName}
         minimumBid={minimumBid}
         selectedCategories={selectedCategories}
@@ -584,6 +616,7 @@ export default function LeagueWaiversContainer({
         loadingMorePlayers={loadingMorePlayers}
         hasMorePlayers={hasMorePlayers}
         initialPlayerId={initialPlayerId}
+        timeZone={timeZone}
       />
 
       {/* Load older activity */}

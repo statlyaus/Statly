@@ -1,17 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import PlayerStatsTable from '@/components/stats/PlayerStatsTable';
-import StatFilters from '@/components/StatFilters';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 
 export default function StatsPage() {
   const { players, loading, error } = usePlayerStats();
-
-  const [statQualifier, setStatQualifier] = useState<string>('Kicks');
-  const [statThreshold, setStatThreshold] = useState<number>(10);
-  const [timeframe, setTimeframe] = useState<string>('Season');
 
   if (loading) {
     return (
@@ -28,17 +22,7 @@ export default function StatsPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Player Statistics</h1>
-      <StatFilters
-        statQualifier={statQualifier}
-        setStatQualifier={setStatQualifier}
-        statThreshold={statThreshold}
-        setStatThreshold={setStatThreshold}
-        timeframe={timeframe}
-        setTimeframe={setTimeframe}
-      />
-      <div className="mt-6">
-        <PlayerStatsTable players={players} />
-      </div>
+      <PlayerStatsTable players={players} />
     </div>
   );
 }

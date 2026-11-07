@@ -1,0 +1,32 @@
+name: Dependabot auto-merge
+
+# Turns on squash auto-merge for Dependabot's minor and patch pull requests, so they land as soon
+# as CI Gate and GitGuardian pass instead of waiting for the owner. Majors (only security updates
+# open them, see .github/dependabot.yml) stay manual. Auto-merge never bypasses the ruleset.
+#
+# A merge enabled by GITHUB_TOKEN does not trigger push workflows on main, so the PR queue
+# workflow dispatches CI for an unverified main tip on its schedule.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  enable-auto-merge:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'statlyaus/Statly'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      # An unknown update type stays manual, the same as a major.
+      - if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.metadata.outputs.update-type)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
