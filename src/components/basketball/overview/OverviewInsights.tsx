@@ -33,7 +33,9 @@ function MatchupOdds({ matchup, leagueId }: { matchup: MatchupView; leagueId: st
           {formatChance(projection.outcome.win)}
           <span className="ml-1.5 font-sans text-sm font-medium text-muted-foreground">
             chance to win the week
-            {projection.outcome.tie > 0 ? `, ${formatChance(projection.outcome.tie)} to tie` : ''}
+            {projection.outcome.tie > 0.0005
+              ? `, ${formatChance(projection.outcome.tie)} to tie`
+              : ''}
           </span>
         </p>
       ) : (

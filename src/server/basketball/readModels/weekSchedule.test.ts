@@ -31,32 +31,32 @@ const week3Games: FakeGame[] = [
 const client = (games: FakeGame[]) => createFakeNbaClient({ teams, players: [], games, stats: [] });
 
 describe('loadWeekSchedule', () => {
-  it('splits the week into played and remaining dates and counts games per team', async () => {
+  it('counts final games and projects the rest, with games per team', async () => {
     const schedule = await loadWeekSchedule(leagueFixture(), 3, {
       today: '2026-11-05',
       client: client(week3Games),
     });
 
     expect(schedule).toMatchObject({ week: 3, start: '2026-11-02', end: '2026-11-08' });
-    // Thursday is played: its only game is final with a box score.
-    expect(schedule.playedDates).toEqual(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05']);
-    expect(schedule.remainingDates).toEqual(['2026-11-06', '2026-11-07', '2026-11-08']);
+    expect(schedule.playedDates).toEqual(['2026-11-02', '2026-11-04', '2026-11-05']);
+    // Saturday's only game is postponed, so nothing is left to play that day.
+    expect(schedule.remainingDates).toEqual(['2026-11-06', '2026-11-08']);
     expect(schedule.finalGames).toEqual([
       { gameId: 'mon', date: '2026-11-02' },
       { gameId: 'wed', date: '2026-11-04' },
       { gameId: 'thu', date: '2026-11-05' },
     ]);
-    // A postponed game is not a game.
     expect(schedule.teamsByDate['2026-11-07']).toEqual([]);
     expect(schedule.teamsByDate['2026-11-06'].sort()).toEqual(['LAL', 'NYK']);
     expect(schedule.gamesByTeam.BOS).toEqual({ total: 2, remaining: 0 });
     expect(schedule.gamesByTeam.NYK).toEqual({ total: 3, remaining: 2 });
   });
 
-  it('keeps today in the rest of the week until every game today is final and ingested', async () => {
+  it('projects each game until it is final with a box score, whatever its date', async () => {
     const games = [
       game('early', '2026-11-05', 'BOS', 'NYK', 'FINAL'),
       game('late', '2026-11-05', 'DEN', 'LAL', 'IN_PROGRESS'),
+      // Yesterday's late tip-off whose box score is not ingested yet.
       { ...game('lagging', '2026-11-04', 'DEN', 'LAL', 'FINAL'), boxScoreIngested: false },
     ];
     const schedule = await loadWeekSchedule(leagueFixture(), 3, {
@@ -64,23 +64,40 @@ describe('loadWeekSchedule', () => {
       client: client(games),
     });
 
-    expect(schedule.remainingDates[0]).toBe('2026-11-05');
-    // Today's early game is projected with the rest of today, not counted twice.
-    expect(schedule.finalGames).toEqual([{ gameId: 'lagging', date: '2026-11-04' }]);
-    expect(schedule.teamsByDate['2026-11-05'].sort()).toEqual(['BOS', 'DEN', 'LAL', 'NYK']);
+    expect(schedule.finalGames).toEqual([{ gameId: 'early', date: '2026-11-05' }]);
+    expect(schedule.playedDates).toEqual(['2026-11-05']);
+    // Today is both: the early game counts, the late one is projected.
+    expect(schedule.remainingDates).toEqual(['2026-11-04', '2026-11-05']);
+    expect(schedule.teamsByDate['2026-11-05'].sort()).toEqual(['DEN', 'LAL']);
+    expect(schedule.teamsByDate['2026-11-04'].sort()).toEqual(['DEN', 'LAL']);
+    expect(schedule.gamesByTeam.BOS).toEqual({ total: 1, remaining: 0 });
+    expect(schedule.gamesByTeam.LAL).toEqual({ total: 2, remaining: 2 });
   });
 
-  it('treats a past week as played and a future week as all to play', async () => {
+  it('treats a finished week as played and a future week as all to play', async () => {
+    const finished = week3Games.map((g) =>
+      g.status === 'SCHEDULED' ? { ...g, status: 'FINAL' as const } : g
+    );
+    const upcoming = week3Games.map((g) =>
+      g.status === 'FINAL' ? { ...g, status: 'SCHEDULED' as const } : g
+    );
     const past = await loadWeekSchedule(leagueFixture(), 3, {
       today: '2026-11-20',
-      client: client(week3Games),
+      client: client(finished),
     });
     const future = await loadWeekSchedule(leagueFixture(), 3, {
       today: '2026-10-25',
-      client: client(week3Games),
+      client: client(upcoming),
     });
 
     expect(past.remainingDates).toEqual([]);
+    expect(past.gameDates).toEqual([
+      '2026-11-02',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-08',
+    ]);
     expect(future.playedDates).toEqual([]);
     expect(future.gamesByTeam.NYK).toEqual({ total: 3, remaining: 3 });
   });
