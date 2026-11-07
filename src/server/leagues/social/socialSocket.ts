@@ -2,31 +2,38 @@ import type { Server as SocketIOServer, Socket as SocketIOSocket } from 'socket.
 
 import { logger } from '@/lib/logger';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import { isLeagueSocialRoom, leagueSeasonSocialRoom } from '@/server/realtime/roomNames';
 import type { SocialRealtimeEnvelope } from '@/types/social';
 
+import { ensureActiveLeagueSeason } from './socialAccess';
+import { SocialError } from './socialErrors';
 import { socialPubSub } from './socialPubSub';
 
-const SOCIAL_ROOM_PREFIX = 'social:league:';
 const SOCIAL_JOIN_RATE_LIMIT_WINDOW_MS = 60_000;
 const SOCIAL_JOIN_RATE_LIMIT_MAX_ATTEMPTS = 10;
 const SOCIAL_LEAGUE_ID_MAX_LENGTH = 128;
 
 type SocialRoomRequest = {
   leagueId?: unknown;
+  /** Optional: the season the client is showing. It is checked, never trusted. */
+  seasonId?: unknown;
 };
 
 type SocialSocketErrorCode =
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'VALIDATION'
-  | 'RATE_LIMITED'
-  | 'INTERNAL';
+  'UNAUTHORIZED' | 'FORBIDDEN' | 'VALIDATION' | 'RATE_LIMITED' | 'INTERNAL';
 
 export type SocialSocketAcknowledgement =
   | {
       ok: true;
       leagueId: string;
+      seasonId: string;
       room: string;
+    }
+  | {
+      ok: true;
+      leagueId: string;
+      /** Every social room of the league the socket left, one per season. */
+      rooms: string[];
     }
   | {
       ok: false;
@@ -46,17 +53,37 @@ function acknowledge(
   callback?.(result);
 }
 
-function parseLeagueId(request: SocialRoomRequest | null | undefined): string | null {
-  if (typeof request?.leagueId !== 'string') return null;
+function parseRoomId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
 
-  const leagueId = request.leagueId.trim();
-  if (!leagueId || leagueId.length > SOCIAL_LEAGUE_ID_MAX_LENGTH) return null;
+  const id = value.trim();
+  if (!id || id.length > SOCIAL_LEAGUE_ID_MAX_LENGTH || id.includes(':')) return null;
 
-  return leagueId;
+  return id;
 }
 
-export function getLeagueSocialRoom(leagueId: string): string {
-  return `${SOCIAL_ROOM_PREFIX}${leagueId}`;
+function parseLeagueId(request: SocialRoomRequest | null | undefined): string | null {
+  return parseRoomId(request?.leagueId);
+}
+
+/** `undefined` when the client named no season, `null` when it named an invalid one. */
+function parseRequestedSeasonId(
+  request: SocialRoomRequest | null | undefined
+): string | null | undefined {
+  if (request?.seasonId === undefined || request.seasonId === null) return undefined;
+  return parseRoomId(request.seasonId);
+}
+
+async function leaveLeagueSocialRooms(
+  socket: Pick<SocketIOSocket, 'rooms' | 'leave'>,
+  leagueId: string,
+  keep?: string
+): Promise<string[]> {
+  const left = [...socket.rooms].filter(
+    (room) => room !== keep && isLeagueSocialRoom(room, leagueId)
+  );
+  await Promise.all(left.map((room) => socket.leave(room)));
+  return left;
 }
 
 function getAuthenticatedSocketUserId(socket: SocketIOSocket): string | null {
@@ -125,7 +152,8 @@ function attachSocketHandlers(socket: SocketIOSocket): void {
       }
 
       const leagueId = parseLeagueId(request);
-      if (!leagueId) {
+      const requestedSeasonId = parseRequestedSeasonId(request);
+      if (!leagueId || requestedSeasonId === null) {
         acknowledge(callback, invalidRequestAcknowledgement());
         return;
       }
@@ -143,10 +171,34 @@ function attachSocketHandlers(socket: SocketIOSocket): void {
           return;
         }
 
-        const room = getLeagueSocialRoom(leagueId);
+        // League membership admits a member to the league's active season, the season every
+        // social and trade read serves; a client-named season is checked against it, never trusted.
+        const seasonId = await ensureActiveLeagueSeason(leagueId);
+        if (requestedSeasonId !== undefined && requestedSeasonId !== seasonId) {
+          acknowledge(callback, {
+            ok: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Membership of that league season is required',
+            },
+          });
+          return;
+        }
+
+        const room = leagueSeasonSocialRoom(leagueId, seasonId);
+        // A rejoin after the active season changed moves the socket rather than adding a room.
+        await leaveLeagueSocialRooms(socket, leagueId, room);
         await socket.join(room);
-        acknowledge(callback, { ok: true, leagueId, room });
+        acknowledge(callback, { ok: true, leagueId, seasonId, room });
       } catch (error) {
+        if (error instanceof SocialError && error.code === 'NOT_FOUND') {
+          acknowledge(callback, {
+            ok: false,
+            error: { code: 'FORBIDDEN', message: 'Current league membership is required' },
+          });
+          return;
+        }
+
         logger.error('Failed to authorize league social socket join', {
           socketId: socket.id,
           leagueId,
@@ -178,10 +230,9 @@ function attachSocketHandlers(socket: SocketIOSocket): void {
         return;
       }
 
-      const room = getLeagueSocialRoom(leagueId);
       try {
-        await socket.leave(room);
-        acknowledge(callback, { ok: true, leagueId, room });
+        const rooms = await leaveLeagueSocialRooms(socket, leagueId);
+        acknowledge(callback, { ok: true, leagueId, rooms });
       } catch (error) {
         logger.error('Failed to leave league social socket room', {
           socketId: socket.id,
@@ -208,7 +259,8 @@ export async function broadcastLeagueSocialEvent(
   io: SocketIOServer,
   envelope: SocialRealtimeEnvelope
 ): Promise<void> {
-  const room = getLeagueSocialRoom(envelope.leagueId);
+  // Season-scoped: a socket in another season's room of the same league never sees this event.
+  const room = leagueSeasonSocialRoom(envelope.leagueId, envelope.seasonId);
   const sockets = await io.local.in(room).fetchSockets();
   // One socket's failed membership lookup must not stop delivery to the others.
   const results = await Promise.allSettled(
@@ -234,6 +286,7 @@ export async function broadcastLeagueSocialEvent(
     if (result.status === 'rejected') {
       logger.error('Failed to deliver league social event to a socket', {
         leagueId: envelope.leagueId,
+        seasonId: envelope.seasonId,
         event: envelope.event,
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       });
