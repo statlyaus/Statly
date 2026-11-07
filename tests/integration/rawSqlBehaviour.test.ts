@@ -247,11 +247,20 @@ describe('team actions route', () => {
     await prisma.teamAction.create({
       data: { leagueId: LEAGUE, memberId: members[1], actionType: 'TRADE_PROPOSAL', details: {} },
     });
-    const created = await post({
-      actionType: 'WAIVER_CLAIM',
-      details: { playerId: players[3], dropPlayerId: players[0] },
+    await prisma.teamAction.create({
+      data: {
+        leagueId: LEAGUE,
+        memberId: members[0],
+        actionType: 'WAIVER_CLAIM',
+        details: { playerId: players[3], dropPlayerId: players[0] },
+      },
     });
-    expect(created.status).toBe(200);
+    // Claims enter through the waiver service only; the route refuses to write one.
+    const refused = await post({
+      actionType: 'WAIVER_CLAIM',
+      details: { playerId: players[2], dropPlayerId: players[0] },
+    });
+    expect(refused.status).toBe(400);
 
     const actions = await list();
     expect(actions.map((action: { actionType: string }) => action.actionType)).toEqual([
