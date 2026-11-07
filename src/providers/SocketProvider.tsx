@@ -15,19 +15,24 @@ interface Props {
 const SocketContext = createContext<Socket | null>(null);
 const SOCKET_AUTH_RETRY_DELAY_MS = 250;
 const SOCKET_AUTH_RETRY_ATTEMPTS = 16;
+// Socket.IO retries transport failures itself; report only a connection that keeps failing.
+const SOCKET_FAILURES_BEFORE_REPORT = 5;
 
 function isSocketDisabled(): boolean {
   return process.env.NEXT_PUBLIC_SOCKET_DISABLED === 'true';
 }
 
-export async function resolveSocketAuthToken(uid: string): Promise<string | null> {
+export async function resolveSocketAuthToken(
+  uid: string,
+  forceRefresh = false
+): Promise<string | null> {
   if (isDevelopmentAuthEnabled()) {
     return `dev:${uid}`;
   }
 
   const currentUser = auth?.currentUser;
   if (currentUser) {
-    return currentUser.getIdToken();
+    return forceRefresh ? currentUser.getIdToken(true) : currentUser.getIdToken();
   }
 
   return null;
@@ -81,24 +86,56 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
           return;
         }
 
+        let forceTokenRefresh = false;
+        let refreshedAfterRejection = false;
+        let consecutiveFailures = 0;
+        let failureReported = false;
+        const reportPersistentFailure = (err: unknown) => {
+          if (failureReported) return;
+          failureReported = true;
+          captureException(err);
+        };
+
+        // A callback, not a fixed value: Socket.IO calls it on every (re)connect, so a reconnect
+        // after the first ID token expired (one hour) sends a current token.
         const s = io(socketUrl, {
-          auth: { token },
+          auth: (cb) => {
+            const forceRefresh = forceTokenRefresh;
+            forceTokenRefresh = false;
+            resolveSocketAuthToken(uid, forceRefresh)
+              .then((freshToken) => cb({ token: freshToken }))
+              .catch(() => cb({ token: null }));
+          },
           transports: ['websocket', 'polling'],
           reconnection: true,
         });
         activeSocket = s;
         setSocket(s);
 
+        s.on('connect', () => {
+          consecutiveFailures = 0;
+          refreshedAfterRejection = false;
+          failureReported = false;
+        });
+
         s.on('connect_error', (err) => {
-          captureException(err);
-        });
+          if (!s.active) {
+            // The server refused the handshake (authentication). Socket.IO does not retry that,
+            // so refresh the token and try once more before reporting it.
+            if (!refreshedAfterRejection) {
+              refreshedAfterRejection = true;
+              forceTokenRefresh = true;
+              s.connect();
+              return;
+            }
+            reportPersistentFailure(err);
+            return;
+          }
 
-        s.on('error', (err) => {
-          captureException(err);
-        });
-
-        s.on('disconnect', (reason) => {
-          captureException(new Error(`Socket disconnected: ${reason}`));
+          consecutiveFailures += 1;
+          if (consecutiveFailures >= SOCKET_FAILURES_BEFORE_REPORT) {
+            reportPersistentFailure(err);
+          }
         });
 
         const handleVisibility = () => {
