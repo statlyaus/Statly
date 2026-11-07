@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { buildMatchupCard } from '@/server/leagues/matchupReadModel';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 const categories: FantasyCategoryKey[] = ['goals', 'tackles'];
-const categoryDirections = { goals: 'HIGH_WINS', tackles: 'HIGH_WINS' } as const;
+const categoryDirections = normalizeCategoryDirections(categories);
 
 function team(id: string) {
   return { id, teamName: `Team ${id}`, teamLogoUrl: null };
