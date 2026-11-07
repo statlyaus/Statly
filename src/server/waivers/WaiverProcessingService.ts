@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
@@ -477,11 +478,16 @@ export class WaiverProcessingService {
         leagueId,
         OR: [{ id: claim.teamId }, { userId: claim.userId }],
       },
-      select: { id: true },
+      select: { id: true, isActive: true, status: true },
     });
 
     if (!member) {
       return { status: 'FAILED', reason: 'Roster not found' };
+    }
+
+    // A removed member's pending claims are rejected, which releases the reserved bid.
+    if (!isActivePrismaMembership(member)) {
+      return { status: 'FAILED', reason: 'Team no longer active' };
     }
 
     const memberId = member.id;
@@ -743,10 +749,10 @@ export class PrismaWaiverClaimStore implements ClaimStore {
         leagueId: input.leagueId,
         userId: input.userId,
       },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, isActive: true, status: true },
     });
 
-    if (!member) {
+    if (!member || !isActivePrismaMembership(member)) {
       throw new WaiverClaimStoreError('TEAM_NOT_FOUND', 'Team not found');
     }
 

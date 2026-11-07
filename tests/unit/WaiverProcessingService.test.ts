@@ -50,6 +50,8 @@ function createDbMock() {
       findFirst: vi.fn().mockResolvedValue({
         id: 'member-1',
         userId: 'user-1',
+        isActive: true,
+        status: 'ACTIVE',
       }),
     },
     leagueRosterPlayer: {
@@ -103,7 +105,9 @@ function createClaimStoreMock() {
 function createSubmitDbMock() {
   const db = {
     leagueMember: {
-      findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+      findFirst: vi
+        .fn()
+        .mockResolvedValue({ id: 'member-1', userId: 'user-1', isActive: true, status: 'ACTIVE' }),
       findMany: vi
         .fn()
         .mockResolvedValue([
@@ -329,6 +333,38 @@ describe('WaiverProcessingService', () => {
     );
     expect(claimStore.completeClaim).not.toHaveBeenCalled();
     expect(projection.projectLeague).not.toHaveBeenCalled();
+  });
+
+  it('rejects, without awarding or debiting, a pending claim of a member removed from the league', async () => {
+    const { db, tx } = createDbMock();
+    tx.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      userId: 'user-1',
+      isActive: false,
+      status: 'REMOVED',
+    });
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      claims: [claim({ bidAmount: 12, dropPlayerId: 'old-player' })],
+    });
+
+    expect(result.results).toEqual([
+      { id: 'claim-1', status: 'FAILED', reason: 'Team no longer active' },
+    ]);
+    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
+    expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
+    expect(claimStore.rejectClaim).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1', bidAmount: 12 }),
+      true
+    );
   });
 
   it('does not debit FAAB when canonical roster validation fails', async () => {
@@ -708,6 +744,32 @@ describe('PrismaWaiverClaimStore', () => {
     expect(activityDoc.set).not.toHaveBeenCalled();
   });
 
+  it('refuses a claim for a team whose member was removed from the league', async () => {
+    const db = createSubmitDbMock();
+    db.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      userId: 'user-1',
+      isActive: false,
+      status: 'REMOVED',
+    });
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({
+        leagueId: 'league-1',
+        userId: 'user-1',
+        teamId: 'member-1',
+        playerId: 'free-player',
+        priority: 1,
+        bidAmount: 7,
+        waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      })
+    ).rejects.toMatchObject({ code: 'TEAM_NOT_FOUND' });
+    expect(db.teamAction.create).not.toHaveBeenCalled();
+    expect(db.waiverPriority.updateMany).not.toHaveBeenCalled();
+  });
+
   it('keeps a submitted claim when the Firestore compatibility projection fails', async () => {
     const db = createSubmitDbMock();
     const { firestore, waiverDoc } = createCompatibilityProjectionMock();
@@ -737,7 +799,12 @@ describe('PrismaWaiverClaimStore', () => {
     const joinedAt = new Date('2026-06-01T00:00:00.000Z');
     const db = {
       leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-2', userId: 'user-2' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-2',
+          userId: 'user-2',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
         findMany: vi.fn().mockResolvedValue([
           { id: 'member-1', userId: 'user-1', draftSlot: 1, joinedAt },
           { id: 'member-2', userId: 'user-2', draftSlot: 2, joinedAt },
@@ -824,7 +891,12 @@ describe('PrismaWaiverClaimStore', () => {
   it('mirrors a settled outcome to Firestore after the commit', async () => {
     const db = {
       leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-1',
+          userId: 'user-1',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
       },
       waiverPriority: {
         findMany: vi
@@ -882,7 +954,12 @@ describe('PrismaWaiverClaimStore', () => {
   it('cancels canonical pending claims and releases reserved FAAB before mirroring cancellation', async () => {
     const db = {
       leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-1',
+          userId: 'user-1',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
       },
       teamAction: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
