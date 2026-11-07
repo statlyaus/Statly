@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 
 import { useDebounce } from '@/hooks/useDebounce';
 import { fetchApi } from '@/lib/api';
+import { guernseyFor } from '@/lib/clubGuernseys';
 import type { PlayerSearchResult } from '@/types/players';
 
 interface PlayerSearchProps {
@@ -24,30 +25,6 @@ interface PlayerSearchProps {
 }
 
 const MIN_QUERY_LENGTH = 2;
-
-const getTeamColor = (team: string): string => {
-  const teamColors: Record<string, string> = {
-    Adelaide: 'bg-red-500',
-    'Brisbane Lions': 'bg-amber-600',
-    Carlton: 'bg-blue-700',
-    Collingwood: 'bg-gray-900',
-    Essendon: 'bg-red-600',
-    Fremantle: 'bg-purple-600',
-    Geelong: 'bg-blue-800',
-    'Gold Coast': 'bg-yellow-500',
-    GWS: 'bg-orange-500',
-    Hawthorn: 'bg-amber-700',
-    Melbourne: 'bg-red-700',
-    'North Melbourne': 'bg-blue-600',
-    'Port Adelaide': 'bg-teal-600',
-    Richmond: 'bg-yellow-600',
-    'St Kilda': 'bg-red-500',
-    Sydney: 'bg-red-600',
-    'West Coast': 'bg-blue-500',
-    'Western Bulldogs': 'bg-blue-600',
-  };
-  return teamColors[team] || 'bg-gray-500';
-};
 
 export default function PlayerSearch({
   placeholder = 'Search players...',
@@ -222,6 +199,9 @@ export default function PlayerSearch({
       );
     }
 
+    // Club colours come from the shared guernsey table: base fills the circle, trim draws the initials.
+    const guernsey = guernseyFor(player.team);
+
     return (
       <div
         className={`w-full border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${
@@ -231,7 +211,8 @@ export default function PlayerSearch({
         <div className="flex items-center space-x-3">
           {showAvatar && (
             <div
-              className={`w-10 h-10 rounded-full ${getTeamColor(player.team ?? '')} flex items-center justify-center text-white font-semibold text-sm`}
+              className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
+              style={{ backgroundColor: guernsey.base, color: guernsey.trim }}
             >
               {player.name
                 .split(' ')
