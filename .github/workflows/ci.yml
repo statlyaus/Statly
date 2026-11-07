@@ -480,7 +480,22 @@ jobs:
     name: Container images
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      DATABASE_URL: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test
     services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: statly_fantasy_test
+          POSTGRES_USER: statly_test
+          POSTGRES_PASSWORD: statly_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U statly_test -d statly_fantasy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
       redis:
         image: redis:7-alpine
         ports:
@@ -498,8 +513,6 @@ jobs:
         run: docker build --target socket --tag statly-socket:ci .
       - name: Build worker image
         run: docker build --target worker --tag statly-worker:ci .
-      - name: Build web image (default target)
-        run: docker build --tag statly-web:ci .
       - name: Socket.IO image serves /health
         run: |
           docker run --detach --name statly-socket --network host \
@@ -536,6 +549,22 @@ jobs:
           --env FIREBASE_ADMIN_DISABLED=true --env SENTRY_DISABLED=true
           statly-worker:ci node --import tsx --input-type=module
           --eval "await import('/app/src/server/workers/webVitalsWorker.ts'); process.exit(0);"
+      - name: Worker image's Prisma client queries PostgreSQL
+        run: >-
+          docker run --rm --network host --env DATABASE_URL
+          statly-worker:ci node --input-type=module
+          --eval 'import prismaClient from "@prisma/client";
+          const prisma = new prismaClient.PrismaClient();
+          console.log(await prisma.$queryRawUnsafe("SELECT 1 AS ok"));
+          await prisma.$disconnect();'
+      - name: Build web image (default target)
+        run: >-
+          docker build --tag statly-web:ci
+          --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=ci-build-key
+          --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=statly-ci.firebaseapp.com
+          --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=statly-ci
+          --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=1:1234567890:web:ci
+          .
       - if: always()
         name: Stop smoke containers
         run: docker rm --force statly-socket statly-worker || true

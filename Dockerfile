@@ -33,6 +33,8 @@ CMD ["sh", "-c", "exec npm run outcomes:sources:dispatch-due-external -- --worke
 # server and the workers. tsx is a production dependency: it runs the TypeScript entry points
 # directly, exactly as `worker:start` and the Draft worker E2E job do.
 FROM base AS server-deps
+# Same unpinned toolchain as the deps stage; Alpine drops old package revisions, so pins break builds.
+# skipcq: DOK-DL3018
 RUN apk add --no-cache libc6-compat python3 make g++ openssl
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -44,6 +46,8 @@ RUN PRISMA_HIDE_UPDATE_MESSAGE=1 npx --no-install prisma generate --schema=prism
 # dependencies, no build toolchain. Files stay root-owned and read-only to the runtime user; tsx
 # writes its transpile cache to /tmp.
 FROM base AS server-runtime
+# Prisma's engine needs OpenSSL on Alpine. Unpinned for the same reason as the toolchain above.
+# skipcq: DOK-DL3018
 RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
@@ -76,8 +80,19 @@ COPY . .
 # build context so image builds cannot depend on a developer workstation artifact.
 RUN npm run prisma:generate && npm run outcomes:prisma:generate
 
-# Next build
+# Next build. The Firebase web config is public (it is compiled into the browser bundle and the auth
+# service worker) and the build refuses to run without it, so pass it with --build-arg. Never pass a
+# secret as a build argument. The build itself talks to no Redis or Firebase Admin, as in CI's Build job.
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
+ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV FIREBASE_ADMIN_DISABLED=true
+ENV REDIS_DISABLED=1
 RUN npm run build
 
 # Production web image (default target: keep it the last stage)
