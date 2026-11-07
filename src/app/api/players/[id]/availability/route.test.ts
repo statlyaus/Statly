@@ -2,28 +2,23 @@ import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  firestoreCollection: vi.fn(),
   getAuthenticatedUserId: vi.fn(),
   leagueMemberFindMany: vi.fn(),
   leagueRosterPlayerFindMany: vi.fn(),
-  listActiveLeagueMembers: vi.fn(),
-  listActiveUserLeagueMemberships: vi.fn(),
   loggerError: vi.fn(),
-  loggerWarn: vi.fn(),
   pickFindMany: vi.fn(),
   playerFindMany: vi.fn(),
   teamActionFindMany: vi.fn(),
 }));
 
+// Firestore must never decide availability: any use of it fails the test.
 vi.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: { collection: mocks.firestoreCollection },
-}));
-vi.mock('@/lib/leagueMembership', () => ({
-  listActiveLeagueMembers: mocks.listActiveLeagueMembers,
-  listActiveUserLeagueMemberships: mocks.listActiveUserLeagueMemberships,
+  get adminDb() {
+    throw new Error('Firestore must not be read for player availability');
+  },
 }));
 vi.mock('@/lib/logger', () => ({
-  logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
+  logger: { error: mocks.loggerError, warn: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -39,6 +34,12 @@ vi.mock('@/lib/serverAuth', () => ({
 }));
 
 import { GET } from './route';
+
+function request() {
+  return GET(new NextRequest('http://localhost/api/players/player-1/availability'), {
+    params: Promise.resolve({ id: 'player-1' }),
+  });
+}
 
 describe('GET /api/players/[id]/availability', () => {
   beforeEach(() => {
@@ -56,49 +57,60 @@ describe('GET /api/players/[id]/availability', () => {
     mocks.leagueRosterPlayerFindMany.mockResolvedValue([]);
     mocks.pickFindMany.mockResolvedValue([]);
     mocks.teamActionFindMany.mockResolvedValue([]);
-    mocks.listActiveUserLeagueMemberships.mockRejectedValue(
-      new Error('Missing Firestore credentials')
-    );
-    mocks.firestoreCollection.mockImplementation(() => {
-      throw new Error('Missing Firestore credentials');
-    });
   });
 
-  it('preserves Prisma availability when Firestore compatibility data is unavailable', async () => {
-    const response = await GET(
-      new NextRequest('http://localhost/api/players/player-1/availability'),
-      { params: Promise.resolve({ id: 'player-1' }) }
-    );
+  it('answers from Prisma alone, for the leagues the user is still active in', async () => {
+    const response = await request();
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({
-      success: true,
-      data: {
-        playerId: 'player-1',
-        leagues: [
-          {
-            leagueId: 'league-1',
-            leagueName: 'Test League',
-            teamName: 'Test Team',
-            source: 'prisma',
-            status: 'free-agent',
-            action: {
-              type: 'add',
-              href: '/leagues/league-1?tab=roster&addPlayerId=player-1',
-            },
-          },
-        ],
-      },
-    });
-    expect(mocks.loggerWarn).toHaveBeenCalledWith(
-      'Firestore memberships unavailable for player availability; using Prisma data',
+    expect(body.data.leagues).toEqual([
       expect.objectContaining({
-        userId: 'user-1',
-        error: 'Missing Firestore credentials',
+        leagueId: 'league-1',
+        leagueName: 'Test League',
+        teamName: 'Test Team',
+        status: 'free-agent',
+        action: expect.objectContaining({
+          type: 'add',
+          href: '/leagues/league-1?tab=roster&addPlayerId=player-1',
+        }),
+      }),
+    ]);
+    expect(body.data.leagues[0]).not.toHaveProperty('source');
+    expect(mocks.leagueMemberFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', isActive: true } })
+    );
+  });
+
+  it('returns 500 when Prisma fails, rather than showing the player as a free agent', async () => {
+    mocks.leagueRosterPlayerFindMany.mockRejectedValue(new Error('database unavailable'));
+
+    const response = await request();
+
+    expect(response.status).toBe(500);
+    expect(mocks.loggerError).toHaveBeenCalled();
+  });
+
+  it('uses draft picks for ownership only while the draft is still running', async () => {
+    mocks.pickFindMany.mockResolvedValue([
+      {
+        memberId: 'member-2',
+        draft: { leagueId: 'league-1' },
+        member: { userId: 'user-2', teamName: 'Rival' },
+      },
+    ]);
+
+    const body = await (await request()).json();
+
+    expect(mocks.pickFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          playerId: { in: expect.any(Array) },
+          draft: { leagueId: { in: ['league-1'] }, status: { not: 'COMPLETED' } },
+        },
       })
     );
-    expect(mocks.loggerError).not.toHaveBeenCalled();
+    expect(body.data.leagues[0]).toMatchObject({ status: 'owned', statusDetail: 'Owned by Rival' });
   });
 
   it('states when waiver claims process in the league timezone, labelled', async () => {
@@ -118,11 +130,7 @@ describe('GET /api/players/[id]/availability', () => {
       },
     ]);
 
-    const response = await GET(
-      new NextRequest('http://localhost/api/players/player-1/availability'),
-      { params: Promise.resolve({ id: 'player-1' }) }
-    );
-    const body = await response.json();
+    const body = await (await request()).json();
     const [league] = body.data.leagues;
 
     expect(league.status).toBe('waiver');
