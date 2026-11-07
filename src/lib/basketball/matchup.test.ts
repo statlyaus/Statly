@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { BasketballRosterSlotCounts, NbaStatLine } from '@/types/basketball';
 import type { LineupRosterEntry } from './lineupSimulator';
-import { matchupOutcome, normalCdf, projectMatchup, type MatchupSide } from './matchup';
+import {
+  matchupOutcome,
+  normalCdf,
+  projectMatchup,
+  projectRestOfWeek,
+  type MatchupSide,
+} from './matchup';
 import { emptyStatLine } from './statLine';
 
 function statLine(values: Partial<NbaStatLine>): NbaStatLine {
@@ -187,5 +193,21 @@ describe('projectMatchup', () => {
       1, // STL 10 v 5
       1, // TO 10 v 14
     ]);
+  });
+});
+
+describe('projectRestOfWeek', () => {
+  it('leaves players with no projection out of the lineup, so they never block a bench player', () => {
+    const roster = [{ ...rosterOf('unprojected')[0], value: 10 }, ...rosterOf('bench')];
+    const result = projectRestOfWeek({
+      roster,
+      perGame: { bench: statLine({ points: 10 }) },
+      slots: UTIL_ONLY,
+      days: [{ date: '2026-11-07', playing: ['unprojected', 'bench'] }],
+    });
+
+    expect(result.lineups).toEqual([{ date: '2026-11-07', starters: ['bench'] }]);
+    expect(result.gamesLeft).toEqual({ bench: 1 });
+    expect(result.restOfWeek.points).toBe(10);
   });
 });

@@ -125,7 +125,7 @@ function sideVariance(
 
 export interface MatchupSide {
   roster: readonly LineupRosterEntry[];
-  /** Per-game projection by player id; a player without one adds nothing. */
+  /** Per-game projection by player id; a player without one is left out of the lineup. */
   perGame: Readonly<Record<string, NbaStatLine>>;
   /** Stats already counted this week (see `countedActuals`). */
   actual: NbaStatLine;
@@ -143,20 +143,26 @@ export interface SideProjection extends RestOfWeek {
   total: NbaStatLine;
 }
 
-/** Per-game lines times the games each player is simulated to start on the given days. */
+/**
+ * Per-game lines times the games each player is simulated to start on the given days. A rostered
+ * player with no per-game line (no games in either season) is left out of the lineup, so he never
+ * takes a slot from a bench player who has a projection.
+ */
 export function projectRestOfWeek(input: {
   roster: readonly LineupRosterEntry[];
   perGame: Readonly<Record<string, NbaStatLine>>;
   slots: BasketballRosterSlotCounts;
   days: readonly LineupDay[];
 }): RestOfWeek {
-  const lineups = simulateLineups({ roster: input.roster, slots: input.slots, days: input.days });
+  const lineups = simulateLineups({
+    roster: input.roster.filter((player) => input.perGame[player.playerId]),
+    slots: input.slots,
+    days: input.days,
+  });
   const gamesLeft = countedGames(lineups);
   const restOfWeek = Object.entries(gamesLeft).reduce(
     (total, [playerId, games]) =>
-      input.perGame[playerId]
-        ? addStatLines(total, scaleStatLine(input.perGame[playerId], games))
-        : total,
+      addStatLines(total, scaleStatLine(input.perGame[playerId], games)),
     emptyStatLine()
   );
   return { restOfWeek, gamesLeft, lineups };

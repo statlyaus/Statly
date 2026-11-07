@@ -192,4 +192,20 @@ describe('planAddDrop', () => {
     expect(atTen.now.categories.find((c) => c.category === 'TO')?.needWeight).toBe(1);
     expect(beyond.now.categories.find((c) => c.category === 'TO')?.needWeight).toBe(0.4);
   });
+
+  it('ignores a rostered player with no projection, now and after the swap', () => {
+    const withUnprojected = planAddDrop({
+      ...INPUT,
+      me: { ...INPUT.me, roster: [...INPUT.me.roster, entry('unprojected', 20)] },
+      remainingDays: INPUT.remainingDays.map((day) => ({
+        ...day,
+        playing: [...day.playing, 'unprojected'],
+      })),
+      freeAgents: FREE_AGENTS,
+    });
+    const without = planAddDrop({ ...INPUT, freeAgents: FREE_AGENTS });
+
+    expect(withUnprojected.now.total).toEqual(without.now.total);
+    expect(withUnprojected.options).toEqual(without.options);
+  });
 });
