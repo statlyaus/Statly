@@ -4,9 +4,9 @@
 export const TAKEN_PER_OTHER_TEAM = 8;
 
 export interface TakenPlayersCheck {
-  /** Players rostered by anyone but me and this week's opponent: other entered teams or elsewhere. */
+  /** Players on other teams: on any entered team but mine and this week's opponent, or elsewhere. */
   taken: number;
-  /** (teams − 2) × 8: about a starting lineup for every team besides mine and the opponent. */
+  /** The floor: 8 for every team but mine and, when one is set, this week's opponent. */
   expected: number;
   enough: boolean;
 }
@@ -23,6 +23,12 @@ export function takenPlayersCheck(
   const taken = league.rosterSpots.filter(
     (spot) => spot.teamId !== league.myTeamId && (!opponentTeamId || spot.teamId !== opponentTeamId)
   ).length;
-  const expected = Math.max(0, league.teamCount - 2) * TAKEN_PER_OTHER_TEAM;
+  const otherTeams = league.teamCount - (opponentTeamId ? 2 : 1);
+  const expected = Math.max(0, otherTeams) * TAKEN_PER_OTHER_TEAM;
   return { taken, expected, enough: taken >= expected };
+}
+
+/** "12 players on other teams (at least 80 needed)" */
+export function takenPlayersSummary(check: TakenPlayersCheck): string {
+  return `${check.taken} ${check.taken === 1 ? 'player' : 'players'} on other teams (at least ${check.expected} needed)`;
 }

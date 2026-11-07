@@ -87,22 +87,12 @@ describe('OverviewInsights', () => {
     );
     const notice = screen.getByRole('status');
     expect(notice).toHaveTextContent(
-      'Only 12 players are marked as taken in this league, so some suggestions may already be on other teams.'
+      'Statly knows 12 players on other teams (at least 80 needed), so some suggestions may already be rostered.'
     );
     expect(screen.getByRole('link', { name: "Add the other teams' players" })).toHaveAttribute(
       'href',
       '/basketball/l1/roster#other-teams'
     );
-
-    rerender(
-      <OverviewInsights
-        matchup={readyMatchup}
-        pickups={readyPickups}
-        taken={{ taken: 0, expected: 80, enough: false }}
-        leagueId="l1"
-      />
-    );
-    expect(screen.getByRole('status')).toHaveTextContent(/^No players are marked as taken/);
 
     rerender(
       <OverviewInsights

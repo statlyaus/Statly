@@ -83,10 +83,10 @@ pastes the whole rosters page from Yahoo or ESPN (up to 250 players and 40,000 c
 column headers, stats and dates are ignored, and team names come back as "no match"). After the
 usual review, every confirmed player is marked as taken (a roster spot with no team) in one batch. A
 player already on a team the user entered, including their own and this week's opponent, is left
-where he is and reported as skipped, so a careless paste cannot strip a roster. Until (teams − 2) ×
-8 players sit on teams other than the user's and the opponent's, Pickups and the overview's best adds
-warn that suggestions may already be rostered. "Clear all taken players" removes only the spots with
-no team.
+where he is and reported as skipped, so a careless paste cannot strip a roster. Until at least 8
+players per other team are entered (every team but the user's and, once set, this week's
+opponent's), Pickups and the overview's best adds warn that suggestions may already be rostered.
+"Clear all taken players" removes only the spots with no team.
 
 ## Data source and licensing
 
