@@ -299,9 +299,10 @@ export function classifyDnpReason(reason: string): NbaDnpReason {
 }
 
 const athleteLineSchema = z.object({
+  // ESPN lists some unsigned two-way players with no athlete record (no id, no name).
   athlete: z.object({
-    id: z.string(),
-    displayName: z.string().min(1),
+    id: z.string().optional(),
+    displayName: z.string().min(1).optional(),
     position: z.object({ abbreviation: z.string() }).nullish(),
   }),
   starter: z.boolean(),
@@ -437,30 +438,41 @@ export function parseBoxScore(response: unknown): NbaProviderBoxScore {
     );
   }
 
+  let unidentifiedDidNotPlay = 0;
   const lines = data.boxscore.players.flatMap((team) => {
     const teamCode = standardTeamCode(team.team.abbreviation);
     const { keys, athletes } = team.statistics[0];
-    return athletes.map((line): NbaProviderPlayerLine => {
-      const who = `game ${header.id} athlete ${line.athlete.id}`;
+    return athletes.flatMap((line): NbaProviderPlayerLine[] => {
+      const { id, displayName } = line.athlete;
+      const who = `game ${header.id} athlete ${id}`;
+      if (!id || !displayName) {
+        // No identity to link, and never a name match: a did-not-play row with no stats is
+        // dropped and counted; a row with stats would lose real numbers, so the game fails.
+        if (line.stats.length > 0) parseFailed(`${who} has stats but no athlete id or name`);
+        unidentifiedDidNotPlay += 1;
+        return [];
+      }
       // Rows with no stats (did not play) carry zeros. ESPN fills `reason` for players who played
       // too, so it is read only for a did-not-play row.
       const played = !line.didNotPlay && line.stats.length > 0;
-      return {
-        player: {
-          externalId: line.athlete.id,
-          fullName: line.athlete.displayName,
-          positions: splitPositions(line.athlete.position?.abbreviation),
+      return [
+        {
+          player: {
+            externalId: id,
+            fullName: displayName,
+            positions: splitPositions(line.athlete.position?.abbreviation),
+          },
+          teamCode,
+          starter: line.starter,
+          played,
+          dnpReason: line.didNotPlay ? classifyDnpReason(line.reason ?? '') : null,
+          ...(line.stats.length > 0 ? statValues(keys, line.stats, who) : ZERO_STATS),
         },
-        teamCode,
-        starter: line.starter,
-        played,
-        dnpReason: line.didNotPlay ? classifyDnpReason(line.reason ?? '') : null,
-        ...(line.stats.length > 0 ? statValues(keys, line.stats, who) : ZERO_STATS),
-      };
+      ];
     });
   });
 
-  return { game, lines };
+  return { game, lines, unidentifiedDidNotPlay };
 }
 
 // ---- Injuries ---------------------------------------------------------------------------------

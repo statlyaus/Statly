@@ -88,6 +88,8 @@ export interface NbaProviderBoxScore {
   game: NbaProviderGame;
   /** Every player the box score lists, including did-not-play rows. */
   lines: NbaProviderPlayerLine[];
+  /** Did-not-play rows dropped because the provider gave no player identity. */
+  unidentifiedDidNotPlay: number;
 }
 
 export interface NbaProviderInjury {

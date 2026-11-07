@@ -196,7 +196,9 @@ regular-season games (1,230 in a full season); at most 400 injury rows, and at l
 season is on. Box scores reject the run when a scoreboard cannot be read, every fetch fails, or the
 provider answers 401, 403 or 429; one game that cannot be fetched or parsed, or fails its sanity
 check (both teams present, 8 to 20 listed players each), is skipped and listed in the run summary.
-Injury rows whose athlete has no `NbaPlayerIdentity` are skipped and counted.
+Injury rows whose athlete has no `NbaPlayerIdentity` are skipped and counted, and so is a box-score
+did-not-play row with no player identity at all (ESPN lists some unsigned two-way players that way);
+a row with stats but no identity fails its game.
 
 Licensing guard: ESPN's terms allow personal, non-commercial use only, so its adapter is flagged
 `commercialUseLicensed: false`. Every job, from the cron route or the scripts, refuses such a

@@ -350,6 +350,30 @@ describe('parseBoxScore', () => {
     expect(box.lines[1].dnpReason).toBeNull();
   });
 
+  it('drops and counts a did-not-play row with no athlete record', () => {
+    const response = summaryResponse({
+      ...base,
+      homeAthletes: [{ id: '1' }, { id: 'x', didNotPlay: true }],
+      awayAthletes: [],
+    });
+    // As ESPN lists an unsigned two-way player: no id, no name, no stats.
+    response.boxscore.players[1].statistics[0].athletes[1].athlete = {
+      links: [],
+      shortName: 'Olbrich',
+    } as never;
+
+    const box = parseBoxScore(response);
+
+    expect(box.lines.map((entry) => entry.player.externalId)).toEqual(['1']);
+    expect(box.unidentifiedDidNotPlay).toBe(1);
+  });
+
+  it('rejects a row with stats but no athlete record', () => {
+    const response = summaryResponse({ ...base, homeAthletes: [{ id: '1' }], awayAthletes: [] });
+    response.boxscore.players[1].statistics[0].athletes[0].athlete = { links: [] } as never;
+    expect(rejection(() => parseBoxScore(response)).reason).toBe('parse_failed');
+  });
+
   it('reads the stats by key, not by position', () => {
     const response = summaryResponse({ ...base, homeAthletes: [{ id: '1' }], awayAthletes: [] });
     const homePlayers = response.boxscore.players[1].statistics[0];
