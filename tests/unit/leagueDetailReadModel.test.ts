@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   leagueFindUnique: vi.fn(),
   waiverPriorityFindMany: vi.fn(),
   getLeagueDraftOperationalReadiness: vi.fn(),
+  getLeagueMembershipAccess: vi.fn(),
+  firestoreCollection: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -16,7 +18,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {
-    collection: vi.fn(),
+    collection: mocks.firestoreCollection,
   },
 }));
 vi.mock('@/lib/leagueMembership', () => ({
@@ -34,14 +36,60 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/server/draft/services/DraftReadinessService', () => ({
   getLeagueDraftOperationalReadiness: mocks.getLeagueDraftOperationalReadiness,
 }));
+vi.mock('@/server/leagues/membership', async () => ({
+  getLeagueMembershipAccess: mocks.getLeagueMembershipAccess,
+  isActivePrismaMembership: (await import('@/server/leagues/activeMembership'))
+    .isActivePrismaMembership,
+}));
 
 import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail';
+
+describe('league detail authorization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getLeagueMembershipAccess.mockResolvedValue({ isMember: false, canManage: false });
+  });
+
+  it.each(['test-league-id', 'league-1'])(
+    'rejects an unauthenticated read of %s without loading the league',
+    async (leagueId) => {
+      const result = await loadAuthorizedLeagueDetail(leagueId, null);
+
+      expect(result).toEqual({ ok: false, status: 401, error: 'Unauthorized' });
+      expect(mocks.leagueFindUnique).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['test-league-id', 'league-1'])(
+    'rejects a non-member read of %s without loading the league',
+    async (leagueId) => {
+      const result = await loadAuthorizedLeagueDetail(leagueId, 'outsider');
+
+      expect(result).toEqual({ ok: false, status: 403, error: 'Forbidden' });
+      expect(mocks.getLeagueMembershipAccess).toHaveBeenCalledWith(leagueId, 'outsider');
+      expect(mocks.leagueFindUnique).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not serve a built-in fixture for test-league-id when no league exists', async () => {
+    mocks.getLeagueMembershipAccess.mockResolvedValue({ isMember: true, canManage: false });
+    mocks.leagueFindUnique.mockResolvedValue(null);
+    mocks.firestoreCollection.mockReturnValue({
+      doc: () => ({ get: async () => ({ exists: false }) }),
+    });
+
+    const result = await loadAuthorizedLeagueDetail('test-league-id', 'member-user');
+
+    expect(result).toEqual({ ok: false, status: 404, error: 'League not found' });
+  });
+});
 
 describe('league detail Prisma member projection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.waiverPriorityFindMany.mockResolvedValue([]);
     mocks.getLeagueDraftOperationalReadiness.mockResolvedValue({ isReady: true });
+    mocks.getLeagueMembershipAccess.mockResolvedValue({ isMember: true, canManage: true });
   });
 
   it.each([
@@ -76,7 +124,7 @@ describe('league detail Prisma member projection', () => {
       ],
     } as never);
 
-    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+    const result = await loadAuthorizedLeagueDetail('test-league-id', 'owner-user');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -96,7 +144,7 @@ describe('league detail Prisma member projection', () => {
       members: [],
     } as never);
 
-    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+    const result = await loadAuthorizedLeagueDetail('test-league-id', 'owner-user');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -143,7 +191,7 @@ describe('league detail Prisma member projection', () => {
       ],
     } as never);
 
-    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+    const result = await loadAuthorizedLeagueDetail('test-league-id', 'owner-user');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -201,7 +249,7 @@ describe('league detail Prisma member projection', () => {
       ],
     } as never);
 
-    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+    const result = await loadAuthorizedLeagueDetail('test-league-id', 'owner-user');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
