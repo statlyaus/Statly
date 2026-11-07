@@ -35,6 +35,20 @@ A league is the tenancy boundary for membership, roles, teams, drafts, rosters, 
 waivers. Season-dependent features also carry a `LeagueSeason` identity. Every protected query, write,
 cache key, room, or event must retain the league and applicable season scope.
 
+Every league has an active season (`League.activeSeasonId`): league creation sets one, and the
+2026-11-08 season-scope migration gave one to every league that lacked it. Season-scoped rows carry
+`seasonId`, a foreign key to `LeagueSeason` that cascades on delete:
+
+- social and trade rows, since they were added;
+- `LeagueCompetitionRound` (nullable);
+- since 2026-11-08: `LeagueLineup` (and its players and autosubs through the lineup),
+  `LeagueMatchupScore`, `LeagueStanding`, `WaiverPriority` and `TeamAction` (waiver claims and drops).
+  These five columns are nullable until their readers and writers carry the season, then become
+  required. Existing rows were backfilled to the league's active season.
+
+Not yet season-scoped, pending a season-rollover decision: `LeagueMatchup` (only through its
+competition round), `LeagueRosterPlayer` and `Draft`.
+
 Firebase identity establishes who the user is. Prisma membership and role data decide what that user
 may see or change in a league. Owner, commissioner, member, roster owner, draft participant, and waiver
 claimant permissions are domain decisions, not client navigation decisions.
