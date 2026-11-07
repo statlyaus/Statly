@@ -125,4 +125,114 @@ describe('PasteReview', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /to Bench Mob/ })).toBeDisabled();
   });
+
+  describe('compact, for players on other teams', () => {
+    const MANY: PastedRosterLine[] = [
+      ...LINES,
+      {
+        line: 5,
+        text: 'BN Owen Carter BOS',
+        name: 'Owen Carter',
+        status: 'matched',
+        candidates: [candidate('p-carter', 'Owen Carter', { teamId: 'mine', teamName: 'My Team' })],
+      },
+      {
+        line: 6,
+        text: 'Luca Moretti',
+        name: 'Luca Moretti',
+        status: 'matched',
+        candidates: [candidate('p-moretti', 'Luca Moretti', { teamId: null, teamName: null })],
+      },
+      { line: 7, text: 'Rim Runners', name: 'Rim Runners', status: 'none', candidates: [] },
+    ];
+
+    function renderCompact(onConfirm = vi.fn()) {
+      render(
+        <PasteReview
+          lines={MANY}
+          targetTeamId={null}
+          targetLabel="Rostered elsewhere"
+          compact
+          busy={false}
+          onConfirm={onConfirm}
+          onCancel={vi.fn()}
+        />
+      );
+      return onConfirm;
+    }
+
+    it('counts each kind of line and keeps matched and unmatched lines behind disclosures', () => {
+      renderCompact();
+
+      const summary = screen.getByRole('list', { name: 'What was found' });
+      expect(
+        within(summary)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent)
+      ).toEqual([
+        '3 matched',
+        '1 to check',
+        '1 to choose',
+        '2 with no match',
+        '2 already on a team you entered: left alone',
+      ]);
+      // Lines that need a look are open; matched lines and lines with no match are collapsed.
+      expect(screen.getByRole('group', { name: /Line 2/ })).toBeVisible();
+      expect(screen.getByRole('group', { name: /Line 3/ })).toBeVisible();
+      expect(screen.getByText('Show 3 matched players').closest('details')).not.toHaveAttribute(
+        'open'
+      );
+      expect(screen.getByText('Show 2 lines with no match').closest('details')).not.toHaveAttribute(
+        'open'
+      );
+      expect(screen.getByRole('group', { name: /Line 3/ })).toHaveTextContent(
+        'On Rival: left alone'
+      );
+      expect(screen.getByRole('group', { name: /Line 5/ })).toHaveTextContent(
+        'On My Team: left alone'
+      );
+      expect(screen.getByRole('group', { name: /Line 6/ })).toHaveTextContent(
+        'Already marked as taken'
+      );
+    });
+
+    it('opens the matched lines when the same player is chosen twice', () => {
+      render(
+        <PasteReview
+          lines={[MANY[0], { ...MANY[0], line: 8, text: 'Marcus Hale' }]}
+          targetTeamId={null}
+          targetLabel="Rostered elsewhere"
+          compact
+          busy={false}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+
+      expect(
+        screen.getByText('Marcus Hale is chosen on lines 1 and 8. Skip one.')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Show 2 matched players').closest('details')).toHaveAttribute('open');
+    });
+
+    it('sends every chosen player but counts only those it will mark as taken', () => {
+      const onConfirm = renderCompact();
+
+      fireEvent.click(
+        within(screen.getByRole('group', { name: /Line 2/ })).getByRole('radio', {
+          name: /Jalen Price/,
+        })
+      );
+      // The server is the authority on who is left alone, so every chosen player is sent.
+      fireEvent.click(screen.getByRole('button', { name: 'Mark 3 players as taken' }));
+
+      expect(onConfirm).toHaveBeenCalledWith([
+        'p-hale',
+        'p-jalen',
+        'p-brooks',
+        'p-carter',
+        'p-moretti',
+      ]);
+    });
+  });
 });

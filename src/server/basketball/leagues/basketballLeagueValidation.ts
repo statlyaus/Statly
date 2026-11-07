@@ -10,7 +10,9 @@ import {
 
 import { toValidationError } from './basketballLeagueErrors';
 
-export const MAX_ROSTER_BATCH = 30;
+/** Players per paste or batch add: enough for every rostered player in a 16-team league. */
+export const MAX_ROSTER_BATCH = 250;
+export const MAX_PASTE_CHARACTERS = 40_000;
 export const MAX_SEASON_DAYS = 200;
 export const MAX_ROSTER_SLOTS_TOTAL = 25;
 export const MAX_TWO_WEEK_MATCHUPS = 3;
@@ -259,7 +261,10 @@ export const weekSchema = z
 export const matchupSchema = z.strictObject({ opponentTeamId: id });
 
 export const pasteSchema = z.strictObject({
-  text: z.string().min(1, 'Paste at least one name').max(10_000, 'Paste at most 10,000 characters'),
+  text: z
+    .string()
+    .min(1, 'Paste at least one name')
+    .max(MAX_PASTE_CHARACTERS, 'Paste at most 40,000 characters'),
 });
 
 export const playerSearchSchema = z.object({
