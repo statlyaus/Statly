@@ -101,6 +101,21 @@ describe('LeagueMatchupsPanel category totals', () => {
     const table = await totalsTable();
     expect(table.queryByText(/ (won|lost|drawn)$/)).not.toBeInTheDocument();
   });
+
+  it('shows the start time in the league timezone, labelled', async () => {
+    const scheduled = respond('SCHEDULED');
+    authenticatedFetchMock.mockImplementation(async () => {
+      const response = await scheduled();
+      const body = await response.json();
+      (body.data.matchups[0] as Record<string, unknown>).startsAt = '2026-10-03T09:30:00.000Z';
+      return { ok: true, json: async () => body };
+    });
+    render(
+      <LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" timeZone="Australia/Perth" />
+    );
+
+    expect(await screen.findByText(/^Starts Sat,? 3 Oct,? 5:30\spm AWST$/)).toBeInTheDocument();
+  });
 });
 
 function respondEmpty(canManage: boolean) {

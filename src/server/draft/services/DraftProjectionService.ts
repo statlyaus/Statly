@@ -252,6 +252,7 @@ export class DraftProjectionService {
         round: draft.round,
         direction: draft.direction,
         draftType: draft.league.settings.draftType ?? DraftType.SNAKE,
+        timeZone: draft.league.settings.timeZone,
         clock,
         onClockMemberId,
         participants: draft.orders.map((order) => ({

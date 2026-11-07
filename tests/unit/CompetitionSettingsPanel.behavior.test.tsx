@@ -18,7 +18,6 @@ function competitionRules(fixtureGenerationMode: LeagueFixtureGenerationMode) {
     finalsTeams: 4 as const,
     fixtureGenerationMode,
     lockPolicy: 'INDIVIDUAL_GAME_START' as const,
-    leagueTimeZone: 'Australia/Melbourne',
     interchangeSlots: 4,
     standingsTieBreakCategory: 'goals' as const,
     excludedAflRounds: [],
