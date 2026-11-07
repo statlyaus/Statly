@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest';
 const commissionerRoutes = [
   'src/app/api/leagues/[id]/matchups/route.ts',
   'src/app/api/leagues/[id]/matchups/[round]/recalculate/route.ts',
-  'src/app/api/leagues/[id]/sync-draft-results/route.ts',
   'src/app/api/leagues/[id]/waivers/cancel/route.ts',
 ];
 

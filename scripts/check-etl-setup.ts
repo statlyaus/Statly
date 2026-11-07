@@ -93,8 +93,6 @@ function checkEnvironmentSetup() {
   const apiRoutes = [
     'src/app/api/player-stats/route.ts',
     'src/app/api/matches/enhanced/route.ts',
-    // Helpful diagnostics
-    'src/app/api/auth/health/route.ts',
     'src/app/api/rankings/route.ts',
   ];
 
@@ -192,9 +190,7 @@ function checkEnvironmentSetup() {
   console.log('\n🚀 Next Steps:');
   console.log('1. Fix any critical issues listed above');
   console.log('2. Run: npm run init-firebase-db (to initialize database)');
-  console.log(
-    '3. Test API endpoints: /api/auth/health, /api/player-stats, /api/matches/enhanced, /api/rankings'
-  );
+  console.log('3. Test API endpoints: /api/player-stats, /api/matches/enhanced, /api/rankings');
   console.log('4. Use ETLTestComponent to verify integration');
 
   console.log('\n💡 Quick Setup Commands:');
@@ -202,7 +198,6 @@ function checkEnvironmentSetup() {
   console.log('   npx tsx Scripts/initialize-firebase-db.ts');
   console.log('');
   console.log('   # Test API endpoints');
-  console.log('   curl http://localhost:3000/api/auth/health');
   console.log('   curl "http://localhost:3000/api/player-stats?season=2025"');
   console.log('   curl "http://localhost:3000/api/matches/enhanced?season=2025"');
   console.log('   curl http://localhost:3000/api/rankings');

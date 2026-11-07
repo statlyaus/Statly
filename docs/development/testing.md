@@ -583,18 +583,6 @@ authority against the same database or Redis namespace.
 For responsive changes, verify at least a phone viewport (390px) and the affected desktop layout.
 Realtime and routing changes also need direct-load/refresh evidence, not only client navigation.
 
-## Test data factories
-
-`src/testUtils/playerDataFactory.ts` supplies typed player fixtures:
-
-- `createExamplePlayer(overrides)` for a complete player;
-- `createExamplePlayers(count, overrides)` for lists;
-- `createMinimalPlayer(overrides)` for edge cases; and
-- `PLAYER_VARIATIONS` for injured, suspended, rookie, premium, and bye states.
-
-Prefer these factories over copied production-shaped objects. Override only the fields that matter to
-the test so schema changes remain visible through TypeScript.
-
 ## Flaky-test quarantine
 
 A known flaky test stays in the suite but stops blocking merges. `tests/quarantine.json` lists the

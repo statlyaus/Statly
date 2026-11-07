@@ -4,23 +4,8 @@ import { commonErrors } from '@/lib/apiResponse';
 import { withRequestTracing } from '@/lib/requestTracing';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { redisClient } from '@/lib/redis';
-import { metricsCollector, type ApplicationMetrics } from '@/lib/metrics';
+import { metricsCollector } from '@/lib/metrics';
 import { checkRelationalDatabase } from '@/server/health/relationalDatabaseHealth';
-
-interface HealthCheck {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  timestamp: string;
-  version: string;
-  uptime: number;
-  services: {
-    database: ServiceStatus;
-    relationalDatabase: ServiceStatus;
-    memory: ServiceStatus;
-    redis?: ServiceStatus;
-    metrics: ServiceStatus;
-  };
-  metrics?: ApplicationMetrics;
-}
 
 interface ServiceStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -29,7 +14,18 @@ interface ServiceStatus {
   lastChecked: string;
 }
 
-const startTime = Date.now();
+interface ServiceChecks {
+  database: ServiceStatus;
+  relationalDatabase: ServiceStatus;
+  memory: ServiceStatus;
+  redis: ServiceStatus;
+  metrics: ServiceStatus;
+}
+
+// The route is public, so one round of checks (a Firestore read, a Prisma query and Redis writes)
+// serves every caller for this long instead of running per request.
+const CHECK_TTL_MS = 10_000;
+let cachedChecks: { at: number; result: Promise<ServiceChecks> } | null = null;
 
 function isProductionEnvironment(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -38,9 +34,9 @@ function isProductionEnvironment(): boolean {
 function isRedisExplicitlyConfigured(): boolean {
   return Boolean(
     process.env.REDIS_URL ||
-      process.env.REDIS_HOST ||
-      process.env.REDIS_PORT ||
-      process.env.REDIS_PASSWORD
+    process.env.REDIS_HOST ||
+    process.env.REDIS_PORT ||
+    process.env.REDIS_PASSWORD
   );
 }
 
@@ -181,79 +177,77 @@ function checkMemory(): ServiceStatus {
   };
 }
 
+function runChecks(): Promise<ServiceChecks> {
+  const now = Date.now();
+  if (cachedChecks && now - cachedChecks.at < CHECK_TTL_MS) {
+    return cachedChecks.result;
+  }
+  const result = Promise.all([
+    checkDatabase(),
+    checkRelationalDatabase(),
+    checkRedis(),
+    checkMetrics(),
+  ]).then(([database, relationalDatabase, redis, metrics]) => ({
+    database,
+    relationalDatabase,
+    memory: checkMemory(),
+    redis,
+    metrics,
+  }));
+  cachedChecks = { at: now, result };
+  return result;
+}
+
 export async function GET(req: NextRequest) {
   const tracer = withRequestTracing(req, { endpoint: 'health' });
 
   try {
-    // Run all health checks in parallel
-    const [database, relationalDatabase, memory, redis, metricsCheck] = await Promise.all([
-      checkDatabase(),
-      checkRelationalDatabase(),
-      Promise.resolve(checkMemory()),
-      checkRedis(),
-      checkMetrics(),
-    ]);
-
-    // Collect application metrics
-    const metrics = await metricsCollector.collectAllMetrics(startTime);
-
-    const services = {
-      database,
-      relationalDatabase,
-      memory,
-      redis,
-      metrics: metricsCheck,
-    };
-
-    // Determine overall status based on all services
+    const services = await runChecks();
     const serviceStatuses = Object.values(services);
-    const hasUnhealthyService = serviceStatuses.some((service) => service.status === 'unhealthy');
-    const hasDegradedService = serviceStatuses.some((service) => service.status === 'degraded');
 
-    let status: HealthCheck['status'];
-    if (hasUnhealthyService) {
+    // Detail (errors, timings) stays in the server log; anonymous callers see status only.
+    for (const [name, service] of Object.entries(services)) {
+      if (service.status !== 'healthy') {
+        logger.warn('Health check service not healthy', {
+          service: name,
+          status: service.status,
+          error: service.error,
+          responseTime: service.responseTime,
+        });
+      }
+    }
+
+    let status: ServiceStatus['status'];
+    if (serviceStatuses.some((service) => service.status === 'unhealthy')) {
       status = 'unhealthy';
-    } else if (hasDegradedService) {
+    } else if (serviceStatuses.some((service) => service.status === 'degraded')) {
       status = 'degraded';
     } else {
       status = 'healthy';
     }
 
-    const healthCheck: HealthCheck = {
-      status,
-      timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0',
-      uptime: Date.now() - startTime,
-      services,
-      metrics,
-    };
-
-    // Map status to HTTP status code
-    let httpStatus: number;
-    switch (status) {
-      case 'healthy':
-        httpStatus = 200;
-        break;
-      case 'degraded':
-        httpStatus = 200; // Still operational, just degraded
-        break;
-      case 'unhealthy':
-        httpStatus = 503;
-        break;
-      default:
-        httpStatus = 500;
-    }
+    // Degraded is still operational.
+    const httpStatus = status === 'unhealthy' ? 503 : 200;
 
     tracer.complete(httpStatus, {
       healthStatus: status,
-      servicesChecked: Object.keys(services).length,
-      hasRedis: redisClient.isConnected(),
+      servicesChecked: serviceStatuses.length,
     });
 
     return NextResponse.json(
       {
         success: true,
-        data: healthCheck,
+        data: {
+          status,
+          timestamp: new Date().toISOString(),
+          services: {
+            database: services.database.status,
+            relationalDatabase: services.relationalDatabase.status,
+            memory: services.memory.status,
+            redis: services.redis.status,
+            metrics: services.metrics.status,
+          },
+        },
         timestamp: new Date().toISOString(),
       },
       {
@@ -291,13 +285,7 @@ export async function PATCH(req: NextRequest) {
   const tracer = withRequestTracing(req, { endpoint: 'health-readiness' });
 
   try {
-    // More comprehensive checks for readiness
-    const [database, relationalDatabase, redis, metricsCheck] = await Promise.all([
-      checkDatabase(),
-      checkRelationalDatabase(),
-      checkRedis(),
-      checkMetrics(),
-    ]);
+    const { database, relationalDatabase, redis, metrics: metricsCheck } = await runChecks();
 
     // For readiness, we require all critical services to be healthy
     const criticalServices = [database, relationalDatabase, metricsCheck];
