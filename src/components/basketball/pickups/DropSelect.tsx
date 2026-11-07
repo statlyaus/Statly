@@ -15,12 +15,15 @@ export function DropSelect({
   params,
   options,
   selected,
+  defaultId,
 }: {
   path: string;
   params: SearchParams;
   options: DropOption[];
   /** null: no drop. */
   selected: string | null;
+  /** The default drop, labelled as the lowest value. */
+  defaultId: string | null;
 }) {
   const { update, pending } = useParamNavigation(path, params);
   const [value, setValue] = useOptimistic(selected ?? 'none');
@@ -41,6 +44,7 @@ export function DropSelect({
             {option.fullName}
             {option.onInjuredList ? ' (IL)' : ''}
             {option.value !== null ? ` · value ${formatSigned(option.value)}` : ''}
+            {option.playerId === defaultId ? ' (lowest value)' : ''}
           </option>
         ))}
         <option value="none">Nobody (I have an open roster spot)</option>
