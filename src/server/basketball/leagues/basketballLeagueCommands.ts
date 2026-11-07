@@ -13,7 +13,7 @@ import {
   type EasternDate,
 } from '@/lib/basketball/fantasyWeeks';
 import { prisma } from '@/lib/prisma';
-import { buildExternalUserEmail } from '@/lib/prismaLeagueBridge';
+import { buildExternalUserEmail } from '@/lib/externalUserEmail';
 import { BASKETBALL_CATEGORY_IDS, type BasketballCategoryId } from '@/types/basketball';
 
 import { requireBasketballLeagueOwner } from './basketballLeagueAccess';
