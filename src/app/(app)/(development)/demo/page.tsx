@@ -323,7 +323,7 @@ export default function ComponentDemoPage() {
                         </button>
                       </div>
 
-                      <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+                      <AlertContainer alerts={alerts} onRemove={removeAlert} />
                     </div>
                   </div>
                 </div>

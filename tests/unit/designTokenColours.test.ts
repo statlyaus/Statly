@@ -15,6 +15,7 @@ import {
 const tokenisedFiles = [
   'src/components/stats/PlayerComparison.tsx',
   'src/components/stats/PlayerStatsTable.tsx',
+  'src/components/ui/Alert.tsx',
 ];
 
 describe('design token colours', () => {

@@ -113,7 +113,6 @@ export default function LeaguePageClient({
       <div className="max-w-4xl mx-auto px-4 py-6">
         <Alert
           type="error"
-          variant="light"
           title="Failed to load league"
           actions={
             <button
@@ -136,7 +135,6 @@ export default function LeaguePageClient({
       <div className="max-w-4xl mx-auto px-4 py-6">
         <Alert
           type="warning"
-          variant="light"
           title="League not found"
           actions={
             <button
