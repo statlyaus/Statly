@@ -30,14 +30,17 @@ describe('toBasketballErrorResponse', () => {
     expect(JSON.stringify(response.body)).not.toContain('connection string');
   });
 
-  it('turns a unique-constraint race into a 409', () => {
-    const race = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-      code: 'P2002',
-      clientVersion: 'test',
-    });
+  it.each(['P2002', 'P2003', 'P2025'])(
+    'turns a concurrent-change Prisma error %s into a 409',
+    (code) => {
+      const race = new Prisma.PrismaClientKnownRequestError('Concurrent change', {
+        code,
+        clientVersion: 'test',
+      });
 
-    expect(toBasketballErrorResponse(race).status).toBe(409);
-  });
+      expect(toBasketballErrorResponse(race).status).toBe(409);
+    }
+  );
 });
 
 describe('toValidationError', () => {

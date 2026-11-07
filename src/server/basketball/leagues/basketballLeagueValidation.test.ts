@@ -361,9 +361,10 @@ describe('rosterSpotPatchSchema', () => {
 });
 
 describe('weekSchema', () => {
-  it('reads a positive whole week from the URL segment', () => {
+  it('reads a positive whole week from a number or a URL segment', () => {
     expect(parseInput(weekSchema, '3')).toBe(3);
-    for (const week of ['0', '1.5', 'abc', '']) {
+    expect(parseInput(weekSchema, 3)).toBe(3);
+    for (const week of ['0', '1.5', 'abc', '', 0, 1.5, null]) {
       expect(() => parseInput(weekSchema, week)).toThrow();
     }
   });

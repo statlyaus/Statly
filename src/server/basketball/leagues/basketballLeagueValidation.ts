@@ -247,11 +247,12 @@ export const rosterSpotPatchSchema = z
   .refine((value) => Object.keys(value).length > 0, 'Change at least one field');
 export type BasketballRosterSpotPatch = z.output<typeof rosterSpotPatchSchema>;
 
+/** A fantasy week: a number, or the digits of a URL segment. */
 export const weekSchema = z
-  .string()
-  .regex(/^\d+$/, 'Use a whole week number')
-  .transform(Number)
-  .pipe(z.number().int().min(1, 'Weeks start at 1'));
+  .union([z.number(), z.string().regex(/^\d+$/).transform(Number)], {
+    error: 'Use a whole week number',
+  })
+  .pipe(z.number().int('Use a whole week number').min(1, 'Weeks start at 1'));
 
 export const matchupSchema = z.strictObject({ opponentTeamId: id });
 

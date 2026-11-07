@@ -18,6 +18,9 @@ export interface BasketballFieldErrors {
   fieldErrors: Record<string, string[]>;
 }
 
+// Unique clash, foreign key gone, or row gone: another write to the same league landed first.
+const CONCURRENT_CHANGE_CODES = new Set(['P2002', 'P2003', 'P2025']);
+
 export class BasketballLeagueError extends Error {
   readonly code: BasketballLeagueErrorCode;
   readonly status: number;
@@ -67,7 +70,8 @@ export function toBasketballErrorResponse(error: unknown): BasketballErrorRespon
   const known =
     error instanceof BasketballLeagueError
       ? error
-      : error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+      : error instanceof Prisma.PrismaClientKnownRequestError &&
+          CONCURRENT_CHANGE_CODES.has(error.code)
         ? new BasketballLeagueError(
             'CONFLICT',
             'Another change to this league landed at the same time. Reload and try again.'
