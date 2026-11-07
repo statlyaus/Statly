@@ -519,7 +519,13 @@ export default function MainNavigation(): ReactNode {
         }`}
         role="banner"
       >
-        <div className="mx-auto grid h-16 w-full max-w-[var(--app-shell-max-width)] grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)] items-center gap-3 px-4 sm:px-6 lg:px-8">
+        <div
+          className={`mx-auto grid h-16 w-full max-w-[var(--app-shell-max-width)] grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)] items-center gap-3 px-4 sm:px-6 lg:px-8 ${
+            user
+              ? 'lg:grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)_max-content] 2xl:grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)]'
+              : ''
+          }`}
+        >
           <div className="min-w-0">
             <Link href={brandHref} className="flex min-w-0 items-center">
               <Image
@@ -582,7 +588,6 @@ export default function MainNavigation(): ReactNode {
                   ref={accountButtonRef}
                   onClick={() => setIsAccountMenuOpen((open) => !open)}
                   className="inline-flex items-center gap-3 rounded-md border border-white/30 px-2.5 py-1.5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                  aria-haspopup="menu"
                   aria-expanded={isAccountMenuOpen}
                   aria-controls="account-menu"
                 >
@@ -608,7 +613,6 @@ export default function MainNavigation(): ReactNode {
                 {isAccountMenuOpen ? (
                   <div
                     id="account-menu"
-                    role="menu"
                     className="absolute right-0 mt-2 w-56 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
                   >
                     <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
@@ -617,10 +621,9 @@ export default function MainNavigation(): ReactNode {
                         {accountLabel}
                       </p>
                     </div>
-                    <div className="p-2" role="none">
+                    <div className="p-2">
                       <Link
                         href="/dashboard"
-                        role="menuitem"
                         className="flex rounded-md px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
@@ -628,7 +631,6 @@ export default function MainNavigation(): ReactNode {
                       </Link>
                       <Link
                         href="/help"
-                        role="menuitem"
                         className="flex rounded-md px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
@@ -636,7 +638,6 @@ export default function MainNavigation(): ReactNode {
                       </Link>
                       <button
                         type="button"
-                        role="menuitem"
                         className="flex w-full rounded-md px-3 py-2 text-left text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         onClick={() => {
                           setIsAccountMenuOpen(false);
@@ -664,7 +665,11 @@ export default function MainNavigation(): ReactNode {
           <button
             type="button"
             onClick={() => setIsMobileOpen((open) => !open)}
-            className="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/30 p-2 text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
+            // Player search and the league switcher join the bar only at 2xl, so signed-in
+            // managers keep this toggle (and its quick actions) until then.
+            className={`ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/30 p-2 text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+              user ? '2xl:hidden' : 'lg:hidden'
+            }`}
             aria-expanded={isMobileOpen}
             aria-controls="mobile-main-navigation"
             aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
@@ -697,7 +702,9 @@ export default function MainNavigation(): ReactNode {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] lg:hidden"
+              className={`border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] ${
+                user ? '2xl:hidden' : 'lg:hidden'
+              }`}
             >
               <div className="space-y-4 px-4 py-4">
                 {user ? (
@@ -712,7 +719,7 @@ export default function MainNavigation(): ReactNode {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2 lg:hidden">
                       <p className="px-3 pt-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
                         Navigate
                       </p>
@@ -744,7 +751,7 @@ export default function MainNavigation(): ReactNode {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2 lg:hidden">
                       <p className="px-3 pt-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
                         Tools
                       </p>
@@ -776,7 +783,7 @@ export default function MainNavigation(): ReactNode {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4 lg:hidden">
                       <div className="flex items-center gap-3">
                         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-sm font-semibold text-white">
                           {accountInitial}
