@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { buildExternalUserEmail } from './externalUserEmail';
 import {
   DraftType,
   LeagueRole,
@@ -131,10 +131,7 @@ export function normalizeWaiverRuleForPrisma(value: unknown): WaiverRule {
     : WaiverRule.WEEKLY;
 }
 
-export function buildExternalUserEmail(userId: string): string {
-  const digest = createHash('sha1').update(userId).digest('hex').slice(0, 20);
-  return `firebase_${digest}@statly.local`;
-}
+export { buildExternalUserEmail };
 
 export async function loadFirestoreLeagueMirrorSnapshot(
   input: EnsurePrismaLeagueMirrorInput,
