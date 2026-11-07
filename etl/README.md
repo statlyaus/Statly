@@ -1,7 +1,7 @@
 # AFL ETL
 
-Statly's ETL package fetches AFL match statistics from Footywire through fitzRoy, streams normalized
-rows through TypeScript, and writes live-stat evidence to Firestore. It is separate from protected
+Statly's ETL package fetches the AFL fixture and AFL match statistics from Footywire through fitzRoy,
+streams normalized rows through TypeScript, and writes them to Firestore. It is separate from protected
 league/draft ownership, which remains in Prisma.
 
 There is one supported source path and there is no mock-data fallback.
@@ -9,8 +9,25 @@ There is one supported source path and there is no mock-data fallback.
 ## Pipeline
 
 ```text
-fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.ts → processFootywireData.ts → Firestore
+fetch_fw_fixture.R → NDJSON stdout → fetchPipeline.ts → fixtureIngest.ts → processFixtureData.ts → Firestore matches
+fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.ts → processFootywireData.ts → Firestore player_match_stats
 ```
+
+- `fetch_fw_fixture.R` reads a season's Footywire fixture with `fetch_fixture(source = "footywire")`
+  and the count of games Footywire has posted match stats for. It emits one JSON row per game.
+- `fixtureIngest.ts` turns those rows into `matches` documents (`match_uid`
+  `<season>-R<round>-<HOME>-<AWAY>`, `season`, `round_number`, `round`, `home_team`, `away_team`,
+  `venue`, `start_time_utc`, `status`, `confirmed_bye_teams`). Lineup locks, competition round timing,
+  live matchup totals, `liveGuard.ts` and the stats processor's live gate all read this collection.
+  - Footywire prints start times in the venue's local time (fitzRoy labels them UTC). Each venue maps
+    to its time zone; an unknown venue fails the run.
+  - `status` is `final` for the first N games of the season, where N is Footywire's posted-stats count
+    (Footywire posts match stats in fixture order), `in_progress` for a game that has started without
+    posted stats, and `scheduled` otherwise. A count larger than the number of started games fails the
+    run.
+  - Only numbered home-and-away rounds (`Round N`) are written, matching the stats fetcher. Clubs with
+    no game in a numbered round are its `confirmed_bye_teams`.
+  - Every row is checked before the first write, and only documents whose fields changed are written.
 
 - `fetch_fw_round.R` loads Footywire data through fitzRoy and emits one JSON row per line.
 - `fetchPipeline.ts` resolves the same assets from source and compiled runtimes. It **streams the R
@@ -19,9 +36,11 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
   the canonical row shape without initializing Firebase or performing writes.
 - `processFootywireData.ts` consumes normalized rows, adds deterministic identifiers and checksums, and
   writes match/player-stat documents.
-- `liveGuard.ts` runs the shared pipeline only while Firestore reports a live match window.
-- `backfill.ts` uses the same shared pipeline for bounded historical seasons/rounds and fails the command
-  if any requested round fails.
+- `liveGuard.ts` refreshes the fixture every `FIXTURE_REFRESH_MS` (default 15 minutes), then runs the
+  stats pipeline only while Firestore reports a live match window. A failed fixture refresh skips the
+  cycle.
+- `backfill.ts` loads each season's fixture, then uses the same shared pipeline for bounded historical
+  seasons/rounds, and fails the command if the fixture or any requested round fails.
 - `validateMatchData.ts` checks match and player-stat invariants.
 
 ## Requirements
@@ -85,6 +104,9 @@ npm run build
 # Verify that the R fetcher can run for a bounded round (external read)
 npm run test-r
 
+# Load the current season's fixture into Firestore matches (writes to the configured project)
+npm run fixture
+
 # Run the complete fetch/process path (writes to the configured Firestore project)
 npm run test-pipeline
 
@@ -116,6 +138,8 @@ stats, source checksum, source label, and update time. Category keys must stay a
 
 - Missing R or required packages blocks the pipeline.
 - Fetch, stream, parse, validation, and Firestore write failures produce a failed exit.
+- A fixture row with an unknown club, venue or start time, or a posted-stats count the fixture cannot
+  explain, fails the fixture run before any write.
 - Live cycles may retry after their configured delay, but a failed cycle is never reported as success.
 - Backfill reports every failed season/round and exits non-zero.
 - There is no alternate Python scraper, browser scraper, or mock production source.

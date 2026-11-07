@@ -32,16 +32,20 @@ describe('ETL source-of-truth architecture', () => {
     const fetchPipeline = read('etl/fetchPipeline.ts');
     const processor = read('etl/processFootywireData.ts');
 
-    expect(liveGuard).toContain("import { runFetchPipeline } from './fetchPipeline'");
+    expect(liveGuard).toContain(
+      "import { runFetchPipeline, runFixturePipeline } from './fetchPipeline'"
+    );
     expect(liveGuard).toContain('await runFetchPipeline({');
-    expect(backfill).toContain("import { runFetchPipeline } from './fetchPipeline'");
+    expect(backfill).toContain(
+      "import { runFetchPipeline, runFixturePipeline } from './fetchPipeline'"
+    );
     expect(backfill).toContain('backfillMode: true');
     expect(backfill).toContain('Backfill failed for ${failures.length} round(s)');
     expect(backfill).toContain('process.exitCode = 1');
     expect(fetchPipeline).toContain("spawnSync('Rscript', ['--version']");
     expect(fetchPipeline).toContain("from 'stream/promises'");
     expect(fetchPipeline).toContain('processorInput');
-    expect(fetchPipeline).toContain('Footywire fetcher output pipe failed');
+    expect(fetchPipeline).toContain('fetcher output pipe failed');
     expect(resolveFetchPipelineTimeout({ season: 2026 })).toBe(300_000);
     expect(resolveFetchPipelineTimeout({ season: 2026, backfillMode: true })).toBeNull();
     expect(
@@ -50,6 +54,22 @@ describe('ETL source-of-truth architecture', () => {
     expect(processor).toContain("from './normalizePlayerRow'");
     expect(processor).toContain('normalizePlayerRow(JSON.parse(line))');
     expect(processor).toContain('process.exitCode = 1');
+  });
+
+  it('loads the AFL fixture through the same fitzRoy pipeline before stats', () => {
+    const liveGuard = read('etl/liveGuard.ts');
+    const backfill = read('etl/backfill.ts');
+    const fixtureFetcher = read('etl/fetch_fw_fixture.R');
+    const fixtureProcessor = read('etl/processFixtureData.ts');
+
+    expect(fixtureFetcher).toContain('fetch_fixture(season = season, source = "footywire")');
+    expect(fixtureProcessor).toContain("from './fixtureIngest'");
+    expect(fixtureProcessor).toContain("collection('matches')");
+    expect(fixtureProcessor).toContain('process.exitCode = 1');
+    expect(liveGuard).toContain('await refreshFixtureIfDue()');
+    expect(liveGuard).toContain('skipping this cycle');
+    expect(backfill).toContain('await runFixturePipeline({ season, timeoutMs: null })');
+    expect(backfill).toContain('failures.push(`${season} fixture`)');
   });
 
   it('preserves row types in R and normalizes numeric fields before processing', () => {

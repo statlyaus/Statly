@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { runFetchPipeline } from './fetchPipeline';
+import { runFetchPipeline, runFixturePipeline } from './fetchPipeline';
 
 // Initialize Firebase Admin using same pattern as main project
 if (getApps().length === 0) {
@@ -80,6 +80,20 @@ function sleep(baseMs: number, jitterMs: number = 15000): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+const FIXTURE_REFRESH_MS = Number(process.env.FIXTURE_REFRESH_MS) || 15 * 60 * 1000;
+let lastFixtureRefreshAt = 0;
+
+/**
+ * Refresh Firestore `matches` from the Footywire fixture when it is older than
+ * FIXTURE_REFRESH_MS. Match status (scheduled, in_progress, final) comes from this refresh, so a
+ * failure is thrown: the caller skips the stats cycle rather than gating on stale statuses.
+ */
+async function refreshFixtureIfDue(now = Date.now()): Promise<void> {
+  if (now - lastFixtureRefreshAt < FIXTURE_REFRESH_MS) return;
+  await runFixturePipeline({ season: process.env.SEASON || new Date().getFullYear() });
+  lastFixtureRefreshAt = now;
+}
+
 /**
  * Main guard loop
  */
@@ -88,6 +102,14 @@ async function runGuardLoop(): Promise<void> {
 
   while (true) {
     try {
+      try {
+        await refreshFixtureIfDue();
+      } catch (error) {
+        console.error('Fixture refresh failed; skipping this cycle:', error);
+        await sleep(60000, 30000);
+        continue;
+      }
+
       const isLive = await isLiveWindow();
 
       if (!isLive) {
@@ -130,4 +152,4 @@ if (require.main === module) {
   });
 }
 
-export { isLiveWindow, runFetchCycle };
+export { isLiveWindow, refreshFixtureIfDue, runFetchCycle };

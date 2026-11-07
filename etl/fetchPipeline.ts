@@ -77,23 +77,28 @@ function resolveFetchPipelineTimeout(options: FetchPipelineOptions): number | nu
   return configuredTimeout;
 }
 
-async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
-  const { etlRoot, fetcher, processor } = resolveEtlRuntimePaths();
-  const round = options.round === undefined ? '' : String(options.round);
-  const timeoutMs = resolveFetchPipelineTimeout(options);
+type RPipelineSpec = {
+  etlRoot: string;
+  fetcher: string;
+  fetcherArgs: string[];
+  processor: string;
+  env: NodeJS.ProcessEnv;
+  label: string;
+  timeoutMs: number | null;
+};
+
+async function runRPipeline(spec: RPipelineSpec): Promise<void> {
+  const { etlRoot, fetcher, fetcherArgs, processor, env, label, timeoutMs } = spec;
 
   ensureRscriptAvailable();
 
-  const fetchProcess = spawn('Rscript', [fetcher, String(options.season), round], {
+  const fetchProcess = spawn('Rscript', [fetcher, ...fetcherArgs], {
     cwd: etlRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const processorProcess = spawn(process.execPath, [processor], {
     cwd: etlRoot,
-    env: {
-      ...process.env,
-      BACKFILL_MODE: options.backfillMode ? 'true' : 'false',
-    },
+    env: { ...process.env, ...env },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -103,7 +108,7 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
     }
 
     throw new Error(
-      `Footywire fetcher output pipe failed: ${error instanceof Error ? error.message : String(error)}`
+      `${label} fetcher output pipe failed: ${error instanceof Error ? error.message : String(error)}`
     );
   });
   fetchProcess.stderr?.pipe(process.stderr);
@@ -111,16 +116,16 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
   processorProcess.stderr?.pipe(process.stderr);
 
   fetchProcess.stdout?.on('error', (error) => {
-    console.error('Footywire fetcher output failed:', error);
+    console.error(`${label} fetcher output failed:`, error);
   });
   processorProcess.stdout?.on('error', (error) => {
-    console.error('Footywire processor output failed:', error);
+    console.error(`${label} processor output failed:`, error);
   });
 
   let timeout: NodeJS.Timeout | undefined;
   const pipelineCompletion = Promise.all([
-    waitForSuccessfulExit(fetchProcess, 'Footywire R fetcher'),
-    waitForSuccessfulExit(processorProcess, 'Footywire Node processor'),
+    waitForSuccessfulExit(fetchProcess, `${label} R fetcher`),
+    waitForSuccessfulExit(processorProcess, `${label} Node processor`),
     processorInput,
   ]);
 
@@ -132,7 +137,7 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
         pipelineCompletion,
         new Promise<never>((_, reject) => {
           timeout = setTimeout(() => {
-            reject(new Error(`ETL fetch pipeline timed out after ${timeoutMs}ms`));
+            reject(new Error(`ETL ${label} pipeline timed out after ${timeoutMs}ms`));
           }, timeoutMs);
         }),
       ]);
@@ -151,5 +156,57 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
   }
 }
 
-export { resolveEtlRuntimePaths, resolveFetchPipelineTimeout, runFetchPipeline };
+async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
+  const { etlRoot, fetcher, processor } = resolveEtlRuntimePaths();
+  const round = options.round === undefined ? '' : String(options.round);
+
+  await runRPipeline({
+    etlRoot,
+    fetcher,
+    fetcherArgs: [String(options.season), round],
+    processor,
+    env: { BACKFILL_MODE: options.backfillMode ? 'true' : 'false' },
+    label: 'Footywire',
+    timeoutMs: resolveFetchPipelineTimeout(options),
+  });
+}
+
+function resolveFixtureRuntimePaths(runtimeDirectory: string = __dirname) {
+  const { etlRoot } = resolveEtlRuntimePaths(runtimeDirectory);
+  return {
+    etlRoot,
+    fetcher: path.join(etlRoot, 'fetch_fw_fixture.R'),
+    processor: path.join(etlRoot, 'dist', 'processFixtureData.js'),
+  };
+}
+
+/** Refresh Firestore `matches` from the Footywire fixture for a season (optionally one round). */
+async function runFixturePipeline(options: {
+  season: number | string;
+  round?: number | string;
+  timeoutMs?: number | null;
+}): Promise<void> {
+  const { etlRoot, fetcher, processor } = resolveFixtureRuntimePaths();
+
+  await runRPipeline({
+    etlRoot,
+    fetcher,
+    fetcherArgs: [String(options.season)],
+    processor,
+    env: options.round === undefined ? {} : { FIXTURE_ROUND: String(options.round) },
+    label: 'Footywire fixture',
+    timeoutMs: resolveFetchPipelineTimeout({
+      season: options.season,
+      timeoutMs: options.timeoutMs,
+    }),
+  });
+}
+
+export {
+  resolveEtlRuntimePaths,
+  resolveFetchPipelineTimeout,
+  resolveFixtureRuntimePaths,
+  runFetchPipeline,
+  runFixturePipeline,
+};
 export type { EtlRuntimePaths, FetchPipelineOptions };
