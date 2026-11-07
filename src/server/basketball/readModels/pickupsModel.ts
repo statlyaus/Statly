@@ -14,8 +14,10 @@ import type { WeekSchedule } from './weekSchedule';
 
 /** Free agents need at least this many blended minutes per game (the sheet's Add/Drop default). */
 export const PICKUP_MIN_MINUTES = 15;
-/** How many free agents, by season value, the planner ranks. */
+/** Free agents listed by season value when there is no opponent to rank against. */
 export const PICKUP_LIMIT = 80;
+/** Safety cap on free agents run through the weekly planner (about 250 qualify mid-season). */
+export const PICKUP_PLAN_CAP = 250;
 
 export interface DropOption {
   playerId: string;
@@ -39,6 +41,8 @@ interface PickupsBase {
   dropOptions: DropOption[];
   /** null: no drop (an open roster spot). */
   drop: DropOption | null;
+  /** The default drop: my lowest-valued player not on the IL. */
+  defaultDropId: string | null;
 }
 
 export type PickupsView =
@@ -59,9 +63,11 @@ export type PickupsView =
 
 /**
  * This week's streaming planner. Free agents are players not rostered anywhere in the profile,
- * healthy or day-to-day, with blended minutes of at least `minMinutes`, best `limit` by season
- * value. `drop` undefined picks my lowest-valued player not on the IL; null drops nobody; an id
- * not on my roster falls back to the default.
+ * healthy or day-to-day, with blended minutes of at least `minMinutes`. Every one whose NBA team
+ * still plays from the day the add takes effect is ranked, however low his season value; without
+ * an opponent the best `limit` by season value are listed instead. `drop` undefined picks my
+ * lowest-valued player not on the IL; null drops nobody; an id not on my roster falls back to the
+ * default.
  */
 export async function loadPickups(
   league: BasketballLeagueDetail,
@@ -98,22 +104,42 @@ export async function loadPickups(
       : (dropOptions.find((option) => option.playerId === options.drop) ?? defaultDrop);
 
   const minMinutes = options.minMinutes ?? PICKUP_MIN_MINUTES;
-  const freeAgents = pool.players
-    .filter(
-      (player) =>
-        player.owner.kind === 'FREE_AGENT' &&
-        player.injury?.status !== 'OUT' &&
-        player.minutesPerGame >= minMinutes
-    )
-    .slice(0, options.limit ?? PICKUP_LIMIT);
+  const eligible = pool.players.filter(
+    (player) =>
+      player.owner.kind === 'FREE_AGENT' &&
+      player.injury?.status !== 'OUT' &&
+      player.minutesPerGame >= minMinutes
+  );
   const addFrom = addDays(today, 1);
-  const base = { week, schedule, addFrom, myTeam, pool, dropOptions, drop };
+  const base = {
+    week,
+    schedule,
+    addFrom,
+    myTeam,
+    pool,
+    dropOptions,
+    drop,
+    defaultDropId: defaultDrop?.playerId ?? null,
+  };
 
   if (!context.opponent || !context.opponentTeam) {
-    return { ...base, status: 'NO_OPPONENT', freeAgents };
+    return {
+      ...base,
+      status: 'NO_OPPONENT',
+      freeAgents: eligible.slice(0, options.limit ?? PICKUP_LIMIT),
+    };
   }
 
-  const teamOf = (playerId: string) => poolById.get(playerId)?.teamId ?? null;
+  const addDates = schedule.remainingDates.filter((date) => date >= addFrom);
+  const freeAgents = eligible
+    .filter(
+      (player) =>
+        player.teamId !== null &&
+        addDates.some((date) => schedule.teamsByDate[date].includes(player.teamId!))
+    )
+    .slice(0, PICKUP_PLAN_CAP);
+
+  const teamOf = (playerId: string) => context.teamIdByPlayer[playerId] ?? null;
   const remainingDays = playingDays(schedule, [
     ...[...me.side.roster, ...context.opponent.side.roster].map((entry) => ({
       playerId: entry.playerId,

@@ -36,9 +36,10 @@ export default async function BasketballMatchupPage({
   const { league } = await loadLeagueForPage(leagueId, path);
   const now = new Date();
   const today = toEasternDate(now);
-  const weekParam = Number(firstParam(query, 'week'));
+  const weekText = firstParam(query, 'week') ?? '';
+  const weekParam = /^\d+$/.test(weekText) ? Number(weekText) : undefined;
   const view = await loadMatchup(league, {
-    week: Number.isInteger(weekParam) ? weekParam : undefined,
+    week: weekParam,
     today,
   });
   const currentWeek = resolveWeek(league, undefined, today).week;
@@ -113,7 +114,7 @@ export default async function BasketballMatchupPage({
 
       <HowCalculated>
         <p>
-          <strong>So far.</strong> Box scores from this week&rsquo;s finished days count for a
+          <strong>So far.</strong> Box scores from this week&rsquo;s finished games count for a
           player only on days the lineup simulator would have started him, and only from the date
           you added him.
         </p>
@@ -136,7 +137,8 @@ export default async function BasketballMatchupPage({
           are simulated too. Players you have dropped no longer count, even for games they played
           for you this week. Positions come from the stats provider (often just G, F or C) and can
           differ from your platform&rsquo;s, so a player may fill fewer slots here than he can for
-          you.
+          you. A finished game whose box score has not been loaded yet is projected until the next
+          stats update brings it in.
         </p>
       </HowCalculated>
     </div>

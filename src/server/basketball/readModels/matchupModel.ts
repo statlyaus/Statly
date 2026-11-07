@@ -74,6 +74,8 @@ export interface MatchupContext {
   opponentTeam: TeamRef | null;
   me: SideInputs;
   opponent: SideInputs | null;
+  /** Current NBA team of every player on either side, projected or not. */
+  teamIdByPlayer: Record<string, string | null>;
 }
 
 interface MatchupSideView {
@@ -192,6 +194,24 @@ export async function loadMatchupContext(
       : [];
 
   const poolById = new Map(pool.players.map((player) => [player.playerId, player]));
+  // Rostered players the pool has no row for (no games in either season) still have a team.
+  const unprojected = sideSpots
+    .filter((spot) => !poolById.has(spot.playerId))
+    .map((spot) => spot.playerId);
+  const unprojectedTeams =
+    unprojected.length > 0
+      ? await client.nbaPlayer.findMany({
+          where: { id: { in: unprojected } },
+          select: { id: true, teamId: true },
+        })
+      : [];
+  const teamIdByPlayer: Record<string, string | null> = Object.fromEntries([
+    ...unprojectedTeams.map((player) => [player.id, player.teamId]),
+    ...sideSpots.flatMap((spot) => {
+      const player = poolById.get(spot.playerId);
+      return player ? [[spot.playerId, player.teamId]] : [];
+    }),
+  ]);
   const buildSide = (teamId: string): SideInputs => {
     const spots = sideSpots.filter((spot) => spot.teamId === teamId);
     const roster = spots.map((spot) => lineupEntry(spot, poolById.get(spot.playerId)));
@@ -233,6 +253,7 @@ export async function loadMatchupContext(
     opponentTeam: opponentId ? { id: opponentId, name: teamName.get(opponentId) ?? '' } : null,
     me: buildSide(league.myTeamId),
     opponent: opponentId ? buildSide(opponentId) : null,
+    teamIdByPlayer,
   };
 }
 
@@ -251,7 +272,7 @@ function sideView(
       const player = poolById.get(entry.playerId);
       const perGame = inputs.side.perGame[entry.playerId];
       const countedLeft = gamesLeft[entry.playerId] ?? 0;
-      const teamId = player?.teamId ?? null;
+      const teamId = context.teamIdByPlayer[entry.playerId] ?? null;
       return {
         playerId: entry.playerId,
         fullName: player?.fullName ?? spot.player.fullName,
@@ -282,10 +303,9 @@ export async function loadMatchup(
     return { status: 'NO_OPPONENT', week, lastWeek, schedule, myTeam, pool };
   }
 
-  const teamOf = new Map(pool.players.map((player) => [player.playerId, player.teamId]));
   const rostered = [...context.me.side.roster, ...context.opponent.side.roster].map((entry) => ({
     playerId: entry.playerId,
-    teamId: teamOf.get(entry.playerId) ?? null,
+    teamId: context.teamIdByPlayer[entry.playerId] ?? null,
   }));
   const projection = projectMatchup({
     categories: league.categories,

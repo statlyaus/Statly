@@ -13,7 +13,7 @@ import {
 } from './__fixtures__/fakeNbaClient';
 import { loadPickups } from './pickupsModel';
 
-const teams = ['BOS', 'NYK', 'DEN', 'LAL'].map((code) => ({ id: code, code }));
+const teams = ['BOS', 'NYK', 'DEN', 'LAL', 'MIA', 'PHI'].map((code) => ({ id: code, code }));
 const game = (
   id: string,
   gameDate: string,
@@ -55,6 +55,9 @@ const players: (FakePlayer & { points: number; minutes?: number })[] = [
     injury: { status: 'OUT' },
   },
   { id: 'f4', fullName: 'Free Bench', positions: ['F'], teamId: 'LAL', points: 22, minutes: 10 },
+  // A weak streamer with a game left, and a strong player whose team's last game is today.
+  { id: 'f5', fullName: 'Free Streamer', positions: ['G'], teamId: 'NYK', points: 2 },
+  { id: 'f6', fullName: 'Free Idle', positions: ['F'], teamId: 'MIA', points: 28 },
 ];
 
 function data(): FakeNbaData {
@@ -68,6 +71,7 @@ function data(): FakeNbaData {
       game('fri', '2026-11-06', 'NYK', 'LAL'),
       game('sat', '2026-11-07', 'BOS', 'DEN'),
       game('sun', '2026-11-08', 'LAL', 'DEN'),
+      game('thu2', '2026-11-05', 'MIA', 'PHI'),
     ].map((g) => (g.id === 'last' ? { ...g, season: 2026 } : g)),
     stats: players.map((player) =>
       statRow('last', player.id, player.teamId ?? 'BOS', {
@@ -107,7 +111,8 @@ describe('loadPickups', () => {
     const view = await loadPickups(league, { today, client: createFakeNbaClient(data()) });
     if (view.status !== 'READY') throw new Error('expected pickups');
 
-    expect(view.options.map((option) => option.player.playerId).sort()).toEqual(['f1', 'f2']);
+    // f6's team has no game once the add takes effect; f3 is out; f4 is under 15 minutes.
+    expect(view.options.map((option) => option.player.playerId).sort()).toEqual(['f1', 'f2', 'f5']);
     // The lowest-valued player not on the IL.
     expect(view.drop?.playerId).toBe('b');
     expect(view.dropOptions.map((option) => option.playerId)).toEqual(['a', 'b', 'il']);
@@ -123,14 +128,19 @@ describe('loadPickups', () => {
     expect(view.options.find((option) => option.player.playerId === 'f1')?.gamesAdded).toBe(2);
   });
 
-  it('honours the limit and the minutes floor', async () => {
+  it('ranks every free agent with a game left, capping only the no-opponent list', async () => {
     const client = createFakeNbaClient(data());
-    const top = await loadPickups(league, { today, client, limit: 1 });
+    const capped = await loadPickups(league, { today, client, limit: 1 });
     const strict = await loadPickups(league, { today, client, minMinutes: 25 });
-    if (top.status !== 'READY' || strict.status !== 'READY') throw new Error('expected pickups');
+    if (capped.status !== 'READY' || strict.status !== 'READY') throw new Error('expected pickups');
 
-    expect(top.options.map((option) => option.player.playerId)).toEqual(['f1']);
-    expect(strict.options.map((option) => option.player.playerId)).toEqual(['f1']);
+    // The weakest free agent still reaches the weekly ranking.
+    expect(capped.options.map((option) => option.player.playerId).sort()).toEqual([
+      'f1',
+      'f2',
+      'f5',
+    ]);
+    expect(strict.options.map((option) => option.player.playerId).sort()).toEqual(['f1', 'f5']);
   });
 
   it('drops the chosen player, nobody, or falls back when the choice is not mine', async () => {
@@ -152,6 +162,12 @@ describe('loadPickups', () => {
 
     expect(view.status).toBe('NO_OPPONENT');
     if (view.status !== 'NO_OPPONENT') return;
-    expect(view.freeAgents.map((player) => player.playerId)).toEqual(['f1', 'f2']);
+    expect(view.freeAgents.map((player) => player.playerId)).toEqual(['f6', 'f1', 'f2', 'f5']);
+    const capped = await loadPickups(
+      { ...league, matchups: [] },
+      { today, client: createFakeNbaClient(data()), limit: 2 }
+    );
+    if (capped.status !== 'NO_OPPONENT') return;
+    expect(capped.freeAgents.map((player) => player.playerId)).toEqual(['f6', 'f1']);
   });
 });

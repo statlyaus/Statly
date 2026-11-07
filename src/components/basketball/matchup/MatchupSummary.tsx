@@ -11,10 +11,10 @@ const navLink =
   'inline-flex min-h-11 items-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export function weekStatus(schedule: WeekSchedule): string {
-  const played = schedule.playedDates.length;
-  if (played === 0) return 'Upcoming';
-  if (played === schedule.dates.length) return 'Final';
-  return `In progress: ${played} of ${schedule.dates.length} days played`;
+  if (schedule.playedDates.length === 0) return 'Upcoming';
+  if (schedule.remainingDates.length === 0) return 'Final';
+  const done = schedule.gameDates.filter((date) => !schedule.remainingDates.includes(date));
+  return `In progress: ${done.length} of ${schedule.gameDates.length} game days done`;
 }
 
 export function WeekNav({
@@ -91,6 +91,10 @@ export function MatchupScoreboard({
             <Stat label="Win the week" value={formatChance(outcome.win)} strong />
             {outcome.tie > 0.0005 ? <Stat label="Tie" value={formatChance(outcome.tie)} /> : null}
             <Stat label="Lose the week" value={formatChance(outcome.loss)} />
+            <Stat
+              label="Expected categories"
+              value={`${projection.expectedCategoriesWon.toFixed(1)} of ${total}`}
+            />
           </>
         ) : (
           <Stat
@@ -99,10 +103,6 @@ export function MatchupScoreboard({
             strong
           />
         )}
-        <Stat
-          label="Expected categories"
-          value={`${projection.expectedCategoriesWon.toFixed(1)} of ${total}`}
-        />
       </dl>
       {format === 'H2H_EACH_CATEGORY' ? (
         <p className="mt-2 text-xs text-muted-foreground">

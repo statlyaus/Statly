@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BasketballCategoryId } from '@/types/basketball';
@@ -71,6 +72,34 @@ describe('PlayersControls punts', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Punt PTS' }));
     expect(replace).toHaveBeenLastCalledWith(path, { scroll: false });
+  });
+
+  it('does not navigate on mount, so a punt what-if in the URL survives StrictMode', async () => {
+    render(
+      <StrictMode>
+        <PlayersControls
+          path={path}
+          params={{ punts: 'AST,PTS' }}
+          leagueId="league-1"
+          userId="user-1"
+          categories={['PTS', 'REB', 'AST']}
+          leaguePunts={['AST']}
+          punts={['AST', 'PTS']}
+          query={{ freeAgentsOnly: false, position: null, minMinutes: 0, search: '' }}
+        />
+      </StrictMode>
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('searches after typing stops', async () => {
+    const user = userEvent.setup();
+    renderControls(['AST']);
+    await user.type(screen.getByLabelText('Filter by name or team'), 'jok');
+    await waitFor(() =>
+      expect(replace).toHaveBeenLastCalledWith(`${path}?q=jok`, { scroll: false })
+    );
   });
 
   it('will not punt the last counted category', () => {

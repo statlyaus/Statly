@@ -84,6 +84,7 @@ export default async function BasketballPickupsPage({
               params={query}
               options={view.dropOptions}
               selected={view.drop?.playerId ?? null}
+              defaultId={view.defaultDropId}
             />
             <p className="pb-2 text-sm text-muted-foreground">
               Week {view.week}. An add counts from {formatGameDate(view.addFrom)}, the next US day.
@@ -105,7 +106,8 @@ export default async function BasketballPickupsPage({
           )}
           {rows.length === 0 ? (
             <EmptyState title="No free agents to show">
-              Everyone averaging {PICKUP_MIN_MINUTES} minutes or more is rostered or ruled out.
+              Everyone averaging {PICKUP_MIN_MINUTES} minutes or more is rostered, ruled out or has
+              no game left this week.
             </EmptyState>
           ) : (
             <PickupsTable
@@ -121,8 +123,10 @@ export default async function BasketballPickupsPage({
       <HowCalculated>
         <p>
           <strong>Free agents</strong> are players nobody holds in this league profile, not ruled
-          out, averaging at least {PICKUP_MIN_MINUTES} minutes: the best {PICKUP_LIMIT} by season
-          value. Mark a player as taken when a team you have not entered holds him.
+          out, averaging at least {PICKUP_MIN_MINUTES} minutes. Every one whose NBA team still plays
+          this week after the add takes effect is ranked, however low his season value; without an
+          opponent, the best {PICKUP_LIMIT} by season value are listed. Mark a player as taken when
+          a team you have not entered holds him.
         </p>
         <p>
           <strong>The swap.</strong> The player you drop loses his remaining games. The free agent

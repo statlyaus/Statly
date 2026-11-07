@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useOptimistic, useRef, useState } from 'react';
+import { useEffect, useOptimistic, useState } from 'react';
 
 import { buttonStyles, fieldLabelStyles, fieldStyles } from '@/components/ui/controlStyles';
 import { getBasketballCategory, type BasketballCategoryId } from '@/types/basketball';
@@ -53,13 +53,10 @@ export function PlayersControls({
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
-  const firstRender = useRef(true);
 
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
+    // Mounting (twice under StrictMode) must not navigate with stale params.
+    if (search.trim() === query.search) return;
     const timer = setTimeout(() => update({ q: search.trim() || null, limit: null }), 300);
     return () => clearTimeout(timer);
     // Only the typed text should trigger a search.
