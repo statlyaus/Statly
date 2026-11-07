@@ -159,6 +159,65 @@ describe('league settings route draft scheduling', () => {
     }
   );
 
+  it.each([
+    ['an unknown category key', { scoring: { categories: ['goals', 'tackles', 'goalz'] } }],
+    ['too few categories', { scoring: { categories: ['goals', 'tackles'] } }],
+    [
+      'too many categories',
+      {
+        scoring: {
+          categories: [
+            'goals',
+            'tackles',
+            'inside50s',
+            'intercepts',
+            'contestedMarks',
+            'rebound50s',
+            'contestedPossessions',
+            'effectiveDisposals',
+            'scoreInvolvements',
+            'kicks',
+            'handballs',
+          ],
+        },
+      },
+    ],
+    ['categories that are not a list', { scoring: { categories: 'goals' } }],
+    ['a league name over 50 characters', { league: { name: 'L'.repeat(51) } }],
+    ['a league name under 3 characters', { league: { name: 'AB' } }],
+    ['an unknown time zone', { draft: { timeZone: 'Mars/Base' } }],
+    ['an empty time zone', { draft: { timeZone: '' } }],
+  ])('rejects %s without writing settings', async (_label, body) => {
+    const response = await PUT(settingsRequest(body), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.updateLeague).not.toHaveBeenCalled();
+    expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('saves valid categories, name and time zone', async () => {
+    const response = await PUT(
+      settingsRequest({
+        league: { name: 'Statly Premier League' },
+        scoring: { categories: ['goals', 'tackles', 'intercepts'] },
+        draft: { timeZone: 'Australia/Perth' },
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateLeague).toHaveBeenCalledWith({
+      where: { id: 'league-1' },
+      data: { name: 'Statly Premier League', categoriesJson: ['goals', 'tackles', 'intercepts'] },
+    });
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      where: { id: 'settings-1' },
+      data: expect.objectContaining({ timeZone: 'Australia/Perth' }),
+    });
+  });
+
   it('rejects malformed draft dates without writing settings', async () => {
     const response = await PUT(
       new NextRequest('http://localhost/api/leagues/league-1/settings', {
