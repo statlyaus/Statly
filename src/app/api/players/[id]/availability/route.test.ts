@@ -113,7 +113,7 @@ describe('GET /api/players/[id]/availability', () => {
     expect(body.data.leagues[0]).toMatchObject({ status: 'owned', statusDetail: 'Owned by Rival' });
   });
 
-  it('states when waiver claims process in the league timezone, labelled', async () => {
+  it('states when the next daily waiver run processes the claims, in the league timezone', async () => {
     mocks.leagueMemberFindMany.mockResolvedValue([
       {
         id: 'member-1',
@@ -135,6 +135,9 @@ describe('GET /api/players/[id]/availability', () => {
 
     expect(league.status).toBe('waiver');
     expect(league.timeZone).toBe('Australia/Perth');
-    expect(league.statusDetail).toMatch(/^Claims process Sat,? 3 Oct,? 5:30\spm AWST$/);
+    // Due at 8:30 pm Saturday Melbourne time; the run is 6 am Sunday Melbourne (AEDT from that
+    // morning), which is 3 am in Perth.
+    expect(league.statusDetail).toMatch(/^Claims process Sun,? 4 Oct,? 3:00\sam AWST$/);
+    expect(league.waiver.processingAt).toBe('2099-10-03T19:00:00.000Z');
   });
 });
