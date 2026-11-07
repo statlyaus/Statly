@@ -10,12 +10,12 @@ import MotionPreferenceProvider from '@/providers/MotionPreferenceProvider';
 
 const barlow = Barlow({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
+  weight: ['400', '500', '600', '700', '900'],
   variable: '--font-barlow',
 });
 const barlowCondensed = Barlow_Condensed({
   subsets: ['latin'],
-  weight: ['600', '700', '800'],
+  weight: ['600', '700'],
   variable: '--font-barlow-condensed',
 });
 
