@@ -106,7 +106,8 @@ authorization.
 
 The processor creates deterministic match/player identifiers and retains source checksum/evidence.
 External names are weak evidence: ambiguous rows must be reported, not used to merge canonical
-protected player ownership silently.
+protected player ownership silently. Stats reach a Statly player only through a reviewed `footywire`
+identity link (`npm run player-identity:footywire`, see `docs/runbooks/player-identity.md`).
 
 A player-match document contains season, round, clubs, normalized player identity, supported numeric
 stats, source checksum, source label, and update time. Category keys must stay aligned with
