@@ -43,19 +43,37 @@ const AUTH_ERROR_MESSAGES: Record<string, string | null> = {
   'auth/network-request-failed': 'Network error. Check your connection and try again.',
   'auth/popup-blocked': 'Your browser blocked the sign-in window. Allow pop-ups and try again.',
   'auth/email-already-in-use': 'An account already exists for this email. Sign in instead.',
+  'auth/weak-password': 'That password is too weak. Choose a longer one.',
+  'auth/operation-not-allowed': 'This sign-in method is not available. Try another one.',
+  'auth/account-exists-with-different-credential':
+    'An account already exists for this email with a different sign-in method. Use that method instead.',
   'auth/popup-closed-by-user': null,
   'auth/cancelled-popup-request': null,
 };
 
+// Firebase signed in, but this browser cannot carry the session to Statly's server (see
+// src/lib/authServiceWorker.ts). Retrying will not help unless the cause is a slow start.
+const UNSUPPORTED_BROWSER_MESSAGE =
+  "This browser can't keep you signed in to Statly. Open Statly in Safari, Chrome or Firefox, outside private browsing.";
+const TRANSPORT_START_FAILED_MESSAGE =
+  "Statly couldn't finish signing you in on this browser. Reload the page and try again. If it keeps happening, open Statly in Safari, Chrome or Firefox, outside private browsing.";
+
 // Firebase errors carry a code; never show their raw message. Our own errors (no code) are already plain.
-const authErrorMessage = (err: unknown): string | null => {
+const authErrorMessage = (err: unknown, isSignup: boolean): string | null => {
+  const fallback = isSignup
+    ? 'Could not create your account. Please try again.'
+    : 'Sign-in failed. Please try again.';
+  if ((err as { name?: unknown } | null)?.name === 'AuthServiceWorkerError') {
+    const code = (err as { code?: unknown }).code;
+    return code === 'unsupported' || code === 'insecure-context'
+      ? UNSUPPORTED_BROWSER_MESSAGE
+      : TRANSPORT_START_FAILED_MESSAGE;
+  }
   const code = (err as { code?: unknown } | null)?.code;
   if (typeof code === 'string') {
-    return code in AUTH_ERROR_MESSAGES
-      ? AUTH_ERROR_MESSAGES[code]
-      : 'Sign-in failed. Please try again.';
+    return code in AUTH_ERROR_MESSAGES ? AUTH_ERROR_MESSAGES[code] : fallback;
   }
-  return err instanceof Error ? err.message : 'Sign-in failed. Please try again.';
+  return err instanceof Error ? err.message : fallback;
 };
 
 interface FormValidation {
@@ -213,7 +231,7 @@ const AuthForm = ({
       }
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      setError(authErrorMessage(err));
+      setError(authErrorMessage(err, isSignup));
     } finally {
       setIsSubmitting(false);
     }
@@ -227,7 +245,7 @@ const AuthForm = ({
       showNotification('success', 'Successfully signed in with Google!');
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      setError(authErrorMessage(err));
+      setError(authErrorMessage(err, isSignup));
     } finally {
       setIsGoogleLoading(false);
     }
@@ -241,7 +259,7 @@ const AuthForm = ({
       showNotification('success', 'Successfully signed in with Facebook!');
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      setError(authErrorMessage(err));
+      setError(authErrorMessage(err, isSignup));
     } finally {
       setIsGithubLoading(false);
     }
@@ -255,7 +273,7 @@ const AuthForm = ({
       showNotification('success', 'Successfully signed in with Apple!');
       redirectAfterAuthentication();
     } catch (err: unknown) {
-      setError(authErrorMessage(err));
+      setError(authErrorMessage(err, isSignup));
     } finally {
       setIsAppleLoading(false);
     }
