@@ -96,6 +96,33 @@ describe('team actions route architecture', () => {
     expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['WAIVER_CLAIM', { playerId: 'p-1', dropPlayerId: 'p-2' }],
+    ['TRADE_PROPOSAL', { offeredPlayers: ['p-1'], requestedPlayers: ['p-2'] }],
+  ])(
+    'rejects %s so claims and trades only enter through their own services',
+    async (actionType, details) => {
+      authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
+      membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: true });
+
+      const { POST } = await import('../../src/app/api/leagues/[id]/actions/[userId]/route');
+      const response = await POST(
+        jsonRequest('/api/leagues/league-1/actions/user-1', {
+          actionType,
+          details,
+          targetMemberId: 'member-2',
+        }),
+        { params: Promise.resolve({ id: 'league-1', userId: 'user-1' }) }
+      );
+
+      // Prisma is an empty object here, so any read or write would surface as a 500.
+      expect(response!.status).toBe(400);
+      await expect(response!.json()).resolves.toMatchObject({
+        error: { message: 'Only DROP_PLAYER actions are accepted here' },
+      });
+    }
+  );
+
   it('rejects non-object action details without silently replacing the payload', async () => {
     authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
     membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: true });

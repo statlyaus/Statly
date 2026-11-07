@@ -313,6 +313,36 @@ unmatched and ambiguous counts. A fetch failure, a parse failure or more than 60
 nothing. From 8 October to 31 December (Melbourne time) the route reports `skipped: 'off-season'`
 and does not fetch.
 
+`Scripts/dev/curl-admin.sh cron '/api/cron/nba?job=boxscores'` runs one NBA ingest job (`boxscores`,
+`schedule`, `players` or `injuries`) for the current season and returns `{ ok, job, runId, summary }`.
+Any other `job` returns 400. A rejected run returns 422 with its `reason` (`fetch_failed`,
+`parse_failed`, `out_of_bounds` or `unlicensed_provider`) and writes only its `NbaIngestRun` row;
+any other failure returns 500. With `NODE_ENV=production` the ESPN adapter is refused unless
+`NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true`.
+
+To load NBA data locally, use a database of your own, never the development or test database, and
+set both URLs so Prisma does not fall back to `.env`. Run the players and schedule jobs before the
+box scores:
+
+```sh
+createdb -h 127.0.0.1 statly_bball_local
+export DATABASE_URL=postgresql://$USER@127.0.0.1:5432/statly_bball_local
+export DIRECT_DATABASE_URL=$DATABASE_URL
+npx prisma migrate deploy
+npm run nba:sync -- --job players
+npm run nba:sync -- --job schedule
+npm run nba:sync -- --job injuries
+npm run nba:sync -- --job boxscores --limit 20
+npm run nba:backfill -- --season 2026            # dry run: what is stored
+npm run nba:backfill -- --season 2026 --apply    # 2025-26, about 1,300 requests at 1 per second
+```
+
+The backfill is resumable and exits non-zero if ESPN refuses it or any season total differs.
+`--tolerance N` accepts a per-stat difference of up to N from ESPN's season totals (default 0); use
+it only after checking the affected games' box scores against the stored rows, because ESPN's totals
+feed can be one off its own box scores. Both scripts refuse a non-local `DATABASE_URL` without
+`--allow-remote`, and treat a remote database as production for the licensing guard.
+
 Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
 succeed. The admin and user contracts are enforced by
 `tests/unit/adminControlPlaneAuthorization.test.ts` and
@@ -530,10 +560,6 @@ shared or production PostgreSQL database.
 - Focused architecture tests assert durable source-of-truth and safety rules that are cheaper and more
   reliable than prose review.
 
-`npm run test:race` is reserved for a future focused concurrency suite. It currently fails when
-`tests/race` has no test files, so it must not be advertised as coverage or added to aggregate CI until
-real race specifications exist.
-
 ## Timeout budgets
 
 The unit configuration keeps a 30 second default so ordinary tests stay bounded. Tests that build the
@@ -586,18 +612,6 @@ authority against the same database or Redis namespace.
 
 For responsive changes, verify at least a phone viewport (390px) and the affected desktop layout.
 Realtime and routing changes also need direct-load/refresh evidence, not only client navigation.
-
-## Test data factories
-
-`src/testUtils/playerDataFactory.ts` supplies typed player fixtures:
-
-- `createExamplePlayer(overrides)` for a complete player;
-- `createExamplePlayers(count, overrides)` for lists;
-- `createMinimalPlayer(overrides)` for edge cases; and
-- `PLAYER_VARIATIONS` for injured, suspended, rookie, premium, and bye states.
-
-Prefer these factories over copied production-shaped objects. Override only the fields that matter to
-the test so schema changes remain visible through TypeScript.
 
 ## Flaky-test quarantine
 

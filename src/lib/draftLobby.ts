@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { subMinutes } from 'date-fns';
 
 export type LobbyStatus = 'CLOSED' | 'OPEN' | 'COUNTDOWN' | 'LIVE';
 
@@ -36,78 +35,6 @@ export interface PreDraftQueueItem {
     position: string;
     club: string;
   };
-}
-
-/**
- * Open the draft lobby (5 minutes before draft start)
- */
-export async function openDraftLobby(draftId: string): Promise<void> {
-  try {
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
-      include: {
-        league: {
-          include: {
-            settings: true,
-          },
-        },
-      },
-    });
-
-    if (!draft) {
-      throw new Error('Draft not found');
-    }
-
-    const draftStartTime = draft.league?.settings?.startAt;
-    if (!draftStartTime) {
-      throw new Error('Draft start time not set');
-    }
-
-    const lobbyOpenTime = subMinutes(draftStartTime, 5); // 5 minutes before
-    const _countdownStartTime = subMinutes(draftStartTime, 5); // Countdown starts immediately
-
-    await prisma.draft.update({
-      where: { id: draftId },
-      data: {
-        lobbyStatus: 'OPEN',
-        lobbyOpenAt: lobbyOpenTime,
-      },
-    });
-
-    logger.info('Draft lobby opened', {
-      draftId,
-      lobbyOpenTime: lobbyOpenTime.toISOString(),
-      draftStartTime: draftStartTime.toISOString(),
-    });
-  } catch (error) {
-    logger.error('Failed to open draft lobby', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
-
-/**
- * Start the 5-minute countdown
- */
-export async function startDraftCountdown(draftId: string): Promise<void> {
-  try {
-    await prisma.draft.update({
-      where: { id: draftId },
-      data: {
-        lobbyStatus: 'COUNTDOWN',
-      },
-    });
-
-    logger.info('Draft countdown started', { draftId });
-  } catch (error) {
-    logger.error('Failed to start draft countdown', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
 }
 
 /**

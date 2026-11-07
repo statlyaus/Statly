@@ -217,11 +217,9 @@ describe('getLeagueDraftOperationalReadiness', () => {
 
   it('keeps lobby read paths free of lifecycle writes', () => {
     const lobbySource = read('src/lib/draftLobby.ts');
-    const lobbyRouteSource = read('src/app/api/drafts/[id]/lobby/route.ts');
     const convergenceSource = read('src/server/draft/services/DraftSetupConvergenceService.ts');
 
     expect(lobbySource).not.toContain('auto-open');
-    expect(lobbyRouteSource).not.toContain('ensureLobbyColumns');
     expect(convergenceSource).not.toContain('startDraft(');
     expect(convergenceSource).not.toContain('currentPickDeadline');
   });

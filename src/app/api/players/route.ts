@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { getPlayers } from '@/lib/data';
-import { middlewareConfigs } from '@/lib/apiMiddleware';
-import { NextResponse } from 'next/server';
+import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
+import { NextResponse, type NextRequest } from 'next/server';
 
 const querySchema = z.object({
   search: z.string().optional(),
@@ -41,7 +41,17 @@ const querySchema = z.object({
     .default(20),
 });
 
-export const GET = middlewareConfigs.public(async ({ req }) => {
+const checkRateLimit = withRateLimit(rateLimitConfigs.public);
+
+export async function GET(req: NextRequest) {
+  const rateLimit = checkRateLimit(req);
+  if (!rateLimit.success) {
+    return NextResponse.json(rateLimit.body, {
+      status: rateLimit.status,
+      headers: rateLimit.headers,
+    });
+  }
+
   const params = Object.fromEntries(req.nextUrl.searchParams.entries());
   const parsed = querySchema.safeParse(params);
 
@@ -64,4 +74,4 @@ export const GET = middlewareConfigs.public(async ({ req }) => {
     page,
     limit,
   });
-});
+}

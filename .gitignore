@@ -98,3 +98,6 @@ lint.config.js
 
 # Local Redis snapshot written by the development socket/queue stack.
 /dump.rdb
+
+# ETL data dumps
+etl/*.ndjson

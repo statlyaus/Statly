@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const runtimePaths = [
-  'src/app/api/leagues/[id]/roster/[userId]/route.ts',
   'src/app/api/leagues/[id]/actions/[userId]/route.ts',
   'src/services/rosterService.ts',
   'src/app/api/test-lobby/route.ts',

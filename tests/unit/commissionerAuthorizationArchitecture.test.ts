@@ -7,10 +7,8 @@ import { describe, expect, it } from 'vitest';
 // powers. Commissioner-only actions use getLeagueMembershipAccess, where only the owner or a
 // co-commissioner with an active membership can manage the league.
 const commissionerRoutes = [
-  'src/app/api/leagues/[id]/draft-settings/route.ts',
   'src/app/api/leagues/[id]/matchups/route.ts',
   'src/app/api/leagues/[id]/matchups/[round]/recalculate/route.ts',
-  'src/app/api/leagues/[id]/sync-draft-results/route.ts',
   'src/app/api/leagues/[id]/waivers/cancel/route.ts',
 ];
 
