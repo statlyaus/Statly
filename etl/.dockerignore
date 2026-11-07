@@ -1,0 +1,8 @@
+# Keep the build context to source: no local installs, builds, data dumps or secrets.
+node_modules
+dist
+*.ndjson
+.env*
+*key*
+afl-trade-intelligence
+test

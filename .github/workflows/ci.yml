@@ -124,6 +124,14 @@ jobs:
         run: npm run build
       - name: Test
         run: npm run test:compiled
+      - name: Build live ETL runtime image
+        run: docker build --tag statly-etl:ci --file Dockerfile .
+      - name: Verify live ETL image runtimes
+        run: >-
+          docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m statly-etl:ci
+          bash -c "node -e \"require.resolve('/etl/dist/liveGuard.js'); require.resolve('/etl/dist/processFootywireData.js')\"
+          && Rscript --vanilla -e \"for (p in c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr')) library(p, character.only = TRUE)\"
+          && test -r /etl/fetch_fw_round.R"
       - name: Build pinned AFL trade capture runtime
         run: docker build --tag statly-afl-trade-capture:ci --file afl-trade-intelligence/Dockerfile afl-trade-intelligence
       - name: Verify offline fitzRoy decoder contract
