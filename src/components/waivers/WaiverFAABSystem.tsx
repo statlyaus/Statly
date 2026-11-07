@@ -18,7 +18,7 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
-import { type LeagueActivityItem } from '@/services/leagueDataService';
+import { type LeagueActivityItem } from '@/types/waivers';
 
 type WaiverClaimStatus = 'pending' | 'successful' | 'failed' | 'outbid';
 
