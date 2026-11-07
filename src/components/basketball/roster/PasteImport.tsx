@@ -66,6 +66,8 @@ export function PasteImport({
     }
     setLines(null);
     setText('');
+    // The review and its buttons are gone: put focus back on the empty box, not on the page body.
+    requestAnimationFrame(() => document.getElementById(id)?.focus());
   }
 
   if (lines) {

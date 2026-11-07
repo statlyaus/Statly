@@ -196,6 +196,25 @@ describe('PasteReview', () => {
       );
     });
 
+    it('opens the matched lines when the same player is chosen twice', () => {
+      render(
+        <PasteReview
+          lines={[MANY[0], { ...MANY[0], line: 8, text: 'Marcus Hale' }]}
+          targetTeamId={null}
+          targetLabel="Rostered elsewhere"
+          compact
+          busy={false}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+
+      expect(
+        screen.getByText('Marcus Hale is chosen on lines 1 and 8. Skip one.')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Show 2 matched players').closest('details')).toHaveAttribute('open');
+    });
+
     it('sends every chosen player but counts only those it will mark as taken', () => {
       const onConfirm = renderCompact();
 

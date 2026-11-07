@@ -19,7 +19,7 @@ import {
   formatWeekLabel,
 } from '../shell/basketballFormat';
 import { OTHER_TEAMS_ANCHOR } from '../shell/TakenPlayersNotice';
-import { takenPlayersCheck } from '../shell/takenPlayers';
+import { takenPlayersCheck, takenPlayersSummary } from '../shell/takenPlayers';
 import { OpponentPicker } from './OpponentPicker';
 import { OtherTeamsSection } from './OtherTeamsSection';
 import { PasteImport } from './PasteImport';
@@ -141,8 +141,9 @@ export function BasketballRosterManager({
     value: group.teamId ?? ELSEWHERE,
     label: group.teamId === null ? 'Rostered elsewhere' : group.name,
   }));
-  const targetTeamId = target === ELSEWHERE ? null : target;
-  const targetLabel = teamName(targetTeamId);
+  // Players on other teams have their own section, so Add to only offers entered teams.
+  const addTargets = destinations.filter((destination) => destination.value !== ELSEWHERE);
+  const targetLabel = teamName(target);
 
   /** Runs one command; on success shows the league the server read back. Returns an error or null. */
   async function run(command: RunCommand): Promise<string | null> {
@@ -240,13 +241,8 @@ export function BasketballRosterManager({
       playerId: player.id,
       url: `${base}/roster`,
       method: 'POST',
-      body: { entries: [{ playerId: player.id, teamId: targetTeamId }] },
-      success: (result) =>
-        result.skipped?.length
-          ? `Left ${player.fullName} on ${result.skipped[0].teamName}, a team you entered. Use Move to change his team.`
-          : targetTeamId === null
-            ? `Marked ${player.fullName} as taken.`
-            : `Added ${player.fullName} to ${targetLabel}.`,
+      body: { entries: [{ playerId: player.id, teamId: target }] },
+      success: `Added ${player.fullName} to ${targetLabel}.`,
     });
     return message === null;
   }
@@ -311,7 +307,7 @@ export function BasketballRosterManager({
     },
     {
       title: 'Paste the players on other teams',
-      detail: `${taken.taken} of about ${taken.expected} marked as taken`,
+      detail: takenPlayersSummary(taken),
       done: taken.enough,
       href: `#${OTHER_TEAMS_ANCHOR}`,
     },
@@ -397,7 +393,7 @@ export function BasketballRosterManager({
                 onChange={(event) => setTarget(event.target.value)}
                 className={fieldStyles({ size: 'sm', className: 'w-48 pr-7' })}
               >
-                {destinations.map((destination) => (
+                {addTargets.map((destination) => (
                   <option key={destination.value} value={destination.value}>
                     {destination.label}
                   </option>
@@ -418,10 +414,10 @@ export function BasketballRosterManager({
             <div className="border-t border-border p-3">
               <PasteImport
                 leagueId={league.id}
-                targetTeamId={targetTeamId}
+                targetTeamId={target}
                 targetLabel={targetLabel}
                 disabled={disabled}
-                onConfirm={addPlayers(targetTeamId)}
+                onConfirm={addPlayers(target)}
               />
             </div>
           </details>

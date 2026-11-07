@@ -148,6 +148,7 @@ export function PasteReview({
   onCancel: () => void;
 }) {
   const [choices, setChoices] = useState<Choice[]>(() => lines.map(initialChoice));
+  const [matchedOpen, setMatchedOpen] = useState(false);
 
   const unresolved = choices.filter((choice) => choice === null).length;
   const candidates = new Map(
@@ -167,6 +168,8 @@ export function PasteReview({
       `${name} is chosen on lines ${onLines.slice(0, -1).join(', ')} and ${onLines.at(-1)}. Skip one.`,
     ];
   });
+  // A duplicate choice is usually on a matched line, so show those lines (updating during render).
+  if (compact && duplicates.length > 0 && !matchedOpen) setMatchedOpen(true);
   const leftAlone = chosen.filter((entry) => {
     const candidate = candidates.get(entry.playerId);
     return candidate ? isLeftAlone(candidate, targetTeamId) : false;
@@ -222,7 +225,12 @@ export function PasteReview({
             </ol>
           ) : null}
           {ofStatus('matched').length > 0 ? (
-            <details className="rounded-md border border-border">
+            <details
+              // Opens by itself when a duplicate choice needs one of these lines skipped.
+              open={matchedOpen}
+              onToggle={(event) => setMatchedOpen(event.currentTarget.open)}
+              className="rounded-md border border-border"
+            >
               <summary className={DISCLOSURE_SUMMARY}>
                 Show {plural(ofStatus('matched').length, 'matched player', 'matched players')}
               </summary>

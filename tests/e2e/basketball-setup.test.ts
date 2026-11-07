@@ -125,7 +125,7 @@ test('marks the players on other teams as taken, leaving my team alone', async (
   await test.step('paste three names, one of them already on my team', async () => {
     await page.goto(roster);
     await expect(page.getByRole('region', { name: 'Set up in three steps' })).toContainText(
-      '0 of about 80 marked as taken'
+      '0 players on other teams (at least 80 needed)'
     );
     await otherTeams
       .getByLabel("Paste your league's rosters")
@@ -146,6 +146,8 @@ test('marks the players on other teams as taken, leaving my team alone', async (
       )
     ).toBeVisible();
     await expect(otherTeams).toContainText('2 players marked as taken');
+    // Focus returns to the emptied paste box rather than dropping to the page.
+    await expect(otherTeams.getByLabel("Paste your league's rosters")).toBeFocused();
     await expect(
       page
         .getByRole('region', { name: 'Dev Dunkers roster' })
@@ -158,7 +160,7 @@ test('marks the players on other teams as taken, leaving my team alone', async (
     await page.goto(`/basketball/${E2E_BASKETBALL_LEAGUE_ID}/pickups`);
     await expect(page.getByRole('heading', { level: 1, name: 'Pickups' })).toBeVisible();
     await expect(
-      page.getByText('Only 2 players are marked as taken in this league', { exact: false })
+      page.getByText('Statly knows 2 players on other teams (at least 80 needed)', { exact: false })
     ).toBeVisible();
     for (const name of ['Luca Moretti', 'Darius Holt']) {
       await expect(page.getByText(name)).toHaveCount(0);
