@@ -133,6 +133,8 @@ describe('performance analytics contract', () => {
 
   it('distinguishes Web Vitals from custom application timings', () => {
     expect(isWebVitalMetricName('INP')).toBe(true);
+    // FID was replaced by INP; the client no longer collects it.
+    expect(isWebVitalMetricName('FID')).toBe(false);
     expect(isWebVitalMetricName('custom_fetch_user_leagues')).toBe(false);
     expect(isWebVitalMetricName('player_image_load_error')).toBe(false);
   });

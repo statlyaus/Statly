@@ -28,51 +28,31 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
     reason: "Clears the caller's own session cookie; same-origin checked and reads nothing.",
   },
   {
-    route: 'GET /leagues',
-    reason:
-      'Lists leagues whose Firestore projection is marked public. REVIEW: Firestore is not the league authority.',
-  },
-  {
     route: 'POST /leagues/[id]/draft',
     reason: 'Disabled legacy endpoint; always returns 409 and touches no state.',
   },
 
   // Operational probes. No user or league data is returned.
   { route: '/ping', reason: 'Liveness probe; reads nothing.' },
-  { route: '/auth/health', reason: 'Authentication subsystem probe; reports status only.' },
   {
     route: '/health',
     reason:
-      'Operational health probe. REVIEW: it performs a live Firestore read plus Redis and relational checks on every call with no caching, so it is also an unauthenticated cost surface.',
+      'Operational health probe. Returns per-service status only; one round of checks serves all callers for 10 seconds.',
   },
 
   // Public AFL statistics and match read models.
   { route: '/players', reason: 'Public AFL player read model.' },
   { route: '/players/search', reason: 'Public AFL player search.' },
-  { route: '/players/[id]/stats', reason: 'Public AFL player statistics.' },
   { route: '/players/[id]/matches', reason: 'Public AFL player match history.' },
   { route: '/player-stats', reason: 'Public AFL player statistics read model.' },
   { route: '/matches', reason: 'Public AFL match read model.' },
-  { route: '/matches/enhanced', reason: 'Public AFL match read model with derived detail.' },
   { route: '/injuries', reason: 'Public AFL injury list.' },
-  { route: '/weekend-summary', reason: 'Public weekend summary.' },
   { route: '/rankings', reason: 'Public ranking reads.' },
-  {
-    route: '/rankings/suggest',
-    reason: 'Pure computation over supplied input; reads no stored state.',
-  },
 
   // Live-stat ingestion projections, read-only from the application's perspective.
-  { route: '/live-data', reason: 'Reads live AFL stat evidence from the ingestion projection.' },
   {
     route: '/live-player-stats',
     reason: 'Reads live AFL player stats from the ingestion projection.',
-  },
-  { route: '/etl', reason: 'Reads live AFL stat evidence; the ETL writer runs out of band.' },
-  {
-    route: '/ingest-injuries',
-    reason:
-      'Stateless injury-text parser. REVIEW: confirm the `ingest` mode never persists before treating this as settled.',
   },
 
   // Telemetry.

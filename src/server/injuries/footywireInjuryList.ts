@@ -56,7 +56,7 @@ function timeframe(
 }
 
 /**
- * Normalizes Footywire's "Returning" text. Same rules and precedence as the legacy
+ * Normalizes Footywire's "Returning" text. Same rules and precedence as the former
  * `/api/ingest-injuries` parser, so stored statuses keep their meaning.
  */
 export function normalizeReturnTimeframe(returnRaw: string): ReturnTimeframe {

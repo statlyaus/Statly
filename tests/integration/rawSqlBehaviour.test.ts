@@ -26,7 +26,6 @@ vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
 import { GET, POST } from '@/app/api/leagues/[id]/actions/[userId]/route';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { prisma } from '@/lib/prisma';
-import { draftTransactionPatterns } from '@/lib/transactionManager';
 import {
   PrismaWaiverClaimStore,
   WaiverClaimStoreError,
@@ -248,11 +247,20 @@ describe('team actions route', () => {
     await prisma.teamAction.create({
       data: { leagueId: LEAGUE, memberId: members[1], actionType: 'TRADE_PROPOSAL', details: {} },
     });
-    const created = await post({
-      actionType: 'WAIVER_CLAIM',
-      details: { playerId: players[3], dropPlayerId: players[0] },
+    await prisma.teamAction.create({
+      data: {
+        leagueId: LEAGUE,
+        memberId: members[0],
+        actionType: 'WAIVER_CLAIM',
+        details: { playerId: players[3], dropPlayerId: players[0] },
+      },
     });
-    expect(created.status).toBe(200);
+    // Claims enter through the waiver service only; the route refuses to write one.
+    const refused = await post({
+      actionType: 'WAIVER_CLAIM',
+      details: { playerId: players[2], dropPlayerId: players[0] },
+    });
+    expect(refused.status).toBe(400);
 
     const actions = await list();
     expect(actions.map((action: { actionType: string }) => action.actionType)).toEqual([
@@ -280,27 +288,5 @@ describe('team actions route', () => {
     const [drop] = await list();
     expect(drop).toMatchObject({ actionType: 'DROP_PLAYER', status: 'REJECTED' });
     expect(drop.processedAt).not.toBeNull();
-  });
-});
-
-describe('draft pick claim', () => {
-  it('claims nothing without a live draft, then claims and persists the next version', async () => {
-    expect(
-      await prisma.$transaction((tx) => draftTransactionPatterns.claimNextPick(tx, LEAGUE))
-    ).toEqual({ claimed: false });
-
-    await prisma.draft.update({
-      where: { id: DRAFT },
-      data: { status: DraftStatus.LIVE, currentPick: 1 },
-    });
-    const first = await prisma.$transaction((tx) =>
-      draftTransactionPatterns.claimNextPick(tx, LEAGUE)
-    );
-    const second = await prisma.$transaction((tx) =>
-      draftTransactionPatterns.claimNextPick(tx, LEAGUE)
-    );
-
-    expect(first).toMatchObject({ claimed: true, draftId: DRAFT, nextPickNumber: 2 });
-    expect(second.newVersion).toBe((first.newVersion ?? 0) + 1);
   });
 });
