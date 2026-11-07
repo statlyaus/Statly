@@ -10,9 +10,10 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # GitHub draft PRs are skipped by `drafts: false`; a title keyword of 'draft' also skipped every
+    # draft-room PR.
     ignore_title_keywords:
       - 'wip'
-      - 'draft'
 
   tools:
     eslint:
@@ -26,16 +27,6 @@ reviews:
           - '.venv/**'
           - '.next/**'
           - 'out/**'
-    ruff:
-      enabled: true
-      path_filters:
-        exclude:
-          - 'node_modules/**'
-          - 'vendor/**'
-          - 'build/**'
-          - 'dist/**'
-          - '.venv/**'
-          - '__pycache__/**'
     gitleaks:
       enabled: true
       path_filters:
@@ -73,5 +64,5 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
-      - '**/.cursorrules'
-      - '**/CODING_STANDARDS.md'
+      - 'AGENTS.md'
+      - '**/AGENTS.md'

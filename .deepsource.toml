@@ -7,10 +7,12 @@ name = "secrets"
 name = "sql"
 
 [[analyzers]]
-name = "java"
+name = "javascript"
 
   [analyzers.meta]
-  runtime_version = "15"
+  dialect = "typescript"
+  plugins = ["react"]
+  environment = ["nodejs", "browser"]
 
 [[analyzers]]
 name = "docker"
