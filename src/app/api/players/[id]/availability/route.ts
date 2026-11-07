@@ -4,28 +4,23 @@ export const dynamic = 'force-dynamic';
 import type { NextRequest } from 'next/server';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { adminDb } from '@/lib/firebaseAdmin';
-import {
-  listActiveLeagueMembers,
-  listActiveUserLeagueMemberships,
-  type LeagueMembershipListItem,
-} from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
+// Prisma owns membership, rosters, picks and waiver claims, so it alone decides availability. A failed
+// read is a 500, never an empty result: an empty result would show every player as a free agent.
+
 type AvailabilityStatus = 'owned' | 'your-roster' | 'waiver' | 'free-agent';
 type AvailabilityActionType = 'trade' | 'waiver' | 'add' | 'roster';
-type LeagueAvailabilitySource = 'prisma' | 'firestore';
 
 interface UserLeagueContext {
   leagueId: string;
   leagueName: string;
   teamName: string;
   memberId: string;
-  source: LeagueAvailabilitySource;
   timeZone?: string;
 }
 
@@ -41,16 +36,10 @@ interface AvailabilityWaiver {
   pendingClaims: number;
 }
 
-interface FirestoreAvailabilityStatus {
-  owner?: AvailabilityOwner;
-  waiver?: AvailabilityWaiver;
-}
-
 interface PlayerLeagueAvailability {
   leagueId: string;
   leagueName: string;
   teamName: string;
-  source: LeagueAvailabilitySource;
   /** The league's IANA timezone; league times in this row are shown in it. */
   timeZone?: string;
   status: AvailabilityStatus;
@@ -93,212 +82,28 @@ function readPlayerIdFromDetails(details: unknown): string | null {
   return typeof playerId === 'string' ? playerId : null;
 }
 
-function toDate(value: unknown): Date | null {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  if (
-    value &&
-    typeof value === 'object' &&
-    'toDate' in value &&
-    typeof (value as { toDate?: unknown }).toDate === 'function'
-  ) {
-    const date = (value as { toDate: () => Date }).toDate();
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  if (typeof value === 'string' || typeof value === 'number') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  return null;
-}
-
-function getMembershipMemberId(membership: LeagueMembershipListItem): string {
-  return membership.id || `${membership.leagueId}:${membership.userId}`;
-}
-
 async function loadUserLeagueContexts(userId: string): Promise<UserLeagueContext[]> {
-  const contexts = new Map<string, UserLeagueContext>();
-  const prismaMemberships = await prisma.leagueMember
-    .findMany({
-      where: { userId },
-      include: {
-        league: {
-          select: {
-            id: true,
-            name: true,
-            settings: { select: { timeZone: true } },
-          },
+  const memberships = await prisma.leagueMember.findMany({
+    where: { userId, isActive: true },
+    include: {
+      league: {
+        select: {
+          id: true,
+          name: true,
+          settings: { select: { timeZone: true } },
         },
       },
-      orderBy: { joinedAt: 'desc' },
-    })
-    .catch((error) => {
-      logger.warn('Prisma league memberships unavailable for player availability', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    });
+    },
+    orderBy: { joinedAt: 'desc' },
+  });
 
-  for (const membership of prismaMemberships) {
-    contexts.set(membership.leagueId, {
-      leagueId: membership.leagueId,
-      leagueName: membership.league.name,
-      teamName: membership.teamName,
-      memberId: membership.id,
-      source: 'prisma',
-      timeZone: membership.league.settings?.timeZone,
-    });
-  }
-
-  try {
-    const firestoreMemberships = await listActiveUserLeagueMemberships(userId);
-    const missingFirestoreMemberships = firestoreMemberships.filter(
-      (membership) => membership.leagueId && !contexts.has(membership.leagueId)
-    );
-    const firestoreLeagueDocs = await Promise.all(
-      missingFirestoreMemberships.map(async (membership) => ({
-        membership,
-        snap: await adminDb.collection('leagues').doc(membership.leagueId).get(),
-      }))
-    );
-
-    for (const { membership, snap } of firestoreLeagueDocs) {
-      const data = snap.data() ?? {};
-      contexts.set(membership.leagueId, {
-        leagueId: membership.leagueId,
-        leagueName: String(data.name ?? data.leagueName ?? membership.leagueId),
-        teamName: membership.teamName || 'My team',
-        memberId: getMembershipMemberId(membership),
-        source: 'firestore',
-      });
-    }
-  } catch (error) {
-    logger.warn('Firestore memberships unavailable for player availability; using Prisma data', {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return Array.from(contexts.values());
-}
-
-async function loadFirestoreOwnership(input: {
-  leagueId: string;
-  playerIds: string[];
-  currentUserId: string;
-}): Promise<FirestoreAvailabilityStatus> {
-  const leagueRef = adminDb.collection('leagues').doc(input.leagueId);
-  const [members, ownershipDocs, availableDocs, rosterSnaps, waiverSnaps] = await Promise.all([
-    listActiveLeagueMembers(input.leagueId).catch(() => []),
-    Promise.all(
-      input.playerIds.map((playerId) =>
-        leagueRef.collection('playerOwnerships').doc(playerId).get()
-      )
-    ),
-    Promise.all(
-      input.playerIds.map((playerId) =>
-        leagueRef.collection('availablePlayers').doc(playerId).get()
-      )
-    ),
-    Promise.all(
-      input.playerIds.map((playerId) =>
-        leagueRef
-          .collection('rosters')
-          .where('playerIds', 'array-contains', playerId)
-          .limit(1)
-          .get()
-      )
-    ),
-    Promise.all(
-      input.playerIds.map((playerId) =>
-        leagueRef
-          .collection('waivers')
-          .where('playerId', '==', playerId)
-          .where('status', '==', 'PENDING')
-          .limit(20)
-          .get()
-      )
-    ),
-  ]);
-
-  const memberById = new Map<string, LeagueMembershipListItem>();
-  const memberByUserId = new Map<string, LeagueMembershipListItem>();
-  for (const member of members) {
-    memberById.set(member.id, member);
-    memberById.set(getMembershipMemberId(member), member);
-    memberByUserId.set(member.userId, member);
-  }
-
-  const ownershipDoc = ownershipDocs.find((doc) => doc.exists);
-  const availableDoc = availableDocs.find((doc) => doc.exists);
-  const rosterSnap = rosterSnaps.find((snap) => !snap.empty);
-  const ownershipData = ownershipDoc?.data() ?? null;
-  const availableData = availableDoc?.data() ?? null;
-  const ownershipMemberId =
-    typeof ownershipData?.memberId === 'string'
-      ? ownershipData.memberId
-      : typeof availableData?.memberId === 'string' && availableData.status === 'owned'
-        ? availableData.memberId
-        : null;
-  const ownershipUserId =
-    typeof ownershipData?.userId === 'string'
-      ? ownershipData.userId
-      : typeof availableData?.userId === 'string'
-        ? availableData.userId
-        : null;
-
-  let ownerMember = ownershipMemberId ? memberById.get(ownershipMemberId) : undefined;
-  if (!ownerMember && ownershipUserId) ownerMember = memberByUserId.get(ownershipUserId);
-
-  if (!ownerMember && rosterSnap && !rosterSnap.empty) {
-    const rosterDoc = rosterSnap.docs[0];
-    const rosterData = rosterDoc.data();
-    const rosterUserId = typeof rosterData.userId === 'string' ? rosterData.userId : rosterDoc.id;
-    ownerMember = memberByUserId.get(rosterUserId) ?? memberById.get(rosterDoc.id);
-  }
-
-  const owner = ownerMember
-    ? {
-        memberId: getMembershipMemberId(ownerMember),
-        userId: ownerMember.userId,
-        teamName: ownerMember.teamName || 'Team',
-        isCurrentUser: ownerMember.userId === input.currentUserId,
-      }
-    : undefined;
-
-  let earliestProcessingAt: Date | undefined;
-  let pendingClaims = 0;
-  const availableProcessingAt = toDate(availableData?.processingAt);
-  if (availableData?.status === 'waiver') {
-    if (availableProcessingAt && availableProcessingAt.getTime() > Date.now()) {
-      earliestProcessingAt = availableProcessingAt;
-    }
-    pendingClaims = 0;
-  }
-  for (const waiversSnap of waiverSnaps) {
-    waiversSnap.forEach((doc) => {
-      const data = doc.data();
-      const processingAt = toDate(data.processingAt);
-      if (processingAt && processingAt.getTime() > Date.now()) {
-        pendingClaims += 1;
-        if (!earliestProcessingAt || processingAt < earliestProcessingAt) {
-          earliestProcessingAt = processingAt;
-        }
-      }
-    });
-  }
-
-  return {
-    ...(owner ? { owner } : {}),
-    ...(pendingClaims > 0 || earliestProcessingAt
-      ? {
-          waiver: {
-            ...(earliestProcessingAt ? { processingAt: earliestProcessingAt } : {}),
-            pendingClaims,
-          },
-        }
-      : {}),
-  };
+  return memberships.map((membership) => ({
+    leagueId: membership.leagueId,
+    leagueName: membership.league.name,
+    teamName: membership.teamName,
+    memberId: membership.id,
+    timeZone: membership.league.settings?.timeZone,
+  }));
 }
 
 function serializeWaiver(waiver: AvailabilityWaiver): PlayerLeagueAvailability['waiver'] {
@@ -314,14 +119,17 @@ function buildAvailabilityRow(input: {
   owner?: AvailabilityOwner;
   waiver?: AvailabilityWaiver;
 }): PlayerLeagueAvailability {
+  const base = {
+    leagueId: input.league.leagueId,
+    leagueName: input.league.leagueName,
+    teamName: input.league.teamName,
+    timeZone: input.league.timeZone,
+  };
+
   if (input.owner) {
     const actionType: AvailabilityActionType = input.owner.isCurrentUser ? 'roster' : 'trade';
     return {
-      leagueId: input.league.leagueId,
-      leagueName: input.league.leagueName,
-      teamName: input.league.teamName,
-      source: input.league.source,
-      timeZone: input.league.timeZone,
+      ...base,
       status: input.owner.isCurrentUser ? 'your-roster' : 'owned',
       statusLabel: input.owner.isCurrentUser ? 'On your roster' : 'Owned',
       statusDetail: input.owner.isCurrentUser
@@ -343,11 +151,7 @@ function buildAvailabilityRow(input: {
 
   if (input.waiver) {
     return {
-      leagueId: input.league.leagueId,
-      leagueName: input.league.leagueName,
-      teamName: input.league.teamName,
-      source: input.league.source,
-      timeZone: input.league.timeZone,
+      ...base,
       status: 'waiver',
       statusLabel: 'Waivers',
       statusDetail: input.waiver.processingAt
@@ -363,11 +167,7 @@ function buildAvailabilityRow(input: {
   }
 
   return {
-    leagueId: input.league.leagueId,
-    leagueName: input.league.leagueName,
-    teamName: input.league.teamName,
-    source: input.league.source,
-    timeZone: input.league.timeZone,
+    ...base,
     status: 'free-agent',
     statusLabel: 'Free agent',
     statusDetail: 'Not rostered in this league',
@@ -407,26 +207,16 @@ async function resolvePlayerIdentityCandidates(requestedPlayerId: string): Promi
     ].filter(Boolean)
   );
 
-  const players = await prisma.player
-    .findMany({
-      where: {
-        OR: [
-          { id: { in: Array.from(seedIds) } },
-          ...Array.from(possibleNames).map((name) => ({ name })),
-        ],
-      },
-      select: {
-        id: true,
-      },
-      take: 20,
-    })
-    .catch((error) => {
-      logger.warn('Prisma player id resolution unavailable for availability lookup', {
-        requestedPlayerId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    });
+  const players = await prisma.player.findMany({
+    where: {
+      OR: [
+        { id: { in: Array.from(seedIds) } },
+        ...Array.from(possibleNames).map((name) => ({ name })),
+      ],
+    },
+    select: { id: true },
+    take: 20,
+  });
 
   for (const player of players) seedIds.add(player.id);
   return Array.from(seedIds);
@@ -437,33 +227,20 @@ async function loadPrismaOwnerships(input: {
   playerIds: string[];
   userId: string;
 }): Promise<Map<string, AvailabilityOwner>> {
-  if (input.leagueIds.length === 0 || input.playerIds.length === 0) return new Map();
   const ownerByLeagueId = new Map<string, AvailabilityOwner>();
+  if (input.leagueIds.length === 0 || input.playerIds.length === 0) return ownerByLeagueId;
 
-  const ownerships = await prisma.leagueRosterPlayer
-    .findMany({
-      where: {
-        leagueId: { in: input.leagueIds },
-        playerId: { in: input.playerIds },
-      },
-      select: {
-        leagueId: true,
-        memberId: true,
-        member: {
-          select: {
-            id: true,
-            userId: true,
-            teamName: true,
-          },
-        },
-      },
-    })
-    .catch((error) => {
-      logger.warn('Prisma roster ownership unavailable for player availability', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    });
+  const ownerships = await prisma.leagueRosterPlayer.findMany({
+    where: {
+      leagueId: { in: input.leagueIds },
+      playerId: { in: input.playerIds },
+    },
+    select: {
+      leagueId: true,
+      memberId: true,
+      member: { select: { userId: true, teamName: true } },
+    },
+  });
 
   for (const ownership of ownerships) {
     ownerByLeagueId.set(ownership.leagueId, {
@@ -477,26 +254,20 @@ async function loadPrismaOwnerships(input: {
   const missingLeagueIds = input.leagueIds.filter((leagueId) => !ownerByLeagueId.has(leagueId));
   if (missingLeagueIds.length === 0) return ownerByLeagueId;
 
-  // Fallback to draft picks for leagues without roster entries
-  const draftPicks = await prisma.pick
-    .findMany({
-      where: {
-        playerId: { in: input.playerIds },
-        draft: { leagueId: { in: missingLeagueIds } },
-      },
-      select: {
-        playerId: true,
-        memberId: true,
-        draft: { select: { leagueId: true } },
-        member: { select: { userId: true, teamName: true } },
-      },
-    })
-    .catch((error) => {
-      logger.warn('Prisma draft picks unavailable for player availability', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    });
+  // Picks reach the roster table only when the draft completes (RosterProjectionService), so a pick
+  // decides ownership only while its draft is still running. After that the roster table is the
+  // truth, and a drafted player who was later dropped is not owned.
+  const draftPicks = await prisma.pick.findMany({
+    where: {
+      playerId: { in: input.playerIds },
+      draft: { leagueId: { in: missingLeagueIds }, status: { not: 'COMPLETED' } },
+    },
+    select: {
+      memberId: true,
+      draft: { select: { leagueId: true } },
+      member: { select: { userId: true, teamName: true } },
+    },
+  });
 
   for (const pick of draftPicks) {
     const leagueId = pick.draft.leagueId;
@@ -519,27 +290,20 @@ async function loadPrismaWaivers(input: {
   const waiversByLeagueId = new Map<string, AvailabilityWaiver>();
   if (input.leagueIds.length === 0 || input.playerIds.length === 0) return waiversByLeagueId;
 
-  const pendingWaiverActions = await prisma.teamAction
-    .findMany({
-      where: {
-        leagueId: { in: input.leagueIds },
-        actionType: { in: ['WAIVER_CLAIM', 'DROP_PLAYER'] },
-        status: 'PENDING',
-        processingAt: { gt: new Date() },
-      },
-      select: {
-        leagueId: true,
-        details: true,
-        processingAt: true,
-      },
-      orderBy: { processingAt: 'asc' },
-    })
-    .catch((error) => {
-      logger.warn('Prisma waiver actions unavailable for player availability', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    });
+  const pendingWaiverActions = await prisma.teamAction.findMany({
+    where: {
+      leagueId: { in: input.leagueIds },
+      actionType: { in: ['WAIVER_CLAIM', 'DROP_PLAYER'] },
+      status: 'PENDING',
+      processingAt: { gt: new Date() },
+    },
+    select: {
+      leagueId: true,
+      details: true,
+      processingAt: true,
+    },
+    orderBy: { processingAt: 'asc' },
+  });
 
   const playerIdSet = new Set(input.playerIds);
   for (const action of pendingWaiverActions) {
@@ -563,47 +327,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const userId = await getAuthenticatedUserId(request);
     if (!userId) return commonErrors.unauthorized();
 
-    const leagueContexts = await loadUserLeagueContexts(userId);
+    const [leagueContexts, playerIds] = await Promise.all([
+      loadUserLeagueContexts(userId),
+      resolvePlayerIdentityCandidates(requestedPlayerId),
+    ]);
     const leagueIds = leagueContexts.map((league) => league.leagueId);
-    const playerIds = await resolvePlayerIdentityCandidates(requestedPlayerId);
 
-    if (leagueIds.length === 0) {
-      return successResponse({
-        playerId: requestedPlayerId,
-        playerIds,
-        leagues: [] satisfies PlayerLeagueAvailability[],
-        generatedAt: new Date().toISOString(),
-      });
-    }
-
-    const [ownershipByLeagueId, waiversByLeagueId, firestoreStatuses] = await Promise.all([
+    const [ownershipByLeagueId, waiversByLeagueId] = await Promise.all([
       loadPrismaOwnerships({ leagueIds, playerIds, userId }),
       loadPrismaWaivers({ leagueIds, playerIds }),
-      Promise.all(
-        leagueContexts.map(async (league) => ({
-          leagueId: league.leagueId,
-          status: await loadFirestoreOwnership({
-            leagueId: league.leagueId,
-            playerIds,
-            currentUserId: userId,
-          }).catch((): FirestoreAvailabilityStatus => ({})),
-        }))
-      ),
     ]);
 
-    const firestoreStatusByLeagueId = new Map(
-      firestoreStatuses.map((item) => [item.leagueId, item.status])
-    );
-
-    const leagues = leagueContexts.map((league) => {
-      const firestoreStatus = firestoreStatusByLeagueId.get(league.leagueId);
-      return buildAvailabilityRow({
+    const leagues = leagueContexts.map((league) =>
+      buildAvailabilityRow({
         league,
         playerId: requestedPlayerId,
-        owner: ownershipByLeagueId.get(league.leagueId) ?? firestoreStatus?.owner,
-        waiver: waiversByLeagueId.get(league.leagueId) ?? firestoreStatus?.waiver,
-      });
-    });
+        owner: ownershipByLeagueId.get(league.leagueId),
+        waiver: waiversByLeagueId.get(league.leagueId),
+      })
+    );
 
     return successResponse({
       playerId: requestedPlayerId,

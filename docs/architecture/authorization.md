@@ -8,15 +8,16 @@ whether the action is operational rather than competition state.
 
 ## Access tiers
 
-| Tier               | Requirement                                     | Resolved by                                                      | Examples                                                                       |
-| ------------------ | ----------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Public             | none                                            | route code                                                       | player and match reads, public draft and trade research, `/api/ping`           |
-| User               | verified Firebase identity                      | `getAuthenticatedUserId` (`src/lib/serverAuth.ts`)               | user watchlists, user league settings, team actions                            |
-| League participant | active `LeagueMember`                           | `getLeagueMembershipAccess` (`src/server/leagues/membership.ts`) | own roster and lineup writes, social posting, own draft queue and watchlist    |
-| League manager     | league owner or co-commissioner                 | `canManageLeague` / `LeagueMembershipAccess.canManage`           | waiver processing, league settings, social moderation, draft lifecycle actions |
-| Operator           | `x-admin-secret` header carrying `ADMIN_SECRET` | `isAdminRequest` (`src/lib/adminAuth.ts`)                        | queue and worker control plane                                                 |
-| Scheduler          | `Authorization: Bearer $CRON_SECRET`            | `isCronRequestAuthorized` (`src/lib/cronAuth.ts`)                | `/api/cron/*`                                                                  |
-| Local development  | non-production only, both dev-auth flags true   | `isServerDevelopmentAuthEnabled` (`src/lib/devAuth.ts`)          | scripted identity `statly-dev-tester`                                          |
+| Tier                     | Requirement                                               | Resolved by                                                                                | Examples                                                                       |
+| ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Public                   | none                                                      | route code                                                                                 | player and match reads, public draft and trade research, `/api/ping`           |
+| User                     | verified Firebase identity                                | `getAuthenticatedUserId` (`src/lib/serverAuth.ts`)                                         | user watchlists, user league settings, team actions                            |
+| League participant       | active `LeagueMember`                                     | `getLeagueMembershipAccess` (`src/server/leagues/membership.ts`)                           | own roster and lineup writes, social posting, own draft queue and watchlist    |
+| League manager           | league owner or co-commissioner                           | `canManageLeague` / `LeagueMembershipAccess.canManage`                                     | waiver processing, league settings, social moderation, draft lifecycle actions |
+| Basketball profile owner | `BasketballLeague.ownerId === userId`; non-owners get 404 | `requireBasketballLeagueOwner` (`src/server/basketball/leagues/basketballLeagueAccess.ts`) | `/api/basketball/leagues/*`, `/basketball` pages                               |
+| Operator                 | `x-admin-secret` header carrying `ADMIN_SECRET`           | `isAdminRequest` (`src/lib/adminAuth.ts`)                                                  | queue and worker control plane                                                 |
+| Scheduler                | `Authorization: Bearer $CRON_SECRET`                      | `isCronRequestAuthorized` (`src/lib/cronAuth.ts`)                                          | `/api/cron/*`                                                                  |
+| Local development        | non-production only, both dev-auth flags true             | `isServerDevelopmentAuthEnabled` (`src/lib/devAuth.ts`)                                    | scripted identity `statly-dev-tester`                                          |
 
 Each tier above Public resolves identity at the transport boundary and then calls shared server logic
 that owns league, season, and membership scope. A verified Firebase UID never implies membership,
@@ -51,6 +52,16 @@ Two further implementations of the same decision exist and must stay consistent:
 
 The values `commissioner` and `admin` cannot be produced by the current Prisma enum; they only occur
 as legacy Firestore data.
+
+## Basketball profiles
+
+A fantasy basketball league profile is private to the user who created it. It has no members or
+roles: the only rule is `BasketballLeague.ownerId === userId`. Every query in
+`src/server/basketball/leagues` filters by owner, and every team, roster spot and matchup read or
+write is also scoped to the league id. Someone else's league answers 404 exactly like a league that
+does not exist, from the API and from pages (`loadOwnedBasketballLeague` returns null and the page
+calls `notFound()`), so a profile's existence never leaks. The global `Nba*` reference tables hold no
+user data; player search only needs a signed-in user.
 
 ## Known divergences
 
