@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const cacheCalls = vi.hoisted(() => [] as { key: string[]; options: unknown }[]);
+vi.mock('next/cache', () => ({
+  unstable_cache: (fn: () => Promise<unknown>, key: string[], options: unknown) => {
+    cacheCalls.push({ key, options });
+    // The data cache stores JSON: anything that does not survive a round trip would break.
+    return async () => JSON.parse(JSON.stringify(await fn()));
+  },
+}));
 
 import { leagueFixture, spot } from './__fixtures__/fakeNbaClient';
 import { loadRotation, type RotationReadClient } from './rotationModel';
@@ -216,6 +225,15 @@ describe('loadRotation', () => {
         },
       ],
     ]);
+  });
+
+  it('caches the season’s box scores until the next box-score ingest', async () => {
+    await loadRotation(league, { today: '2026-11-02', client: fakeClient() });
+
+    expect(cacheCalls.at(-1)).toEqual({
+      key: ['basketball:rotation', '2027', '2026-11-01T12:00:00.000Z'],
+      options: { revalidate: 300 },
+    });
   });
 
   it('has no opponent alerts when no opponent is set this week', async () => {

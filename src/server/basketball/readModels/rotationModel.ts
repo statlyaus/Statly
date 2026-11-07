@@ -1,17 +1,16 @@
 import 'server-only';
 
 import type { PrismaClient } from '@prisma/client';
+import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 
-import {
-  dateOnlyToString,
-  fantasyWeekOf,
-  toEasternDate,
-  type EasternDate,
-} from '@/lib/basketball/fantasyWeeks';
+import { dateOnlyToString, toEasternDate, type EasternDate } from '@/lib/basketball/fantasyWeeks';
 import {
   buildRotation,
+  isRoleUp,
   type AlertLevel,
+  type RotationDnpReason,
+  type RotationGameRow,
   type RotationPlayer,
   type RotationPlayerInfo,
   type RotationTeam,
@@ -20,7 +19,12 @@ import {
 import { prisma } from '@/lib/prisma';
 import type { BasketballLeagueDetail } from '@/server/basketball/leagues/basketballLeagueDto';
 
-import type { PlayerOwner, PoolPlayerInjury } from './playerPool';
+import {
+  loadStatsUpdatedAt,
+  ownerLabels,
+  type PlayerOwner,
+  type PoolPlayerInjury,
+} from './playerPool';
 
 /** The Prisma reads the rotation page makes; tests pass an in-memory fake. */
 export type RotationReadClient = Pick<
@@ -63,34 +67,124 @@ interface SeasonRotation {
   statsUpdatedAt: string | null;
 }
 
+const DNP_REASONS: readonly RotationDnpReason[] = [
+  'COACH_DECISION',
+  'INJURY',
+  'REST',
+  'SUSPENDED',
+  'PERSONAL',
+  'OTHER',
+];
+
+/**
+ * A season's box-score rows as the data cache stores them (JSON, 2 MB per entry at most): one
+ * number tuple per row, with game ids, dates, team codes and player ids listed once. A full season
+ * (about 37,000 rows) packs to about 1 MB; as plain objects it would be several times the limit.
+ */
+interface PackedRows {
+  games: [gameId: string, gameDate: EasternDate][];
+  teamCodes: string[];
+  playerIds: string[];
+  /** game, team, player (indexes), flags (1 starter + 2 played), dnp (0 or 1 + DNP_REASONS index),
+   * seconds, FGM, FGA, 3PM, FTA, plus-minus. */
+  rows: number[][];
+}
+
+function packRows(rows: RotationGameRow[]): PackedRows {
+  const indexer = <T>(key: (value: T) => string) => {
+    const list: T[] = [];
+    const index = new Map<string, number>();
+    return {
+      list,
+      of(value: T): number {
+        const found = index.get(key(value));
+        if (found !== undefined) return found;
+        index.set(key(value), list.length);
+        return list.push(value) - 1;
+      },
+    };
+  };
+  const games = indexer<[string, EasternDate]>(([gameId]) => gameId);
+  const teams = indexer<string>((code) => code);
+  const players = indexer<string>((id) => id);
+  return {
+    rows: rows.map((row) => [
+      games.of([row.gameId, row.gameDate]),
+      teams.of(row.teamCode),
+      players.of(row.playerId),
+      (row.starter ? 1 : 0) + (row.played ? 2 : 0),
+      row.dnpReason ? DNP_REASONS.indexOf(row.dnpReason) + 1 : 0,
+      row.secondsPlayed,
+      row.fieldGoalsMade,
+      row.fieldGoalsAttempted,
+      row.threePointersMade,
+      row.freeThrowsAttempted,
+      row.plusMinus,
+    ]),
+    games: games.list,
+    teamCodes: teams.list,
+    playerIds: players.list,
+  };
+}
+
+function unpackRows(packed: PackedRows): RotationGameRow[] {
+  return packed.rows.map(([game, team, player, flags, dnp, seconds, fgm, fga, tpm, fta, pm]) => ({
+    gameId: packed.games[game][0],
+    gameDate: packed.games[game][1],
+    teamCode: packed.teamCodes[team],
+    playerId: packed.playerIds[player],
+    starter: (flags & 1) === 1,
+    played: (flags & 2) === 2,
+    dnpReason: dnp ? DNP_REASONS[dnp - 1] : null,
+    secondsPlayed: seconds,
+    fieldGoalsMade: fgm,
+    fieldGoalsAttempted: fga,
+    threePointersMade: tpm,
+    freeThrowsAttempted: fta,
+    plusMinus: pm,
+  }));
+}
+
+async function readSeasonRows(client: RotationReadClient, season: number): Promise<PackedRows> {
+  const rows = await client.nbaPlayerGameStat.findMany({
+    where: { game: { season, status: 'FINAL' } },
+    select: {
+      gameId: true,
+      playerId: true,
+      starter: true,
+      played: true,
+      dnpReason: true,
+      secondsPlayed: true,
+      fieldGoalsMade: true,
+      fieldGoalsAttempted: true,
+      threePointersMade: true,
+      freeThrowsAttempted: true,
+      plusMinus: true,
+      game: { select: { gameDate: true } },
+      team: { select: { code: true } },
+    },
+  });
+  return packRows(
+    rows.map(({ game, team, ...row }) => ({
+      ...row,
+      gameDate: dateOnlyToString(game.gameDate),
+      teamCode: team.code,
+    }))
+  );
+}
+
 /** One season's rotation from its final box scores; shared by every league on that season. */
 const loadSeasonRotation = cache(
   async (client: RotationReadClient, season: number): Promise<SeasonRotation> => {
-    const [rows, run] = await Promise.all([
-      client.nbaPlayerGameStat.findMany({
-        where: { game: { season, status: 'FINAL' } },
-        select: {
-          gameId: true,
-          playerId: true,
-          starter: true,
-          played: true,
-          dnpReason: true,
-          secondsPlayed: true,
-          fieldGoalsMade: true,
-          fieldGoalsAttempted: true,
-          threePointersMade: true,
-          freeThrowsAttempted: true,
-          plusMinus: true,
-          game: { select: { gameDate: true } },
-          team: { select: { code: true } },
-        },
-      }),
-      client.nbaIngestRun.findFirst({
-        where: { job: { in: ['BOX_SCORES', 'BACKFILL'] }, outcome: 'SUCCEEDED' },
-        orderBy: { finishedAt: 'desc' },
-        select: { finishedAt: true },
-      }),
-    ]);
+    // The box scores only change when an ingest run lands, so its finish time keys the cache;
+    // the revalidate is a backstop. Names and injuries are read fresh on every render.
+    const statsUpdatedAt = await loadStatsUpdatedAt(client);
+    const packed = await unstable_cache(
+      () => readSeasonRows(client, season),
+      ['basketball:rotation', String(season), statsUpdatedAt ?? 'never'],
+      { revalidate: 300 }
+    )();
+    const rows = unpackRows(packed);
     const identities = rows.length
       ? await client.nbaPlayer.findMany({
           where: { id: { in: [...new Set(rows.map((row) => row.playerId))] } },
@@ -128,17 +222,10 @@ const loadSeasonRotation = cache(
     );
     const nameOf = (playerId: string) => identityById.get(playerId)?.fullName ?? 'Unknown player';
 
-    const rotation = buildRotation(
-      rows.map(({ game, team, ...row }) => ({
-        ...row,
-        gameDate: dateOnlyToString(game.gameDate),
-        teamCode: team.code,
-      })),
-      info
-    );
+    const rotation = buildRotation(rows, info);
 
     return {
-      statsUpdatedAt: run?.finishedAt?.toISOString() ?? null,
+      statsUpdatedAt,
       teams: rotation.teams.map((team) => ({
         ...team,
         lastChange: team.lastChange
@@ -162,27 +249,6 @@ const loadSeasonRotation = cache(
     };
   }
 );
-
-// ponytail: same rule as playerPool's private ownerLabels; export that one if a third copy appears.
-function ownerLabels(
-  league: BasketballLeagueDetail,
-  today: EasternDate
-): { owners: Map<string, PlayerOwner>; opponentName: string | null } {
-  const week = fantasyWeekOf(today, league.weekOneStartsOn, league.twoWeekMatchups);
-  const opponentId = league.matchups.find(
-    (matchup) => matchup.week === week && matchup.teamId === league.myTeamId
-  )?.opponentTeamId;
-  const teamName = new Map(league.teams.map((team) => [team.id, team.name]));
-  const owners = new Map(
-    league.rosterSpots.map((spot): [string, PlayerOwner] => {
-      if (spot.teamId === null) return [spot.playerId, { kind: 'ELSEWHERE', teamName: null }];
-      const kind =
-        spot.teamId === league.myTeamId ? 'MINE' : spot.teamId === opponentId ? 'OPPONENT' : 'TEAM';
-      return [spot.playerId, { kind, teamName: teamName.get(spot.teamId) ?? '' }];
-    })
-  );
-  return { owners, opponentName: (opponentId && teamName.get(opponentId)) || null };
-}
 
 const LEVEL_ORDER: Record<AlertLevel, number> = { RED: 0, AMBER: 1, GREEN: 2 };
 
@@ -215,13 +281,7 @@ export async function loadRotation(
     opponentName,
     alerts: { mine: withAlert('MINE'), opponent: withAlert('OPPONENT') },
     freeAgentRoleUps: players
-      .filter(
-        (player) =>
-          player.owner.kind === 'FREE_AGENT' &&
-          player.alert?.roleUp &&
-          // A benched or coach-DNP player whose minutes also rose is not moving up.
-          player.alert.level !== 'RED'
-      )
+      .filter((player) => player.owner.kind === 'FREE_AGENT' && isRoleUp(player.alert))
       .sort((a, b) => b.minutesPerGame - a.minutesPerGame),
   };
 }
