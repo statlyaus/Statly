@@ -34,6 +34,8 @@
     "dev:seed:waivers": "tsx Scripts/dev/seed-waiver-scenario.ts",
     "dev:seed:in-season": "tsx -r dotenv/config Scripts/dev/seed-local-in-season-league.ts",
     "players:sync-positions": "tsx -r dotenv/config Scripts/dev/sync-player-positions.ts",
+    "nba:backfill": "tsx -r dotenv/config Scripts/basketball/backfill-nba-season.ts",
+    "nba:sync": "tsx -r dotenv/config Scripts/basketball/sync-nba.ts",
     "dev:smoke:local": "tsx Scripts/dev/smoke-local-stack.ts",
     "dev:full:local": "bash Scripts/dev/full-local-stack.sh",
     "dev:full:workbook-evaluation": "bash Scripts/dev/full-local-workbook-evaluation.sh",
