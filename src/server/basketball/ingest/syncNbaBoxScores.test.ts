@@ -2,7 +2,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { fakeIngestPrisma, fakeProvider } from './__fixtures__/fakes';
-import type { NbaProviderBoxScore, NbaProviderPlayerLine } from './nbaStatsProvider';
+import type {
+  NbaProviderBoxScore,
+  NbaProviderGame,
+  NbaProviderPlayerLine,
+} from './nbaStatsProvider';
 import { NbaIngestRejected } from './nbaStatsProvider';
 import { boxScoreProblem, syncNbaBoxScores } from './syncNbaBoxScores';
 
@@ -128,7 +132,7 @@ describe('syncNbaBoxScores', () => {
 
   it('asks for yesterday and today on the Eastern calendar', async () => {
     const { prisma } = pendingDatabase(0);
-    const fetchScoreboard = vi.fn(async () => []);
+    const fetchScoreboard = vi.fn(async (_date: string): Promise<NbaProviderGame[]> => []);
 
     await syncNbaBoxScores({
       prisma,
@@ -143,7 +147,7 @@ describe('syncNbaBoxScores', () => {
 
   it('fetches at most the game limit and rejects when every fetch fails', async () => {
     const { prisma, forbiddenWrites } = pendingDatabase(20);
-    const fetchBoxScore = vi.fn(async () => {
+    const fetchBoxScore = vi.fn(async (_externalId: string): Promise<NbaProviderBoxScore> => {
       throw new NbaIngestRejected('fetch_failed', 'summary answered 500', { httpStatus: 500 });
     });
     const provider = fakeProvider({ fetchScoreboard: async () => [], fetchBoxScore });
