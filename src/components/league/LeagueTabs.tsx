@@ -897,22 +897,14 @@ export default function LeagueTabs({
               )}
 
               {activeTab === 'waivers' && (
-                <div className="space-y-4">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Waiver Wire</h2>
-                    <p className="mt-1 text-sm text-gray-600">
-                      Submit claims, review your queue, and track league waiver activity.
-                    </p>
-                  </div>
-                  <LeagueWaiversContainer
-                    leagueId={league.id}
-                    currentUserId={currentUserId}
-                    membersIndex={waiverMembersIndex}
-                    selectedCategories={league.categories}
-                    initialPlayerId={selectedPlayerId}
-                    timeZone={league.timeZone}
-                  />
-                </div>
+                <LeagueWaiversContainer
+                  leagueId={league.id}
+                  currentUserId={currentUserId}
+                  membersIndex={waiverMembersIndex}
+                  selectedCategories={league.categories}
+                  initialPlayerId={selectedPlayerId}
+                  timeZone={league.timeZone}
+                />
               )}
 
               {activeTab === 'draft' && (
