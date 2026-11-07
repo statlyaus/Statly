@@ -13,6 +13,10 @@ The default real-data preset is goals, tackles, inside 50s, intercepts, conteste
 contested possessions, effective disposals, and score involvements. Commissioners can choose other
 supported categories and whether higher or lower values win.
 
+A separate fantasy basketball section (`/basketball`) lets a user mirror their own NBA category
+league (Yahoo, ESPN and others) to rank players, project matchups and plan pickups; see
+[fantasy basketball](docs/domain/basketball.md).
+
 ## Architecture
 
 Statly is a Next.js 16 and React 19 application written in TypeScript.
