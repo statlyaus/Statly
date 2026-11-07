@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { isWaiverRunHour } from './waiverSchedule';
+const findManyMock = vi.fn();
+vi.mock('@/lib/prisma', () => ({
+  prisma: { teamAction: { findMany: (...args: unknown[]) => findManyMock(...args) } },
+}));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
+
+import { isWaiverRunHour, processDueLeagueWaivers } from './waiverSchedule';
 
 describe('daily waiver run hour', () => {
   it.each([
@@ -15,5 +21,25 @@ describe('daily waiver run hour', () => {
     ['2026-07-14T21:00:00Z', false],
   ])('at %s is %s', (instant, expected) => {
     expect(isWaiverRunHour(new Date(instant))).toBe(expected);
+  });
+});
+
+describe('daily waiver run across leagues', () => {
+  it('keeps processing other leagues and reports the leagues that failed', async () => {
+    findManyMock.mockResolvedValue([{ leagueId: 'league-a' }, { leagueId: 'league-b' }]);
+    const service = {
+      processLeague: vi.fn(async ({ leagueId }: { leagueId: string }) => {
+        if (leagueId === 'league-a') throw new Error('database unavailable');
+        return { processed: 2, results: [] };
+      }),
+    };
+
+    const run = await processDueLeagueWaivers(new Date('2026-07-14T20:00:00Z'), service);
+
+    expect(run).toEqual({
+      ran: true,
+      leagues: [{ leagueId: 'league-b', processed: 2, results: [] }],
+      failedLeagueIds: ['league-a'],
+    });
   });
 });

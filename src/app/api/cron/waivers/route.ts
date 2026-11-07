@@ -25,6 +25,16 @@ export async function GET(request: NextRequest) {
         processed: run.leagues.reduce((sum, league) => sum + league.processed, 0),
       });
     }
+    // A failed league makes the run fail, so the scheduler records it instead of a silent success.
+    if (run.failedLeagueIds.length > 0) {
+      logger.error('Scheduled waiver processing failed for some leagues', {
+        failedLeagueIds: run.failedLeagueIds,
+      });
+      return NextResponse.json(
+        { ok: false, ...run, checkedAt: new Date().toISOString() },
+        { status: 500, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
     return NextResponse.json(
       { ok: true, ...run, checkedAt: new Date().toISOString() },
       { headers: { 'Cache-Control': 'no-store' } }
