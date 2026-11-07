@@ -233,10 +233,29 @@ describe('basketball league profiles', () => {
     const league = await createBasketballLeague(OWNER, createInput);
     await setBasketballMatchup(OWNER, league.id, 25, { opponentTeamId: league.teams[1].id });
 
-    await expectError(
+    const stranded = await expectError(
       updateBasketballLeague(OWNER, league.id, { regularSeasonEndsOn: '2027-03-01' }),
-      'CONFLICT'
+      'VALIDATION'
     );
+    expect(stranded).toMatchObject({
+      details: { fieldErrors: { regularSeasonEndsOn: expect.any(Array) } },
+    });
+  });
+
+  it('names the season by the year it ends, even for a profile that stops early', async () => {
+    const truncated = await createBasketballLeague(OWNER, {
+      ...createInput,
+      regularSeasonEndsOn: '2026-12-31',
+    });
+    const lateStart = await createBasketballLeague(OWNER, {
+      ...createInput,
+      name: 'Second half',
+      weekOneStartsOn: '2027-01-04',
+      regularSeasonEndsOn: '2027-04-11',
+    });
+
+    expect(truncated.season).toBe(2027);
+    expect(lateStart.season).toBe(2027);
   });
 
   it('allows only one team marked as the user’s own per league', async () => {
@@ -461,6 +480,26 @@ describe('basketball roster spots', () => {
     await expectError(
       updateBasketballRosterSpot(OWNER, league.id, PLAYERS.jokic.id, { onInjuredList: true }),
       'NOT_FOUND'
+    );
+  });
+
+  it('rejects moving a spot to a team from another league of the same owner', async () => {
+    const league = await createBasketballLeague(OWNER, createInput);
+    const otherLeague = await createBasketballLeague(OWNER, { ...createInput, name: 'Other' });
+    await addBasketballRosterSpots(OWNER, league.id, {
+      entries: [{ playerId: PLAYERS.jokic.id, teamId: league.myTeamId }],
+    });
+
+    const error = await expectError(
+      updateBasketballRosterSpot(OWNER, league.id, PLAYERS.jokic.id, {
+        teamId: otherLeague.teams[1].id,
+      }),
+      'VALIDATION'
+    );
+
+    expect(error).toMatchObject({ details: { fieldErrors: { teamId: expect.any(Array) } } });
+    expect((await getBasketballLeagueDetail(OWNER, league.id)).rosterSpots[0].teamId).toBe(
+      league.myTeamId
     );
   });
 });

@@ -49,13 +49,22 @@ function inCatalogOrder(ids: readonly BasketballCategoryId[]): BasketballCategor
   return BASKETBALL_CATEGORY_IDS.filter((id) => ids.includes(id));
 }
 
+/**
+ * The NBA season a profile plays in, named by the year it ends (2026-27 is 2027). Taken from week
+ * one, which always falls inside the season, so a profile that stops early (ends 2026-12-31) is still
+ * the 2027 season: a start from July on belongs to the season ending the next year.
+ */
+function seasonOf(weekOneStartsOn: EasternDate): number {
+  const [year, month] = weekOneStartsOn.split('-').map(Number);
+  return month >= 7 ? year + 1 : year;
+}
+
 function toLeagueData(settings: BasketballLeagueSettings) {
   return {
     name: settings.name,
     platform: settings.platform,
     format: settings.format,
-    // The season is the year the regular season ends in (2026-27 is 2027).
-    season: Number(settings.regularSeasonEndsOn.slice(0, 4)),
+    season: seasonOf(settings.weekOneStartsOn),
     categories: inCatalogOrder(settings.categories),
     puntCategories: inCatalogOrder(settings.puntCategories),
     teamCount: settings.teamCount,
@@ -176,8 +185,8 @@ export async function updateBasketballLeague(
       select: { week: true },
     });
     if (lateMatchup) {
-      throw new BasketballLeagueError(
-        'CONFLICT',
+      throw fieldError(
+        'regularSeasonEndsOn',
         `These dates end the season in week ${lastWeek}, but week ${lateMatchup.week} has a matchup. Clear it first.`
       );
     }
