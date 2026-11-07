@@ -74,7 +74,12 @@ describe('generateCompetitionSchedule', () => {
     });
 
     expect(schedule).toHaveLength(4);
-    expect(schedule[1]).toMatchObject({ round: 2, aflRound: 2, status: 'NO_MATCHUP', fixtures: [] });
+    expect(schedule[1]).toMatchObject({
+      round: 2,
+      aflRound: 2,
+      status: 'NO_MATCHUP',
+      fixtures: [],
+    });
     expect(schedule[2]?.fixtures).toHaveLength(2);
     expect(schedule[3]).toMatchObject({ round: 4, aflRound: 4, status: 'SCHEDULED' });
   });
