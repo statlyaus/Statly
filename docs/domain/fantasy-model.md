@@ -46,6 +46,15 @@ slots and rebuilds the draft order. After the draft, rosters, fixtures, and stan
 team, so managers are not removed. Ownership transfer makes the previous owner a manager.
 Firestore member documents are written afterwards as a compatibility projection.
 
+## Transactions
+
+Free-agent adds, waiver claims, and trade proposals, counters, and acceptances open only once the
+league's draft is `COMPLETED`. Every transaction route asks one server guard,
+`src/server/leagues/transactionWindow.ts`, before it writes; until then the request is refused with
+HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and trades open once the
+league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
+cancelling, and commissioner review are not transactions and stay available.
+
 ## League creation defaults
 
 The normalization boundary in `src/server/leagues/createLeagueContract.ts` supplies defaults when a

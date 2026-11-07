@@ -8,6 +8,10 @@ import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
+  getTransactionWindow,
+  transactionsClosedResponse,
+} from '@/server/leagues/transactionWindow';
+import {
   PrismaWaiverClaimStore,
   WaiverClaimStoreError,
 } from '@/server/waivers/WaiverProcessingService';
@@ -42,6 +46,8 @@ export const POST = withMetrics(
       if (!access.isMember) {
         return NextResponse.json({ error: 'League membership required' }, { status: 403 });
       }
+      const transactionWindow = await getTransactionWindow(leagueId);
+      if (!transactionWindow.open) return transactionsClosedResponse(transactionWindow);
 
       const requestedPlayerId = String(playerId);
       const activePlayers = await prisma.player.findMany({

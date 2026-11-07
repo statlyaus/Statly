@@ -17,6 +17,7 @@ const ids = {
   firstPlayer: 'trade-test-player-first',
   firstPlayerAlias: 'trade-test-player-first-retired',
   secondPlayer: 'trade-test-player-second',
+  draft: 'trade-test-draft',
 } as const;
 
 const now = new Date('2026-07-21T10:00:00.000Z');
@@ -50,6 +51,67 @@ describe.sequential('league trade service transactions', () => {
 
   beforeEach(async () => {
     await resetTradeState();
+  });
+
+  it('refuses a proposal until the league draft is complete', async () => {
+    await setDraftStatus('LIVE');
+
+    await expect(createTrade()).rejects.toMatchObject({
+      code: 'DRAFT_NOT_COMPLETE',
+      status: 409,
+      message: 'Adds, waiver claims and trades open once the league draft is complete.',
+    });
+    await expect(prisma.leagueTradeThread.count({ where: { leagueId: ids.league } })).resolves.toBe(
+      0
+    );
+    await expect(
+      prisma.leagueTradeCommand.count({ where: { leagueId: ids.league } })
+    ).resolves.toBe(0);
+  });
+
+  it('refuses acceptance and counters while the league draft is not complete', async () => {
+    const created = await createTrade();
+    await setDraftStatus('PAUSED');
+
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.secondUser,
+        created.threadId,
+        { action: 'accept', expectedVersion: 0, idempotencyKey: 'accept-draft-open-0001' },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'DRAFT_NOT_COMPLETE', status: 409 });
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.secondUser,
+        created.threadId,
+        {
+          action: 'counter',
+          expectedVersion: 0,
+          sendingPlayerIds: [ids.secondPlayer],
+          receivingPlayerIds: [ids.firstPlayer],
+          idempotencyKey: 'counter-draft-open-0001',
+        },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'DRAFT_NOT_COMPLETE', status: 409 });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'OPEN', version: 0 });
+
+    // Withdrawing is not a transaction, so the proposer can still take the offer back.
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.firstUser,
+        created.threadId,
+        { action: 'withdraw', expectedVersion: 0, idempotencyKey: 'withdraw-draft-open-0001' },
+        now
+      )
+    ).resolves.toMatchObject({ status: 'WITHDRAWN' });
   });
 
   it('rejects a proposal that spoofs player ownership and rolls back its command', async () => {
@@ -796,6 +858,9 @@ async function seedLeague(): Promise<void> {
   await prisma.leagueSeason.create({
     data: { id: ids.season, leagueId: ids.league, label: '2026', year: 2026 },
   });
+  await prisma.draft.create({
+    data: { id: ids.draft, leagueId: ids.league, status: 'COMPLETED', totalPicks: 8 },
+  });
   await prisma.league.update({
     where: { id: ids.league },
     data: { activeSeasonId: ids.season },
@@ -881,6 +946,11 @@ async function resetTradeState(): Promise<void> {
     data: { memberId: ids.secondMember, acquiredBy: 'DRAFT' },
   });
   await setReviewMode('NONE');
+  await setDraftStatus('COMPLETED');
+}
+
+async function setDraftStatus(status: 'LIVE' | 'PAUSED' | 'COMPLETED'): Promise<void> {
+  await prisma.draft.update({ where: { id: ids.draft }, data: { status } });
 }
 
 async function createTrade(
