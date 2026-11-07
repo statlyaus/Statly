@@ -44,12 +44,12 @@ const quickLinks = [
 
 export default function DraftsPage() {
   return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
+      <div className="min-h-screen bg-[color:var(--league-page)] text-[color:var(--league-text)]">
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
           <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div className="max-w-3xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                   Draft operations
                 </p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
@@ -63,13 +63,13 @@ export default function DraftsPage() {
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:min-w-[390px]">
                 <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                  <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                     Active
                   </p>
                   <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">0</p>
                 </div>
                 <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                  <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                     Status
                   </p>
                   <p className="mt-1 text-sm font-semibold text-[color:var(--league-success)]">
@@ -77,7 +77,7 @@ export default function DraftsPage() {
                   </p>
                 </div>
                 <div className="col-span-2 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:col-span-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                  <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                     Next step
                   </p>
                   <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
@@ -124,7 +124,7 @@ export default function DraftsPage() {
           <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-48px_rgba(23,34,48,0.28)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-text-muted)]">
+                <div className="inline-flex items-center gap-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
                   <CalendarClock className="h-4 w-4" aria-hidden="true" />
                   Quick actions
                 </div>
