@@ -43,13 +43,17 @@ function data(): FakeNbaData {
   };
   return {
     teams,
-    players: Object.keys(ppg).map((id) => ({
-      id,
-      fullName: id.toUpperCase(),
-      positions: ['F'],
-      teamId: teamOf[id],
-      injury: id === 'd' ? { status: 'OUT' as const } : undefined,
-    })),
+    players: [
+      ...Object.keys(ppg).map((id) => ({
+        id,
+        fullName: id.toUpperCase(),
+        positions: ['F'],
+        teamId: teamOf[id],
+        injury: id === 'd' ? { status: 'OUT' as const } : undefined,
+      })),
+      // A rookie with no games yet: nothing to project.
+      { id: 'rookie', fullName: 'Rookie', positions: ['G'], teamId: 'LAL' },
+    ],
     games: [
       game('mon', '2026-11-02', 'BOS', 'NYK', 'FINAL'),
       game('wed', '2026-11-04', 'DEN', 'LAL', 'FINAL'),
@@ -86,6 +90,7 @@ const league = leagueFixture({
     spot('c', 'team-me', { onInjuredList: true }),
     spot('d', 'team-me'),
     spot('e', 'team-me', { acquiredOn: '2026-11-06' }),
+    spot('rookie', 'team-me'),
     spot('x', 'team-opp'),
     spot('y', 'team-opp'),
     spot('z', 'team-other'),
@@ -117,6 +122,12 @@ describe('loadMatchup', () => {
     expect(row('c')).toMatchObject({ countedSoFar: 0, countedLeft: 0, onInjuredList: true });
     expect(row('d')).toMatchObject({ countedSoFar: 0, countedLeft: 0 });
     expect(row('e')).toMatchObject({ countedSoFar: 0, countedLeft: 2, teamGamesLeft: 3 });
+    // No projection, but his NBA team's games left still come from the schedule.
+    expect(row('rookie')).toMatchObject({
+      hasProjection: false,
+      countedLeft: 0,
+      teamGamesLeft: 3,
+    });
   });
 
   it('keeps each side to its own roster', async () => {
@@ -132,6 +143,7 @@ describe('loadMatchup', () => {
       'c',
       'd',
       'e',
+      'rookie',
     ]);
     expect(view.opponent.players.map((player) => player.playerId).sort()).toEqual(['x', 'y']);
   });

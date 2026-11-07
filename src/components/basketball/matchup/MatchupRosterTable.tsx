@@ -81,6 +81,7 @@ export function MatchupRosterTable({
               {players.map((player) => {
                 const rowBg = 'bg-card';
                 const benched =
+                  player.hasProjection &&
                   player.countedLeft === 0 &&
                   player.teamGamesLeft > 0 &&
                   !player.onInjuredList &&
@@ -108,6 +109,14 @@ export function MatchupRosterTable({
                           <span className={badgeStyles({ tone: 'muted', size: 'xs' })}>IL</span>
                         ) : null}
                         <InjuryBadge injury={player.injury} />
+                        {player.hasProjection ? null : (
+                          <span
+                            className={badgeStyles({ tone: 'neutral', size: 'xs' })}
+                            title="No games in either season yet, so nothing to project"
+                          >
+                            No projection
+                          </span>
+                        )}
                       </span>
                     </th>
                     <td className="px-2 text-right tabular-nums text-foreground">

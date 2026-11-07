@@ -18,15 +18,20 @@ export interface WeekSchedule {
   end: EasternDate;
   dates: EasternDate[];
   today: EasternDate;
-  /** Dates whose stats are in: before today, or today once every game is final and ingested. */
+  /** Dates with a game that counts: final with its box score in. */
   playedDates: EasternDate[];
-  /** The other dates of the week: projected. */
+  /**
+   * Dates with a game still to count: not yet final, or final without its box score (a late tip-off
+   * or ingest lag), whatever the date. A date can be in both lists.
+   */
   remainingDates: EasternDate[];
-  /** NBA team ids with a game on each date (postponed and cancelled games are not games). */
+  /** Dates with any game (postponed and cancelled games are not games). */
+  gameDates: EasternDate[];
+  /** NBA team ids with a game still to count on each date: these are projected. */
   teamsByDate: Record<EasternDate, string[]>;
-  /** FINAL games on played dates: the box-score lines that count this week. */
+  /** Final games with their box score in: the lines that count this week. */
   finalGames: { gameId: string; date: EasternDate }[];
-  /** Games per NBA team id this week, and how many fall on remaining dates. */
+  /** Games per NBA team id this week, and how many are still to count. */
   gamesByTeam: Record<string, { total: number; remaining: number }>;
 }
 
@@ -61,31 +66,25 @@ export async function loadWeekSchedule(
 
   const isDone = (game: (typeof games)[number]) =>
     game.status === 'FINAL' && game.boxScoreIngestedAt !== null;
-  const played = new Set(
-    range.dates.filter(
-      (date) =>
-        date < today ||
-        (date === today &&
-          games.some((game) => game.date === date) &&
-          games.filter((game) => game.date === date).every(isDone))
-    )
-  );
-  const remainingDates = range.dates.filter((date) => !played.has(date));
+  const done = games.filter(isDone);
+  const toCount = games.filter((game) => !isDone(game));
+  const datesOf = (list: typeof games) =>
+    range.dates.filter((date) => list.some((game) => game.date === date));
 
   const teamsByDate: Record<EasternDate, string[]> = Object.fromEntries(
     range.dates.map((date) => [
       date,
-      games
+      toCount
         .filter((game) => game.date === date)
         .flatMap((game) => [game.homeTeamId, game.awayTeamId]),
     ])
   );
   const gamesByTeam: WeekSchedule['gamesByTeam'] = {};
-  for (const date of range.dates) {
-    for (const teamId of teamsByDate[date]) {
+  for (const game of games) {
+    for (const teamId of [game.homeTeamId, game.awayTeamId]) {
       const counts = (gamesByTeam[teamId] ??= { total: 0, remaining: 0 });
       counts.total += 1;
-      if (!played.has(date)) counts.remaining += 1;
+      if (!isDone(game)) counts.remaining += 1;
     }
   }
 
@@ -95,12 +94,11 @@ export async function loadWeekSchedule(
     end: range.end,
     dates: range.dates,
     today,
-    playedDates: range.dates.filter((date) => played.has(date)),
-    remainingDates,
+    playedDates: datesOf(done),
+    remainingDates: datesOf(toCount),
+    gameDates: datesOf(games),
     teamsByDate,
-    finalGames: games
-      .filter((game) => played.has(game.date) && game.status === 'FINAL')
-      .map((game) => ({ gameId: game.id, date: game.date })),
+    finalGames: done.map((game) => ({ gameId: game.id, date: game.date })),
     gamesByTeam,
   };
 }
