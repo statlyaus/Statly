@@ -23,18 +23,13 @@ vi.mock('@/server/diagnostics/lobbySchemaDiagnostic', () => ({
   loadLobbySchemaDiagnostic: routeMocks.loadLobbySchemaDiagnostic,
 }));
 
-import { GET as getTestData, POST as addTestData } from '@/app/api/add-test-data/route';
 import { GET as getTestDraft, POST as createTestDraft } from '@/app/api/create-test-draft/route';
-import { POST as createTestUser } from '@/app/api/dev/test-user/route';
 import { GET as getDraftDebug } from '@/app/api/drafts/[id]/debug/route';
 import { GET as getLobbyDiagnostic } from '@/app/api/test-lobby/route';
 
 const guardedHandlers = [
-  { name: 'add-test-data POST', invoke: () => addTestData(request('POST')) },
-  { name: 'add-test-data GET', invoke: () => getTestData() },
   { name: 'create-test-draft POST', invoke: () => createTestDraft(request('POST')) },
   { name: 'create-test-draft GET', invoke: () => getTestDraft(request('GET')) },
-  { name: 'dev/test-user POST', invoke: () => createTestUser(request('POST')) },
   {
     name: 'draft debug GET',
     invoke: () =>
