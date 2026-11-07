@@ -34,6 +34,8 @@
     "dev:seed:waivers": "tsx Scripts/dev/seed-waiver-scenario.ts",
     "dev:seed:in-season": "tsx -r dotenv/config Scripts/dev/seed-local-in-season-league.ts",
     "players:sync-positions": "tsx -r dotenv/config Scripts/dev/sync-player-positions.ts",
+    "nba:backfill": "tsx -r dotenv/config Scripts/basketball/backfill-nba-season.ts",
+    "nba:sync": "tsx -r dotenv/config Scripts/basketball/sync-nba.ts",
     "dev:smoke:local": "tsx Scripts/dev/smoke-local-stack.ts",
     "dev:full:local": "bash Scripts/dev/full-local-stack.sh",
     "dev:full:workbook-evaluation": "bash Scripts/dev/full-local-workbook-evaluation.sh",
@@ -110,11 +112,7 @@
     "outcomes:valuation:run-local": "tsx Scripts/dev/run-local-afl-private-valuation.ts",
     "outcomes:valuation:provision-and-dispatch-local": "tsx Scripts/dev/provision-local-afl-private-valuation.ts",
     "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
-    "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
-    "check:etl": "tsx Scripts/check-etl-setup.ts",
     "player-identity:consolidate": "tsx Scripts/player-identity-consolidation.ts",
-    "db:check": "tsx Scripts/check-database.ts",
-    "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",
     "test:int": "vitest run --config vitest.config.int.ts",
     "test:outcomes:int": "tsx Scripts/dev/run-disposable-afl-trade-outcomes-tests.ts",
@@ -143,9 +141,7 @@
     "queue:webvitals": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && tsx ./src/server/queue/webVitalsProducer.ts'",
     "dev:up": "concurrently -k -n web,socket,draft-worker -c blue,magenta,green \"npm:dev\" \"npm:socket\" \"npm:draft-worker:dev\"",
     "dev:down": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*enhancedDraftWorker\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'",
-    "socket:only": "bash -lc 'NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'",
-    "test:socket": "node scripts/dev/test-sio.mjs",
-    "test:smoke:socket": "bash -lc '( NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts & echo $! > .socket.pid ); sleep 2; node scripts/dev/test-sio.mjs; CODE=$?; ( kill $(cat .socket.pid) >/dev/null 2>&1 || true ); rm -f .socket.pid; exit $CODE'"
+    "socket:only": "bash -lc 'NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
@@ -158,7 +154,6 @@
     "@prisma/client": "^6.19.3",
     "@sentry/nextjs": "^10.78.0",
     "@socket.io/redis-adapter": "8.3.0",
-    "@tanstack/react-query": "^5.104.5",
     "bullmq": "^5.81.5",
     "chart.js": "^4.6.1",
     "cheerio": "^1.2.0",
@@ -191,8 +186,7 @@
     "tsx": "^4.23.15",
     "uuid": "^11.1.1",
     "web-vitals": "^4.2.4",
-    "zod": "^4.6.7",
-    "zustand": "^5.0.16"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.11",

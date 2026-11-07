@@ -10,11 +10,7 @@ function read(path: string) {
 
 const lcpLogoPages = ['src/app/(auth)/login/page.tsx', 'src/app/(auth)/register/page.tsx'];
 
-const headerLogos = [
-  'src/app/(public)/layout.tsx',
-  'src/components/navigation/MainNavigation.tsx',
-  'src/components/navigation/MainSidebar.tsx',
-];
+const headerLogos = ['src/app/(public)/layout.tsx', 'src/components/navigation/MainNavigation.tsx'];
 
 describe('image load priority', () => {
   it('preloads the primary logo that is the LCP image on the auth pages', () => {

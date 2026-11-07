@@ -11,13 +11,11 @@ import { LoadingSpinner } from './ui';
 
 type AvailabilityStatus = 'owned' | 'your-roster' | 'waiver' | 'free-agent';
 type AvailabilityActionType = 'trade' | 'waiver' | 'add' | 'roster';
-type LeagueAvailabilitySource = 'prisma' | 'firestore';
 
 interface PlayerLeagueAvailability {
   leagueId: string;
   leagueName: string;
   teamName: string;
-  source?: LeagueAvailabilitySource;
   timeZone?: string;
   status: AvailabilityStatus;
   statusLabel: string;
