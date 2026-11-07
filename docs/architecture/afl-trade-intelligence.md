@@ -128,7 +128,9 @@ impact, objective fairness, or a trade winner. Each public response must identif
 release and its effective-through date.
 
 The archive and factual outcomes must remain useful when numerical valuation is unavailable,
-withdrawn, stale, or unsupported for a cohort. The mandatory valuation milestone answers four
+withdrawn, stale, or unsupported for a cohort. A failed valuation read on the public trade, trade
+detail, or club page is logged and shown as "trade values temporarily unavailable" beside the factual
+record; it never hides that record. The mandatory valuation milestone answers four
 distinct questions when an eligible model publication is active:
 
 1. **At-trade decision value:** the distribution of future contribution knowable at the transaction
