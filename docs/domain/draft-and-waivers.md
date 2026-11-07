@@ -171,7 +171,9 @@ holds the player that call sent, and refused otherwise. Two first claims in a le
 priority rows; the second keeps the first's rows, but the two members can end up sharing a priority
 number, because priority is not unique. That is accepted. Waivers run automatically once a day, at 6 am Melbourne time: a Netlify scheduled function calls
 `/api/cron/waivers` hourly, and only the run in the 6 am Melbourne hour processes leagues with due
-claims, so the time holds through daylight saving. Only one waiver processing run per league proceeds at a
+claims, so the time holds through daylight saving. Leagues are processed one at a time; a league
+whose run throws keeps its claims pending and the others still run, but the route then answers
+HTTP 500 with the failed league ids and logs an error, so the scheduler records a failed run. Only one waiver processing run per league proceeds at a
 time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refused as already running
 (HTTP 409) rather than debiting and awarding the same claims again. A run that dies releases the
 lease implicitly after 15 minutes. Each claim settles in one transaction: it is taken only while still
