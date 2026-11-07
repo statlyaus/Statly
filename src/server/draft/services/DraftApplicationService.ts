@@ -25,6 +25,7 @@ import type {
   DraftOutboxPayload,
   DraftPickEventPayload,
   DraftPlayerSnapshot,
+  DraftSettingsSnapshot,
 } from '../domain/draftTypes';
 
 type PickCommandData = {
@@ -72,8 +73,6 @@ function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEve
   return events;
 }
 
-const DRAFT_MANAGER_ROLES = new Set(['OWNER', 'MANAGER', 'COMMISSIONER', 'ADMIN']);
-
 type PickResult = DraftCommandResult<PickCommandData>;
 type FilledPick = NonNullable<Awaited<ReturnType<typeof draftRepository.findPickByOverall>>>;
 
@@ -118,10 +117,6 @@ async function transactPick(
   }
 }
 
-function isDraftManagerRole(role: string | null | undefined): boolean {
-  return DRAFT_MANAGER_ROLES.has(String(role ?? '').toUpperCase());
-}
-
 function assertCanManageDraftCommand(
   draft: DraftAggregate,
   actorUserId: string | undefined,
@@ -132,7 +127,7 @@ function assertCanManageDraftCommand(
   }
 
   const actor = draft.participants.find((participant) => participant.userId === actorUserId);
-  if (!actor || !isDraftManagerRole(actor.role)) {
+  if (!actor || !actor.canManageDraft) {
     throw new Error(`forbidden:Commissioner access required to ${action}`);
   }
 }
@@ -142,6 +137,7 @@ async function selectHighestStatlyZAvailablePlayer(
   input: {
     excludedPlayerIds: string[];
     selectedCategories: readonly string[];
+    categoryDirections?: DraftSettingsSnapshot['categoryDirections'];
   }
 ): Promise<DraftPlayerSnapshot | null> {
   const candidates = await draftRepository.listAvailableAutoPickCandidates(
@@ -164,7 +160,11 @@ async function selectHighestStatlyZAvailablePlayer(
       statsLookup
     )
   );
-  const zScores = calculateStatlyZScores(projectedCandidates, input.selectedCategories);
+  const zScores = calculateStatlyZScores(
+    projectedCandidates,
+    input.selectedCategories,
+    input.categoryDirections
+  );
 
   return [...candidates].sort((a, b) => {
     const aScore = zScores.get(a.id)?.score;
@@ -612,6 +612,7 @@ export class DraftApplicationService {
         selectedPlayer = await selectHighestStatlyZAvailablePlayer(tx, {
           excludedPlayerIds,
           selectedCategories: draft.settings.selectedCategories,
+          categoryDirections: draft.settings.categoryDirections,
         });
       }
 

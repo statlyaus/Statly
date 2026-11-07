@@ -4,6 +4,8 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import type { CategoryDirection } from '@/server/leagues/scoringTypes';
 import {
   buildAvailableDraftPlayer,
   calculateStatlyZScores,
@@ -147,6 +149,7 @@ async function loadAvailablePlayers(input: {
   leagueId: string;
   limit: number;
   selectedCategories: FantasyCategoryKey[];
+  categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
   statsLookup: DraftPlayerStatsLookup | null;
   cursor?: string;
 }): Promise<{ items: PlayerLite[]; nextCursor: string | null }> {
@@ -192,7 +195,11 @@ async function loadAvailablePlayers(input: {
   const statlyZCohortPlayers = normalizedPlayers.map((player) =>
     buildAvailableDraftPlayer(player, input.statsLookup)
   );
-  const statlyZScores = calculateStatlyZScores(statlyZCohortPlayers, input.selectedCategories);
+  const statlyZScores = calculateStatlyZScores(
+    statlyZCohortPlayers,
+    input.selectedCategories,
+    input.categoryDirections
+  );
   const items = players.map((player) => {
     const draftPlayer = buildAvailableDraftPlayer(player, input.statsLookup);
     const statlyZScore = statlyZScores.get(player.id);
@@ -223,14 +230,25 @@ async function loadAvailablePlayers(input: {
   };
 }
 
-async function loadSelectedCategories(leagueId: string): Promise<FantasyCategoryKey[]> {
+async function loadLeagueCategories(leagueId: string): Promise<{
+  selectedCategories: FantasyCategoryKey[];
+  categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
+}> {
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
-    select: { categoriesJson: true },
+    select: { categoriesJson: true, settings: { select: { categoryDirectionsJson: true } } },
   });
-  const selectedCategories = parseSelectedCategories(league?.categoriesJson);
+  const parsedCategories = parseSelectedCategories(league?.categoriesJson);
+  const selectedCategories =
+    parsedCategories.length > 0 ? parsedCategories : [...REAL_DATA_NINE_CATEGORY_PRESET];
 
-  return selectedCategories.length > 0 ? selectedCategories : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  return {
+    selectedCategories,
+    categoryDirections: normalizeCategoryDirections(
+      selectedCategories,
+      league?.settings?.categoryDirectionsJson
+    ),
+  };
 }
 
 async function loadStatsLookup(leagueId: string): Promise<DraftPlayerStatsLookup | null> {
@@ -273,8 +291,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const playersCursor = url.searchParams.get('playersCursor') || undefined;
     const activityCursor = url.searchParams.get('activityCursor') || undefined;
     const activityBefore = activityCursor ? parseWaiverActivityCursor(activityCursor) : null;
-    const [selectedCategories, statsLookup] = await Promise.all([
-      loadSelectedCategories(leagueId),
+    const [{ selectedCategories, categoryDirections }, statsLookup] = await Promise.all([
+      loadLeagueCategories(leagueId),
       loadStatsLookup(leagueId),
     ]);
 
@@ -300,6 +318,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           limit: playersLimit,
           cursor: playersCursor,
           selectedCategories,
+          categoryDirections,
           statsLookup,
         }),
       ]);

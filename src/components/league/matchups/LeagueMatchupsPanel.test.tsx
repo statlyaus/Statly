@@ -31,6 +31,7 @@ function respond(status: Status) {
                 row('goals', 'Goals', 'G', 14, 11, 'home'),
                 row('tackles', 'Tackles', 'T', 68, 74, 'away'),
                 row('intercepts', 'Intercepts', 'ITC', 58, 58, 'draw'),
+                row('clangers', 'Clangers', 'CL', 40, 44, 'home', 'LOW_WINS'),
               ],
             },
           ],
@@ -45,9 +46,10 @@ function row(
   shortLabel: string,
   homeValue: number,
   awayValue: number,
-  winner: 'home' | 'away' | 'draw'
+  winner: 'home' | 'away' | 'draw',
+  direction: 'HIGH_WINS' | 'LOW_WINS' = 'HIGH_WINS'
 ) {
-  return { category, label, shortLabel, homeValue, awayValue, direction: 'HIGH_WINS', winner };
+  return { category, label, shortLabel, homeValue, awayValue, direction, winner };
 }
 
 async function totalsTable() {
@@ -82,12 +84,37 @@ describe('LeagueMatchupsPanel category totals', () => {
     expect(table.getByTitle('Intercepts')).toHaveTextContent('ITC');
   });
 
+  it('marks a category the lower total wins, and only that one', async () => {
+    authenticatedFetchMock.mockImplementation(respond('LIVE'));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+
+    const table = await totalsTable();
+    expect(table.getByRole('columnheader', { name: /^CL.*lower wins/i })).toBeInTheDocument();
+    expect(table.getByRole('columnheader', { name: /^G$/ })).toBeInTheDocument();
+    expect(table.getAllByText(/lower wins/i)).toHaveLength(1);
+  });
+
   it('shows no result before the matchup starts', async () => {
     authenticatedFetchMock.mockImplementation(respond('SCHEDULED'));
     render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
 
     const table = await totalsTable();
     expect(table.queryByText(/ (won|lost|drawn)$/)).not.toBeInTheDocument();
+  });
+
+  it('shows the start time in the league timezone, labelled', async () => {
+    const scheduled = respond('SCHEDULED');
+    authenticatedFetchMock.mockImplementation(async () => {
+      const response = await scheduled();
+      const body = await response.json();
+      (body.data.matchups[0] as Record<string, unknown>).startsAt = '2026-10-03T09:30:00.000Z';
+      return { ok: true, json: async () => body };
+    });
+    render(
+      <LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" timeZone="Australia/Perth" />
+    );
+
+    expect(await screen.findByText(/^Starts Sat,? 3 Oct,? 5:30\spm AWST$/)).toBeInTheDocument();
   });
 });
 

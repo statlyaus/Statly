@@ -263,6 +263,84 @@ describe('draft players read model route', () => {
     expect(unknownPlayer.avgPoints).toBeUndefined();
   });
 
+  it("returns the league's direction for each selected category", async () => {
+    prismaMocks.draft.findUnique.mockResolvedValueOnce({
+      id: 'cmq29ngg50004ux5s39ya2azu',
+      createdAt: new Date('2026-06-06T10:00:00.000Z'),
+      startedAt: null,
+      completedAt: null,
+      leagueId: 'league-1',
+      league: {
+        categoriesJson: ['goals', 'tackles'],
+        settings: { categoryDirectionsJson: { tackles: 'LOW_WINS', inside50s: 'LOW_WINS' } },
+      },
+    });
+
+    const response = await GET(request(), {
+      params: Promise.resolve({ id: 'cmq29ngg50004ux5s39ya2azu' }),
+    });
+    const body = await response.json();
+
+    expect(body.data.categoryDirections).toEqual({ goals: 'HIGH_WINS', tackles: 'LOW_WINS' });
+  });
+
+  it("scores Statly Z with the league's direction, so more goals lowers Z in a LOW_WINS goals league", async () => {
+    const statsPlayer = (id: string, name: string, team: string, goals: number) => ({
+      id,
+      name,
+      team,
+      position: 'FWD',
+      games: 2,
+      statsSeason: 2026,
+      availableStatSeasons: [2026],
+      statsBySeason: {
+        '2026': {
+          games: 2,
+          dataThrough: '2026-03-15',
+          stats: { goals },
+          basisByStat: { goals: 'TOTAL' },
+        },
+      },
+      stats: {},
+    });
+    prismaMocks.draft.findUnique.mockResolvedValueOnce({
+      id: 'cmq29ngg50004ux5s39ya2azu',
+      createdAt: new Date('2026-06-06T10:00:00.000Z'),
+      startedAt: null,
+      completedAt: null,
+      leagueId: 'league-1',
+      league: {
+        categoriesJson: ['goals'],
+        settings: { categoryDirectionsJson: { goals: 'LOW_WINS' } },
+      },
+    });
+    prismaMocks.player.findMany.mockResolvedValue([
+      { id: 'ace_player', name: 'Ace Player', position: 'FWD', club: 'Adelaide', active: true },
+      { id: 'quiet_player', name: 'Quiet Player', position: 'FWD', club: 'Brisbane', active: true },
+    ]);
+    dataMocks.getPlayers.mockResolvedValue([
+      statsPlayer('ace_player', 'Ace Player', 'Adelaide', 10),
+      statsPlayer('quiet_player', 'Quiet Player', 'Brisbane', 2),
+    ]);
+
+    const response = await GET(request(), {
+      params: Promise.resolve({ id: 'cmq29ngg50004ux5s39ya2azu' }),
+    });
+    const body = await response.json();
+    const byId = Object.fromEntries(
+      body.data.players.map((player: { id: string }) => [player.id, player])
+    );
+
+    expect(byId.ace_player).toMatchObject({
+      statlyZScore: -1,
+      statlyZBreakdown: [{ category: 'goals', value: 5, zScore: -1 }],
+    });
+    expect(byId.quiet_player).toMatchObject({
+      statlyZScore: 1,
+      statlyZBreakdown: [{ category: 'goals', value: 1, zScore: 1 }],
+    });
+  });
+
   it('calculates Statly Z from the full available cohort before pagination and filters', async () => {
     const draftId = 'cmq29ngg50004ux5s39ya2azu';
     const pagePlayer = {

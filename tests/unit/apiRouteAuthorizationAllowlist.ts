@@ -49,30 +49,16 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
   // Public AFL statistics and match read models.
   { route: '/players', reason: 'Public AFL player read model.' },
   { route: '/players/search', reason: 'Public AFL player search.' },
-  { route: '/players/[id]/stats', reason: 'Public AFL player statistics.' },
   { route: '/players/[id]/matches', reason: 'Public AFL player match history.' },
   { route: '/player-stats', reason: 'Public AFL player statistics read model.' },
   { route: '/matches', reason: 'Public AFL match read model.' },
-  { route: '/matches/enhanced', reason: 'Public AFL match read model with derived detail.' },
   { route: '/injuries', reason: 'Public AFL injury list.' },
-  { route: '/weekend-summary', reason: 'Public weekend summary.' },
   { route: '/rankings', reason: 'Public ranking reads.' },
-  {
-    route: '/rankings/suggest',
-    reason: 'Pure computation over supplied input; reads no stored state.',
-  },
 
   // Live-stat ingestion projections, read-only from the application's perspective.
-  { route: '/live-data', reason: 'Reads live AFL stat evidence from the ingestion projection.' },
   {
     route: '/live-player-stats',
     reason: 'Reads live AFL player stats from the ingestion projection.',
-  },
-  { route: '/etl', reason: 'Reads live AFL stat evidence; the ETL writer runs out of band.' },
-  {
-    route: '/ingest-injuries',
-    reason:
-      'Stateless injury-text parser. REVIEW: confirm the `ingest` mode never persists before treating this as settled.',
   },
 
   // Telemetry.
