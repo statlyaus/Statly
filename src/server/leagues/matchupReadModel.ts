@@ -803,6 +803,9 @@ export async function loadLeagueMatchupReadModel({
   };
 }
 
+/** Bounds the scoring write (a league's matchups and members), not the stats fetch before it. */
+const ROUND_SCORING_TRANSACTION_TIMEOUT_MS = 30_000;
+
 export async function recalculateLeagueRoundMatchups({
   leagueId,
   round,
@@ -978,12 +981,9 @@ export async function recalculateLeagueRoundMatchups({
   const resolvedLineupsByMemberId = new Map(
     resolvedLineups.map((lineup) => [lineup.memberId, lineup])
   );
-  const calculatedScores = [];
-
-  for (const matchup of scorableMatchups) {
-    if (!matchup.homeMemberId || !matchup.awayMemberId) {
-      continue;
-    }
+  const finalizedAt = status === 'FINAL' ? new Date() : null;
+  const calculatedScores = scorableMatchups.flatMap((matchup) => {
+    if (!matchup.homeMemberId || !matchup.awayMemberId) return [];
 
     const homeLineup = resolvedLineupsByMemberId.get(matchup.homeMemberId);
     const awayLineup = resolvedLineupsByMemberId.get(matchup.awayMemberId);
@@ -1014,136 +1014,164 @@ export async function recalculateLeagueRoundMatchups({
     });
     const homePointsFor = sumCategoryTotals(homeTotals, settings.categories);
     const awayPointsFor = sumCategoryTotals(awayTotals, settings.categories);
-    const finalizedAt = status === 'FINAL' ? new Date() : null;
-
-    await prisma.$transaction([
-      prisma.leagueMatchup.update({
-        where: { id: matchup.id },
-        data: {
-          status,
-          finalizedAt,
-          winnerMemberId: result.matchupDraw
-            ? null
-            : result.homeMatchupWin
-              ? matchup.homeMemberId
-              : matchup.awayMemberId,
-          homeCategoryWins: result.homeCategoryWins,
-          awayCategoryWins: result.awayCategoryWins,
-          drawnCategories: result.drawnCategories,
-        },
-      }),
-      prisma.leagueMatchupScore.upsert({
-        where: { matchupId_memberId: { matchupId: matchup.id, memberId: matchup.homeMemberId } },
-        create: {
-          leagueId,
-          matchupId: matchup.id,
-          memberId: matchup.homeMemberId,
-          round,
-          categoriesJson: result.categories,
-          categoryWins: result.homeCategoryWins,
-          categoryLosses: result.awayCategoryWins,
-          categoryDraws: result.drawnCategories,
-          pointsFor: homePointsFor,
-          pointsAgainst: awayPointsFor,
-          matchupWin: result.homeMatchupWin,
-          matchupLoss: result.awayMatchupWin,
-          matchupDraw: result.matchupDraw,
-          status,
-          finalizedAt,
-        },
-        update: {
-          categoriesJson: result.categories,
-          categoryWins: result.homeCategoryWins,
-          categoryLosses: result.awayCategoryWins,
-          categoryDraws: result.drawnCategories,
-          pointsFor: homePointsFor,
-          pointsAgainst: awayPointsFor,
-          matchupWin: result.homeMatchupWin,
-          matchupLoss: result.awayMatchupWin,
-          matchupDraw: result.matchupDraw,
-          status,
-          finalizedAt,
-        },
-      }),
-      prisma.leagueMatchupScore.upsert({
-        where: { matchupId_memberId: { matchupId: matchup.id, memberId: matchup.awayMemberId } },
-        create: {
-          leagueId,
-          matchupId: matchup.id,
-          memberId: matchup.awayMemberId,
-          round,
-          categoriesJson: result.categories.map((category) => ({
-            ...category,
-            homeValue: category.awayValue,
-            awayValue: category.homeValue,
-            winner:
-              category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
-          })),
-          categoryWins: result.awayCategoryWins,
-          categoryLosses: result.homeCategoryWins,
-          categoryDraws: result.drawnCategories,
-          pointsFor: awayPointsFor,
-          pointsAgainst: homePointsFor,
-          matchupWin: result.awayMatchupWin,
-          matchupLoss: result.homeMatchupWin,
-          matchupDraw: result.matchupDraw,
-          status,
-          finalizedAt,
-        },
-        update: {
-          categoriesJson: result.categories.map((category) => ({
-            ...category,
-            homeValue: category.awayValue,
-            awayValue: category.homeValue,
-            winner:
-              category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
-          })),
-          categoryWins: result.awayCategoryWins,
-          categoryLosses: result.homeCategoryWins,
-          categoryDraws: result.drawnCategories,
-          pointsFor: awayPointsFor,
-          pointsAgainst: homePointsFor,
-          matchupWin: result.awayMatchupWin,
-          matchupLoss: result.homeMatchupWin,
-          matchupDraw: result.matchupDraw,
-          status,
-          finalizedAt,
-        },
-      }),
-    ]);
-
-    calculatedScores.push({ matchupId: matchup.id, result });
-  }
-
-  if (status === 'FINAL') {
-    if (fixtureVersion > 0) {
-      await prisma.leagueCompetitionRound.update({
-        where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
-        data: { status: 'FINAL', lockedAt: new Date() },
-      });
-    }
-
-    const finalizedScores = await prisma.leagueMatchupScore.findMany({
-      where: {
-        leagueId,
-        status: 'FINAL',
-        matchup: { fixtureVersion, phase: 'REGULAR' },
+    return [
+      {
+        matchupId: matchup.id,
+        homeMemberId: matchup.homeMemberId,
+        awayMemberId: matchup.awayMemberId,
+        result,
+        homePointsFor,
+        awayPointsFor,
       },
-    });
-    const standings = calculateStandingsRows({
-      scoringMode: settings.scoringMode,
-      memberIds: members.map((member) => member.id),
-      finalizedScores,
-    });
+    ];
+  });
 
-    for (const standing of standings) {
-      await prisma.leagueStanding.upsert({
-        where: { leagueId_memberId: { leagueId, memberId: standing.memberId } },
-        create: { leagueId, ...standing },
-        update: standing,
+  // Scores, the round status and the standings are written in one transaction, so a crash or timeout
+  // cannot leave some matchups final while the round and the ladder are stale. The no-op write on the
+  // league row (as in joinLeague) makes a second run for the same league wait for this one, so two
+  // runs cannot interleave their standings.
+  const finalized = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`UPDATE "League" SET "ownerId" = "ownerId" WHERE "id" = ${leagueId}`;
+
+      for (const scored of calculatedScores) {
+        await tx.leagueMatchup.update({
+          where: { id: scored.matchupId },
+          data: {
+            status,
+            finalizedAt,
+            winnerMemberId: scored.result.matchupDraw
+              ? null
+              : scored.result.homeMatchupWin
+                ? scored.homeMemberId
+                : scored.awayMemberId,
+            homeCategoryWins: scored.result.homeCategoryWins,
+            awayCategoryWins: scored.result.awayCategoryWins,
+            drawnCategories: scored.result.drawnCategories,
+          },
+        });
+        await tx.leagueMatchupScore.upsert({
+          where: {
+            matchupId_memberId: { matchupId: scored.matchupId, memberId: scored.homeMemberId },
+          },
+          create: {
+            leagueId,
+            matchupId: scored.matchupId,
+            memberId: scored.homeMemberId,
+            round,
+            categoriesJson: scored.result.categories,
+            categoryWins: scored.result.homeCategoryWins,
+            categoryLosses: scored.result.awayCategoryWins,
+            categoryDraws: scored.result.drawnCategories,
+            pointsFor: scored.homePointsFor,
+            pointsAgainst: scored.awayPointsFor,
+            matchupWin: scored.result.homeMatchupWin,
+            matchupLoss: scored.result.awayMatchupWin,
+            matchupDraw: scored.result.matchupDraw,
+            status,
+            finalizedAt,
+          },
+          update: {
+            categoriesJson: scored.result.categories,
+            categoryWins: scored.result.homeCategoryWins,
+            categoryLosses: scored.result.awayCategoryWins,
+            categoryDraws: scored.result.drawnCategories,
+            pointsFor: scored.homePointsFor,
+            pointsAgainst: scored.awayPointsFor,
+            matchupWin: scored.result.homeMatchupWin,
+            matchupLoss: scored.result.awayMatchupWin,
+            matchupDraw: scored.result.matchupDraw,
+            status,
+            finalizedAt,
+          },
+        });
+        await tx.leagueMatchupScore.upsert({
+          where: {
+            matchupId_memberId: { matchupId: scored.matchupId, memberId: scored.awayMemberId },
+          },
+          create: {
+            leagueId,
+            matchupId: scored.matchupId,
+            memberId: scored.awayMemberId,
+            round,
+            categoriesJson: scored.result.categories.map((category) => ({
+              ...category,
+              homeValue: category.awayValue,
+              awayValue: category.homeValue,
+              winner:
+                category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
+            })),
+            categoryWins: scored.result.awayCategoryWins,
+            categoryLosses: scored.result.homeCategoryWins,
+            categoryDraws: scored.result.drawnCategories,
+            pointsFor: scored.awayPointsFor,
+            pointsAgainst: scored.homePointsFor,
+            matchupWin: scored.result.awayMatchupWin,
+            matchupLoss: scored.result.homeMatchupWin,
+            matchupDraw: scored.result.matchupDraw,
+            status,
+            finalizedAt,
+          },
+          update: {
+            categoriesJson: scored.result.categories.map((category) => ({
+              ...category,
+              homeValue: category.awayValue,
+              awayValue: category.homeValue,
+              winner:
+                category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
+            })),
+            categoryWins: scored.result.awayCategoryWins,
+            categoryLosses: scored.result.homeCategoryWins,
+            categoryDraws: scored.result.drawnCategories,
+            pointsFor: scored.awayPointsFor,
+            pointsAgainst: scored.homePointsFor,
+            matchupWin: scored.result.awayMatchupWin,
+            matchupLoss: scored.result.homeMatchupWin,
+            matchupDraw: scored.result.matchupDraw,
+            status,
+            finalizedAt,
+          },
+        });
+      }
+
+      if (status !== 'FINAL') return null;
+
+      if (fixtureVersion > 0) {
+        await tx.leagueCompetitionRound.update({
+          where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
+          data: { status: 'FINAL', lockedAt: new Date() },
+        });
+      }
+
+      const finalizedScores = await tx.leagueMatchupScore.findMany({
+        where: {
+          leagueId,
+          status: 'FINAL',
+          matchup: { fixtureVersion, phase: 'REGULAR' },
+        },
       });
-    }
+      const standings = calculateStandingsRows({
+        scoringMode: settings.scoringMode,
+        memberIds: members.map((member) => member.id),
+        finalizedScores,
+      });
 
+      for (const standing of standings) {
+        await tx.leagueStanding.upsert({
+          where: { leagueId_memberId: { leagueId, memberId: standing.memberId } },
+          create: { leagueId, ...standing },
+          update: standing,
+        });
+      }
+
+      return { finalizedScores, standings };
+    },
+    { timeout: ROUND_SCORING_TRANSACTION_TIMEOUT_MS }
+  );
+
+  // Finals fixtures follow from the committed standings; a later recalculation re-syncs them.
+  if (finalized) {
+    const { finalizedScores, standings } = finalized;
     const finalsTeams = settings.competitionRules.finalsTeams;
     const isSupportedFinalsTeamCount = (value: number): value is FinalsTeamCount =>
       value === 4 || value === 6 || value === 8;
@@ -1191,7 +1219,7 @@ export async function recalculateLeagueRoundMatchups({
     round,
     status,
     recalculated: calculatedScores.length,
-    scores: calculatedScores,
+    scores: calculatedScores.map(({ matchupId, result }) => ({ matchupId, result })),
     roundStatus,
   };
 }
