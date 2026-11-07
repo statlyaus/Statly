@@ -12,19 +12,7 @@ import {
 } from '@/types/basketball';
 
 import type { SummaryError } from '../shell/formParts';
-
-/**
- * Defaults for a new league. Change these each NBA season: week one starts on the Monday of the
- * season's first week (Yahoo's default) and the regular season ends on the NBA's last regular-season
- * day.
- */
-export const NEW_LEAGUE_DEFAULTS = {
-  platform: 'YAHOO' as BasketballPlatform,
-  format: 'H2H_MOST_CATEGORIES' as BasketballScoringFormat,
-  teamCount: 12,
-  weekOneStartsOn: '2026-10-19',
-  regularSeasonEndsOn: '2027-04-11',
-};
+import { NEW_LEAGUE_DEFAULTS } from './newLeagueDefaults';
 
 export type LeagueFormMode = 'create' | 'edit';
 
@@ -172,6 +160,25 @@ export function fieldKeyOf(path: string): string {
 export function fieldIdOf(key: string): string {
   return `bb-league-${key.replace('.', '-')}`;
 }
+
+/** The id of each form control, for labels, error links and the error summary. */
+export const LEAGUE_FIELD_IDS = {
+  name: fieldIdOf('name'),
+  platform: fieldIdOf('platform'),
+  format: fieldIdOf('format'),
+  categories: fieldIdOf('categories'),
+  punts: fieldIdOf('puntCategories'),
+  teamCount: fieldIdOf('teamCount'),
+  myTeamName: fieldIdOf('myTeamName'),
+  otherTeamNames: fieldIdOf('otherTeamNames'),
+  rosterSlots: fieldIdOf('rosterSlots'),
+  weekOne: fieldIdOf('weekOneStartsOn'),
+  seasonEnd: fieldIdOf('regularSeasonEndsOn'),
+  twoWeek: fieldIdOf('twoWeekMatchups'),
+  budget: fieldIdOf('auctionBudget'),
+};
+
+export type LeagueFieldIds = typeof LEAGUE_FIELD_IDS;
 
 /** Field errors grouped by control, with a list-item prefix where the API names an entry. */
 export function groupFieldErrors(fieldErrors: FieldErrors, values: LeagueFormValues): FieldErrors {
