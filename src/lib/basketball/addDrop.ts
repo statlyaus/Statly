@@ -69,11 +69,15 @@ function categoriesWon(categories: readonly CategoryComparison[]): number {
 }
 
 /**
- * Drops `dropPlayerId` (or nobody) and adds each free agent from `addFrom`, re-running the lineup
+ * Drops `dropPlayerId` and adds each free agent from `addFrom`, re-running the lineup
  * simulator over the remaining days: the add starts only where he fits by value and position, and
  * may push a lower-valued teammate out. The drop loses every remaining day. `remainingDays` must
  * list the free agents among the players whose teams play. Filtering free agents (minutes,
  * injuries, ownership) is the caller's job.
+ *
+ * `dropPlayerId: null` drops nobody: on a full roster that models an extra roster spot. A caller
+ * ranking pickups for a full roster must pass a real drop, such as the lowest-valued droppable
+ * player.
  */
 export function planAddDrop(input: {
   categories: readonly BasketballCategoryId[];
