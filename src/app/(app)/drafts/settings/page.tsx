@@ -108,8 +108,8 @@ export default function DraftSettingsPage() {
     return (
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign in Required</h1>
-            <p className="text-gray-600">Please sign in to manage your draft settings.</p>
+            <h1 className="text-2xl font-bold text-foreground mb-4">Sign in Required</h1>
+            <p className="text-muted-foreground">Please sign in to manage your draft settings.</p>
           </div>
         </div>
     );
@@ -118,30 +118,30 @@ export default function DraftSettingsPage() {
   return (
       <div className="mx-auto max-w-4xl p-6">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Draft Settings</h1>
-          <p className="text-gray-600 mt-2">Customize your draft experience and preferences.</p>
+          <h1 className="text-3xl font-bold text-foreground">Draft Settings</h1>
+          <p className="text-muted-foreground mt-2">Customize your draft experience and preferences.</p>
         </header>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading settings...</span>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-bar"></div>
+            <span className="ml-3 text-muted-foreground">Loading settings...</span>
           </div>
         ) : (
           <div className="space-y-8">
             {/* Auto-Pick Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Auto-Pick Settings</h2>
+            <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">Auto-Pick Settings</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <label
                       htmlFor="auto-pick-enabled"
-                      className="text-sm font-medium text-gray-700"
+                      className="text-sm font-medium text-foreground"
                     >
                       Enable Auto-Pick
                     </label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       Automatically pick players when your time runs out
                     </p>
                   </div>
@@ -152,7 +152,7 @@ export default function DraftSettingsPage() {
                     onChange={(e) =>
                       setPreferences((prev) => ({ ...prev, autoPickEnabled: e.target.checked }))
                     }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-brand-bar focus:ring-ring border-input rounded"
                   />
                 </div>
 
@@ -160,7 +160,7 @@ export default function DraftSettingsPage() {
                   <div>
                     <label
                       htmlFor="auto-pick-time"
-                      className="block text-sm font-medium text-gray-700 mb-2"
+                      className="block text-sm font-medium text-foreground mb-2"
                     >
                       Auto-Pick Time (seconds)
                     </label>
@@ -173,7 +173,7 @@ export default function DraftSettingsPage() {
                           autoPickTime: parseInt(e.target.value),
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:ring-2 focus:ring-ring focus:border-transparent"
                     >
                       <option value={30}>30 seconds</option>
                       <option value={60}>1 minute</option>
@@ -187,18 +187,18 @@ export default function DraftSettingsPage() {
             </div>
 
             {/* Notification Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Notification Settings</h2>
+            <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">Notification Settings</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <label
                       htmlFor="notifications-enabled"
-                      className="text-sm font-medium text-gray-700"
+                      className="text-sm font-medium text-foreground"
                     >
                       Enable Notifications
                     </label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       Receive browser notifications during drafts
                     </p>
                   </div>
@@ -212,16 +212,16 @@ export default function DraftSettingsPage() {
                         notificationsEnabled: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-brand-bar focus:ring-ring border-input rounded"
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <label htmlFor="sound-enabled" className="text-sm font-medium text-gray-700">
+                    <label htmlFor="sound-enabled" className="text-sm font-medium text-foreground">
                       Enable Sound
                     </label>
-                    <p className="text-sm text-gray-500">Play sounds for draft events</p>
+                    <p className="text-sm text-muted-foreground">Play sounds for draft events</p>
                   </div>
                   <input
                     id="sound-enabled"
@@ -230,20 +230,20 @@ export default function DraftSettingsPage() {
                     onChange={(e) =>
                       setPreferences((prev) => ({ ...prev, soundEnabled: e.target.checked }))
                     }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-brand-bar focus:ring-ring border-input rounded"
                   />
                 </div>
               </div>
             </div>
 
             {/* Default Draft Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Default Draft Settings</h2>
+            <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">Default Draft Settings</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label
                     htmlFor="default-time-per-pick"
-                    className="block text-sm font-medium text-gray-700 mb-2"
+                    className="block text-sm font-medium text-foreground mb-2"
                   >
                     Default Time Per Pick
                   </label>
@@ -256,7 +256,7 @@ export default function DraftSettingsPage() {
                         defaultTimePerPick: parseInt(e.target.value),
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:ring-2 focus:ring-ring focus:border-transparent"
                   >
                     <option value={60}>1 minute</option>
                     <option value={90}>1.5 minutes</option>
@@ -269,7 +269,7 @@ export default function DraftSettingsPage() {
                 <div>
                   <label
                     htmlFor="preferred-draft-type"
-                    className="block text-sm font-medium text-gray-700 mb-2"
+                    className="block text-sm font-medium text-foreground mb-2"
                   >
                     Preferred Draft Type
                   </label>
@@ -282,7 +282,7 @@ export default function DraftSettingsPage() {
                         preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR',
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:ring-2 focus:ring-ring focus:border-transparent"
                   >
                     <option value="SNAKE">Snake Draft</option>
                     <option value="LINEAR">Linear Draft</option>
@@ -296,8 +296,8 @@ export default function DraftSettingsPage() {
               <div
                 className={`p-4 rounded-lg ${
                   message.type === 'success'
-                    ? 'bg-green-50 border border-green-200 text-green-700'
-                    : 'bg-red-50 border border-red-200 text-red-700'
+                    ? 'bg-[color:var(--league-success-soft)] border border-[color:var(--league-success)] text-[color:var(--league-success)]'
+                    : 'bg-[color:var(--league-danger-soft)] border border-[color:var(--league-danger)] text-[color:var(--league-danger)]'
                 }`}
               >
                 {message.text}
@@ -305,10 +305,10 @@ export default function DraftSettingsPage() {
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between pt-6 border-t border-border">
               <button
                 onClick={handleReset}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-foreground border border-input rounded-md hover:bg-muted transition-colors"
               >
                 Reset to Defaults
               </button>
@@ -316,14 +316,14 @@ export default function DraftSettingsPage() {
               <div className="flex space-x-3">
                 <button
                   onClick={() => window.history.back()}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 text-foreground border border-input rounded-md hover:bg-muted transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="px-6 py-2 bg-brand-bar text-brand-bar-foreground rounded-md hover:bg-brand-bar/90 disabled:opacity-50 transition-colors"
                 >
                   {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>
