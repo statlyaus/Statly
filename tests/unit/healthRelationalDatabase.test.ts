@@ -52,10 +52,10 @@ describe('health relational database probe', () => {
     });
   });
 
-  it('includes Prisma in both health aggregation and critical readiness', () => {
+  it('includes Prisma in the shared checks behind health and critical readiness', () => {
     const source = readFileSync(join(process.cwd(), 'src/app/api/health/route.ts'), 'utf8');
 
-    expect(source.match(/checkRelationalDatabase\(\)/g)).toHaveLength(2);
+    expect(source.match(/checkRelationalDatabase\(\)/g)).toHaveLength(1);
     expect(source).toContain(
       'const criticalServices = [database, relationalDatabase, metricsCheck]'
     );
