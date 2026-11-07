@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
+import type { Prisma } from '@prisma/client';
+
 import { dateOnlyToString, stringToDateOnly } from '@/lib/basketball/fantasyWeeks';
 
 import {
@@ -23,6 +27,7 @@ import {
 export const NBA_TEAM_COUNT = 30;
 export const MIN_ROSTERED_PLAYERS = 300;
 export const MAX_ROSTERED_PLAYERS = 700;
+const CREATE_CHUNK = 500;
 
 export interface NbaPlayersSummary {
   teams: number;
@@ -95,8 +100,8 @@ export async function syncNbaPlayers(
     const { players, duplicates } = await fetchRosteredPlayers(provider, teams);
 
     // Every check has passed; writes start here. They are idempotent, so a crash part-way is
-    // repaired by the next run. ponytail: no single transaction (≈550 rows); add one if a reader
-    // ever needs the roster set to change atomically.
+    // repaired by the next run. ponytail: teams, updates and releases are not one transaction with
+    // the creates; add one if a reader ever needs the roster set to change atomically.
     const teamIds = await upsertTeams(prisma, teams);
     const known = await prisma.nbaPlayerIdentity.findMany({
       where: { provider: provider.id },
@@ -120,7 +125,10 @@ export async function syncNbaPlayers(
       known.map((identity) => [identity.externalId, identity.player])
     );
 
-    let created = 0;
+    const toCreate: Array<{
+      player: Prisma.NbaPlayerCreateManyInput & { id: string };
+      externalId: string;
+    }> = [];
     let updated = 0;
     for (const player of players) {
       const data = {
@@ -134,13 +142,7 @@ export async function syncNbaPlayers(
       };
       const existing = knownByExternalId.get(player.externalId);
       if (!existing) {
-        await prisma.nbaPlayer.create({
-          data: {
-            ...data,
-            identities: { create: { provider: provider.id, externalId: player.externalId } },
-          },
-        });
-        created += 1;
+        toCreate.push({ player: { id: randomUUID(), ...data }, externalId: player.externalId });
         continue;
       }
       const unchanged =
@@ -157,6 +159,27 @@ export async function syncNbaPlayers(
       }
     }
 
+    // New players (about 530 on the first run) go in with their identities in one transaction, a
+    // few statements per chunk, so no player is ever left without its provider identity.
+    if (toCreate.length > 0) {
+      await prisma.$transaction(
+        async (tx) => {
+          for (let index = 0; index < toCreate.length; index += CREATE_CHUNK) {
+            const chunk = toCreate.slice(index, index + CREATE_CHUNK);
+            await tx.nbaPlayer.createMany({ data: chunk.map(({ player }) => player) });
+            await tx.nbaPlayerIdentity.createMany({
+              data: chunk.map(({ player, externalId }) => ({
+                playerId: player.id,
+                provider: provider.id,
+                externalId,
+              })),
+            });
+          }
+        },
+        { timeout: 60_000 }
+      );
+    }
+
     const rostered = new Set(players.map((player) => player.externalId));
     const released = known
       .filter((identity) => identity.player.active && !rostered.has(identity.externalId))
@@ -171,7 +194,7 @@ export async function syncNbaPlayers(
     return {
       teams: teams.length,
       players: players.length,
-      created,
+      created: toCreate.length,
       updated,
       deactivated: released.length,
       duplicates,

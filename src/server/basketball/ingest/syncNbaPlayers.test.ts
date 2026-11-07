@@ -67,6 +67,35 @@ describe('syncNbaPlayers', () => {
     expect(forbiddenWrites).toEqual([]);
   });
 
+  it('creates new players and their identities in batches inside one transaction', async () => {
+    const { prisma, transactionCalls } = fakeIngestPrisma(
+      {
+        nbaTeam: {
+          upsert: (async ({ where }: { where: { code: string } }) => ({
+            id: `team-${where.code}`,
+          })) as never,
+        },
+      },
+      { transaction: () => ({ count: 0 }) }
+    );
+    const provider = fakeProvider({ fetchTeams: async () => teams, fetchTeamRoster: rosterOf(12) });
+
+    const { summary } = await syncNbaPlayers({ prisma, provider, season: 2027 });
+
+    expect(summary).toMatchObject({ players: 360, created: 360, updated: 0 });
+    expect(transactionCalls.map(({ model, method }) => `${model}.${method}`)).toEqual([
+      'nbaPlayer.createMany',
+      'nbaPlayerIdentity.createMany',
+    ]);
+    const [players, identities] = transactionCalls.map(
+      ({ args }) => (args as { data: Array<Record<string, string>> }).data
+    );
+    expect(players).toHaveLength(360);
+    expect(identities).toHaveLength(360);
+    expect(identities[0]).toEqual({ playerId: players[0].id, provider: 'fake', externalId: '1-0' });
+    expect(players[0]).toMatchObject({ fullName: 'Player 1-0', teamId: 'team-T00', active: true });
+  });
+
   it('rejects a roster fetch failure before writing', async () => {
     const { prisma, forbiddenWrites } = fakeIngestPrisma();
     const provider = fakeProvider({
