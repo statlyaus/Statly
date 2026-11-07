@@ -79,10 +79,7 @@ describe('blendProjection', () => {
   });
 
   it('uses this season alone from 15 games on', () => {
-    const result = blendProjection(
-      totals(22, 34, { points: 30 }),
-      totals(60, 20, { points: 12 })
-    );
+    const result = blendProjection(totals(22, 34, { points: 30 }), totals(60, 20, { points: 12 }));
     expect(result?.weightThisSeason).toBe(1);
     expect(result?.perGame.points).toBeCloseTo(30, 10);
     expect(result?.minutesPerGame).toBeCloseTo(34, 10);

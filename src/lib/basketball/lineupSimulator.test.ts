@@ -68,11 +68,7 @@ describe('eligibleSlots', () => {
 
 describe('simulateLineups', () => {
   it('starts the most valuable players with a game, then fills from the bench', () => {
-    const roster = [
-      entry('star', ['PG'], 9),
-      entry('bench', ['SG'], 1),
-      entry('idle', ['SG'], 8),
-    ];
+    const roster = [entry('star', ['PG'], 9), entry('bench', ['SG'], 1), entry('idle', ['SG'], 8)];
     // One PG and one G slot: "idle" has no game, so "bench" fills the G slot.
     expect(startersOn(roster, slots({ PG: 1, G: 1, BN: 1 }), ['star', 'bench'])).toEqual([
       'star',
@@ -101,11 +97,7 @@ describe('simulateLineups', () => {
   });
 
   it('puts an unknown position in UTIL only', () => {
-    const roster = [
-      entry('mystery', [], 10),
-      entry('pg1', ['PG'], 5),
-      entry('pg2', ['PG'], 4),
-    ];
+    const roster = [entry('mystery', [], 10), entry('pg1', ['PG'], 5), entry('pg2', ['PG'], 4)];
     expect(startersOn(roster, slots({ PG: 1, UTIL: 1 }), ['mystery', 'pg1', 'pg2'])).toEqual([
       'mystery',
       'pg1',

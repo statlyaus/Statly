@@ -118,10 +118,7 @@ export function auctionValues(
   const totals = values.map((value) => value.total).sort((a, b) => b - a);
   const drafted = settings.teamCount * settings.rosterSpots;
   const replacement = totals[Math.min(drafted, totals.length - 1)];
-  const aboveReplacement = totals.reduce(
-    (sum, total) => sum + Math.max(0, total - replacement),
-    0
-  );
+  const aboveReplacement = totals.reduce((sum, total) => sum + Math.max(0, total - replacement), 0);
   const dollarsAboveMinimum = settings.teamCount * settings.budget - drafted;
 
   return Object.fromEntries(

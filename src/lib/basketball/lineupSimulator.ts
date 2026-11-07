@@ -61,8 +61,8 @@ export function eligibleSlots(positions: readonly string[]): BasketballRosterSlo
 }
 
 function starterSlotList(slots: BasketballRosterSlotCounts): BasketballRosterSlot[] {
-  return BASKETBALL_ROSTER_SLOTS.filter((slot) => slot !== 'BN' && slot !== 'IL').flatMap(
-    (slot) => Array.from({ length: Math.max(0, slots[slot]) }, () => slot)
+  return BASKETBALL_ROSTER_SLOTS.filter((slot) => slot !== 'BN' && slot !== 'IL').flatMap((slot) =>
+    Array.from({ length: Math.max(0, slots[slot]) }, () => slot)
   );
 }
 
@@ -94,7 +94,12 @@ function chooseStarters(
   };
 
   return candidates.flatMap((candidate, index) =>
-    assign(index, slotList.map(() => false)) ? [candidate.playerId] : []
+    assign(
+      index,
+      slotList.map(() => false)
+    )
+      ? [candidate.playerId]
+      : []
   );
 }
 
