@@ -25,8 +25,10 @@ export function TakenPlayersNotice({
       role="status"
       className={`rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-sm text-foreground ${className}`}
     >
-      Only {check.taken} {check.taken === 1 ? 'player is' : 'players are'} marked as taken in this
-      league, so some suggestions may already be on other teams.{' '}
+      {check.taken === 0
+        ? 'No players are'
+        : `Only ${check.taken} ${check.taken === 1 ? 'player is' : 'players are'}`}{' '}
+      marked as taken in this league, so some suggestions may already be on other teams.{' '}
       <Link
         href={`${basketballLeagueHref(leagueId, 'roster')}#${OTHER_TEAMS_ANCHOR}`}
         className="font-semibold underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"

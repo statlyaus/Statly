@@ -98,6 +98,16 @@ describe('OverviewInsights', () => {
       <OverviewInsights
         matchup={readyMatchup}
         pickups={readyPickups}
+        taken={{ taken: 0, expected: 80, enough: false }}
+        leagueId="l1"
+      />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/^No players are marked as taken/);
+
+    rerender(
+      <OverviewInsights
+        matchup={readyMatchup}
+        pickups={readyPickups}
         taken={ENOUGH_TAKEN}
         leagueId="l1"
       />

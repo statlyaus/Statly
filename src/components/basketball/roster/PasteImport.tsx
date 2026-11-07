@@ -12,6 +12,7 @@ import { PasteReview } from './PasteReview';
 /**
  * Paste a roster copied from Yahoo or ESPN: the server reads a name from each line and proposes
  * players (no write), the user reviews every line, and only the confirmed players are added.
+ * `compact` suits a whole league's paste: a bigger box and a review that counts lines.
  */
 export function PasteImport({
   leagueId,
@@ -19,6 +20,9 @@ export function PasteImport({
   targetLabel,
   disabled,
   onConfirm,
+  compact = false,
+  label = 'Paste players, one per line',
+  help = 'Copy a roster from Yahoo or ESPN. Slots, positions, team codes and injury tags are ignored.',
 }: {
   leagueId: string;
   targetTeamId: string | null;
@@ -26,6 +30,9 @@ export function PasteImport({
   disabled: boolean;
   /** Adds the confirmed players; resolves to an error message, or null when they were added. */
   onConfirm: (playerIds: string[]) => Promise<string | null>;
+  compact?: boolean;
+  label?: string;
+  help?: string;
 }) {
   const id = useId();
   const [text, setText] = useState('');
@@ -65,9 +72,16 @@ export function PasteImport({
     return (
       <div className="flex flex-col gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Check the players before adding</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {targetTeamId === null
+              ? 'Check the players before marking them as taken'
+              : 'Check the players before adding'}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            Nothing is saved until you confirm. Adding a player who is on another team moves him.
+            Nothing is saved until you confirm.{' '}
+            {targetTeamId === null
+              ? 'Players already on a team you entered are left alone.'
+              : 'Adding a player who is on another team moves him.'}
           </p>
         </div>
         {error ? (
@@ -80,6 +94,7 @@ export function PasteImport({
           lines={lines}
           targetTeamId={targetTeamId}
           targetLabel={targetLabel}
+          compact={compact}
           busy={pending || disabled}
           onConfirm={(playerIds) => void confirm(playerIds)}
           onCancel={() => {
@@ -100,14 +115,14 @@ export function PasteImport({
       }}
     >
       <label htmlFor={id} className="text-sm font-semibold text-foreground">
-        Paste players, one per line
+        {label}
       </label>
       <p id={`${id}-help`} className="text-xs text-muted-foreground">
-        Copy a roster from Yahoo or ESPN. Slots, positions, team codes and injury tags are ignored.
+        {help}
       </p>
       <textarea
         id={id}
-        rows={5}
+        rows={compact ? 10 : 5}
         value={text}
         onChange={(event) => setText(event.target.value)}
         aria-invalid={error ? true : undefined}

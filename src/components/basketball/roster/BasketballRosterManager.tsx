@@ -7,6 +7,7 @@ import { badgeStyles, buttonStyles, fieldStyles } from '@/components/ui/controlS
 import type { FantasyWeekRange } from '@/lib/basketball/fantasyWeeks';
 import type {
   BasketballLeagueDetail,
+  BasketballRosterSkip,
   BasketballRosterSpotDto,
   NbaPlayerSearchResult,
 } from '@/server/basketball/leagues/basketballLeagueDto';
@@ -17,9 +18,13 @@ import {
   formatEasternDate,
   formatWeekLabel,
 } from '../shell/basketballFormat';
+import { OTHER_TEAMS_ANCHOR } from '../shell/TakenPlayersNotice';
+import { takenPlayersCheck } from '../shell/takenPlayers';
 import { OpponentPicker } from './OpponentPicker';
+import { OtherTeamsSection } from './OtherTeamsSection';
 import { PasteImport } from './PasteImport';
 import { PlayerSearchAdd } from './PlayerSearchAdd';
+import { RosterChecklist } from './RosterChecklist';
 import {
   ELSEWHERE,
   TeamRosterList,
@@ -33,15 +38,42 @@ interface Notice {
   undo?: { label: string; run: () => void };
 }
 
+/** The league the server read back, plus what an add skipped or a clear removed. */
+type CommandResult = BasketballLeagueDetail & {
+  skipped?: BasketballRosterSkip[];
+  removed?: number;
+};
+
 interface RunCommand {
   playerId: string | null;
   url: string;
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
-  success: string;
+  /** Said once the server confirms; a function reads what the server reported. */
+  success: string | ((result: CommandResult) => string);
   /** Element to focus afterwards, when the control used has gone (a moved or removed player). */
   focusAfter?: string;
   undo?: Notice['undo'];
+}
+
+const playerCount = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
+
+/** "Skipped 1 on a team you entered: Marcus Hale (Dev Dunkers)." or ''. */
+function skippedMessage(skipped: BasketballRosterSkip[] = []): string {
+  if (skipped.length === 0) return '';
+  const named = skipped.slice(0, 3).map((skip) => `${skip.fullName} (${skip.teamName})`);
+  const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : '';
+  return ` Skipped ${skipped.length} on ${skipped.length === 1 ? 'a team' : 'teams'} you entered: ${named.join(', ')}${more}.`;
+}
+
+/** What an add confirmed: players marked as taken (team null) or added to a team, and any skipped. */
+function addedMessage(sent: number, teamLabel: string | null, result: CommandResult): string {
+  const saved = sent - (result.skipped?.length ?? 0);
+  const done =
+    teamLabel === null
+      ? `Marked ${playerCount(saved)} as taken.`
+      : `Added ${playerCount(saved)} to ${teamLabel}.`;
+  return `${done}${skippedMessage(result.skipped)}`.trim();
 }
 
 interface TeamGroup {
@@ -117,7 +149,7 @@ export function BasketballRosterManager({
     setBusy({ playerId: command.playerId });
     setError(null);
     setNotice(null);
-    const result = await callBasketballApi<BasketballLeagueDetail>(
+    const result = await callBasketballApi<CommandResult>(
       command.url,
       command.method,
       command.body
@@ -129,8 +161,11 @@ export function BasketballRosterManager({
       setError(message);
       return message;
     }
-    setLeague(result.data);
-    setNotice({ message: command.success, undo: command.undo });
+    const { skipped: _skipped, removed: _removed, ...saved } = result.data;
+    setLeague(saved);
+    const message =
+      typeof command.success === 'function' ? command.success(result.data) : command.success;
+    setNotice({ message, undo: command.undo });
     router.refresh();
     const { focusAfter } = command;
     if (focusAfter) requestAnimationFrame(() => document.getElementById(focusAfter)?.focus());
@@ -206,18 +241,35 @@ export function BasketballRosterManager({
       url: `${base}/roster`,
       method: 'POST',
       body: { entries: [{ playerId: player.id, teamId: targetTeamId }] },
-      success: `Added ${player.fullName} to ${targetLabel}.`,
+      success: (result) =>
+        result.skipped?.length
+          ? `Left ${player.fullName} on ${result.skipped[0].teamName}, a team you entered. Use Move to change his team.`
+          : targetTeamId === null
+            ? `Marked ${player.fullName} as taken.`
+            : `Added ${player.fullName} to ${targetLabel}.`,
     });
     return message === null;
   }
 
-  async function addFromPaste(playerIds: string[]): Promise<string | null> {
-    return run({
+  function addPlayers(teamId: string | null) {
+    return (playerIds: string[]): Promise<string | null> =>
+      run({
+        playerId: null,
+        url: `${base}/roster`,
+        method: 'POST',
+        body: { entries: playerIds.map((playerId) => ({ playerId, teamId })) },
+        success: (result) =>
+          addedMessage(playerIds.length, teamId === null ? null : teamName(teamId), result),
+      });
+  }
+
+  function clearTaken() {
+    void run({
       playerId: null,
-      url: `${base}/roster`,
-      method: 'POST',
-      body: { entries: playerIds.map((playerId) => ({ playerId, teamId: targetTeamId })) },
-      success: `Added ${playerIds.length} ${playerIds.length === 1 ? 'player' : 'players'} to ${targetLabel}.`,
+      url: `${base}/roster/elsewhere`,
+      method: 'DELETE',
+      success: (result) => `Cleared ${playerCount(result.removed ?? 0)} marked as taken.`,
+      focusAfter: headingId(ELSEWHERE),
     });
   }
 
@@ -239,6 +291,32 @@ export function BasketballRosterManager({
         }));
   }
 
+  const teamSize = (teamId: string) =>
+    league.rosterSpots.filter((spot) => spot.teamId === teamId).length;
+  const taken = takenPlayersCheck(league, opponentTeamId);
+  const checklist = [
+    {
+      title: 'Add your team',
+      detail: playerCount(teamSize(league.myTeamId)),
+      done: teamSize(league.myTeamId) > 0,
+      href: '#add-players',
+    },
+    {
+      title: "Add this week's opponent",
+      detail: opponentTeamId
+        ? `${teamName(opponentTeamId)}: ${playerCount(teamSize(opponentTeamId))}`
+        : 'Not set',
+      done: opponentTeamId !== null && teamSize(opponentTeamId) > 0,
+      href: '#opponent',
+    },
+    {
+      title: 'Paste the players on other teams',
+      detail: `${taken.taken} of about ${taken.expected} marked as taken`,
+      done: taken.enough,
+      href: `#${OTHER_TEAMS_ANCHOR}`,
+    },
+  ];
+
   const rosteredOn = (playerId: string) => {
     const spot = league.rosterSpots.find((candidate) => candidate.playerId === playerId);
     return spot ? teamName(spot.teamId) : null;
@@ -246,6 +324,7 @@ export function BasketballRosterManager({
 
   return (
     <div className="flex flex-col gap-6">
+      <RosterChecklist steps={checklist} />
       <div aria-live="polite" className="empty:hidden">
         {notice ? (
           <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-result-win/30 bg-result-win/5 px-3 py-1.5">
@@ -277,7 +356,7 @@ export function BasketballRosterManager({
         <section
           id="opponent"
           aria-labelledby="bb-opponent-title"
-          className="rounded-lg border border-border bg-card p-4"
+          className="scroll-mt-24 rounded-lg border border-border bg-card p-4"
         >
           <h2
             id="bb-opponent-title"
@@ -297,8 +376,9 @@ export function BasketballRosterManager({
         </section>
 
         <section
+          id="add-players"
           aria-labelledby="bb-add-title"
-          className="rounded-lg border border-border bg-card p-4"
+          className="scroll-mt-24 rounded-lg border border-border bg-card p-4"
         >
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <h2 id="bb-add-title" className="font-display text-lg font-bold text-foreground">
@@ -341,7 +421,7 @@ export function BasketballRosterManager({
                 targetTeamId={targetTeamId}
                 targetLabel={targetLabel}
                 disabled={disabled}
-                onConfirm={addFromPaste}
+                onConfirm={addPlayers(targetTeamId)}
               />
             </div>
           </details>
@@ -349,7 +429,20 @@ export function BasketballRosterManager({
       </div>
 
       {groups.map((group) =>
-        group.teamId === null && group.spots.length === 0 ? null : (
+        group.teamId === null ? (
+          <OtherTeamsSection
+            key={group.key}
+            leagueId={league.id}
+            headingId={headingId(group.key)}
+            spots={group.spots}
+            destinations={destinations}
+            busyPlayerId={busy?.playerId ?? null}
+            disabled={disabled}
+            actions={actions}
+            onPasteConfirm={addPlayers(null)}
+            onClear={clearTaken}
+          />
+        ) : (
           <section
             key={group.key}
             aria-labelledby={headingId(group.key)}
@@ -377,11 +470,6 @@ export function BasketballRosterManager({
                 {group.spots.length} {group.spots.length === 1 ? 'player' : 'players'}
               </span>
             </div>
-            {group.teamId === null ? (
-              <p className="text-xs text-muted-foreground">
-                Players on teams you haven&apos;t entered. They are left out of free agents.
-              </p>
-            ) : null}
             {group.spots.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
                 No players yet. Choose &ldquo;{group.name}&rdquo; under Add to, then search or
