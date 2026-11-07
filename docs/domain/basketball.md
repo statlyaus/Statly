@@ -91,7 +91,8 @@ spreadsheet this section rebuilds ("the sheet"), with the changes noted here.
   are blended as counts, so FG% and FT% are blended makes over blended attempts.
 - A player with no last season is blended with the rookie baseline (the sheet's Rosters row 2):
   FGM 3, FGA 7, FTM 1.1, FTA 1.5, 3PM 0.9, PTS 8, REB 3.2, AST 1.6, STL 0.6, BLK 0.4, TO 1.0.
-  Minutes and three-point attempts have no prior; his own numbers stand.
+  Minutes and three-point attempts have no prior; his own numbers stand. The baseline applies to
+  any player with no last-season games, including a veteran who missed all of last season.
 - Before a player's first game this season, last season stands alone. No games in either season:
   no projection.
 
@@ -100,8 +101,10 @@ spreadsheet this section rebuilds ("the sheet"), with the changes noted here.
 Value is Statly's own volume-weighted z-score. It replaces the Basketball Monster values the sheet
 used, which are a paid feed.
 
-- Pool: players with blended minutes of at least 20 a game. Every player with a game in either
-  season gets a z, so replacement level never runs out of players.
+- Pool: blended minutes of at least 20 a game and at least one game in either season. Pool means
+  and spreads come from these players only.
+- Every player with at least one game in either season gets a z, in the pool or not, so
+  replacement level never runs out of players.
 - Counting categories: `z = (x − poolMean) / poolSd`, population SD over the pool.
 - Percentages: `poolPct = Σmakes / Σattempts` over the pool, impact = `(pct − poolPct) × attempts`,
   then z of impact over the pool. A 100 % shooter on two attempts is worth less than an 80 % shooter
