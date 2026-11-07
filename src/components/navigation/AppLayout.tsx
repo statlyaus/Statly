@@ -35,9 +35,9 @@ export default function AppLayout({ children, mode = 'auto' }: AppLayoutProps): 
         Skip to content
       </a>
       <MainNavigation />
-      <div id="main-content" role="main" tabIndex={-1} className="w-full min-w-0 outline-none">
+      <main id="main-content" tabIndex={-1} className="w-full min-w-0 outline-none">
         {children}
-      </div>
+      </main>
     </div>
   );
 

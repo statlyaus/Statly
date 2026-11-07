@@ -12,15 +12,17 @@ export function useFocusTrap<T extends HTMLElement = HTMLElement>(isActive: bool
     const container = containerRef.current;
     const previouslyFocusedElement =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusableElements = container.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-
-    const firstElement = focusableElements[0] as HTMLElement;
-    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+    // Read the focusable elements on every Tab: live content (a pick feed) changes while open.
+    const getFocusableElements = () =>
+      container.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+      );
 
     function handleTabKey(e: KeyboardEvent) {
       if (e.key !== 'Tab') return;
+      const focusableElements = getFocusableElements();
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
 
       if (e.shiftKey) {
         if (document.activeElement === firstElement) {
@@ -36,7 +38,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLElement>(isActive: bool
     }
 
     container.addEventListener('keydown', handleTabKey);
-    firstElement?.focus();
+    getFocusableElements()[0]?.focus();
 
     return () => {
       container.removeEventListener('keydown', handleTabKey);

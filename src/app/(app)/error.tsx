@@ -21,7 +21,7 @@ export default function AppRouteError({
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-4">
       <div className="max-w-md text-center">
-        <div className="mx-auto mb-4 h-12 w-12 text-result-loss">
+        <div className="mx-auto mb-4 h-12 w-12 text-destructive">
           <ExclamationTriangleIcon aria-hidden="true" />
         </div>
         <h1 className="mb-2 text-2xl font-semibold text-foreground">This page could not load</h1>

@@ -112,7 +112,7 @@ export default function JoinLeaguePage() {
 
   if (!user) {
     return (
-        <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
+        <div className="min-h-screen bg-[color:var(--league-page)] px-4 py-10 text-[color:var(--league-text)]">
           <section className="mx-auto max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
               <UserPlus className="h-5 w-5" aria-hidden="true" />
@@ -128,13 +128,13 @@ export default function JoinLeaguePage() {
               Log in
             </Link>
           </section>
-        </main>
+        </div>
     );
   }
 
   if (joinedLeague) {
     return (
-        <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
+        <div className="min-h-screen bg-[color:var(--league-page)] px-4 py-10 text-[color:var(--league-text)]">
           <section className="mx-auto max-w-lg rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]">
               <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
@@ -166,12 +166,12 @@ export default function JoinLeaguePage() {
               </button>
             </div>
           </section>
-        </main>
+        </div>
     );
   }
 
   return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
+      <div className="min-h-screen bg-[color:var(--league-page)] text-[color:var(--league-text)]">
         <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
           <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
             <button
@@ -184,7 +184,7 @@ export default function JoinLeaguePage() {
             </button>
 
             <header className="mt-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+              <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                 Invite access
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
@@ -285,6 +285,6 @@ export default function JoinLeaguePage() {
             </div>
           </aside>
         </div>
-      </main>
+      </div>
   );
 }

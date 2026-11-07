@@ -869,11 +869,16 @@ export default function LeagueTabs({
                   currentUserId={currentUserId}
                   categories={league.categories}
                   onOpenSettings={() => handleTabChange('league-settings')}
+                  timeZone={league.timeZone}
                 />
               )}
 
               {activeTab === 'lineup' && (
-                <LeagueMyTeamPanel leagueId={league.id} currentUserId={currentUserId} />
+                <LeagueMyTeamPanel
+                  leagueId={league.id}
+                  currentUserId={currentUserId}
+                  timeZone={league.timeZone}
+                />
               )}
 
               {activeTab === 'standings' && (
@@ -905,6 +910,7 @@ export default function LeagueTabs({
                     membersIndex={waiverMembersIndex}
                     selectedCategories={league.categories}
                     initialPlayerId={selectedPlayerId}
+                    timeZone={league.timeZone}
                   />
                 </div>
               )}

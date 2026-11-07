@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -317,6 +317,8 @@ function NavDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const isActive =
     isNavActive(pathname, item.href) ||
     (item.submenu?.some((subItem) => isNavActive(pathname, subItem.href)) ?? false);
@@ -328,17 +330,31 @@ function NavDropdown({
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
     }
   }, [isOpen]);
 
   return (
     <div ref={dropdownRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
+        aria-expanded={isOpen}
+        aria-controls={menuId}
         className={`inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
           isActive
             ? 'bg-white text-brand-bar'
@@ -360,14 +376,15 @@ function NavDropdown({
       <AnimatePresence>
         {isOpen ? (
           <motion.div
+            id={menuId}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
-            className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
+            className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
           >
             <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+              <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                 {item.name}
               </p>
               <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
@@ -383,7 +400,7 @@ function NavDropdown({
                     href={subItem.href}
                     onClick={() => setIsOpen(false)}
                     aria-current={isSubActive ? 'page' : undefined}
-                    className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                    className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                       isSubActive
                         ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
                         : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
@@ -516,7 +533,7 @@ export default function MainNavigation(): ReactNode {
             </Link>
           </div>
 
-          <div className="hidden min-w-0 items-center justify-center lg:flex">
+          <nav aria-label="Main" className="hidden min-w-0 items-center justify-center lg:flex">
             <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto [scrollbar-width:none]">
               {desktopNavigationItems.map((item) => {
                 const isActive = isNavActive(pathname, item.href);
@@ -538,7 +555,7 @@ export default function MainNavigation(): ReactNode {
               })}
               {user ? <NavDropdown item={toolsNavigationItem} pathname={pathname} /> : null}
             </div>
-          </div>
+          </nav>
 
           <div className="hidden min-w-0 items-center justify-self-end gap-2 lg:flex">
             {user ? (
@@ -592,7 +609,7 @@ export default function MainNavigation(): ReactNode {
                   <div
                     id="account-menu"
                     role="menu"
-                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
+                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
                   >
                     <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
                       <p className="font-semibold text-[color:var(--league-text)]">Signed in</p>
@@ -604,7 +621,7 @@ export default function MainNavigation(): ReactNode {
                       <Link
                         href="/dashboard"
                         role="menuitem"
-                        className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        className="flex rounded-md px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
                         Dashboard
@@ -612,7 +629,7 @@ export default function MainNavigation(): ReactNode {
                       <Link
                         href="/help"
                         role="menuitem"
-                        className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        className="flex rounded-md px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
                         Help
@@ -620,7 +637,7 @@ export default function MainNavigation(): ReactNode {
                       <button
                         type="button"
                         role="menuitem"
-                        className="flex w-full rounded-2xl px-3 py-2 text-left text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        className="flex w-full rounded-md px-3 py-2 text-left text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         onClick={() => {
                           setIsAccountMenuOpen(false);
                           void handleLogout();
@@ -674,8 +691,9 @@ export default function MainNavigation(): ReactNode {
 
         <AnimatePresence>
           {isMobileOpen ? (
-            <motion.div
+            <motion.nav
               id="mobile-main-navigation"
+              aria-label="Main"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -684,8 +702,8 @@ export default function MainNavigation(): ReactNode {
               <div className="space-y-4 px-4 py-4">
                 {user ? (
                   <>
-                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
                         Quick actions
                       </p>
                       <div className="mt-3 space-y-3">
@@ -694,8 +712,8 @@ export default function MainNavigation(): ReactNode {
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
-                      <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                      <p className="px-3 pt-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
                         Navigate
                       </p>
                       <div className="mt-2 space-y-1">
@@ -707,7 +725,7 @@ export default function MainNavigation(): ReactNode {
                               href={item.href}
                               onClick={() => setIsMobileOpen(false)}
                               aria-current={isActive ? 'page' : undefined}
-                              className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                              className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                                 isActive
                                   ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
                                   : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
@@ -726,8 +744,8 @@ export default function MainNavigation(): ReactNode {
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
-                      <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                      <p className="px-3 pt-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
                         Tools
                       </p>
                       <div className="mt-2 space-y-1">
@@ -739,7 +757,7 @@ export default function MainNavigation(): ReactNode {
                               href={item.href}
                               onClick={() => setIsMobileOpen(false)}
                               aria-current={isActive ? 'page' : undefined}
-                              className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                              className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                                 isActive
                                   ? 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]'
                                   : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
@@ -758,7 +776,7 @@ export default function MainNavigation(): ReactNode {
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
                       <div className="flex items-center gap-3">
                         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-sm font-semibold text-white">
                           {accountInitial}
@@ -774,7 +792,7 @@ export default function MainNavigation(): ReactNode {
                         <Link
                           href="/dashboard"
                           onClick={() => setIsMobileOpen(false)}
-                          className="rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                          className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         >
                           Dashboard
                         </Link>
@@ -785,7 +803,7 @@ export default function MainNavigation(): ReactNode {
                             void handleLogout();
                           }}
                           disabled={isLoggingOut || loading}
-                          className="rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
+                          className="rounded-md bg-[color:var(--league-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
                         >
                           {isLoggingOut ? 'Signing out…' : 'Sign out'}
                         </button>
@@ -793,7 +811,7 @@ export default function MainNavigation(): ReactNode {
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                  <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
                     {publicNavigationItems.map((item) => {
                       const isActive = isNavActive(pathname, item.href);
                       return (
@@ -802,7 +820,7 @@ export default function MainNavigation(): ReactNode {
                           href={item.href}
                           onClick={() => setIsMobileOpen(false)}
                           aria-current={isActive ? 'page' : undefined}
-                          className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                          className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                             isActive
                               ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
                               : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
@@ -822,14 +840,14 @@ export default function MainNavigation(): ReactNode {
                       <Link
                         href="/dashboard"
                         onClick={() => setIsMobileOpen(false)}
-                        className="mb-2 block rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                        className="mb-2 block rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
                       >
                         Open Fantasy
                       </Link>
                       <Link
                         href="/login"
                         onClick={() => setIsMobileOpen(false)}
-                        className="block rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                        className="block rounded-md bg-[color:var(--league-primary)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
                       >
                         Sign in
                       </Link>
@@ -837,7 +855,7 @@ export default function MainNavigation(): ReactNode {
                   </div>
                 )}
               </div>
-            </motion.div>
+            </motion.nav>
           ) : null}
         </AnimatePresence>
       </header>
