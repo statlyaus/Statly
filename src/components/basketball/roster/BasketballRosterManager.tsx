@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 
-import { badgeStyles, fieldStyles } from '@/components/ui/controlStyles';
+import { badgeStyles, buttonStyles, fieldStyles } from '@/components/ui/controlStyles';
 import type { FantasyWeekRange } from '@/lib/basketball/fantasyWeeks';
 import type {
   BasketballLeagueDetail,
@@ -20,7 +20,29 @@ import {
 import { OpponentPicker } from './OpponentPicker';
 import { PasteImport } from './PasteImport';
 import { PlayerSearchAdd } from './PlayerSearchAdd';
-import { ELSEWHERE, TeamRosterList, type RosterDestination } from './TeamRosterList';
+import {
+  ELSEWHERE,
+  TeamRosterList,
+  type RosterActions,
+  type RosterDestination,
+} from './TeamRosterList';
+
+/** A confirmed change, with an Undo for a removal. */
+interface Notice {
+  message: string;
+  undo?: { label: string; run: () => void };
+}
+
+interface RunCommand {
+  playerId: string | null;
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  success: string;
+  /** Element to focus afterwards, when the control used has gone (a moved or removed player). */
+  focusAfter?: string;
+  undo?: Notice['undo'];
+}
 
 interface TeamGroup {
   key: string;
@@ -46,7 +68,7 @@ export function BasketballRosterManager({
   const targetId = useId();
   const [league, setLeague] = useState(initialLeague);
   const [busy, setBusy] = useState<{ playerId: string | null } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [target, setTarget] = useState<string>(initialLeague.myTeamId);
 
@@ -91,18 +113,15 @@ export function BasketballRosterManager({
   const targetLabel = teamName(targetTeamId);
 
   /** Runs one command; on success shows the league the server read back. Returns an error or null. */
-  async function run(
-    playerId: string | null,
-    url: string,
-    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
-    body: unknown,
-    success: string,
-    focusAfter?: string
-  ): Promise<string | null> {
-    setBusy({ playerId });
+  async function run(command: RunCommand): Promise<string | null> {
+    setBusy({ playerId: command.playerId });
     setError(null);
     setNotice(null);
-    const result = await callBasketballApi<BasketballLeagueDetail>(url, method, body);
+    const result = await callBasketballApi<BasketballLeagueDetail>(
+      command.url,
+      command.method,
+      command.body
+    );
     setBusy(null);
     if (!result.ok) {
       const details = Object.values(result.fieldErrors).flat();
@@ -111,8 +130,9 @@ export function BasketballRosterManager({
       return message;
     }
     setLeague(result.data);
-    setNotice(success);
+    setNotice({ message: command.success, undo: command.undo });
     router.refresh();
+    const { focusAfter } = command;
     if (focusAfter) requestAnimationFrame(() => document.getElementById(focusAfter)?.focus());
     return null;
   }
@@ -121,76 +141,102 @@ export function BasketballRosterManager({
     `${base}/roster/${encodeURIComponent(spot.playerId)}`;
   const headingId = (key: string) => `bb-roster-${key}`;
   const disabled = busy !== null;
+  const name = (spot: BasketballRosterSpotDto) => spot.player.fullName;
 
-  const actions = {
-    move: (spot: BasketballRosterSpotDto, teamId: string | null) =>
-      void run(
-        spot.playerId,
-        spotUrl(spot),
-        'PATCH',
-        { teamId },
-        `Moved ${spot.player.fullName} to ${teamName(teamId)}.`,
-        headingId(spot.teamId ?? ELSEWHERE)
-      ),
-    setInjuredList: (spot: BasketballRosterSpotDto, onInjuredList: boolean) =>
-      void run(
-        spot.playerId,
-        spotUrl(spot),
-        'PATCH',
-        { onInjuredList },
-        `${spot.player.fullName} is ${onInjuredList ? 'on' : 'off'} the injured list.`
-      ),
-    setHeldSince: (spot: BasketballRosterSpotDto, acquiredOn: string) =>
-      void run(
-        spot.playerId,
-        spotUrl(spot),
-        'PATCH',
-        { acquiredOn },
-        `${spot.player.fullName} counts from ${formatEasternDate(acquiredOn)}.`
-      ),
-    remove: (spot: BasketballRosterSpotDto) =>
-      void run(
-        spot.playerId,
-        spotUrl(spot),
-        'DELETE',
-        undefined,
-        `Removed ${spot.player.fullName} from ${teamName(spot.teamId)}.`,
-        headingId(spot.teamId ?? ELSEWHERE)
-      ),
+  const actions: RosterActions = {
+    move: (spot, teamId) =>
+      void run({
+        playerId: spot.playerId,
+        url: spotUrl(spot),
+        method: 'PATCH',
+        body: { teamId },
+        success: `Moved ${name(spot)} to ${teamName(teamId)}.`,
+        focusAfter: headingId(spot.teamId ?? ELSEWHERE),
+      }),
+    setInjuredList: (spot, onInjuredList) =>
+      void run({
+        playerId: spot.playerId,
+        url: spotUrl(spot),
+        method: 'PATCH',
+        body: { onInjuredList },
+        success: `${name(spot)} is ${onInjuredList ? 'on' : 'off'} the injured list.`,
+      }),
+    setHeldSince: async (spot, acquiredOn) =>
+      (await run({
+        playerId: spot.playerId,
+        url: spotUrl(spot),
+        method: 'PATCH',
+        body: { acquiredOn },
+        success: `${name(spot)} counts from ${formatEasternDate(acquiredOn)}.`,
+      })) === null,
+    remove: (spot) =>
+      void run({
+        playerId: spot.playerId,
+        url: spotUrl(spot),
+        method: 'DELETE',
+        success: `Removed ${name(spot)} from ${teamName(spot.teamId)}.`,
+        focusAfter: headingId(spot.teamId ?? ELSEWHERE),
+        // Puts him back exactly as he was: same team, injured-list flag and held-since date.
+        undo: {
+          label: `Undo removing ${name(spot)}`,
+          run: () =>
+            void run({
+              playerId: spot.playerId,
+              url: `${base}/roster`,
+              method: 'POST',
+              body: {
+                entries: [
+                  {
+                    playerId: spot.playerId,
+                    teamId: spot.teamId,
+                    onInjuredList: spot.onInjuredList,
+                    acquiredOn: spot.acquiredOn,
+                  },
+                ],
+              },
+              success: `Put ${name(spot)} back on ${teamName(spot.teamId)}.`,
+            }),
+        },
+      }),
   };
 
   async function addFromSearch(player: NbaPlayerSearchResult): Promise<boolean> {
-    const message = await run(
-      player.id,
-      `${base}/roster`,
-      'POST',
-      { entries: [{ playerId: player.id, teamId: targetTeamId }] },
-      `Added ${player.fullName} to ${targetLabel}.`
-    );
+    const message = await run({
+      playerId: player.id,
+      url: `${base}/roster`,
+      method: 'POST',
+      body: { entries: [{ playerId: player.id, teamId: targetTeamId }] },
+      success: `Added ${player.fullName} to ${targetLabel}.`,
+    });
     return message === null;
   }
 
   async function addFromPaste(playerIds: string[]): Promise<string | null> {
-    return run(
-      null,
-      `${base}/roster`,
-      'POST',
-      { entries: playerIds.map((playerId) => ({ playerId, teamId: targetTeamId })) },
-      `Added ${playerIds.length} ${playerIds.length === 1 ? 'player' : 'players'} to ${targetLabel}.`
-    );
+    return run({
+      playerId: null,
+      url: `${base}/roster`,
+      method: 'POST',
+      body: { entries: playerIds.map((playerId) => ({ playerId, teamId: targetTeamId })) },
+      success: `Added ${playerIds.length} ${playerIds.length === 1 ? 'player' : 'players'} to ${targetLabel}.`,
+    });
   }
 
   function saveOpponent(teamId: string | null) {
     const url = `${base}/matchups/${week.week}`;
     void (teamId
-      ? run(
-          null,
+      ? run({
+          playerId: null,
           url,
-          'PUT',
-          { opponentTeamId: teamId },
-          `${teamName(teamId)} is your opponent for week ${week.week}.`
-        )
-      : run(null, url, 'DELETE', undefined, `Cleared your opponent for week ${week.week}.`));
+          method: 'PUT',
+          body: { opponentTeamId: teamId },
+          success: `${teamName(teamId)} is your opponent for week ${week.week}.`,
+        })
+      : run({
+          playerId: null,
+          url,
+          method: 'DELETE',
+          success: `Cleared your opponent for week ${week.week}.`,
+        }));
   }
 
   const rosteredOn = (playerId: string) => {
@@ -202,9 +248,20 @@ export function BasketballRosterManager({
     <div className="flex flex-col gap-6">
       <div aria-live="polite" className="empty:hidden">
         {notice ? (
-          <p className="rounded-md border border-result-win/30 bg-result-win/5 px-3 py-2 text-sm font-medium text-foreground">
-            {notice}
-          </p>
+          <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-result-win/30 bg-result-win/5 px-3 py-1.5">
+            <p className="text-sm font-medium text-foreground">{notice.message}</p>
+            {notice.undo ? (
+              <button
+                type="button"
+                onClick={notice.undo.run}
+                disabled={disabled}
+                aria-label={notice.undo.label}
+                className={buttonStyles({ variant: 'outline', size: 'sm', className: 'shrink-0' })}
+              >
+                Undo
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
       {error ? (
