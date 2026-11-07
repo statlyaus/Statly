@@ -55,6 +55,8 @@ const history = buildStandingsHistory({
     { ...game(3, 'alpha', 'delta', 1, 1), status: 'LIVE' as const, winnerMemberId: null },
   ],
   finalsTeams: 2,
+  scoringMode: 'H2H_MOST_CATEGORIES',
+  categoryCount: 9,
 });
 
 function respond() {
@@ -91,9 +93,7 @@ describe('LeagueStandingsPanel', () => {
     expect(within(yourRow).getByText('Live')).toBeInTheDocument();
     expect(within(yourRow).getByText('2–1')).toBeInTheDocument();
     expect(screen.getByText('Finals', { selector: 'span' })).toBeInTheDocument();
-    expect(
-      within(yourRow).getByText(/^(\d+%|In|Out|>99%|<1%)$/)
-    ).toBeInTheDocument();
+    expect(within(yourRow).getByText(/^(\d+%|In|Out|>99%|<1%)$/)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /Finals\s*, sort by finals chance/ })
     ).toBeInTheDocument();
