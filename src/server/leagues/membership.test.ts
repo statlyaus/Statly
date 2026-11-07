@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   leagueFindUnique: vi.fn(),
-  getLeagueMembership: vi.fn(),
-  isLeagueManagerRole: vi.fn(),
+  firestoreCollection: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -14,15 +13,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 vi.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: {
-    collection: vi.fn(() => ({
-      doc: vi.fn(() => ({ get: vi.fn() })),
-    })),
-  },
-}));
-vi.mock('@/lib/leagueMembership', () => ({
-  getLeagueMembership: mocks.getLeagueMembership,
-  isLeagueManagerRole: mocks.isLeagueManagerRole,
+  adminDb: { collection: mocks.firestoreCollection },
 }));
 
 import { getLeagueMembershipAccess } from './membership';
@@ -85,5 +76,20 @@ describe('Prisma league membership access', () => {
     await expect(getLeagueMembershipAccess('league-1', 'co-user')).resolves.toMatchObject({
       canManage: true,
     });
+  });
+
+  it('does not treat a Firestore-only owner or member as a member when the league has no Prisma row', async () => {
+    mocks.leagueFindUnique.mockResolvedValue(null);
+    mocks.firestoreCollection.mockImplementation(() => {
+      throw new Error('Firestore must not decide membership');
+    });
+
+    await expect(getLeagueMembershipAccess('firestore-league', 'user-1')).resolves.toEqual({
+      leagueId: 'firestore-league',
+      userId: 'user-1',
+      isMember: false,
+      canManage: false,
+    });
+    expect(mocks.firestoreCollection).not.toHaveBeenCalled();
   });
 });
