@@ -27,7 +27,7 @@ export default async function BasketballRosterPage({
     <div>
       <BasketballPageHeading
         title="Roster"
-        description="Who is on each team. Statly only counts players entered here, so keep your team and this week's opponent up to date."
+        description="Who is on each team. Statly only knows the players entered here: your team, this week's opponent and everyone rostered on other teams."
       />
       <BasketballRosterManager initialLeague={league} week={week} />
     </div>

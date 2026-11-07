@@ -74,6 +74,20 @@ it counts for that team.
 Adding players from a pasted list is an explicit, reviewed operation: the server proposes candidate
 matches for each line and nothing is saved until the user confirms each one.
 
+## Players on other teams
+
+Statly only knows the players a user enters, so any player not entered counts as a free agent. A
+useful profile therefore has three steps, shown as a checklist on the Roster page: the user's team,
+this week's opponent, then every other rostered player in the league. For the last step the user
+pastes the whole rosters page from Yahoo or ESPN (up to 250 players and 40,000 characters; headings,
+column headers, stats and dates are ignored, and team names come back as "no match"). After the
+usual review, every confirmed player is marked as taken (a roster spot with no team) in one batch. A
+player already on a team the user entered, including their own and this week's opponent, is left
+where he is and reported as skipped, so a careless paste cannot strip a roster. Until at least 8
+players per other team are entered (every team but the user's and, once set, this week's
+opponent's), Pickups and the overview's best adds warn that suggestions may already be rostered.
+"Clear all taken players" removes only the spots with no team.
+
 ## Data source and licensing
 
 The NBA ingest reads ESPN's public site API (schedule, box scores, injuries, rosters) behind a
