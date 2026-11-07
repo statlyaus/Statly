@@ -59,7 +59,10 @@ no-release mode. To mount the production-shaped read boundary, set
 - `AFL_TRADE_OBJECT_REPOSITORY_ID`; and
 - `AFL_TRADE_OBJECT_POLICY_EVIDENCE_ID`, the retained immutable infrastructure-policy evidence.
 
-PostgreSQL mode fails startup if any value is missing or malformed. It does not downgrade to disabled
+PostgreSQL mode fails startup if any value is missing or malformed. On first use it also reads
+`outcome_database_identity` and refuses to serve unless the row declares `statly-afl-trade-outcomes`
+at the schema format the running code reads, so a URL that points at the fantasy database, an
+unmigrated database, or a newer format fails with one clear error. It does not downgrade to disabled
 mode and never discovers a fantasy database or Firestore source. The application role needs only the
 isolated outcomes queries and the exact object-prefix read operations described below.
 
