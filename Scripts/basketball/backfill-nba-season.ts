@@ -8,6 +8,11 @@
  *   npm run nba:backfill -- --season 2026                 # dry run: report what is stored
  *   npm run nba:backfill -- --season 2026 --apply         # fetch and write (about 21 minutes)
  *   npm run nba:backfill -- --season 2026 --apply --limit 25
+ *   npm run nba:backfill -- --season 2027 --apply --tolerance 1
+ *
+ * `--tolerance N` accepts a per-stat difference of up to N from ESPN's season totals (default 0).
+ * Use it only after checking that the stored box scores match ESPN's: ESPN's totals feed can be
+ * one off its own box scores.
  *
  * Refuses a non-local DATABASE_URL without --allow-remote, and an unlicensed provider in production
  * unless NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true.
@@ -24,7 +29,7 @@ import { assertLocalDatabase, parseArgs, positiveInteger } from './nbaCli';
 async function main() {
   const args = parseArgs(process.argv.slice(2), {
     flags: ['apply', 'allow-remote'],
-    values: ['season', 'limit'],
+    values: ['season', 'limit', 'tolerance'],
   });
   const season = positiveInteger(args.season, 'season');
   if (!season) throw new Error('--season is required, e.g. --season 2026 for 2025-26');
@@ -53,6 +58,7 @@ async function main() {
       provider: createEspnNbaStatsProvider({ maxConcurrency: 1, minIntervalMs: 1000 }),
       season,
       maxGames: positiveInteger(args.limit, 'limit'),
+      tolerance: args.tolerance === undefined ? 0 : positiveInteger(args.tolerance, 'tolerance'),
       log: (line) => console.log(line),
     });
     for (const skip of summary.skipped)

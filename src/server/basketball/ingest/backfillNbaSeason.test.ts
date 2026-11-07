@@ -41,6 +41,16 @@ describe('compareSeasonTotals', () => {
     ]);
   });
 
+  it('accepts differences within the tolerance and no larger', () => {
+    // ESPN's 2026-27 season-totals feed is one assist off its own box scores for two players.
+    const offByOne = new Map([['3934672', { points: 1960, rebounds: 210, assists: 481 }]]);
+    const offByTwo = new Map([['3934672', { points: 1960, rebounds: 210, assists: 482 }]]);
+
+    expect(compareSeasonTotals([brunson], offByOne, 1)).toEqual([]);
+    expect(compareSeasonTotals([brunson], offByTwo, 1)).toHaveLength(1);
+    expect(compareSeasonTotals([brunson], offByOne)).toHaveLength(1);
+  });
+
   it('counts a player with no stored rows as zero', () => {
     expect(compareSeasonTotals([brunson], new Map())).toHaveLength(3);
   });

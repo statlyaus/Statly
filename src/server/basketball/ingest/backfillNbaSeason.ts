@@ -50,17 +50,26 @@ export interface NbaBackfillSummary {
 export interface BackfillNbaSeasonOptions extends NbaIngestJobOptions {
   /** Stop after this many box scores (for a trial run). */
   maxGames?: number;
+  /** Largest per-stat difference from the provider's season totals still accepted. Default 0. */
+  tolerance?: number;
   log?: (line: string) => void;
 }
 
+/**
+ * Stats whose stored sum differs from the provider's total by more than `tolerance`. Keep it 0:
+ * ESPN's season-totals feed can disagree with its own box scores (2026-27: one assist for two
+ * players after game 401909846, whose box score and game logs match what is stored), and only then
+ * should an operator rerun with `--tolerance 1` after checking the box scores.
+ */
 export function compareSeasonTotals(
   totals: NbaProviderSeasonTotal[],
-  stored: Map<string, Record<VerifiedStat, number>>
+  stored: Map<string, Record<VerifiedStat, number>>,
+  tolerance = 0
 ): NbaTotalsMismatch[] {
   return totals.flatMap((total) =>
     STATS.flatMap((stat) => {
       const sum = stored.get(total.athleteExternalId)?.[stat] ?? 0;
-      return sum === total[stat]
+      return Math.abs(sum - total[stat]) <= tolerance
         ? []
         : [
             {
@@ -80,10 +89,12 @@ export async function verifyNbaSeasonTotals({
   prisma,
   provider,
   season,
+  tolerance = 0,
 }: {
   prisma: NbaIngestPrisma;
   provider: NbaStatsProvider;
   season: number;
+  tolerance?: number;
 }): Promise<{ checked: number; mismatches: NbaTotalsMismatch[] }> {
   const totals = await provider.fetchSeasonTotals(season);
   if (totals.length === 0) {
@@ -121,13 +132,20 @@ export async function verifyNbaSeasonTotals({
       ];
     })
   );
-  return { checked: totals.length, mismatches: compareSeasonTotals(totals, stored) };
+  return { checked: totals.length, mismatches: compareSeasonTotals(totals, stored, tolerance) };
 }
 
 export async function backfillNbaSeason(
   options: BackfillNbaSeasonOptions
 ): Promise<NbaIngestResult<NbaBackfillSummary>> {
-  const { prisma, provider, season, maxGames = Number.POSITIVE_INFINITY, log = () => {} } = options;
+  const {
+    prisma,
+    provider,
+    season,
+    maxGames = Number.POSITIVE_INFINITY,
+    tolerance = 0,
+    log = () => {},
+  } = options;
   const jobOptions = { prisma, provider, season, now: options.now };
 
   return recordNbaIngestRun('BACKFILL', options, async () => {
@@ -146,6 +164,8 @@ export async function backfillNbaSeason(
         now: new Date(),
         refreshStatuses: false,
         excludeExternalIds: exclude,
+        // An operator rerunning a backfill after a fix wants every skipped game retried now.
+        deferFailingGames: false,
         limits: { games: Math.min(BATCH_SIZE, maxGames - ingested) },
       });
       ingested += summary.ingested;
@@ -164,7 +184,7 @@ export async function backfillNbaSeason(
 
     let verification: NbaBackfillSummary['verification'] = null;
     if (pending === 0) {
-      verification = await verifyNbaSeasonTotals({ prisma, provider, season });
+      verification = await verifyNbaSeasonTotals({ prisma, provider, season, tolerance });
       log(`Verified ${verification.checked} players: ${verification.mismatches.length} mismatches`);
     }
     const summary = { season, players, schedule, ingested, skipped, pending, verification };
