@@ -249,10 +249,16 @@ export function createPostgresDraftTradeReadRepository(dependencies: {
       return buildBundle([]);
     }
     if (cached?.archiveId !== snapshot.selection.publicArchiveId) {
-      cached = {
+      const entry = {
         archiveId: snapshot.selection.publicArchiveId,
         bundle: loadArchive(snapshot.selection, dependencies.archiveRepository),
       };
+      cached = entry;
+      // Cache only a successful load: a transient read failure must not pin the release
+      // to a rejected promise for the life of the process.
+      entry.bundle.catch(() => {
+        if (cached === entry) cached = null;
+      });
     }
     return cached.bundle;
   };
