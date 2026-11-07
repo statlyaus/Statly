@@ -112,8 +112,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       select: { id: true, teamName: true, isCoCommissioner: true, userId: true },
       orderBy: { joinedAt: 'asc' },
     }),
+    // Only active teams: the same set publishCompetition schedules and saveCompetitionFixture accepts.
     prisma.leagueMember.findMany({
-      where: { leagueId: id },
+      where: { leagueId: id, isActive: true },
       select: { id: true, teamName: true, draftSlot: true },
       orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
     }),
