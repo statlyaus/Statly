@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
-// Team actions and waiver priorities have no foreign keys; members, drafts and picks
+// Team actions and waiver priorities have no foreign key to League (only to their season); members, drafts and picks
 // do not cascade from League; trade rows restrict member deletion. So fixtures are removed child-first,
 // and everything else cascades from the member, league or player.
 export async function deleteLeagueFixtures(
