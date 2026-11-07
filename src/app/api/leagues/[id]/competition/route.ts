@@ -186,7 +186,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   await prisma.leagueSettings.update({
     where: { id: authorization.league.settings.id },
-    data: { competitionRulesJson: JSON.stringify(rules) },
+    data: { competitionRulesJson: rules },
   });
 
   return NextResponse.json({ success: true, data: { rules } });
