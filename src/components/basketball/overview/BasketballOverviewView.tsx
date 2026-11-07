@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import { buttonStyles, textLinkStyles } from '@/components/ui/controlStyles';
 import type {
@@ -268,15 +269,19 @@ export function BasketballOverviewView({
   overview,
   leagueId,
   now,
+  insights,
 }: {
   overview: BasketballOverview;
   leagueId: string;
   now: Date;
+  /** The projected result and best adds, rendered under this week's matchup. */
+  insights?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-5">
       <Freshness overview={overview} now={now} />
       <ThisWeek overview={overview} leagueId={leagueId} />
+      {insights}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <MyRoster players={overview.me.players} leagueId={leagueId} />
         <div className="flex flex-col gap-5">

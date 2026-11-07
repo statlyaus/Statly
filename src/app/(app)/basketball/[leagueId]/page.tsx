@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { BasketballOverviewView } from '@/components/basketball/overview/BasketballOverviewView';
+import { OverviewInsights } from '@/components/basketball/overview/OverviewInsights';
 import { BasketballPageHeading } from '@/components/basketball/shell/BasketballPageHeading';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import { loadOwnedBasketballLeague } from '@/server/basketball/leagues/basketballLeagueQueries';
+import { loadMatchup } from '@/server/basketball/readModels/matchupModel';
 import { loadBasketballOverview } from '@/server/basketball/readModels/overview';
+import { loadPickups } from '@/server/basketball/readModels/pickupsModel';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Overview | Statly basketball' };
@@ -21,15 +24,25 @@ export default async function BasketballOverviewPage({
   const league = await loadOwnedBasketballLeague(userId, leagueId);
   if (!league) notFound();
   const now = new Date();
-  const overview = await loadBasketballOverview(league, { now });
+  // The matchup and pickups models share one cached player pool per request.
+  const [overview, matchup, pickups] = await Promise.all([
+    loadBasketballOverview(league, { now }),
+    loadMatchup(league),
+    loadPickups(league),
+  ]);
 
   return (
     <div>
       <BasketballPageHeading
         title="Overview"
-        description="Your week at a glance: opponent, games left and injuries."
+        description="Your week at a glance: projected result, best adds, games left and injuries."
       />
-      <BasketballOverviewView overview={overview} leagueId={league.id} now={now} />
+      <BasketballOverviewView
+        overview={overview}
+        leagueId={league.id}
+        now={now}
+        insights={<OverviewInsights matchup={matchup} pickups={pickups} leagueId={league.id} />}
+      />
     </div>
   );
 }
