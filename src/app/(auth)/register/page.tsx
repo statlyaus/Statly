@@ -1,7 +1,7 @@
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
-import { toSafeRedirect } from '@/lib/safeRedirect';
+import { toSafeRedirect, withSafeNext } from '@/lib/safeRedirect';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { Suspense } from 'react';
@@ -65,7 +65,11 @@ export default async function RegisterPage({
               </Suspense>
 
               <div className="mt-8 border-t border-border pt-6">
-                <Button href="/login" variant="secondary" className="w-full justify-center">
+                <Button
+                  href={withSafeNext('/login', nextUrl)}
+                  variant="secondary"
+                  className="w-full justify-center"
+                >
                   Already have an account? Sign in
                 </Button>
               </div>

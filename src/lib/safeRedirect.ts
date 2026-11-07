@@ -10,3 +10,9 @@ export function toSafeRedirect(url?: string): string | undefined {
     return undefined;
   }
 }
+
+/** Link to `path`, carrying a same-site `next` destination so switching auth pages keeps it. */
+export function withSafeNext(path: string, next?: string): string {
+  const destination = toSafeRedirect(next);
+  return destination ? `${path}?next=${encodeURIComponent(destination)}` : path;
+}
