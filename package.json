@@ -112,11 +112,7 @@
     "outcomes:valuation:run-local": "tsx Scripts/dev/run-local-afl-private-valuation.ts",
     "outcomes:valuation:provision-and-dispatch-local": "tsx Scripts/dev/provision-local-afl-private-valuation.ts",
     "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
-    "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
-    "check:etl": "tsx Scripts/check-etl-setup.ts",
     "player-identity:consolidate": "tsx Scripts/player-identity-consolidation.ts",
-    "db:check": "tsx Scripts/check-database.ts",
-    "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",
     "test:int": "vitest run --config vitest.config.int.ts",
     "test:outcomes:int": "tsx Scripts/dev/run-disposable-afl-trade-outcomes-tests.ts",
@@ -145,9 +141,7 @@
     "queue:webvitals": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && tsx ./src/server/queue/webVitalsProducer.ts'",
     "dev:up": "concurrently -k -n web,socket,draft-worker -c blue,magenta,green \"npm:dev\" \"npm:socket\" \"npm:draft-worker:dev\"",
     "dev:down": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*enhancedDraftWorker\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'",
-    "socket:only": "bash -lc 'NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'",
-    "test:socket": "node scripts/dev/test-sio.mjs",
-    "test:smoke:socket": "bash -lc '( NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts & echo $! > .socket.pid ); sleep 2; node scripts/dev/test-sio.mjs; CODE=$?; ( kill $(cat .socket.pid) >/dev/null 2>&1 || true ); rm -f .socket.pid; exit $CODE'"
+    "socket:only": "bash -lc 'NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",
