@@ -75,6 +75,15 @@ reviewed change, not a drive-by edit.
 - Active-membership logic is duplicated with the same status list in `isActivePrismaMembership`
   (`src/server/leagues/membership.ts`) and `isActiveMembershipData` (`src/lib/leagueMembership.ts`).
 
+## Firestore client access
+
+Browser clients never write league state to Firestore. `firestore.rules` grants signed-in clients
+reads of the league projection they belong to and writes only to their own `users/{uid}` documents
+(dashboard settings). Every league path, including rosters, lineups and member documents, is
+`allow write: if false`; only server code writes the projection, through the Admin SDK.
+`tests/unit/firestoreRulesArchitecture.test.ts` fails if any other path gains a client write grant.
+Rules and indexes reach Firebase only on the next `firebase deploy`.
+
 ## Rules for changes
 
 - Authorize at the data boundary; reject changes that authorize only in UI or route code.
