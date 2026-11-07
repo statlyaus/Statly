@@ -406,6 +406,50 @@ export async function resolveCurrentCompetitionRoundNumber(
   return currentRound?.round ?? null;
 }
 
+function clubKey(club: string) {
+  return getTeamName(club).toUpperCase();
+}
+
+type RoundMatch = Extract<
+  Awaited<ReturnType<typeof getRoundMatchesResult>>,
+  { ok: true }
+>['matches'][number];
+
+/** Each club's game start, the clubs on a confirmed bye, and the round's first game start. */
+function indexRoundMatchStarts(matches: readonly RoundMatch[]) {
+  const startsByClub = new Map<string, Date>();
+  const byeClubs = new Set<string>();
+  let firstGameStartsAt: Date | null = null;
+  for (const match of matches) {
+    for (const club of match.confirmed_bye_teams ?? []) {
+      if (typeof club === 'string' && club.trim()) byeClubs.add(clubKey(club));
+    }
+    const startsAt = new Date(match.start_time_utc);
+    if (!Number.isFinite(startsAt.getTime())) continue;
+    if (!firstGameStartsAt || startsAt < firstGameStartsAt) firstGameStartsAt = startsAt;
+    startsByClub.set(clubKey(match.home_team), startsAt);
+    startsByClub.set(clubKey(match.away_team), startsAt);
+  }
+  return { startsByClub, byeClubs, firstGameStartsAt };
+}
+
+/**
+ * Fail closed: once the round's first game has started (the competition round start or the first
+ * official game, whichever is earlier), a player whose own game start is unknown stays where he
+ * is. No lock time is stored for him, so a later official start time still applies.
+ */
+function resolveStartUnknownHeldPlayerIds(
+  timingResult: RoundPlayerGameStartsResult,
+  competitionRound: { startsAt: Date | null } | null,
+  now: Date
+): ReadonlySet<string> {
+  if (!timingResult.ok) return new Set();
+  const roundStartedAt = [competitionRound?.startsAt, timingResult.firstGameStartsAt]
+    .filter((date): date is Date => date instanceof Date)
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  return roundStartedAt && roundStartedAt <= now ? timingResult.startUnknownPlayerIds : new Set();
+}
+
 export async function loadRoundPlayerGameStarts({
   aflRound,
   players,
@@ -430,24 +474,11 @@ export async function loadRoundPlayerGameStarts({
     return { ok: false, error: 'Official AFL match timing is temporarily unavailable.' };
   }
 
-  const startsByClub = new Map<string, Date>();
-  const byeClubs = new Set<string>();
-  let firstGameStartsAt: Date | null = null;
-  for (const match of result.matches) {
-    for (const club of match.confirmed_bye_teams ?? []) {
-      if (typeof club === 'string' && club.trim()) byeClubs.add(getTeamName(club).toUpperCase());
-    }
-    const startsAt = new Date(match.start_time_utc);
-    if (!Number.isFinite(startsAt.getTime())) continue;
-    if (!firstGameStartsAt || startsAt < firstGameStartsAt) firstGameStartsAt = startsAt;
-    startsByClub.set(getTeamName(match.home_team).toUpperCase(), startsAt);
-    startsByClub.set(getTeamName(match.away_team).toUpperCase(), startsAt);
-  }
-
+  const { startsByClub, byeClubs, firstGameStartsAt } = indexRoundMatchStarts(result.matches);
   const gameStartsByPlayerId = new Map<string, Date>();
   const startUnknownPlayerIds = new Set<string>();
   for (const player of players) {
-    const club = player.club ? getTeamName(player.club).toUpperCase() : null;
+    const club = player.club ? clubKey(player.club) : null;
     const startsAt = club ? startsByClub.get(club) : undefined;
     if (startsAt) gameStartsByPlayerId.set(player.playerId, startsAt);
     else if (!club || !byeClubs.has(club)) startUnknownPlayerIds.add(player.playerId);
@@ -984,19 +1015,11 @@ export async function saveMemberLineup({
       return { ok: false, code: 'INVALID_LINEUP', errors: ['This round is locked.'] };
     }
 
-    // Fail closed: once the round's first game has started, a player whose own game start is
-    // unknown (club not matched to a fixture, and not on a confirmed bye) stays where he is. No
-    // lock time is stored for him, so a later official start time still applies.
-    const roundStartedAt = [
-      currentCompetitionRound?.startsAt,
-      timingResult.ok ? timingResult.firstGameStartsAt : null,
-    ]
-      .filter((date): date is Date => date instanceof Date)
-      .sort((left, right) => left.getTime() - right.getTime())[0];
-    const startUnknownPlayerIds =
-      timingResult.ok && roundStartedAt && roundStartedAt <= saveNow
-        ? timingResult.startUnknownPlayerIds
-        : new Set<string>();
+    const startUnknownPlayerIds = resolveStartUnknownHeldPlayerIds(
+      timingResult,
+      currentCompetitionRound,
+      saveNow
+    );
 
     const existingLineup = await tx.leagueLineup.findUnique({
       where: { leagueId_memberId_round: { leagueId, memberId, round } },
