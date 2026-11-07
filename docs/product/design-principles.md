@@ -18,6 +18,9 @@ These are quality references, not assets or layouts to copy.
 
 - Reuse open-code shadcn-style primitives and existing composition patterns.
 - Use semantic theme tokens rather than fixed palette utilities in product markup.
+  `node Scripts/design/count-raw-colours.mjs --top 15` lists the files that still use raw palette
+  classes or colour literals; once a file is clean, add it to `tests/unit/designTokenColours.test.ts`
+  so it cannot regress.
 - Preserve light/dark behavior supported by the surrounding surface.
 - Keep spacing, radius, typography, and elevation consistent with existing tokens.
 - Add a new abstraction only when immediate reuse exists; fix the owning shared primitive when a shared
