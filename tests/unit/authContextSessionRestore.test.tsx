@@ -40,7 +40,7 @@ vi.mock('@/lib/devAuth', () => ({
   readStoredDevelopmentAuthUser: () => null,
 }));
 
-vi.mock('@/components/LoadingSpinner', () => ({
+vi.mock('@/components/ui/LoadingSpinner', () => ({
   default: () => <div>Restoring session</div>,
 }));
 

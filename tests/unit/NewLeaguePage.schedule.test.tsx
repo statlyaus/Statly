@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,10 +14,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/AuthContext', () => ({
   useAuth: () => ({ user: { uid: 'commissioner-1' } }),
-}));
-
-vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/lib/api', () => ({

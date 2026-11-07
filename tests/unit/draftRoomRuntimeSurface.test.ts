@@ -41,11 +41,4 @@ describe('draft room runtime source of truth', () => {
     expect(sourceOfTruth).toContain('Roster projection after a pick');
     expect(sourceOfTruth).toContain('waiver/free-agent surfaces');
   });
-
-  it('marks the older available-player table as a reference-only surface', () => {
-    const legacyTable = read('src/components/AvailablePlayersTable.tsx');
-
-    expect(legacyTable).toContain('Legacy reference table only');
-    expect(legacyTable).toContain('src/components/draft/PlayerGrid.tsx');
-  });
 });

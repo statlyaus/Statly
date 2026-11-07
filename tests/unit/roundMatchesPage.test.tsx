@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react';
-
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,10 +17,6 @@ vi.mock('@/lib/firebaseAdmin', () => ({
 
 vi.mock('@/lib/matchMapper', () => ({
   mapMatchEventToDTO: vi.fn(),
-}));
-
-vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/components/RoundMatches', () => ({

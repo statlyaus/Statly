@@ -24,10 +24,6 @@ vi.mock('@/AuthContext', () => ({
   }),
 }));
 
-vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('@/components/ui/ErrorBoundary', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
