@@ -119,22 +119,29 @@ const loadSeasonTotals = cache(
   }
 );
 
-const loadStatsUpdatedAt = cache(async (client: NbaReadClient): Promise<string | null> => {
-  const run = await client.nbaIngestRun.findFirst({
-    where: { job: { in: ['BOX_SCORES', 'BACKFILL'] }, outcome: 'SUCCEEDED' },
-    orderBy: { finishedAt: 'desc' },
-    select: { finishedAt: true },
-  });
-  return run?.finishedAt?.toISOString() ?? null;
-});
+/** When the latest successful box-score ingest (or backfill) finished, as ISO; null if never. */
+export const loadStatsUpdatedAt = cache(
+  async (client: Pick<NbaReadClient, 'nbaIngestRun'>): Promise<string | null> => {
+    const run = await client.nbaIngestRun.findFirst({
+      where: { job: { in: ['BOX_SCORES', 'BACKFILL'] }, outcome: 'SUCCEEDED' },
+      orderBy: { finishedAt: 'desc' },
+      select: { finishedAt: true },
+    });
+    return run?.finishedAt?.toISOString() ?? null;
+  }
+);
 
-function ownerLabels(league: BasketballLeagueDetail, today: EasternDate): Map<string, PlayerOwner> {
+/** Who holds each rostered player in this league, and this week's opponent's name. */
+export function ownerLabels(
+  league: BasketballLeagueDetail,
+  today: EasternDate
+): { owners: Map<string, PlayerOwner>; opponentName: string | null } {
   const week = fantasyWeekOf(today, league.weekOneStartsOn, league.twoWeekMatchups);
   const opponentId = league.matchups.find(
     (matchup) => matchup.week === week && matchup.teamId === league.myTeamId
   )?.opponentTeamId;
   const teamName = new Map(league.teams.map((team) => [team.id, team.name]));
-  return new Map(
+  const owners = new Map(
     league.rosterSpots.map((spot): [string, PlayerOwner] => {
       if (spot.teamId === null) return [spot.playerId, { kind: 'ELSEWHERE', teamName: null }];
       const kind =
@@ -142,6 +149,7 @@ function ownerLabels(league: BasketballLeagueDetail, today: EasternDate): Map<st
       return [spot.playerId, { kind, teamName: teamName.get(spot.teamId) ?? '' }];
     })
   );
+  return { owners, opponentName: (opponentId && teamName.get(opponentId)) || null };
 }
 
 function median(values: number[]): number {
@@ -209,7 +217,7 @@ export async function loadPlayerPool(
   const projectionById = new Map(
     projections.map((projection) => [projection.playerId, projection])
   );
-  const owners = ownerLabels(league, today);
+  const { owners } = ownerLabels(league, today);
 
   const players = values.map((value): PoolPlayer => {
     const identity = identityById.get(value.playerId)!;
