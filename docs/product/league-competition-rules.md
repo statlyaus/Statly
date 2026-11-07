@@ -17,7 +17,12 @@ tests, and this document together.
 ## Category scoring
 
 Each matchup aggregates the selected categories for active lineup players. Category direction decides
-whether higher or lower wins; equal values are draws.
+whether higher or lower wins; equal values are draws. Screens follow the stored direction: the draft
+room's category sort puts the best value first (lowest for `LOW_WINS`), and the matchup totals mark
+each `LOW_WINS` category as "lower wins". Statly Z, the default draft and waiver ranking and the
+auto-pick choice, sums each selected category's z-score against the available pool, negated for a
+`LOW_WINS` category, so a higher value there lowers the score. Its breakdown shows the raw stat and
+the signed z-score, so the entries add up to the total.
 
 - `H2H_EACH_CATEGORY` adds each category win/loss/draw to standings.
 - `H2H_MOST_CATEGORIES` awards the weekly matchup to the team winning more categories; equal category
@@ -45,8 +50,12 @@ Lineups autosave through authenticated, league-scoped server commands and expose
 unsaved, failed, and locked states. The latest saved lineup may carry to the next playable round under
 the current competition rules.
 
-The default lock policy is the official start of each player's AFL match. A configured round deadline
-is the alternative. Locked players cannot be moved, removed, or replaced manually. Official fixture
+The default lock policy is the official start of each player's AFL match. The alternative locks the
+whole round at Thursday 7:00 pm Sydney time (`Australia/Sydney`), whatever the league's timezone, so
+the lock always falls before the Thursday night game; a configured round deadline overrides it. A
+league has one configurable timezone, `LeagueSettings.timeZone` (default `UTC`), and it is for
+display only. Competition rules carry no timezone; a `leagueTimeZone` key left in older stored rules
+is ignored. Locked players cannot be moved, removed, or replaced manually. Official fixture
 updates can change an unlocked player's lock time; an unknown start time remains explicitly pending.
 
 ## Interchange autosubs

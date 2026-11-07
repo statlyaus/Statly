@@ -83,6 +83,26 @@ describe('league detail Prisma member projection', () => {
     expect(result.league?.status).toBe(leagueStatus);
   });
 
+  it('carries the league timezone so league times can be shown in it', async () => {
+    mocks.leagueFindUnique.mockResolvedValue({
+      id: 'test-league-id',
+      name: 'Test League',
+      inviteCode: 'TEST123',
+      ownerId: 'owner-user',
+      categoriesJson: null,
+      createdAt: new Date('2026-07-21T00:00:00.000Z'),
+      settings: { maxTeams: 2, timeZone: 'Australia/Perth' },
+      drafts: [],
+      members: [],
+    } as never);
+
+    const result = await loadAuthorizedLeagueDetail('test-league-id', null);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.league?.timeZone).toBe('Australia/Perth');
+  });
+
   it('excludes retained inactive members from teams and league capacity', async () => {
     mocks.leagueFindUnique.mockResolvedValue({
       id: 'test-league-id',

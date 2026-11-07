@@ -52,6 +52,7 @@ const DraftRoomSnapshotParticipantSchema = z.object({
   displayName: z.string(),
   teamName: z.string().optional(),
   draftOrder: z.number().int().positive(),
+  canManageDraft: z.boolean().optional(),
 });
 
 const DraftRoomSnapshotPickSchema = z.object({
@@ -96,6 +97,8 @@ export const DraftRoomSnapshotPayloadSchema = z
       round: z.number().int().positive(),
       direction: z.enum(['FORWARD', 'REVERSE']),
       draftType: z.enum(['SNAKE', 'LINEAR']).optional(),
+      /** The league's IANA timezone, so pick times show in it. */
+      timeZone: z.string().optional(),
       clock: DraftClockPayloadSchema,
       onClockMemberId: z.string().nullable(),
       participants: z.array(DraftRoomSnapshotParticipantSchema),

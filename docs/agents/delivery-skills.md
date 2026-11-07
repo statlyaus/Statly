@@ -42,8 +42,9 @@ pull request merges, `council` costs three reviewers per round, and a rebuild ca
 request's content.
 
 **Limits.** The app wakes a session on a failing check, a conflict or a review comment. It does not
-wake one when checks go green or the branch falls BEHIND. A pull request that sits green and BEHIND
-needs one word from you: "babysit".
+wake one when checks go green or the branch falls BEHIND. The PR queue workflow updates green BEHIND
+auto-merge pull requests one at a time (see "Pull request queue" in `docs/development/delivery.md`);
+one without auto-merge still needs one word from you: "babysit".
 
 ## Learning them
 

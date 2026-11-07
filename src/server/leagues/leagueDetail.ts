@@ -120,6 +120,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           description: `${prismaLeague.name} Fantasy League`,
           categories,
           draftDate: prismaLeague.settings?.startAt?.toISOString(),
+          timeZone: prismaLeague.settings?.timeZone,
           draftType: prismaLeague.settings?.draftType?.toLowerCase() as League['draftType'],
           pickOrder: prismaLeague.settings?.pickOrder?.toLowerCase() as League['pickOrder'],
           waiverRule,

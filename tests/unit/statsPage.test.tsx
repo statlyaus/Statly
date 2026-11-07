@@ -21,10 +21,6 @@ vi.mock('@/components/stats/PlayerStatsTable', () => ({
   ),
 }));
 
-vi.mock('@/components/StatFilters', () => ({
-  default: () => <div>Statistics filters</div>,
-}));
-
 vi.mock('@/components/ui/LoadingSpinner', () => ({
   default: () => <div>Loading statistics</div>,
 }));
@@ -38,7 +34,7 @@ describe('StatsPage', () => {
     };
   });
 
-  it('renders canonical player data without enhanced-match aggregation', () => {
+  it('renders canonical player data without filter controls that change nothing', () => {
     statsState.value = {
       players: [{ id: 'player-1', name: 'Test Player', stats: { kicks: 12 } }],
       loading: false,
@@ -48,7 +44,8 @@ describe('StatsPage', () => {
     render(<StatsPage />);
 
     expect(screen.getByRole('heading', { name: 'Player Statistics' })).toBeVisible();
-    expect(screen.getByText('Statistics filters')).toBeVisible();
+    expect(screen.queryByLabelText('Timeframe')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Min')).not.toBeInTheDocument();
     expect(screen.getByText('1 players loaded')).toBeVisible();
   });
 
