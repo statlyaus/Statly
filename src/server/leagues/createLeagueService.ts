@@ -241,6 +241,7 @@ function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreate
     throw new LeagueCreationError(name.error, 400, 'VALIDATION');
   }
   if (
+    !Number.isInteger(normalized.maxTeams) ||
     normalized.maxTeams < LEAGUE_CONSTRAINTS.maxTeams.min ||
     normalized.maxTeams > LEAGUE_CONSTRAINTS.maxTeams.max
   ) {
