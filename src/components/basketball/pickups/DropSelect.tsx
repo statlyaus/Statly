@@ -1,5 +1,7 @@
 'use client';
 
+import { useOptimistic } from 'react';
+
 import { fieldLabelStyles, fieldStyles } from '@/components/ui/controlStyles';
 import type { DropOption } from '@/server/basketball/readModels/pickupsModel';
 
@@ -21,13 +23,17 @@ export function DropSelect({
   selected: string | null;
 }) {
   const { update, pending } = useParamNavigation(path, params);
+  const [value, setValue] = useOptimistic(selected ?? 'none');
   return (
-    <label className={`${fieldLabelStyles} max-w-md`}>
+    <label className={`${fieldLabelStyles} w-full min-w-0 max-w-md`}>
       If I drop
       <select
-        value={selected ?? 'none'}
+        value={value}
         aria-busy={pending}
-        onChange={(event) => update({ drop: event.target.value })}
+        onChange={(event) => {
+          const drop = event.target.value;
+          update({ drop }, () => setValue(drop));
+        }}
         className={fieldStyles({ size: 'md' })}
       >
         {options.map((option) => (

@@ -57,8 +57,8 @@ export function PlayersTable({
   sortHref: (key: PlayerSortKey) => string;
   sortState: (key: PlayerSortKey) => SortState;
 }) {
-  // Rank 3rem + player 11rem (14rem from sm) + owner 7rem + GP/MPG 7.5rem + categories 5.5rem each
-  // + value 4.5rem + $ 3.5rem + games 3.5rem.
+  // Rank 3rem + player 11rem (14rem from sm) + owner 7rem + value 4.5rem + $ 3.5rem + games 3.5rem
+  // + GP/MPG 7.5rem + categories 5.5rem each. Value leads so it is on screen without scrolling.
   const fixed = 3 + 7 + 7.5 + 4.5 + 3.5 + (showAuction ? 3.5 : 0) + categories.length * 5.5;
   const widthStyle = {
     '--players-min': `${fixed + 11}rem`,
@@ -68,9 +68,17 @@ export function PlayersTable({
     key: PlayerSortKey,
     label: string,
     className: string,
-    children: React.ReactNode
+    children: React.ReactNode,
+    align: 'left' | 'right' = 'right'
   ) => (
-    <SortHeaderLink href={sortHref(key)} label={label} state={sortState(key)} className={className}>
+    <SortHeaderLink
+      key={key}
+      href={sortHref(key)}
+      label={label}
+      state={sortState(key)}
+      className={className}
+      align={align}
+    >
       {children}
     </SortHeaderLink>
   );
@@ -79,7 +87,7 @@ export function PlayersTable({
     <div
       role="region"
       aria-label="Players table"
-      className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative max-h-[70vh] overflow-auto rounded-lg border border-border bg-card"
     >
       <table
         className="w-full min-w-[var(--players-min)] table-fixed text-sm sm:min-w-[var(--players-min-sm)]"
@@ -101,12 +109,26 @@ export function PlayersTable({
               'name',
               SORT_LABELS.name,
               'sticky left-12 z-20 w-44 bg-card text-left shadow-[1px_0_0_0_var(--border)] sm:w-56',
-              'Player'
+              'Player',
+              'left'
             )}
             <th scope="col" className="w-28 px-2 py-2 text-left font-semibold">
               Owner
             </th>
-            {header('gp', SORT_LABELS.gp, 'w-14', <abbr title="Games played this season">GP</abbr>)}
+            {header('value', SORT_LABELS.value, 'w-[4.5rem]', 'Value')}
+            {showAuction ? header('auction', SORT_LABELS.auction, 'w-14', '$') : null}
+            {header(
+              'gamesLeft',
+              SORT_LABELS.gamesLeft,
+              'w-14',
+              <abbr title="NBA games left this fantasy week">Wk</abbr>
+            )}
+            {header(
+              'gp',
+              SORT_LABELS.gp,
+              'w-14',
+              <abbr title="Games played this season, and last season below">GP</abbr>
+            )}
             {header('mpg', SORT_LABELS.mpg, 'w-16', <abbr title="Minutes per game">MPG</abbr>)}
             {categories.map((categoryId) => {
               const category = getBasketballCategory(categoryId);
@@ -121,14 +143,6 @@ export function PlayersTable({
                 </span>
               );
             })}
-            {header('value', SORT_LABELS.value, 'w-[4.5rem]', 'Value')}
-            {showAuction ? header('auction', SORT_LABELS.auction, 'w-14', '$') : null}
-            {header(
-              'gamesLeft',
-              SORT_LABELS.gamesLeft,
-              'w-14',
-              <abbr title="NBA games left this fantasy week">Wk</abbr>
-            )}
           </tr>
         </thead>
         <tbody>
@@ -138,7 +152,7 @@ export function PlayersTable({
             return (
               <tr
                 key={player.playerId}
-                className={`h-14 border-b border-border ${rowBg}`}
+                className="h-14 border-b border-border"
                 aria-label={mine ? `${player.fullName} (your player)` : undefined}
               >
                 <td
@@ -160,18 +174,32 @@ export function PlayersTable({
                     <InjuryBadge injury={player.injury} />
                   </span>
                 </th>
-                <td className="px-2">
+                <td className={`px-2 ${rowBg}`}>
                   <span className="flex min-w-0">
                     <OwnerLabel owner={player.owner} />
                   </span>
                 </td>
                 <td
-                  className="px-2 text-right tabular-nums text-foreground"
-                  title={`${player.gamesLastSeason} games last season`}
+                  className={`px-2 text-right font-display text-base font-bold tabular-nums text-foreground ${rowBg}`}
                 >
-                  {player.gamesThisSeason}
+                  {formatSigned(player.value)}
                 </td>
-                <td className="px-2 text-right tabular-nums text-foreground">
+                {showAuction ? (
+                  <td className={`px-2 text-right tabular-nums text-foreground ${rowBg}`}>
+                    ${player.auctionDollars}
+                  </td>
+                ) : null}
+                <td className={`px-2 text-right tabular-nums text-foreground ${rowBg}`}>
+                  {gamesLeft[player.playerId] ?? 0}
+                </td>
+                <td className={`px-2 text-right tabular-nums text-foreground ${rowBg}`}>
+                  <span className="block">{player.gamesThisSeason}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {player.gamesLastSeason}
+                    <span className="sr-only"> games</span> last
+                  </span>
+                </td>
+                <td className={`px-2 text-right tabular-nums text-foreground ${rowBg}`}>
                   {player.minutesPerGame.toFixed(1)}
                 </td>
                 {categories.map((categoryId) => {
@@ -189,17 +217,6 @@ export function PlayersTable({
                     </td>
                   );
                 })}
-                <td className="px-2 text-right font-display text-base font-bold tabular-nums text-foreground">
-                  {formatSigned(player.value)}
-                </td>
-                {showAuction ? (
-                  <td className="px-2 text-right tabular-nums text-foreground">
-                    ${player.auctionDollars}
-                  </td>
-                ) : null}
-                <td className="px-2 text-right tabular-nums text-foreground">
-                  {gamesLeft[player.playerId] ?? 0}
-                </td>
               </tr>
             );
           })}

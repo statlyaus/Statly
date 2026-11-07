@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useOptimistic, useRef, useState } from 'react';
 
 import { buttonStyles, fieldLabelStyles, fieldStyles } from '@/components/ui/controlStyles';
 import { getBasketballCategory, type BasketballCategoryId } from '@/types/basketball';
@@ -10,6 +10,10 @@ import { sendBasketballCommand } from '../analysis/basketballApi';
 import type { SearchParams } from '../analysis/searchParams';
 import { useParamNavigation } from '../analysis/useParamNavigation';
 import { MINUTE_FLOORS, PLAYER_POSITIONS, type PlayersQuery } from './playersView';
+
+type ControlState = Pick<PlayersQuery, 'freeAgentsOnly' | 'position' | 'minMinutes'> & {
+  punts: BasketballCategoryId[];
+};
 
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((value) => b.includes(value));
@@ -37,6 +41,16 @@ export function PlayersControls({
   const router = useRouter();
   const { update, pending } = useParamNavigation(path, params);
   const [search, setSearch] = useState(query.search);
+  // Shown at once; the server render that follows the URL change confirms it.
+  const [view, setView] = useOptimistic<ControlState, Partial<ControlState>>(
+    {
+      freeAgentsOnly: query.freeAgentsOnly,
+      position: query.position,
+      minMinutes: query.minMinutes,
+      punts,
+    },
+    (current, patch) => ({ ...current, ...patch })
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const firstRender = useRef(true);
@@ -52,16 +66,16 @@ export function PlayersControls({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const whatIf = !sameSet(punts, leaguePunts);
+  const whatIf = !sameSet(view.punts, leaguePunts);
   const togglePunt = (categoryId: BasketballCategoryId) => {
-    const next = punts.includes(categoryId)
-      ? punts.filter((punt) => punt !== categoryId)
-      : [...punts, categoryId];
+    const next = view.punts.includes(categoryId)
+      ? view.punts.filter((punt) => punt !== categoryId)
+      : [...view.punts, categoryId];
     setMessage(null);
-    update({
-      punts: sameSet(next, leaguePunts) ? null : next.join(',') || 'none',
-      limit: null,
-    });
+    update(
+      { punts: sameSet(next, leaguePunts) ? null : next.join(',') || 'none', limit: null },
+      () => setView({ punts: next })
+    );
   };
 
   const savePunts = async () => {
@@ -70,7 +84,7 @@ export function PlayersControls({
     const result = await sendBasketballCommand(
       `/api/basketball/leagues/${encodeURIComponent(leagueId)}`,
       'PATCH',
-      { puntCategories: punts },
+      { puntCategories: view.punts },
       userId
     );
     setSaving(false);
@@ -92,7 +106,7 @@ export function PlayersControls({
     >
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
         <label className={fieldLabelStyles}>
-          Search
+          Filter by name or team
           <input
             type="search"
             value={search}
@@ -106,8 +120,11 @@ export function PlayersControls({
           <label className={fieldLabelStyles}>
             Position
             <select
-              value={query.position ?? ''}
-              onChange={(event) => update({ pos: event.target.value || null, limit: null })}
+              value={view.position ?? ''}
+              onChange={(event) => {
+                const position = (event.target.value || null) as PlayersQuery['position'];
+                update({ pos: position, limit: null }, () => setView({ position }));
+              }}
               className={fieldStyles({ size: 'sm' })}
             >
               <option value="">Any</option>
@@ -121,10 +138,13 @@ export function PlayersControls({
           <label className={fieldLabelStyles}>
             Minutes
             <select
-              value={query.minMinutes}
-              onChange={(event) =>
-                update({ mpg: event.target.value === '0' ? null : event.target.value, limit: null })
-              }
+              value={view.minMinutes}
+              onChange={(event) => {
+                const minMinutes = Number(event.target.value);
+                update({ mpg: minMinutes ? String(minMinutes) : null, limit: null }, () =>
+                  setView({ minMinutes })
+                );
+              }}
               className={fieldStyles({ size: 'sm' })}
             >
               {MINUTE_FLOORS.map((floor) => (
@@ -138,8 +158,13 @@ export function PlayersControls({
         <label className="flex min-h-9 items-center gap-2 text-sm font-medium text-foreground">
           <input
             type="checkbox"
-            checked={query.freeAgentsOnly}
-            onChange={(event) => update({ fa: event.target.checked ? '1' : null, limit: null })}
+            checked={view.freeAgentsOnly}
+            onChange={(event) => {
+              const freeAgentsOnly = event.target.checked;
+              update({ fa: freeAgentsOnly ? '1' : null, limit: null }, () =>
+                setView({ freeAgentsOnly })
+              );
+            }}
             className="size-4 accent-brand-bar"
           />
           Free agents only
@@ -155,8 +180,8 @@ export function PlayersControls({
         </legend>
         <div className="flex flex-wrap gap-2">
           {categories.map((categoryId) => {
-            const punted = punts.includes(categoryId);
-            const lastCounted = !punted && punts.length >= categories.length - 1;
+            const punted = view.punts.includes(categoryId);
+            const lastCounted = !punted && view.punts.length >= categories.length - 1;
             const label = getBasketballCategory(categoryId).shortLabel;
             return (
               <button

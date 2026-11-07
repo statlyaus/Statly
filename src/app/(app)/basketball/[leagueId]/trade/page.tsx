@@ -73,7 +73,11 @@ export default async function BasketballTradePage({
             max={MAX_TRADE_PLAYERS}
           />
           {view.evaluation ? (
-            <TradeResult evaluation={view.evaluation} />
+            <TradeResult
+              evaluation={view.evaluation}
+              giveCount={view.give.length}
+              getCount={view.get.length}
+            />
           ) : (
             <p className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
               Pick players to give, get, or both to see the trade by category.

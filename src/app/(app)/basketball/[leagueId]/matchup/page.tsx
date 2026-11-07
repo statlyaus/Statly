@@ -52,7 +52,7 @@ export default async function BasketballMatchupPage({
       <PageHeading title="Matchup">
         {view.status === 'READY'
           ? `Week ${view.week} against ${view.opponentTeam.name}: who wins each category if the rest of the week plays out as projected.`
-          : 'Who wins each category this week if the rest of the week plays out as projected.'}
+          : `Who wins each category in week ${view.week} if the rest of the week plays out as projected.`}
       </PageHeading>
       <StaleStatsNotice updatedAt={view.pool.statsUpdatedAt} now={now} />
       <WeekNav
@@ -73,7 +73,13 @@ export default async function BasketballMatchupPage({
       ) : view.status === 'NO_OPPONENT' ? (
         <EmptyState
           title={`No opponent set for week ${view.week}`}
-          action={{ href: rosterHref, label: "Set this week's opponent" }}
+          action={{
+            href: rosterHref,
+            label:
+              view.week === currentWeek
+                ? "Set this week's opponent"
+                : `Set the week ${view.week} opponent`,
+          }}
         >
           Pick who you play this week, and add their roster, to see the category odds.
         </EmptyState>

@@ -11,7 +11,15 @@ const VERDICT: Record<TradeVerdict, { word: string; tone: 'win' | 'loss' | 'draw
 };
 
 /** Per-category z of what I give and get, the net and a GAIN/LOSS/EVEN word for each. */
-export function TradeResult({ evaluation }: { evaluation: TradeEvaluation }) {
+export function TradeResult({
+  evaluation,
+  giveCount,
+  getCount,
+}: {
+  evaluation: TradeEvaluation;
+  giveCount: number;
+  getCount: number;
+}) {
   const { gains, losses, evens } = evaluation.summary;
   return (
     <section aria-label="Trade result" className="space-y-3">
@@ -33,11 +41,18 @@ export function TradeResult({ evaluation }: { evaluation: TradeEvaluation }) {
           {evens} even
           {evaluation.categories.some((category) => category.punted) ? ' (punts left out)' : ''}.
         </p>
+        {giveCount !== getCount ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {getCount > giveCount
+              ? `You get ${getCount} players for ${giveCount}: the total does not count the player you would drop to make room.`
+              : `You give ${giveCount} players for ${getCount}: the total does not count the free agent you could add with the open spot.`}
+          </p>
+        ) : null}
       </div>
       <div
         role="region"
         aria-label="Trade by category"
-        className="overflow-x-auto rounded-lg border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="relative overflow-x-auto rounded-lg border border-border bg-card"
       >
         <table className="w-full min-w-[30rem] table-fixed text-sm">
           <caption className="sr-only">

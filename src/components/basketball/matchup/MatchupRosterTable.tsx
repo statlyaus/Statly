@@ -25,7 +25,13 @@ export function MatchupRosterTable({
   const style = { '--roster-min': `${11 + 3 * 4 + categories.length * 4.5}rem` } as CSSProperties;
   return (
     <section aria-label={title} className="space-y-2">
-      <h2 className="font-display text-lg font-bold text-foreground">{title}</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <h2 className="font-display text-lg font-bold text-foreground">{title}</h2>
+        <p className="text-xs text-muted-foreground">
+          Left: NBA games left · Starts: simulated starts left · Done: days counted · categories:
+          projected rest of week
+        </p>
+      </div>
       {players.length === 0 ? (
         <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           No players on this roster yet.
@@ -34,7 +40,7 @@ export function MatchupRosterTable({
         <div
           role="region"
           aria-label={`${title} table`}
-          className="overflow-x-auto rounded-lg border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative overflow-x-auto rounded-lg border border-border bg-card"
         >
           <table className="w-full min-w-[var(--roster-min)] table-fixed text-sm" style={style}>
             <caption className="sr-only">

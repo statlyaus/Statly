@@ -8,7 +8,7 @@ import { CallChip } from '../analysis/AnalysisBits';
 import { formatCategory, formatChance, formatDateRange, formatMargin } from '../analysis/format';
 
 const navLink =
-  'inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-11 items-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export function weekStatus(schedule: WeekSchedule): string {
   const played = schedule.playedDates.length;
@@ -137,9 +137,9 @@ export function MatchupCategoryTable({
     <div
       role="region"
       aria-label="Categories this week"
-      className="overflow-x-auto rounded-lg border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative overflow-x-auto rounded-lg border border-border bg-card"
     >
-      <table className="w-full min-w-[34rem] table-fixed text-sm">
+      <table className="w-full table-fixed text-sm sm:min-w-[34rem]">
         <caption className="sr-only">
           Each category: your projected week, your opponent&rsquo;s, the margin, the call and your
           chance of winning it.
@@ -148,9 +148,9 @@ export function MatchupCategoryTable({
           <tr className="border-b border-border text-xs text-muted-foreground">
             <th
               scope="col"
-              className="sticky left-0 z-10 w-24 bg-card px-3 py-2 text-left font-semibold"
+              className="sticky left-0 z-10 w-16 bg-card px-3 py-2 text-left font-semibold sm:w-24"
             >
-              Category
+              <span className="sr-only sm:not-sr-only">Category</span>
             </th>
             <th scope="col" className="px-2 py-2 text-right font-semibold">
               You
@@ -158,14 +158,18 @@ export function MatchupCategoryTable({
             <th scope="col" className="px-2 py-2 text-right font-semibold">
               Opponent
             </th>
-            <th scope="col" className="px-2 py-2 text-right font-semibold">
+            <th scope="col" className="hidden px-2 py-2 text-right font-semibold sm:table-cell">
               Margin
             </th>
-            <th scope="col" className="w-14 px-2 py-2 text-center font-semibold">
+            <th scope="col" className="w-12 px-2 py-2 text-center font-semibold sm:w-14">
               Call
             </th>
-            <th scope="col" className="w-36 px-3 py-2 text-left font-semibold">
-              Win chance
+            <th
+              scope="col"
+              className="w-16 px-2 py-2 text-right font-semibold sm:w-36 sm:px-3 sm:text-left"
+            >
+              <span className="sm:hidden">Win</span>
+              <span className="hidden sm:inline">Win chance</span>
             </th>
           </tr>
         </thead>
@@ -194,17 +198,17 @@ export function MatchupCategoryTable({
                   total={formatCategory(row.category, projection.opponent.total)}
                   soFar={formatCategory(row.category, projection.opponent.actual)}
                 />
-                <td className="px-2 text-right tabular-nums text-foreground">
+                <td className="hidden px-2 text-right tabular-nums text-foreground sm:table-cell">
                   {formatMargin(row.category, row.margin)}
                 </td>
                 <td className="px-2 text-center">
                   <CallChip call={row.call} />
                 </td>
-                <td className="px-3">
-                  <span className="flex items-center gap-2">
+                <td className="px-2 sm:px-3">
+                  <span className="flex items-center justify-end gap-2">
                     <span
                       aria-hidden="true"
-                      className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+                      className="hidden h-1.5 flex-1 overflow-hidden rounded-full bg-muted sm:block"
                     >
                       <span
                         className="block h-full rounded-full bg-brand-bar"

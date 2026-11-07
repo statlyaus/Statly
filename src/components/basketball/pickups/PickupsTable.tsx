@@ -106,7 +106,7 @@ export function PickupsTable({
     <div
       role="region"
       aria-label="Free agents table"
-      className="max-h-[75vh] overflow-auto rounded-lg border border-border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative max-h-[75vh] overflow-auto rounded-lg border border-border bg-card"
     >
       <table
         className={`w-full table-fixed text-sm ${planned ? 'min-w-[62rem]' : 'min-w-[38rem]'}`}
@@ -134,20 +134,16 @@ export function PickupsTable({
               <>
                 <th
                   scope="col"
-                  aria-sort="none"
-                  className="w-16 px-2 py-2 text-right font-semibold"
-                >
-                  <abbr title="Games he would start from the day the add takes effect">Starts</abbr>
-                </th>
-                <th scope="col" className="w-16 px-2 py-2 text-right font-semibold">
-                  <abbr title="Categories won after the swap (a toss-up counts ½)">Cats</abbr>
-                </th>
-                <th
-                  scope="col"
                   aria-sort="descending"
                   className="w-20 px-2 py-2 text-right font-semibold"
                 >
                   Change
+                </th>
+                <th scope="col" className="w-16 px-2 py-2 text-right font-semibold">
+                  <abbr title="Games he would start from the day the add takes effect">Starts</abbr>
+                </th>
+                <th scope="col" className="w-16 px-2 py-2 text-right font-semibold">
+                  <abbr title="Categories won after the swap (a toss-up counts ½)">Cats</abbr>
                 </th>
                 <th scope="col" className="w-16 px-2 py-2 text-right font-semibold">
                   <abbr title="Need-weighted change across categories">Fit</abbr>
@@ -200,12 +196,6 @@ export function PickupsTable({
               </th>
               {row.plan && now ? (
                 <>
-                  <td className="px-2 text-right tabular-nums text-foreground">
-                    {row.plan.gamesAdded}
-                  </td>
-                  <td className="px-2 text-right tabular-nums text-foreground">
-                    {row.plan.categoriesWon}
-                  </td>
                   <td
                     className={`px-2 text-right font-display text-base font-bold tabular-nums ${
                       row.plan.categoryChange > 0
@@ -216,6 +206,12 @@ export function PickupsTable({
                     }`}
                   >
                     {formatSigned(row.plan.categoryChange)}
+                  </td>
+                  <td className="px-2 text-right tabular-nums text-foreground">
+                    {row.plan.gamesAdded}
+                  </td>
+                  <td className="px-2 text-right tabular-nums text-foreground">
+                    {row.plan.categoriesWon}
                   </td>
                   <td className="px-2 text-right tabular-nums text-foreground">
                     {formatSigned(row.plan.fit)}

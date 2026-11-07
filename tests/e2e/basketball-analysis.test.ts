@@ -51,7 +51,7 @@ test.describe('basketball analysis pages', () => {
       .getByRole('link', { name: /^Next: Week \d+$/ })
       .click();
     await expect(page).toHaveURL(/[?&]week=\d+/);
-    await expect(page.getByRole('link', { name: 'This week' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'This week', exact: true })).toBeVisible();
 
     await expectNoAppErrorBoundary(page);
     expect(errors).toEqual([]);

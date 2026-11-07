@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useOptimistic, useState } from 'react';
 
 import { buttonStyles, fieldLabelStyles, fieldStyles } from '@/components/ui/controlStyles';
 
@@ -46,7 +46,9 @@ export function TradeBuilder({
 }) {
   const { update, pending } = useParamNavigation(path, params);
   const [search, setSearch] = useState('');
-  const setSide = (key: 'give' | 'get', ids: string[]) => update({ [key]: ids.join(',') || null });
+  const [picks, setPicks] = useOptimistic({ give, get });
+  const setSide = (key: 'give' | 'get', ids: string[]) =>
+    update({ [key]: ids.join(',') || null }, () => setPicks({ ...picks, [key]: ids }));
   const byId = useMemo(
     () => new Map(otherPlayers.map((player) => [player.playerId, player])),
     [otherPlayers]
@@ -57,16 +59,16 @@ export function TradeBuilder({
     return otherPlayers
       .filter(
         (player) =>
-          !get.includes(player.playerId) &&
+          !picks.get.includes(player.playerId) &&
           (normalise(player.fullName).includes(needle) ||
             normalise(player.teamCode ?? '').includes(needle) ||
             normalise(player.holder).includes(needle))
       )
       .slice(0, SEARCH_RESULTS);
-  }, [otherPlayers, search, get]);
+  }, [otherPlayers, search, picks.get]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2" aria-busy={pending}>
+    <div className="grid items-start gap-4 lg:grid-cols-2" aria-busy={pending}>
       <fieldset className="rounded-lg border border-border bg-card p-4">
         <legend className="px-1 font-display text-lg font-bold text-foreground">You give</legend>
         {myPlayers.length === 0 ? (
@@ -76,20 +78,20 @@ export function TradeBuilder({
         ) : (
           <ul className="divide-y divide-border">
             {myPlayers.map((player) => {
-              const checked = give.includes(player.playerId);
+              const checked = picks.give.includes(player.playerId);
               return (
                 <li key={player.playerId}>
                   <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={!checked && give.length >= max}
+                      disabled={!checked && picks.give.length >= max}
                       onChange={() =>
                         setSide(
                           'give',
                           checked
-                            ? give.filter((id) => id !== player.playerId)
-                            : [...give, player.playerId]
+                            ? picks.give.filter((id) => id !== player.playerId)
+                            : [...picks.give, player.playerId]
                         )
                       }
                       className="size-4 accent-brand-bar"
@@ -113,9 +115,9 @@ export function TradeBuilder({
 
       <fieldset className="space-y-3 rounded-lg border border-border bg-card p-4">
         <legend className="px-1 font-display text-lg font-bold text-foreground">You get</legend>
-        {get.length > 0 ? (
+        {picks.get.length > 0 ? (
           <ul className="divide-y divide-border" aria-label="Players you get">
-            {get.map((id) => {
+            {picks.get.map((id) => {
               const player = byId.get(id);
               if (!player) return null;
               return (
@@ -134,7 +136,7 @@ export function TradeBuilder({
                     onClick={() =>
                       setSide(
                         'get',
-                        get.filter((other) => other !== id)
+                        picks.get.filter((other) => other !== id)
                       )
                     }
                     aria-label={`Remove ${player.fullName}`}
@@ -147,7 +149,7 @@ export function TradeBuilder({
             })}
           </ul>
         ) : null}
-        {get.length < max ? (
+        {picks.get.length < max ? (
           <>
             <label className={fieldLabelStyles}>
               Find a player
@@ -179,7 +181,7 @@ export function TradeBuilder({
                       <button
                         type="button"
                         onClick={() => {
-                          setSide('get', [...get, player.playerId]);
+                          setSide('get', [...picks.get, player.playerId]);
                           setSearch('');
                         }}
                         aria-label={`Add ${player.fullName}`}
