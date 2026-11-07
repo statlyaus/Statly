@@ -18,13 +18,9 @@ const guardedRoutes = [
 ] as const;
 
 const developmentPages = [
-  'demo',
   'infrastructure-test',
-  'player-analysis-demo',
   'sentry-test',
-  'test-live-data',
   'test-myteam',
-  'test-search',
   'test-socket',
   'timer-test',
 ] as const;
