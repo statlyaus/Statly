@@ -296,6 +296,8 @@ export function withMetrics<TArgs extends any[], TResult>(
 
     try {
       const result = await fn(...args);
+      // Wrapped routes catch their own failures and return a 500, so count server-error responses.
+      isError = result instanceof Response && result.status >= 500;
       return result;
     } catch (error) {
       isError = true;
