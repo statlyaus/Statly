@@ -12,6 +12,7 @@ const SHOW_OPTIONS: { value: RotationShow; param: string | null; label: string }
   { value: 'ALL', param: null, label: 'All players' },
   { value: 'MINE', param: 'mine', label: 'My players' },
   { value: 'FREE_AGENTS', param: 'fa', label: 'Free agents' },
+  { value: 'RISING', param: 'rising', label: 'Free agents moving up' },
 ];
 
 type FilterState = Pick<RotationQuery, 'show' | 'team'>;
@@ -40,9 +41,9 @@ export function RotationFilters({
       aria-label="Player table filters"
       aria-busy={pending}
       onSubmit={(event) => event.preventDefault()}
-      className="grid grid-cols-2 gap-3 sm:flex sm:items-end"
+      className="grid gap-3 sm:flex sm:items-end"
     >
-      <label className={`${fieldLabelStyles} sm:w-44`}>
+      <label className={`${fieldLabelStyles} sm:w-56`}>
         Show
         <select
           value={view.show}

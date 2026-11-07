@@ -11,6 +11,7 @@ function player(
     teamCode?: string;
     level?: 'RED' | 'AMBER' | 'GREEN';
     minutesPerGame?: number;
+    roleUp?: boolean;
   } = {}
 ): RotationPlayerView {
   return {
@@ -22,12 +23,14 @@ function player(
       extra.owner === 'MINE'
         ? { kind: 'MINE', teamName: 'Me' }
         : { kind: extra.owner === 'ELSEWHERE' ? 'ELSEWHERE' : 'FREE_AGENT', teamName: null },
-    alert: extra.level ? { level: extra.level, text: '', marker: '', roleUp: null } : null,
+    alert: extra.level
+      ? { level: extra.level, text: '', roleUp: extra.roleUp ? 'EARNED' : null }
+      : null,
   } as RotationPlayerView;
 }
 
 const players = [
-  player('Ann', { level: 'GREEN', minutesPerGame: 30 }),
+  player('Ann', { level: 'GREEN', roleUp: true, minutesPerGame: 30 }),
   player('Bea', { owner: 'MINE', teamCode: 'NYK', minutesPerGame: 25 }),
   player('Cat', { level: 'RED', owner: 'ELSEWHERE', minutesPerGame: 10 }),
   player('Dee', { level: 'AMBER', owner: 'MINE', minutesPerGame: 35 }),
@@ -69,5 +72,6 @@ describe('selectRotationPlayers', () => {
       'Eve',
     ]);
     expect(names(selectRotationPlayers(players, query({ team: 'NYK' })))).toEqual(['Bea']);
+    expect(names(selectRotationPlayers(players, query({ show: 'rising' })))).toEqual(['Ann']);
   });
 });

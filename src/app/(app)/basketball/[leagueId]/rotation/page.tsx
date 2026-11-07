@@ -129,8 +129,8 @@ export default async function BasketballRotationPage({
               empty="No free agent has moved into a bigger role lately."
             />
             {view.freeAgentRoleUps.length > FREE_AGENT_LIMIT ? (
-              <PanelLink href={tableHref({ show: 'fa', team: null, sort: null, dir: null })}>
-                {view.freeAgentRoleUps.length - FREE_AGENT_LIMIT} more among the free agents below
+              <PanelLink href={tableHref({ show: 'rising', team: null, sort: 'mpg', dir: null })}>
+                All {view.freeAgentRoleUps.length} free agents moving up, in the player table
               </PanelLink>
             ) : null}
           </RotationPanel>
@@ -207,10 +207,11 @@ export default async function BasketballRotationPage({
         </p>
         <p>
           <strong>At risk</strong> (⚠): a starter with under 2.45 free-throw attempts per 36 minutes
-          over his last 10 games and an effective FG% of .509 or lower over his last 5; a bench
-          player on 12+ minutes with a plus-minus of −5.4 per 48 or worse and FG% of .425 or lower
-          over his last 10; or minutes down: the median of his last 3 games 7 or more below his
-          average (10 in his first 12 games), for a player averaging 15+.
+          over his last 10 games and an effective FG% of .509 or lower over his last 5 (not flagged
+          while he is injured or not dressed for the last game); a bench player on 12+ minutes with
+          a plus-minus of −5.4 per 48 or worse and FG% of .425 or lower over his last 10; or minutes
+          down: the median of his last 3 games 7 or more below his average (10 in his first 12
+          games), for a player averaging 15+.
         </p>
         <p>
           <strong>Role up</strong> (▲): moved into the starting five in the last 3 games and still

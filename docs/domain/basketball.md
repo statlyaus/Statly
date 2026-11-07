@@ -197,6 +197,11 @@ stored box scores of the season's final regular-season games. The Rotation page
   established starter benched in the last 3; green for a new starter (or injury cover, paired with an
   absent starter by listed position) and minutes up; amber for the bench-risk and DNP-risk flags and
   minutes down. Personal and other DNP reasons count as injured, as in the sheet.
+- One deliberate difference from the sheet: a starter who was out or not dressed for his team's last
+  game gets no bench-risk flag, since an absent player is not about to lose his spot for his
+  shooting.
+- The season's box scores are cached per finished ingest run (five minutes at most), so the page
+  does not reread every row on each visit; names and injuries are read fresh.
 - Not ported: the sheet's coach career traits and next-game churn probabilities, which came from a
   hand-built dataset Statly does not have.
 

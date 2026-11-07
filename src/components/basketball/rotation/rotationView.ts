@@ -3,12 +3,12 @@
  * sort it applies. Pure and isomorphic.
  */
 
-import type { AlertLevel } from '@/lib/basketball/rotation';
+import { isRoleUp, type AlertLevel } from '@/lib/basketball/rotation';
 import type { RotationPlayerView } from '@/server/basketball/readModels/rotationModel';
 
 import { firstParam, type SearchParams } from '../analysis/searchParams';
 
-export type RotationShow = 'ALL' | 'MINE' | 'FREE_AGENTS';
+export type RotationShow = 'ALL' | 'MINE' | 'FREE_AGENTS' | 'RISING';
 export type RotationSortKey = 'alert' | 'name' | 'gp' | 'gs' | 'starts' | 'dnp' | 'mpg';
 
 export const ROTATION_PAGE_SIZE = 100;
@@ -21,7 +21,19 @@ export interface RotationQuery {
   limit: number;
 }
 
-const SHOW_PARAMS: Record<string, RotationShow> = { mine: 'MINE', fa: 'FREE_AGENTS' };
+const SHOW_PARAMS: Record<string, RotationShow> = {
+  mine: 'MINE',
+  fa: 'FREE_AGENTS',
+  rising: 'RISING',
+};
+
+const SHOWN: Record<RotationShow, (player: RotationPlayerView) => boolean> = {
+  ALL: () => true,
+  MINE: (player) => player.owner.kind === 'MINE',
+  FREE_AGENTS: (player) => player.owner.kind === 'FREE_AGENT',
+  /** The page's "Free agents moving up". */
+  RISING: (player) => player.owner.kind === 'FREE_AGENT' && isRoleUp(player.alert),
+};
 const SORTS: readonly RotationSortKey[] = ['alert', 'name', 'gp', 'gs', 'starts', 'dnp', 'mpg'];
 const LEVEL_RANK: Record<AlertLevel, number> = { RED: 3, AMBER: 2, GREEN: 1 };
 
@@ -77,9 +89,7 @@ export function selectRotationPlayers(
   return players
     .filter(
       (player) =>
-        (query.show === 'ALL' ||
-          player.owner.kind === (query.show === 'MINE' ? 'MINE' : 'FREE_AGENT')) &&
-        (query.team === null || player.teamCode === query.team)
+        SHOWN[query.show](player) && (query.team === null || player.teamCode === query.team)
     )
     .sort((a, b) => direction * compare(a, b, query.sort) || a.fullName.localeCompare(b.fullName));
 }
