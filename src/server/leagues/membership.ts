@@ -1,6 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 
 import { isActivePrismaMembership } from './activeMembership';
 
@@ -13,6 +11,11 @@ export interface LeagueMembershipAccess {
   canManage: boolean;
 }
 
+/**
+ * Resolves a caller's membership and management rights from Prisma alone. A league with no Prisma
+ * row, or a user with no active Prisma membership, is not a member: Firestore member and league
+ * documents are a compatibility projection and never decide access.
+ */
 export async function getLeagueMembershipAccess(
   leagueId: string,
   userId: string
@@ -35,54 +38,23 @@ export async function getLeagueMembershipAccess(
     },
   });
 
-  if (prismaLeague) {
-    const member = prismaLeague.members[0];
-    if (!member || !isActivePrismaMembership(member)) {
-      return {
-        leagueId,
-        userId,
-        isMember: false,
-        canManage: false,
-      };
-    }
-
-    const isOwner = prismaLeague.ownerId === userId;
-    const role = member.role;
-    const canManage = isOwner || member.isCoCommissioner;
-
+  const member = prismaLeague?.members[0];
+  if (!prismaLeague || !member || !isActivePrismaMembership(member)) {
     return {
       leagueId,
       userId,
-      memberId: member.id,
-      role,
-      isMember: true,
-      canManage,
+      isMember: false,
+      canManage: false,
     };
   }
-
-  const membership = await getLeagueMembership(leagueId, userId);
-  const firestoreOwner = await isFirestoreLeagueOwner(leagueId, userId);
-
-  if (!membership.isMember) {
-    return {
-      leagueId,
-      userId,
-      ...(firestoreOwner ? { role: 'owner' } : {}),
-      isMember: firestoreOwner,
-      canManage: firestoreOwner,
-    };
-  }
-
-  const role = typeof membership.data?.role === 'string' ? membership.data.role : undefined;
-  const canManage = isLeagueManagerRole(role) || firestoreOwner;
 
   return {
     leagueId,
     userId,
-    ...(membership.memberDocId ? { memberId: membership.memberDocId } : {}),
-    ...(role ? { role } : {}),
+    memberId: member.id,
+    role: member.role,
     isMember: true,
-    canManage,
+    canManage: prismaLeague.ownerId === userId || member.isCoCommissioner,
   };
 }
 
@@ -111,13 +83,4 @@ export async function getDraftMembershipAccess(
   }
 
   return getLeagueMembershipAccess(draft.leagueId, userId);
-}
-
-async function isFirestoreLeagueOwner(leagueId: string, userId: string): Promise<boolean> {
-  const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
-  if (!leagueDoc.exists) {
-    return false;
-  }
-
-  return leagueDoc.data()?.ownerId === userId;
 }
