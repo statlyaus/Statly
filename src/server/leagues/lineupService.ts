@@ -213,13 +213,19 @@ function resolveThursdayLock(startsAt: Date | null, timeZone: string): Date | nu
   );
 }
 
+/**
+ * The Thursday round lock is an AFL-calendar deadline, always 7:00 pm Sydney time, so it falls before
+ * the Thursday night game whatever display timezone (`LeagueSettings.timeZone`) the league uses.
+ */
+const AFL_LOCK_TIME_ZONE = 'Australia/Sydney';
+
 function resolveRoundLockAt(
   rules: CompetitionRules,
   competitionRound: { startsAt: Date | null; fallbackLockAt: Date | null }
 ) {
   if (competitionRound.fallbackLockAt) return competitionRound.fallbackLockAt;
   if (rules.lockPolicy === 'THURSDAY_7PM_AEST') {
-    return resolveThursdayLock(competitionRound.startsAt, rules.leagueTimeZone);
+    return resolveThursdayLock(competitionRound.startsAt, AFL_LOCK_TIME_ZONE);
   }
   return null;
 }

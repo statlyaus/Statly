@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { AlertCircle, Bookmark, Clock, ListPlus, Search, Trash2, Zap } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Bookmark, Clock, ListPlus, Search, Trash2, X, Zap } from 'lucide-react';
 
 import type { DraftPlayer } from '@/types/draft';
 import { getStatlyZPresentation } from '@/lib/statlyZPresentation';
@@ -149,6 +149,8 @@ interface WatchlistRowActionsProps {
   isLoading: boolean;
   isQueueMutationPending: boolean;
   isWatchlistPending: boolean;
+  isArmed: boolean;
+  onArm: (playerId: string | null) => void;
   onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
   onDraftPlayer: (player: DraftPlayer) => void | Promise<void>;
   onRemoveFromWatchlist: (playerId: string) => void | Promise<void>;
@@ -161,10 +163,14 @@ function WatchlistRowActions({
   isLoading,
   isQueueMutationPending,
   isWatchlistPending,
+  isArmed,
+  onArm,
   onAddToQueue,
   onDraftPlayer,
   onRemoveFromWatchlist,
 }: WatchlistRowActionsProps) {
+  const draftDisabled = !canActOnPlayer || !canDraft || isLoading;
+
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       {onAddToQueue && (
@@ -174,7 +180,7 @@ function WatchlistRowActions({
             if (row.draftablePlayer) void onAddToQueue(row.draftablePlayer);
           }}
           disabled={!canActOnPlayer || row.isQueued || isQueueMutationPending}
-          className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={
             row.isQueued
               ? `${row.player.name} is already in your draft queue`
@@ -186,22 +192,43 @@ function WatchlistRowActions({
         </button>
       )}
 
+      {/* Same two-step pick as the player grid's Select: the first press arms, the second confirms. */}
       <button
         type="button"
         onClick={() => {
-          if (row.draftablePlayer) void onDraftPlayer(row.draftablePlayer);
+          if (!row.draftablePlayer) return;
+          if (isArmed) {
+            onArm(null);
+            void onDraftPlayer(row.draftablePlayer);
+          } else {
+            onArm(String(row.item.playerId));
+          }
         }}
-        disabled={!canActOnPlayer || !canDraft || isLoading}
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2 text-xs font-semibold text-white shadow-[0_0_18px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={draftDisabled}
+        className="inline-flex h-11 items-center justify-center gap-1 rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-3 text-xs font-semibold text-white shadow-[0_0_18px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={
-          canDraft
-            ? `Draft ${row.player.name}`
-            : `Cannot draft ${row.player.name} until you are on the clock`
+          isArmed
+            ? `Confirm pick: ${row.player.name}`
+            : canDraft
+              ? `Draft ${row.player.name}`
+              : `Cannot draft ${row.player.name} until you are on the clock`
         }
       >
         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-        Draft
+        {isArmed ? 'Confirm' : 'Draft'}
       </button>
+
+      {isArmed ? (
+        <button
+          type="button"
+          onClick={() => onArm(null)}
+          className="inline-flex h-11 items-center justify-center gap-1 rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Cancel pick: ${row.player.name}`}
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+          Cancel
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -209,7 +236,7 @@ function WatchlistRowActions({
           void onRemoveFromWatchlist(String(row.item.playerId));
         }}
         disabled={isWatchlistPending}
-        className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={`Remove ${row.player.name} from watchlist`}
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -224,6 +251,8 @@ interface WatchlistPlayerRowProps {
   isLoading: boolean;
   isQueueMutationPending: boolean;
   pendingWatchlistIds: ReadonlySet<string>;
+  armedPlayerId: string | null;
+  onArm: (playerId: string | null) => void;
   onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
   onDraftPlayer: (player: DraftPlayer) => void | Promise<void>;
   onRemoveFromWatchlist: (playerId: string) => void | Promise<void>;
@@ -235,6 +264,8 @@ function WatchlistPlayerRow({
   isLoading,
   isQueueMutationPending,
   pendingWatchlistIds,
+  armedPlayerId,
+  onArm,
   onAddToQueue,
   onDraftPlayer,
   onRemoveFromWatchlist,
@@ -281,6 +312,8 @@ function WatchlistPlayerRow({
             isLoading={isLoading}
             isQueueMutationPending={isQueueMutationPending}
             isWatchlistPending={isWatchlistPending}
+            isArmed={canActOnPlayer && armedPlayerId === String(row.item.playerId)}
+            onArm={onArm}
             onAddToQueue={onAddToQueue}
             onDraftPlayer={onDraftPlayer}
             onRemoveFromWatchlist={onRemoveFromWatchlist}
@@ -307,6 +340,12 @@ export default function DraftWatchlist({
 }: WatchlistProps) {
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [armedPlayerId, setArmedPlayerId] = useState<string | null>(null);
+
+  // An armed pick never outlives the clock.
+  useEffect(() => {
+    if (!canDraft) setArmedPlayerId(null);
+  }, [canDraft]);
 
   const draftedIds = useMemo(
     () => new Set(draftedPlayerIds.map((id) => String(id))),
@@ -467,6 +506,8 @@ export default function DraftWatchlist({
                 isLoading={isLoading}
                 isQueueMutationPending={isQueueMutationPending}
                 pendingWatchlistIds={pendingWatchlistIds}
+                armedPlayerId={armedPlayerId}
+                onArm={setArmedPlayerId}
                 onAddToQueue={onAddToQueue}
                 onDraftPlayer={onDraftPlayer}
                 onRemoveFromWatchlist={onRemoveFromWatchlist}

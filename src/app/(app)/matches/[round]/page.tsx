@@ -14,9 +14,9 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
 
   if (!isValidRound) {
     return (
-        <main className="mx-auto max-w-5xl p-4">
+        <div className="mx-auto max-w-5xl p-4">
           <h1 className="mb-4 text-2xl font-semibold text-red-600">Invalid round parameter.</h1>
-        </main>
+        </div>
     );
   }
 
@@ -54,7 +54,7 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
   }
 
   return (
-      <main className="mx-auto max-w-5xl p-4">
+      <div className="mx-auto max-w-5xl p-4">
         <div className="flex items-center justify-between mb-4 gap-2">
           <h1 className="text-2xl font-semibold">Round {roundNumber} Matches</h1>
           <Link href="/matches" className="text-sm text-blue-600 hover:text-blue-700">
@@ -88,6 +88,6 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
         </div>
 
         <RoundMatches round={roundNumber} initialMatches={initialMatches} />
-      </main>
+      </div>
   );
 }
