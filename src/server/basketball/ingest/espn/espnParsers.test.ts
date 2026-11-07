@@ -360,12 +360,26 @@ describe('parseBoxScore', () => {
     expect(line).toMatchObject({ secondsPlayed: 600, points: 7, plusMinus: 3, fieldGoalsMade: 3 });
   });
 
+  it('reads "--" minutes and plus-minus as zero for a player who checked in without time', () => {
+    const stats = ['--', '0', '0-0', '0-0', '0-0', '0', '0', '0', '0', '0', '0', '0', '0', '--'];
+    const response = summaryResponse({
+      ...base,
+      homeAthletes: [{ id: '1', stats }],
+      awayAthletes: [],
+    });
+
+    const [line] = parseBoxScore(response).lines;
+
+    expect(line).toMatchObject({ played: true, secondsPlayed: 0, points: 0, plusMinus: 0 });
+  });
+
   it.each([
-    ['a made-attempted pair without a dash', '7/13'],
-    ['a non-numeric count', '--'],
-  ])('rejects %s', (_label, value) => {
+    ['a made-attempted pair without a dash', 2, '7/13'],
+    ['a dash pair where a made-attempted pair belongs', 2, '--'],
+    ['a non-numeric count', 1, '--'],
+  ])('rejects %s', (_label, index, value) => {
     const stats = [...boxAthlete({ id: '1' }).stats];
-    stats[2] = value;
+    stats[index] = value;
     const response = summaryResponse({
       ...base,
       homeAthletes: [{ id: '1', stats }],

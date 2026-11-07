@@ -345,6 +345,11 @@ function count(value: string | undefined, what: string): number {
   return Number.parseInt(value, 10);
 }
 
+// ESPN shows "--" minutes and plus-minus for a player who checked in with no recorded time.
+function countOrDash(value: string | undefined, what: string): number {
+  return value === '--' ? 0 : count(value, what);
+}
+
 function madeAttempted(value: string | undefined, what: string): [number, number] {
   const match = value === undefined ? null : MADE_ATTEMPTED.exec(value);
   if (!match) parseFailed(`${what} "${value}" is not a made-attempted pair`);
@@ -396,7 +401,7 @@ function statValues(keys: string[], stats: string[], who: string): StatValues {
   );
   return {
     // ESPN reports whole minutes only.
-    secondsPlayed: count(read('minutes'), `${who} MIN`) * 60,
+    secondsPlayed: countOrDash(read('minutes'), `${who} MIN`) * 60,
     points: count(read('points'), `${who} PTS`),
     rebounds: count(read('rebounds'), `${who} REB`),
     offensiveRebounds: count(read('offensiveRebounds'), `${who} OREB`),
@@ -412,7 +417,7 @@ function statValues(keys: string[], stats: string[], who: string): StatValues {
     freeThrowsMade,
     freeThrowsAttempted,
     personalFouls: count(read('fouls'), `${who} PF`),
-    plusMinus: count(read('plusMinus'), `${who} +/-`),
+    plusMinus: countOrDash(read('plusMinus'), `${who} +/-`),
   };
 }
 
