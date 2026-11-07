@@ -223,7 +223,7 @@ describe('resolveAutosubs', () => {
   });
 
   it('returns stable sorted copies when no autosubs are required', () => {
-    const input: ResolveAutosubsInput = {
+    const input: Parameters<typeof resolveAutosubs>[0] = {
       activeAssignments: [
         active('util', 'UTIL', 0),
         active('def-1', 'DEF', 1),
@@ -249,7 +249,7 @@ describe('resolveAutosubs', () => {
   });
 
   it('does not mutate its input assignments or confirmed non-player list', () => {
-    const input: ResolveAutosubsInput = {
+    const input: Parameters<typeof resolveAutosubs>[0] = {
       activeAssignments: [active('def-out', 'DEF', 0)],
       interchangeAssignments: [interchange('replacement', 0)],
       confirmedDidNotPlayPlayerIds: ['def-out'],
