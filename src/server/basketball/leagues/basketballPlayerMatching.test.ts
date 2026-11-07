@@ -46,6 +46,8 @@ describe('cleanPastedLine', () => {
     ['Victor Wembanyama (SAS)', 'Victor Wembanyama'],
     ['PG\tTyrese Haliburton Ind - PG\t@Bos\t7:30 pm', 'Tyrese Haliburton'],
     ['Luka Doncic', 'Luka Doncic'],
+    ['LeBron James SF, PF', 'LeBron James'],
+    ['LeBron James LAL - SF; PF', 'LeBron James'],
   ])('%s → %s', (line, expected) => {
     expect(cleanPastedLine(line)).toBe(expected);
   });

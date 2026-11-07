@@ -27,7 +27,9 @@ const name = z.string().trim().min(1, 'Enter a name').max(60, 'Use at most 60 ch
 const id = z.string().trim().min(1, 'Required').max(128);
 export const easternDate = z.string().refine(isEasternDate, 'Use a real date as YYYY-MM-DD');
 const category = z.enum(BASKETBALL_CATEGORY_IDS);
-const slotCount = z.number().int().min(0, 'Use 0 to 10').max(10, 'Use 0 to 10').default(0);
+// Every slot type is required, on create and on update, so a partial rosterSlots object is rejected
+// rather than silently zeroing the slots it leaves out. Stored rosterSlotsJson is always complete.
+const slotCount = z.number('Use 0 to 10').int().min(0, 'Use 0 to 10').max(10, 'Use 0 to 10');
 
 export const rosterSlotsSchema = z
   .strictObject({

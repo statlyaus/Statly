@@ -131,7 +131,7 @@ const SEPARATORS = new Set(['-', '–', '—', '|', '•']);
 const JERSEY_NUMBER = /^#?\d{1,2}$/;
 
 function bare(token: string): string {
-  return token.replace(/^[([]+|[)\]]+$/g, '');
+  return token.replace(/^[([]+|[)\],;]+$/g, '');
 }
 
 function isLeadingClutter(token: string): boolean {
