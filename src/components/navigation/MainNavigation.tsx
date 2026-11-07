@@ -511,7 +511,7 @@ export default function MainNavigation(): ReactNode {
           : typeof error === 'string'
             ? error
             : 'An unexpected error occurred';
-      showError('Sign out failed', message, { variant: 'light', autoHideDuration: 7000 });
+      showError('Sign out failed', message, { autoHideDuration: 7000 });
     } finally {
       setIsLoggingOut(false);
     }
@@ -528,7 +528,7 @@ export default function MainNavigation(): ReactNode {
 
   return (
     <>
-      <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+      <AlertContainer alerts={alerts} onRemove={removeAlert} />
 
       <header
         className={`sticky top-0 z-50 border-b border-brand-bar bg-brand-bar text-brand-bar-foreground ${
