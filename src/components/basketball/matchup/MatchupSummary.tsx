@@ -34,7 +34,8 @@ export function WeekNav({
     <nav aria-label="Fantasy week" className="flex flex-wrap items-center gap-2">
       {week > 1 ? (
         <Link href={hrefFor(week - 1)} className={navLink}>
-          <span aria-hidden="true">‹</span> Week {week - 1}
+          <span aria-hidden="true">‹</span> <span className="sr-only">Previous: </span>Week{' '}
+          {week - 1}
         </Link>
       ) : null}
       <p className="px-1 text-sm">
@@ -45,7 +46,7 @@ export function WeekNav({
       </p>
       {week < lastWeek ? (
         <Link href={hrefFor(week + 1)} className={navLink}>
-          Week {week + 1} <span aria-hidden="true">›</span>
+          <span className="sr-only">Next: </span>Week {week + 1} <span aria-hidden="true">›</span>
         </Link>
       ) : null}
       {week !== currentWeek ? (

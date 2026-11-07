@@ -157,20 +157,19 @@ export function PlayersControls({
           {categories.map((categoryId) => {
             const punted = punts.includes(categoryId);
             const lastCounted = !punted && punts.length >= categories.length - 1;
+            const label = getBasketballCategory(categoryId).shortLabel;
             return (
               <button
                 key={categoryId}
                 type="button"
                 aria-pressed={punted}
+                aria-label={`Punt ${label}`}
                 disabled={lastCounted}
                 onClick={() => togglePunt(categoryId)}
                 title={lastCounted ? 'Keep at least one category' : undefined}
                 className={`${buttonStyles({ variant: punted ? 'primary' : 'outline', size: 'sm' })} min-w-14`}
               >
-                <span className={punted ? 'line-through' : ''}>
-                  {getBasketballCategory(categoryId).shortLabel}
-                </span>
-                <span className="sr-only">{punted ? ', punted' : ', counted'}</span>
+                <span className={punted ? 'line-through' : ''}>{label}</span>
               </button>
             );
           })}
