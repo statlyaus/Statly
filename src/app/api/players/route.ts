@@ -44,7 +44,7 @@ const querySchema = z.object({
 const checkRateLimit = withRateLimit(rateLimitConfigs.public);
 
 export async function GET(req: NextRequest) {
-  const rateLimit = checkRateLimit(req);
+  const rateLimit = await checkRateLimit(req);
   if (!rateLimit.success) {
     return NextResponse.json(rateLimit.body, {
       status: rateLimit.status,
