@@ -1,8 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -283,11 +281,6 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
     });
 
     await new WaiverAvailabilityProjectionService().projectLeague({ leagueId });
-
-    await Promise.allSettled([
-      revalidateTag(tags.league(leagueId), { expire: 0 }),
-      revalidateTag(tags.waivers(leagueId), { expire: 0 }),
-    ]);
 
     logger.info('Processed drop player action into pending waiver hold', {
       actionId,

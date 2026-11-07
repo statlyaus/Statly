@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
-import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
   PrismaWaiverClaimStore,
@@ -68,19 +66,6 @@ export const POST = withMetrics(
       // A cancelled claim was never public, so it is not published to the league's activity.
 
       logger.info('waiver cancelled', { leagueId, callerId, claimId });
-      try {
-        revalidateTag(tags.waivers(leagueId), { expire: 0 });
-        revalidateTag(tags.league(leagueId), { expire: 0 });
-      } catch (revalErr) {
-        logger.warn('Failed to revalidate tags after waiver cancel', {
-          leagueId,
-          tags: [tags.waivers(leagueId), tags.league(leagueId)],
-          error:
-            revalErr instanceof Error
-              ? { name: revalErr.name, message: revalErr.message, stack: revalErr.stack }
-              : undefined,
-        });
-      }
       return NextResponse.json({ ok: true }, { status: 200 });
     } catch (err) {
       if (err instanceof WaiverClaimStoreError && err.code === 'CLAIM_NOT_PENDING') {

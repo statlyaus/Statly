@@ -1,8 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 
-import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -36,18 +34,6 @@ export const POST = withMetrics(
       }
 
       logger.info('waivers processed', { leagueId, processed: result.processed });
-
-      const revalidation = await Promise.allSettled([
-        revalidateTag(tags.waivers(leagueId), { expire: 0 }),
-        revalidateTag(tags.league(leagueId), { expire: 0 }),
-      ]);
-      const failedRevalidations = revalidation.filter((item) => item.status === 'rejected');
-      if (failedRevalidations.length) {
-        logger.warn('Failed to revalidate tags after waivers process', {
-          leagueId,
-          failed: failedRevalidations.length,
-        });
-      }
 
       return NextResponse.json(result);
     } catch (error) {

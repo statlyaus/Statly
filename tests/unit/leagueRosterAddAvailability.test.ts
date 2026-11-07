@@ -42,24 +42,6 @@ vi.mock('../../src/lib/prisma', () => ({
   prisma: prismaMocks,
 }));
 
-vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
-}));
-
-vi.mock('@/lib/cacheTags', () => ({
-  tags: {
-    league: (leagueId: string) => `league:${leagueId}`,
-    waivers: (leagueId: string) => `waivers:${leagueId}`,
-  },
-}));
-
-vi.mock('../../src/lib/cacheTags', () => ({
-  tags: {
-    league: (leagueId: string) => `league:${leagueId}`,
-    waivers: (leagueId: string) => `waivers:${leagueId}`,
-  },
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
