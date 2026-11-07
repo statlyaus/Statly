@@ -35,9 +35,7 @@ export { ConfirmationModal, useModal, useConfirmation } from './Modal';
 export { default as Tooltip } from './Tooltip';
 export { useTooltip, InfoTooltip, PlayerStatTooltip } from './Tooltip';
 export { ErrorBoundary } from './ErrorBoundary';
-export { LoadingState } from './LoadingState';
 
 // Re-export default exports with named exports for convenience
 export { default as BadgeComponent } from './Badge';
 export { default as ErrorBoundaryComponent } from './ErrorBoundary';
-export { default as LoadingStateComponent } from './LoadingState';
