@@ -262,6 +262,7 @@ function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreate
     );
   }
   if (
+    !Number.isInteger(normalized.maxTeams) ||
     normalized.maxTeams < LEAGUE_CONSTRAINTS.maxTeams.min ||
     normalized.maxTeams > LEAGUE_CONSTRAINTS.maxTeams.max
   ) {

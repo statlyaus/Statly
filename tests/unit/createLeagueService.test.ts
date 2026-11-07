@@ -129,6 +129,25 @@ describe('canonical league creation', () => {
     } satisfies Partial<LeagueCreationError>);
   });
 
+  it.each([12.5, '12', Number.NaN])(
+    'rejects a league size of %s as a validation error before writing',
+    async (maxTeams) => {
+      const { client } = buildPrisma();
+
+      await expect(
+        createCanonicalLeague(
+          { userId: 'owner-user', input: buildInput({ maxTeams: maxTeams as never }) },
+          { prisma: client as never }
+        )
+      ).rejects.toMatchObject({
+        message: 'League size must be 4-20 teams',
+        status: 400,
+        code: 'VALIDATION',
+      } satisfies Partial<LeagueCreationError>);
+      expect(client.$transaction).not.toHaveBeenCalled();
+    }
+  );
+
   it('rejects malformed trade deadlines at the domain boundary', async () => {
     const { client, tx } = buildPrisma();
 
