@@ -144,7 +144,9 @@ Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
 Claims validate membership, league settings, player availability, optional drop ownership, roster
-capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to
+capacity, and priority/FAAB rules at the server boundary. Only an active member can submit a claim, and a
+pending claim whose member has since been removed from the league is rejected at settlement ("Team
+no longer active"), which releases its bid. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
 The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
 waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
