@@ -84,3 +84,93 @@ is set deliberately. A licensed feed (for example balldontlie's paid tier, which
 use, or an enterprise feed) is required before a public launch. The schema stores provider-neutral
 values (seconds played, standard team codes, a did-not-play reason enum) so the adapter can be
 swapped without a migration.
+
+## Valuation and matchup maths
+
+The engine in `src/lib/basketball/` is pure TypeScript with no database or network access, so it
+runs on the server and in client components. It ports the formulas of the fantasy basketball
+spreadsheet this section rebuilds ("the sheet"), with the changes noted here.
+
+### Projections (`projection.ts`)
+
+- Per-game line = season totals ÷ games played; minutes from seconds played.
+- Blend: `w = min(1, gamesThisSeason / 15)`, each stat `w·now + (1 − w)·last`. Makes and attempts
+  are blended as counts, so FG% and FT% are blended makes over blended attempts.
+- A player with no last season is blended with the rookie baseline (the sheet's Rosters row 2):
+  FGM 3, FGA 7, FTM 1.1, FTA 1.5, 3PM 0.9, PTS 8, REB 3.2, AST 1.6, STL 0.6, BLK 0.4, TO 1.0.
+  Minutes and three-point attempts have no prior; his own numbers stand. The baseline applies to
+  any player with no last-season games, including a veteran who missed all of last season.
+- Before a player's first game this season, last season stands alone. No games in either season:
+  no projection.
+
+### Player value (`valuation.ts`)
+
+Value is Statly's own volume-weighted z-score. It replaces the Basketball Monster values the sheet
+used, which are a paid feed.
+
+- Pool: blended minutes of at least 20 a game and at least one game in either season. Pool means
+  and spreads come from these players only.
+- Every player with at least one game in either season gets a z, in the pool or not, so
+  replacement level never runs out of players.
+- Counting categories: `z = (x − poolMean) / poolSd`, population SD over the pool.
+- Percentages: `poolPct = Σmakes / Σattempts` over the pool, impact = `(pct − poolPct) × attempts`,
+  then z of impact over the pool. A 100 % shooter on two attempts is worth less than an 80 % shooter
+  on ten.
+- Low-wins categories (turnovers) are negated so a higher z is always better. A category with no
+  spread in the pool scores 0.
+- Total = Σ z over the league's categories that are not punted.
+- Auction dollars: replacement = the total of the (teams × roster spots + 1)th best player, or the
+  worst if there are fewer. Above replacement:
+  `ROUND(1 + (v − repl) / Σ(v − repl)⁺ × (teams × budget − teams × spots))`; everyone else $1.
+
+### Daily lineups (`lineupSimulator.ts`)
+
+Each day, the players with a game who are not on the injured list, not OUT and already acquired are
+taken by value, highest first. A player starts only if he raises the maximum matching between
+players and starter slots (every slot except BN and IL). Day-to-day players count as playing.
+
+| Position          | Slots it can fill |
+| ----------------- | ----------------- |
+| PG                | PG, G, UTIL       |
+| SG                | SG, G, UTIL       |
+| SF                | SF, F, UTIL       |
+| PF                | PF, F, UTIL       |
+| C                 | C, UTIL           |
+| G (ESPN generic)  | PG, SG, G, UTIL   |
+| F (ESPN generic)  | SF, PF, F, UTIL   |
+| Several positions | the union         |
+| Unknown           | UTIL only         |
+
+### Week projection (`matchup.ts`)
+
+- Each side's week = stats already counted + per-game line × games simulated for the remaining days.
+- Margin = me − opponent (opponent − me for turnovers). Call: toss-up when
+  `|me − opp| / max(|me|, |opp|) < 3 %`, else win or loss by the margin's sign.
+- Only the remaining volume is uncertain. Counting categories, per side:
+  `σ² = k·R + (0.06·R)²`, R = rest-of-week total, k = 1.1 3PM, 2.5 PTS, 1.2 REB, 1.1 AST, 1.0 STL,
+  1.1 BLK, 1.0 TO. Percentages, per side:
+  `sqrt(A·p·(1 − p)·1.2 + (0.02·A)²) / max(Atot, 1)`, A = remaining attempts, Atot = the week's
+  projected attempts, p = the week's projected percentage. The two sides add in quadrature.
+- Win chance = `Φ(margin / σ)` (Abramowitz–Stegun normal CDF); with σ = 0 it is 1, 0 or ½ by sign.
+- Expected categories won = Σ win chance. Most categories: a Poisson-binomial DP gives
+  P(win) = P(categories won > n/2), P(tie) = P(won = n/2) for an even n, and P(loss). Each category:
+  the expected record only.
+
+### Add/drop (`addDrop.ts`) and trades (`trade.ts`)
+
+- For one drop, each free agent is added from his add date and the lineup re-simulated. Category
+  points against the opponent's projected week: win 1, toss-up ½, loss 0; options rank by the change
+  in points, then fit to needs.
+- Need weight from the current week: `rl = margin / max(|me|, |opp|)`; `|rl| ≤ 10 %` → 1.0, behind
+  by more → 0.4, ahead by more → 0.1. Fit = `100 × Σ weight × change / scale`, scale = my current
+  percentage for FG% and FT%, else `max(opponent, 1)`; turnovers count negatively.
+- Trade check: per category, Σ z of players received − Σ z of players given; under 0.25 either way
+  is even; punted categories are flagged and left out of the total.
+
+### Simplifications
+
+- There is no lineup log. Days already played are simulated too: the players with a box-score line
+  that day compete for slots, the injured list applies, today's OUT status does not.
+- A dropped player's games earlier in the week are lost, and the add/drop drop loses every
+  remaining day.
+- Day-to-day counts as playing; only OUT and injured-list players are left out.
