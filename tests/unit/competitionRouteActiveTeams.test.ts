@@ -57,7 +57,7 @@ describe('GET /api/leagues/[id]/competition fixture teams', () => {
 
     const response = await GET(request, { params: Promise.resolve({ id: 'league-1' }) });
 
-    expect(response.status).toBe(200);
+    expect(response?.status).toBe(200);
     const teamQuery = mocks.findMembers.mock.calls
       .map(([query]) => query)
       .find((query) => 'draftSlot' in (query.select ?? {}));
