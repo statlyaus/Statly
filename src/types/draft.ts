@@ -45,6 +45,8 @@ export interface DraftParticipant {
   displayName: string;
   teamName?: string;
   draftOrder: number;
+  /** League owner or co-commissioner: sees start, pause and resume. The server enforces it. */
+  canManageDraft?: boolean;
   isOnline: boolean;
   lastSeen: Date;
   isCurrentTurn: boolean;

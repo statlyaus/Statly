@@ -34,7 +34,7 @@ export default async function LoginPage({
                 alt="Statly"
                 width={312}
                 height={118}
-                priority
+                preload
                 className="mx-auto mb-8 h-auto w-64 max-w-full sm:w-80"
               />
               <h1 className="text-3xl font-semibold tracking-normal text-foreground">

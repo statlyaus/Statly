@@ -18,6 +18,9 @@ These are quality references, not assets or layouts to copy.
 
 - Reuse open-code shadcn-style primitives and existing composition patterns.
 - Use semantic theme tokens rather than fixed palette utilities in product markup.
+  `node Scripts/design/count-raw-colours.mjs --top 15` lists the files that still use raw palette
+  classes or colour literals; once a file is clean, add it to `tests/unit/designTokenColours.test.ts`
+  so it cannot regress.
 - Preserve light/dark behavior supported by the surrounding surface.
 - Keep spacing, radius, typography, and elevation consistent with existing tokens.
 - Add a new abstraction only when immediate reuse exists; fix the owning shared primitive when a shared
@@ -40,11 +43,20 @@ while identity and action context remain discoverable.
 Full-screen draft/broadcast experiences can opt out of the standard shell, but that ownership must be
 explicit at the route/layout boundary. Do not make each page remember to reconstruct a shared shell.
 
+The shell (`src/components/navigation/AppLayout.tsx`) owns the landmarks: the header's primary links
+sit in `<nav aria-label="Main">`, and the shell renders the page's only `<main id="main-content">`,
+which the skip link targets. Pages under `src/app/(app)` wrap their content in a `<div>` or
+`<section>`, never `<main>`; `tests/unit/app-shell-landmarks.test.tsx` enforces this. Only an
+immersive route that skips the shell, such as the live draft room, renders its own `<main>`.
+
 ## Realtime and data-rich UI
 
 - Distinguish persisted state, pending mutation, reconnecting/catching-up state, and failure.
 - Do not imply a pick, trade, waiver, or lineup save succeeded before server confirmation.
-- Keep timestamps deterministic and show the relevant league timezone.
+- Keep timestamps deterministic and show the relevant league timezone. League times (draft starts,
+  picks, lineup locks, matchup starts, waiver runs and claims) go through `formatLeagueTime` in
+  `src/lib/leagueTime.ts`, which formats in the league's `LeagueSettings.timeZone` and always prints
+  the zone abbreviation. Relative times ("3m ago") and real AFL fixture times are not league times.
 - Explain comparison bases, sample sizes, directionality, and limitations; do not label an estimate as
   objective fairness.
 - Use loading, empty, error, unauthorized, and stale-data states deliberately.

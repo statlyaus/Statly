@@ -30,7 +30,6 @@ const nextCommand = [
   'NEXT_PUBLIC_DISABLE_PERFORMANCE_ANALYTICS=true',
   `NEXT_PUBLIC_SOCKET_DISABLED=${useSocketWebServer ? 'false' : 'true'}`,
   `NEXT_PUBLIC_SOCKET_URL=${socketURL}`,
-  `NEXT_PUBLIC_SOCKET_IO_URL=${socketURL}`,
   './node_modules/.bin/next dev --turbopack',
   `-p ${port}`,
 ].join(' ');

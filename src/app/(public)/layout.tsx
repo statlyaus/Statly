@@ -36,7 +36,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
               alt="Statly"
               width={136}
               height={40}
-              priority
+              loading="eager"
               className="h-auto w-28 sm:w-32"
             />
           </Link>
