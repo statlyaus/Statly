@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { prisma } from '@/lib/prisma';
 
 import { requireBasketballLeagueOwner } from './basketballLeagueAccess';
@@ -21,7 +23,10 @@ import {
 } from './basketballLeagueValidation';
 import { cleanPastedLine, matchPlayerNames, searchPlayersByName } from './basketballPlayerMatching';
 
-export async function listBasketballLeagues(userId: string): Promise<BasketballLeagueSummary[]> {
+/** Memoised per request (React `cache`), so a layout and its page share one query. */
+export const listBasketballLeagues = cache(async function listBasketballLeagues(
+  userId: string
+): Promise<BasketballLeagueSummary[]> {
   const leagues = await prisma.basketballLeague.findMany({
     where: { ownerId: userId },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -41,7 +46,7 @@ export async function listBasketballLeagues(userId: string): Promise<BasketballL
     myTeamName: teams[0]?.name ?? '',
     createdAt: createdAt.toISOString(),
   }));
-}
+});
 
 /** The whole profile: settings, teams, roster spots with player details, and matchups. 404 unless owned. */
 export async function getBasketballLeagueDetail(
@@ -56,8 +61,11 @@ export async function getBasketballLeagueDetail(
   return toBasketballLeagueDetail(league);
 }
 
-/** For pages: the owned profile, or null for a missing or someone else's league (call `notFound()`). */
-export async function loadOwnedBasketballLeague(
+/**
+ * For pages: the owned profile, or null for a missing or someone else's league (call `notFound()`).
+ * Memoised per request (React `cache`), so a layout and its page share one query.
+ */
+export const loadOwnedBasketballLeague = cache(async function loadOwnedBasketballLeague(
   userId: string,
   leagueId: string
 ): Promise<BasketballLeagueDetail | null> {
@@ -67,7 +75,7 @@ export async function loadOwnedBasketballLeague(
     if (error instanceof BasketballLeagueError && error.code === 'NOT_FOUND') return null;
     throw error;
   }
-}
+});
 
 const playerSelect = {
   id: true,
