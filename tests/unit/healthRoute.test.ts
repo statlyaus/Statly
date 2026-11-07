@@ -80,8 +80,9 @@ describe('health route', () => {
       status: 'unhealthy',
       timestamp: expect.any(String),
       services: {
-        database: 'healthy',
+        database: 'unhealthy',
         relationalDatabase: 'unhealthy',
+        firestoreProjection: 'healthy',
         memory: expect.any(String),
         redis: 'healthy',
         metrics: 'healthy',
