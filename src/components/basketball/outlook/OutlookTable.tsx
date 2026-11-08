@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 
 import type { OutlookPlayer } from '@/server/basketball/readModels/roleOutlook';
 
-import { OwnerLabel, SortHeaderLink } from '../analysis/AnalysisBits';
+import { InjuryBadge, OwnerLabel, SortHeaderLink } from '../analysis/AnalysisBits';
 import { formatChance, formatPct, formatSigned } from '../analysis/format';
-import { driverText, OutlookInjuryBadge } from './OutlookPanels';
+import { driverText } from './OutlookPanels';
 import type { OutlookTableView } from './outlookView';
 
 type SortState = 'ascending' | 'descending' | 'none';
@@ -306,11 +306,15 @@ export function OutlookTable({
                     <span className="truncate">
                       {player.teamCode} · {player.positions.join('/') || '–'}
                     </span>
-                    <OutlookInjuryBadge injury={player.injury} stale={injuriesStale} />
+                    <InjuryBadge
+                      injury={player.injury}
+                      seasonEnding={player.injury?.seasonEnding}
+                      stale={injuriesStale}
+                    />
                   </span>
                 </th>
-                <td className="px-2" title={player.owner.teamName ?? undefined}>
-                  <span className="flex min-w-0 overflow-hidden">
+                <td className="px-2">
+                  <span className="flex min-w-0">
                     <OwnerLabel owner={player.owner} />
                   </span>
                 </td>

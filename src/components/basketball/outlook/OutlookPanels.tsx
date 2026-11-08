@@ -1,55 +1,15 @@
 /**
- * The Outlook page's ranked lists, which replace the sheet's 'Role Model Charts', and the injury
- * badge the page shares with its table. Server-safe: no hooks, tokens only, signs and words with
- * every colour.
+ * The Outlook page's ranked lists, which replace the sheet's 'Role Model Charts'. Server-safe: no
+ * hooks, tokens only, signs and words with every colour.
  */
 
 import type { ReactNode } from 'react';
 
-import { badgeStyles } from '@/components/ui/controlStyles';
-import type {
-  OutlookDriver,
-  OutlookInjury,
-  OutlookPlayer,
-} from '@/server/basketball/readModels/roleOutlook';
+import type { OutlookDriver, OutlookPlayer } from '@/server/basketball/readModels/roleOutlook';
 
-import { OwnerLabel } from '../analysis/AnalysisBits';
-import { formatGameDate, formatSigned } from '../analysis/format';
+import { InjuryBadge, OwnerLabel } from '../analysis/AnalysisBits';
+import { formatSigned } from '../analysis/format';
 import type { OutlookPanels as Panels } from './outlookView';
-
-/** OUT, DTD or OUT · season; "old" when the report is over a day old (it is still used). */
-export function OutlookInjuryBadge({
-  injury,
-  stale,
-}: {
-  injury: OutlookInjury | null;
-  stale: boolean;
-}) {
-  if (!injury) return null;
-  const out = injury.status === 'OUT';
-  const when = injury.seasonEnding
-    ? ', out for the season'
-    : injury.expectedReturnOn
-      ? `, back ${formatGameDate(injury.expectedReturnOn)}`
-      : '';
-  const old = stale ? ' (injury report over a day old)' : '';
-  return (
-    <span
-      className={badgeStyles({ tone: out ? 'loss' : 'warning', size: 'xs' })}
-      title={`${injury.detail ?? (out ? 'Out' : 'Day-to-day')}${when}${old}`}
-    >
-      {out ? 'OUT' : 'DTD'}
-      {injury.seasonEnding ? ' · season' : ''}
-      {stale ? ' · old' : ''}
-      <span className="sr-only">
-        {out ? ' ruled out' : ' day-to-day'}
-        {injury.detail ? `: ${injury.detail}` : ''}
-        {when}
-        {old}
-      </span>
-    </span>
-  );
-}
 
 /** "Gafford out +2.1": his minutes without that teammate minus with him, as the sheet shows. */
 export const driverText = (driver: OutlookDriver) =>
@@ -93,7 +53,11 @@ function RankedList({
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate font-semibold text-foreground">{player.fullName}</span>
               <OwnerLabel owner={player.owner} />
-              <OutlookInjuryBadge injury={player.injury} stale={stale} />
+              <InjuryBadge
+                injury={player.injury}
+                seasonEnding={player.injury?.seasonEnding}
+                stale={stale}
+              />
             </span>
             <span className="block truncate text-xs text-muted-foreground" title={detail(player)}>
               {detail(player)}
