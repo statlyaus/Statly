@@ -99,6 +99,37 @@ use, or an enterprise feed) is required before a public launch. The schema store
 values (seconds played, standard team codes, a did-not-play reason enum) so the adapter can be
 swapped without a migration.
 
+## Injury report
+
+`NbaPlayerInjury` holds the provider's current injury report, one row per listed player:
+
+| Field              | Meaning                                                                                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`           | `OUT` or `DAY_TO_DAY`. Any other status fails the run.                                                                                                                     |
+| `detail`           | Side and type, for example "Left Ankle".                                                                                                                                   |
+| `expectedReturnOn` | The provider's return date (Eastern). Often a next-evaluation date rather than a firm return.                                                                              |
+| `comment`          | The provider's one-line note on the player, for example "X (ankle) is out for Friday's game".                                                                              |
+| `fantasyStatus`    | The provider's own fantasy availability code, as given. ESPN sends `OUT`, `GTD` (game-time decision) and `OFS` (out for season). Read `seasonEnding` instead of this code. |
+| `seasonEnding`     | The player is out for the rest of the season (rule below).                                                                                                                 |
+
+The ESPN adapter sets `seasonEnding` when either:
+
+- the fantasy status is `OFS`; or
+- the player is listed Out and the one-line note (matched ignoring case) contains "season-ending",
+  unless it reads "from", "after" or "following" a/an/his/the season-ending injury (an earlier
+  one), or contains "miss", "out for", "sidelined for" or "sit out", then "the", then optionally
+  "rest of the", "remainder of the", "entire" or "whole", a season like "2026-27" and "regular", then
+  "season" or "campaign", unless followed by "opener", "debut" or "finale" (spaced or hyphenated)
+  or by "'s".
+
+So "is out for the season", "will miss the rest of the season" and "is expected to miss the 2026-27
+season" count; "out for the season opener", "miss the start of the season" and hedges such as "most,
+if not all, of the season" do not. ESPN's longer note is neither stored nor read, because it often
+names teammates who are out. ESPN gives an `OFS` player a placeholder return date months after the
+season ends, so readers should treat a season-ending row as out for every remaining game whatever its
+date. On the 8 November 2026 feed (88 rows) the rule marked the 3 `OFS` players; the note rule on its
+own found 2 of them and no one else.
+
 ## Valuation and matchup maths
 
 The engine in `src/lib/basketball/` is pure TypeScript with no database or network access, so it
