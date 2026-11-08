@@ -44,7 +44,7 @@ describe('DashboardClient auth restore behavior', () => {
   it('redirects unauthenticated users to login once Firebase auth resolves', async () => {
     mocks.useAuth.mockReturnValue({ user: null, loading: false });
 
-    render(<DashboardClient />);
+    render(<DashboardClient showBasketball={false} />);
 
     await waitFor(() => {
       expect(mocks.replace).toHaveBeenCalledWith('/login?next=%2Fdashboard');
@@ -56,7 +56,7 @@ describe('DashboardClient auth restore behavior', () => {
   it('keeps the legacy navigation out of the auth-resolution state', () => {
     mocks.useAuth.mockReturnValue({ user: null, loading: true });
 
-    render(<DashboardClient />);
+    render(<DashboardClient showBasketball={false} />);
 
     expect(screen.getByText('Restoring dashboard session')).toBeInTheDocument();
     expect(screen.queryByText('Legacy navigation')).not.toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('DashboardClient auth restore behavior', () => {
       loading: false,
     });
 
-    render(<DashboardClient />);
+    render(<DashboardClient showBasketball={false} />);
 
     expect(screen.getByText('Dashboard for tester@statly.dev')).toBeInTheDocument();
     expect(screen.getByText('Legacy navigation')).toBeInTheDocument();

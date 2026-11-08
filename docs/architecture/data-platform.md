@@ -236,7 +236,8 @@ Licensing guard: ESPN's terms allow personal, non-commercial use only, so its ad
 `commercialUseLicensed: false`. Every job, from the cron route or the scripts, refuses such a
 provider with `unlicensed_provider` when `NODE_ENV=production` unless
 `NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true` is set deliberately. A licensed feed is an owner decision
-before any public launch. Netlify's access to ESPN is untested.
+before any public launch; until then the basketball section itself is private to an allow-list
+(see [authorization](authorization.md)). Netlify's access to ESPN is untested.
 
 Every invocation writes an `NbaIngestRun` row first and sets `finishedAt` and `outcome` when it ends.
 A row with `finishedAt` still null more than an hour after `startedAt` means the function was killed

@@ -99,6 +99,19 @@ use, or an enterprise feed) is required before a public launch. The schema store
 values (seconds played, standard team codes, a did-not-play reason enum) so the adapter can be
 swapped without a migration.
 
+Owner decision, 2026-11-08: ESPN stays, and the section stays private until the data is licensed.
+The free alternatives were checked and ruled out: NBA.com's terms bar its statistics from "any
+fantasy game or other commercial product or service"; Basketball-Reference forbids building a data
+store that substitutes for its own and sells bulk data from US$5,000; Basketball Monster allows
+personal, non-commercial use only and forbids scraping or putting its content in a database.
+
+Access is an allow-list: `BASKETBALL_ALLOWED_USER_IDS` holds the comma-separated Firebase user ids
+that may open `/basketball` and call `/api/basketball/*` (`canUseBasketball`,
+`src/server/basketball/basketballAccess.ts`). Everyone else gets a 404 and no Basketball link in the
+navigation. Left unset, the section is open to signed-in users outside production (local development
+and e2e) and closed to everyone in production. The NBA ingest is not gated by it; it runs on
+`CRON_SECRET` and the licensing guard above.
+
 ## Valuation and matchup maths
 
 The engine in `src/lib/basketball/` is pure TypeScript with no database or network access, so it
