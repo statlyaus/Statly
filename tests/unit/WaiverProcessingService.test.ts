@@ -38,11 +38,15 @@ function claim(overrides: Partial<WaiverClaim> = {}): WaiverClaim {
   };
 }
 
+// The where-filter every waiver priority and claim query carries: the league's active season.
+const ACTIVE_SEASON = { season: { activeForLeague: { is: { id: 'league-1' } } } };
+
 function createDbMock() {
   const tx = {
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
+        activeSeasonId: 'season-1',
         settings: { rosterSize: 2 },
       }),
     },
@@ -104,6 +108,7 @@ function createClaimStoreMock() {
 
 function createSubmitDbMock() {
   const db = {
+    league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
     leagueMember: {
       findFirst: vi
         .fn()
@@ -560,7 +565,11 @@ describe('WaiverProcessingService', () => {
 
   it('moves the successful team to the bottom before choosing the next pending claim', async () => {
     const { db, tx } = createDbMock();
-    tx.league.findUnique.mockResolvedValue({ id: 'league-1', settings: { rosterSize: 10 } });
+    tx.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      activeSeasonId: 'season-1',
+      settings: { rosterSize: 10 },
+    });
     tx.leagueRosterPlayer.count.mockResolvedValue(0);
     tx.player.findMany.mockResolvedValue([
       { id: 'player-1', name: 'Player One', club: 'Test Club', position: 'MID' },
@@ -719,6 +728,7 @@ describe('PrismaWaiverClaimStore', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           leagueId: 'league-1',
+          seasonId: 'season-1',
           memberId: 'member-1',
           actionType: 'WAIVER_CLAIM',
           details: expect.objectContaining({ playerId: 'free-player' }),
@@ -726,7 +736,7 @@ describe('PrismaWaiverClaimStore', () => {
       })
     );
     expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1' },
+      where: { leagueId: 'league-1', ...ACTIVE_SEASON, memberId: 'member-1' },
       data: { pendingBidTotal: { increment: 7 } },
     });
     expect(waiverDoc.set).toHaveBeenCalledWith(
@@ -788,7 +798,7 @@ describe('PrismaWaiverClaimStore', () => {
 
     expect(result.id).toBe('action-1');
     expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1' },
+      where: { leagueId: 'league-1', ...ACTIVE_SEASON, memberId: 'member-1' },
       data: { pendingBidTotal: { increment: 7 } },
     });
     // Only the pending-to-cancelled guard writes status; a kept claim is never cancelled.
@@ -798,6 +808,7 @@ describe('PrismaWaiverClaimStore', () => {
   it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
     const joinedAt = new Date('2026-06-01T00:00:00.000Z');
     const db = {
+      league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
       leagueMember: {
         findFirst: vi.fn().mockResolvedValue({
           id: 'member-2',
@@ -846,8 +857,18 @@ describe('PrismaWaiverClaimStore', () => {
 
     expect(db.waiverPriority.createMany).toHaveBeenCalledWith({
       data: [
-        expect.objectContaining({ memberId: 'member-2', priority: 1, remainingFAAB: null }),
-        expect.objectContaining({ memberId: 'member-1', priority: 2, remainingFAAB: null }),
+        expect.objectContaining({
+          seasonId: 'season-1',
+          memberId: 'member-2',
+          priority: 1,
+          remainingFAAB: null,
+        }),
+        expect.objectContaining({
+          seasonId: 'season-1',
+          memberId: 'member-1',
+          priority: 2,
+          remainingFAAB: null,
+        }),
       ],
       skipDuplicates: true,
     });
@@ -879,7 +900,12 @@ describe('PrismaWaiverClaimStore', () => {
     await store.rejectClaim(tx as never, pending, true);
 
     expect(tx.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1', pendingBidTotal: { gte: 7 } },
+      where: {
+        leagueId: 'league-1',
+        ...ACTIVE_SEASON,
+        memberId: 'member-1',
+        pendingBidTotal: { gte: 7 },
+      },
       data: { pendingBidTotal: { decrement: 7 } },
     });
     expect(tx.teamAction.update).toHaveBeenCalledWith({
@@ -992,7 +1018,12 @@ describe('PrismaWaiverClaimStore', () => {
       }),
     });
     expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1', pendingBidTotal: { gte: 7 } },
+      where: {
+        leagueId: 'league-1',
+        ...ACTIVE_SEASON,
+        memberId: 'member-1',
+        pendingBidTotal: { gte: 7 },
+      },
       data: { pendingBidTotal: { decrement: 7 } },
     });
     expect(waiverDoc.update).toHaveBeenCalledWith(

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { normalizeCompetitionRules } from '@/server/leagues/competitionRules';
 import { parseLeagueCategories } from '@/server/leagues/defaultLineups';
@@ -35,6 +36,7 @@ export async function loadLeagueStandingsHistory(
     league.settings.categoryDirectionsJson
   );
   const fixtureVersion = league.settings.competitionRulesVersion;
+  const seasonId = activeSeasonIdOf(league);
 
   const [members, standings, finalizedScores, matchups] = await Promise.all([
     prisma.leagueMember.findMany({
@@ -42,10 +44,11 @@ export async function loadLeagueStandingsHistory(
       where: { leagueId, isActive: true },
       select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
     }),
-    prisma.leagueStanding.findMany({ where: { leagueId } }),
+    prisma.leagueStanding.findMany({ where: { leagueId, seasonId } }),
     prisma.leagueMatchupScore.findMany({
       where: {
         leagueId,
+        seasonId,
         status: 'FINAL',
         matchup: { fixtureVersion, phase: 'REGULAR' },
       },

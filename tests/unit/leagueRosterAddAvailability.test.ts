@@ -116,6 +116,7 @@ describe('league roster free-agent add eligibility', () => {
     expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
+        season: { activeForLeague: { is: { id: 'league-1' } } },
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
         processingAt: { gt: expect.any(Date) },
