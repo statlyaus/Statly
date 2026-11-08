@@ -85,6 +85,9 @@ client omits optional values:
 - `H2H_EACH_CATEGORY` scoring
 - the real-data nine-category preset
 - normalized active lineup slots and category directions
+- the AFL season of the draft date, or of the creation date when there is none: next season once
+  that year's Grand Final has passed (see
+  [league competition rules](../product/league-competition-rules.md#calendar-and-fixtures))
 
 Clients may expose additional choices, but they must submit values supported by the server contract.
 
