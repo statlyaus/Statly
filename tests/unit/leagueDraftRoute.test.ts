@@ -18,7 +18,6 @@ vi.mock('@/lib/prisma', () => ({ prisma: { league: { findUnique: mocks.findLeagu
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: { collection: mocks.firestoreCollection } }));
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMembership: mocks.legacyMembership,
-  isLeagueManagerRole: (role: unknown) => role === 'owner' || role === 'manager',
 }));
 vi.mock('@/server/draft/services/DraftReadinessService', () => ({
   getLeagueDraftOperationalReadiness: mocks.readiness,

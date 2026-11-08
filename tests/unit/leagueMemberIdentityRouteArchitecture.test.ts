@@ -10,19 +10,22 @@ describe('league member identity route architecture', () => {
     const route = source();
 
     expect(route).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
-    expect(route).toContain("import { getLeagueMembership } from '@/lib/leagueMembership'");
+    expect(route).toContain(
+      "import { getLeagueMembershipAccess } from '@/server/leagues/membership'"
+    );
+    expect(route).not.toContain('@/lib/leagueMembership');
     expect(route).toContain('const userId = await getAuthenticatedUserId(request);');
     expect(route).toContain(
-      'const league = await prisma.league.findUnique({ where: { id }, select: { id: true } });'
+      'const league = await prisma.league.findUnique({ where: { id }, select: { ownerId: true } });'
     );
-    expect(route).toContain('const membership = await getLeagueMembership(id, userId);');
-    expect(route).toContain("membership.source !== 'prisma'");
+    expect(route).toContain('const access = await getLeagueMembershipAccess(id, userId);');
+    expect(route).toContain('const memberId = access.memberId;');
     expect(route.indexOf('prisma.league.findUnique')).toBeLessThan(
-      route.indexOf('const membership = await getLeagueMembership(id, userId);')
+      route.indexOf('const access = await getLeagueMembershipAccess(id, userId);')
     );
-    expect(route.indexOf('const membership = await getLeagueMembership(id, userId);')).toBeLessThan(
-      route.indexOf('body = (await request.json()) as Record<string, unknown>;')
-    );
+    expect(
+      route.indexOf('const access = await getLeagueMembershipAccess(id, userId);')
+    ).toBeLessThan(route.indexOf('body = (await request.json()) as Record<string, unknown>;'));
     expect(route).toContain("return NextResponse.json({ error: 'Invalid request body' }");
   });
 

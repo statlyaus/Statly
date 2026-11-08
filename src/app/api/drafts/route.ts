@@ -12,7 +12,6 @@ import {
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { createDraftReminders } from '@/lib/reminders';
-import { ensurePrismaLeagueMirror } from '@/lib/prismaLeagueBridge';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
@@ -138,6 +137,61 @@ function orderMembersForDraft(
   });
 }
 
+type ValidatedDraftRequest =
+  { ok: true; timeZone: string; scheduledStartTime: Date } | { ok: false; error: string };
+
+// Checks the request's own fields and resolves its start time (UTC); no database access.
+function validateCreateDraftRequest(body: CreateDraftRequest): ValidatedDraftRequest {
+  if (!body.name?.trim()) {
+    return { ok: false, error: 'Draft name is required' };
+  }
+
+  if (
+    typeof body.leagueSize !== 'number' ||
+    !Number.isInteger(body.leagueSize) ||
+    body.leagueSize < MIN_LEAGUE_TEAMS ||
+    body.leagueSize > MAX_LEAGUE_TEAMS
+  ) {
+    return {
+      ok: false,
+      error: `League size must be between ${MIN_LEAGUE_TEAMS} and ${MAX_LEAGUE_TEAMS}`,
+    };
+  }
+
+  if (!['snake', 'linear'].includes(body.draftType)) {
+    return { ok: false, error: 'Draft type must be "snake" or "linear"' };
+  }
+
+  if (!body.timePerPick || !isValidPickSeconds(body.timePerPick)) {
+    return {
+      ok: false,
+      error: `Time per pick must be between ${MIN_PICK_SECONDS} and ${MAX_PICK_SECONDS} seconds`,
+    };
+  }
+
+  const timeZone = body.timeZone || 'UTC';
+  if (!isValidTimeZone(timeZone)) {
+    return { ok: false, error: 'Invalid timezone' };
+  }
+
+  // Without a scheduled time the draft starts in 5 minutes.
+  if (!body.scheduledTime) {
+    return { ok: true, timeZone, scheduledStartTime: addMinutes(new Date(), 5) };
+  }
+
+  let scheduledStartTime: Date;
+  try {
+    // Convert from the user's timezone to UTC for storage
+    scheduledStartTime = localToUtc(body.scheduledTime, timeZone);
+  } catch (_error) {
+    return { ok: false, error: 'Invalid scheduled time format' };
+  }
+  if (scheduledStartTime <= new Date()) {
+    return { ok: false, error: 'Scheduled time must be in the future' };
+  }
+  return { ok: true, timeZone, scheduledStartTime };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const userId = await getAuthenticatedUserId(request);
@@ -164,57 +218,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validation
-    if (!body.name?.trim()) {
-      return errorResponse('Draft name is required', 400);
+    const validated = validateCreateDraftRequest(body);
+    if (!validated.ok) {
+      return errorResponse(validated.error, 400);
     }
-
-    if (
-      typeof body.leagueSize !== 'number' ||
-      !Number.isInteger(body.leagueSize) ||
-      body.leagueSize < MIN_LEAGUE_TEAMS ||
-      body.leagueSize > MAX_LEAGUE_TEAMS
-    ) {
-      return errorResponse(
-        `League size must be between ${MIN_LEAGUE_TEAMS} and ${MAX_LEAGUE_TEAMS}`,
-        400
-      );
-    }
-
-    if (!['snake', 'linear'].includes(body.draftType)) {
-      return errorResponse('Draft type must be "snake" or "linear"', 400);
-    }
-
-    if (!body.timePerPick || !isValidPickSeconds(body.timePerPick)) {
-      return errorResponse(
-        `Time per pick must be between ${MIN_PICK_SECONDS} and ${MAX_PICK_SECONDS} seconds`,
-        400
-      );
-    }
-
-    // Timezone validation
-    const timeZone = body.timeZone || 'UTC';
-    if (!isValidTimeZone(timeZone)) {
-      return errorResponse('Invalid timezone', 400);
-    }
-
-    // Scheduled time validation and conversion
-    let scheduledStartTime: Date;
-    if (body.scheduledTime) {
-      try {
-        // Convert from user's timezone to UTC for storage
-        scheduledStartTime = localToUtc(body.scheduledTime, timeZone);
-
-        if (scheduledStartTime <= new Date()) {
-          return errorResponse('Scheduled time must be in the future', 400);
-        }
-      } catch (_error) {
-        return errorResponse('Invalid scheduled time format', 400);
-      }
-    } else {
-      // If no scheduled time provided, start draft in 5 minutes from now
-      scheduledStartTime = addMinutes(new Date(), 5);
-    }
+    const { timeZone, scheduledStartTime } = validated;
 
     const positionLimits = normalizeDraftPositionLimits(body.positionLimits);
     const autoPickRules = normalizeDraftAutoPickRules(body.autoPickRules);
@@ -222,28 +230,6 @@ export async function POST(request: NextRequest) {
     const rosterSize = getRosterSizeFromPositionLimits(positionLimits);
     const benchSize = getBenchSizeFromPositionLimits(positionLimits);
     const activePlayerCount = await prisma.player.count({ where: { active: true } });
-
-    if (body.leagueId) {
-      const existingLeague = await prisma.league.findUnique({
-        where: { id: body.leagueId },
-        select: { id: true },
-      });
-
-      if (!existingLeague) {
-        await ensurePrismaLeagueMirror({
-          leagueId: body.leagueId,
-          draftType: body.draftType,
-          timePerPick: body.timePerPick,
-          scheduledStartTime,
-          timeZone,
-          rosterSize,
-          benchSize,
-          pickOrder,
-          positionLimits,
-          autoPickRules,
-        });
-      }
-    }
 
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {
