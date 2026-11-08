@@ -26,19 +26,15 @@ interface LivePlayer {
 }
 
 interface RealTimeMatchCenterProps {
-  selectedLeague?: string;
   favoriteTeams?: string[];
-  watchlistPlayers?: string[];
   onPlayerSelect?: (player: LivePlayer) => void;
 }
 
 export default function RealTimeMatchCenter({
-  selectedLeague: _selectedLeague,
   favoriteTeams: _favoriteTeams = [],
-  watchlistPlayers = [],
   onPlayerSelect,
 }: RealTimeMatchCenterProps) {
-  const [activeTab, setActiveTab] = useState<'matches' | 'live-players' | 'my-players'>('matches');
+  const [activeTab, setActiveTab] = useState<'matches' | 'live-players'>('matches');
 
   // Live data from ETL (polling)
   const { playerStats, liveMatches, isLive, lastUpdate, isLoading, error, refresh } = useLiveData({
@@ -55,23 +51,14 @@ export default function RealTimeMatchCenter({
     onSelectRef.current = onPlayerSelect;
   }, [onPlayerSelect]);
 
-  // Build a Set for O(1) membership checks
-  const watchSet = useMemo(() => new Set(watchlistPlayers), [watchlistPlayers]);
-
-  const myPlayers = useMemo(() => {
-    if (!watchlistPlayers.length) return [];
-    return playerStats.filter((p) => watchSet.has(p.id));
-  }, [playerStats, watchSet, watchlistPlayers.length]);
-
   // Tabs model and keyboard navigation
   const tabs = useMemo(
     () =>
       [
         { id: 'matches', label: 'Live Matches', count: liveMatches.length },
         { id: 'live-players', label: 'Top Performers', count: playerStats.length },
-        { id: 'my-players', label: 'My Players', count: myPlayers.length },
       ] as const,
-    [liveMatches.length, playerStats.length, myPlayers.length]
+    [liveMatches.length, playerStats.length]
   );
   const tabsLength = tabs.length;
   const tabRefs = useRef<HTMLButtonElement[]>([]);
@@ -111,13 +98,7 @@ export default function RealTimeMatchCenter({
   );
 
   // Card component with memoized click handler
-  const LivePlayerCard = ({
-    p,
-    isWatched,
-  }: {
-    p: (typeof playerStats)[number];
-    isWatched: boolean;
-  }) => {
+  const LivePlayerCard = ({ p }: { p: (typeof playerStats)[number] }) => {
     const handleClick = useCallback(() => {
       onSelectRef.current?.({
         id: p.id,
@@ -176,15 +157,6 @@ export default function RealTimeMatchCenter({
             <div className="text-gray-500">Goals</div>
           </div>
         </div>
-
-        {isWatched && (
-          <div className="mt-3 flex items-center gap-1">
-            <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-            <span className="text-xs text-yellow-600">Watchlist</span>
-          </div>
-        )}
       </motion.div>
     );
   };
@@ -256,37 +228,9 @@ export default function RealTimeMatchCenter({
     >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {playerStats.slice(0, 12).map((p) => (
-          <LivePlayerCard key={p.id} p={p} isWatched={watchSet.has(p.id)} />
+          <LivePlayerCard key={p.id} p={p} />
         ))}
       </div>
-    </motion.div>
-  );
-
-  const myPlayersSection = (
-    <motion.div
-      key="my-players"
-      id="tabpanel-my-players"
-      role="tabpanel"
-      aria-labelledby="tab-my-players"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="min-h-[200px]"
-    >
-      {myPlayers.length ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {myPlayers.map((p) => (
-            <LivePlayerCard key={p.id} p={p} isWatched={true} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">Your watchlist is empty</div>
-          <div className="text-gray-500">
-            Add players to your watchlist to see their live scores here
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 
@@ -361,7 +305,6 @@ export default function RealTimeMatchCenter({
       <AnimatePresence mode="wait">
         {activeTab === 'matches' && matchesSection}
         {activeTab === 'live-players' && topPerformersSection}
-        {activeTab === 'my-players' && myPlayersSection}
       </AnimatePresence>
     </div>
   );

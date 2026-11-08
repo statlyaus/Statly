@@ -286,8 +286,8 @@ Some endpoints require a credential by design and fail closed when it is absent:
 - `/api/admin/*` requires the `x-admin-secret` header carrying `ADMIN_SECRET`.
 - `/api/cron/*` requires `Authorization: Bearer $CRON_SECRET` (`src/lib/cronAuth.ts`). An unset
   `CRON_SECRET` denies every request outside `NODE_ENV=development`.
-- `/api/user/watchlists`, `/api/user/leagues`, and `/api/user/leagues/[id]/settings` derive the user
-  from a verified identity and ignore any client-supplied `userId`. In local development the scripted
+- `/api/user/teams` derives the user from a verified identity and ignores any client-supplied
+  `userId`; it lists the caller's Prisma league memberships. In local development the scripted
   identity is accepted when both `STATLY_ENABLE_DEV_AUTH` and `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH` are
   `true` and the process is not running in production mode.
 - `/basketball` and `/api/basketball/*` answer 404 to anyone not in `BASKETBALL_ALLOWED_USER_IDS`
@@ -307,7 +307,7 @@ CRON_SECRET=<paste a different output of: openssl rand -hex 32>
 ```sh
 Scripts/dev/curl-admin.sh admin /api/admin/queue
 Scripts/dev/curl-admin.sh cron /api/cron/daily
-Scripts/dev/curl-admin.sh user /api/user/leagues
+Scripts/dev/curl-admin.sh user /api/user/teams
 ```
 
 `Scripts/dev/curl-admin.sh cron /api/cron/injuries` fetches the Footywire injury list once and stores
