@@ -35,6 +35,7 @@ import {
   type CategoryTotals,
 } from './matchupScoringEngine';
 import { calculateStandingsRows } from './standingsService';
+import { inferUnselectedDidNotPlay, loadTeamSheetStatlyPlayerIds } from './unselectedPlayers';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
 import { normalizeLineupSlots } from './lineupSettings';
 import type { LeagueLineupSlot, LeagueScoringMode } from './scoringTypes';
@@ -498,10 +499,13 @@ export function resolveRoundPlayerAvailability({
   stats,
   matches,
   expectedPlayers,
+  statlyPlayerIds = new Set(),
 }: {
   stats: readonly NormalizedLiveStatRow[];
   matches: readonly RawRoundMatch[];
   expectedPlayers: readonly { playerId: string; club: string | null }[];
+  /** Stat row player ids known to be Statly players; proves a club's team sheet is mapped. */
+  statlyPlayerIds?: ReadonlySet<string>;
 }) {
   const totalsByPlayerId = new Map<string, CategoryTotals>();
   const nonPlayingReasonByPlayerId = new Map<string, 'DID_NOT_PLAY' | 'CLUB_BYE'>();
@@ -531,6 +535,15 @@ export function resolveRoundPlayerAvailability({
       totalsByPlayerId.set(player.playerId, {});
       nonPlayingReasonByPlayerId.set(player.playerId, 'CLUB_BYE');
     }
+  }
+  for (const playerId of inferUnselectedDidNotPlay({
+    stats,
+    matches,
+    players: expectedPlayers.filter((player) => !totalsByPlayerId.has(player.playerId)),
+    statlyPlayerIds,
+  })) {
+    totalsByPlayerId.set(playerId, {});
+    nonPlayingReasonByPlayerId.set(playerId, 'DID_NOT_PLAY');
   }
 
   return { totalsByPlayerId, nonPlayingReasonByPlayerId };
@@ -586,6 +599,11 @@ export async function loadLivePlayerTotalsForRound(
     stats: normalizedStats,
     matches: rawMatches,
     expectedPlayers,
+    statlyPlayerIds: await loadTeamSheetStatlyPlayerIds({
+      stats: normalizedStats,
+      matches: rawMatches,
+      players: expectedPlayers,
+    }),
   });
 
   const available =
