@@ -63,6 +63,11 @@ interface LeagueSettingsResponse {
     categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
     scoringSettingsLockedAt: string | null;
   };
+  // Why scoring or draft structure can no longer change; null while it is still editable.
+  locks: {
+    scoring: string | null;
+    draftStructure: string | null;
+  };
   roster: {
     rosterSize: number;
     benchSize: number;
@@ -161,6 +166,7 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
       ),
       scoringSettingsLockedAt: league.scoringSettingsLockedAt ?? null,
     },
+    locks: { scoring: null, draftStructure: null },
     roster: {
       rosterSize: 18,
       benchSize: DEFAULT_DRAFT_POSITION_LIMITS.BENCH,
@@ -189,6 +195,7 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
   const scoringSource = isRecord(source.scoring) ? source.scoring : {};
   const draftSource = isRecord(source.draft) ? source.draft : {};
   const waiverSource = isRecord(source.waiver) ? source.waiver : {};
+  const locksSource = isRecord(source.locks) ? source.locks : {};
 
   return {
     league: {
@@ -219,6 +226,11 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
         typeof scoringSource.scoringSettingsLockedAt === 'string'
           ? scoringSource.scoringSettingsLockedAt
           : null,
+    },
+    locks: {
+      scoring: typeof locksSource.scoring === 'string' ? locksSource.scoring : null,
+      draftStructure:
+        typeof locksSource.draftStructure === 'string' ? locksSource.draftStructure : null,
     },
     roster: {
       rosterSize: asNumber(rosterSource.rosterSize, fallback.roster.rosterSize),
@@ -982,6 +994,7 @@ export function LeagueSettingsPanel({
     }
   };
 
+  const draftStructureLock = settings.locks.draftStructure;
   const teamFillPercent = Math.min(100, Math.round((memberCount / settings.league.maxTeams) * 100));
 
   const updateFixtureGenerationMode = (fixtureGenerationMode: LeagueFixtureGenerationMode) => {
@@ -1097,6 +1110,7 @@ export function LeagueSettingsPanel({
 
         <ScoringSettingsPanel
           value={settings.scoring}
+          lockReason={settings.locks.scoring}
           disabled={!isAdmin || isSaving}
           onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
         />
@@ -1112,6 +1126,11 @@ export function LeagueSettingsPanel({
           <h3 className="text-base font-semibold text-[color:var(--league-text)]">
             Draft Settings
           </h3>
+          {draftStructureLock && (
+            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+              {draftStructureLock}
+            </p>
+          )}
           <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
               Draft Date
@@ -1128,6 +1147,7 @@ export function LeagueSettingsPanel({
               Draft Type
               <select
                 value={settings.draft.draftType}
+                disabled={Boolean(draftStructureLock)}
                 onChange={(event) =>
                   updateDraftSettings({
                     draftType: event.target.value as LeagueSettingsDraftType,
@@ -1143,6 +1163,7 @@ export function LeagueSettingsPanel({
               Pick Order
               <select
                 value={settings.draft.pickOrder}
+                disabled={Boolean(draftStructureLock)}
                 onChange={(event) =>
                   updateDraftSettings({ pickOrder: event.target.value as DraftPickOrderMode })
                 }
@@ -1186,6 +1207,11 @@ export function LeagueSettingsPanel({
           <h3 className="text-base font-semibold text-[color:var(--league-text)]">
             Roster Settings
           </h3>
+          {draftStructureLock && (
+            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+              {draftStructureLock}
+            </p>
+          )}
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {POSITION_LIMIT_KEYS.map((key) => (
               <label
@@ -1198,6 +1224,7 @@ export function LeagueSettingsPanel({
                   min={0}
                   max={key === 'BENCH' ? 20 : 30}
                   value={settings.roster.positionLimits[key]}
+                  disabled={Boolean(draftStructureLock)}
                   onChange={(event) =>
                     updatePositionLimit(key, Number.parseInt(event.target.value, 10) || 0)
                   }
