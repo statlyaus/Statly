@@ -200,7 +200,7 @@ export async function GET(
 
   // Record and ladder position for this team and this round's opponent.
   const [standingRows, activeMembers] = await Promise.all([
-    prisma.leagueStanding.findMany({ where: { leagueId: id } }),
+    prisma.leagueStanding.findMany({ where: { leagueId: id, seasonId: activeSeasonIdOf(league) } }),
     prisma.leagueMember.findMany({
       where: { leagueId: id, isActive: true },
       select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
