@@ -124,6 +124,13 @@ HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and tra
 league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
 cancelling, and commissioner review are not transactions and stay available.
 
+A player is waiver-only, winnable only by a claim at the next 6 am Melbourne waiver run, while he has
+a `PENDING` waiver claim in the league's active season (until a run settles it, even once it is due),
+or was dropped since the last waiver run or is still inside a drop's waiver period.
+`src/server/waivers/waiverOnlyPlayers.ts` decides this for both the free-agent add, which refuses
+with HTTP 409 and code `PLAYER_ON_WAIVERS`, and the player availability panel, which offers Claim
+instead of Add.
+
 ## Data boundaries
 
 Prisma owns protected fantasy state. Firestore match-stat documents are external scoring evidence and

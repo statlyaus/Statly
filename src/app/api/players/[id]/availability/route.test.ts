@@ -125,6 +125,7 @@ describe('GET /api/players/[id]/availability', () => {
     mocks.teamActionFindMany.mockResolvedValue([
       {
         leagueId: 'league-1',
+        actionType: 'WAIVER_CLAIM',
         details: { playerId: 'player-1' },
         processingAt: new Date('2099-10-03T09:30:00.000Z'),
       },
@@ -139,5 +140,53 @@ describe('GET /api/players/[id]/availability', () => {
     // morning), which is 3 am in Perth.
     expect(league.statusDetail).toMatch(/^Claims process Sun,? 4 Oct,? 3:00\sam AWST$/);
     expect(league.waiver.processingAt).toBe('2099-10-03T19:00:00.000Z');
+  });
+
+  it('keeps a player with a due but unprocessed claim on waivers instead of offering Add', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 10 am Wednesday 1 July 2026 Melbourne; the claim fell due at 4 am, before the 6 am run that
+    // did not settle it, so the next run that can award him is 6 am Thursday.
+    vi.setSystemTime(new Date('2026-07-01T00:00:00.000Z'));
+    try {
+      mocks.leagueMemberFindMany.mockResolvedValue([
+        {
+          id: 'member-1',
+          leagueId: 'league-1',
+          teamName: 'Test Team',
+          league: {
+            id: 'league-1',
+            name: 'Test League',
+            settings: { timeZone: 'Australia/Melbourne' },
+          },
+        },
+      ]);
+      mocks.teamActionFindMany.mockResolvedValue([
+        {
+          leagueId: 'league-1',
+          actionType: 'WAIVER_CLAIM',
+          details: { playerId: 'player-1' },
+          processingAt: new Date('2026-06-30T18:00:00.000Z'),
+        },
+      ]);
+
+      const body = await (await request()).json();
+      const [league] = body.data.leagues;
+
+      expect(league.status).toBe('waiver');
+      expect(league.waiver).toMatchObject({
+        processingAt: '2026-07-01T20:00:00.000Z',
+        pendingClaims: 1,
+      });
+      expect(mocks.teamActionFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'PENDING',
+            OR: expect.arrayContaining([{ actionType: 'WAIVER_CLAIM' }]),
+          }),
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

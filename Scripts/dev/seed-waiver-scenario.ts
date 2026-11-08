@@ -123,8 +123,10 @@ async function main() {
   await prisma.leagueSettings.create({
     data: {
       id: SETTINGS_ID,
-      rosterSize: 4,
-      benchSize: 0,
+      // Capacity is rosterSize + benchSize, as in the draft: three drafted players each leave the
+      // one open spot on the bench, so a claim exercises bench capacity.
+      rosterSize: 3,
+      benchSize: 1,
       maxTeams: 2,
       pickSeconds: 60,
       draftType: 'SNAKE',

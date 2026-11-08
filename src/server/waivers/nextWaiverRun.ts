@@ -14,3 +14,12 @@ export function nextWaiverRunAt(dueAt: Date): Date {
   }
   return candidate;
 }
+
+/** The latest daily run (6 am Melbourne, on the hour) at or before `now`. */
+export function previousWaiverRunAt(now: Date): Date {
+  const candidate = new Date(Math.floor(now.getTime() / HOUR_MS) * HOUR_MS);
+  while (!isWaiverRunHour(candidate)) {
+    candidate.setTime(candidate.getTime() - HOUR_MS);
+  }
+  return candidate;
+}

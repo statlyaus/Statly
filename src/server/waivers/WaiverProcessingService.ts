@@ -6,8 +6,15 @@ import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
+import {
+  evaluateRosterExchangeCapacity,
+  getLeagueRosterCapacity,
+} from '@/server/rosters/rosterCapacity';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
-import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
+import {
+  groupWaiverPlayersByIdentity,
+  type WaiverIdentityPlayer,
+} from '@/server/waivers/waiverPlayerIdentity';
 import { publishWaiverOutcome } from '@/server/waivers/waiverActivity';
 
 export interface WaiverSettings {
@@ -468,7 +475,7 @@ export class WaiverProcessingService {
   ): Promise<CanonicalRosterPlan> {
     const league = await tx.league.findUnique({
       where: { id: leagueId },
-      select: { settings: { select: { rosterSize: true } } },
+      select: { settings: { select: { rosterSize: true, benchSize: true } } },
     });
 
     if (!league) {
@@ -525,49 +532,33 @@ export class WaiverProcessingService {
       return { status: 'FAILED', reason: 'Player already owned' };
     }
 
-    const rosterSize = league.settings.rosterSize;
     const currentRosterCount = await tx.leagueRosterPlayer.count({
       where: { leagueId, memberId },
     });
-    let nextRosterCount = currentRosterCount + 1;
-    const canonicalDropPlayerId = claim.dropPlayerId
-      ? ((await resolveCanonicalPlayerId(claim.dropPlayerId, undefined, tx)) ?? claim.dropPlayerId)
-      : undefined;
-    // Roster rows can still hold an alias id, so the drop is matched by every alias of that player.
-    const dropAliasIds = canonicalDropPlayerId
-      ? [
-          ...new Set([
-            ...(claim.dropPlayerId ? [claim.dropPlayerId] : []),
-            canonicalDropPlayerId,
-            ...(groupWaiverPlayersByIdentity(activePlayers)
-              .find((group) =>
-                group.aliases.some(
-                  (player) =>
-                    player.id === claim.dropPlayerId || player.id === canonicalDropPlayerId
-                )
-              )
-              ?.aliases.map((player) => player.id) ?? []),
-          ]),
-        ]
-      : [];
     let storedDropPlayerId: string | undefined;
-
-    if (canonicalDropPlayerId) {
-      const dropOwnership = await tx.leagueRosterPlayer.findFirst({
-        where: { leagueId, memberId, playerId: { in: dropAliasIds } },
-        select: { playerId: true },
-      });
-
-      if (!dropOwnership) {
+    if (claim.dropPlayerId) {
+      const dropRowPlayerId = await this.findDropRosterPlayerId(
+        tx,
+        leagueId,
+        memberId,
+        claim.dropPlayerId,
+        activePlayers
+      );
+      if (!dropRowPlayerId) {
         return { status: 'FAILED', reason: 'Drop player not on roster' };
       }
-
       // The stored id is what the drop deletes, so it must be the row that actually exists.
-      storedDropPlayerId = dropOwnership.playerId;
-      nextRosterCount -= 1;
+      storedDropPlayerId = dropRowPlayerId;
     }
 
-    if (nextRosterCount > rosterSize) {
+    // The draft fills rosterSize + benchSize, so the waiver limit is the same shared capacity.
+    const capacity = evaluateRosterExchangeCapacity({
+      currentCount: currentRosterCount,
+      outgoingCount: storedDropPlayerId ? 1 : 0,
+      incomingCount: 1,
+      capacity: getLeagueRosterCapacity(league.settings),
+    });
+    if (!capacity.isAllowed) {
       return { status: 'FAILED', reason: 'Roster limit reached' };
     }
 
@@ -577,6 +568,35 @@ export class WaiverProcessingService {
       playerId: canonicalPlayerId,
       ...(storedDropPlayerId ? { dropPlayerId: storedDropPlayerId } : {}),
     };
+  }
+
+  /** The member's roster row for the drop player, matched by every alias since rows can hold one. */
+  private async findDropRosterPlayerId(
+    tx: PrismaTransactionClient,
+    leagueId: string,
+    memberId: string,
+    dropPlayerId: string,
+    activePlayers: WaiverIdentityPlayer[]
+  ): Promise<string | null> {
+    const canonicalDropPlayerId =
+      (await resolveCanonicalPlayerId(dropPlayerId, undefined, tx)) ?? dropPlayerId;
+    const aliasGroup = groupWaiverPlayersByIdentity(activePlayers).find((group) =>
+      group.aliases.some(
+        (player) => player.id === dropPlayerId || player.id === canonicalDropPlayerId
+      )
+    );
+    const dropAliasIds = [
+      ...new Set([
+        dropPlayerId,
+        canonicalDropPlayerId,
+        ...(aliasGroup?.aliases.map((player) => player.id) ?? []),
+      ]),
+    ];
+    const dropOwnership = await tx.leagueRosterPlayer.findFirst({
+      where: { leagueId, memberId, playerId: { in: dropAliasIds } },
+      select: { playerId: true },
+    });
+    return dropOwnership?.playerId ?? null;
   }
 }
 

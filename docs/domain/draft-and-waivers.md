@@ -152,9 +152,11 @@ in. Every waiver read and write is filtered to the league's active season, so a 
 season never shows, settles or holds a player, and balances start again in a new season.
 
 Claims validate membership, league settings, player availability, optional drop ownership, roster
-capacity, and priority/FAAB rules at the server boundary. Only an active member can submit a claim, and a
-pending claim whose member has since been removed from the league is rejected at settlement ("Team
-no longer active"), which releases its bid. Processing must be deterministic and safe to
+capacity, and priority/FAAB rules at the server boundary. Roster capacity is the league's
+`rosterSize` plus `benchSize`, the same total the draft fills (`src/server/rosters/rosterCapacity.ts`,
+shared with trades), so a team with a full drafted roster can still claim with a drop. Only an active
+member can submit a claim, and a pending claim whose member has since been removed from the league is
+rejected at settlement ("Team no longer active"), which releases its bid. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
 The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
 waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
