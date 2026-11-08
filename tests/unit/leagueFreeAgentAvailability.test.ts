@@ -50,6 +50,9 @@ const prismaMocks = vi.hoisted(() => ({
     findMany: vi.fn(),
     findFirst: vi.fn(),
   },
+  draft: {
+    findUnique: vi.fn(),
+  },
 }));
 
 const firestoreMocks = vi.hoisted(() => {
@@ -226,6 +229,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    prismaMocks.draft.findUnique.mockResolvedValue({ status: 'COMPLETED' });
 
     firestoreMocks.emptyQuery.where.mockImplementation(() => firestoreMocks.emptyQuery);
     firestoreMocks.emptyQuery.orderBy.mockImplementation(() => firestoreMocks.emptyQuery);

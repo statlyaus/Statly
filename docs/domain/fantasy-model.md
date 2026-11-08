@@ -66,15 +66,6 @@ Firestore member documents are written afterwards as a compatibility projection.
 member update and team settings routes treat a league with no Prisma row as not found; they never
 decide existence, membership or a write from Firestore.
 
-## Transactions
-
-Free-agent adds, waiver claims, and trade proposals, counters, and acceptances open only once the
-league's draft is `COMPLETED`. Every transaction route asks one server guard,
-`src/server/leagues/transactionWindow.ts`, before it writes; until then the request is refused with
-HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and trades open once the
-league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
-cancelling, and commissioner review are not transactions and stay available.
-
 ## League creation defaults
 
 The normalization boundary in `src/server/leagues/createLeagueContract.ts` supplies defaults when a
@@ -113,6 +104,15 @@ persisted, and auditable; a player contributes at most once. Commissioner change
 competition state require an audit record and recalculation of affected future state.
 
 The full product contract is in [league competition rules](../product/league-competition-rules.md).
+
+## Transactions
+
+Free-agent adds, waiver claims, and trade proposals, counters, and acceptances open only once the
+league's draft is `COMPLETED`. Every transaction route asks one server guard,
+`src/server/leagues/transactionWindow.ts`, before it writes; until then the request is refused with
+HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and trades open once the
+league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
+cancelling, and commissioner review are not transactions and stay available.
 
 ## Data boundaries
 

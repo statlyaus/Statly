@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import {
   evaluateRosterExchangeCapacity,
   getLeagueRosterCapacity,
@@ -8,6 +9,7 @@ import {
 
 export type FreeAgentAddErrorCode =
   | 'NOT_ACTIVE_MEMBER'
+  | 'DRAFT_NOT_COMPLETE'
   | 'PLAYER_NOT_FOUND'
   | 'PLAYER_OWNED'
   | 'PLAYER_ON_WAIVERS'
@@ -42,7 +44,7 @@ type FreeAgentAddDb = Pick<PrismaClient, '$transaction'>;
 
 /**
  * Adds an unowned player to the caller's roster in one transaction. The caller must be an active
- * member, the player must be unowned (under any alias) and off a drop waiver hold, and the roster must
+ * member of a league whose draft is complete, the player must be unowned (under any alias) and off a drop waiver hold, and the roster must
  * have room under the same rosterSize + benchSize capacity the draft, trades and waivers use.
  */
 export async function addFreeAgentToRoster(
@@ -73,6 +75,11 @@ export async function addFreeAgentToRoster(
           'You are not an active manager in this league',
           403
         );
+      }
+
+      const transactionWindow = await getTransactionWindow(leagueId, tx);
+      if (!transactionWindow.open) {
+        throw new FreeAgentAddError(transactionWindow.code, transactionWindow.reason, 409);
       }
 
       const player = await tx.player.findUnique({ where: { id: playerId }, select: { id: true } });
