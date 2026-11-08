@@ -82,7 +82,7 @@ type RPipelineSpec = {
   fetcher: string;
   fetcherArgs: string[];
   processor: string;
-  env: NodeJS.ProcessEnv;
+  env: Record<string, string>;
   label: string;
   timeoutMs: number | null;
 };
