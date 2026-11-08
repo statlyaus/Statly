@@ -25,6 +25,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# The base image is pinned by digest; exact apt versions would break the build when Ubuntu
+# retires them from its archive.
+# skipcq: DOK-DL3008
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
       ca-certificates \
