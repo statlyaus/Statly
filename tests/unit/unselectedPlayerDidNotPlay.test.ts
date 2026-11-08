@@ -106,9 +106,8 @@ function givenRound({
     ],
   });
   etlMocks.getRoundPlayerStatsResult.mockResolvedValue({ ok: true, stats });
-  prismaMocks.player.findMany.mockImplementation(
-    async ({ where }: { where: { id: { in: string[] } } }) =>
-      where.id.in.filter((id) => statlyPlayerIds.includes(id)).map((id) => ({ id }))
+  prismaMocks.player.findMany.mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
+    Promise.resolve(where.id.in.filter((id) => statlyPlayerIds.includes(id)).map((id) => ({ id })))
   );
 }
 
