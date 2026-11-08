@@ -12,6 +12,7 @@ import { PrismaWaiverClaimStore, type WaiverClaim } from '@/server/waivers/Waive
 import { loadWaiverOutcomes, publishWaiverOutcome } from '@/server/waivers/waiverActivity';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const LEAGUE = 'int-waiver-read-league';
 const OTHER_LEAGUE = 'int-waiver-read-other-league';
@@ -20,6 +21,8 @@ const users = ['a', 'b'].map((name) => `int-waiver-read-user-${name}`);
 const [member, rival] = users.map((id) => `${id}-member`);
 const OTHER_MEMBER = 'int-waiver-read-user-a-other-member';
 const FAAB = { system: 'FAAB', faabBudget: 100 } as const;
+const PAST_SEASON = 'int-waiver-read-2025';
+const seasonIds: Record<string, string> = {};
 
 // Nothing under test reads Firestore; the store only writes projections elsewhere.
 const store = () => new PrismaWaiverClaimStore(prisma, {} as never);
@@ -69,6 +72,12 @@ async function seedFixture() {
       },
     ],
   });
+  seasonIds[LEAGUE] = await activateLeagueSeason(prisma, LEAGUE);
+  seasonIds[OTHER_LEAGUE] = await activateLeagueSeason(prisma, OTHER_LEAGUE);
+  // An earlier season of the same league: its claims and balances must never show or settle.
+  await prisma.leagueSeason.create({
+    data: { id: PAST_SEASON, leagueId: LEAGUE, label: '2025 season', year: 2025 },
+  });
   await prisma.leagueMember.createMany({
     data: [
       { id: member, leagueId: LEAGUE, userId: users[0], role: 'OWNER', teamName: 'A' },
@@ -83,10 +92,12 @@ const claimAction = (
   leagueId: string,
   memberId: string,
   status: 'PENDING' | 'PROCESSED' | 'REJECTED' | 'CANCELLED',
-  createdAt: string
+  createdAt: string,
+  seasonId = seasonIds[leagueId]
 ) => ({
   id,
   leagueId,
+  seasonId,
   memberId,
   actionType: 'WAIVER_CLAIM' as const,
   status,
@@ -142,12 +153,72 @@ describe('waivers page read model', () => {
     await expect(store().loadRemainingFaab(LEAGUE, member, FAAB)).resolves.toBe(100);
 
     await prisma.waiverPriority.create({
-      data: { leagueId: LEAGUE, memberId: member, priority: 1, remainingFAAB: 63 },
+      data: {
+        leagueId: LEAGUE,
+        seasonId: seasonIds[LEAGUE],
+        memberId: member,
+        priority: 1,
+        remainingFAAB: 63,
+      },
     });
     await expect(store().loadRemainingFaab(LEAGUE, member, FAAB)).resolves.toBe(63);
     await expect(
       store().loadRemainingFaab(LEAGUE, member, { system: 'PRIORITY' })
     ).resolves.toBeUndefined();
+  });
+
+  it('never shows, settles or debits claims and balances of an earlier season', async () => {
+    await prisma.teamAction.createMany({
+      data: [
+        claimAction('read-now', LEAGUE, member, 'PENDING', '2026-10-04T00:00:00Z'),
+        claimAction('read-past', LEAGUE, member, 'PENDING', '2025-10-04T00:00:00Z', PAST_SEASON),
+      ],
+    });
+    await prisma.waiverPriority.createMany({
+      data: [
+        {
+          leagueId: LEAGUE,
+          seasonId: PAST_SEASON,
+          memberId: member,
+          priority: 1,
+          remainingFAAB: 7,
+        },
+        {
+          leagueId: LEAGUE,
+          seasonId: seasonIds[LEAGUE],
+          memberId: member,
+          priority: 1,
+          remainingFAAB: 90,
+        },
+      ],
+    });
+
+    expect((await store().loadMemberClaims(LEAGUE, member)).map((claim) => claim.id)).toEqual([
+      'read-now',
+    ]);
+    expect((await store().loadPendingClaims(LEAGUE)).map((claim) => claim.id)).toEqual([
+      'read-now',
+    ]);
+    await expect(store().loadClaim(LEAGUE, 'read-past')).resolves.toBeNull();
+    await expect(store().loadRemainingFaab(LEAGUE, member, FAAB)).resolves.toBe(90);
+
+    const [claim] = await store().loadPendingClaims(LEAGUE);
+    await expect(
+      prisma.$transaction((tx) =>
+        store().debitFaabInTransaction(tx, { ...claim, bidAmount: 30 }, FAAB)
+      )
+    ).resolves.toEqual({ ok: true });
+    const balances = await prisma.waiverPriority.findMany({
+      where: { leagueId: LEAGUE, memberId: member },
+      select: { seasonId: true, remainingFAAB: true },
+      orderBy: { seasonId: 'asc' },
+    });
+    expect(balances).toEqual(
+      expect.arrayContaining([
+        { seasonId: PAST_SEASON, remainingFAAB: 7 },
+        { seasonId: seasonIds[LEAGUE], remainingFAAB: 60 },
+      ])
+    );
   });
 
   it('publishes a processed claim once, readable, and lists it in the waiver feed', async () => {
@@ -214,16 +285,8 @@ describe('waivers page read model', () => {
   });
 
   it('pages waiver outcomes newest first and leaves out other leagues and other events', async () => {
-    const [{ id: seasonId }, { id: otherSeasonId }] = await Promise.all(
-      [LEAGUE, OTHER_LEAGUE].map((leagueId) =>
-        prisma.leagueSeason.create({ data: { leagueId, label: '2026', year: 2026 } })
-      )
-    );
-    await prisma.league.update({ where: { id: LEAGUE }, data: { activeSeasonId: seasonId } });
-    await prisma.league.update({
-      where: { id: OTHER_LEAGUE },
-      data: { activeSeasonId: otherSeasonId },
-    });
+    const seasonId = seasonIds[LEAGUE];
+    const otherSeasonId = seasonIds[OTHER_LEAGUE];
     const message = (id: string, leagueId: string, season: string, type: string, at: string) => ({
       id,
       leagueId,

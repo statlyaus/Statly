@@ -35,6 +35,7 @@ const memberCommandMocks = vi.hoisted(() => ({
 const prismaMocks = vi.hoisted(() => ({
   syncPrismaLeagueMember: vi.fn(),
   syncPrismaLeagueOwner: vi.fn(),
+  leagueFindUnique: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -87,6 +88,14 @@ vi.mock('@/lib/prismaLeagueBridge', () => ({
 vi.mock('../../src/lib/prismaLeagueBridge', () => ({
   syncPrismaLeagueMember: prismaMocks.syncPrismaLeagueMember,
   syncPrismaLeagueOwner: prismaMocks.syncPrismaLeagueOwner,
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: { league: { findUnique: prismaMocks.leagueFindUnique } },
+}));
+
+vi.mock('../../src/lib/prisma', () => ({
+  prisma: { league: { findUnique: prismaMocks.leagueFindUnique } },
 }));
 
 vi.mock('@/server/leagues/memberCommands', () => memberCommandMocks);
@@ -153,6 +162,7 @@ describe('league membership route Firestore architecture', () => {
     );
     prismaMocks.syncPrismaLeagueMember.mockResolvedValue({ synced: true });
     prismaMocks.syncPrismaLeagueOwner.mockResolvedValue({ synced: true });
+    prismaMocks.leagueFindUnique.mockResolvedValue({ id: 'league-1' });
     // These leagues are Firestore-only legacy leagues with no Prisma row.
     memberCommandMocks.findPrismaLeagueIdByInviteCode.mockResolvedValue(null);
     memberCommandMocks.joinLeague.mockResolvedValue({
@@ -173,10 +183,12 @@ describe('league membership route Firestore architecture', () => {
     }
   });
 
-  it('routes every invite code through the canonical league lookup', () => {
+  it('routes every invite code through the Prisma league lookup', () => {
     const source = readFileSync(join(process.cwd(), 'src/app/api/leagues/join/route.ts'), 'utf8');
 
-    expect(source).toContain(".where('code', '==', normalizedCode)");
+    expect(source).toContain('findPrismaLeagueIdByInviteCode(normalizedCode)');
+    expect(source).not.toContain(".where('code'");
+    expect(source).not.toContain('runTransaction');
     expect(source).not.toContain("normalizedCode === '123ABC'");
     expect(source).not.toContain("id: 'test-league-id'");
   });
@@ -192,103 +204,8 @@ describe('league membership route Firestore architecture', () => {
     expect(source).not.toContain('test-league-id');
   });
 
-  it('joins a league from canonical active members without reading the top-level mirror', async () => {
-    const leagueData = {
-      name: 'AFL Keepers',
-      code: 'KEEPER',
-      type: 'private',
-      status: 'preseason',
-      maxTeams: 4,
-      draftDate: '2026-06-01T10:00:00.000Z',
-    };
-    const leagueQueryGet = vi.fn().mockResolvedValue({
-      empty: false,
-      size: 1,
-      docs: [
-        {
-          id: 'league-1',
-          data: () => leagueData,
-        },
-      ],
-    });
-    const leagueDocRef = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        id: 'league-1',
-        data: () => leagueData,
-      }),
-    };
-    const leaguesCollection = {
-      doc: vi.fn(() => leagueDocRef),
-      where: vi.fn(() => ({
-        limit: vi.fn(() => ({ get: leagueQueryGet })),
-      })),
-    };
-
-    authMocks.getUserIdFromRequest.mockResolvedValue('joining-user');
-    firestoreMocks.collection.mockImplementation((collectionName: string) => {
-      if (collectionName === 'leagues') return leaguesCollection;
-      throw new Error(`Unexpected top-level collection read: ${collectionName}`);
-    });
-    membershipMocks.queueLeagueMembershipSet.mockReturnValue('league-1_joining-user');
-    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
-      activeMember({ id: 'league-1_owner', userId: 'owner-user', teamName: 'Owner Team' }),
-      activeMember({ id: 'league-1_existing', userId: 'existing-user', teamName: 'Existing Team' }),
-    ]);
-
-    const { POST: joinLeague } = await import('../../src/app/api/leagues/join/route');
-    const response = await joinLeague(
-      jsonRequest('/api/leagues/join', { code: 'kee-per', teamName: 'New Team' })
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(201);
-    expect(leaguesCollection.where).toHaveBeenCalledWith('code', '==', 'KEEPER');
-    expect(body.data.member).toMatchObject({
-      id: 'league-1_joining-user',
-      leagueId: 'league-1',
-      userId: 'joining-user',
-      teamName: 'New Team',
-    });
-    expect(firestoreMocks.runTransaction).toHaveBeenCalled();
-    expect(membershipMocks.queueLeagueMembershipSet).toHaveBeenCalledWith(
-      expect.objectContaining({ set: firestoreMocks.transactionSet }),
-      expect.objectContaining({ userId: 'joining-user', teamName: 'New Team' })
-    );
-    expect(firestoreMocks.transactionSet).toHaveBeenCalledWith(
-      leagueDocRef,
-      expect.objectContaining({ memberCount: 3 }),
-      { merge: true }
-    );
-    expect(membershipMocks.listActiveLeagueMembers).toHaveBeenCalledWith('league-1');
-    expect(prismaMocks.syncPrismaLeagueMember).toHaveBeenCalledWith(
-      expect.objectContaining({ draftSlot: 3, memberId: 'league-1_joining-user' })
-    );
-  });
-
   it('does not expose league samples when a join code is missing', async () => {
-    const leagueQueryGet = vi.fn().mockResolvedValue({
-      empty: true,
-      size: 0,
-      docs: [],
-    });
-    const directLimit = vi.fn(() => ({
-      get: vi.fn().mockResolvedValue({
-        docs: [{ id: 'private-league', data: () => ({ code: 'PRIVATE_SAMPLE', name: 'Private' }) }],
-      }),
-    }));
-    const leaguesCollection = {
-      where: vi.fn(() => ({
-        limit: vi.fn(() => ({ get: leagueQueryGet })),
-      })),
-      limit: directLimit,
-    };
-
     authMocks.getUserIdFromRequest.mockResolvedValue('joining-user');
-    firestoreMocks.collection.mockImplementation((collectionName: string) => {
-      if (collectionName === 'leagues') return leaguesCollection;
-      throw new Error(`Unexpected top-level collection read: ${collectionName}`);
-    });
 
     const { POST: joinLeague } = await import('../../src/app/api/leagues/join/route');
     const response = await joinLeague(
@@ -297,8 +214,8 @@ describe('league membership route Firestore architecture', () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.debug).toBeUndefined();
-    expect(directLimit).not.toHaveBeenCalled();
+    expect(body).toEqual({ success: false, error: 'League with code "MISSING" not found.' });
+    expect(firestoreMocks.collection).not.toHaveBeenCalled();
   });
 
   it('updates a Prisma league member through the command, then projects it to Firestore', async () => {
@@ -342,74 +259,35 @@ describe('league membership route Firestore architecture', () => {
     expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
   });
 
-  it('updates a legacy Firestore-only league member without reading the top-level mirror', async () => {
+  it('refuses to update a member of a league with no Prisma row without touching Firestore', async () => {
     memberCommandMocks.updateLeagueMember.mockResolvedValue({
       ok: false,
       code: 'league-not-found',
       message: 'League not found.',
     });
-    const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn(), update: vi.fn() };
-    const leagueDocRef = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        id: 'league-1',
-        data: () => ({
-          id: 'league-1',
-          name: 'AFL Keepers',
-          ownerId: 'owner-user',
-          status: 'preseason',
-          maxTeams: 4,
-        }),
-      }),
-    };
-    const leaguesCollection = {
-      doc: vi.fn(() => leagueDocRef),
-    };
-
     authMocks.getUserIdFromRequest.mockResolvedValue('owner-user');
-    firestoreMocks.batch.mockReturnValue(batch);
-    firestoreMocks.collection.mockImplementation((collectionName: string) => {
-      if (collectionName === 'leagues') return leaguesCollection;
-      throw new Error(`Unexpected top-level collection read: ${collectionName}`);
+    firestoreMocks.collection.mockImplementation(() => {
+      throw new Error('Unexpected Firestore read for a league with no Prisma row');
     });
-    membershipMocks.listActiveFirestoreLeagueMembers.mockResolvedValue([
-      activeMember({ id: 'target-user', userId: 'target-user', teamName: 'Old Team' }),
-      activeMember({ id: 'other-user', userId: 'other-user', teamName: 'Other Team' }),
-    ]);
 
     const { POST: mutateLeagueMember } =
       await import('../../src/app/api/leagues/[id]/members/route');
     const response = await mutateLeagueMember(
-      jsonRequest('/api/leagues/league-1/members', {
+      jsonRequest('/api/leagues/legacy-league/members', {
         action: 'updateMember',
         targetUserId: 'target-user',
         updates: { teamName: 'Renamed Team' },
       }),
-      { params: Promise.resolve({ id: 'league-1' }) }
+      { params: Promise.resolve({ id: 'legacy-league' }) }
     );
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.data).toMatchObject({
-      id: 'target-user',
-      leagueId: 'league-1',
-      userId: 'target-user',
-      teamName: 'Renamed Team',
-    });
-    expect(membershipMocks.queueLeagueMembershipPatch).toHaveBeenCalledWith(
-      batch,
-      'league-1',
-      'target-user',
-      { teamName: 'Renamed Team' },
-      { topLevelMemberId: 'league-1_target-user' }
-    );
-    expect(prismaMocks.syncPrismaLeagueMember).toHaveBeenCalledWith(
-      expect.objectContaining({
-        leagueId: 'league-1',
-        memberId: 'league-1_target-user',
-        teamName: 'Renamed Team',
-      })
-    );
+    expect(response.status).toBe(404);
+    expect(body).toMatchObject({ success: false, code: 'league-not-found' });
+    expect(firestoreMocks.collection).not.toHaveBeenCalled();
+    expect(firestoreMocks.batch).not.toHaveBeenCalled();
+    expect(membershipMocks.queueLeagueMembershipPatch).not.toHaveBeenCalled();
+    expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
   });
 
   it('removes a member through the Prisma command, then projects the removal to Firestore', async () => {
@@ -572,11 +450,89 @@ describe('league membership route Firestore architecture', () => {
     expect(prismaMocks.syncPrismaLeagueOwner).not.toHaveBeenCalled();
   });
 
-  it('rejects member list reads before Firestore league reads when the requester is not a member', async () => {
+  it('lists members of a Prisma league that has no Firestore document', async () => {
+    firestoreMocks.collection.mockImplementation(() => {
+      throw new Error('Unexpected Firestore read for a Prisma league');
+    });
+    membershipMocks.verifyLeagueMembership.mockResolvedValue({
+      isMember: true,
+      source: 'prisma',
+      memberDocId: 'member-request-user',
+    });
+    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+      {
+        ...activeMember({ id: 'member-owner', userId: 'owner-user', teamName: 'Owner Team' }),
+        role: 'owner',
+        joinedAt: new Date('2026-05-30T00:00:00.000Z'),
+        source: 'prisma',
+      },
+      {
+        ...activeMember({ id: 'member-request-user', userId: 'request-user', teamName: 'Mine' }),
+        source: 'prisma',
+      },
+    ]);
+
+    const { GET: getLeagueMembers } = await import('../../src/app/api/leagues/[id]/members/route');
+    const response = await getLeagueMembers(
+      new Request('https://statly.test/api/leagues/league-1/members') as NextRequest,
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      data: [
+        {
+          id: 'member-owner',
+          leagueId: 'league-1',
+          userId: 'owner-user',
+          role: 'owner',
+          teamName: 'Owner Team',
+          joinedAt: '2026-05-30T00:00:00.000Z',
+          isActive: true,
+        },
+        {
+          id: 'member-request-user',
+          leagueId: 'league-1',
+          userId: 'request-user',
+          role: 'member',
+          teamName: 'Mine',
+          joinedAt: '2026-05-31T00:00:00.000Z',
+          isActive: true,
+        },
+      ],
+    });
+    expect(prismaMocks.leagueFindUnique).toHaveBeenCalledWith({
+      where: { id: 'league-1' },
+      select: { id: true },
+    });
+    expect(firestoreMocks.collection).not.toHaveBeenCalled();
+  });
+
+  it('returns not found for a league with no Prisma row without consulting Firestore', async () => {
+    prismaMocks.leagueFindUnique.mockResolvedValue(null);
+    firestoreMocks.collection.mockImplementation(() => {
+      throw new Error('Unexpected Firestore read for a league with no Prisma row');
+    });
+
+    const { GET: getLeagueMembers } = await import('../../src/app/api/leagues/[id]/members/route');
+    const response = await getLeagueMembers(
+      new Request('https://statly.test/api/leagues/legacy-league/members') as NextRequest,
+      { params: Promise.resolve({ id: 'legacy-league' }) }
+    );
+
+    expect(response.status).toBe(404);
+    expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
+    expect(membershipMocks.listActiveLeagueMembers).not.toHaveBeenCalled();
+    expect(firestoreMocks.collection).not.toHaveBeenCalled();
+  });
+
+  it('rejects member list reads when the requester is not a member, without reading Firestore', async () => {
     authMocks.getUserIdFromRequest.mockResolvedValue('outside-user');
     membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: false, source: 'none' });
     firestoreMocks.collection.mockImplementation(() => {
-      throw new Error('Unexpected Firestore league read before membership authorization');
+      throw new Error('Unexpected Firestore league read');
     });
 
     const { GET: getLeagueMembers } = await import('../../src/app/api/leagues/[id]/members/route');

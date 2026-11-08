@@ -69,6 +69,7 @@ describe('WaiverAvailabilityProjectionService', () => {
     expect(db.teamAction.findMany).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
+        season: { activeForLeague: { is: { id: 'league-1' } } },
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
         processingAt: { gt: expect.any(Date) },

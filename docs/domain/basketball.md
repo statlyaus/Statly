@@ -74,6 +74,20 @@ it counts for that team.
 Adding players from a pasted list is an explicit, reviewed operation: the server proposes candidate
 matches for each line and nothing is saved until the user confirms each one.
 
+## Players on other teams
+
+Statly only knows the players a user enters, so any player not entered counts as a free agent. A
+useful profile therefore has three steps, shown as a checklist on the Roster page: the user's team,
+this week's opponent, then every other rostered player in the league. For the last step the user
+pastes the whole rosters page from Yahoo or ESPN (up to 250 players and 40,000 characters; headings,
+column headers, stats and dates are ignored, and team names come back as "no match"). After the
+usual review, every confirmed player is marked as taken (a roster spot with no team) in one batch. A
+player already on a team the user entered, including their own and this week's opponent, is left
+where he is and reported as skipped, so a careless paste cannot strip a roster. Until at least 8
+players per other team are entered (every team but the user's and, once set, this week's
+opponent's), Pickups and the overview's best adds warn that suggestions may already be rostered.
+"Clear all taken players" removes only the spots with no team.
+
 ## Data source and licensing
 
 The NBA ingest reads ESPN's public site API (schedule, box scores, injuries, rosters) behind a
@@ -174,3 +188,37 @@ players and starter slots (every slot except BN and IL). Day-to-day players coun
 - A dropped player's games earlier in the week are lost, and the add/drop drop loses every
   remaining day.
 - Day-to-day counts as playing; only OUT and injured-list players are left out.
+
+## Rotation Watch
+
+`rotation.ts` ports the sheet's Rotation Watch (its `LineupLog.gs` Apps Script) and reads only the
+stored box scores of the season's final regular-season games. The Rotation page
+(`/basketball/[leagueId]/rotation`) shows it with each player's owner in the league profile.
+
+- "Last 5" and "last 10" are the team's last games, not calendar days. A player the box score does
+  not list was not dressed.
+- Per NBA team: games, unique starting fives (season and last 10), games whose starters changed from
+  the game before, the last change with why each starter left (not dressed, bench, DNP-CD, rested,
+  suspended, injured), coach's-decision DNPs per game and players with 10+ minutes per game over the
+  last 10.
+- Per player: games, starts, starts in the last 5 (starter 4–5, spot starter 1–3), last game status,
+  coach's-decision DNPs in the last 10 and the latest, his latest move into or out of the five in the
+  last 10, minutes per game and a one-line summary. A traded player is shown with the team of his
+  latest box score, counting that team's games only (the sheet keeps the team whose last game is
+  latest, which can be his old team).
+- Alerts follow the sheet's rules and priority, at most two items, level the highest: red for a
+  coach's-decision DNP in the team's last 2 games (12+ minutes a game over the last 10) or an
+  established starter benched in the last 3; green for a new starter (or injury cover, paired with an
+  absent starter by listed position) and minutes up; amber for the bench-risk and DNP-risk flags and
+  minutes down. Personal and other DNP reasons count as injured, as in the sheet.
+- One deliberate difference from the sheet: a starter who was out or not dressed for his team's last
+  game gets no bench-risk flag, since an absent player is not about to lose his spot for his
+  shooting.
+- The season's box scores are cached per finished ingest run (five minutes at most), so the page
+  does not reread every row on each visit; names and injuries are read fresh.
+- Not ported: the sheet's coach career traits and next-game churn probabilities, which came from a
+  hand-built dataset Statly does not have.
+
+Checked against the sheet's Rotation Watch for games to 2 Nov 2026: all 30 team rows matched, the
+76 alert texts matched as a set (injury return dates aside), and a sample of 38 player rows matched
+field for field.

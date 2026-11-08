@@ -7,6 +7,7 @@ import {
   leaguePatchSchema,
   leagueSettingsSchema,
   parseInput,
+  pasteSchema,
   playerSearchSchema,
   rosterEntriesSchema,
   rosterSpotPatchSchema,
@@ -310,16 +311,16 @@ describe('teamsSchema', () => {
 });
 
 describe('rosterEntriesSchema', () => {
-  it('accepts up to 30 distinct players with an explicit team or null', () => {
-    const entries = Array.from({ length: 30 }, (_, index) => ({
+  it('accepts up to 250 distinct players, a whole league, with an explicit team or null', () => {
+    const entries = Array.from({ length: 250 }, (_, index) => ({
       playerId: `p${index}`,
       teamId: index % 2 ? 'team-1' : null,
     }));
-    expect(parseInput(rosterEntriesSchema, { entries }).entries).toHaveLength(30);
+    expect(parseInput(rosterEntriesSchema, { entries }).entries).toHaveLength(250);
     expect(
       fieldErrorsOf(() =>
         parseInput(rosterEntriesSchema, {
-          entries: [...entries, { playerId: 'p30', teamId: null }],
+          entries: [...entries, { playerId: 'p250', teamId: null }],
         })
       )
     ).toHaveProperty('entries');
@@ -344,6 +345,15 @@ describe('rosterEntriesSchema', () => {
       })
     );
     expect(Object.keys(errors)).toEqual(['entries.1.playerId']);
+  });
+});
+
+describe('pasteSchema', () => {
+  it('takes a whole rosters page of up to 40,000 characters', () => {
+    expect(parseInput(pasteSchema, { text: 'x'.repeat(40_000) }).text).toHaveLength(40_000);
+    expect(
+      fieldErrorsOf(() => parseInput(pasteSchema, { text: 'x'.repeat(40_001) }))
+    ).toHaveProperty('text');
   });
 });
 

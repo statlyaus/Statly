@@ -188,7 +188,96 @@ describe('league matchup API route architecture', () => {
     expect(mocks.updateLeagueSettings).not.toHaveBeenCalled();
   });
 
+  it('returns 409 when publishing an already published competition, without resetting it', async () => {
+    const request = new NextRequest('http://localhost/api/leagues/league-1/competition', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    const response = requireResponse(
+      await POST(request, { params: Promise.resolve({ id: 'league-1' }) })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Published competition rules cannot be changed. Use a commissioner override instead.',
+    });
+    expect(mocks.publishCompetition).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when the service finds the competition already published', async () => {
+    mocks.findLeague.mockResolvedValueOnce({
+      ownerId: 'owner-user',
+      categoriesJson: ['goals'],
+      settings: {
+        id: 'settings-1',
+        competitionStatus: 'SETUP',
+        competitionRulesJson: {},
+        competitionRulesVersion: 0,
+      },
+      members: [{ id: 'member-1', userId: 'owner-user', isCoCommissioner: false }],
+    });
+    mocks.publishCompetition.mockResolvedValueOnce({
+      ok: false,
+      code: 'COMPETITION_ALREADY_PUBLISHED',
+      errors: [
+        'Published competition rules cannot be changed. Use a commissioner override instead.',
+      ],
+    });
+    const request = new NextRequest('http://localhost/api/leagues/league-1/competition', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    const response = requireResponse(
+      await POST(request, { params: Promise.resolve({ id: 'league-1' }) })
+    );
+
+    expect(response.status).toBe(409);
+  });
+
+  it('saves competition rules as a JSON object, not a double-encoded string', async () => {
+    mocks.findLeague.mockResolvedValueOnce({
+      ownerId: 'owner-user',
+      categoriesJson: ['goals'],
+      settings: {
+        id: 'settings-1',
+        competitionStatus: 'SETUP',
+        competitionRulesJson: {},
+        competitionRulesVersion: 0,
+      },
+      members: [{ id: 'member-1', userId: 'owner-user', isCoCommissioner: false }],
+    });
+    const request = new NextRequest('http://localhost/api/leagues/league-1/competition', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rules: { regularSeasonRounds: 14, lockPolicy: 'THURSDAY_7PM_AEST' } }),
+    });
+
+    const response = requireResponse(
+      await PUT(request, { params: Promise.resolve({ id: 'league-1' }) })
+    );
+
+    expect(response.status).toBe(200);
+    const stored = mocks.updateLeagueSettings.mock.calls[0]?.[0].data.competitionRulesJson;
+    expect(typeof stored).toBe('object');
+    expect(stored).toMatchObject({ regularSeasonRounds: 14, lockPolicy: 'THURSDAY_7PM_AEST' });
+  });
+
   it('returns 400 for malformed publish JSON without publishing competition data', async () => {
+    mocks.findLeague.mockResolvedValueOnce({
+      ownerId: 'owner-user',
+      categoriesJson: ['goals'],
+      settings: {
+        id: 'settings-1',
+        competitionStatus: 'SETUP',
+        competitionRulesJson: {},
+        competitionRulesVersion: 0,
+      },
+      members: [{ id: 'member-1', userId: 'owner-user', isCoCommissioner: false }],
+    });
     const request = new NextRequest('http://localhost/api/leagues/league-1/competition', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
