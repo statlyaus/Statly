@@ -115,7 +115,7 @@ const playerIn = async (injuries: FakeInjury[], playerId: string) => {
 };
 
 describe('loadSeasonOutlook', () => {
-  it('caches the computed season under its stats run, injury fetch and date, history daily', async () => {
+  it('caches the computed season under its stats run, injury fetch and date', async () => {
     cacheCalls.length = 0;
     const outlook = await loadSeasonOutlook(fakeClient(), 2027, TODAY);
 
@@ -130,7 +130,6 @@ describe('loadSeasonOutlook', () => {
         ],
         options: { revalidate: 300 },
       },
-      { key: ['basketball:role-history', '2027'], options: { revalidate: 86_400 } },
     ]);
     expect(outlook).toMatchObject({
       season: 2027,
