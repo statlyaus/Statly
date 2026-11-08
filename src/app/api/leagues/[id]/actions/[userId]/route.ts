@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { findLockedOutPlayers, PLAYER_LOCKED_REASON } from '@/server/leagues/playerLockout';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
@@ -118,10 +119,17 @@ export async function POST(
       return errorResponse(validationResult.error || 'Invalid action', 400);
     }
 
+    const playerId = String(canonicalDetails.playerId);
+    // Rolling lockout: a player whose AFL game has started this round stays until the round ends.
+    const lockout = await findLockedOutPlayers({ leagueId, playerIds: [playerId] });
+    if (!lockout.ok) return errorResponse(lockout.reason, 503, lockout.code);
+    if (lockout.lockedPlayerIds.has(playerId)) {
+      return errorResponse(PLAYER_LOCKED_REASON, 409, 'PLAYER_LOCKED');
+    }
+
     // Dropped players leave the roster now, then stay on waivers before free agency. The roster
     // delete and the waiver hold commit together, so a reported drop always has its hold.
     const processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const playerId = String(canonicalDetails.playerId);
 
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const dropped = await prisma.$transaction(async (tx) => {

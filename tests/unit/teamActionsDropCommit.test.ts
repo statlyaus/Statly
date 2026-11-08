@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const authMocks = vi.hoisted(() => ({ getAuthenticatedUserId: vi.fn() }));
 const membershipMocks = vi.hoisted(() => ({ verifyLeagueMembership: vi.fn() }));
 const projectLeague = vi.hoisted(() => vi.fn());
+const findLockedOutPlayers = vi.hoisted(() => vi.fn());
 
 const tx = vi.hoisted(() => ({
   leagueRosterPlayer: { deleteMany: vi.fn() },
@@ -26,6 +27,11 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: 
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }));
 vi.mock('@/server/players/playerIdentityService', () => ({
   resolveCanonicalPlayerIds: vi.fn(async () => new Map()),
+}));
+vi.mock('@/server/leagues/playerLockout', () => ({
+  findLockedOutPlayers,
+  PLAYER_LOCKED_REASON:
+    "A player whose AFL game has started this round can't be dropped or traded until the round ends.",
 }));
 vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
   WaiverAvailabilityProjectionService: vi.fn(() => ({ projectLeague })),
@@ -53,12 +59,45 @@ describe('team action drop commit', () => {
     membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: true });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue({ playerId: 'player-1' });
-    prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) =>
-      work(tx)
-    );
+    prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) => work(tx));
     tx.leagueRosterPlayer.deleteMany.mockResolvedValue({ count: 1 });
     tx.teamAction.create.mockResolvedValue({ id: 'action-1' });
     projectLeague.mockResolvedValue({ owned: 0, available: 1 });
+    findLockedOutPlayers.mockResolvedValue({ ok: true, lockedPlayerIds: new Set() });
+  });
+
+  it('refuses with 409 to drop a player whose AFL game has started this round', async () => {
+    findLockedOutPlayers.mockResolvedValue({ ok: true, lockedPlayerIds: new Set(['player-1']) });
+
+    const response = await drop();
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toEqual({
+      message:
+        "A player whose AFL game has started this round can't be dropped or traded until the round ends.",
+      code: 'PLAYER_LOCKED',
+    });
+    expect(findLockedOutPlayers).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      playerIds: ['player-1'],
+    });
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 503 when AFL match times cannot be read, rather than guessing', async () => {
+    findLockedOutPlayers.mockResolvedValue({
+      ok: false,
+      code: 'LOCK_TIMING_UNAVAILABLE',
+      reason: 'Official AFL match times are unavailable right now.',
+    });
+
+    const response = await drop();
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe('LOCK_TIMING_UNAVAILABLE');
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
   });
 
   it('removes the roster row and writes the waiver hold in one transaction', async () => {
