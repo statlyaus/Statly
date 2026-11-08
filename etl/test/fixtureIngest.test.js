@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   buildFixtureMatches,
   changedFixtureMatches,
+  findFixtureMatch,
   ingestFixtureRows,
 } = require('../dist/fixtureIngest');
 
@@ -295,4 +296,39 @@ test('fixture pipeline resolves its fetcher and processor beside the stats pipel
 
   assert.deepEqual(resolveFixtureRuntimePaths(etlRoot), expected);
   assert.deepEqual(resolveFixtureRuntimePaths(path.join(etlRoot, 'dist')), expected);
+});
+
+test("puts both clubs' stats rows on the fixture's one home-away match", () => {
+  const fixture = buildFixtureMatches(
+    [
+      row({
+        round_label: 'Round 0',
+        home_team: 'Sydney',
+        away_team: 'Hawthorn',
+        venue: 'S.C.G.',
+        local_start: '2025-03-07 19:40:00',
+      }),
+      row({
+        season_game: 2,
+        round_label: 'Round 0',
+        home_team: 'GWS',
+        away_team: 'Collingwood',
+        venue: 'Sydney Showground',
+        local_start: '2025-03-08 16:15:00',
+      }),
+    ],
+    BEFORE_SEASON
+  );
+  // One row from each side of the same game, as the stats processor abbreviates them: the
+  // stats feed lists each player's own club first.
+  const homeRow = { teamAbbr: 'SYD', oppAbbr: 'HAW' };
+  const awayRow = { teamAbbr: 'HAW', oppAbbr: 'SYD' };
+
+  const home = findFixtureMatch(fixture, homeRow.teamAbbr, homeRow.oppAbbr);
+  const away = findFixtureMatch(fixture, awayRow.teamAbbr, awayRow.oppAbbr);
+
+  assert.equal(home.match_uid, '2025-R0-SYD-HAW');
+  assert.equal(away, home);
+  assert.equal(findFixtureMatch(fixture, 'COL', 'GWS').match_uid, '2025-R0-GWS-COL');
+  assert.equal(findFixtureMatch(fixture, 'SYD', 'COL'), undefined);
 });

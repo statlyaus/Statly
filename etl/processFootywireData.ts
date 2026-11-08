@@ -4,6 +4,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import * as readline from 'readline';
 
+import { findFixtureMatch, type FixtureMatch } from './fixtureIngest';
 import { normalizePlayerRow, toProcessedStats, type PlayerRow } from './normalizePlayerRow';
 
 // Initialize Firebase Admin using same pattern as main project
@@ -100,21 +101,50 @@ function addJitter(baseMs: number, jitterMs: number = 6000): number {
   return baseMs + Math.random() * jitterMs;
 }
 
-async function checkMatchStatus(matchUid: string): Promise<string> {
-  try {
-    const matchDoc = await db.collection('matches').doc(matchUid).get();
-    return matchDoc.exists ? matchDoc.data()?.status || 'unknown' : 'unknown';
-  } catch (error) {
-    console.error(`Error checking match status for ${matchUid}:`, error);
-    return 'unknown';
+type StoredFixtureMatch = Pick<FixtureMatch, 'match_uid' | 'home_team' | 'away_team' | 'status'>;
+
+// The round's fixture is read once per run; etl/processFixtureData.ts writes it before the stats.
+const fixtureByRound = new Map<string, Promise<StoredFixtureMatch[]>>();
+
+function readRoundFixture(season: number, round: number): Promise<StoredFixtureMatch[]> {
+  const key = `${season}:${round}`;
+  let fixture = fixtureByRound.get(key);
+  if (!fixture) {
+    fixture = db
+      .collection('matches')
+      .where('season', '==', season)
+      .where('round_number', '==', round)
+      .get()
+      .then((snapshot) => snapshot.docs.map((doc) => doc.data() as StoredFixtureMatch));
+    // A failed read is retried by the next row rather than cached.
+    fixture.catch(() => fixtureByRound.delete(key));
+    fixtureByRound.set(key, fixture);
   }
+  return fixture;
+}
+
+/** The fixture's HOME-AWAY match for a stats row, whichever club the row belongs to. */
+async function resolveFixtureMatch(
+  row: PlayerRow,
+  teamAbbr: string,
+  oppAbbr: string
+): Promise<StoredFixtureMatch> {
+  const match = findFixtureMatch(await readRoundFixture(row.season, row.round), teamAbbr, oppAbbr);
+  if (!match) {
+    throw new Error(
+      `No fixture match for ${row.season} round ${row.round} ${row.team} v ${row.opposition}; ` +
+        'load the fixture first (npm run fixture)'
+    );
+  }
+  return match;
 }
 
 async function processPlayerRow(row: PlayerRow): Promise<void> {
   const teamAbbr = getTeamAbbr(row.team);
   const oppAbbr = row.opposition ? getTeamAbbr(row.opposition) : 'UNK';
 
-  const matchUid = `${row.season}-R${row.round}-${teamAbbr}-${oppAbbr}`;
+  const match = await resolveFixtureMatch(row, teamAbbr, oppAbbr);
+  const matchUid = match.match_uid;
   const playerUid = `ply_${slugify(row.player_name)}`;
   const docId = `${matchUid}_${playerUid}`;
 
@@ -123,7 +153,7 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
 
   // Check if match is still in progress before processing (skip in backfill mode)
   if (!isBackfillMode) {
-    const matchStatus = await checkMatchStatus(matchUid);
+    const matchStatus = match.status;
     if (matchStatus !== 'in_progress') {
       console.log(`Skipping ${docId} - match status: ${matchStatus}`);
       return;
@@ -225,4 +255,4 @@ if (require.main === module) {
   });
 }
 
-export { processPlayerRow, checkMatchStatus, normalizePlayerRow };
+export { processPlayerRow, normalizePlayerRow };

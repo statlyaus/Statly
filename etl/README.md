@@ -35,7 +35,9 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
 - `normalizePlayerRow.ts` validates required identity fields and converts supported numeric values into
   the canonical row shape without initializing Firebase or performing writes.
 - `processFootywireData.ts` consumes normalized rows, adds deterministic identifiers and checksums, and
-  writes match/player-stat documents.
+  writes match/player-stat documents. A row's `match_uid` is the fixture's `<HOME>-<AWAY>` match for
+  its two clubs, whichever club the row belongs to (the stats feed lists the player's own club first).
+  A row whose game is not in the loaded fixture fails and is not written; load the fixture first.
 - `liveGuard.ts` refreshes the fixture every `FIXTURE_REFRESH_MS` (default 15 minutes), then runs the
   stats pipeline only while Firestore reports a live match window. A failed fixture refresh skips the
   cycle.

@@ -277,3 +277,19 @@ export async function ingestFixtureRows(
   if (changed.length > 0) await deps.write(changed);
   return { matches: matches.length, written: changed.length };
 }
+
+/**
+ * The fixture match two clubs play in, whichever of them is listed first. The stats feed lists each
+ * player's own club first, so an away club's rows name the game AWAY-HOME; the fixture's HOME-AWAY
+ * match is the one id both clubs' stats must carry.
+ */
+export function findFixtureMatch<T extends Pick<FixtureMatch, 'home_team' | 'away_team'>>(
+  matches: readonly T[],
+  teamAbbr: string,
+  oppAbbr: string
+): T | undefined {
+  const clubs = [teamAbbr, oppAbbr].sort().join('|');
+  return matches.find(
+    (match) => [club(match.home_team).abbr, club(match.away_team).abbr].sort().join('|') === clubs
+  );
+}
