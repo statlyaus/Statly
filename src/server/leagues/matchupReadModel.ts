@@ -2,7 +2,9 @@ import 'server-only';
 
 import { ensureDefaultLineups } from '@/server/leagues/defaultLineups';
 import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/server/etl/etlRoundData';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { resolveFootywirePlayerIds } from '@/server/players/footywireIdentity';
 import { getTeamName } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
@@ -547,7 +549,35 @@ export function resolveRoundPlayerAvailability({
   return { totalsByPlayerId, nonPlayingReasonByPlayerId };
 }
 
-async function loadLivePlayerTotalsForRound(
+/**
+ * The ETL keys stats by its Footywire player id. Only a reviewed `footywire` identity link turns
+ * that id into a Statly player id; unlinked rows keep the ETL id, so they reach no Statly player and
+ * are reported for review (docs/runbooks/player-identity.md), never matched by name here.
+ */
+async function linkEtlStatsToPlayers(
+  rows: readonly NormalizedLiveStatRow[],
+  season: number,
+  round: number
+): Promise<NormalizedLiveStatRow[]> {
+  const playerIdByEtlId = await resolveFootywirePlayerIds(
+    rows.map((row) => row.playerId),
+    prisma
+  );
+  const unlinked = rows.filter((row) => !playerIdByEtlId.has(row.playerId));
+  if (unlinked.length > 0) {
+    logger.warn('ETL player stats without a reviewed Footywire identity link', {
+      season,
+      round,
+      unlinkedCount: unlinked.length,
+    });
+  }
+  return rows.map((row) => ({
+    ...row,
+    playerId: playerIdByEtlId.get(row.playerId) ?? row.playerId,
+  }));
+}
+
+export async function loadLivePlayerTotalsForRound(
   season: number,
   round: number,
   expectedPlayers: readonly { playerId: string; club: string | null }[] = []
@@ -557,10 +587,14 @@ async function loadLivePlayerTotalsForRound(
     getRoundMatchesResult(season, round),
   ]);
   const rawMatches = (matchesResult.ok ? matchesResult.matches : []) as unknown as RawRoundMatch[];
-  const normalizedStats = normalizeLiveStatRows(
-    (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[],
-    rawMatches
-  ).filter((row) => row.round === round);
+  const normalizedStats = await linkEtlStatsToPlayers(
+    normalizeLiveStatRows(
+      (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[],
+      rawMatches
+    ).filter((row) => row.round === round),
+    season,
+    round
+  );
   const { totalsByPlayerId, nonPlayingReasonByPlayerId } = resolveRoundPlayerAvailability({
     stats: normalizedStats,
     matches: rawMatches,
