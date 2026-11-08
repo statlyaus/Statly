@@ -2,7 +2,6 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger } from '@/lib/logger';
-import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
@@ -19,10 +18,7 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
-import {
-  resolveCanonicalPlayerId,
-  resolveCanonicalPlayerIds,
-} from '@/server/players/playerIdentityService';
+import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
 import {
@@ -76,17 +72,6 @@ function readBoundedInt(raw: string | null, fallback: number, max: number): numb
   const parsed = Number.parseInt(raw ?? '', 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(0, Math.min(max, parsed));
-}
-
-function parseActionDetails(raw: unknown): Record<string, unknown> {
-  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
-
-  try {
-    const parsed = JSON.parse(String(raw ?? '{}'));
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
 }
 
 function toPlayerLite(player: {
@@ -162,24 +147,9 @@ async function loadAvailablePlayers(input: {
     where: { leagueId: input.leagueId },
     select: { playerId: true },
   });
-  const waiverHolds = await prisma.teamAction.findMany({
-    where: {
-      leagueId: input.leagueId,
-      ...inActiveSeason(input.leagueId),
-      actionType: 'DROP_PLAYER',
-      status: 'PENDING',
-      processingAt: { gt: new Date() },
-    },
-    select: { details: true },
-  });
-  const ownedPlayerIds = ownerships.map((ownership) => ownership.playerId);
-  const heldExternalPlayerIds = waiverHolds
-    .map((hold) => parseActionDetails(hold.details).playerId)
-    .filter((playerId): playerId is string => typeof playerId === 'string' && Boolean(playerId));
-  const heldPlayerIds = (
-    await Promise.all(heldExternalPlayerIds.map((playerId) => resolveCanonicalPlayerId(playerId)))
-  ).filter((playerId): playerId is string => Boolean(playerId));
-  const unavailablePlayerIds = new Set([...ownedPlayerIds, ...heldPlayerIds]);
+  // Only rostered players are left out. A player with a pending claim or a recent drop is
+  // waiver-only (loadWaiverOnlyHolds): free-agent Add refuses him, so this list is where he is won.
+  const unavailablePlayerIds = new Set(ownerships.map((ownership) => ownership.playerId));
   const playerSelect = { id: true, name: true, club: true, position: true } as const;
   const activePlayers = await prisma.player.findMany({
     where: { active: true },

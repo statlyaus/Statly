@@ -374,6 +374,39 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     );
   });
 
+  it('accepts a claim on a player still inside a drop waiver period', async () => {
+    prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
+    // A waiver-only player: free-agent Add refuses him, so a claim must be how he is won.
+    prismaMocks.teamAction.findMany.mockResolvedValue([
+      {
+        leagueId: 'league-1',
+        actionType: 'DROP_PLAYER',
+        status: 'PENDING',
+        details: { playerId: 'free-player' },
+        processingAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
+      },
+    ]);
+
+    const { POST } = await import('../../src/app/api/leagues/[id]/waivers/submit/route');
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/waivers/submit', {
+        teamId: 'member-1',
+        playerId: 'free-player',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(201);
+    expect(prismaMocks.teamAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actionType: 'WAIVER_CLAIM',
+          details: expect.objectContaining({ playerId: 'free-player' }),
+        }),
+      })
+    );
+  });
+
   it('accepts a claim Prisma allows even when the Firestore ownership projection says owned', async () => {
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
     // A stale projection: an ownership document and a roster that still list the player.

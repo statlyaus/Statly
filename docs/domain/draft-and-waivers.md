@@ -139,7 +139,9 @@ Waiver ownership is league-scoped and derived from canonical roster/player ident
 roster mutation must update the same ownership boundary used to calculate availability. Firestore may
 hold a compatibility projection, but relational state remains authoritative and projections must be
 rebuildable from it. Each league's Waivers tab reads a member's claims, FAAB balance and activity feed
-from Prisma. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
+from Prisma. Its player list leaves out only rostered players: a waiver-only player (a pending claim,
+or a drop since the last run or still inside its waiver period; see `docs/domain/fantasy-model.md`)
+is listed and claimable there, because free-agent Add refuses him. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
 the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
 the viewer has no league. `/rosters` does the same for the league's Roster tab; it no longer reads
 Firestore free agents or offers its own claim buttons.
