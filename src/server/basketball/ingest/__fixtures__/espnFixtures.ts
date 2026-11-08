@@ -320,7 +320,6 @@ export interface InjurySpec {
   /** ESPN's one-line note (`shortComment`); null leaves it out. */
   comment?: string | null;
   /** ESPN's longer note, which can discuss teammates. */
-  longComment?: string;
   /** ESPN's fantasy status code (OUT, OFS, GTD); null leaves it out. */
   fantasyStatus?: string | null;
 }
@@ -330,7 +329,6 @@ export function injuryEntry(spec: InjurySpec) {
   return {
     id: `9${spec.athleteId}`,
     shortComment: spec.comment === undefined ? 'Player (ankle) is out.' : spec.comment,
-    longComment: spec.longComment,
     status: spec.status ?? 'Out',
     date: spec.date ?? '2026-11-06T22:06Z',
     athlete: {
@@ -346,7 +344,8 @@ export function injuryEntry(spec: InjurySpec) {
     },
     type: { id: '4', name: 'INJURY_STATUS_OUT', abbreviation: 'O' },
     details: {
-      fantasyStatus: fantasyStatus && { description: fantasyStatus, abbreviation: fantasyStatus },
+      fantasyStatus:
+        fantasyStatus == null ? null : { description: fantasyStatus, abbreviation: fantasyStatus },
       type: spec.type ?? 'Ankle',
       location: 'Leg',
       side: spec.side ?? 'Left',

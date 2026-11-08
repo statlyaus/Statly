@@ -5,7 +5,6 @@ import {
   boxAthlete,
   ESPN_TEAMS,
   injuriesResponse,
-  type InjurySpec,
   rosterAthlete,
   rosterResponse,
   scheduleEvent,
@@ -534,42 +533,19 @@ describe('parseInjuries', () => {
     });
   });
 
-  function seasonEndingOf(spec: Omit<InjurySpec, 'athleteId'>) {
+  it('does not read the comment for season-enders without the OFS status', () => {
     const [entry] = parseInjuries(
-      injuriesResponse([{ id: '1', entries: [{ athleteId: '14', ...spec }] }])
+      injuriesResponse([
+        {
+          id: '1',
+          entries: [
+            { athleteId: '14', comment: 'Zed Example (knee) will miss the rest of the season.' },
+          ],
+        },
+      ])
     );
-    return entry.seasonEnding;
-  }
 
-  it.each([
-    'Zed Example has sustained a season-ending ruptured right Achilles tendon.',
-    'Zed Example tore his right ACL and is expected to miss the 2026-27 season.',
-    'Zed Example (knee) will miss the rest of the season.',
-    'Zed Example (back) is out for the season.',
-    'Zed Example (foot) will be sidelined for the remainder of the regular season.',
-  ])('marks an Out player as a season-ender from the note: %s', (comment) => {
-    expect(seasonEndingOf({ comment })).toBe(true);
-  });
-
-  it.each([
-    ['a single game', 'Out', "Zed Example (ankle) is out for Friday's game against Team Q."],
-    ['the opener', 'Out', 'Zed Example (ankle) is out for the season opener.'],
-    ['the hyphenated opener', 'Out', 'Zed Example (ankle) will miss the season-opener.'],
-    ['the start of the season', 'Out', 'Zed Example will miss the start of the 2026-27 season.'],
-    ['a hedge', 'Out', 'Zed Example is expected to miss most, if not all, of the season.'],
-    ['an earlier injury', 'Out', 'Zed Example (knee) is recovering from a season-ending ACL tear.'],
-    ['a day-to-day player', 'Day-To-Day', 'Zed Example (knee) will miss the rest of the season.'],
-  ])('does not mark a season-ender from %s', (_label, status, comment) => {
-    expect(seasonEndingOf({ status, comment })).toBe(false);
-  });
-
-  it('ignores a season-ender named only in the long note', () => {
-    expect(
-      seasonEndingOf({
-        comment: 'Zed Example (hamstring) is out for Sunday.',
-        longComment: 'Team Q is already without Yan Sample, who is out for the season.',
-      })
-    ).toBe(false);
+    expect(entry).toMatchObject({ status: 'OUT', seasonEnding: false });
   });
 
   it('rejects an entry whose link has no athlete id', () => {

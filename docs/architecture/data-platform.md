@@ -223,7 +223,8 @@ few batched statements inside one transaction.
 
 Each injury row keeps the status (`OUT` or `DAY_TO_DAY`), side and type, return date, the
 provider's one-line note and its own fantasy status code, and a `seasonEnding` flag the adapter
-derives from them, so a season-ending injury with no real return date is not read as a short absence.
+derives from that code (`OFS` on ESPN), so a season-ending injury with no real return date is not read
+as a short absence.
 The fields and the flag's rule are in [fantasy basketball](../domain/basketball.md#injury-report).
 
 Ingestion fails closed. Every fetch and check runs before the first write, and a rejected run

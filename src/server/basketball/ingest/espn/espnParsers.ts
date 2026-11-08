@@ -491,21 +491,10 @@ export function parseBoxScore(response: unknown): NbaProviderBoxScore {
 const INJURY_STATUSES = { Out: 'OUT', 'Day-To-Day': 'DAY_TO_DAY' } as const;
 const ATHLETE_ID_IN_LINK = /\/id\/(\d+)(?:\/|$)/;
 // ESPN's fantasy status codes seen in the feed: OUT, GTD and OFS ("out for season"). An OFS row
-// carries a placeholder return date months after the season ends.
+// carries a placeholder return date months after the season ends. The comment is stored but not
+// parsed for season-enders: note phrasing ("could miss the rest of the season") misfires, and a false
+// flag would mark an active player out for every remaining game.
 const OUT_FOR_SEASON = 'OFS';
-// The one-line note says the player is out for the rest of this season: "season-ending" (but not
-// "from/after/following a season-ending ...", which looks back at an earlier injury), or "miss / out
-// for / sidelined for / sit out the [rest of the | remainder of the | entire | whole] [2026-27]
-// [regular] season|campaign" (but not "the season opener", "the season's ..."). "The start of the
-// season" and "most, if not all, of the season" do not match.
-const SEASON_ENDING_NOTE = new RegExp(
-  [
-    String.raw`(?<!\b(?:from|after|following)\s+(?:a|an|his|the)\s+)\bseason[- ]ending\b`,
-    String.raw`\b(?:miss|out for|sidelined for|sit out)\s+the\s+(?:(?:rest|remainder)\s+of\s+the\s+|entire\s+|whole\s+)?(?:\d{4}-\d{2}\s+)?(?:regular\s+)?(?:season|campaign)\b(?![\s-]+(?:opener|debut|finale)|['’]s)`,
-  ].join('|'),
-  'i'
-);
-
 const injuriesSchema = z.object({
   injuries: z.array(
     z.object({
@@ -552,9 +541,7 @@ export function parseInjuries(response: unknown): NbaProviderInjury[] {
         comment,
         fantasyStatus,
         // Only the one-line note is read: the long note often names teammates who are out.
-        seasonEnding:
-          fantasyStatus === OUT_FOR_SEASON ||
-          (entry.status === 'Out' && SEASON_ENDING_NOTE.test(comment ?? '')),
+        seasonEnding: fantasyStatus === OUT_FOR_SEASON,
       };
     })
   );
