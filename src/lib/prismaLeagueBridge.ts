@@ -1,23 +1,16 @@
 import { buildExternalUserEmail } from './externalUserEmail';
 import {
-  DraftType,
   LeagueRole,
-  PickOrder,
-  WaiverRule,
+  type DraftType,
+  type PickOrder,
   type Prisma,
   type PrismaClient,
+  type WaiverRule,
 } from '@prisma/client';
-import type { Firestore } from 'firebase-admin/firestore';
 
-import { adminDb } from './firebaseAdmin';
 import { prisma } from './prisma';
 import { getLeagueMemberDocId, isActiveMembershipData } from './leagueMembership';
-import {
-  normalizeDraftAutoPickRules,
-  normalizeDraftPositionLimits,
-  type DraftAutoPickRules,
-  type DraftPositionLimits,
-} from './draftSettings';
+import type { DraftAutoPickRules, DraftPositionLimits } from './draftSettings';
 
 type PrismaClientLike = Pick<PrismaClient, '$transaction' | 'league'>;
 type PrismaTx = Prisma.TransactionClient;
@@ -54,19 +47,6 @@ export interface PrismaLeagueMirrorSnapshot {
   members: PrismaLeagueMirrorMember[];
 }
 
-export interface EnsurePrismaLeagueMirrorInput {
-  leagueId: string;
-  draftType?: 'snake' | 'linear' | string;
-  timePerPick?: number;
-  scheduledStartTime?: Date;
-  timeZone?: string;
-  rosterSize?: number;
-  benchSize?: number;
-  pickOrder?: 'random' | 'manual' | string;
-  positionLimits?: unknown;
-  autoPickRules?: unknown;
-}
-
 export interface SyncPrismaLeagueMemberInput {
   leagueId: string;
   userId: string;
@@ -89,16 +69,7 @@ export interface SyncPrismaLeagueOwnerInput {
 }
 
 interface BridgeDependencies {
-  firestore?: Firestore;
   prisma?: PrismaClientLike;
-}
-
-export function normalizeDraftTypeForPrisma(value: unknown): DraftType {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase() === 'linear'
-    ? DraftType.LINEAR
-    : DraftType.SNAKE;
 }
 
 export function normalizeLeagueRoleForPrisma(
@@ -115,107 +86,7 @@ export function normalizeLeagueRoleForPrisma(
   return LeagueRole.MANAGER;
 }
 
-export function normalizePickOrderForPrisma(value: unknown): PickOrder {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase() === 'manual'
-    ? PickOrder.MANUAL
-    : PickOrder.RANDOM;
-}
-
-export function normalizeWaiverRuleForPrisma(value: unknown): WaiverRule {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase() === 'rolling'
-    ? WaiverRule.ROLLING
-    : WaiverRule.WEEKLY;
-}
-
 export { buildExternalUserEmail };
-
-export async function loadFirestoreLeagueMirrorSnapshot(
-  input: EnsurePrismaLeagueMirrorInput,
-  firestore: Firestore = adminDb
-): Promise<PrismaLeagueMirrorSnapshot> {
-  const leagueRef = firestore.collection('leagues').doc(input.leagueId);
-  const [leagueDoc, topLevelMembersSnap, embeddedMembersSnap] = await Promise.all([
-    leagueRef.get(),
-    firestore.collection('leagueMembers').where('leagueId', '==', input.leagueId).get(),
-    leagueRef.collection('members').get(),
-  ]);
-
-  if (!leagueDoc.exists) {
-    throw new Error('League not found');
-  }
-
-  const leagueData = leagueDoc.data() ?? {};
-  const topLevelMembers = topLevelMembersSnap.docs
-    .map((doc) => toMirrorMember(doc.id, input.leagueId, doc.data()))
-    .filter((member): member is PrismaLeagueMirrorMember => Boolean(member));
-
-  const embeddedMembers = embeddedMembersSnap.docs
-    .map((doc) =>
-      toMirrorMember(getLeagueMemberDocId(input.leagueId, doc.id), input.leagueId, {
-        ...doc.data(),
-        userId: doc.data().userId ?? doc.id,
-      })
-    )
-    .filter((member): member is PrismaLeagueMirrorMember => Boolean(member));
-
-  const members = topLevelMembers.length > 0 ? topLevelMembers : embeddedMembers;
-  const ownerId =
-    stringOrUndefined(leagueData.ownerId) ??
-    members.find((member) => String(member.role).toLowerCase() === 'owner')?.userId ??
-    members[0]?.userId;
-
-  if (!ownerId) {
-    throw new Error('League has no owner or active members to mirror');
-  }
-
-  const startAt =
-    input.scheduledStartTime ??
-    toDate(leagueData.draftDate) ??
-    toDate(leagueData.startAt) ??
-    new Date();
-
-  return {
-    leagueId: input.leagueId,
-    name: stringOrUndefined(leagueData.name) ?? 'Untitled League',
-    inviteCode:
-      stringOrUndefined(leagueData.code) ??
-      stringOrUndefined(leagueData.inviteCode) ??
-      input.leagueId,
-    ownerId,
-    maxTeams: numberOrUndefined(leagueData.maxTeams) ?? Math.max(members.length, 4),
-    draftType: normalizeDraftTypeForPrisma(input.draftType ?? leagueData.draftType),
-    pickOrder: normalizePickOrderForPrisma(input.pickOrder ?? leagueData.pickOrder),
-    waiverRule: normalizeWaiverRuleForPrisma(leagueData.waiverRule ?? leagueData.waiverResetPolicy),
-    startAt,
-    timeZone: input.timeZone ?? stringOrUndefined(leagueData.timeZone) ?? 'Australia/Melbourne',
-    pickSeconds: input.timePerPick ?? numberOrUndefined(leagueData.pickSeconds) ?? 120,
-    allowAutoPick: normalizeDraftAutoPickRules(input.autoPickRules ?? leagueData.autoPickRules)
-      .enabled,
-    positionLimitsJson: normalizeDraftPositionLimits(
-      input.positionLimits ?? leagueData.positionLimits
-    ),
-    autoPickRulesJson: normalizeDraftAutoPickRules(input.autoPickRules ?? leagueData.autoPickRules),
-    members,
-  };
-}
-
-export async function ensurePrismaLeagueMirror(
-  input: EnsurePrismaLeagueMirrorInput,
-  deps: BridgeDependencies = {}
-) {
-  const firestore = deps.firestore ?? adminDb;
-  const client = deps.prisma ?? prisma;
-  const snapshot = await loadFirestoreLeagueMirrorSnapshot(input, firestore);
-
-  return upsertPrismaLeagueMirror(snapshot, client, {
-    rosterSize: input.rosterSize ?? 18,
-    benchSize: input.benchSize ?? 4,
-  });
-}
 
 export async function upsertPrismaLeagueMirror(
   snapshot: PrismaLeagueMirrorSnapshot,
@@ -515,20 +386,4 @@ function stringOrUndefined(value: unknown): string | undefined {
 
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function toDate(value: unknown): Date | undefined {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  if (typeof value === 'string' || typeof value === 'number') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  }
-
-  const maybeTimestamp = value as { toDate?: () => Date } | undefined;
-  if (typeof maybeTimestamp?.toDate === 'function') {
-    const date = maybeTimestamp.toDate();
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  }
-
-  return undefined;
 }

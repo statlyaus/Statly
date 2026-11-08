@@ -7,7 +7,6 @@ vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMembership: vi.fn(),
-  isLeagueManagerRole: vi.fn(),
 }));
 
 function buildLeague(overrides: Record<string, unknown> = {}) {

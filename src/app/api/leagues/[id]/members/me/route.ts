@@ -1,7 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { getLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -10,6 +9,7 @@ import {
   normalizeTeamSymbolUrl,
   normalizeTeamSymbolZoom,
 } from '@/lib/teamSymbol';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import type { LeagueMemberNotificationSettings } from '@/types/leagues';
 import {
   DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES,
@@ -153,16 +153,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // Prisma owns leagues and membership. A league with no Prisma row is legacy data and is not
     // found; Firestore never decides who may change a team.
-    const league = await prisma.league.findUnique({ where: { id }, select: { id: true } });
+    const league = await prisma.league.findUnique({ where: { id }, select: { ownerId: true } });
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
 
-    const membership = await getLeagueMembership(id, userId);
-    if (!membership.isMember || membership.source !== 'prisma' || !membership.memberDocId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Team settings live on the caller's active LeagueMember row. An owner without one belongs to
+    // the league but has no team to edit, so that is a missing resource, not a forbidden one.
+    const access = await getLeagueMembershipAccess(id, userId);
+    if (!access.memberId) {
+      return league.ownerId === userId
+        ? NextResponse.json({ error: 'You do not have a team in this league' }, { status: 404 })
+        : NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const memberId = membership.memberDocId;
+    const memberId = access.memberId;
 
     let body: Record<string, unknown>;
     try {

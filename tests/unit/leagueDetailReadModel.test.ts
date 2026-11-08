@@ -23,7 +23,6 @@ vi.mock('@/lib/firebaseAdmin', () => ({
 }));
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMembership: vi.fn(),
-  isLeagueManagerRole: vi.fn(),
   listActiveLeagueMembers: mocks.listActiveLeagueMembers,
 }));
 vi.mock('@/lib/logger', () => ({
