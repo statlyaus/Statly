@@ -5,6 +5,7 @@ import { BasketballLeagueError } from '@/server/basketball/leagues/basketballLea
 
 const mocks = vi.hoisted(() => ({
   getAuthenticatedUserId: vi.fn(),
+  canUseBasketball: vi.fn(),
   apiError: vi.fn(),
   listBasketballLeagues: vi.fn(),
   getBasketballLeagueDetail: vi.fn(),
@@ -22,6 +23,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/serverAuth', () => ({ getAuthenticatedUserId: mocks.getAuthenticatedUserId }));
+vi.mock('@/server/basketball/basketballAccess', () => ({
+  canUseBasketball: mocks.canUseBasketball,
+}));
 vi.mock('@/lib/logger', () => ({ logger: { apiError: mocks.apiError } }));
 vi.mock('@/server/basketball/leagues/basketballLeagueQueries', () => ({
   listBasketballLeagues: mocks.listBasketballLeagues,
@@ -223,6 +227,7 @@ function call(routeCase: RouteCase, body: string | undefined = undefined): Promi
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getAuthenticatedUserId.mockResolvedValue(USER);
+  mocks.canUseBasketball.mockReturnValue(true);
 });
 
 describe.each(cases)('$name', (routeCase) => {
@@ -233,6 +238,20 @@ describe.each(cases)('$name', (routeCase) => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(mocks[routeCase.service]).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 without touching the service when the caller is not allowed into basketball', async () => {
+    mocks.canUseBasketball.mockReturnValue(false);
+
+    const response = await call(routeCase);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Not found' },
+    });
+    expect(mocks.canUseBasketball).toHaveBeenCalledWith(USER);
     expect(mocks[routeCase.service]).not.toHaveBeenCalled();
   });
 
