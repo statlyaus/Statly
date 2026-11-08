@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { listActiveLeagueMembers } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
@@ -501,7 +502,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (
         faabBudget !== undefined &&
         faabBudget !== prismaLeague.settings.faabBudget &&
-        (await prisma.teamAction.count({ where: { leagueId: id, actionType: 'WAIVER_CLAIM' } })) > 0
+        (await prisma.teamAction.count({
+          where: { leagueId: id, ...inActiveSeason(id), actionType: 'WAIVER_CLAIM' },
+        })) > 0
       ) {
         return NextResponse.json(
           { error: 'FAAB budget is locked once waiver claims exist' },

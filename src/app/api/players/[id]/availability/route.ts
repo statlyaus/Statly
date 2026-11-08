@@ -5,6 +5,7 @@ import type { NextRequest } from 'next/server';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { IN_ACTIVE_SEASON } from '@/server/leagues/activeSeason';
 import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { prisma } from '@/lib/prisma';
@@ -293,6 +294,7 @@ async function loadPrismaWaivers(input: {
   const pendingWaiverActions = await prisma.teamAction.findMany({
     where: {
       leagueId: { in: input.leagueIds },
+      ...IN_ACTIVE_SEASON,
       actionType: { in: ['WAIVER_CLAIM', 'DROP_PLAYER'] },
       status: 'PENDING',
       processingAt: { gt: new Date() },

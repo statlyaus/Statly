@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { createErrorResponse, errorResponse, successResponse } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       prisma.teamAction.findFirst({
         where: {
           leagueId,
+          ...inActiveSeason(leagueId),
           actionType: 'DROP_PLAYER',
           status: 'PENDING',
           processingAt: { gt: new Date() },

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { IN_ACTIVE_SEASON } from '@/server/leagues/activeSeason';
 
 import type { WaiverProcessingResult } from './WaiverProcessingService';
 
@@ -37,6 +38,7 @@ export async function processDueLeagueWaivers(
 
   const due = await prisma.teamAction.findMany({
     where: {
+      ...IN_ACTIVE_SEASON,
       actionType: 'WAIVER_CLAIM',
       status: 'PENDING',
       OR: [{ processingAt: null }, { processingAt: { lte: now } }],

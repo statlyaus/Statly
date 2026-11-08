@@ -4,6 +4,7 @@ import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
+import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
@@ -40,7 +41,7 @@ export async function GET(
     }
 
     const actions = await prisma.teamAction.findMany({
-      where: { leagueId, memberId: member.id },
+      where: { leagueId, ...inActiveSeason(leagueId), memberId: member.id },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -128,6 +129,7 @@ export async function POST(
       data: {
         id: actionId,
         leagueId,
+        seasonId: await requireActiveSeasonId(prisma, leagueId),
         memberId: member.id,
         actionType: 'DROP_PLAYER',
         // The details came from the parsed JSON request body, so they are JSON values.

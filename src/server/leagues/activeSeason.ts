@@ -37,3 +37,14 @@ export async function requireActiveSeasonId(
   });
   return activeSeasonIdOf({ id: leagueId, activeSeasonId: league?.activeSeasonId ?? null });
 }
+
+/**
+ * Where-filter for season-scoped rows read or written by league (waiver claims and priority): the
+ * row's season is the league's active season. A relation filter, so a write needs no extra read.
+ */
+export function inActiveSeason(leagueId: string) {
+  return { season: { activeForLeague: { is: { id: leagueId } } } };
+}
+
+/** The same filter for rows of several leagues: each row is in its own league's active season. */
+export const IN_ACTIVE_SEASON = { season: { activeForLeague: { isNot: null } } };

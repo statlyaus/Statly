@@ -130,7 +130,11 @@ describe('league settings route draft scheduling', () => {
       error: 'FAAB budget is locked once waiver claims exist',
     });
     expect(mocks.countActions).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', actionType: 'WAIVER_CLAIM' },
+      where: {
+        leagueId: 'league-1',
+        season: { activeForLeague: { is: { id: 'league-1' } } },
+        actionType: 'WAIVER_CLAIM',
+      },
     });
     expect(mocks.updateSettings).not.toHaveBeenCalled();
   });

@@ -283,6 +283,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
 
     prismaMocks.league.findUnique.mockResolvedValue({
       id: 'league-1',
+      activeSeasonId: 'season-1',
       settings: { waiverRule: 'WEEKLY', faabBudget: null },
     });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({

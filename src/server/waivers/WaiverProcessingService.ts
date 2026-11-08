@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
@@ -425,6 +426,7 @@ export class WaiverProcessingService {
       await tx.teamAction.create({
         data: {
           leagueId,
+          seasonId: await requireActiveSeasonId(tx, leagueId),
           memberId: plan.memberId,
           actionType: 'DROP_PLAYER',
           status: 'PENDING',
@@ -659,6 +661,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     const actions = (await this.db.teamAction.findMany({
       where: {
         leagueId,
+        ...inActiveSeason(leagueId),
         actionType: 'WAIVER_CLAIM',
         status: 'PENDING',
         OR: [{ processingAt: null }, { processingAt: { lte: new Date() } }],
@@ -681,7 +684,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   // A member's most recent claims, newest first, with statuses in the words the waivers page uses.
   async loadMemberClaims(leagueId: string, memberId: string): Promise<WaiverClaim[]> {
     const actions = (await this.db.teamAction.findMany({
-      where: { leagueId, memberId, actionType: 'WAIVER_CLAIM' },
+      where: { leagueId, ...inActiveSeason(leagueId), memberId, actionType: 'WAIVER_CLAIM' },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -718,6 +721,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       where: {
         id: claimId,
         leagueId,
+        ...inActiveSeason(leagueId),
         actionType: 'WAIVER_CLAIM',
       },
       select: {
@@ -760,7 +764,8 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     };
 
     const action = await this.db.$transaction(async (tx) => {
-      await this.ensureLeaguePriorityRows(tx, input.leagueId, input.waiverSettings);
+      const seasonId = await requireActiveSeasonId(tx, input.leagueId);
+      await this.ensureLeaguePriorityRows(tx, input.leagueId, seasonId, input.waiverSettings);
 
       if (input.waiverSettings.system === 'FAAB' && typeof input.bidAmount === 'number') {
         await this.reservePendingBid(tx, {
@@ -774,6 +779,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       return tx.teamAction.create({
         data: {
           leagueId: input.leagueId,
+          seasonId,
           memberId: member.id,
           actionType: 'WAIVER_CLAIM',
           status: 'PENDING',
@@ -959,7 +965,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     }
 
     const bid = claim.bidAmount;
-    const member = { leagueId: claim.leagueId, memberId: claim.teamId };
+    const member = {
+      leagueId: claim.leagueId,
+      ...inActiveSeason(claim.leagueId),
+      memberId: claim.teamId,
+    };
     // An unset balance starts at the league budget. Guarded on null, so a concurrent writer that
     // already set it is left alone.
     if (typeof waiverSettings.faabBudget === 'number') {
@@ -985,7 +995,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   async refundFaab(claim: WaiverClaim): Promise<void> {
     if (typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
 
-    const member = { leagueId: claim.leagueId, memberId: claim.teamId };
+    const member = {
+      leagueId: claim.leagueId,
+      ...inActiveSeason(claim.leagueId),
+      memberId: claim.teamId,
+    };
     await this.db.$transaction([
       this.db.waiverPriority.updateMany({
         where: { ...member, remainingFAAB: { not: null } },
@@ -1031,7 +1045,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       if (!memberId || !original || original.priority === update.priority) continue;
 
       await db.waiverPriority.updateMany({
-        where: { leagueId, memberId },
+        where: { leagueId, ...inActiveSeason(leagueId), memberId },
         data: { priority: update.priority },
       });
     }
@@ -1089,6 +1103,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   private async ensureLeaguePriorityRows(
     tx: PrismaWaiverStoreTransaction,
     leagueId: string,
+    seasonId: string,
     waiverSettings: WaiverSettings
   ): Promise<void> {
     const [members, existingRows] = await Promise.all([
@@ -1117,11 +1132,12 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     if (missingMembers.length === 0) return;
 
     // Two first claims can both find no rows. skipDuplicates lets the second writer keep the rows the
-    // first one created instead of failing the claim on the (leagueId, memberId) unique key.
+    // first one created instead of failing the claim on the (leagueId, seasonId, memberId) unique key.
     await tx.waiverPriority.createMany({
       data: missingMembers.map((member, index) => ({
         id: randomUUID(),
         leagueId,
+        seasonId,
         memberId: member.id,
         priority: firstPriority + index,
         remainingFAAB: waiverSettings.system === 'FAAB' ? (waiverSettings.faabBudget ?? 100) : null,
@@ -1144,7 +1160,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     // ends and then increments the committed total, so a check made after the write sees every
     // reservation; throwing rolls this increment back.
     await tx.waiverPriority.updateMany({
-      where: { leagueId: input.leagueId, memberId: input.memberId },
+      where: {
+        leagueId: input.leagueId,
+        ...inActiveSeason(input.leagueId),
+        memberId: input.memberId,
+      },
       data: { pendingBidTotal: { increment: input.bidAmount } },
     });
 
@@ -1168,7 +1188,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   ): Promise<void> {
     if (typeof claim.bidAmount !== 'number' || claim.bidAmount <= 0) return;
 
-    const member = { leagueId: claim.leagueId, memberId: claim.teamId };
+    const member = {
+      leagueId: claim.leagueId,
+      ...inActiveSeason(claim.leagueId),
+      memberId: claim.teamId,
+    };
     // Floored at zero: decrement only what is reserved, otherwise clear the reservation.
     const released = await tx.waiverPriority.updateMany({
       where: { ...member, pendingBidTotal: { gte: claim.bidAmount } },
@@ -1200,7 +1224,7 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     memberId?: string
   ): Promise<WaiverPriorityRow[]> {
     return db.waiverPriority.findMany({
-      where: { leagueId, ...(memberId ? { memberId } : {}) },
+      where: { leagueId, ...inActiveSeason(leagueId), ...(memberId ? { memberId } : {}) },
       orderBy: { priority: 'asc' },
       select: { memberId: true, priority: true, remainingFAAB: true, pendingBidTotal: true },
     });

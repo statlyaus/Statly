@@ -138,6 +138,11 @@ Firestore free agents or offers its own claim buttons.
 Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
+Waiver state is season-scoped (2026-11-08). Claims and drops (`TeamAction`) and each member's priority
+and FAAB balance (`WaiverPriority`, one row per member per season) carry the season they were created
+in. Every waiver read and write is filtered to the league's active season, so a claim from an earlier
+season never shows, settles or holds a player, and balances start again in a new season.
+
 Claims validate membership, league settings, player availability, optional drop ownership, roster
 capacity, and priority/FAAB rules at the server boundary. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
@@ -151,7 +156,7 @@ rather than standing in the league budget.
 Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each
 member's budget); otherwise a `ROLLING` league uses priority order. Commissioners set or clear the
 budget through the league settings API (`waiver.faabBudget`: a whole number of at least 1, or
-`null`). The minimum bid is 1 and the waiver period is 24 hours. The budget is locked once the league has any waiver
+`null`). The minimum bid is 1 and the waiver period is 24 hours. The budget is locked once the active season has any waiver
 claim, because members' balances are derived from it when a claim first touches them. Firestore holds no waiver settings.
 
 ### Concurrent writers

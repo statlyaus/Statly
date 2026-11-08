@@ -3,6 +3,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { listActiveLeagueMembers } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import { getLeagueMembershipAccess, isActivePrismaMembership } from '@/server/leagues/membership';
@@ -71,7 +72,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
       const [draftReadiness, waiverPriorityRows] = await Promise.all([
         getLeagueDraftOperationalReadiness(prisma, { leagueId }),
         prisma.waiverPriority.findMany({
-          where: { leagueId },
+          where: { leagueId, ...inActiveSeason(leagueId) },
           orderBy: { priority: 'asc' },
           select: { memberId: true },
         }),
