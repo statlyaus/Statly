@@ -9,8 +9,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-barlow-condensed), var(--font-barlow), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-saira), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-saira-extra-condensed), var(--font-saira), ui-sans-serif, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -353,6 +353,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Stats line up in columns across the app: scores, tables and FAAB. */
+    font-variant-numeric: tabular-nums;
+  }
+  /* Display type is set in condensed caps, scoreboard style. In the base layer so a `normal-case`
+     utility can still opt a heading out. */
+  .font-display {
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
   }
 }
 

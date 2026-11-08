@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Barlow, Barlow_Condensed } from 'next/font/google';
+import { Saira, Saira_Extra_Condensed } from 'next/font/google';
 
 import '@/index.css';
 
@@ -8,15 +8,16 @@ import FirebaseAnalyticsInitializer from '@/components/FirebaseAnalyticsInitiali
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 import MotionPreferenceProvider from '@/providers/MotionPreferenceProvider';
 
-const barlow = Barlow({
+// Saira for text and Saira Extra Condensed for display (owner's "Stats Panel" pick, 2026-11-08).
+const saira = Saira({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '900'],
-  variable: '--font-barlow',
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-saira',
 });
-const barlowCondensed = Barlow_Condensed({
+const sairaExtraCondensed = Saira_Extra_Condensed({
   subsets: ['latin'],
-  weight: ['600', '700'],
-  variable: '--font-barlow-condensed',
+  weight: ['600', '700', '800'],
+  variable: '--font-saira-extra-condensed',
 });
 
 export const metadata: Metadata = {
@@ -27,7 +28,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <html lang="en" data-theme="light" className={`${barlow.variable} ${barlowCondensed.variable}`}>
+    <html
+      lang="en"
+      data-theme="light"
+      className={`${saira.variable} ${sairaExtraCondensed.variable}`}
+    >
       <body className="font-sans" suppressHydrationWarning>
         <FirebaseAnalyticsInitializer />
         <PageErrorBoundary name="RootLayout">

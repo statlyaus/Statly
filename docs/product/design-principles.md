@@ -23,6 +23,9 @@ These are quality references, not assets or layouts to copy.
   so it cannot regress.
 - Preserve light/dark behavior supported by the surrounding surface.
 - Keep spacing, radius, typography, and elevation consistent with existing tokens.
+- Type is Saira for text (`font-sans`) and Saira Extra Condensed for headings and scores
+  (`font-display`, set in uppercase by the base layer; add `normal-case` to opt out). Numbers are
+  tabular across the app so stats line up in columns.
 - Add a new abstraction only when immediate reuse exists; fix the owning shared primitive when a shared
   behavior is wrong.
 
