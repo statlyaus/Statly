@@ -441,7 +441,12 @@ function NavDropdown({
   );
 }
 
-export default function MainNavigation(): ReactNode {
+export default function MainNavigation({
+  showBasketball = false,
+}: {
+  /** Fantasy basketball is private to an allow-list; others never see its link. */
+  readonly showBasketball?: boolean;
+} = {}): ReactNode {
   const pathname = usePathname();
   const { user, logout, loading } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -521,7 +526,10 @@ export default function MainNavigation(): ReactNode {
   const accountLabel = user?.displayName || user?.email || 'Account';
   const accountInitial = accountLabel.charAt(0).toUpperCase() || 'S';
   const showLeagueSwitcher = Boolean(user) && shouldShowLeagueSwitcher(pathname);
-  const desktopNavigationItems = user ? primaryNavigationItems : publicNavigationItems;
+  const signedInNavigationItems = showBasketball
+    ? primaryNavigationItems
+    : primaryNavigationItems.filter((item) => item.href !== '/basketball');
+  const desktopNavigationItems = user ? signedInNavigationItems : publicNavigationItems;
   if (isDraftHubPath(pathname)) {
     return null;
   }
@@ -734,7 +742,7 @@ export default function MainNavigation(): ReactNode {
                         Navigate
                       </p>
                       <div className="mt-2 space-y-1">
-                        {primaryNavigationItems.map((item) => {
+                        {signedInNavigationItems.map((item) => {
                           const isActive = isNavActive(pathname, item.href);
                           return (
                             <Link

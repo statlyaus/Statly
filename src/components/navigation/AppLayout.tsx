@@ -10,9 +10,12 @@ import MainNavigation from './MainNavigation';
 interface AppLayoutProps {
   children: React.ReactNode;
   mode?: 'auto' | 'shell';
+  /** Whether the caller may use fantasy basketball (`canUseBasketball`); a nested layout inherits it. */
+  showBasketball?: boolean;
 }
 
-const AppLayoutContext = createContext(false);
+// Set by the outermost AppLayout; a nested one (the draft room's shell) reads it.
+const AppLayoutContext = createContext<{ showBasketball: boolean } | null>(null);
 const draftHubRoutes = new Set(['create', 'history', 'settings']);
 
 export function isImmersiveAppPath(pathname: string): boolean {
@@ -21,8 +24,14 @@ export function isImmersiveAppPath(pathname: string): boolean {
   return segments.length === 2 && segments[0] === 'drafts' && !draftHubRoutes.has(segments[1]);
 }
 
-export default function AppLayout({ children, mode = 'auto' }: AppLayoutProps): React.ReactElement {
-  const isNested = useContext(AppLayoutContext);
+export default function AppLayout({
+  children,
+  mode = 'auto',
+  showBasketball,
+}: AppLayoutProps): React.ReactElement {
+  const outer = useContext(AppLayoutContext);
+  const isNested = outer !== null;
+  const basketballVisible = showBasketball ?? outer?.showBasketball ?? false;
   const pathname = usePathname();
   const shell = (
     <div data-app-shell className="min-h-screen w-full min-w-0 bg-background">
@@ -32,7 +41,7 @@ export default function AppLayout({ children, mode = 'auto' }: AppLayoutProps): 
       >
         Skip to content
       </a>
-      <MainNavigation />
+      <MainNavigation showBasketball={basketballVisible} />
       <main id="main-content" tabIndex={-1} className="w-full min-w-0 outline-none">
         {children}
       </main>
@@ -47,7 +56,9 @@ export default function AppLayout({ children, mode = 'auto' }: AppLayoutProps): 
 
   return (
     <SectionErrorBoundary name="AppLayout">
-      <AppLayoutContext.Provider value>{content}</AppLayoutContext.Provider>
+      <AppLayoutContext.Provider value={{ showBasketball: basketballVisible }}>
+        {content}
+      </AppLayoutContext.Provider>
     </SectionErrorBoundary>
   );
 }

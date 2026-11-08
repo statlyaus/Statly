@@ -7,7 +7,7 @@ import AppLayout from '@/components/navigation/AppLayout';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-export default function DashboardClient() {
+export default function DashboardClient({ showBasketball }: { readonly showBasketball: boolean }) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -22,7 +22,7 @@ export default function DashboardClient() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout showBasketball={showBasketball}>
       <UserDashboard user={user} />
     </AppLayout>
   );

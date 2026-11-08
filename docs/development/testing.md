@@ -290,6 +290,9 @@ Some endpoints require a credential by design and fail closed when it is absent:
   from a verified identity and ignore any client-supplied `userId`. In local development the scripted
   identity is accepted when both `STATLY_ENABLE_DEV_AUTH` and `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH` are
   `true` and the process is not running in production mode.
+- `/basketball` and `/api/basketball/*` answer 404 to anyone not in `BASKETBALL_ALLOWED_USER_IDS`
+  (comma-separated Firebase user ids). Unset, they are open to any signed-in user outside production,
+  which covers `npm run dev` and e2e; set it to someone else's id to see the gate locally.
 
 Set local values in `.env.local`, which is ignored and never committed. Generate one value per
 secret so no two environments share a credential:
