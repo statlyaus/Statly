@@ -69,7 +69,7 @@ describe('ETL source-of-truth architecture', () => {
     expect(liveGuard).toContain('await refreshFixtureIfDue()');
     expect(liveGuard).toContain('skipping this cycle');
     expect(backfill).toContain('await runFixturePipeline({ season, timeoutMs: null })');
-    expect(backfill).toContain('failures.push(`${season} fixture`)');
+    expect(backfill).toMatch(/failures\.push\(`\$\{season\} fixture`\)/);
   });
 
   it('preserves row types in R and normalizes numeric fields before processing', () => {
