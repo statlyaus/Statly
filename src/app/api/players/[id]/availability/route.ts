@@ -9,6 +9,7 @@ import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { nextWaiverRunAt } from '@/server/waivers/nextWaiverRun';
 
 // Prisma owns membership, rosters, picks and waiver claims, so it alone decides availability. A failed
 // read is a 500, never an empty result: an empty result would show every player as a free agent.
@@ -311,7 +312,10 @@ async function loadPrismaWaivers(input: {
     if (!actionPlayerId || !playerIdSet.has(actionPlayerId)) continue;
     const current = waiversByLeagueId.get(action.leagueId);
     waiversByLeagueId.set(action.leagueId, {
-      processingAt: current?.processingAt ?? action.processingAt ?? undefined,
+      // A claim is settled by the first daily run at or after its due time, not at the due time.
+      processingAt:
+        current?.processingAt ??
+        (action.processingAt ? nextWaiverRunAt(action.processingAt) : undefined),
       pendingClaims: (current?.pendingClaims ?? 0) + 1,
     });
   }

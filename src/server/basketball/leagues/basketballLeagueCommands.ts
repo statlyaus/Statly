@@ -17,7 +17,11 @@ import { buildExternalUserEmail } from '@/lib/externalUserEmail';
 import { BASKETBALL_CATEGORY_IDS, type BasketballCategoryId } from '@/types/basketball';
 
 import { requireBasketballLeagueOwner } from './basketballLeagueAccess';
-import type { BasketballLeagueDetail } from './basketballLeagueDto';
+import type {
+  BasketballLeagueDetail,
+  BasketballRosterAddResult,
+  BasketballRosterSkip,
+} from './basketballLeagueDto';
 import {
   BasketballLeagueError,
   fieldError,
@@ -274,18 +278,21 @@ export async function setBasketballLeagueTeams(
 
 /**
  * Adds players to teams in the league (`teamId` null: rostered by a team not entered). A player
- * already in the league is moved, not duplicated. A new or moved player's `acquiredOn` defaults to
- * the first day of the current fantasy week, and a moved player comes off the injured list unless
- * the entry says otherwise. Only ever called with player ids the user confirmed.
+ * already in the league is moved, not duplicated, except that marking a player on an entered team
+ * (the user's own, this week's opponent or any other) as rostered elsewhere skips him and reports
+ * him in `skipped`: a sloppy whole-league paste never strips a roster. A new or moved player's
+ * `acquiredOn` defaults to the first day of the current fantasy week, and a moved player comes off
+ * the injured list unless the entry says otherwise. Only ever called with player ids the user
+ * confirmed. Up to `MAX_ROSTER_BATCH` players in one transaction of a few statements.
  */
 export async function addBasketballRosterSpots(
   userId: string,
   leagueId: string,
   input: unknown,
   options: BasketballCommandOptions = {}
-): Promise<BasketballLeagueDetail> {
+): Promise<BasketballRosterAddResult> {
   const { entries } = parseInput(rosterEntriesSchema, input);
-  await prisma.$transaction(async (tx) => {
+  const skipped = await prisma.$transaction(async (tx) => {
     const league = await requireBasketballLeagueOwner(tx, leagueId, userId);
     const teamIds = [...new Set(entries.flatMap((entry) => (entry.teamId ? [entry.teamId] : [])))];
     const playerIds = entries.map((entry) => entry.playerId);
@@ -297,7 +304,13 @@ export async function addBasketballRosterSpots(
       tx.nbaPlayer.findMany({ where: { id: { in: playerIds } }, select: { id: true } }),
       tx.basketballRosterSpot.findMany({
         where: { leagueId, playerId: { in: playerIds } },
-        select: { id: true, playerId: true, teamId: true },
+        select: {
+          id: true,
+          playerId: true,
+          teamId: true,
+          team: { select: { name: true } },
+          player: { select: { fullName: true } },
+        },
       }),
     ]);
     const knownTeams = new Set(teams.map((team) => team.id));
@@ -314,38 +327,69 @@ export async function addBasketballRosterSpots(
     });
     throwFieldErrors(errors);
 
-    const weekStart = currentWeekStart(league, options.now ?? new Date());
+    const weekStart = stringToDateOnly(currentWeekStart(league, options.now ?? new Date()));
     const spotByPlayer = new Map(spots.map((spot) => [spot.playerId, spot]));
+    const created: Prisma.BasketballRosterSpotCreateManyInput[] = [];
+    // Spots that change the same way are updated in one statement.
+    const updates = new Map<
+      string,
+      { ids: string[]; data: Prisma.BasketballRosterSpotUncheckedUpdateManyInput }
+    >();
+    const skips: BasketballRosterSkip[] = [];
     for (const entry of entries) {
       const spot = spotByPlayer.get(entry.playerId);
+      const acquiredOn = entry.acquiredOn ? stringToDateOnly(entry.acquiredOn) : undefined;
       if (!spot) {
-        await tx.basketballRosterSpot.create({
-          data: {
-            leagueId,
-            playerId: entry.playerId,
-            teamId: entry.teamId,
-            onInjuredList: entry.onInjuredList ?? false,
-            acquiredOn: stringToDateOnly(entry.acquiredOn ?? weekStart),
-          },
+        created.push({
+          leagueId,
+          playerId: entry.playerId,
+          teamId: entry.teamId,
+          onInjuredList: entry.onInjuredList ?? false,
+          acquiredOn: acquiredOn ?? weekStart,
+        });
+        continue;
+      }
+      if (entry.teamId === null && spot.teamId !== null) {
+        skips.push({
+          playerId: spot.playerId,
+          fullName: spot.player.fullName,
+          teamId: spot.teamId,
+          teamName: spot.team?.name ?? '',
+          reason: 'ON_ENTERED_TEAM',
         });
         continue;
       }
       const moved = spot.teamId !== entry.teamId;
-      await tx.basketballRosterSpot.updateMany({
-        where: { id: spot.id, leagueId },
-        data: {
-          teamId: entry.teamId,
-          onInjuredList: entry.onInjuredList ?? (moved ? false : undefined),
-          acquiredOn: entry.acquiredOn
-            ? stringToDateOnly(entry.acquiredOn)
-            : moved
-              ? stringToDateOnly(weekStart)
-              : undefined,
-        },
-      });
+      const data: Prisma.BasketballRosterSpotUncheckedUpdateManyInput = {
+        teamId: entry.teamId,
+        onInjuredList: entry.onInjuredList ?? (moved ? false : undefined),
+        acquiredOn: acquiredOn ?? (moved ? weekStart : undefined),
+      };
+      const key = JSON.stringify(data);
+      const update = updates.get(key) ?? { ids: [] as string[], data };
+      update.ids.push(spot.id);
+      updates.set(key, update);
     }
+
+    if (created.length > 0) await tx.basketballRosterSpot.createMany({ data: created });
+    for (const { ids, data } of updates.values()) {
+      await tx.basketballRosterSpot.updateMany({ where: { leagueId, id: { in: ids } }, data });
+    }
+    return skips;
   });
-  return getBasketballLeagueDetail(userId, leagueId);
+  return { ...(await getBasketballLeagueDetail(userId, leagueId)), skipped };
+}
+
+/** Removes every player marked as rostered elsewhere; players on entered teams stay. */
+export async function clearBasketballTakenPlayers(
+  userId: string,
+  leagueId: string
+): Promise<BasketballLeagueDetail & { removed: number }> {
+  await requireBasketballLeagueOwner(prisma, leagueId, userId);
+  const { count } = await prisma.basketballRosterSpot.deleteMany({
+    where: { leagueId, teamId: null },
+  });
+  return { ...(await getBasketballLeagueDetail(userId, leagueId)), removed: count };
 }
 
 /** Changes one spot's injured-list flag, acquired date or team; a team change is a move, as above. */

@@ -1,8 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { listActiveUserLeagueMemberships } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import {
@@ -48,6 +46,8 @@ export async function GET(
       );
     }
 
+    // Prisma is the only league authority. A league with no Prisma row is legacy data and is not
+    // listed; Firestore league documents are never read here.
     const prismaMemberships = await prisma.leagueMember.findMany({
       where: { userId, isActive: true },
       include: {
@@ -62,70 +62,38 @@ export async function GET(
       orderBy: { joinedAt: 'desc' },
     });
 
-    if (prismaMemberships.length > 0) {
-      const leagues = prismaMemberships.map((membership) => {
-        const league = membership.league;
-        const draft = league.drafts[0] ?? null;
+    const leagues = prismaMemberships.map((membership) => {
+      const league = membership.league;
+      const draft = league.drafts[0] ?? null;
 
-        return {
-          id: league.id,
-          name: league.name,
-          teamName: membership.teamName,
-          status:
-            draft?.status === 'COMPLETED'
-              ? 'completed'
-              : draft?.status === 'LIVE' || draft?.status === 'PAUSED'
-                ? 'active'
-                : 'preseason',
-          draftCompleted: draft?.status === 'COMPLETED',
-          memberCount: league._count.members,
-          maxTeams: league.settings.maxTeams,
-          description: `${league.name} Fantasy League`,
-          ownerId: league.ownerId,
-          type: 'private',
-          code: league.inviteCode,
-          categories: normalizeCategories(league.categoriesJson),
-          draftDate: league.settings.startAt?.toISOString(),
-          createdAt: league.createdAt.toISOString(),
-          updatedAt: league.createdAt.toISOString(),
-        };
-      });
+      return {
+        id: league.id,
+        name: league.name,
+        teamName: membership.teamName,
+        status:
+          draft?.status === 'COMPLETED'
+            ? 'completed'
+            : draft?.status === 'LIVE' || draft?.status === 'PAUSED'
+              ? 'active'
+              : 'preseason',
+        draftCompleted: draft?.status === 'COMPLETED',
+        memberCount: league._count.members,
+        maxTeams: league.settings.maxTeams,
+        description: `${league.name} Fantasy League`,
+        ownerId: league.ownerId,
+        type: 'private',
+        code: league.inviteCode,
+        categories: normalizeCategories(league.categoriesJson),
+        draftDate: league.settings.startAt?.toISOString(),
+        createdAt: league.createdAt.toISOString(),
+        updatedAt: league.createdAt.toISOString(),
+      };
+    });
 
-      logger.info('Returning Prisma league memberships', { userId, count: leagues.length });
-      return NextResponse.json({
-        success: true,
-        leagues,
-      });
-    }
-
-    const memberships = await listActiveUserLeagueMemberships(userId);
-    const leagueIds = memberships
-      .map((membership) => membership.leagueId)
-      .filter((leagueId) => leagueId.length > 0);
-
-    // Fetch the actual league details for each membership
-    const leagues = [];
-    if (leagueIds.length > 0) {
-      const leaguesRef = adminDb.collection('leagues');
-      const leagueSnapshots = await Promise.all(leagueIds.map((id) => leaguesRef.doc(id).get()));
-
-      for (const leagueDoc of leagueSnapshots) {
-        if (leagueDoc.exists) {
-          const data = leagueDoc.data();
-          leagues.push({
-            id: leagueDoc.id,
-            ...data,
-            categories: normalizeCategories(data?.categories),
-          });
-        }
-      }
-    }
-
-    logger.info(`Fetched ${memberships.length} league memberships for user ${userId}`);
-
+    logger.info('Returning Prisma league memberships', { userId, count: leagues.length });
     return NextResponse.json({
       success: true,
-      leagues: leagues,
+      leagues,
     });
   } catch (error) {
     logger.error('Error fetching user league memberships:', error);

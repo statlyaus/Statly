@@ -54,7 +54,12 @@ Apply migrations with `npx prisma migrate deploy`. The history starts at the
   operations that genuinely require a remote project.
 - `NEXT_PUBLIC_USE_EMULATORS`: explicit client emulator opt-in.
 - `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST`: server emulator endpoints.
-- `REDIS_URL` or the documented Redis host/port fields: realtime and worker coordination.
+- `REDIS_URL` or the documented Redis host/port fields: realtime and worker coordination, and the
+  shared rate-limit counters.
+- `RATE_LIMIT_TRUSTED_PROXY_COUNT` (default `1`): how many proxies in front of the web app append to
+  `x-forwarded-for`; rate limits key anonymous callers by the hop that many entries from the right.
+  On Netlify (`NETLIFY=true`) `x-nf-client-connection-ip` takes precedence. See
+  [rate limits](../architecture/data-platform.md#rate-limits).
 - `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`: optional browser-only GIPHY key for league chat GIFs; the GIF
   button is hidden while it is unset.
 - `INTERNAL_TASK_SECRET` and cron/metrics credentials: server-only; use deployment secret storage.
@@ -70,7 +75,9 @@ removing the current file does not remove it from history.
 
 The browser signs in through the Firebase Web SDK. Statly's generated auth service worker attaches a
 current Firebase ID token to eligible same-origin app requests. Server boundaries verify the token and
-then authorize membership/role against canonical domain state.
+then authorize membership/role against canonical domain state. If the worker cannot start (an
+insecure origin, an unsupported or private browser), sign-in signs the Firebase user back out and says
+so, rather than leaving a Firebase session the app ignores.
 
 The legacy `statly_session` cookie remains a compatibility fallback where implemented. New code must
 not treat middleware routing checks or cookie presence as domain authorization.

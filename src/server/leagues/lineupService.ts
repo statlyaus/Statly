@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 
+import { activeSeasonIdOf, requireActiveSeasonId } from './activeSeason';
 import { normalizeCompetitionRules, type CompetitionRules } from './competitionRules';
 import { normalizeLineupSlots } from './lineupSettings';
 import type { ActiveLineupSlot, LeagueLineupSlot, LineupSlotSettings } from './scoringTypes';
@@ -27,6 +28,8 @@ export interface RosterLineupPlayer {
   position: string | null;
   club?: string | null;
   gameStartsAt?: Date | null;
+  /** The round has started and this player's AFL game start is unknown, so he is held in place. */
+  startTimeUnknown?: boolean;
 }
 
 export interface SubmittedLineupPlayer {
@@ -53,6 +56,8 @@ export interface MemberLineupRoundContext {
   source: 'PUBLISHED' | 'SETUP_FALLBACK';
   round: number;
   aflRound: number | null;
+  /** AFL season year of the round's `LeagueSeason`; null when the round is not linked to one. */
+  seasonYear: number | null;
   phase: 'REGULAR' | 'FINALS';
   roundStatus: 'SCHEDULED' | 'NO_MATCHUP' | 'PENDING' | 'LOCKED' | 'FINAL';
   startsAt: Date | null;
@@ -69,6 +74,10 @@ export type RoundPlayerGameStartsResult =
       ok: true;
       gameStartsByPlayerId: Map<string, Date>;
       timingStatus: RoundTimingStatus;
+      /** Players with no matched AFL game and no confirmed club bye. */
+      startUnknownPlayerIds: Set<string>;
+      /** The earliest official game start in the AFL round, if any. */
+      firstGameStartsAt: Date | null;
     }
   | { ok: false; error: string };
 
@@ -94,6 +103,7 @@ export function createSetupLineupRoundContext(round: number): MemberLineupRoundC
     source: 'SETUP_FALLBACK',
     round,
     aflRound: null,
+    seasonYear: null,
     phase: 'REGULAR',
     roundStatus: 'PENDING',
     startsAt: null,
@@ -219,6 +229,12 @@ function resolveThursdayLock(startsAt: Date | null, timeZone: string): Date | nu
  */
 const AFL_LOCK_TIME_ZONE = 'Australia/Sydney';
 
+/**
+ * AFL fixtures and match times are read for the season the competition round belongs to, the
+ * same year scoring uses, rather than the calendar year the request happens to run in.
+ */
+const ROUND_SEASON_YEAR = { season: { select: { year: true } } } as const;
+
 function resolveRoundLockAt(
   rules: CompetitionRules,
   competitionRound: { startsAt: Date | null; fallbackLockAt: Date | null }
@@ -255,6 +271,7 @@ export async function loadMemberLineupRoundContext({
         round,
       },
     },
+    include: ROUND_SEASON_YEAR,
   });
   if (!competitionRound) return null;
 
@@ -284,6 +301,7 @@ export async function loadMemberLineupRoundContext({
     source: 'PUBLISHED',
     round: competitionRound.round,
     aflRound: competitionRound.aflRound,
+    seasonYear: competitionRound.season?.year ?? null,
     phase: competitionRound.phase,
     roundStatus: competitionRound.status,
     startsAt: competitionRound.startsAt,
@@ -313,6 +331,7 @@ function deriveLineupLockState(
 export interface LineupRoundSummary {
   round: number;
   aflRound: number | null;
+  seasonYear: number | null;
   phase: 'REGULAR' | 'FINALS';
   status: MemberLineupRoundContext['roundStatus'];
   startsAt: Date | null;
@@ -336,12 +355,14 @@ export async function loadLineupRoundSummaries(
   const rounds = await prisma.leagueCompetitionRound.findMany({
     where: { leagueId, fixtureVersion: league.settings.competitionRulesVersion },
     orderBy: { round: 'asc' },
+    include: ROUND_SEASON_YEAR,
   });
   return rounds.map((competitionRound) => {
     const lockAt = competitionRound.lockedAt ?? resolveRoundLockAt(rules, competitionRound);
     return {
       round: competitionRound.round,
       aflRound: competitionRound.aflRound,
+      seasonYear: competitionRound.season?.year ?? null,
       phase: competitionRound.phase,
       status: competitionRound.status,
       startsAt: competitionRound.startsAt,
@@ -400,6 +421,50 @@ export async function resolveCurrentCompetitionRoundNumber(
   return currentRound?.round ?? null;
 }
 
+function clubKey(club: string) {
+  return getTeamName(club).toUpperCase();
+}
+
+type RoundMatch = Extract<
+  Awaited<ReturnType<typeof getRoundMatchesResult>>,
+  { ok: true }
+>['matches'][number];
+
+/** Each club's game start, the clubs on a confirmed bye, and the round's first game start. */
+function indexRoundMatchStarts(matches: readonly RoundMatch[]) {
+  const startsByClub = new Map<string, Date>();
+  const byeClubs = new Set<string>();
+  let firstGameStartsAt: Date | null = null;
+  for (const match of matches) {
+    for (const club of match.confirmed_bye_teams ?? []) {
+      if (typeof club === 'string' && club.trim()) byeClubs.add(clubKey(club));
+    }
+    const startsAt = new Date(match.start_time_utc);
+    if (!Number.isFinite(startsAt.getTime())) continue;
+    if (!firstGameStartsAt || startsAt < firstGameStartsAt) firstGameStartsAt = startsAt;
+    startsByClub.set(clubKey(match.home_team), startsAt);
+    startsByClub.set(clubKey(match.away_team), startsAt);
+  }
+  return { startsByClub, byeClubs, firstGameStartsAt };
+}
+
+/**
+ * Fail closed: once the round's first game has started (the competition round start or the first
+ * official game, whichever is earlier), a player whose own game start is unknown stays where he
+ * is. No lock time is stored for him, so a later official start time still applies.
+ */
+function resolveStartUnknownHeldPlayerIds(
+  timingResult: RoundPlayerGameStartsResult,
+  competitionRound: { startsAt: Date | null } | null,
+  now: Date
+): ReadonlySet<string> {
+  if (!timingResult.ok) return new Set();
+  const roundStartedAt = [competitionRound?.startsAt, timingResult.firstGameStartsAt]
+    .filter((date): date is Date => date instanceof Date)
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  return roundStartedAt && roundStartedAt <= now ? timingResult.startUnknownPlayerIds : new Set();
+}
+
 export async function loadRoundPlayerGameStarts({
   aflRound,
   players,
@@ -414,6 +479,8 @@ export async function loadRoundPlayerGameStarts({
       ok: true,
       gameStartsByPlayerId: new Map<string, Date>(),
       timingStatus: 'PUBLISHED_PENDING',
+      startUnknownPlayerIds: new Set(players.map((player) => player.playerId)),
+      firstGameStartsAt: null,
     };
   }
 
@@ -422,25 +489,22 @@ export async function loadRoundPlayerGameStarts({
     return { ok: false, error: 'Official AFL match timing is temporarily unavailable.' };
   }
 
-  const startsByClub = new Map<string, Date>();
-  for (const match of result.matches) {
-    const startsAt = new Date(match.start_time_utc);
-    if (!Number.isFinite(startsAt.getTime())) continue;
-    startsByClub.set(getTeamName(match.home_team).toUpperCase(), startsAt);
-    startsByClub.set(getTeamName(match.away_team).toUpperCase(), startsAt);
-  }
-
+  const { startsByClub, byeClubs, firstGameStartsAt } = indexRoundMatchStarts(result.matches);
   const gameStartsByPlayerId = new Map<string, Date>();
+  const startUnknownPlayerIds = new Set<string>();
   for (const player of players) {
-    if (!player.club) continue;
-    const startsAt = startsByClub.get(getTeamName(player.club).toUpperCase());
+    const club = player.club ? clubKey(player.club) : null;
+    const startsAt = club ? startsByClub.get(club) : undefined;
     if (startsAt) gameStartsByPlayerId.set(player.playerId, startsAt);
+    else if (!club || !byeClubs.has(club)) startUnknownPlayerIds.add(player.playerId);
   }
 
   return {
     ok: true,
     gameStartsByPlayerId,
     timingStatus: gameStartsByPlayerId.size === players.length ? 'AVAILABLE' : 'PUBLISHED_PENDING',
+    startUnknownPlayerIds,
+    firstGameStartsAt,
   };
 }
 
@@ -555,7 +619,11 @@ export function validateLineupSubmission(
     if (lockedPlayer && !isUnchangedLockedAssignment) {
       errors.push(`Player ${player.playerId} is locked.`);
     }
-    if (isLineupPlayerLocked(rosterPlayer.gameStartsAt, now) && !lockedPlayer) {
+    if (rosterPlayer.startTimeUnknown && !lockedPlayer) {
+      errors.push(
+        `Player ${player.playerId} is locked: his AFL game start time is not known and the round has started.`
+      );
+    } else if (isLineupPlayerLocked(rosterPlayer.gameStartsAt, now) && !lockedPlayer) {
       errors.push(`Player ${player.playerId} is locked.`);
     }
     // DEF, MID, RUC and FWD take only players listed in that position; UTIL and interchange
@@ -747,8 +815,9 @@ export async function loadMemberLineup({
   round: number;
 }) {
   return prisma.$transaction(async (tx) => {
+    const seasonId = await requireActiveSeasonId(tx, leagueId);
     const query = {
-      where: { leagueId_memberId_round: { leagueId, memberId, round } },
+      where: { leagueId_seasonId_memberId_round: { leagueId, seasonId, memberId, round } },
       include: {
         players: {
           include: { player: true },
@@ -829,6 +898,7 @@ export async function saveMemberLineup({
             round,
           },
         },
+        include: ROUND_SEASON_YEAR,
       });
   if (!initialCompetitionRound && !initialIsSetupFallback) {
     return {
@@ -856,6 +926,7 @@ export async function saveMemberLineup({
     initialRules.lockPolicy === 'INDIVIDUAL_GAME_START'
       ? await loadRoundPlayerGameStarts({
           aflRound: initialCompetitionRound?.aflRound ?? null,
+          season: initialCompetitionRound?.season?.year ?? undefined,
           players: initialRosterPlayers.map((row) => ({
             playerId: row.playerId,
             club: row.player.club,
@@ -865,6 +936,8 @@ export async function saveMemberLineup({
           ok: true,
           gameStartsByPlayerId: new Map<string, Date>(),
           timingStatus: 'AVAILABLE',
+          startUnknownPlayerIds: new Set<string>(),
+          firstGameStartsAt: null,
         };
   const roundNotStarted = Boolean(
     initialCompetitionRound?.startsAt && initialCompetitionRound.startsAt > new Date()
@@ -960,8 +1033,15 @@ export async function saveMemberLineup({
       return { ok: false, code: 'INVALID_LINEUP', errors: ['This round is locked.'] };
     }
 
+    const seasonId = activeSeasonIdOf(currentLeague);
+    const startUnknownPlayerIds = resolveStartUnknownHeldPlayerIds(
+      timingResult,
+      currentCompetitionRound,
+      saveNow
+    );
+
     const existingLineup = await tx.leagueLineup.findUnique({
-      where: { leagueId_memberId_round: { leagueId, memberId, round } },
+      where: { leagueId_seasonId_memberId_round: { leagueId, seasonId, memberId, round } },
       include: { players: true },
     });
     const normalizedExistingPlayers = existingLineup
@@ -980,7 +1060,7 @@ export async function saveMemberLineup({
       })
     );
     const existingLockedPlayers = existingPlayersWithLocks
-      .filter((player) => player.lockedAt)
+      .filter((player) => player.lockedAt || startUnknownPlayerIds.has(player.playerId))
       .map((player) => ({
         playerId: player.playerId,
         slot: player.slot,
@@ -994,6 +1074,7 @@ export async function saveMemberLineup({
         position: row.player.position,
         club: row.player.club,
         gameStartsAt: gameStartsByPlayerId.get(row.playerId) ?? null,
+        startTimeUnknown: startUnknownPlayerIds.has(row.playerId),
       })),
       existingLockedPlayers,
       submittedPlayers,
@@ -1009,8 +1090,8 @@ export async function saveMemberLineup({
     }
 
     const upserted = await tx.leagueLineup.upsert({
-      where: { leagueId_memberId_round: { leagueId, memberId, round } },
-      create: { leagueId, memberId, round },
+      where: { leagueId_seasonId_memberId_round: { leagueId, seasonId, memberId, round } },
+      create: { leagueId, seasonId, memberId, round },
       update: {},
     });
 

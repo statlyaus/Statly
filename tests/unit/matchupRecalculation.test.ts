@@ -5,15 +5,22 @@ const etlMocks = vi.hoisted(() => ({
   getRoundMatchesResult: vi.fn().mockResolvedValue({ ok: true, matches: [] }),
 }));
 
-const prismaMocks = vi.hoisted(() => ({
-  $transaction: vi.fn(),
-  league: { findUnique: vi.fn() },
-  leagueCompetitionRound: { findUnique: vi.fn() },
-  leagueMatchup: { findMany: vi.fn(), update: vi.fn() },
-  leagueMatchupScore: { upsert: vi.fn() },
-  leagueLineup: { findMany: vi.fn() },
-  leagueMember: { findMany: vi.fn() },
-}));
+const prismaMocks = vi.hoisted(() => {
+  const mocks = {
+    $transaction: vi.fn(),
+    $executeRaw: vi.fn(),
+    league: { findUnique: vi.fn() },
+    leagueCompetitionRound: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn() },
+    leagueMatchup: { findMany: vi.fn(), update: vi.fn() },
+    leagueMatchupScore: { upsert: vi.fn(), findMany: vi.fn() },
+    leagueStanding: { upsert: vi.fn() },
+    leagueLineup: { findMany: vi.fn() },
+    leagueMember: { findMany: vi.fn() },
+  };
+  // Interactive transactions run against the same mocks.
+  mocks.$transaction.mockImplementation((work: (tx: typeof mocks) => unknown) => work(mocks));
+  return mocks;
+});
 const carryForwardMock = vi.hoisted(() => vi.fn().mockResolvedValue(0));
 
 vi.mock('@/server/etl/etlRoundData', () => etlMocks);
@@ -30,6 +37,7 @@ import {
 function leagueWithFixtureVersion(competitionRulesVersion: number) {
   return {
     id: 'league-1',
+    activeSeasonId: 'season-1',
     categoriesJson: ['goals'],
     settings: {
       scoringMode: 'H2H_EACH_CATEGORY',
@@ -46,6 +54,8 @@ function leagueWithFixtureVersion(competitionRulesVersion: number) {
 describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMocks.leagueMatchupScore.findMany.mockResolvedValue([]);
+    prismaMocks.leagueCompetitionRound.count.mockResolvedValue(1);
     prismaMocks.leagueMatchup.findMany.mockResolvedValue([]);
     prismaMocks.leagueLineup.findMany.mockResolvedValue([]);
     prismaMocks.leagueMember.findMany.mockResolvedValue([]);
@@ -427,5 +437,66 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
     expect(prismaMocks.leagueMatchup.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'matchup-1' } })
     );
+  });
+  it('writes every score, the final round and the standings in one locked transaction', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
+    prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      { id: 'matchup-1', homeMemberId: 'member-1', awayMemberId: 'member-2' },
+      { id: 'matchup-2', homeMemberId: 'member-3', awayMemberId: 'member-4' },
+    ]);
+    prismaMocks.leagueMember.findMany.mockResolvedValue(
+      ['member-1', 'member-2', 'member-3', 'member-4'].map((id) => ({ id, teamName: id }))
+    );
+    const memberIds = ['member-1', 'member-2', 'member-3', 'member-4'];
+    prismaMocks.leagueLineup.findMany.mockResolvedValue(
+      memberIds.map((memberId, index) => ({
+        id: `lineup-${memberId}`,
+        memberId,
+        players: [
+          {
+            id: `a-${index}`,
+            playerId: `player-${index}`,
+            slot: 'MID',
+            slotIndex: 0,
+            player: { club: 'GWS' },
+          },
+        ],
+      }))
+    );
+    etlMocks.getRoundPlayerStatsResult.mockResolvedValue({
+      ok: true,
+      stats: memberIds.map((_, index) => ({
+        player_uid: `player-${index}`,
+        round_number: 12,
+        status: 'final',
+        stats: { minutes: 80, goals: index },
+      })),
+    });
+    etlMocks.getRoundMatchesResult.mockResolvedValue({
+      ok: true,
+      matches: [
+        { match_uid: 'afl-match-1', status: 'final', home_team: 'GWS', away_team: 'Geelong' },
+      ],
+    });
+
+    const result = await recalculateLeagueRoundMatchups({
+      leagueId: 'league-1',
+      round: 4,
+      finalize: true,
+    });
+
+    expect(result).toMatchObject({ status: 'FINAL', recalculated: 2 });
+    expect(prismaMocks.$transaction).toHaveBeenCalledTimes(1);
+    const [lockCall] = prismaMocks.$executeRaw.mock.invocationCallOrder;
+    expect(String(prismaMocks.$executeRaw.mock.calls[0][0])).toContain('UPDATE "League"');
+    const writes = [
+      ...prismaMocks.leagueMatchup.update.mock.invocationCallOrder,
+      ...prismaMocks.leagueMatchupScore.upsert.mock.invocationCallOrder,
+      ...prismaMocks.leagueCompetitionRound.update.mock.invocationCallOrder,
+      ...prismaMocks.leagueStanding.upsert.mock.invocationCallOrder,
+    ];
+    expect(writes).toHaveLength(2 + 4 + 1 + 4);
+    expect(Math.min(...writes)).toBeGreaterThan(lockCall);
   });
 });

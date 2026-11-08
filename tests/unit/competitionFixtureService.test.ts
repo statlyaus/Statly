@@ -34,6 +34,7 @@ describe('competition fixture mutations', () => {
     vi.clearAllMocks();
     prismaMocks.$transaction.mockImplementation((work) => work(txMocks));
     txMocks.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
       settings: { competitionRulesVersion: 2, scoringMode: 'H2H_EACH_CATEGORY' },
     });
     txMocks.leagueCompetitionRound.findUnique.mockResolvedValue({
@@ -163,8 +164,12 @@ describe('competition fixture mutations', () => {
       where: { matchupId: 'fixture-1' },
     });
     expect(txMocks.leagueMatchup.delete).toHaveBeenCalledWith({ where: { id: 'fixture-1' } });
+    // Only the active season's ladder is rebuilt, from that season's final scores.
+    expect(txMocks.leagueMatchupScore.findMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ leagueId: 'league-1', seasonId: 'season-1' }),
+    });
     expect(txMocks.leagueStanding.deleteMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1' },
+      where: { leagueId: 'league-1', seasonId: 'season-1' },
     });
     expect(txMocks.leagueStanding.createMany).toHaveBeenCalledOnce();
     expect(txMocks.leagueCompetitionAudit.create).toHaveBeenCalledOnce();

@@ -51,12 +51,35 @@ function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null
     : DEVELOPMENT_AUTH_USER_ID;
 }
 
+/**
+ * Firebase Admin codes that mean the presented credential itself is bad: the caller is signed out.
+ * Every other failure (a network error during the revocation lookup, an Admin credential or
+ * configuration fault, an outage) means the check could not run. That must surface as an error, not
+ * as a sign-out, or a signed-in browser is sent to /login and straight back again.
+ */
+const SIGNED_OUT_CREDENTIAL_ERROR_CODES = new Set([
+  'auth/argument-error',
+  'auth/id-token-expired',
+  'auth/id-token-revoked',
+  'auth/invalid-id-token',
+  'auth/session-cookie-expired',
+  'auth/session-cookie-revoked',
+  'auth/user-disabled',
+  'auth/user-not-found',
+]);
+
+function signedOutOrRethrow(error: unknown): null {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && SIGNED_OUT_CREDENTIAL_ERROR_CODES.has(code)) return null;
+  throw error;
+}
+
 async function validateFirebaseIdToken(token: string): Promise<string | null> {
   try {
     const decoded = await adminAuth.verifyIdToken(token, true);
     return decoded.uid ?? null;
-  } catch {
-    return null;
+  } catch (error) {
+    return signedOutOrRethrow(error);
   }
 }
 
@@ -64,8 +87,8 @@ async function validateFirebaseSessionCookie(sessionCookie: string): Promise<str
   try {
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
     return decoded.uid ?? null;
-  } catch {
-    return null;
+  } catch (error) {
+    return signedOutOrRethrow(error);
   }
 }
 
@@ -75,6 +98,7 @@ async function validateFirebaseSessionCookie(sessionCookie: string): Promise<str
  * Firebase ID tokens are the primary production credential. The session cookie is retained as a
  * migration fallback until every authenticated browser request uses the same-origin token transport.
  * Expected missing, expired, invalid, and revoked credentials resolve to null without noisy logging.
+ * A verification that could not run (Firebase Admin unreachable or misconfigured) rejects instead.
  */
 export async function resolveAuthenticatedUserId(
   credentials: ServerAuthCredentials
@@ -133,7 +157,8 @@ export const getAuthenticatedUserId = getUserIdFromRequest;
 
 /**
  * Resolve identity from an App Router server component context.
- * Returns null for expected unauthenticated states so callers own redirect or fallback behavior.
+ * Returns null for expected unauthenticated states so callers own redirect or fallback behavior,
+ * and rejects when verification could not run so the error boundary shows it.
  */
 export async function getAuthenticatedUserIdFromServerContext(): Promise<string | null> {
   const [headerStore, cookieStore] = await Promise.all([headers(), cookies()]);

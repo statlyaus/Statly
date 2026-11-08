@@ -351,6 +351,7 @@ async function main() {
             await prisma.leagueMatchupScore.create({
               data: {
                 leagueId: LEAGUE_ID,
+                seasonId: SEASON_ID,
                 matchupId: matchup.id,
                 memberId: member.id,
                 round,
@@ -382,6 +383,7 @@ async function main() {
     await prisma.leagueStanding.createMany({
       data: [...standings].map(([memberId, standing]) => ({
         leagueId: LEAGUE_ID,
+        seasonId: SEASON_ID,
         memberId,
         ...standing,
       })),
@@ -416,6 +418,7 @@ async function main() {
         await prisma.leagueLineup.create({
           data: {
             leagueId: LEAGUE_ID,
+            seasonId: SEASON_ID,
             memberId: member.id,
             round,
             lockedAt: new Date(now.getTime() - DAY),

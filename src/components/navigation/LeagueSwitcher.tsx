@@ -61,6 +61,8 @@ export default function LeagueSwitcher() {
   const [lastLeagueId, setLastLeagueId] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -81,6 +83,7 @@ export default function LeagueSwitcher() {
     let mounted = true;
     const load = async () => {
       try {
+        setLoadFailed(false);
         if (!user) {
           setLeagues([]);
           setLoading(false);
@@ -88,12 +91,17 @@ export default function LeagueSwitcher() {
         }
         setLoading(true);
         const r = await fetch(`/api/leagues/user/${user.uid}`);
+        if (!r.ok) throw new Error(`League list request failed with ${r.status}`);
         const j = await r.json();
         const list = Array.isArray(j) ? j : j?.leagues ? j.leagues : j?.data?.leagues || [];
         if (mounted)
           setLeagues(list.map((l: { id: string; name: string }) => ({ id: l.id, name: l.name })));
       } catch (_e) {
-        if (mounted) setLeagues([]);
+        // A failed request is not "no leagues": say so and offer a retry.
+        if (mounted) {
+          setLeagues([]);
+          setLoadFailed(true);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -102,7 +110,7 @@ export default function LeagueSwitcher() {
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [user, loadAttempt]);
 
   const currentId =
     (leagueId && leagues.some((l) => l.id === leagueId) ? leagueId : undefined) ||
@@ -176,6 +184,17 @@ export default function LeagueSwitcher() {
             <CommandList>
               {loading ? (
                 <CommandEmpty>Loading leagues…</CommandEmpty>
+              ) : loadFailed ? (
+                <div role="alert" className="space-y-2 px-3 py-4 text-sm">
+                  <p className="text-[color:var(--league-text)]">Could not load your leagues.</p>
+                  <button
+                    type="button"
+                    onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+                    className="rounded-md border border-[color:var(--league-border)] px-3 py-1.5 font-semibold text-[color:var(--league-text)] hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  >
+                    Try again
+                  </button>
+                </div>
               ) : filteredLeagues.length === 0 ? (
                 <CommandEmpty>
                   {leagues.length === 0 ? 'No leagues found' : 'No matches found'}
@@ -187,8 +206,7 @@ export default function LeagueSwitcher() {
                     return (
                       <CommandItem
                         key={league.id}
-                        role="option"
-                        aria-selected={isActive}
+                        aria-current={isActive ? 'true' : undefined}
                         onClick={() => {
                           onChange(league.id);
                           setIsOpen(false);

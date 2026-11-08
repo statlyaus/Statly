@@ -176,6 +176,11 @@ model LeagueSeason {
   tradeThreads            LeagueTradeThread[]
   tradeCommands           LeagueTradeCommand[]
   tradeOutboxEvents       LeagueTradeOutboxEvent[]
+  lineups                 LeagueLineup[]
+  matchupScores           LeagueMatchupScore[]
+  standings               LeagueStanding[]
+  waiverPriorities        WaiverPriority[]
+  teamActions             TeamAction[]
 
   @@unique([leagueId, year])
   @@index([leagueId, createdAt])
@@ -660,6 +665,8 @@ model LeagueMatchup {
 model LeagueLineup {
   id        String    @id @default(cuid())
   leagueId  String
+  /// Season scope (2026-11-08): the league's active season when the lineup was created.
+  seasonId  String
   memberId  String
   round     Int
   lockedAt  DateTime?
@@ -667,12 +674,13 @@ model LeagueLineup {
   updatedAt DateTime  @updatedAt
 
   league   League                @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season   LeagueSeason          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   member   LeagueMember          @relation(fields: [memberId], references: [id], onDelete: Cascade)
   players  LeagueLineupPlayer[]
   autosubs LeagueLineupAutosub[]
 
-  @@unique([leagueId, memberId, round])
-  @@index([leagueId, round])
+  @@unique([leagueId, seasonId, memberId, round])
+  @@index([leagueId, seasonId, round])
   @@index([memberId])
 }
 
@@ -757,6 +765,8 @@ model LeagueCompetitionAudit {
 model LeagueMatchupScore {
   id             String              @id @default(cuid())
   leagueId       String
+  /// Season scope (2026-11-08): the league's active season when the score was calculated.
+  seasonId       String
   matchupId      String
   memberId       String
   round          Int
@@ -774,11 +784,12 @@ model LeagueMatchupScore {
   finalizedAt    DateTime?
 
   league  League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season  LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   matchup LeagueMatchup @relation(fields: [matchupId], references: [id], onDelete: Cascade)
   member  LeagueMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([matchupId, memberId])
-  @@index([leagueId, round])
+  @@index([leagueId, seasonId, round])
   @@index([leagueId, status])
   @@index([memberId])
 }
@@ -786,6 +797,8 @@ model LeagueMatchupScore {
 model LeagueStanding {
   id             String   @id @default(cuid())
   leagueId       String
+  /// Season scope (2026-11-08): one ladder row per member per season.
+  seasonId       String
   memberId       String
   wins           Int      @default(0)
   losses         Int      @default(0)
@@ -798,10 +811,10 @@ model LeagueStanding {
   updatedAt      DateTime @updatedAt
 
   league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season LeagueSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@unique([leagueId, memberId])
-  @@index([leagueId])
+  @@unique([leagueId, seasonId, memberId])
   @@index([memberId])
 }
 
@@ -1294,6 +1307,8 @@ model LeagueTradeOutboxEvent {
 model TeamAction {
   id             String         @id @default(cuid())
   leagueId       String
+  /// Season scope (2026-11-08). Nullable until the waiver readers and writers carry it.
+  seasonId       String?
   memberId       String
   actionType     TeamActionType
   status         ActionStatus   @default(PENDING)
@@ -1304,7 +1319,10 @@ model TeamAction {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
+  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
   @@index([leagueId, status])
+  @@index([leagueId, seasonId, status])
   @@index([memberId])
   @@index([actionType])
   @@index([processingAt])
@@ -1313,6 +1331,8 @@ model TeamAction {
 model WaiverPriority {
   id              String   @id @default(cuid())
   leagueId        String
+  /// Season scope (2026-11-08). Nullable until the waiver readers and writers carry it.
+  seasonId        String?
   memberId        String
   priority        Int
   remainingFAAB   Float?
@@ -1320,8 +1340,11 @@ model WaiverPriority {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
   @@unique([leagueId, memberId])
   @@index([leagueId, priority])
+  @@index([leagueId, seasonId, priority])
   @@index([memberId])
 }
 
