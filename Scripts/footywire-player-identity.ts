@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Reviewed Footywire identity links (docs/runbooks/player-identity.md, "Footywire stats identity").
  *
@@ -90,7 +89,8 @@ async function main() {
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
   try {
-    if (propose) {
+    // The guard above makes --propose and --manifest exclusive, so no manifest means a proposal.
+    if (!manifestPath) {
       const season = Number(seasonValue);
       if (!Number.isInteger(season)) throw new Error('--propose needs --season <year>');
       const [etlPlayers, players, existingIdentities] = await Promise.all([
@@ -114,7 +114,7 @@ async function main() {
       return;
     }
 
-    const manifest = JSON.parse(await fs.readFile(path.resolve(manifestPath!), 'utf8')) as unknown;
+    const manifest = JSON.parse(await fs.readFile(path.resolve(manifestPath), 'utf8')) as unknown;
     if (apply) {
       console.log(JSON.stringify(await applyFootywireIdentityManifest(prisma, manifest)));
       return;

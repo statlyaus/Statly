@@ -222,10 +222,7 @@ async function planWithClient(client: IdentityClient, manifest: ReviewedFootywir
 }
 
 /** Dry run: what applying the manifest would create, keep and refuse. Writes nothing. */
-export async function planFootywireIdentityManifest(
-  client: IdentityClient,
-  manifestValue: unknown
-) {
+export function planFootywireIdentityManifest(client: IdentityClient, manifestValue: unknown) {
   return planWithClient(client, validateReviewedFootywireIdentityManifest(manifestValue));
 }
 

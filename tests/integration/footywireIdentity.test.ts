@@ -13,9 +13,9 @@ const etl = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/server/etl/etlRoundData', () => ({
-  getRoundPlayerStatsResult: async () => ({ ok: true, stats: etl.stats }),
-  getRoundMatchesResult: async () => ({ ok: true, matches: etl.matches }),
-  getRoundMatches: async () => etl.matches,
+  getRoundPlayerStatsResult: () => Promise.resolve({ ok: true, stats: etl.stats }),
+  getRoundMatchesResult: () => Promise.resolve({ ok: true, matches: etl.matches }),
+  getRoundMatches: () => Promise.resolve(etl.matches),
 }));
 
 import { prisma } from '@/lib/prisma';
