@@ -222,3 +222,83 @@ stored box scores of the season's final regular-season games. The Rotation page
 Checked against the sheet's Rotation Watch for games to 2 Nov 2026: all 30 team rows matched, the
 76 alert texts matched as a set (injury return dates aside), and a sample of 38 player rows matched
 field for field.
+
+## Role outlook
+
+The role outlook ports the sheet's Role Model (version 3 of its `RoleModel.gs` Apps Script): for
+each player it predicts minutes, usage and total usage over his team's next 5 games, and how much
+his injured or returning teammates move his minutes. The engine is pure TypeScript in
+`src/lib/basketball/` (`roleGameRows.ts`, `roleFeatures.ts`, `roleModel.ts`); the stat projections,
+schedule, rest of season and injury mapping build on it separately.
+
+### Inputs (`roleGameRows.ts`)
+
+Rows are the stored box-score lines of the season's final games, one per player who played.
+
+- Minutes are seconds played ÷ 60. A player listed as played with 0 seconds (a short cameo, since
+  the provider prints whole minutes) counts as 0.25 minutes.
+- USG% is the box-score formula, to one decimal:
+  `100·(FGA + 0.44·FTA + TOV)·(team minutes / 5) / (MIN·(team FGA + 0.44·team FTA + team TOV))`,
+  team totals over all of the team's rows in the game. Team minutes are snapped to 240 plus 25 per
+  overtime (`240 + 25·round((Σ minutes − 240) / 25)`), because whole minutes do not add up exactly.
+  No shots, free throws or turnovers: 0.
+- Total usage = USG% × MIN / 48. Margin = team score − opponent score. Makes are the stored makes.
+- Rows are ordered by date, game, team and player before the model runs, because the order breaks
+  ties (equal season minutes in the top 8, equal predictions in the sort).
+
+### Features (`roleFeatures.ts`)
+
+A player's games for one team form a sequence; a traded player has one per team. For every game of
+every sequence the engine builds the model's 50 role features: minutes, USG% and total usage over
+his last 1, 3, 5 and 10 games and the season, with spreads and gaps; games played and team games
+missed before this one; consecutive games at least 4 minutes above the median of his previous 5 to
+10; his rank in season minutes within the team game; the minutes per game of the team's top 8 (by
+minutes so far, departed players included) missing from the game, and its mean over the last 3;
+per-36 scoring, shooting and plus-minus rates; team margin over the last 10, divided by 10 however
+few games there are (as the script does); and the coach's traits. Coach traits are 30 fitted rows
+committed in `roleModelConstants.ts`; Statly has no coach data, so a coaching change needs a
+one-line edit (zeros for a new coach, as the sheet does). Each game also gets the probability that
+the player's minutes drop, which feeds his teammates' injury inputs.
+
+### Teammate injuries
+
+For a player's latest game, each teammate with 3+ earlier games for the team at 10+ minutes a game
+counts, unless he has missed more than the team's last 5 games and is not on the injury report.
+Input per teammate: his expected share of the next 5 team games missed (0 to 1; 0 when not on the
+report). A teammate is newly out by that share minus whether he missed the latest game, and coming
+back by the reverse. The player's own minutes and total usage without that teammate minus with him,
+over earlier games he played, are shrunk by n / (n + 3) (n = games without him). The injury minutes
+shift is Σ newly out × difference − Σ coming back × difference. A teammate is shown as a driver when
+he is out or coming back and the difference is at least one minute.
+
+### Model heads
+
+Ten teammate sums join the 50 features. Seven fitted heads (trained by the sheet's owner on NBA
+2013-14 to 2024-25, tested on 2025-26):
+
+| Output                        | Form                    | Test              |
+| ----------------------------- | ----------------------- | ----------------- |
+| Minutes next 5                | last-5 average + linear | MAE 3.03, R² 0.73 |
+| USG% next 5                   | last-5 average + linear | MAE 2.44, R² 0.73 |
+| Total usage next 5            | last-5 average + linear | MAE 1.67, R² 0.84 |
+| P(minutes +3), P(−3)          | logistic                | AUC 0.76, 0.73    |
+| P(total usage +15 %), (−15 %) | logistic                | AUC 0.78, 0.73    |
+
+The minutes range is the prediction plus the fitted 80 % band for its size (the first band whose
+upper edge reaches it, else the last), never below 0. A row is produced for each sequence whose
+latest game is his third or later for the team with 10+ minutes a game over his last 5, sorted by
+rounded total usage next 5, highest first. Values are rounded half up to 0.1 (probabilities 0.01)
+only at the output; the two change columns are differences of the rounded values.
+
+### Parity with the sheet
+
+`roleModel.parity.test.ts` checks the port against `RoleModel.gs` on a synthetic league from a
+seeded generator (made-up players, a trade, cameos, overtime, injured, returning and long-gone
+teammates). CI compares with the script's committed output; with `ROLE_MODEL_GS_DIR` pointing at a
+local copy of the script (never committed), the test runs the script itself in `node:vm` and also
+compares every fitted constant and a 30-team league. On 8 Nov 2026 every displayed column matched on
+all rows (60 and 289), with raw outputs identical, and the same held on the stored box scores to 6
+Nov 2026 (327 rows) and to 1 Apr 2026 (488 rows).
+
+Deliberate differences so far: players are joined by player ID, not name; minutes are whole minutes
+with the cameo and team-minutes rules above; makes are real makes.
