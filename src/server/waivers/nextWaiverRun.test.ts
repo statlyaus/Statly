@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextWaiverRunAt } from './nextWaiverRun';
+import { nextWaiverRunAt, previousWaiverRunAt } from './nextWaiverRun';
 
 describe('nextWaiverRunAt', () => {
   it.each([
@@ -16,5 +16,20 @@ describe('nextWaiverRunAt', () => {
     ['2026-12-01T10:00:00.000Z', '2026-12-01T19:00:00.000Z'],
   ])('a claim due at %s is processed at %s', (dueAt, runAt) => {
     expect(nextWaiverRunAt(new Date(dueAt)).toISOString()).toBe(runAt);
+  });
+});
+
+describe('previousWaiverRunAt', () => {
+  it.each([
+    // AEST: 10:00 am on 1 July; the last run was 6 am that morning.
+    ['2026-07-01T00:00:00.000Z', '2026-06-30T20:00:00.000Z'],
+    // 5:59 am: the last run was the previous morning.
+    ['2026-07-01T19:59:00.000Z', '2026-06-30T20:00:00.000Z'],
+    // During the 6 am hour the run has started.
+    ['2026-07-01T20:30:00.000Z', '2026-07-01T20:00:00.000Z'],
+    // AEDT: 9 pm on 1 December; the last run was 6 am that morning.
+    ['2026-12-01T10:00:00.000Z', '2026-11-30T19:00:00.000Z'],
+  ])('at %s the last run was %s', (now, runAt) => {
+    expect(previousWaiverRunAt(new Date(now)).toISOString()).toBe(runAt);
   });
 });

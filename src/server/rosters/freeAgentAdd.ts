@@ -1,12 +1,12 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
-import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import {
   evaluateRosterExchangeCapacity,
   getLeagueRosterCapacity,
 } from '@/server/rosters/rosterCapacity';
+import { loadWaiverOnlyHolds } from '@/server/waivers/waiverOnlyPlayers';
 
 export type FreeAgentAddErrorCode =
   | 'NOT_ACTIVE_MEMBER'
@@ -34,6 +34,7 @@ export interface FreeAgentAddInput {
   playerId: string;
   /** Every id the player is known by, since older roster rows can still hold an alias. */
   playerAliasIds: string[];
+  now?: Date;
 }
 
 export interface FreeAgentAddResult {
@@ -45,8 +46,9 @@ type FreeAgentAddDb = Pick<PrismaClient, '$transaction'>;
 
 /**
  * Adds an unowned player to the caller's roster in one transaction. The caller must be an active
- * member of a league whose draft is complete, the player must be unowned (under any alias) and off a drop waiver hold, and the roster must
- * have room under the same rosterSize + benchSize capacity the draft, trades and waivers use.
+ * member of a league whose draft is complete, the player must be unowned (under any alias) and not
+ * waiver-only (a pending claim, or a drop since the last waiver run or still in its waiver period),
+ * and the roster must have room under the same rosterSize + benchSize capacity the draft, trades and waivers use.
  */
 export async function addFreeAgentToRoster(
   db: FreeAgentAddDb,
@@ -94,19 +96,17 @@ export async function addFreeAgentToRoster(
         throw new FreeAgentAddError('PLAYER_OWNED', 'Player already owned in this league', 409);
       }
 
-      const activeWaiverHold = await tx.teamAction.findFirst({
-        where: {
-          leagueId,
-          ...inActiveSeason(leagueId),
-          actionType: 'DROP_PLAYER',
-          status: 'PENDING',
-          processingAt: { gt: new Date() },
-          details: { path: ['playerId'], equals: playerId },
-        },
-        select: { id: true },
+      const [waiverHold] = await loadWaiverOnlyHolds(tx, {
+        leagueIds: [leagueId],
+        playerIds: playerAliasIds,
+        now: input.now,
       });
-      if (activeWaiverHold) {
-        throw new FreeAgentAddError('PLAYER_ON_WAIVERS', 'Player is on waivers', 409);
+      if (waiverHold) {
+        throw new FreeAgentAddError(
+          'PLAYER_ON_WAIVERS',
+          'Player is on waivers: he can only be won with a waiver claim at the next waiver run.',
+          409
+        );
       }
 
       const currentCount = await tx.leagueRosterPlayer.count({

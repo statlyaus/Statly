@@ -25,7 +25,7 @@ const prismaMocks = vi.hoisted(() => ({
     count: vi.fn(),
   },
   teamAction: {
-    findFirst: vi.fn(),
+    findMany: vi.fn(),
   },
   draft: {
     findUnique: vi.fn(),
@@ -92,10 +92,14 @@ describe('league roster free-agent add eligibility', () => {
     prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue(null);
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
     prismaMocks.leagueRosterPlayer.findMany.mockResolvedValue([]);
-    prismaMocks.teamAction.findFirst.mockResolvedValue({
-      id: 'drop-hold-1',
-      processingAt: new Date(Date.now() + 60 * 60 * 1000),
-    });
+    prismaMocks.teamAction.findMany.mockResolvedValue([
+      {
+        leagueId: 'league-1',
+        actionType: 'DROP_PLAYER',
+        details: { playerId: 'held-player' },
+        processingAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    ]);
     prismaMocks.leagueRosterPlayer.create.mockResolvedValue({ id: 'roster-player-1' });
     prismaMocks.$transaction.mockImplementation((work: unknown) => {
       if (Array.isArray(work)) return Promise.all(work);
@@ -116,23 +120,25 @@ describe('league roster free-agent add eligibility', () => {
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.error).toEqual({ message: 'Player is on waivers', code: 'PLAYER_ON_WAIVERS' });
-    expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith({
-      where: {
-        leagueId: 'league-1',
-        season: { activeForLeague: { is: { id: 'league-1' } } },
-        actionType: 'DROP_PLAYER',
-        status: 'PENDING',
-        processingAt: { gt: expect.any(Date) },
-        details: { path: ['playerId'], equals: 'held-player' },
-      },
-      select: { id: true },
+    expect(body.error).toEqual({
+      message:
+        'Player is on waivers: he can only be won with a waiver claim at the next waiver run.',
+      code: 'PLAYER_ON_WAIVERS',
     });
+    expect(prismaMocks.teamAction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          leagueId: { in: ['league-1'] },
+          season: { activeForLeague: { isNot: null } },
+          status: 'PENDING',
+        }),
+      })
+    );
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 
   it('refuses an add to a full roster with 422 instead of exceeding rosterSize + benchSize', async () => {
-    prismaMocks.teamAction.findFirst.mockResolvedValue(null);
+    prismaMocks.teamAction.findMany.mockResolvedValue([]);
     prismaMocks.leagueRosterPlayer.count.mockResolvedValue(26);
     const { POST } = await import('../../src/app/api/leagues/[id]/roster/add/route');
 
@@ -174,12 +180,8 @@ describe('league roster free-agent add eligibility', () => {
       { params: Promise.resolve({ id: 'league-1' }) }
     );
 
+    // The hold is stored under the canonical id, so the retired alias still meets it.
     expect(response.status).toBe(409);
-    expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ details: { path: ['playerId'], equals: 'held-player' } }),
-      })
-    );
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 });
