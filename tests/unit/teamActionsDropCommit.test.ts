@@ -54,9 +54,7 @@ describe('team action drop commit', () => {
     membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: true });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue({ playerId: 'player-1' });
-    prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) =>
-      work(tx)
-    );
+    prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) => work(tx));
     tx.leagueRosterPlayer.deleteMany.mockResolvedValue({ count: 1 });
     tx.teamAction.create.mockResolvedValue({ id: 'action-1' });
     projectLeague.mockResolvedValue({ owned: 0, available: 1 });
