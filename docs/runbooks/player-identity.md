@@ -90,3 +90,58 @@ PostgreSQL.
 
 Never restore PostgreSQL or Firestore independently; the waiver projection must be regenerated after a
 relational rollback.
+
+## Footywire stats identity
+
+The ETL keys every `player_match_stats` row by its own Footywire player id (`player_uid`, for
+example `ply_marcus_bontempelli`), not by a Statly `Player.id`. Live matchup totals
+(`loadLivePlayerTotalsForRound`) turn that id into a Statly player only through a reviewed
+`PlayerExternalIdentity` row with provider `footywire` and a recorded `verifiedAt`. A row with no
+reviewed link keeps the ETL id, reaches no Statly player, and is logged as unlinked. The read path
+never matches by name.
+
+Links are written only by this reviewed operation. It never merges, edits or deletes `Player` rows,
+and it never moves an existing link.
+
+1. Generate a proposal from one season's ETL stats. This reads Firestore and the database; it
+   writes nothing. `STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT` must name the Firebase project paired
+   with the database:
+
+   ```sh
+   npm run player-identity:footywire -- --production --propose --season 2026 > footywire-identity.json
+   ```
+
+   `mappings` lists ETL players whose normalized name and club match exactly one Statly player with
+   no Footywire link yet. `unmatched` lists every other ETL player with `NO_CANDIDATE` or
+   `AMBIGUOUS` and its candidate ids. These are the players to review.
+
+2. Review every mapping and every unmatched player. Remove wrong mappings and add reviewed ones as
+   `{ "externalId": ..., "playerId": ... }`. Then set `reviewed` to `true` and fill in `reviewedBy`
+   and `reviewedAt` (ISO time).
+3. Check the plan. It writes nothing, and it exits non-zero when anything is blocked:
+
+   ```sh
+   npm run player-identity:footywire -- --production --manifest footywire-identity.json
+   ```
+
+   Blockers are:
+   - an ETL id already linked to a different player;
+   - a player who already has a different Footywire id;
+   - an ETL id mapped twice;
+   - a player id that does not exist.
+
+   Fix the manifest. Do not bypass a blocker.
+
+4. Apply. One serializable transaction writes every new link with `verifiedAt` = `reviewedAt`, or
+   none:
+
+   ```sh
+   npm run player-identity:footywire -- --production --manifest footywire-identity.json --apply
+   ```
+
+Without `--production`, the command needs the disposable `statly_verify_player_*` database
+described above. To undo an apply, delete the `footywire` rows carrying that manifest's `verifiedAt`.
+Nothing else was changed.
+
+The ETL id is the slugged player name, so two AFL players with the same name share one id. The
+proposal reports that case as `AMBIGUOUS`. Do not link it until the ETL carries a distinguishing id.
