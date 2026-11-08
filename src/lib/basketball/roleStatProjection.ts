@@ -122,7 +122,7 @@ export function projectNextFive(
       teamCode,
       g,
       history.backToBack.get(playerId),
-      injuries.get(playerId)?.fracNext5 ?? 0
+      injuries.get(playerId)?.gamesOut ?? 0
     );
     for (const c of PROJECTED_STATS) p[c] *= Math.exp(OPP_COEF[c] * s.od[c]);
     const vs = (c: ProjectedStat) => round1(p[c] - total(g, c) / n);
