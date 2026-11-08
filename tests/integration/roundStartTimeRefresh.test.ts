@@ -9,11 +9,13 @@ vi.mock('server-only', () => ({}));
 
 const fixture = vi.hoisted(() => ({ matches: [] as Array<Record<string, unknown>> }));
 vi.mock('@/server/etl/etlRoundData', () => ({
-  getRoundMatches: vi.fn(async (season: number, round: number) =>
-    fixture.matches.filter((match) => match.season === season && match.round_number === round)
+  getRoundMatches: vi.fn((season: number, round: number) =>
+    Promise.resolve(
+      fixture.matches.filter((match) => match.season === season && match.round_number === round)
+    )
   ),
-  getRoundMatchesResult: vi.fn(async () => ({ ok: true, matches: [] })),
-  getRoundPlayerStatsResult: vi.fn(async () => ({ ok: true, stats: [] })),
+  getRoundMatchesResult: vi.fn().mockResolvedValue({ ok: true, matches: [] }),
+  getRoundPlayerStatsResult: vi.fn().mockResolvedValue({ ok: true, stats: [] }),
 }));
 
 import { prisma } from '@/lib/prisma';
@@ -105,12 +107,11 @@ async function seedLeaguePublishedWithoutFixture() {
   }
 }
 
-const recalculate = vi.fn(async ({ round }: { round: number }) => ({
-  status: 'LIVE' as const,
-  recalculated: round,
-}));
+const recalculate = vi.fn(({ round }: { round: number }) =>
+  Promise.resolve({ status: 'LIVE' as const, recalculated: round })
+);
 
-async function currentRound() {
+function currentRound() {
   return prisma.leagueCompetitionRound.findUniqueOrThrow({
     where: { leagueId_fixtureVersion_round: { leagueId: LEAGUE, fixtureVersion: 2, round: 1 } },
     select: { status: true, startsAt: true, matchups: { select: { startsAt: true } } },
