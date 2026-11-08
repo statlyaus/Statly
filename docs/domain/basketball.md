@@ -415,6 +415,39 @@ stored) took 0.86 s on a laptop: 0.27 s of reads (history 0.15 s), 0.57 s of eng
 641 KB, well under the data cache's 2 MB entry limit. A miss is quick enough to compute in a page
 request, so the ingest jobs do not warm the cache.
 
+### Outlook page
+
+The Outlook page (`/basketball/[leagueId]/outlook`, the tab after Rotation) is a server page over
+`loadOutlook` for the owner's league; there is no API route. Its view state is in the URL.
+
+- Biggest movers: the sheet's 'Role Model Charts' as three ranked lists over every player with an
+  outlook, not just the league's, each with his owner: the 10 biggest rises and 10 biggest falls in
+  minutes (next 5 against last 5), the 15 largest injury minutes shifts (0.5 or more either way,
+  with the teammates driving them) and the 15 largest gaps between projected points next 5 and his
+  season average. Players under 1 expected game in the next 5 are left out, and the minutes and
+  points lists need 15+ minutes a game over the last 5, as in the sheet. Ties keep the season order.
+- Table: the next 5 games (default) or the rest of season (`view=ros`); who it lists (`show`:
+  rostered players and the top free agents by default, or mine, this week's opponent, free agents,
+  all rostered, all); and a sort on any column (`sort`, `dir`; default total usage next 5, or
+  minutes for the rest of season). Next 5 columns: games played, minutes last 5 and next 5 (with
+  the change and the 80 % range), P(+3) and P(−3) minutes, USG% and total usage next 5, injury shift
+  with its drivers ("Name out +2.1"), bigger-role games, expected games next 5 (with back-to-backs
+  and the chance he sits one) and this fantasy week, the seven counting stats, FG%, FT% and
+  opponent defence. Rest of season: minutes, teammate shift, expected games, team games left and
+  the same stats.
+- Injury badges read OUT, DTD or "OUT · season"; "old" marks a report over a day old, which is still
+  used, and a notice says so. Stale box scores get the shared notice.
+- Empty states: no box-score ingest yet ("NBA stats haven't been loaded yet"), and no player with an
+  outlook yet ("The outlook starts after a player's third game").
+- In the data but not shown: the coach, FGA, FTA, the chances of usage ±15 % and rebounds and
+  assists against season average.
+
+The lists were checked against the sheet's charts for 7 Nov 2026 (box scores to 6 Nov, history
+recomputed from 3 stored seasons, that day's ESPN injury report): 8 of 10 gainers, 10 of 10 losers
+and 12 of 15 injury shifts matched, the same counts as the sheet's own script given the ESPN
+report, so the injury source explains the differences. The sheet's points column was not archived;
+against the script given the ESPN report, 13 of 15 matched.
+
 ### Parity with the sheet
 
 `roleModel.parity.test.ts` checks the port against `RoleModel.gs` on a synthetic league from a
