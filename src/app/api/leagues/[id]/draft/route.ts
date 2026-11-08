@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: DraftPageProps): Promise
       include: {
         settings: true,
         drafts: { orderBy: { createdAt: 'desc' }, take: 1 },
-        _count: { select: { members: true } },
+        _count: { select: { members: { where: { isActive: true } } } },
       },
     });
     if (!prismaLeague) {

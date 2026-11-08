@@ -9,7 +9,6 @@ import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 
 const scheduleDraftStart = vi.fn();
 const createDraftReminders = vi.fn();
-const ensurePrismaLeagueMirror = vi.fn();
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -32,9 +31,6 @@ vi.mock('@/lib/firebaseAdmin', () => ({
 
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMembership: vi.fn(),
-  isLeagueManagerRole: (role: unknown) =>
-    typeof role === 'string' &&
-    ['owner', 'commissioner', 'admin', 'manager'].includes(role.trim().toLowerCase()),
 }));
 
 vi.mock('@/server/queue/draftQueue', () => ({
@@ -43,10 +39,6 @@ vi.mock('@/server/queue/draftQueue', () => ({
 
 vi.mock('@/lib/reminders', () => ({
   createDraftReminders,
-}));
-
-vi.mock('@/lib/prismaLeagueBridge', () => ({
-  ensurePrismaLeagueMirror,
 }));
 
 beforeEach(() => {
@@ -78,10 +70,10 @@ describe('draft create authorization architecture', () => {
     );
 
     expect(source.indexOf('const userId = await getAuthenticatedUserId(request);')).toBeLessThan(
-      source.indexOf('await ensurePrismaLeagueMirror')
+      source.indexOf('await prisma.$transaction')
     );
     expect(source.indexOf('await canManageLeague(body.leagueId, userId)')).toBeLessThan(
-      source.indexOf('await ensurePrismaLeagueMirror')
+      source.indexOf('await prisma.$transaction')
     );
   });
 
@@ -183,7 +175,6 @@ describe('draft create authorization architecture', () => {
       error: 'Authentication required',
     });
     expect(json).not.toHaveBeenCalled();
-    expect(ensurePrismaLeagueMirror).not.toHaveBeenCalled();
     expect(scheduleDraftStart).not.toHaveBeenCalled();
     expect(createDraftReminders).not.toHaveBeenCalled();
   });
@@ -207,7 +198,6 @@ describe('draft create authorization architecture', () => {
       success: false,
       error: 'League draft creation requires a leagueId',
     });
-    expect(ensurePrismaLeagueMirror).not.toHaveBeenCalled();
     expect(scheduleDraftStart).not.toHaveBeenCalled();
     expect(createDraftReminders).not.toHaveBeenCalled();
   });
@@ -238,7 +228,6 @@ describe('draft create authorization architecture', () => {
       success: false,
       error: 'Commissioner access required',
     });
-    expect(ensurePrismaLeagueMirror).not.toHaveBeenCalled();
     expect(scheduleDraftStart).not.toHaveBeenCalled();
     expect(createDraftReminders).not.toHaveBeenCalled();
   });

@@ -11,58 +11,11 @@ vi.mock('../../src/lib/prisma', () => ({
 
 import {
   buildExternalUserEmail,
-  loadFirestoreLeagueMirrorSnapshot,
-  normalizeDraftTypeForPrisma,
   normalizeLeagueRoleForPrisma,
   syncPrismaLeagueMember,
   upsertPrismaLeagueMirror,
   type PrismaLeagueMirrorSnapshot,
 } from '../../src/lib/prismaLeagueBridge';
-
-function snap(docs: Array<{ id: string; data: Record<string, unknown> }>) {
-  return {
-    docs: docs.map((doc) => ({
-      id: doc.id,
-      data: () => doc.data,
-    })),
-  };
-}
-
-function buildFirestoreMock(input: {
-  league: Record<string, unknown>;
-  topLevelMembers?: Array<{ id: string; data: Record<string, unknown> }>;
-  embeddedMembers?: Array<{ id: string; data: Record<string, unknown> }>;
-}) {
-  const leagueRef = {
-    get: vi.fn().mockResolvedValue({
-      exists: true,
-      data: () => input.league,
-    }),
-    collection: vi.fn(() => ({
-      get: vi.fn().mockResolvedValue(snap(input.embeddedMembers ?? [])),
-    })),
-  };
-
-  const leagueMembersQuery = {
-    get: vi.fn().mockResolvedValue(snap(input.topLevelMembers ?? [])),
-  };
-
-  const leagueMembersCollection = {
-    where: vi.fn(() => leagueMembersQuery),
-  };
-
-  return {
-    collection: vi.fn((name: string) => {
-      if (name === 'leagues') {
-        return { doc: vi.fn(() => leagueRef) };
-      }
-      if (name === 'leagueMembers') {
-        return leagueMembersCollection;
-      }
-      throw new Error(`Unexpected collection ${name}`);
-    }),
-  };
-}
 
 function buildTx(overrides: Record<string, unknown> = {}) {
   const tx = {
@@ -108,91 +61,13 @@ function buildPrismaClient(tx: Record<string, unknown>) {
 }
 
 describe('prismaLeagueBridge', () => {
-  it('normalizes Firestore roles, draft types, and external user emails deterministically', () => {
-    expect(normalizeDraftTypeForPrisma('linear')).toBe(DraftType.LINEAR);
-    expect(normalizeDraftTypeForPrisma('snake')).toBe(DraftType.SNAKE);
+  it('normalizes Firestore roles and external user emails deterministically', () => {
     expect(normalizeLeagueRoleForPrisma('owner', 'user-1', 'user-1')).toBe(LeagueRole.OWNER);
     expect(normalizeLeagueRoleForPrisma('member', 'user-2', 'user-1')).toBe(LeagueRole.MANAGER);
     expect(buildExternalUserEmail('firebase-user')).toBe(buildExternalUserEmail('firebase-user'));
     expect(buildExternalUserEmail('firebase-user')).toMatch(
       /^firebase_[a-f0-9]{20}@statly\.local$/
     );
-  });
-
-  it('loads active top-level memberships as the Prisma mirror source', async () => {
-    const firestore = buildFirestoreMock({
-      league: {
-        name: 'Statly League',
-        code: 'ABC12345',
-        ownerId: 'owner-user',
-        maxTeams: 10,
-        draftType: 'linear',
-      },
-      topLevelMembers: [
-        {
-          id: 'inactive-member',
-          data: {
-            leagueId: 'league-1',
-            userId: 'inactive-user',
-            teamName: 'Inactive',
-            isActive: false,
-          },
-        },
-        {
-          id: 'owner-member',
-          data: {
-            leagueId: 'league-1',
-            userId: 'owner-user',
-            role: 'owner',
-            teamName: 'Owner Team',
-            draftSlot: 1,
-            isActive: true,
-          },
-        },
-      ],
-      embeddedMembers: [
-        {
-          id: 'embedded-user',
-          data: {
-            userId: 'embedded-user',
-            role: 'member',
-            teamName: 'Embedded Team',
-            isActive: true,
-          },
-        },
-      ],
-    });
-
-    const snapshot = await loadFirestoreLeagueMirrorSnapshot(
-      {
-        leagueId: 'league-1',
-        timePerPick: 90,
-        scheduledStartTime: new Date('2026-06-01T00:00:00.000Z'),
-      },
-      firestore as never
-    );
-
-    expect(snapshot).toMatchObject({
-      leagueId: 'league-1',
-      name: 'Statly League',
-      inviteCode: 'ABC12345',
-      ownerId: 'owner-user',
-      maxTeams: 10,
-      draftType: DraftType.LINEAR,
-      pickSeconds: 90,
-      allowAutoPick: true,
-      positionLimitsJson: { DEF: 5, MID: 7, RUC: 2, FWD: 4, BENCH: 4 },
-      autoPickRulesJson: { enabled: true, strategy: 'queue-first' },
-      members: [
-        {
-          id: 'owner-member',
-          userId: 'owner-user',
-          role: 'owner',
-          teamName: 'Owner Team',
-          draftSlot: 1,
-        },
-      ],
-    });
   });
 
   it('creates a Prisma mirror with stable league, user, and member identities', async () => {

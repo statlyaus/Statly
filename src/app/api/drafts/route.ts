@@ -12,7 +12,6 @@ import {
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { createDraftReminders } from '@/lib/reminders';
-import { ensurePrismaLeagueMirror } from '@/lib/prismaLeagueBridge';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
@@ -222,28 +221,6 @@ export async function POST(request: NextRequest) {
     const rosterSize = getRosterSizeFromPositionLimits(positionLimits);
     const benchSize = getBenchSizeFromPositionLimits(positionLimits);
     const activePlayerCount = await prisma.player.count({ where: { active: true } });
-
-    if (body.leagueId) {
-      const existingLeague = await prisma.league.findUnique({
-        where: { id: body.leagueId },
-        select: { id: true },
-      });
-
-      if (!existingLeague) {
-        await ensurePrismaLeagueMirror({
-          leagueId: body.leagueId,
-          draftType: body.draftType,
-          timePerPick: body.timePerPick,
-          scheduledStartTime,
-          timeZone,
-          rosterSize,
-          benchSize,
-          pickOrder,
-          positionLimits,
-          autoPickRules,
-        });
-      }
-    }
 
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {

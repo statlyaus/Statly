@@ -10,9 +10,6 @@ const authMocks = vi.hoisted(() => ({
 const firestoreMocks = vi.hoisted(() => ({
   batch: vi.fn(),
   collection: vi.fn(),
-  runTransaction: vi.fn(),
-  transactionGet: vi.fn(),
-  transactionSet: vi.fn(),
 }));
 
 const membershipMocks = vi.hoisted(() => ({
@@ -33,8 +30,6 @@ const memberCommandMocks = vi.hoisted(() => ({
 }));
 
 const prismaMocks = vi.hoisted(() => ({
-  syncPrismaLeagueMember: vi.fn(),
-  syncPrismaLeagueOwner: vi.fn(),
   leagueFindUnique: vi.fn(),
 }));
 
@@ -50,7 +45,6 @@ vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {
     batch: firestoreMocks.batch,
     collection: firestoreMocks.collection,
-    runTransaction: firestoreMocks.runTransaction,
   },
 }));
 
@@ -58,7 +52,6 @@ vi.mock('../../src/lib/firebaseAdmin', () => ({
   adminDb: {
     batch: firestoreMocks.batch,
     collection: firestoreMocks.collection,
-    runTransaction: firestoreMocks.runTransaction,
   },
 }));
 
@@ -78,16 +71,6 @@ vi.mock('../../src/lib/leagueMembership', () => ({
   queueLeagueMembershipPatch: membershipMocks.queueLeagueMembershipPatch,
   queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
   verifyLeagueMembership: membershipMocks.verifyLeagueMembership,
-}));
-
-vi.mock('@/lib/prismaLeagueBridge', () => ({
-  syncPrismaLeagueMember: prismaMocks.syncPrismaLeagueMember,
-  syncPrismaLeagueOwner: prismaMocks.syncPrismaLeagueOwner,
-}));
-
-vi.mock('../../src/lib/prismaLeagueBridge', () => ({
-  syncPrismaLeagueMember: prismaMocks.syncPrismaLeagueMember,
-  syncPrismaLeagueOwner: prismaMocks.syncPrismaLeagueOwner,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -153,15 +136,6 @@ describe('league membership route Firestore architecture', () => {
       source: 'embedded',
       memberDocId: 'league-1_request-user',
     });
-    firestoreMocks.transactionGet.mockImplementation((ref: { get?: () => unknown }) => ref.get?.());
-    firestoreMocks.runTransaction.mockImplementation((callback) =>
-      callback({
-        get: firestoreMocks.transactionGet,
-        set: firestoreMocks.transactionSet,
-      })
-    );
-    prismaMocks.syncPrismaLeagueMember.mockResolvedValue({ synced: true });
-    prismaMocks.syncPrismaLeagueOwner.mockResolvedValue({ synced: true });
     prismaMocks.leagueFindUnique.mockResolvedValue({ id: 'league-1' });
     // These leagues are Firestore-only legacy leagues with no Prisma row.
     memberCommandMocks.findPrismaLeagueIdByInviteCode.mockResolvedValue(null);
@@ -256,7 +230,6 @@ describe('league membership route Firestore architecture', () => {
       { teamName: 'Renamed Team', role: 'member' },
       { topLevelMemberId: 'league-1_target-user' }
     );
-    expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
   });
 
   it('refuses to update a member of a league with no Prisma row without touching Firestore', async () => {
@@ -287,7 +260,6 @@ describe('league membership route Firestore architecture', () => {
     expect(firestoreMocks.collection).not.toHaveBeenCalled();
     expect(firestoreMocks.batch).not.toHaveBeenCalled();
     expect(membershipMocks.queueLeagueMembershipPatch).not.toHaveBeenCalled();
-    expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
   });
 
   it('removes a member through the Prisma command, then projects the removal to Firestore', async () => {
@@ -366,7 +338,6 @@ describe('league membership route Firestore architecture', () => {
     expect(memberCommandMocks.removeLeagueMember.mock.invocationCallOrder[0]).toBeLessThan(
       batch.commit.mock.invocationCallOrder[0]
     );
-    expect(prismaMocks.syncPrismaLeagueMember).not.toHaveBeenCalled();
   });
 
   it('refuses removal after the draft starts without writing the Firestore projection', async () => {
@@ -447,7 +418,6 @@ describe('league membership route Firestore architecture', () => {
       { role: 'member' },
       { topLevelMemberId: 'league-1_owner-user' }
     );
-    expect(prismaMocks.syncPrismaLeagueOwner).not.toHaveBeenCalled();
   });
 
   it('lists members of a Prisma league that has no Firestore document', async () => {

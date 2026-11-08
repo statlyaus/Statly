@@ -3,23 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
   getAuthenticatedUserId: vi.fn(),
-  getUserIdFromRequest: vi.fn(),
 }));
 
 const firestoreMocks = vi.hoisted(() => ({
-  batch: vi.fn(),
   collection: vi.fn(),
-  runTransaction: vi.fn(),
-  transactionGet: vi.fn(),
-  transactionSet: vi.fn(),
 }));
 
 const membershipMocks = vi.hoisted(() => ({
-  getLeagueMemberDocId: vi.fn(),
-  getLeagueMembership: vi.fn(),
-  isLeagueManagerRole: vi.fn(),
   listActiveLeagueMembers: vi.fn(),
-  queueLeagueMembershipSet: vi.fn(),
 }));
 
 const membershipAccessMocks = vi.hoisted(() => ({
@@ -46,44 +37,30 @@ const draftSetupMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
-  getUserIdFromRequest: authMocks.getUserIdFromRequest,
 }));
 
 vi.mock('../../src/lib/serverAuth', () => ({
   getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
-  getUserIdFromRequest: authMocks.getUserIdFromRequest,
 }));
 
 vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {
-    batch: firestoreMocks.batch,
     collection: firestoreMocks.collection,
-    runTransaction: firestoreMocks.runTransaction,
   },
 }));
 
 vi.mock('../../src/lib/firebaseAdmin', () => ({
   adminDb: {
-    batch: firestoreMocks.batch,
     collection: firestoreMocks.collection,
-    runTransaction: firestoreMocks.runTransaction,
   },
 }));
 
 vi.mock('@/lib/leagueMembership', () => ({
-  getLeagueMemberDocId: membershipMocks.getLeagueMemberDocId,
-  getLeagueMembership: membershipMocks.getLeagueMembership,
-  isLeagueManagerRole: membershipMocks.isLeagueManagerRole,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
-  queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
 }));
 
 vi.mock('../../src/lib/leagueMembership', () => ({
-  getLeagueMemberDocId: membershipMocks.getLeagueMemberDocId,
-  getLeagueMembership: membershipMocks.getLeagueMembership,
-  isLeagueManagerRole: membershipMocks.isLeagueManagerRole,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
-  queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
 }));
 
 vi.mock('@/server/leagues/membership', () => ({
@@ -149,30 +126,12 @@ describe('league capacity guards', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     authMocks.getAuthenticatedUserId.mockResolvedValue('owner-user');
-    authMocks.getUserIdFromRequest.mockResolvedValue('joining-user');
-    membershipMocks.getLeagueMembership.mockResolvedValue({
-      isMember: true,
-      source: 'prisma',
-      data: { role: 'OWNER' },
-    });
     membershipAccessMocks.getLeagueMembershipAccess.mockResolvedValue({
       leagueId: 'league-1',
       userId: 'owner-user',
       isMember: true,
       canManage: true,
     });
-    membershipMocks.isLeagueManagerRole.mockReturnValue(true);
-    membershipMocks.getLeagueMemberDocId.mockImplementation(
-      (leagueId: string, userId: string) => `${leagueId}_${userId}`
-    );
-    membershipMocks.queueLeagueMembershipSet.mockReturnValue('league-1_joining-user');
-    firestoreMocks.transactionGet.mockImplementation((ref: { get?: () => unknown }) => ref.get?.());
-    firestoreMocks.runTransaction.mockImplementation((callback) =>
-      callback({
-        get: firestoreMocks.transactionGet,
-        set: firestoreMocks.transactionSet,
-      })
-    );
   });
 
   it('rejects reducing Prisma league maxTeams below the active member count', async () => {

@@ -8,7 +8,6 @@ vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMembership: vi.fn(),
-  isLeagueManagerRole: vi.fn(),
 }));
 
 const now = new Date('2026-09-26T10:00:00.000Z');
