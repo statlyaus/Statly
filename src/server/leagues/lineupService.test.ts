@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => {
   const prisma = {
     league: { findUnique: vi.fn() },
     leagueRosterPlayer: { findMany: vi.fn() },
-    leagueCompetitionRound: { findUnique: vi.fn() },
+    leagueCompetitionRound: { findUnique: vi.fn(), findMany: vi.fn() },
     leagueMatchup: { findFirst: vi.fn() },
     leagueLineup: { findUnique: vi.fn(), upsert: vi.fn() },
     leagueLineupPlayer: {
@@ -28,6 +28,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }));
 
 import {
   createSetupLineupRoundContext,
+  loadLineupRoundSummaries,
   loadMemberLineupRoundContext,
   loadRoundPlayerGameStarts,
   normalizeLegacyBenchAssignments,
@@ -152,6 +153,7 @@ describe('authoritative lineup timing', () => {
     'locks at Thursday 7:00 pm Sydney time for $label',
     async ({ timeZone, roundStartsAt, expectedLockAt }) => {
       mocks.prisma.league.findUnique.mockResolvedValue({
+        activeSeasonId: 'season-1',
         settings: {
           ...settings,
           timeZone,
@@ -178,6 +180,7 @@ describe('authoritative lineup timing', () => {
 
   it('ignores the retired competition-rules timezone that older rule rows still carry', async () => {
     mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
       settings: {
         ...settings,
         timeZone: 'Australia/Perth',
@@ -205,6 +208,7 @@ describe('authoritative lineup timing', () => {
 
   it('locks a Monday to Wednesday round at its own start, not the previous Thursday', async () => {
     mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
       settings: {
         ...settings,
         timeZone: 'Australia/Sydney',
@@ -296,7 +300,10 @@ describe('authoritative lineup timing', () => {
     mocks.prisma.playerExternalIdentity.findMany.mockResolvedValue([
       { externalId: 'retired-player-1', playerId: 'player-1' },
     ]);
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      settings: thursdaySettings,
+    });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -385,7 +392,7 @@ describe('save boundary invariants', () => {
   it.each(['NO_MATCHUP', 'LOCKED', 'FINAL'])(
     'rejects an initially %s competition round',
     async (status) => {
-      mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+      mocks.prisma.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1', settings });
       mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
       mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
         ...scheduledRound,
@@ -409,8 +416,8 @@ describe('save boundary invariants', () => {
     'rejects when the round becomes %s at the transactional save boundary',
     async (status) => {
       mocks.prisma.league.findUnique
-        .mockResolvedValueOnce({ settings })
-        .mockResolvedValueOnce({ settings });
+        .mockResolvedValueOnce({ activeSeasonId: 'season-1', settings })
+        .mockResolvedValueOnce({ activeSeasonId: 'season-1', settings });
       mocks.prisma.leagueRosterPlayer.findMany
         .mockResolvedValueOnce([rosterPlayer()])
         .mockResolvedValueOnce([rosterPlayer()]);
@@ -442,7 +449,10 @@ describe('save boundary invariants', () => {
       ...settings,
       competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      settings: thursdaySettings,
+    });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -470,7 +480,10 @@ describe('save boundary invariants', () => {
       ...settings,
       competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      settings: thursdaySettings,
+    });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -500,7 +513,10 @@ describe('save boundary invariants', () => {
       ...settings,
       competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      settings: thursdaySettings,
+    });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -530,7 +546,7 @@ describe('save boundary invariants', () => {
   });
 
   it('fails explicitly before mutation when official timing is unavailable mid-round', async () => {
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+    mocks.prisma.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1', settings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -558,7 +574,10 @@ describe('save boundary invariants', () => {
       ...settings,
       competitionRulesJson: { lockPolicy: 'THURSDAY_7PM_AEST' },
     };
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      settings: thursdaySettings,
+    });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -579,7 +598,7 @@ describe('save boundary invariants', () => {
   });
 
   it('saves before the round starts even when official timing is unavailable', async () => {
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+    mocks.prisma.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1', settings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
@@ -621,7 +640,7 @@ describe('players whose AFL game start is unknown', () => {
       { id: 'unmatched-player' },
       { id: 'bye-player' },
     ]);
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+    mocks.prisma.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1', settings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([
       rosterPlayer('player-1', 'GWS'),
       rosterPlayer('unmatched-player', 'Unknown Club'),
@@ -739,5 +758,50 @@ describe('players whose AFL game start is unknown', () => {
       ok: false,
       errors: ['Player unmatched-player is locked and must remain in place.'],
     });
+  });
+});
+
+describe('lineup timing follows the league season, not the calendar year', () => {
+  const seasonRound = {
+    ...scheduledRound,
+    round: 1,
+    phase: 'REGULAR',
+    endsAt: null,
+    startsAt: new Date('2099-07-18T09:00:00.000Z'),
+    season: { year: 2025 },
+  };
+
+  it('reads AFL match times for the season the competition round belongs to', async () => {
+    mocks.prisma.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1', settings });
+    mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue(seasonRound);
+    mocks.getRoundMatchesResult.mockResolvedValue({ ok: true, matches: [] });
+    mocks.prisma.leagueLineup.findUnique.mockResolvedValue(null);
+    mocks.prisma.leagueLineup.upsert.mockResolvedValue({ id: 'lineup-1' });
+
+    await saveMemberLineup({ leagueId: 'league-1', memberId: 'member-1', round: 1, players: [] });
+
+    expect(mocks.getRoundMatchesResult).toHaveBeenCalledWith(2025, 17);
+  });
+
+  it('reports the season year with the round context and round summaries', async () => {
+    mocks.prisma.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1', settings });
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue(seasonRound);
+    mocks.prisma.leagueCompetitionRound.findMany.mockResolvedValue([seasonRound]);
+    mocks.prisma.leagueMatchup.findFirst.mockResolvedValue(null);
+
+    const context = await loadMemberLineupRoundContext({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+    });
+    const summaries = await loadLineupRoundSummaries('league-1');
+
+    expect(context?.seasonYear).toBe(2025);
+    expect(summaries[0]?.seasonYear).toBe(2025);
+  });
+
+  it('has no season year while the league is still in setup', () => {
+    expect(createSetupLineupRoundContext(1).seasonYear).toBeNull();
   });
 });

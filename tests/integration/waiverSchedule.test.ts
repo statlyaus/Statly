@@ -15,6 +15,7 @@ import {
 import { processDueLeagueWaivers } from '@/server/waivers/waiverSchedule';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const LEAGUE = 'int-waiver-schedule-league';
 const SETTINGS = 'int-waiver-schedule-settings';
@@ -70,6 +71,7 @@ beforeEach(async () => {
       settingsId: SETTINGS,
     },
   });
+  await activateLeagueSeason(prisma, LEAGUE);
   await prisma.leagueMember.create({
     data: { id: MEMBER, leagueId: LEAGUE, userId: USER, role: 'OWNER', teamName: 'Early Risers' },
   });
