@@ -10,12 +10,16 @@ describe('league member identity route architecture', () => {
     const route = source();
 
     expect(route).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
-    expect(route).toContain(
-      "import { getLeagueMembership, queueLeagueMembershipPatch } from '@/lib/leagueMembership'"
-    );
+    expect(route).toContain("import { getLeagueMembership } from '@/lib/leagueMembership'");
     expect(route).toContain('const userId = await getAuthenticatedUserId(request);');
+    expect(route).toContain(
+      'const league = await prisma.league.findUnique({ where: { id }, select: { id: true } });'
+    );
     expect(route).toContain('const membership = await getLeagueMembership(id, userId);');
-    expect(route).toContain('if (!membership.isMember)');
+    expect(route).toContain("membership.source !== 'prisma'");
+    expect(route.indexOf('prisma.league.findUnique')).toBeLessThan(
+      route.indexOf('const membership = await getLeagueMembership(id, userId);')
+    );
     expect(route.indexOf('const membership = await getLeagueMembership(id, userId);')).toBeLessThan(
       route.indexOf('body = (await request.json()) as Record<string, unknown>;')
     );
@@ -38,20 +42,20 @@ describe('league member identity route architecture', () => {
       'teamLogoPositionY: normalizeTeamSymbolPosition(body.teamLogoPositionY)'
     );
     expect(route).toContain('teamLogoZoom: normalizeTeamSymbolZoom(body.teamLogoZoom)');
-    expect(route).toContain("return NextResponse.json({ error: error.message }, { status: 400 });");
+    expect(route).toContain('return NextResponse.json({ error: error.message }, { status: 400 });');
   });
 
-  it('updates Prisma first and Firestore fallback with partial member settings', () => {
+  it('writes partial member settings to Prisma only, never a Firestore fallback', () => {
     const route = source();
 
     expect(route).toContain('await prisma.leagueMember.update({');
-    expect(route).toContain('where: { id: membership.memberDocId }');
+    expect(route).toContain('where: { id: memberId }');
     expect(route).toContain('const prismaData:');
-    expect(route).toContain('const firestorePatch:');
     expect(route).toContain('data: prismaData');
     expect(route).toContain('notificationSettingsJson');
-    expect(route).toContain('queueLeagueMembershipPatch(batch, id, userId, firestorePatch)');
-    expect(route).toContain('await batch.commit();');
+    expect(route).not.toContain('adminDb');
+    expect(route).not.toContain('queueLeagueMembershipPatch');
+    expect(route).not.toContain('firestorePatch');
   });
 
   it('returns the member identity response envelope', () => {

@@ -34,6 +34,7 @@ test.describe('shared app shell at 390px', () => {
       '/live-scoring',
       '/commissioner',
       '/rosters',
+      '/basketball',
     ];
 
     for (const route of protectedRoutes) {

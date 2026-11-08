@@ -40,12 +40,9 @@ export interface LeagueMembershipWrite {
 
 export interface MembershipCheckResult {
   isMember: boolean;
+  /** Always `prisma` for a member and `none` otherwise: Prisma is the only membership authority. */
   source: MembershipSource;
-  /**
-   * Identifier associated with the member document.
-   * For embedded membership, this is the `userId`.
-   * For legacy membership, this is the legacy team/document id (often `leagueId_userId`).
-   */
+  /** The Prisma `LeagueMember` id, or the user id for an owner with no member row. */
   memberDocId?: string;
 }
 
@@ -94,13 +91,6 @@ export function isActiveMembershipData(data: FirebaseFirestore.DocumentData | un
   const normalizedStatus =
     typeof data.status === 'string' ? data.status.trim().toLowerCase() : undefined;
   return !normalizedStatus || !['declined', 'inactive', 'removed'].includes(normalizedStatus);
-}
-
-export function isLeagueManagerRole(role: unknown): boolean {
-  return (
-    typeof role === 'string' &&
-    ['owner', 'commissioner', 'admin', 'manager'].includes(role.trim().toLowerCase())
-  );
 }
 
 export function toCanonicalLeagueMembershipData(
@@ -213,9 +203,61 @@ export function queueLeagueMembershipPatch(
   batch.set(embeddedRef, patch, { merge: true });
 }
 
+const PRISMA_MEMBERSHIP_LIST_SELECT = {
+  id: true,
+  userId: true,
+  role: true,
+  teamName: true,
+  teamLogoUrl: true,
+  teamLogoPositionX: true,
+  teamLogoPositionY: true,
+  teamLogoZoom: true,
+  joinedAt: true,
+  leftAt: true,
+  isActive: true,
+  status: true,
+  isCoCommissioner: true,
+} as const;
+
+interface PrismaMembershipListRow {
+  id: string;
+  userId: string;
+  teamName: string;
+  teamLogoUrl: string | null;
+  teamLogoPositionX: number | null;
+  teamLogoPositionY: number | null;
+  teamLogoZoom: number | null;
+  joinedAt: Date;
+  leftAt: Date | null;
+  isCoCommissioner: boolean;
+}
+
+function toPrismaMembershipListItem(
+  leagueId: string,
+  ownerId: string,
+  member: PrismaMembershipListRow
+): LeagueMembershipListItem {
+  return {
+    id: member.id,
+    leagueId,
+    userId: member.userId,
+    // The API's role vocabulary: the owner, a co-commissioner ('admin'), or an ordinary member.
+    role: member.userId === ownerId ? 'owner' : member.isCoCommissioner ? 'admin' : 'member',
+    teamName: member.teamName,
+    ...(member.teamLogoUrl ? { teamLogoUrl: member.teamLogoUrl } : {}),
+    ...(member.teamLogoPositionX != null ? { teamLogoPositionX: member.teamLogoPositionX } : {}),
+    ...(member.teamLogoPositionY != null ? { teamLogoPositionY: member.teamLogoPositionY } : {}),
+    ...(member.teamLogoZoom != null ? { teamLogoZoom: member.teamLogoZoom } : {}),
+    joinedAt: member.joinedAt,
+    ...(member.leftAt ? { leftAt: member.leftAt } : {}),
+    isActive: true,
+    source: 'prisma',
+  };
+}
+
 /**
- * Active members of a league. Prisma owns membership, so a league with a Prisma row is read from
- * Prisma (removed and declined rows excluded); only legacy leagues fall back to Firestore.
+ * Active members of a league, read from Prisma (removed and declined rows excluded). Prisma owns
+ * membership, so a league with no Prisma row has no members.
  */
 export async function listActiveLeagueMembers(
   leagueId: string
@@ -226,50 +268,18 @@ export async function listActiveLeagueMembers(
       ownerId: true,
       members: {
         orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
-        select: {
-          id: true,
-          userId: true,
-          role: true,
-          teamName: true,
-          teamLogoUrl: true,
-          teamLogoPositionX: true,
-          teamLogoPositionY: true,
-          teamLogoZoom: true,
-          joinedAt: true,
-          leftAt: true,
-          isActive: true,
-          status: true,
-          isCoCommissioner: true,
-        },
+        select: PRISMA_MEMBERSHIP_LIST_SELECT,
       },
     },
   });
 
   if (!prismaLeague) {
-    return listActiveFirestoreLeagueMembers(leagueId);
+    return [];
   }
 
-  return prismaLeague.members.filter(isActivePrismaMembership).map((member) => ({
-    id: member.id,
-    leagueId,
-    userId: member.userId,
-    // The API's role vocabulary: the owner, a co-commissioner ('admin'), or an ordinary member.
-    role:
-      member.userId === prismaLeague.ownerId
-        ? 'owner'
-        : member.isCoCommissioner
-          ? 'admin'
-          : 'member',
-    teamName: member.teamName,
-    ...(member.teamLogoUrl ? { teamLogoUrl: member.teamLogoUrl } : {}),
-    ...(member.teamLogoPositionX != null ? { teamLogoPositionX: member.teamLogoPositionX } : {}),
-    ...(member.teamLogoPositionY != null ? { teamLogoPositionY: member.teamLogoPositionY } : {}),
-    ...(member.teamLogoZoom != null ? { teamLogoZoom: member.teamLogoZoom } : {}),
-    joinedAt: member.joinedAt,
-    ...(member.leftAt ? { leftAt: member.leftAt } : {}),
-    isActive: true,
-    source: 'prisma' as const,
-  }));
+  return prismaLeague.members
+    .filter(isActivePrismaMembership)
+    .map((member) => toPrismaMembershipListItem(leagueId, prismaLeague.ownerId, member));
 }
 
 /**
@@ -297,23 +307,32 @@ export async function listActiveFirestoreLeagueMembers(
   return toActiveMemberList(legacySnap.docs, leagueId, 'legacy');
 }
 
+/**
+ * A user's active league memberships, read from Prisma and ordered by join time. Firestore member
+ * documents are never consulted.
+ */
 export async function listActiveUserLeagueMemberships(
   userId: string
 ): Promise<LeagueMembershipListItem[]> {
-  const embeddedSnap = await adminDb.collectionGroup('members').where('userId', '==', userId).get();
+  const memberships = await prisma.leagueMember.findMany({
+    where: { userId },
+    orderBy: { joinedAt: 'asc' },
+    select: {
+      ...PRISMA_MEMBERSHIP_LIST_SELECT,
+      leagueId: true,
+      league: { select: { ownerId: true } },
+    },
+  });
 
-  if (!embeddedSnap.empty) {
-    return toActiveMemberList(embeddedSnap.docs, '', 'embedded');
-  }
-
-  const legacySnap = await adminDb.collection('leagueMembers').where('userId', '==', userId).get();
-
-  return toActiveMemberList(legacySnap.docs, '', 'legacy');
+  return memberships
+    .filter(isActivePrismaMembership)
+    .map((member) => toPrismaMembershipListItem(member.leagueId, member.league.ownerId, member));
 }
 
 /**
- * Reads a user's league membership data.
- * Checks the canonical embedded doc first, then falls back to the legacy global collection.
+ * Reads a user's league membership data from Prisma. A league with no Prisma row, or a user with no
+ * active Prisma membership who is not the league owner, is not a member. Firestore member documents
+ * are a compatibility projection and never decide membership or role.
  */
 export async function getLeagueMembership(
   leagueId: string,
@@ -376,35 +395,6 @@ export async function getLeagueMembership(
         status: 'ACTIVE',
       },
     };
-  }
-
-  // Prefer per-league embedded membership document
-  const embeddedRef = adminDb.doc(`leagues/${leagueId}/members/${userId}`);
-  const embeddedSnap = await embeddedRef.get();
-  if (embeddedSnap.exists) {
-    const data = embeddedSnap.data();
-    const isMember = isActiveMembershipData(data);
-    return {
-      isMember,
-      source: 'embedded',
-      memberDocId: embeddedSnap.id,
-      ...(isMember && data ? { data } : {}),
-    };
-  }
-
-  // Fallback: legacy membership collection
-  const legacySnap = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', userId)
-    .limit(10)
-    .get();
-  if (!legacySnap.empty) {
-    const doc = legacySnap.docs.find((candidate) => isActiveMembershipData(candidate.data()));
-    if (!doc) {
-      return { isMember: false, source: 'none' };
-    }
-    return { isMember: true, source: 'legacy', memberDocId: doc.id, data: doc.data() };
   }
 
   return { isMember: false, source: 'none' };

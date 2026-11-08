@@ -2,6 +2,7 @@ import {
   captureRouterTransitionStart,
   initializeSentryClient,
 } from '@/lib/sentry/clientInstrumentation';
+import { privateSentryDataCollection } from '@/lib/sentry/dataCollection';
 
 function readSampleRate(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -10,6 +11,7 @@ function readSampleRate(value: string | undefined, fallback: number): number {
 
 const isProduction = process.env.NODE_ENV === 'production';
 const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+const sendPersonalData = process.env.NEXT_PUBLIC_SENTRY_SEND_DEFAULT_PII === 'true';
 const sentryDebugEnabled =
   !isProduction &&
   (process.env.NEXT_PUBLIC_SENTRY_DEBUG === 'true' || process.env.NEXT_PUBLIC_SENTRY_DEBUG === '1');
@@ -18,7 +20,7 @@ if (sentryDsn) {
   initializeSentryClient({
     dsn: sentryDsn,
     enabled: true,
-    sendDefaultPii: process.env.NEXT_PUBLIC_SENTRY_SEND_DEFAULT_PII === 'true',
+    dataCollection: sendPersonalData ? undefined : privateSentryDataCollection,
     tracesSampleRate: readSampleRate(
       process.env.NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE,
       isProduction ? 0.1 : 1

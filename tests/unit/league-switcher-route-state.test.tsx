@@ -61,6 +61,7 @@ describe('LeagueSwitcher route state', () => {
     mocks.user = { uid: 'user-1' };
     document.cookie = `${LAST_LEAGUE_ID_COOKIE}=league-123; path=/`;
     vi.mocked(fetch).mockResolvedValue({
+      ok: true,
       json: async () => ({
         data: {
           leagues: [{ id: 'league-123', name: 'Test Lab Alpha' }],
