@@ -6,6 +6,7 @@ const membershipMocks = vi.hoisted(() => ({ verifyLeagueMembership: vi.fn() }));
 const projectLeague = vi.hoisted(() => vi.fn());
 
 const tx = vi.hoisted(() => ({
+  league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
   leagueRosterPlayer: { deleteMany: vi.fn() },
   teamAction: { create: vi.fn() },
 }));
@@ -72,6 +73,7 @@ describe('team action drop commit', () => {
     expect(tx.teamAction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         leagueId: 'league-1',
+        seasonId: 'season-1',
         memberId: 'member-1',
         actionType: 'DROP_PLAYER',
         details: { playerId: 'player-1' },
