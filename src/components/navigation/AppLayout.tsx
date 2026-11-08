@@ -28,7 +28,7 @@ export default function AppLayout({
   children,
   mode = 'auto',
   showBasketball,
-}: AppLayoutProps): React.ReactElement {
+}: AppLayoutProps): React.ReactNode {
   const outer = useContext(AppLayoutContext);
   const isNested = outer !== null;
   const basketballVisible = showBasketball ?? outer?.showBasketball ?? false;
@@ -49,7 +49,7 @@ export default function AppLayout({
   );
 
   if (isNested) {
-    return mode === 'shell' ? shell : <>{children}</>;
+    return mode === 'shell' ? shell : children;
   }
 
   const content = mode === 'shell' || !isImmersiveAppPath(pathname ?? '') ? shell : children;
