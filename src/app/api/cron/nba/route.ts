@@ -41,9 +41,9 @@ export async function GET(request: NextRequest) {
 
   // Only the box score job has a Sentry Crons monitor (docs/runbooks/monitoring-and-alerts.md).
   const monitorSlug = `cron-nba-${job}`;
-  return isCronMonitorSlug(monitorSlug)
+  return await (isCronMonitorSlug(monitorSlug)
     ? monitorCronRun(monitorSlug, () => runNbaIngestJob(job))
-    : runNbaIngestJob(job);
+    : runNbaIngestJob(job));
 }
 
 async function runNbaIngestJob(job: NbaIngestJobName): Promise<NextResponse> {

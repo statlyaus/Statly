@@ -13,8 +13,8 @@ vi.mock('@/server/waivers/waiverSchedule', () => ({
   processDueLeagueWaivers: (...args: unknown[]) => processDueLeagueWaiversMock(...args),
 }));
 
-const monitorCronRunMock = vi.fn(
-  async (_slug: string, run: () => Promise<Response>): Promise<Response> => run()
+const monitorCronRunMock = vi.fn((_slug: string, run: () => Promise<Response>): Promise<Response> =>
+  run()
 );
 vi.mock('@/server/cron/cronMonitors', () => ({
   monitorCronRun: (slug: string, run: () => Promise<Response>) => monitorCronRunMock(slug, run),

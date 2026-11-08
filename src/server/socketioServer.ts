@@ -1038,7 +1038,9 @@ process.on('uncaughtException', (error) => {
   });
 
   // Sentry's own handler has captured it; send that before shutting down.
-  void flushProcessSentry().finally(() => gracefulShutdown('uncaughtException'));
+  flushProcessSentry()
+    .finally(() => gracefulShutdown('uncaughtException'))
+    .catch(() => undefined);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -1048,7 +1050,9 @@ process.on('unhandledRejection', (reason, promise) => {
     timestamp: new Date().toISOString(),
   });
 
-  void flushProcessSentry().finally(() => gracefulShutdown('unhandledRejection'));
+  flushProcessSentry()
+    .finally(() => gracefulShutdown('unhandledRejection'))
+    .catch(() => undefined);
 });
 
 // Start the server only after the cross-instance broadcast adapter is ready.

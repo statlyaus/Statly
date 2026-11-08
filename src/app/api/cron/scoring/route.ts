@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return monitorCronRun('cron-scoring', runScheduledScoring);
+  return await monitorCronRun('cron-scoring', runScheduledScoring);
 }
 
 async function runScheduledScoring(): Promise<NextResponse> {

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return monitorCronRun('cron-waivers', runScheduledWaivers);
+  return await monitorCronRun('cron-waivers', runScheduledWaivers);
 }
 
 async function runScheduledWaivers(): Promise<NextResponse> {

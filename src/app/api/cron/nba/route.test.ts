@@ -22,7 +22,7 @@ vi.mock('@/server/basketball/ingest/nbaIngestJobs', async (importOriginal) => {
 });
 
 const monitorCronRunMock = vi.hoisted(() =>
-  vi.fn(async (_slug: string, run: () => Promise<Response>): Promise<Response> => run())
+  vi.fn((_slug: string, run: () => Promise<Response>): Promise<Response> => run())
 );
 vi.mock('@/server/cron/cronMonitors', () => ({
   isCronMonitorSlug: (slug: string) => slug === 'cron-nba-boxscores',

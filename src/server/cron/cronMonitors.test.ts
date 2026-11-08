@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const captureCheckInMock = vi.fn((..._args: unknown[]) => 'check-in-1');
-const flushMock = vi.fn(async (..._args: unknown[]) => true);
+const flushMock = vi.fn((..._args: unknown[]) => Promise.resolve(true));
 vi.mock('@sentry/nextjs', () => ({
   captureCheckIn: (...args: unknown[]) => captureCheckInMock(...args),
   flush: (...args: unknown[]) => flushMock(...args),
@@ -23,7 +23,9 @@ describe('monitorCronRun', () => {
   });
 
   it('checks in in_progress then ok, with the monitor schedule, for a successful run', async () => {
-    const response = await monitorCronRun('cron-waivers', async () => new Response('{}'));
+    const response = await monitorCronRun('cron-waivers', () =>
+      Promise.resolve(new Response('{}'))
+    );
 
     expect(response.status).toBe(200);
     expect(statuses()).toEqual(['in_progress', 'ok']);
@@ -48,9 +50,8 @@ describe('monitorCronRun', () => {
   });
 
   it('checks in error when the route answers 500', async () => {
-    const response = await monitorCronRun(
-      'cron-scoring',
-      async () => new Response('{}', { status: 500 })
+    const response = await monitorCronRun('cron-scoring', () =>
+      Promise.resolve(new Response('{}', { status: 500 }))
     );
 
     expect(response.status).toBe(500);
@@ -58,16 +59,16 @@ describe('monitorCronRun', () => {
   });
 
   it('checks in error when an NBA ingest is rejected with 422', async () => {
-    await monitorCronRun('cron-nba-boxscores', async () => new Response('{}', { status: 422 }));
+    await monitorCronRun('cron-nba-boxscores', () =>
+      Promise.resolve(new Response('{}', { status: 422 }))
+    );
 
     expect(statuses()).toEqual(['in_progress', 'error']);
   });
 
   it('checks in error and rethrows when the run throws', async () => {
     await expect(
-      monitorCronRun('cron-waivers', async () => {
-        throw new Error('database down');
-      })
+      monitorCronRun('cron-waivers', () => Promise.reject(new Error('database down')))
     ).rejects.toThrow('database down');
 
     expect(statuses()).toEqual(['in_progress', 'error']);
@@ -77,7 +78,9 @@ describe('monitorCronRun', () => {
   it('still returns the response when Sentry flushing fails', async () => {
     flushMock.mockRejectedValueOnce(new Error('network'));
 
-    const response = await monitorCronRun('cron-waivers', async () => new Response('{}'));
+    const response = await monitorCronRun('cron-waivers', () =>
+      Promise.resolve(new Response('{}'))
+    );
 
     expect(response.status).toBe(200);
   });
