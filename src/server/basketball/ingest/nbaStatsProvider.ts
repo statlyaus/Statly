@@ -98,6 +98,12 @@ export interface NbaProviderInjury {
   detail: string | null;
   expectedReturnOn: EasternDate | null;
   reportedAt: Date | null;
+  /** The provider's one-line note on the injury, e.g. "X (ankle) is out for Friday's game". */
+  comment: string | null;
+  /** The provider's own fantasy availability code, as given (ESPN: OUT, OFS, GTD). */
+  fantasyStatus: string | null;
+  /** The provider says the player is out for the rest of the season. */
+  seasonEnding: boolean;
 }
 
 export interface NbaProviderSeasonTotal {

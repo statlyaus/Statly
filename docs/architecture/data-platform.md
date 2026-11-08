@@ -221,6 +221,12 @@ of those skips is a day old, so a box score that keeps failing cannot use up eve
 run summary counts it as `deferred`. The players job creates new players and their identities in a
 few batched statements inside one transaction.
 
+Each injury row keeps the status (`OUT` or `DAY_TO_DAY`), side and type, return date, the
+provider's one-line note and its own fantasy status code, and a `seasonEnding` flag the adapter
+derives from that code (`OFS` on ESPN), so a season-ending injury with no real return date is not read
+as a short absence.
+The fields and the flag's rule are in [fantasy basketball](../domain/basketball.md#injury-report).
+
 Ingestion fails closed. Every fetch and check runs before the first write, and a rejected run
 (`fetch_failed`, `parse_failed`, `out_of_bounds`, `unlicensed_provider`) writes only its
 `NbaIngestRun` row. Bounds: exactly 30 teams and 300 to 700 rostered players; 1,100 to 1,300
@@ -258,6 +264,13 @@ top 50 scorers with ESPN's own season totals and fail on any difference. `--tole
 difference of up to N per stat, for when ESPN's totals feed disagrees with its own box scores: in
 2026-27 it is one assist off for RJ Barrett and Kyshawn George after game 401909846, whose box score
 and game logs match the stored rows. The default is 0.
+
+The [role outlook](../domain/basketball.md#read-model-roleoutlookts) reads earlier seasons too:
+the 3 seasons before the current one for back-to-back records and up to 13 for each player's career
+rates. Backfill those 3 (for 2026-27, `--season 2026`, `--season 2025` and `--season 2024`); older
+seasons barely change the projections. Its computed output is cached in the Next.js data cache per
+season, keyed by the latest successful box-score ingest, the injury report's fetch time and the
+Eastern date; no table stores it.
 
 ## Rejected alternatives
 

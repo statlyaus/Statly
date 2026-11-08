@@ -490,7 +490,11 @@ export function parseBoxScore(response: unknown): NbaProviderBoxScore {
 
 const INJURY_STATUSES = { Out: 'OUT', 'Day-To-Day': 'DAY_TO_DAY' } as const;
 const ATHLETE_ID_IN_LINK = /\/id\/(\d+)(?:\/|$)/;
-
+// ESPN's fantasy status codes seen in the feed: OUT, GTD and OFS ("out for season"). An OFS row
+// carries a placeholder return date months after the season ends. The comment is stored but not
+// parsed for season-enders: note phrasing ("could miss the rest of the season") misfires, and a false
+// flag would mark an active player out for every remaining game.
+const OUT_FOR_SEASON = 'OFS';
 const injuriesSchema = z.object({
   injuries: z.array(
     z.object({
@@ -498,12 +502,14 @@ const injuriesSchema = z.object({
         z.object({
           status: z.enum(['Out', 'Day-To-Day']),
           date: z.string().nullish(),
+          shortComment: z.string().nullish(),
           athlete: z.object({ links: z.array(z.object({ href: z.string() })) }),
           details: z
             .object({
               type: z.string().nullish(),
               side: z.string().nullish(),
               returnDate: z.string().nullish(),
+              fantasyStatus: z.object({ abbreviation: z.string().nullish() }).nullish(),
             })
             .nullish(),
         })
@@ -524,12 +530,18 @@ export function parseInjuries(response: unknown): NbaProviderInjury[] {
       const detail = [side && side !== 'Not Specified' ? side : null, entry.details?.type]
         .filter(Boolean)
         .join(' ');
+      const comment = entry.shortComment?.trim() || null;
+      const fantasyStatus = entry.details?.fantasyStatus?.abbreviation?.trim() || null;
       return {
         athleteExternalId: athleteId,
         status: INJURY_STATUSES[entry.status],
         detail: detail || null,
         expectedReturnOn: datePart(entry.details?.returnDate),
         reportedAt: entry.date ? instant(entry.date, 'injury date') : null,
+        comment,
+        fantasyStatus,
+        // Only the one-line note is read: the long note often names teammates who are out.
+        seasonEnding: fantasyStatus === OUT_FOR_SEASON,
       };
     })
   );

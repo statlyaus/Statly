@@ -1534,7 +1534,8 @@ model NbaPlayerGameStat {
 }
 
 /// Current injury-report status per player, replaced as a whole list from the provider's feed in one
-/// transaction. A player with no row is not on the report.
+/// transaction. A player with no row is not on the report. `seasonEnding` is derived by the provider
+/// adapter (see docs/domain/basketball.md); `fantasyStatus` is the provider's own code, as given.
 model NbaPlayerInjury {
   id               String          @id @default(cuid())
   playerId         String          @unique
@@ -1542,6 +1543,9 @@ model NbaPlayerInjury {
   detail           String?
   expectedReturnOn DateTime?       @db.Date
   reportedAt       DateTime?
+  comment          String?
+  fantasyStatus    String?
+  seasonEnding     Boolean         @default(false)
   fetchedAt        DateTime
 
   player NbaPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
