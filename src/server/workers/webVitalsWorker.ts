@@ -4,6 +4,7 @@ import { Worker, QueueEvents } from 'bullmq';
 import { z } from 'zod';
 
 import { logger } from '../../lib/logger';
+import { initProcessSentry, reportJobFailure } from '../monitoring/processSentry';
 import { getWebVitalsWriter, createWebVitalsBatcher } from '../../services/webVitalsPersistence';
 import {
   getWorkerClient,
@@ -72,7 +73,7 @@ export function createWebVitalsWorker({
           userAgent: m.userAgent,
         });
       } catch (error) {
-        logger.error('Failed to persist web-vitals metric', {
+        logger.warn('Failed to persist web-vitals metric', {
           jobId: job.id,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -88,8 +89,12 @@ export function createWebVitalsWorker({
   const events = new QueueEvents('web-vitals', {
     connection: getQueueEventsClient() as any,
   });
+  // Reported once, with its queue tag, from the worker's own `failed` event.
+  worker.on('failed', (job, error) => {
+    reportJobFailure('web-vitals', job, error);
+  });
   events.on('failed', ({ jobId, failedReason }) => {
-    logger.error('web-vitals job failed', { jobId, failedReason });
+    logger.warn('web-vitals job failed', { jobId, failedReason });
   });
   events.on('completed', ({ jobId }) => {
     logger.debug('web-vitals job completed', { jobId });
@@ -107,6 +112,7 @@ function isDirectWorkerEntrypoint(): boolean {
 }
 
 if (isDirectWorkerEntrypoint()) {
+  initProcessSentry('web-vitals-worker');
   const { worker, events, batcher } = createWebVitalsWorker();
 
   const shutdown = async (signal: string) => {

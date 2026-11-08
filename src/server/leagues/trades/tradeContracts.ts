@@ -188,7 +188,8 @@ export type TradeServiceErrorCode =
   | 'TRADE_DEADLINE_PASSED'
   | 'TRADE_LIMIT_REACHED'
   | 'ROSTER_CHANGED'
-  | 'ROSTER_LIMIT_EXCEEDED';
+  | 'ROSTER_LIMIT_EXCEEDED'
+  | 'DRAFT_NOT_COMPLETE';
 
 export class TradeServiceError extends Error {
   constructor(

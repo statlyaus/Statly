@@ -8,6 +8,7 @@ import AppLayout from '@/components/navigation/AppLayout';
 import PerformanceMonitor from '@/components/PerformanceMonitor';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
+import { canUseBasketball } from '@/server/basketball/basketballAccess';
 
 export default async function AppRouteLayout({ children }: { readonly children: ReactNode }) {
   const userId = await getAuthenticatedUserIdFromServerContext();
@@ -23,7 +24,7 @@ export default async function AppRouteLayout({ children }: { readonly children: 
       <PerformanceMonitor />
       <AuthProvider>
         <LeagueSocialAppProvider>
-          <AppLayout>{children}</AppLayout>
+          <AppLayout showBasketball={canUseBasketball(userId)}>{children}</AppLayout>
         </LeagueSocialAppProvider>
       </AuthProvider>
     </PageErrorBoundary>

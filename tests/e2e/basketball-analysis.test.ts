@@ -91,9 +91,40 @@ test.describe('basketball analysis pages', () => {
     expect(errors).toEqual([]);
   });
 
-  test('the four pages fit a 390px phone without page-level sideways scroll', async ({ page }) => {
+  test('Outlook ranks the movers and switches the table to the rest of season', async ({
+    page,
+  }) => {
+    const errors = collectRuntimeErrors(page);
+    await page.goto(`${LEAGUE}/outlook`);
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Outlook' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Outlook', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    // Every seeded player has 6+ games this season, so the default view lists the rostered ones.
+    await expect(page.getByRole('heading', { level: 2, name: 'Biggest movers' })).toBeVisible();
+    await expect(tableRows(page, 'Outlook table')).not.toHaveCount(0);
+
+    const restOfSeason = page.getByRole('button', { name: 'Rest of season' });
+    await restOfSeason.click();
+    await expect(page).toHaveURL(/[?&]view=ros/);
+    await expect(restOfSeason).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('columnheader', { name: /Team left/ })).toBeVisible();
+
+    await page.getByLabel('Show').selectOption('ALL');
+    await expect(page).toHaveURL(/[?&]show=all/);
+    await expect(tableRows(page, 'Outlook table')).not.toHaveCount(0);
+
+    await expectNoAppErrorBoundary(page);
+    expect(errors).toEqual([]);
+  });
+
+  test('the analysis pages fit a 390px phone without page-level sideways scroll', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const section of ['players', 'matchup', 'pickups', 'trade']) {
+    for (const section of ['players', 'matchup', 'pickups', 'trade', 'outlook']) {
       await page.goto(`${LEAGUE}/${section}`);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expectNoPageLevelHorizontalOverflow(page);

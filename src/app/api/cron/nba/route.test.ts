@@ -21,6 +21,14 @@ vi.mock('@/server/basketball/ingest/nbaIngestJobs', async (importOriginal) => {
   return { ...actual, NBA_INGEST_JOBS: jobMocks };
 });
 
+const monitorCronRunMock = vi.hoisted(() =>
+  vi.fn((_slug: string, run: () => Promise<Response>): Promise<Response> => run())
+);
+vi.mock('@/server/cron/cronMonitors', () => ({
+  isCronMonitorSlug: (slug: string) => slug === 'cron-nba-boxscores',
+  monitorCronRun: monitorCronRunMock,
+}));
+
 const { GET, POST } = await import('./route');
 const { NbaIngestRejected } = await import('@/server/basketball/ingest/nbaStatsProvider');
 
@@ -47,6 +55,31 @@ describe('/api/cron/nba', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
+    monitorCronRunMock.mockClear();
+  });
+
+  it('checks the box score job in to its Sentry monitor', async () => {
+    const response = await GET(request('?job=boxscores'));
+
+    expect(response.status).toBe(200);
+    expect(monitorCronRunMock).toHaveBeenCalledWith('cron-nba-boxscores', expect.any(Function));
+  });
+
+  it.each(['schedule', 'players', 'injuries'])(
+    'runs the unmonitored %s job without a check-in',
+    async (job) => {
+      const response = await GET(request(`?job=${job}`));
+
+      expect(response.status).toBe(200);
+      expect(monitorCronRunMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not check in an unauthorised call or an unknown job', async () => {
+    await GET(request('?job=boxscores', 'wrong'));
+    await GET(request('?job=nope'));
+
+    expect(monitorCronRunMock).not.toHaveBeenCalled();
   });
 
   it.each(['GET', 'POST'])('rejects a wrong secret on %s without running a job', async (method) => {

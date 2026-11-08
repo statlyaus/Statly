@@ -19,11 +19,11 @@ describe('dashboard production recovery route contract', () => {
     const dashboardPage = readRepoFile('src/app/dashboard/page.tsx');
     expect(dashboardPage).toContain("import DashboardClient from './DashboardClient'");
     expect(dashboardPage).toContain("import { AuthProvider } from '@/AuthContext'");
-    expect(dashboardPage).toContain('<DashboardClient />');
+    expect(dashboardPage).toMatch(/<DashboardClient[\s/]/);
 
     const appLayout = readRepoFile('src/components/navigation/AppLayout.tsx');
     expect(appLayout).toContain("import MainNavigation from './MainNavigation'");
-    expect(appLayout).toContain('<MainNavigation />');
+    expect(appLayout).toMatch(/<MainNavigation[\s/]/);
     expect(appLayout).toContain('href="#main-content"');
     expect(appLayout).toContain('Skip to content');
   });

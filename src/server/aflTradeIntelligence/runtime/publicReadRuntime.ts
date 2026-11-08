@@ -255,6 +255,9 @@ const disabledRuntime: AflTradePublicReadRuntime = Object.freeze({
     async searchTrades() {
       return [];
     },
+    async releaseAvailability() {
+      return 'no_active_release' as const;
+    },
   },
   draftHistoryReadService: createAflDraftHistoryReadService({
     archiveSelector: {

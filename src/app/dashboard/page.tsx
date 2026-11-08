@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { AuthProvider } from '@/AuthContext';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
+import { canUseBasketball } from '@/server/basketball/basketballAccess';
 import DashboardClient from './DashboardClient';
 
 export default async function DashboardPage() {
@@ -12,7 +13,7 @@ export default async function DashboardPage() {
 
   return (
     <AuthProvider>
-      <DashboardClient />
+      <DashboardClient showBasketball={canUseBasketball(userId)} />
     </AuthProvider>
   );
 }

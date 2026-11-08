@@ -1,66 +1,61 @@
-# Multi-stage Docker build for AFL ETL Pipeline
-# Stage 1: R Environment
-FROM r-base:4.6.1 as r-stage
+# Live ETL runtime: node dist/liveGuard.js spawns `Rscript fetch_fw_round.R` and pipes its NDJSON
+# into dist/processFootywireData.js. R uses the same pinned base and CRAN snapshot as the trade
+# capture image (afl-trade-intelligence/Dockerfile). CI builds this image on every change.
 
-# Install R packages dependencies
-RUN apt-get update && apt-get install -y \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libxml2-dev \
+FROM node:22-bookworm-slim AS node-build
+WORKDIR /etl
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY *.ts ./
+RUN npm run build && npm prune --omit=dev
+
+FROM node:22-bookworm-slim AS node-runtime
+
+FROM rocker/r-ver:4.5.1@sha256:03b023fbf7b1b24ac1bb8b2ac5fd7e15a767e67b40ff50c155e328110981c2aa
+
+ARG R_REPOSITORY=https://packagemanager.posit.co/cran/__linux__/noble/2026-08-07
+ARG FITZROY_VERSION=1.7.0
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=UTC \
+    NODE_ENV=production
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# The base image is pinned by digest; exact apt versions would break the build when Ubuntu
+# retires them from its archive.
+# skipcq: DOK-DL3008
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+      ca-certificates \
+      libcurl4-openssl-dev \
+      libicu-dev \
+      libssl-dev \
+      libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install R packages; fitzRoy is pinned to match the sealed trade-intelligence capture image
-ARG FITZROY_VERSION=1.7.0
-RUN R -e "install.packages(c('remotes', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/'); remotes::install_version('fitzRoy', version='${FITZROY_VERSION}', repos='https://cran.rstudio.com/', upgrade='never'); stopifnot(as.character(packageVersion('fitzRoy')) == '${FITZROY_VERSION}')"
+# Every package fetch_fw_round.R and fetch_fw_positions.R load; the build fails if one is missing.
+RUN Rscript --vanilla -e "repos <- '${R_REPOSITORY}'; \
+  install.packages(c('remotes', 'jsonlite', 'janitor', 'dplyr', 'stringr', 'data.table'), repos = repos); \
+  remotes::install_version('fitzRoy', version = '${FITZROY_VERSION}', repos = repos, upgrade = 'never'); \
+  stopifnot(as.character(packageVersion('fitzRoy')) == '${FITZROY_VERSION}'); \
+  for (p in c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr', 'data.table')) \
+    stopifnot(requireNamespace(p, quietly = TRUE))"
 
-# Stage 2: Node.js Environment
-FROM node:22-alpine as node-stage
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 
-# Install dependencies including dev dependencies for build
 WORKDIR /etl
-COPY package*.json ./
-RUN npm ci
-
-# Copy source files
-COPY *.ts ./
-COPY *.R ./
-COPY tsconfig.json ./
-
-# Build TypeScript
-RUN npm run build
-
-# Clean up dev dependencies
-RUN npm ci --only=production
-
-# Stage 3: Production Image
-FROM node:22-alpine
-
-# Install R runtime
-RUN apk add --no-cache R R-dev
-
-# Copy R packages from r-stage
-COPY --from=r-stage /usr/local/lib/R /usr/local/lib/R
-COPY --from=r-stage /usr/lib/R /usr/lib/R
-
-# Set working directory
-WORKDIR /etl
-
-# Copy built artifacts
-COPY --from=node-stage /etl/node_modules ./node_modules
-COPY --from=node-stage /etl/dist ./dist
-COPY --from=node-stage /etl/*.R ./
-
-# Copy package.json for runtime
+COPY --from=node-build /etl/node_modules ./node_modules
+COPY --from=node-build /etl/dist ./dist
 COPY package.json ./
+COPY *.R ./
 
-# Environment variables
-ENV NODE_ENV=production
-ENV SEASON=""
-ENV ROUND=""
+RUN node --version \
+    && useradd --create-home --shell /usr/sbin/nologin --uid 10001 statly-etl
 
-# Health check
-HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD node -e "console.log('Health check passed')"
+USER 10001:10001
 
-# Default command runs the live guard
 CMD ["node", "dist/liveGuard.js"]
