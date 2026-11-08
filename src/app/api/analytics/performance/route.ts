@@ -297,10 +297,11 @@ export async function POST(request: NextRequest) {
     .digest('hex')
     .slice(0, 12);
 
-  // Apply rate limiting per session (fallback to trusted IP, then UA, if needed): 60 per minute on
-  // the shared Redis counter, counted in this process while Redis is unavailable.
+  // Rate limit per trusted client IP (UA when no trusted IP): 60 per minute on the shared Redis
+  // counter, counted in this process while Redis is unavailable. Not per sessionId: the client
+  // writes that, so a fresh one would buy a fresh budget.
   const ua = request.headers.get('user-agent') ?? 'unknown';
-  const identifier = metric.sessionId || getTrustedClientIp(request.headers) || ua;
+  const identifier = getTrustedClientIp(request.headers) ?? ua;
   const idHash = crypto.createHash('sha256').update(identifier).digest('hex').slice(0, 16);
   const { count } = await countRateLimitHit({
     key: `rate-limit:web-vitals:${idHash}`,

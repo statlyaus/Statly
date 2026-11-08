@@ -43,6 +43,7 @@ function metricRequest(name: 'FCP' | 'TTFB', suffix: string) {
     headers: {
       'content-type': 'application/json',
       origin: 'http://localhost:3000',
+      'x-forwarded-for': '203.0.113.7',
     },
     body: JSON.stringify({
       name,
@@ -85,7 +86,7 @@ describe('performance analytics contract', () => {
       expect(options.jobId).not.toContain(':');
       const expectedRateLimitHash = crypto
         .createHash('sha256')
-        .update(`session-${suffix}`)
+        .update('203.0.113.7')
         .digest('hex')
         .slice(0, 16);
       expect(countRateLimitHitMock).toHaveBeenCalledWith({
@@ -96,7 +97,15 @@ describe('performance analytics contract', () => {
     }
   );
 
-  it('returns 429 without queueing once a session spends its 60 per minute', async () => {
+  it('keys the limit by trusted IP, so a new client-written sessionId buys no new budget', async () => {
+    await POST(metricRequest('FCP', `a-${Date.now()}`));
+    await POST(metricRequest('FCP', `b-${Date.now()}`));
+
+    const [first, second] = countRateLimitHitMock.mock.calls.map(([options]) => options.key);
+    expect(first).toBe(second);
+  });
+
+  it('returns 429 without queueing once a client spends its 60 per minute', async () => {
     countRateLimitHitMock.mockResolvedValueOnce({ count: 61, resetAt: Date.now() + 30_000 });
 
     const response = await POST(metricRequest('FCP', `limited-${Date.now()}`));
