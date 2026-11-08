@@ -13,6 +13,7 @@ const TAB_GROUPS = [
     { section: 'players', label: 'Players' },
     { section: 'pickups', label: 'Pickups' },
     { section: 'rotation', label: 'Rotation' },
+    { section: 'outlook', label: 'Outlook' },
     { section: 'trade', label: 'Trade' },
   ],
   [

@@ -2,6 +2,7 @@
 
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
+import { unstable_rethrow } from 'next/navigation';
 import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { logger } from '@/lib/logger';
 import { captureError } from '@/lib/sentry-utils';
@@ -38,6 +39,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
+    // notFound() and redirect() throw too; pass them up to Next.js's own boundaries.
+    unstable_rethrow(error);
     const errorId = `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     return { hasError: true, error, errorId };
   }
