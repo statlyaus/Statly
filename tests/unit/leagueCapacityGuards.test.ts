@@ -35,6 +35,9 @@ const prismaMocks = vi.hoisted(() => ({
   leagueSettings: {
     update: vi.fn(),
   },
+  draft: {
+    findUnique: vi.fn().mockResolvedValue(null),
+  },
 }));
 
 const draftSetupMocks = vi.hoisted(() => ({

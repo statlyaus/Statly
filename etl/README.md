@@ -134,7 +134,8 @@ authorization.
 
 The processor creates deterministic match/player identifiers and retains source checksum/evidence.
 External names are weak evidence: ambiguous rows must be reported, not used to merge canonical
-protected player ownership silently.
+protected player ownership silently. Stats reach a Statly player only through a reviewed `footywire`
+identity link (`npm run player-identity:footywire`, see `docs/runbooks/player-identity.md`).
 
 A player-match document contains season, round, clubs, normalized player identity, supported numeric
 stats, source checksum, source label, and update time. Category keys must stay aligned with
@@ -152,7 +153,10 @@ stats, source checksum, source label, and update time. Category keys must stay a
 
 ## Deployment
 
-`Dockerfile` builds the ETL runtime. `deploy.sh` is the existing explicit Cloud Run deployment command;
+`Dockerfile` builds the ETL runtime: Node 22 for the live guard and processor, and R 4.5.1 with
+fitzRoy 1.7.0 on the same pinned base and CRAN snapshot as the trade capture image. The ETL CI job
+builds it on every change and checks that Node, the R packages and `fetch_fw_round.R` are present.
+`deploy.sh` is the existing explicit Cloud Run deployment command;
 it builds, verifies R packages, deploys a no-traffic revision, and requires a separately authorized
 traffic switch. It is not called by the repository's GitHub Actions and must not be treated as an
 automatic deployment.

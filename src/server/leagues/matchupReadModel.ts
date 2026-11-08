@@ -2,7 +2,9 @@ import 'server-only';
 
 import { ensureDefaultLineups } from '@/server/leagues/defaultLineups';
 import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/server/etl/etlRoundData';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { resolveFootywirePlayerIds } from '@/server/players/footywireIdentity';
 import { getTeamName } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
@@ -33,6 +35,7 @@ import {
   type CategoryTotals,
 } from './matchupScoringEngine';
 import { calculateStandingsRows } from './standingsService';
+import { inferUnselectedDidNotPlay, loadTeamSheetStatlyPlayerIds } from './unselectedPlayers';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
 import { normalizeLineupSlots } from './lineupSettings';
 import type { LeagueLineupSlot, LeagueScoringMode } from './scoringTypes';
@@ -496,10 +499,13 @@ export function resolveRoundPlayerAvailability({
   stats,
   matches,
   expectedPlayers,
+  statlyPlayerIds = new Set(),
 }: {
   stats: readonly NormalizedLiveStatRow[];
   matches: readonly RawRoundMatch[];
   expectedPlayers: readonly { playerId: string; club: string | null }[];
+  /** Stat row player ids known to be Statly players; proves a club's team sheet is mapped. */
+  statlyPlayerIds?: ReadonlySet<string>;
 }) {
   const totalsByPlayerId = new Map<string, CategoryTotals>();
   const nonPlayingReasonByPlayerId = new Map<string, 'DID_NOT_PLAY' | 'CLUB_BYE'>();
@@ -530,11 +536,48 @@ export function resolveRoundPlayerAvailability({
       nonPlayingReasonByPlayerId.set(player.playerId, 'CLUB_BYE');
     }
   }
+  for (const playerId of inferUnselectedDidNotPlay({
+    stats,
+    matches,
+    players: expectedPlayers.filter((player) => !totalsByPlayerId.has(player.playerId)),
+    statlyPlayerIds,
+  })) {
+    totalsByPlayerId.set(playerId, {});
+    nonPlayingReasonByPlayerId.set(playerId, 'DID_NOT_PLAY');
+  }
 
   return { totalsByPlayerId, nonPlayingReasonByPlayerId };
 }
 
-async function loadLivePlayerTotalsForRound(
+/**
+ * The ETL keys stats by its Footywire player id. Only a reviewed `footywire` identity link turns
+ * that id into a Statly player id; unlinked rows keep the ETL id, so they reach no Statly player and
+ * are reported for review (docs/runbooks/player-identity.md), never matched by name here.
+ */
+async function linkEtlStatsToPlayers(
+  rows: readonly NormalizedLiveStatRow[],
+  season: number,
+  round: number
+): Promise<NormalizedLiveStatRow[]> {
+  const playerIdByEtlId = await resolveFootywirePlayerIds(
+    rows.map((row) => row.playerId),
+    prisma
+  );
+  const unlinked = rows.filter((row) => !playerIdByEtlId.has(row.playerId));
+  if (unlinked.length > 0) {
+    logger.warn('ETL player stats without a reviewed Footywire identity link', {
+      season,
+      round,
+      unlinkedCount: unlinked.length,
+    });
+  }
+  return rows.map((row) => ({
+    ...row,
+    playerId: playerIdByEtlId.get(row.playerId) ?? row.playerId,
+  }));
+}
+
+export async function loadLivePlayerTotalsForRound(
   season: number,
   round: number,
   expectedPlayers: readonly { playerId: string; club: string | null }[] = []
@@ -544,14 +587,23 @@ async function loadLivePlayerTotalsForRound(
     getRoundMatchesResult(season, round),
   ]);
   const rawMatches = (matchesResult.ok ? matchesResult.matches : []) as unknown as RawRoundMatch[];
-  const normalizedStats = normalizeLiveStatRows(
-    (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[],
-    rawMatches
-  ).filter((row) => row.round === round);
+  const normalizedStats = await linkEtlStatsToPlayers(
+    normalizeLiveStatRows(
+      (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[],
+      rawMatches
+    ).filter((row) => row.round === round),
+    season,
+    round
+  );
   const { totalsByPlayerId, nonPlayingReasonByPlayerId } = resolveRoundPlayerAvailability({
     stats: normalizedStats,
     matches: rawMatches,
     expectedPlayers,
+    statlyPlayerIds: await loadTeamSheetStatlyPlayerIds({
+      stats: normalizedStats,
+      matches: rawMatches,
+      players: expectedPlayers,
+    }),
   });
 
   const available =

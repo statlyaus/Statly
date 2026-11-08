@@ -85,6 +85,9 @@ client omits optional values:
 - `H2H_EACH_CATEGORY` scoring
 - the real-data nine-category preset
 - normalized active lineup slots and category directions
+- the AFL season of the draft date, or of the creation date when there is none: next season once
+  that year's Grand Final has passed (see
+  [league competition rules](../product/league-competition-rules.md#calendar-and-fixtures))
 
 Clients may expose additional choices, but they must submit values supported by the server contract.
 
@@ -111,6 +114,15 @@ persisted, and auditable; a player contributes at most once. Commissioner change
 competition state require an audit record and recalculation of affected future state.
 
 The full product contract is in [league competition rules](../product/league-competition-rules.md).
+
+## Transactions
+
+Free-agent adds, waiver claims, and trade proposals, counters, and acceptances open only once the
+league's draft is `COMPLETED`. Every transaction route asks one server guard,
+`src/server/leagues/transactionWindow.ts`, before it writes; until then the request is refused with
+HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and trades open once the
+league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
+cancelling, and commissioner review are not transactions and stay available.
 
 ## Data boundaries
 

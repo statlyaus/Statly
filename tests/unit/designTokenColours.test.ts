@@ -24,6 +24,7 @@ function sourceFilesUnder(folder: string): string[] {
 // Files whose colours all come from the design tokens in src/index.css. Add a file here once its
 // raw palette classes and colour literals are gone, so it cannot regress.
 const tokenisedFiles = [
+  'src/components/league/NotLeagueMember.tsx',
   'src/components/stats/PlayerComparison.tsx',
   'src/components/stats/PlayerStatsTable.tsx',
   'src/components/ui/Alert.tsx',
