@@ -99,6 +99,39 @@ use, or an enterprise feed) is required before a public launch. The schema store
 values (seconds played, standard team codes, a did-not-play reason enum) so the adapter can be
 swapped without a migration.
 
+Owner decision, 2026-11-08: ESPN stays, and the section stays private until the data is licensed.
+The free alternatives were checked and ruled out: NBA.com's terms bar its statistics from "any
+fantasy game or other commercial product or service"; Basketball-Reference forbids building a data
+store that substitutes for its own and sells bulk data from US$5,000; Basketball Monster allows
+personal, non-commercial use only and forbids scraping or putting its content in a database.
+
+Access is an allow-list: `BASKETBALL_ALLOWED_USER_IDS` holds the comma-separated Firebase user ids
+that may open `/basketball` and call `/api/basketball/*` (`canUseBasketball`,
+`src/server/basketball/basketballAccess.ts`). Everyone else gets a 404 and no Basketball link in the
+navigation. Left unset, the section is open to signed-in users outside production (local development
+and e2e) and closed to everyone in production. The NBA ingest is not gated by it; it runs on
+`CRON_SECRET` and the licensing guard above.
+
+## Injury report
+
+`NbaPlayerInjury` holds the provider's current injury report, one row per listed player:
+
+| Field              | Meaning                                                                                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`           | `OUT` or `DAY_TO_DAY`. Any other status fails the run.                                                                                                                     |
+| `detail`           | Side and type, for example "Left Ankle".                                                                                                                                   |
+| `expectedReturnOn` | The provider's return date (Eastern). Often a next-evaluation date rather than a firm return.                                                                              |
+| `comment`          | The provider's one-line note on the player, for example "X (ankle) is out for Friday's game".                                                                              |
+| `fantasyStatus`    | The provider's own fantasy availability code, as given. ESPN sends `OUT`, `GTD` (game-time decision) and `OFS` (out for season). Read `seasonEnding` instead of this code. |
+| `seasonEnding`     | The player is out for the rest of the season (rule below).                                                                                                                 |
+
+The ESPN adapter sets `seasonEnding` only when the fantasy status is `OFS`. The comment is stored
+but not parsed for season-enders: phrasing such as "could miss the rest of the season" or
+"recovering from season-ending surgery" misfires, and a false flag would mark an active player out
+for every remaining game. ESPN's longer note is neither stored nor read, because it often names
+teammates who are out. ESPN gives an `OFS` player a placeholder return date months after the season
+ends, so readers should treat a season-ending row as out for every remaining game whatever its date.
+
 ## Valuation and matchup maths
 
 The engine in `src/lib/basketball/` is pure TypeScript with no database or network access, so it
@@ -222,3 +255,233 @@ stored box scores of the season's final regular-season games. The Rotation page
 Checked against the sheet's Rotation Watch for games to 2 Nov 2026: all 30 team rows matched, the
 76 alert texts matched as a set (injury return dates aside), and a sample of 38 player rows matched
 field for field.
+
+## Role outlook
+
+The role outlook ports the sheet's Role Model (version 3 of its `RoleModel.gs` Apps Script): for
+each player it predicts minutes, usage and total usage over his team's next 5 games, and how much
+his injured or returning teammates move his minutes, then projects his stats over those games and
+for the rest of the season. The engine is pure TypeScript in `src/lib/basketball/`: the role model
+(`roleGameRows.ts`, `roleFeatures.ts`, `roleModel.ts`), then the history tables
+(`playerHistory.ts`), injury input (`injuryOutlook.ts`), schedule (`roleSchedule.ts`), next-5 stats
+(`roleStatProjection.ts`) and rest of season (`restOfSeason.ts`).
+
+### Inputs (`roleGameRows.ts`)
+
+Rows are the stored box-score lines of the season's final games, one per player who played.
+
+- Minutes are seconds played ÷ 60. A player listed as played with 0 seconds (a short cameo, since
+  the provider prints whole minutes) counts as 0.25 minutes.
+- USG% is the box-score formula, to one decimal:
+  `100·(FGA + 0.44·FTA + TOV)·(team minutes / 5) / (MIN·(team FGA + 0.44·team FTA + team TOV))`,
+  team totals over all of the team's rows in the game. Team minutes are snapped to 240 plus 25 per
+  overtime (`240 + 25·round((Σ minutes − 240) / 25)`), because whole minutes do not add up exactly.
+  No shots, free throws or turnovers: 0.
+- Total usage = USG% × MIN / 48. Margin = team score − opponent score. Makes are the stored makes.
+- Rows are ordered by date, game, team and player before the model runs, because the order breaks
+  ties (equal season minutes in the top 8, equal predictions in the sort).
+
+### Features (`roleFeatures.ts`)
+
+A player's games for one team form a sequence; a traded player has one per team. For every game of
+every sequence the engine builds the model's 50 role features: minutes, USG% and total usage over
+his last 1, 3, 5 and 10 games and the season, with spreads and gaps; games played and team games
+missed before this one; consecutive games at least 4 minutes above the median of his previous 5 to
+10; his rank in season minutes within the team game; the minutes per game of the team's top 8 (by
+minutes so far, departed players included) missing from the game, and its mean over the last 3;
+per-36 scoring, shooting and plus-minus rates; team margin over the last 10, divided by 10 however
+few games there are (as the script does); and the coach's traits. Coach traits are 30 fitted rows
+committed in `roleModelConstants.ts`; Statly has no coach data, so a coaching change needs a
+one-line edit (zeros for a new coach, as the sheet does). Each game also gets the probability that
+the player's minutes drop, which feeds his teammates' injury inputs.
+
+### Teammate injuries
+
+For a player's latest game, each teammate with 3+ earlier games for the team at 10+ minutes a game
+counts, unless he has missed more than the team's last 5 games and is not on the injury report.
+Input per teammate: his expected share of the next 5 team games missed (0 to 1; 0 when not on the
+report). A teammate is newly out by that share minus whether he missed the latest game, and coming
+back by the reverse. The player's own minutes and total usage without that teammate minus with him,
+over earlier games he played, are shrunk by n / (n + 3) (n = games without him). The injury minutes
+shift is Σ newly out × difference − Σ coming back × difference. A teammate is shown as a driver when
+he is out or coming back and the difference is at least one minute.
+
+### Model heads
+
+Ten teammate sums join the 50 features. Seven fitted heads (trained by the sheet's owner on NBA
+2013-14 to 2024-25, tested on 2025-26):
+
+| Output                        | Form                    | Test              |
+| ----------------------------- | ----------------------- | ----------------- |
+| Minutes next 5                | last-5 average + linear | MAE 3.03, R² 0.73 |
+| USG% next 5                   | last-5 average + linear | MAE 2.44, R² 0.73 |
+| Total usage next 5            | last-5 average + linear | MAE 1.67, R² 0.84 |
+| P(minutes +3), P(−3)          | logistic                | AUC 0.76, 0.73    |
+| P(total usage +15 %), (−15 %) | logistic                | AUC 0.78, 0.73    |
+
+The minutes range is the prediction plus the fitted 80 % band for its size (the first band whose
+upper edge reaches it, else the last), never below 0. A row is produced for each sequence whose
+latest game is his third or later for the team with 10+ minutes a game over his last 5, sorted by
+rounded total usage next 5, highest first. Values are rounded half up to 0.1 (probabilities 0.01)
+only at the output; the two change columns are differences of the rounded values.
+
+### History (`playerHistory.ts`)
+
+The sheet embeds three per-player tables; Statly recomputes them from earlier seasons' stored box
+scores, joined by player ID:
+
+- Career prior: over up to the 13 seasons before this one, a season k years back weighted
+  0.5^(k − 1) (last season 1, then 0.5, 0.25, …): per-minute rates Σ weight × stat ÷ Σ weight ×
+  minutes for points, threes, rebounds, assists, steals, blocks, turnovers, FGA and FTA, and
+  weighted FGM, FGA, FTM and FTA. Absent (a rookie for the model) under 100 minutes in all.
+- Last season: minutes per game and games played ÷ 82, all teams together, cameos counted.
+- Back-to-back record over the 3 seasons before this one: a second night is a team game the day
+  after the team's previous game, with a next game in the same season. Eligible when he played the
+  first night for that team; a sit when he then missed the second night and played the next game.
+
+Inputs are each player's season totals (minutes with the cameo rule, games, stats) and the
+(team, date, player) tuples of played games with the season's game list.
+
+### Injuries (`injuryOutlook.ts`)
+
+Each injury report row becomes the share of his team's next 5 games he is expected to miss and the
+games he is expected to miss in all, counted over the team's remaining games (not final, today or
+later, Eastern date):
+
+| Report                                  | Next 5 missed     | Games out                        |
+| --------------------------------------- | ----------------- | -------------------------------- |
+| Out for the season                      | 1                 | rest of year                     |
+| Return after the team's last game       | 1                 | rest of year                     |
+| Return date after today                 | min(games, 5) ÷ 5 | team games before it, at least 1 |
+| Return date today or earlier (due back) | 0.1               | 0.5                              |
+| No date, out                            | 0.4               | 2                                |
+| No date, day-to-day                     | 0.1               | 0.5                              |
+
+### Next 5 games (`roleSchedule.ts`, `roleStatProjection.ts`)
+
+- Opponent defence: what each team has allowed per minute this season against the league rate,
+  shrunk to it with 10 games of weight (ln((n × ratio + 10) ÷ (n + 10)), n = its games), averaged
+  over the team's next 5 games. Each stat is multiplied by e^(slope × that), with fitted slopes
+  (points 1.0, threes 0.76, rebounds 1.0, assists 0.90, steals 0.81, blocks 0.94, turnovers 0.98,
+  FGA 0, FTA 1.01). The column shows it as % more or fewer points allowed than average.
+- Stats: per-minute rates over his last 5, last 10 and season games for the team, his career rate
+  weighted by how early in the season it is (1 in his first game, 0 from his 21st), and his
+  predicted change in usage and minutes, with fitted coefficients, times his predicted minutes. The
+  predictions are fed rounded, as the sheet does. FG% and FT%: his makes and attempts plus 100 FGA
+  (50 FTA) at his career % (shrunk to the league's 46.3 % and 77.4 % with 25 FGA and 12.5 FTA, and
+  used from 50 career FGA and 25 FTA), to 0.001. Points = 2 × FG% × FGA + threes + FT% × FTA.
+- Sitting a back-to-back: a fitted logistic of whether the game is a second night, his minutes over
+  his last 10 games, and his back-to-back record (earlier seasons plus this season's by the same
+  rule), shrunk to a 5.5 % base rate with 8 nights of weight.
+- Expected games: for each remaining team game, (1 − injured) × (1 − chance he sits), where injured
+  takes his expected games out off the front (beyond the next 5 too, so a long injury keeps him out
+  of a two-week fantasy week). Next 5 sums the first five; each game in the next 14 days is kept so
+  the read model can sum a league's fantasy week.
+
+### Rest of season (`restOfSeason.ts`)
+
+- Minutes per game: a fitted linear model of his minutes over his last 5, last 10 and season (rows
+  from every team he has played for this season, as the script does), last season's minutes per game,
+  and the teammate shift. Teammate shift: for each teammate with games both with and without him, the
+  player's minutes without minus with (shrunk Na ÷ (Na + 3), ±12) times the chance the teammate is
+  absent for the rest of the season (from his injury, or a fitted model of his games missed and
+  current absence streak), his share of games missed and his share of the last 5.
+- Stats: fitted per-minute rate blends of last 5, last 10, season and career, times minutes; no
+  opponent adjustment. FG% and FT% as for the next 5.
+- Expected games: a fitted availability rate (his share of team games played so far, last season's
+  share and minutes) over the team's remaining games, his injured games taken off the front.
+
+### Read model (`roleOutlook.ts`)
+
+`src/server/basketball/readModels/roleOutlook.ts` runs the engine for every player of a season at
+once, because each player's features depend on all his teammates and the opponent factors on every
+row, so a league's subset would cost the same.
+
+- `loadSeasonOutlook(client, season, today)` reads the season's final box-score lines (played or
+  not), its games (postponed and cancelled left out) and the whole injury report, plus the history
+  tables, and returns one row per player: role, next 5 and rest of season, with his name,
+  positions, injury and the names of the teammates driving his injury shift. A traded player is
+  shown once, for the team of his latest box score (the engine still models each team spell).
+- History comes from three SQL reads of earlier seasons' final games: per-player season totals for
+  up to 13 seasons (cameos as 0.25 minutes, ordered by player and season so the career sums always
+  add in the same order), and the game list and played tuples of the last 3 seasons, which
+  `backToBackHistory` turns into back-to-back records.
+- `loadOutlook(league, { now, today, client })` labels each player with his owner in the league,
+  adds his expected games in the league's current fantasy week (from today; a two-week matchup
+  counts both weeks) and marks the default view: every rostered player plus the 25 free agents
+  with the most total usage next 5 among those expected to play at least 1 of the next 5. Every
+  player stays in the list for an "All" filter.
+
+Injuries in the read model: a report row counts his current team's remaining games (the team of
+his latest box score; a listed player with no box score this season is in no team's games and is
+skipped). A season-ending row is out for every remaining game whatever its date. A report over a
+day old is still used, and the view flags it (`injuriesStale`, also set when no report was ever
+fetched). The engine keeps a long injury out beyond the next 5 games, so a two-week fantasy week
+counts it too.
+
+Caching: the computed output, not the rows, is cached for the season under its latest successful
+box-score ingest, the injury report's fetch time and the Eastern date (five minutes at most, a
+backstop for schedule changes). The history tables are read again on each miss: Next.js never reads
+an `unstable_cache` entry nested inside another, and a separate entry would cost every page view a
+read. On 8 Nov 2026 a miss on the full 2025-26 season (32,148 lines, 468 players, 2 earlier seasons
+stored) took 0.86 s on a laptop: 0.27 s of reads (history 0.15 s), 0.57 s of engine. The output was
+641 KB, well under the data cache's 2 MB entry limit. A miss is quick enough to compute in a page
+request, so the ingest jobs do not warm the cache.
+
+### Outlook page
+
+The Outlook page (`/basketball/[leagueId]/outlook`, the tab after Rotation) is a server page over
+`loadOutlook` for the owner's league; there is no API route. Its view state is in the URL.
+
+- Biggest movers, below the table as in the sheet: its 'Role Model Charts' as three ranked lists
+  over every player with an outlook, not just the league's, each with his owner: the 10 biggest
+  rises and 10 biggest falls in minutes (next 5 against last 5), the 15 largest injury minutes
+  shifts (0.5 or more either way, with the teammates driving them) and the 15 largest gaps between
+  projected points next 5 and his season average. Players under 1 expected game in the next 5 are
+  left out, and the minutes and points lists need 15+ minutes a game over the last 5, as in the
+  sheet. Ties keep the season order.
+- Table: the next 5 games (default) or the rest of season (`view=ros`); who it lists (`show`:
+  rostered players and the top free agents by default, or mine, this week's opponent, free agents,
+  all rostered, all); and a sort on any column (`sort`, `dir`; default total usage next 5, or
+  minutes for the rest of season). Next 5 columns: games played, minutes last 5 and next 5 (with
+  the change and the 80 % range), P(+3) and P(−3) minutes, USG% and total usage next 5, injury shift
+  with its drivers ("Name out +2.1"), bigger-role games, expected games next 5 (with back-to-backs
+  and the chance he sits one) and this fantasy week, the seven counting stats, FG%, FT% and
+  opponent defence. Rest of season: minutes, teammate shift, expected games, team games left and
+  the same stats.
+- Injury badges (the shared `InjuryBadge`) read OUT, DTD or "OUT · season"; "old" marks a report
+  over a day old, which is still used, and a notice says so. Stale box scores get the shared notice.
+- Empty states: no box-score ingest yet ("NBA stats haven't been loaded yet"), and no player with an
+  outlook yet ("The outlook starts after a player's third game").
+- In the data but not shown: the coach, FGA, FTA, the chances of usage ±15 % and rebounds and
+  assists against season average.
+
+The lists were checked against the sheet's charts for 7 Nov 2026 (box scores to 6 Nov, history
+recomputed from 3 stored seasons, that day's ESPN injury report): 8 of 10 gainers, 10 of 10 losers
+and 12 of 15 injury shifts matched, the same counts as the sheet's own script given the ESPN
+report, so the injury source explains the differences. The sheet's points column was not archived;
+against the script given the ESPN report, 13 of 15 matched.
+
+### Parity with the sheet
+
+`roleModel.parity.test.ts` checks the port against `RoleModel.gs` on a synthetic league from a
+seeded generator (made-up players, a trade, cameos, overtime, injured, returning and long-gone
+teammates). CI compares with the script's committed output; with `ROLE_MODEL_GS_DIR` pointing at a
+local copy of the script (never committed), the test runs the script itself in `node:vm` and also
+compares every fitted constant and a 30-team league. On 8 Nov 2026 every displayed column matched on
+all rows (60 and 289), with raw outputs identical, and the same held on the stored box scores to 6
+Nov 2026 (327 rows) and to 1 Apr 2026 (488 rows).
+
+`roleProjection.parity.test.ts` does the same for the next-5 stats and schedule and the rest of
+season, with the generator's 3 earlier seasons as history (one team without history) and 21 days of
+games still to play; both sides get the port's history tables. On 8 Nov 2026 every displayed column
+matched (60 and 289 rows) with raw outputs identical, and the same held on the stored box scores to 6
+Nov 2026 (327 rows) and to 1 Apr 2026 (488 rows) with the sheet's own history tables.
+
+Deliberate differences so far: players are joined by player ID, not name; minutes are whole minutes
+with the cameo and team-minutes rules above; makes are real makes; history tables are recomputed
+from the seasons Statly stores, not the sheet's 2013-14 to 2025-26 tables; injuries come from the
+provider's status, return date and season-ending flag with the rule above, not the sheet's wording
+rules, and use the Eastern date throughout; the schedule's results come from stored games; a
+traded player is shown once, for his latest team; expected games this week end on the league's
+fantasy week end, not the next Sunday.
