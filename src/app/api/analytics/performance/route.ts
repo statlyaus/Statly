@@ -2,28 +2,15 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { countRateLimitHit, getTrustedClientIp } from '@/lib/rateLimit';
 import crypto from 'node:crypto';
 import { Queue } from 'bullmq';
 import type { Queue as BullQueue } from 'bullmq';
 import { getPublisherClient } from '@/server/realtime/scalableConnection';
 import type { Redis as IORedisClient, Cluster as IORedisCluster } from 'ioredis';
 
-// Minimal ioredis-compatible types for BullMQ and our rate limiter
+// Minimal ioredis-compatible type for BullMQ
 type BullRedisConnection = IORedisClient | IORedisCluster;
-interface RedisEvalCounter {
-  eval: (
-    script: string,
-    numKeys: number,
-    ...keysAndArgs: Array<string | number>
-  ) => Promise<number>;
-  incr: (key: string) => Promise<number>;
-  expire: (key: string, seconds: number) => Promise<number>;
-}
-
-interface RedisIncrExpire {
-  incr: (key: string) => Promise<number>;
-  expire: (key: string, seconds: number) => Promise<number>;
-}
 
 // Minimal commands needed for distributed de-dup
 interface RedisKV {
@@ -42,23 +29,12 @@ function isRedisKVClient(client: unknown): client is RedisKV {
   return typeof c.set === 'function' && typeof c.eval === 'function';
 }
 
-function isRedisIncrExpire(client: unknown): client is RedisIncrExpire {
-  if (typeof client !== 'object' || client === null) return false;
-  const c = client as { incr?: unknown; expire?: unknown };
-  return typeof c.incr === 'function' && typeof c.expire === 'function';
-}
-
-function isRedisEvalCounter(client: unknown): client is RedisEvalCounter {
-  if (typeof client !== 'object' || client === null) return false;
-  const c = client as { eval?: unknown; incr?: unknown; expire?: unknown };
-  return (
-    typeof c.eval === 'function' && typeof c.incr === 'function' && typeof c.expire === 'function'
-  );
-}
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const RATE_LIMIT_MAX_REQUESTS = 60;
 
 // Allowed metric names and navigation types
 const MetricNameEnum = z.enum(['CLS', 'FID', 'FCP', 'INP', 'LCP', 'TTFB']);
@@ -248,70 +224,6 @@ function getMetricsQueue(): BullQueue {
   return metricsQueue;
 }
 
-async function rateLimit(
-  key: string,
-  limit: number,
-  windowSec: number
-): Promise<{ allowed: boolean; remaining?: number; reset?: number }> {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const windowId = Math.floor(nowSec / windowSec);
-  const windowKey = `${key}:${windowId}`;
-  const reset = (windowId + 1) * windowSec; // epoch seconds of window reset
-
-  try {
-    const client = getPublisherClient();
-    if (!client) {
-      logger.warn('Rate limiter Redis client is not available; allowing request');
-      return { allowed: true, reset };
-    }
-
-    const lua =
-      "local c=redis.call('INCR', KEYS[1]); if c==1 then redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])) end; return c";
-
-    let countRaw: unknown;
-
-    if (isRedisEvalCounter(client)) {
-      try {
-        countRaw = await client.eval(lua, 1, windowKey, String(windowSec));
-      } catch (luaErr: unknown) {
-        // Fallback: best-effort non-atomic path (still guarded) if Lua unavailable
-        logger.warn('Rate limiter Lua EVAL failed; falling back to INCR/EXPIRE', {
-          error: luaErr instanceof Error ? luaErr.message : String(luaErr),
-          stack: luaErr instanceof Error ? luaErr.stack : undefined,
-        });
-        const tempCount = await client.incr(windowKey);
-        if (tempCount === 1) {
-          await client.expire(windowKey, windowSec);
-        }
-        countRaw = tempCount;
-      }
-    } else if (isRedisIncrExpire(client)) {
-      // Client lacks eval, use non-atomic fallback
-      const tempCount = await client.incr(windowKey);
-      if (tempCount === 1) {
-        await client.expire(windowKey, windowSec);
-      }
-      countRaw = tempCount;
-    } else {
-      logger.warn('Rate limiter Redis client missing required commands; allowing request');
-      return { allowed: true, reset };
-    }
-
-    const countNum = typeof countRaw === 'number' ? countRaw : Number(countRaw);
-    const safeCount = Number.isFinite(countNum) && countNum > 0 ? countNum : 1;
-
-    const remaining = Math.max(0, limit - safeCount);
-    return { allowed: safeCount <= limit, remaining, reset };
-  } catch (err: unknown) {
-    // On Redis failure, fail open but log full error and keep a sensible reset
-    logger.warn('Rate limiter unavailable; allowing request', {
-      error: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    return { allowed: true, reset };
-  }
-}
-
 function cleanUrl(raw: string): string {
   try {
     const u = new URL(raw);
@@ -385,13 +297,17 @@ export async function POST(request: NextRequest) {
     .digest('hex')
     .slice(0, 12);
 
-  // Apply rate limiting per session (fallback to UA/IP hash if needed)
-  const xff = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  // Apply rate limiting per session (fallback to trusted IP, then UA, if needed): 60 per minute on
+  // the shared Redis counter, counted in this process while Redis is unavailable.
   const ua = request.headers.get('user-agent') ?? 'unknown';
-  const identifier = metric.sessionId || xff || ua;
+  const identifier = metric.sessionId || getTrustedClientIp(request.headers) || ua;
   const idHash = crypto.createHash('sha256').update(identifier).digest('hex').slice(0, 16);
-  const rl = await rateLimit(`metrics:rl:${idHash}`, 60, 60); // 60 req/min
-  if (!rl.allowed) {
+  const { count } = await countRateLimitHit({
+    key: `rate-limit:web-vitals:${idHash}`,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+    whenRedisUnavailable: 'memory',
+  });
+  if (count > RATE_LIMIT_MAX_REQUESTS) {
     return noStore({ success: false, error: 'Too Many Requests' }, { status: 429 });
   }
 

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const queueAddMock = vi.hoisted(() => vi.fn());
 const redisSetMock = vi.hoisted(() => vi.fn());
 const redisEvalMock = vi.hoisted(() => vi.fn());
+const countRateLimitHitMock = vi.hoisted(() => vi.fn());
 
 vi.mock('bullmq', () => ({
   // Vitest 4 only constructs mocks whose implementation uses `function` or `class`.
@@ -19,6 +20,11 @@ vi.mock('@/server/realtime/scalableConnection', () => ({
     incr: vi.fn().mockResolvedValue(1),
     expire: vi.fn().mockResolvedValue(1),
   }),
+}));
+vi.mock('@/lib/redis', () => ({ redisClient: { getClient: () => null } }));
+vi.mock('@/lib/rateLimit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rateLimit')>()),
+  countRateLimitHit: countRateLimitHitMock,
 }));
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -58,6 +64,7 @@ describe('performance analytics contract', () => {
     queueAddMock.mockResolvedValue({ id: 'queued-job' });
     redisSetMock.mockResolvedValue('OK');
     redisEvalMock.mockResolvedValue(1);
+    countRateLimitHitMock.mockResolvedValue({ count: 1, resetAt: Date.now() + 60_000 });
   });
 
   it.each(['FCP', 'TTFB'] as const)(
@@ -81,14 +88,34 @@ describe('performance analytics contract', () => {
         .update(`session-${suffix}`)
         .digest('hex')
         .slice(0, 16);
-      expect(redisEvalMock).toHaveBeenCalledWith(
-        expect.any(String),
-        1,
-        expect.stringMatching(new RegExp(`^metrics:rl:${expectedRateLimitHash}:\\d+$`)),
-        '60'
-      );
+      expect(countRateLimitHitMock).toHaveBeenCalledWith({
+        key: `rate-limit:web-vitals:${expectedRateLimitHash}`,
+        windowSeconds: 60,
+        whenRedisUnavailable: 'memory',
+      });
     }
   );
+
+  it('returns 429 without queueing once a session spends its 60 per minute', async () => {
+    countRateLimitHitMock.mockResolvedValueOnce({ count: 61, resetAt: Date.now() + 30_000 });
+
+    const response = await POST(metricRequest('FCP', `limited-${Date.now()}`));
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({ success: false, error: 'Too Many Requests' });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(queueAddMock).not.toHaveBeenCalled();
+    expect(redisSetMock).not.toHaveBeenCalled();
+  });
+
+  it('still accepts the 60th metric in a window', async () => {
+    countRateLimitHitMock.mockResolvedValueOnce({ count: 60, resetAt: Date.now() + 30_000 });
+
+    const response = await POST(metricRequest('TTFB', `edge-${Date.now()}`));
+
+    expect(response.status).toBe(200);
+    expect(queueAddMock).toHaveBeenCalledOnce();
+  });
 
   it('returns 400 for an invalid metric without touching the queue', async () => {
     const response = await POST(

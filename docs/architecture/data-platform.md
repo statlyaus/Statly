@@ -152,6 +152,8 @@ per limiter:
 | `auth`, `api`, `heavy` | Fail closed: HTTP 503, `Retry-After: 5` | These guard credentials and expensive work; an unenforced limit is worse than a short outage. |
 | `public`               | Count in this process only              | Anonymous reads stay available, and each instance still caps a single caller instead of none. |
 | League social actions  | Count in this process only              | Unchanged from before: these callers are authenticated and keyed per user and league.         |
+| `/api/metrics`         | Count in this process only              | 10 per minute per credential fingerprint; it counted in process memory before Redis.          |
+| Web Vitals ingestion   | Count in this process only              | 60 per minute per client session id; dropped analytics are harmless, so it stays available.   |
 
 Either fallback logs one warning per minute while it lasts.
 
