@@ -69,6 +69,9 @@ worker acts on that draft only after checking it still belongs to the league and
 Rescheduling or cancelling replaces only that draft's jobs, never another draft's in the same league.
 A start job without a draft id (enqueued before this keying) is refused and logged rather than
 resolved to "the league's draft"; rescheduling the draft enqueues a keyed job.
+Draft structure (position limits and bench, draft type, pick order) can change only while the draft
+is `SCHEDULED`; the league settings API refuses a change after that with 409
+`DRAFT_STRUCTURE_LOCKED`. See [settings locks](../product/league-competition-rules.md#settings-locks).
 Clock commands commit Prisma timing state and an outbox event without depending on Redis. Outbox
 delivery and the worker's startup/periodic repair loop both reconcile the latest persisted LIVE clock
 into an immutable, revision-addressed BullMQ job. They never schedule from stale event data. Missing
