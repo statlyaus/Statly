@@ -17,6 +17,8 @@ import { buildExternalUserEmail } from '@/lib/prismaLeagueBridge';
 import { getLeagueMemberDocId, toCanonicalLeagueMembershipData } from '@/lib/leagueMembership';
 import {
   normalizeCreateLeagueInput,
+  validateLeagueCategories,
+  validateLeagueName,
   type NormalizedCreateLeagueInput,
 } from '@/server/leagues/createLeagueContract';
 import {
@@ -25,11 +27,8 @@ import {
   type League,
   type LeagueMember,
 } from '@/types/leagues';
-import {
-  REAL_DATA_NINE_CATEGORY_PRESET,
-  isFantasyCategoryKey,
-  normalizeFantasyCategoryKeys,
-} from '@/types/fantasyCategories';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import { defaultLeagueSeasonYear, leagueSeasonData } from '@/server/leagues/seasonYear';
 
 type LeagueCreationClient = Pick<PrismaClient, '$transaction' | 'league'>;
 const COMPATIBILITY_PROJECTION_ATTEMPTS = 3;
@@ -148,14 +147,11 @@ export async function createCanonicalLeague(
         },
       });
 
-      const year = (draftStart ?? now).getUTCFullYear();
+      // A draft after the Grand Final, or a league created after it, plays next season.
       const season = await tx.leagueSeason.create({
         data: {
           leagueId: league.id,
-          label: `${year} season`,
-          year,
-          startsAt: new Date(Date.UTC(year, 0, 1)),
-          endsAt: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)),
+          ...leagueSeasonData(defaultLeagueSeasonYear(draftStart ?? now)),
         },
       });
       await tx.league.update({
@@ -230,38 +226,20 @@ async function projectLeagueCreation(
 }
 
 function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreateLeagueInput {
-  if (
-    Array.isArray(input.categories) &&
-    input.categories.some((key) => !isFantasyCategoryKey(key))
-  ) {
-    throw new LeagueCreationError('One or more scoring categories are invalid', 400, 'VALIDATION');
+  const categories = Array.isArray(input.categories)
+    ? validateLeagueCategories(input.categories)
+    : { ok: true as const, value: [...REAL_DATA_NINE_CATEGORY_PRESET] };
+  if (!categories.ok) {
+    throw new LeagueCreationError(categories.error, 400, 'VALIDATION');
   }
-  const suppliedCategories = Array.isArray(input.categories)
-    ? normalizeFantasyCategoryKeys(input.categories, [])
-    : [...REAL_DATA_NINE_CATEGORY_PRESET];
-  if (
-    suppliedCategories.length < LEAGUE_CONSTRAINTS.categories.min ||
-    suppliedCategories.length > LEAGUE_CONSTRAINTS.categories.max
-  ) {
-    throw new LeagueCreationError(
-      `Select ${LEAGUE_CONSTRAINTS.categories.min}-${LEAGUE_CONSTRAINTS.categories.max} scoring categories`,
-      400,
-      'VALIDATION'
-    );
-  }
-  const normalized = normalizeCreateLeagueInput({ ...input, categories: suppliedCategories });
+  const normalized = normalizeCreateLeagueInput({ ...input, categories: categories.value });
 
-  if (
-    normalized.name.length < LEAGUE_CONSTRAINTS.name.minLength ||
-    normalized.name.length > LEAGUE_CONSTRAINTS.name.maxLength
-  ) {
-    throw new LeagueCreationError(
-      `League name must be ${LEAGUE_CONSTRAINTS.name.minLength}-${LEAGUE_CONSTRAINTS.name.maxLength} characters`,
-      400,
-      'VALIDATION'
-    );
+  const name = validateLeagueName(normalized.name);
+  if (!name.ok) {
+    throw new LeagueCreationError(name.error, 400, 'VALIDATION');
   }
   if (
+    !Number.isInteger(normalized.maxTeams) ||
     normalized.maxTeams < LEAGUE_CONSTRAINTS.maxTeams.min ||
     normalized.maxTeams > LEAGUE_CONSTRAINTS.maxTeams.max
   ) {

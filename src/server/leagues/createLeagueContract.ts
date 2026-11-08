@@ -1,8 +1,14 @@
-import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
-import type {
-  CategoryDirection,
-  LeagueFixtureGenerationMode,
-  LeagueScoringMode,
+import {
+  isFantasyCategoryKey,
+  normalizeFantasyCategoryKeys,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
+import {
+  LEAGUE_CONSTRAINTS,
+  type CategoryDirection,
+  type LeagueFixtureGenerationMode,
+  type LeagueScoringMode,
 } from '@/types/leagues';
 
 import { normalizeCategoryDirections } from './categoryDirections';
@@ -37,18 +43,50 @@ export interface NormalizedCreateLeagueInput {
   categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
 }
 
-function normalizeTimeZone(timeZone: unknown): string {
-  if (typeof timeZone !== 'string' || !timeZone.trim()) {
-    return 'UTC';
-  }
+export type LeagueValidation<T> = { ok: true; value: T } | { ok: false; error: string };
 
-  const trimmed = timeZone.trim();
+/** League names are 3-50 characters after trimming, on create and on every later edit. */
+export function validateLeagueName(name: string): LeagueValidation<string> {
+  const trimmed = name.trim();
+  const { minLength, maxLength } = LEAGUE_CONSTRAINTS.name;
+  if (trimmed.length < minLength || trimmed.length > maxLength) {
+    return { ok: false, error: `League name must be ${minLength}-${maxLength} characters` };
+  }
+  return { ok: true, value: trimmed };
+}
+
+/**
+ * A league scores 3-10 known categories. Unknown keys are rejected rather than dropped, so a typo
+ * never silently becomes a different category set.
+ */
+export function validateLeagueCategories(value: unknown): LeagueValidation<FantasyCategoryKey[]> {
+  if (!Array.isArray(value) || value.some((key) => !isFantasyCategoryKey(key))) {
+    return { ok: false, error: 'One or more scoring categories are invalid' };
+  }
+  const categories = normalizeFantasyCategoryKeys(value, []);
+  const { min, max } = LEAGUE_CONSTRAINTS.categories;
+  if (categories.length < min || categories.length > max) {
+    return { ok: false, error: `Select ${min}-${max} scoring categories` };
+  }
+  return { ok: true, value: categories };
+}
+
+/** An IANA time zone name the runtime recognises, such as `Australia/Melbourne`. */
+export function isSupportedTimeZone(value: string): boolean {
+  if (!value.trim()) return false;
   try {
-    Intl.DateTimeFormat(undefined, { timeZone: trimmed });
-    return trimmed;
+    Intl.DateTimeFormat(undefined, { timeZone: value.trim() });
+    return true;
   } catch {
+    return false;
+  }
+}
+
+function normalizeTimeZone(timeZone: unknown): string {
+  if (typeof timeZone !== 'string' || !isSupportedTimeZone(timeZone)) {
     return 'UTC';
   }
+  return timeZone.trim();
 }
 
 export function normalizeCreateLeagueInput(input: CreateLeagueInput): NormalizedCreateLeagueInput {

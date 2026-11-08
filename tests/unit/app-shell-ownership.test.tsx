@@ -42,18 +42,12 @@ vi.mock('@/components/ui/ErrorBoundary', () => ({
   SectionErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/contexts/TeamContext', () => ({
-  TeamProvider: ({ children }: { children: ReactNode }) => (
-    <div data-testid="team-provider">{children}</div>
-  ),
-}));
-
 describe('app shell ownership', () => {
   beforeEach(() => {
     navigation.pathname = '/drafts';
   });
 
-  it('renders one shell and one team provider when legacy wrappers are nested', () => {
+  it('renders one shell when legacy wrappers are nested', () => {
     render(
       <AppLayout>
         <AppLayout>
@@ -66,7 +60,6 @@ describe('app shell ownership', () => {
     expect(screen.getAllByText('Skip to content')).toHaveLength(1);
     expect(document.querySelectorAll('[data-app-shell]')).toHaveLength(1);
     expect(document.querySelectorAll('#main-content')).toHaveLength(1);
-    expect(screen.getAllByTestId('team-provider')).toHaveLength(1);
   });
 
   it('keeps a live draft room immersive', () => {
@@ -81,7 +74,6 @@ describe('app shell ownership', () => {
     expect(screen.queryByRole('banner')).not.toBeInTheDocument();
     expect(screen.queryByText('Skip to content')).not.toBeInTheDocument();
     expect(document.querySelector('[data-app-shell]')).toBeNull();
-    expect(screen.getAllByTestId('team-provider')).toHaveLength(1);
   });
 
   it('allows draft access states to request the standard shell', () => {
@@ -97,7 +89,6 @@ describe('app shell ownership', () => {
 
     expect(screen.getAllByRole('banner')).toHaveLength(1);
     expect(document.querySelectorAll('[data-app-shell]')).toHaveLength(1);
-    expect(screen.getAllByTestId('team-provider')).toHaveLength(1);
   });
 
   it('classifies only draft detail routes as immersive', () => {
@@ -117,7 +108,6 @@ describe('app shell ownership', () => {
     render(layout);
 
     expect(document.querySelectorAll('[data-app-shell]')).toHaveLength(1);
-    expect(screen.getAllByTestId('team-provider')).toHaveLength(1);
     expect(screen.getAllByTestId('auth-provider')).toHaveLength(1);
     expect(screen.getAllByTestId('league-social-provider')).toHaveLength(1);
     expect(screen.getAllByTestId('performance-monitor')).toHaveLength(1);

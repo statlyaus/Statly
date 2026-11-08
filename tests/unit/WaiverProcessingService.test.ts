@@ -38,11 +38,15 @@ function claim(overrides: Partial<WaiverClaim> = {}): WaiverClaim {
   };
 }
 
+// The where-filter every waiver priority and claim query carries: the league's active season.
+const ACTIVE_SEASON = { season: { activeForLeague: { is: { id: 'league-1' } } } };
+
 function createDbMock() {
   const tx = {
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
+        activeSeasonId: 'season-1',
         settings: { rosterSize: 2 },
       }),
     },
@@ -50,6 +54,8 @@ function createDbMock() {
       findFirst: vi.fn().mockResolvedValue({
         id: 'member-1',
         userId: 'user-1',
+        isActive: true,
+        status: 'ACTIVE',
       }),
     },
     leagueRosterPlayer: {
@@ -102,8 +108,11 @@ function createClaimStoreMock() {
 
 function createSubmitDbMock() {
   const db = {
+    league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
     leagueMember: {
-      findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+      findFirst: vi
+        .fn()
+        .mockResolvedValue({ id: 'member-1', userId: 'user-1', isActive: true, status: 'ACTIVE' }),
       findMany: vi
         .fn()
         .mockResolvedValue([
@@ -331,6 +340,38 @@ describe('WaiverProcessingService', () => {
     expect(projection.projectLeague).not.toHaveBeenCalled();
   });
 
+  it('rejects, without awarding or debiting, a pending claim of a member removed from the league', async () => {
+    const { db, tx } = createDbMock();
+    tx.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      userId: 'user-1',
+      isActive: false,
+      status: 'REMOVED',
+    });
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      claims: [claim({ bidAmount: 12, dropPlayerId: 'old-player' })],
+    });
+
+    expect(result.results).toEqual([
+      { id: 'claim-1', status: 'FAILED', reason: 'Team no longer active' },
+    ]);
+    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
+    expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
+    expect(claimStore.rejectClaim).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1', bidAmount: 12 }),
+      true
+    );
+  });
+
   it('does not debit FAAB when canonical roster validation fails', async () => {
     const { db, tx } = createDbMock();
     const claimStore = createClaimStoreMock();
@@ -524,7 +565,11 @@ describe('WaiverProcessingService', () => {
 
   it('moves the successful team to the bottom before choosing the next pending claim', async () => {
     const { db, tx } = createDbMock();
-    tx.league.findUnique.mockResolvedValue({ id: 'league-1', settings: { rosterSize: 10 } });
+    tx.league.findUnique.mockResolvedValue({
+      id: 'league-1',
+      activeSeasonId: 'season-1',
+      settings: { rosterSize: 10 },
+    });
     tx.leagueRosterPlayer.count.mockResolvedValue(0);
     tx.player.findMany.mockResolvedValue([
       { id: 'player-1', name: 'Player One', club: 'Test Club', position: 'MID' },
@@ -683,6 +728,7 @@ describe('PrismaWaiverClaimStore', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           leagueId: 'league-1',
+          seasonId: 'season-1',
           memberId: 'member-1',
           actionType: 'WAIVER_CLAIM',
           details: expect.objectContaining({ playerId: 'free-player' }),
@@ -690,7 +736,7 @@ describe('PrismaWaiverClaimStore', () => {
       })
     );
     expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1' },
+      where: { leagueId: 'league-1', ...ACTIVE_SEASON, memberId: 'member-1' },
       data: { pendingBidTotal: { increment: 7 } },
     });
     expect(waiverDoc.set).toHaveBeenCalledWith(
@@ -706,6 +752,32 @@ describe('PrismaWaiverClaimStore', () => {
     expect(firestore.doc).toHaveBeenCalledWith('leagues/league-1/waiverPriorities/user-1');
     // A submitted claim and its bid stay private until waivers run: nothing is published.
     expect(activityDoc.set).not.toHaveBeenCalled();
+  });
+
+  it('refuses a claim for a team whose member was removed from the league', async () => {
+    const db = createSubmitDbMock();
+    db.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      userId: 'user-1',
+      isActive: false,
+      status: 'REMOVED',
+    });
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({
+        leagueId: 'league-1',
+        userId: 'user-1',
+        teamId: 'member-1',
+        playerId: 'free-player',
+        priority: 1,
+        bidAmount: 7,
+        waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      })
+    ).rejects.toMatchObject({ code: 'TEAM_NOT_FOUND' });
+    expect(db.teamAction.create).not.toHaveBeenCalled();
+    expect(db.waiverPriority.updateMany).not.toHaveBeenCalled();
   });
 
   it('keeps a submitted claim when the Firestore compatibility projection fails', async () => {
@@ -726,7 +798,7 @@ describe('PrismaWaiverClaimStore', () => {
 
     expect(result.id).toBe('action-1');
     expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1' },
+      where: { leagueId: 'league-1', ...ACTIVE_SEASON, memberId: 'member-1' },
       data: { pendingBidTotal: { increment: 7 } },
     });
     // Only the pending-to-cancelled guard writes status; a kept claim is never cancelled.
@@ -736,8 +808,14 @@ describe('PrismaWaiverClaimStore', () => {
   it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
     const joinedAt = new Date('2026-06-01T00:00:00.000Z');
     const db = {
+      league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
       leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-2', userId: 'user-2' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-2',
+          userId: 'user-2',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
         findMany: vi.fn().mockResolvedValue([
           { id: 'member-1', userId: 'user-1', draftSlot: 1, joinedAt },
           { id: 'member-2', userId: 'user-2', draftSlot: 2, joinedAt },
@@ -779,8 +857,18 @@ describe('PrismaWaiverClaimStore', () => {
 
     expect(db.waiverPriority.createMany).toHaveBeenCalledWith({
       data: [
-        expect.objectContaining({ memberId: 'member-2', priority: 1, remainingFAAB: null }),
-        expect.objectContaining({ memberId: 'member-1', priority: 2, remainingFAAB: null }),
+        expect.objectContaining({
+          seasonId: 'season-1',
+          memberId: 'member-2',
+          priority: 1,
+          remainingFAAB: null,
+        }),
+        expect.objectContaining({
+          seasonId: 'season-1',
+          memberId: 'member-1',
+          priority: 2,
+          remainingFAAB: null,
+        }),
       ],
       skipDuplicates: true,
     });
@@ -812,7 +900,12 @@ describe('PrismaWaiverClaimStore', () => {
     await store.rejectClaim(tx as never, pending, true);
 
     expect(tx.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1', pendingBidTotal: { gte: 7 } },
+      where: {
+        leagueId: 'league-1',
+        ...ACTIVE_SEASON,
+        memberId: 'member-1',
+        pendingBidTotal: { gte: 7 },
+      },
       data: { pendingBidTotal: { decrement: 7 } },
     });
     expect(tx.teamAction.update).toHaveBeenCalledWith({
@@ -824,7 +917,12 @@ describe('PrismaWaiverClaimStore', () => {
   it('mirrors a settled outcome to Firestore after the commit', async () => {
     const db = {
       leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-1',
+          userId: 'user-1',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
       },
       waiverPriority: {
         findMany: vi
@@ -882,7 +980,12 @@ describe('PrismaWaiverClaimStore', () => {
   it('cancels canonical pending claims and releases reserved FAAB before mirroring cancellation', async () => {
     const db = {
       leagueMember: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'member-1', userId: 'user-1' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'member-1',
+          userId: 'user-1',
+          isActive: true,
+          status: 'ACTIVE',
+        }),
       },
       teamAction: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -915,7 +1018,12 @@ describe('PrismaWaiverClaimStore', () => {
       }),
     });
     expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1', pendingBidTotal: { gte: 7 } },
+      where: {
+        leagueId: 'league-1',
+        ...ACTIVE_SEASON,
+        memberId: 'member-1',
+        pendingBidTotal: { gte: 7 },
+      },
       data: { pendingBidTotal: { decrement: 7 } },
     });
     expect(waiverDoc.update).toHaveBeenCalledWith(

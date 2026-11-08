@@ -3,16 +3,13 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 
 // Shared authorization for cron endpoints.
-// Requires CRON_SECRET outside local development and fails closed when it is unset. Schedulers send
-// `Authorization: Bearer <CRON_SECRET>`; `x-cron-secret` or `?token=` are also accepted.
+// Requires CRON_SECRET outside local development and fails closed when it is unset. The secret is
+// accepted only as `Authorization: Bearer <CRON_SECRET>`: a query string lands in CDN and function
+// access logs.
 
 function presentedSecret(req: NextRequest): string | null {
   const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') ?? '');
-  return (
-    bearer?.[1]?.trim() ||
-    req.headers.get('x-cron-secret')?.trim() ||
-    req.nextUrl.searchParams.get('token')
-  );
+  return bearer?.[1]?.trim() || null;
 }
 
 // Hash both sides so the comparison is constant-time regardless of input length.

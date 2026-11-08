@@ -169,10 +169,6 @@ vi.mock('@/components/draft/ConnectionStatus', () => ({
   default: () => <div>Connection status</div>,
 }));
 
-vi.mock('@/components/draft/DraftAnalytics', () => ({
-  default: () => <div>Draft analytics panel</div>,
-}));
-
 vi.mock('@/components/draft/DraftControls', () => ({
   default: ({ isLeagueOwner }: { isLeagueOwner: boolean }) => (
     <div>{isLeagueOwner ? 'Draft controls' : null}</div>

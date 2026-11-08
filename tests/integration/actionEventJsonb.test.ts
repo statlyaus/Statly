@@ -9,8 +9,10 @@ import { prisma } from '@/lib/prisma';
 import { planPlayerIdentityConsolidation } from '@/server/players/playerIdentityConsolidationPlanner';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const LEAGUE = 'int-jsonb-c4-league';
+let seasonId = '';
 const SETTINGS = 'int-jsonb-c4-settings';
 const USER = 'int-jsonb-c4-user';
 const MEMBER = 'int-jsonb-c4-member';
@@ -51,6 +53,7 @@ async function seedLeague() {
       settingsId: SETTINGS,
     },
   });
+  seasonId = await activateLeagueSeason(prisma, LEAGUE);
   await prisma.leagueMember.create({
     data: { id: MEMBER, leagueId: LEAGUE, userId: USER, role: 'OWNER', teamName: 'Team' },
   });
@@ -88,7 +91,13 @@ describe('team action, draft event and lobby activity jsonb columns', () => {
   it('rejects a malformed JSON write at the database', async () => {
     await seedLeague();
     const action = await prisma.teamAction.create({
-      data: { leagueId: LEAGUE, memberId: MEMBER, actionType: 'WAIVER_CLAIM', details: {} },
+      data: {
+        leagueId: LEAGUE,
+        seasonId,
+        memberId: MEMBER,
+        actionType: 'WAIVER_CLAIM',
+        details: {},
+      },
     });
 
     // An untyped literal is coerced to the column type, so a text column would have accepted it.
@@ -105,6 +114,7 @@ describe('team action, draft event and lobby activity jsonb columns', () => {
     await prisma.teamAction.create({
       data: {
         leagueId: LEAGUE,
+        seasonId,
         memberId: MEMBER,
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
@@ -133,6 +143,7 @@ describe('team action, draft event and lobby activity jsonb columns', () => {
     const pending = await prisma.teamAction.create({
       data: {
         leagueId: LEAGUE,
+        seasonId,
         memberId: MEMBER,
         actionType: 'WAIVER_CLAIM',
         status: 'PENDING',
@@ -142,6 +153,7 @@ describe('team action, draft event and lobby activity jsonb columns', () => {
     await prisma.teamAction.create({
       data: {
         leagueId: LEAGUE,
+        seasonId,
         memberId: MEMBER,
         actionType: 'WAIVER_CLAIM',
         status: 'PROCESSED',

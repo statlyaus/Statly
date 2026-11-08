@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { runFetchPipeline } from './fetchPipeline';
+import { runFetchPipeline, runFixturePipeline } from './fetchPipeline';
 
 type BackfillOptions = {
   startSeason: number;
@@ -17,6 +17,14 @@ async function backfillData(options: BackfillOptions): Promise<void> {
 
   for (let season = startSeason; season <= endSeason; season++) {
     console.log(`\n=== Processing Season ${season} ===`);
+
+    try {
+      await runFixturePipeline({ season, timeoutMs: null });
+      console.log(`✓ Fixture for Season ${season}`);
+    } catch (error) {
+      console.error(`✗ Error loading the fixture for Season ${season}:`, error);
+      failures.push(`${season} fixture`);
+    }
 
     for (let round = startRound; round <= endRound; round++) {
       console.log(`Processing Season ${season}, Round ${round}...`);

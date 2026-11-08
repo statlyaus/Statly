@@ -1,0 +1,60 @@
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+
+import { BasketballOverviewView } from '@/components/basketball/overview/BasketballOverviewView';
+import { OverviewInsights } from '@/components/basketball/overview/OverviewInsights';
+import { BasketballPageHeading } from '@/components/basketball/shell/BasketballPageHeading';
+import { takenPlayersCheck } from '@/components/basketball/shell/takenPlayers';
+import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
+import { loadOwnedBasketballLeague } from '@/server/basketball/leagues/basketballLeagueQueries';
+import { loadMatchup } from '@/server/basketball/readModels/matchupModel';
+import { loadBasketballOverview } from '@/server/basketball/readModels/overview';
+import { loadPickups } from '@/server/basketball/readModels/pickupsModel';
+
+export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { title: 'Overview | Statly basketball' };
+
+export default async function BasketballOverviewPage({
+  params,
+}: {
+  params: Promise<{ leagueId: string }>;
+}) {
+  const { leagueId } = await params;
+  const userId = await getAuthenticatedUserIdFromServerContext();
+  if (!userId) notFound();
+  const league = await loadOwnedBasketballLeague(userId, leagueId);
+  if (!league) notFound();
+  const now = new Date();
+  // The matchup and pickups models share one cached matchup context (pool, schedule, box scores)
+  // per request.
+  const [overview, matchup, pickups] = await Promise.all([
+    loadBasketballOverview(league, { now }),
+    loadMatchup(league),
+    loadPickups(league),
+  ]);
+
+  return (
+    <div>
+      <BasketballPageHeading
+        title="Overview"
+        description="Your week at a glance: projected result, best adds, games left and injuries."
+      />
+      <BasketballOverviewView
+        overview={overview}
+        leagueId={league.id}
+        now={now}
+        insights={
+          <OverviewInsights
+            matchup={matchup}
+            pickups={pickups}
+            taken={takenPlayersCheck(
+              league,
+              pickups.status === 'READY' ? pickups.opponentTeam.id : null
+            )}
+            leagueId={league.id}
+          />
+        }
+      />
+    </div>
+  );
+}

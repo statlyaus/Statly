@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
+import { activeSeasonIdOf } from './activeSeason';
 import { isActivePrismaMembership } from './membership';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { parseLeagueCategories } from './defaultLineups';
@@ -109,6 +110,7 @@ export async function loadTeamCategoryProfile({
     where: { id: leagueId },
     select: {
       categoriesJson: true,
+      activeSeasonId: true,
       settings: { select: { categoryDirectionsJson: true, competitionRulesVersion: true } },
       members: { select: { id: true, userId: true, teamName: true, isActive: true, status: true } },
     },
@@ -123,6 +125,7 @@ export async function loadTeamCategoryProfile({
   const finalizedScores = await prisma.leagueMatchupScore.findMany({
     where: {
       leagueId,
+      seasonId: activeSeasonIdOf({ id: leagueId, activeSeasonId: league.activeSeasonId }),
       status: 'FINAL',
       matchup: { fixtureVersion: league.settings.competitionRulesVersion, phase: 'REGULAR' },
     },

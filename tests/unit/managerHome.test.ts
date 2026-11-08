@@ -39,6 +39,7 @@ function membership(overrides: Record<string, unknown> = {}) {
     league: {
       id: 'league-1',
       name: 'Friday Night League',
+      activeSeasonId: 'season-1',
       categoriesJson: ['goals', 'tackles'],
       settings: {
         maxTeams: 10,
@@ -263,9 +264,17 @@ describe('loadManagerHome', () => {
     expect(league.form).toEqual(['W', 'L', 'D']);
     expect(client.leagueMatchupScore.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { leagueId: 'league-1', memberId: 'member-1', status: 'FINAL' },
+        where: {
+          leagueId: 'league-1',
+          seasonId: 'season-1',
+          memberId: 'member-1',
+          status: 'FINAL',
+        },
         take: 5,
       })
+    );
+    expect(client.leagueStanding.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { leagueId: 'league-1', seasonId: 'season-1' } })
     );
     expect(league.ladder?.map((row) => [row.position, row.teamName, row.isYou])).toEqual([
       [1, 'Hard Ball Gets', false],
