@@ -15,7 +15,10 @@ tests, and this document together.
 - Commissioner overrides are authorized at the server boundary and retained in the competition audit
   history.
 - Missing official AFL fixture data is represented as pending state; the UI must not invent a reliable
-  lock time.
+  lock time. A round published before its AFL fixture was loaded stays pending until the hourly
+  scoring job finds the fixture: it then takes the round's first bounce as its start time and becomes
+  scheduled, the same as if the fixture had been there at publication, and is scored once it starts.
+  Publication is not reopened.
 
 ## Category scoring
 
