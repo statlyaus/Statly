@@ -1307,8 +1307,8 @@ model LeagueTradeOutboxEvent {
 model TeamAction {
   id             String         @id @default(cuid())
   leagueId       String
-  /// Season scope (2026-11-08). Nullable until the waiver readers and writers carry it.
-  seasonId       String?
+  /// Season scope (2026-11-08): the league's active season when the action was created.
+  seasonId       String
   memberId       String
   actionType     TeamActionType
   status         ActionStatus   @default(PENDING)
@@ -1319,7 +1319,7 @@ model TeamAction {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season LeagueSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
 
   @@index([leagueId, status])
   @@index([leagueId, seasonId, status])
@@ -1331,8 +1331,8 @@ model TeamAction {
 model WaiverPriority {
   id              String   @id @default(cuid())
   leagueId        String
-  /// Season scope (2026-11-08). Nullable until the waiver readers and writers carry it.
-  seasonId        String?
+  /// Season scope (2026-11-08): priority order and FAAB balance per member per season.
+  seasonId        String
   memberId        String
   priority        Int
   remainingFAAB   Float?
@@ -1340,10 +1340,9 @@ model WaiverPriority {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season LeagueSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
 
-  @@unique([leagueId, memberId])
-  @@index([leagueId, priority])
+  @@unique([leagueId, seasonId, memberId])
   @@index([leagueId, seasonId, priority])
   @@index([memberId])
 }
