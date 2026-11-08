@@ -22,6 +22,14 @@ const ids = {
 
 const now = new Date('2026-07-21T10:00:00.000Z');
 
+// The rolling lockout reads AFL match times; these tests set which players it reports as locked.
+const lockout = vi.hoisted(() => ({ findLockedOutPlayers: vi.fn() }));
+const unlocked = () => ({ ok: true as const, lockedPlayerIds: new Set<string>() });
+const locked = (...playerIds: string[]) => ({
+  ok: true as const,
+  lockedPlayerIds: new Set(playerIds),
+});
+
 type TradeServiceModule = typeof import('@/server/leagues/trades/tradeService');
 type TradeReadModelModule = typeof import('@/server/leagues/trades/tradeReadModel');
 
@@ -39,18 +47,159 @@ describe.sequential('league trade service transactions', () => {
 
     vi.resetModules();
     vi.doMock('@/lib/prisma', () => ({ prisma }));
+    vi.doMock('@/server/leagues/playerLockout', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@/server/leagues/playerLockout')>()),
+      findLockedOutPlayers: lockout.findLockedOutPlayers,
+    }));
     service = await import('@/server/leagues/trades/tradeService');
     readModel = await import('@/server/leagues/trades/tradeReadModel');
   }, 60_000);
 
   afterAll(async () => {
     vi.doUnmock('@/lib/prisma');
+    vi.doUnmock('@/server/leagues/playerLockout');
     if (prisma) await deleteFixtures();
     await prisma?.$disconnect();
   });
 
   beforeEach(async () => {
     await resetTradeState();
+    lockout.findLockedOutPlayers.mockReset().mockResolvedValue(unlocked());
+  });
+
+  it('refuses a proposal that includes a player whose AFL game has started this round', async () => {
+    lockout.findLockedOutPlayers.mockResolvedValue(locked(ids.secondPlayer));
+
+    await expect(createTrade()).rejects.toMatchObject({
+      code: 'PLAYER_LOCKED',
+      status: 409,
+      message:
+        "A player whose AFL game has started this round can't be dropped or traded until the round ends.",
+    });
+    expect(lockout.findLockedOutPlayers).toHaveBeenCalledWith({
+      leagueId: ids.league,
+      playerIds: [ids.firstPlayer, ids.secondPlayer],
+      now,
+    });
+    await expect(prisma.leagueTradeThread.count({ where: { leagueId: ids.league } })).resolves.toBe(
+      0
+    );
+    await expect(
+      prisma.leagueTradeCommand.count({ where: { leagueId: ids.league } })
+    ).resolves.toBe(0);
+  });
+
+  it('pauses proposals with 503 when AFL match times cannot be read', async () => {
+    lockout.findLockedOutPlayers.mockResolvedValue({
+      ok: false,
+      code: 'LOCK_TIMING_UNAVAILABLE',
+      reason: 'Official AFL match times are unavailable right now.',
+    });
+
+    await expect(createTrade()).rejects.toMatchObject({
+      code: 'LOCK_TIMING_UNAVAILABLE',
+      status: 503,
+    });
+  });
+
+  it('refuses acceptance and counters once a traded player is locked, and keeps the offer open', async () => {
+    const created = await createTrade();
+    lockout.findLockedOutPlayers.mockResolvedValue(locked(ids.firstPlayer));
+
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.secondUser,
+        created.threadId,
+        { action: 'accept', expectedVersion: 0, idempotencyKey: 'accept-locked-0001' },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'PLAYER_LOCKED', status: 409 });
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.secondUser,
+        created.threadId,
+        {
+          action: 'counter',
+          expectedVersion: 0,
+          sendingPlayerIds: [ids.secondPlayer],
+          receivingPlayerIds: [ids.firstPlayer],
+          idempotencyKey: 'counter-locked-0001',
+        },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'PLAYER_LOCKED', status: 409 });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'OPEN', version: 0 });
+
+    lockout.findLockedOutPlayers.mockResolvedValue(unlocked());
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.secondUser,
+        created.threadId,
+        { action: 'accept', expectedVersion: 0, idempotencyKey: 'accept-locked-0002' },
+        now
+      )
+    ).resolves.toMatchObject({ status: 'COMPLETED' });
+  });
+
+  it('refuses commissioner approval while a traded player is locked', async () => {
+    await setReviewMode('ADMIN');
+    const created = await createTrade();
+    const accepted = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      { action: 'accept', expectedVersion: created.version, idempotencyKey: 'accept-lock-adm1' },
+      now
+    );
+    lockout.findLockedOutPlayers.mockResolvedValue(locked(ids.secondPlayer));
+
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.commissionerUser,
+        created.threadId,
+        {
+          action: 'approve',
+          expectedVersion: accepted.version,
+          idempotencyKey: 'approve-lock-adm1',
+        },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'PLAYER_LOCKED', status: 409 });
+    await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.secondMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'PENDING_ADMIN_REVIEW' });
+  });
+
+  it('holds a due VETO trade while a traded player is locked, then completes it', async () => {
+    await setReviewMode('VETO', 3);
+    const created = await createTrade();
+    await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      { action: 'accept', expectedVersion: created.version, idempotencyKey: 'accept-lock-veto' },
+      now
+    );
+    const due = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+    lockout.findLockedOutPlayers.mockResolvedValue(locked(ids.firstPlayer));
+
+    await expect(service.processDueLeagueTrades(due)).resolves.toBe(0);
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'PENDING_VETO_REVIEW' });
+
+    lockout.findLockedOutPlayers.mockResolvedValue(unlocked());
+    await expect(service.processDueLeagueTrades(due)).resolves.toBe(1);
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.secondMember);
   });
 
   it('refuses a proposal until the league draft is complete', async () => {

@@ -124,6 +124,14 @@ HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and tra
 league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
 cancelling, and commissioner review are not transactions and stay available.
 
+Rolling lockout: once a player's AFL game has started in the round in progress, he cannot be dropped
+or traded until that round ends. `src/server/leagues/playerLockout.ts` decides it from the official
+match times lineups use; a player whose game time is unknown is locked too. A direct drop, a trade
+proposal, a counter, an acceptance, and a commissioner approval that include him are refused with
+HTTP 409 and code `PLAYER_LOCKED`; a veto-review trade that falls due stays in review and completes
+at a later run once the round ends. If match times can't be read, these answer HTTP 503
+`LOCK_TIMING_UNAVAILABLE` instead of guessing.
+
 ## Data boundaries
 
 Prisma owns protected fantasy state. Firestore match-stat documents are external scoring evidence and

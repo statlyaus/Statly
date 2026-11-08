@@ -6,6 +6,7 @@ import { Prisma, type TradeReviewMode } from '@prisma/client';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { findLockedOutPlayers, PLAYER_LOCKED_REASON } from '@/server/leagues/playerLockout';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -95,6 +96,11 @@ export async function createLeagueTrade(
   const access = await requireTradeAccess(leagueId, userId);
   await enforceTransactionWindow(leagueId);
   enforceTradeDeadline(access, now);
+  await enforcePlayerLockout(
+    leagueId,
+    [...canonicalInput.sendingPlayerIds, ...canonicalInput.receivingPlayerIds],
+    now
+  );
 
   return executeIdempotentTradeCommand(
     access,
@@ -129,6 +135,13 @@ export async function executeLeagueTradeAction(
   const access = await requireTradeAccess(leagueId, userId);
   if (canonicalInput.action === 'accept' || canonicalInput.action === 'counter') {
     await enforceTransactionWindow(leagueId);
+  }
+  if (canonicalInput.action === 'counter') {
+    await enforcePlayerLockout(
+      leagueId,
+      [...canonicalInput.sendingPlayerIds, ...canonicalInput.receivingPlayerIds],
+      now
+    );
   }
 
   return executeIdempotentTradeCommand(
@@ -369,6 +382,8 @@ async function executeActionInTransaction(
         thread.currentOffer.reviewHours
       );
       if (transition.shouldFinalize) return finalizeTrade(tx, thread, access.memberId, now);
+      // finalizeTrade checks the lockout itself; a trade going to review is checked here.
+      await enforcePlayerLockout(thread.leagueId, offerPlayerIds(thread), now);
 
       await claimThreadVersion(tx, thread.id, thread.version, 'OPEN', {
         status: transition.threadStatus,
@@ -532,6 +547,8 @@ async function finalizeTrade(
   }
 
   const access = await requireTradeAccessByMember(tx, thread.leagueId, actorMemberId, thread);
+  // A due trade whose player is locked is left in review and finalized by a later run.
+  await enforcePlayerLockout(thread.leagueId, offerPlayerIds(thread), now);
 
   const firstPlayerIds = thread.currentOffer.players
     .filter((player) => player.fromMemberId === thread.memberOneId)
@@ -963,6 +980,23 @@ async function requireTradeAccessByMember(
 async function enforceTransactionWindow(leagueId: string): Promise<void> {
   const window = await getTransactionWindow(leagueId);
   if (!window.open) throw new TradeServiceError(window.code, window.reason, 409);
+}
+
+// Rolling lockout: a player whose AFL game has started this round can't be traded until it ends.
+async function enforcePlayerLockout(
+  leagueId: string,
+  playerIds: readonly string[],
+  now: Date
+): Promise<void> {
+  const lockout = await findLockedOutPlayers({ leagueId, playerIds, now });
+  if (!lockout.ok) throw new TradeServiceError(lockout.code, lockout.reason, 503);
+  if (playerIds.some((playerId) => lockout.lockedPlayerIds.has(playerId))) {
+    throw new TradeServiceError('PLAYER_LOCKED', PLAYER_LOCKED_REASON, 409);
+  }
+}
+
+function offerPlayerIds(thread: LoadedTrade): string[] {
+  return thread.currentOffer.players.map((player) => player.playerId);
 }
 
 function enforceTradeDeadline(access: TradeAccess, now: Date): void {
