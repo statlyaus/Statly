@@ -9,6 +9,14 @@ const DRAFT_NOT_COMPLETE = {
 };
 
 const mocks = vi.hoisted(() => ({
+  WaiverClaimStoreError: class extends Error {
+    constructor(
+      readonly code: string,
+      message: string
+    ) {
+      super(message);
+    }
+  },
   getAuthenticatedUserId: vi.fn(),
   getLeagueMembershipAccess: vi.fn(),
   getTransactionWindow: vi.fn(),
@@ -40,7 +48,7 @@ vi.mock('@/server/waivers/WaiverProcessingService', () => ({
     submitClaim = mocks.submitClaim;
     loadWaiverSettings = mocks.loadWaiverSettings;
   },
-  WaiverClaimStoreError: class extends Error {},
+  WaiverClaimStoreError: mocks.WaiverClaimStoreError,
 }));
 
 function jsonRequest(url: string, body: unknown): NextRequest {
@@ -93,5 +101,48 @@ describe('transactions open only after the draft', () => {
 
     expect(response.status).toBe(403);
     expect(mocks.getTransactionWindow).not.toHaveBeenCalled();
+  });
+});
+
+describe('waiver claim refusals once transactions are open', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAuthenticatedUserId.mockResolvedValue('user-1');
+    mocks.getLeagueMembershipAccess.mockResolvedValue({ isMember: true });
+    mocks.getTransactionWindow.mockResolvedValue({ open: true });
+    mocks.resolveCanonicalPlayerId.mockResolvedValue('player-1');
+    mocks.prisma.player.findMany.mockResolvedValue([
+      { id: 'player-1', name: 'Player One', club: 'CARL', position: 'MID' },
+    ]);
+    mocks.prisma.leagueRosterPlayer.findFirst.mockResolvedValue(null);
+    mocks.loadWaiverSettings.mockResolvedValue({ system: 'ROLLING' });
+  });
+
+  it.each([
+    [new Error('PLAYER_OWNED'), 409, 'Player already owned'],
+    [new mocks.WaiverClaimStoreError('INSUFFICIENT_FAAB', 'x'), 400, 'Insufficient FAAB remaining'],
+    [new Error('INSUFFICIENT_FAAB'), 400, 'Insufficient FAAB remaining'],
+    [new mocks.WaiverClaimStoreError('TEAM_NOT_FOUND', 'x'), 403, 'Team not found'],
+    [
+      new mocks.WaiverClaimStoreError('FAAB_BALANCE_UNAVAILABLE', 'x'),
+      400,
+      'FAAB balance unavailable',
+    ],
+    [new Error('TEAM_NOT_FOUND'), 500, 'Internal Server Error'],
+    [new Error('boom'), 500, 'Internal Server Error'],
+  ])('answers %s with %i', async (error, status, message) => {
+    mocks.submitClaim.mockRejectedValue(error);
+    const { POST } = await import('@/app/api/leagues/[id]/waivers/submit/route');
+
+    const response = await POST(
+      jsonRequest('http://localhost/api/leagues/league-1/waivers/submit', {
+        teamId: 'team-1',
+        playerId: 'player-1',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(status);
+    await expect(response.json()).resolves.toEqual({ error: message });
   });
 });
