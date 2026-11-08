@@ -346,6 +346,19 @@ it only after checking the affected games' box scores against the stored rows, b
 feed can be one off its own box scores. Both scripts refuse a non-local `DATABASE_URL` without
 `--allow-remote`, and treat a remote database as production for the licensing guard.
 
+`Scripts/dev/curl-admin.sh cron /api/cron/scoring` runs round scoring once, as
+`netlify/functions/cron-scoring.mts` does every hour (`src/server/leagues/roundScoringSchedule.ts`).
+For every league with a published competition it recalculates each round that has an official start
+time in the past and is not `FINAL` or a no-matchup week, through the same
+`recalculateLeagueRoundMatchups` the commissioner route uses, never forcing finalization. A round
+becomes `FINAL`, with standings and finals seeding updated, only when that function decides it: every
+AFL match of the round is final and every matchup with two teams was scored. A round with no official
+start time is left pending. Leagues are scored one at a time; a league whose round throws or is refused
+(`UNSCORED_MATCHUP_IN_FINAL_ROUND`, see `docs/runbooks/unscored-finalized-matchups.md`) stops at that
+round, is logged at error level and listed in `failedLeagueIds`, and the response is 500, while the
+other leagues are still scored. There is no per-league lease: rerunning rewrites the same scores, and
+two overlapping runs are not serialized.
+
 Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
 succeed. The admin and user contracts are enforced by
 `tests/unit/adminControlPlaneAuthorization.test.ts` and

@@ -33,6 +33,7 @@ import {
   saveMemberLineup,
   synchronizeLineupPlayerLocks,
 } from '@/server/leagues/lineupService';
+import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 
 async function resolveRoundNumber(leagueId: string, round: string): Promise<number | null> {
@@ -114,7 +115,12 @@ export async function GET(
   const carriedLineup = lineup
     ? null
     : await prisma.leagueLineup.findFirst({
-        where: { leagueId: id, memberId, round: { lt: roundNumber } },
+        where: {
+          leagueId: id,
+          seasonId: activeSeasonIdOf(league),
+          memberId,
+          round: { lt: roundNumber },
+        },
         include: {
           players: {
             include: { player: true },
@@ -139,6 +145,7 @@ export async function GET(
     rules.lockPolicy === 'INDIVIDUAL_GAME_START'
       ? await loadRoundPlayerGameStarts({
           aflRound: effectiveContext?.aflRound ?? null,
+          season: effectiveContext?.seasonYear ?? undefined,
           players: [...timingPlayers.values()],
         })
       : {
@@ -186,6 +193,7 @@ export async function GET(
   // Fixture context for every squad row: AFL opponent, home or away, start time and byes.
   const fixtureResult = await loadRoundPlayerFixtures({
     aflRound: effectiveContext?.aflRound ?? null,
+    season: effectiveContext?.seasonYear ?? undefined,
     players: [...timingPlayers.values()],
   }).catch(() => ({ ok: false as const }));
   const fixturesByPlayerId = fixtureResult.ok ? fixtureResult.fixturesByPlayerId : new Map();

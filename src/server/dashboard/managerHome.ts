@@ -3,6 +3,7 @@ import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
 import { normalizeLineupSlots, totalActiveLineupSlots } from '@/server/leagues/lineupSettings';
 import { parseStoredCategoryRows } from '@/server/leagues/matchupReadModel';
 import { isActivePrismaMembership } from '@/server/leagues/membership';
@@ -179,6 +180,7 @@ export async function loadManagerHome(
             id: true,
             name: true,
             categoriesJson: true,
+            activeSeasonId: true,
             settings: {
               select: { maxTeams: true, timeZone: true, startAt: true, lineupSlotsJson: true },
             },
@@ -406,8 +408,9 @@ export async function loadManagerHome(
         if (nextRound) {
           const saved = await client.leagueLineup.findUnique({
             where: {
-              leagueId_memberId_round: {
+              leagueId_seasonId_memberId_round: {
                 leagueId: league.id,
+                seasonId: activeSeasonIdOf(league),
                 memberId: membership.id,
                 round: nextRound.round,
               },

@@ -12,6 +12,7 @@ import {
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
 
+import { activeSeasonIdOf } from './activeSeason';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { normalizeCompetitionRules } from './competitionRules';
 import { synchronizeFinalsFixtures } from './finalsService';
@@ -740,7 +741,12 @@ export async function loadLeagueMatchupReadModel({
   const lineups =
     visibleMemberIds.length > 0
       ? await prisma.leagueLineup.findMany({
-          where: { leagueId, round: activeRound, memberId: { in: visibleMemberIds } },
+          where: {
+            leagueId,
+            seasonId: activeSeasonIdOf(settings.league),
+            round: activeRound,
+            memberId: { in: visibleMemberIds },
+          },
           include: {
             players: {
               include: { player: true },
@@ -819,6 +825,7 @@ export async function recalculateLeagueRoundMatchups({
   if (!settings) return null;
 
   const fixtureVersion = settings.league.settings.competitionRulesVersion;
+  const seasonId = activeSeasonIdOf(settings.league);
   const [competitionRound, matchups, initialLineups, members] = await Promise.all([
     fixtureVersion > 0
       ? prisma.leagueCompetitionRound.findUnique({
@@ -828,7 +835,7 @@ export async function recalculateLeagueRoundMatchups({
       : Promise.resolve(null),
     prisma.leagueMatchup.findMany({ where: { leagueId, round, fixtureVersion } }),
     prisma.leagueLineup.findMany({
-      where: { leagueId, round },
+      where: { leagueId, seasonId, round },
       include: { players: { include: { player: true } } },
     }),
     prisma.leagueMember.findMany({
@@ -902,7 +909,7 @@ export async function recalculateLeagueRoundMatchups({
   const lineups =
     carriedCount > 0
       ? await prisma.leagueLineup.findMany({
-          where: { leagueId, round },
+          where: { leagueId, seasonId, round },
           include: { players: { include: { player: true } } },
         })
       : initialLineups;

@@ -665,8 +665,8 @@ model LeagueMatchup {
 model LeagueLineup {
   id        String    @id @default(cuid())
   leagueId  String
-  /// Season scope (2026-11-08). Nullable until the lineup readers and writers carry it.
-  seasonId  String?
+  /// Season scope (2026-11-08): the league's active season when the lineup was created.
+  seasonId  String
   memberId  String
   round     Int
   lockedAt  DateTime?
@@ -674,13 +674,12 @@ model LeagueLineup {
   updatedAt DateTime  @updatedAt
 
   league   League                @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season   LeagueSeason?         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season   LeagueSeason          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   member   LeagueMember          @relation(fields: [memberId], references: [id], onDelete: Cascade)
   players  LeagueLineupPlayer[]
   autosubs LeagueLineupAutosub[]
 
-  @@unique([leagueId, memberId, round])
-  @@index([leagueId, round])
+  @@unique([leagueId, seasonId, memberId, round])
   @@index([leagueId, seasonId, round])
   @@index([memberId])
 }

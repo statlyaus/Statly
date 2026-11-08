@@ -52,6 +52,7 @@ function buildClient({
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
+        activeSeasonId: 'season-1',
         categoriesJson: null,
         settings: {
           lineupSlotsJson: lineupSlots,
@@ -146,6 +147,33 @@ describe('ensureDefaultLineups', () => {
     expect(createdPlayers(client).players.create).toHaveLength(5);
   });
 
+  it('reads, carries and writes lineups of the active season only', async () => {
+    const client = buildClient({
+      previousByMember: {
+        'member-1': { round: 3, players: [{ playerId: 'mid', slot: 'MID', slotIndex: 0 }] },
+      },
+      roster: [{ memberId: 'member-1', playerId: 'mid', position: 'MID' }],
+    });
+
+    await ensureDefaultLineups({
+      leagueId: 'league-1',
+      round: 4,
+      memberIds: ['member-1'],
+      client: client as never,
+    });
+
+    const season = { leagueId: 'league-1', seasonId: 'season-1' };
+    expect(client.leagueLineup.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining(season) })
+    );
+    expect(client.leagueLineup.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining(season) })
+    );
+    expect(client.leagueLineup.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ ...season, memberId: 'member-1', round: 4 }),
+    });
+  });
+
   it('builds a lineup by position for a team that never set one, leaving out byes and injuries', async () => {
     mocks.loadRoundPlayerFixtures.mockResolvedValue({
       ok: true,
@@ -191,6 +219,28 @@ describe('ensureDefaultLineups', () => {
 
     expect(created).toBe(0);
     expect(client.leagueLineup.create).not.toHaveBeenCalled();
+  });
+
+  it('reads fixtures for the round season, not the calendar year', async () => {
+    mocks.loadLineupRoundSummaries.mockResolvedValue([
+      { round: 2, aflRound: 22, seasonYear: 2025 },
+    ]);
+    const client = buildClient({
+      lineupSlots: { DEF: 0, MID: 1, RUC: 0, FWD: 0, UTIL: 0 },
+      interchangeSlots: 0,
+      roster: [{ memberId: 'member-1', playerId: 'mid', position: 'MID' }],
+    });
+
+    await ensureDefaultLineups({
+      leagueId: 'league-1',
+      round: 2,
+      memberIds: ['member-1'],
+      client: client as never,
+    });
+
+    expect(mocks.loadRoundPlayerFixtures).toHaveBeenCalledWith(
+      expect.objectContaining({ aflRound: 22, season: 2025 })
+    );
   });
 
   it('still builds a default when the fixture and player feeds fail', async () => {

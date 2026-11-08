@@ -54,7 +54,11 @@ async function hydrateOfficialRoundTimings(
 }
 
 export type PublishCompetitionResult =
-  { ok: true; fixtureVersion: number; roundCount: number } | { ok: false; errors: string[] };
+  | { ok: true; fixtureVersion: number; roundCount: number }
+  | { ok: false; errors: string[]; code?: 'COMPETITION_ALREADY_PUBLISHED' };
+
+const PUBLISHED_COMPETITION_RULES_LOCKED_MESSAGE =
+  'Published competition rules cannot be changed. Use a commissioner override instead.';
 
 class CompetitionPublicationConflictError extends Error {}
 
@@ -134,8 +138,18 @@ export async function publishCompetition({
     },
   });
   if (!league?.settings) return { ok: false, errors: ['League settings were not found.'] };
+  // Publication happens once, from setup. Publishing again would delete a live season's scores,
+  // standings and lineups; later changes go through commissioner overrides.
+  if (league.settings.competitionStatus !== 'SETUP') {
+    return {
+      ok: false,
+      code: 'COMPETITION_ALREADY_PUBLISHED',
+      errors: [PUBLISHED_COMPETITION_RULES_LOCKED_MESSAGE],
+    };
+  }
   if (!league.activeSeasonId)
     return { ok: false, errors: ['An active league season is required.'] };
+  const seasonId = league.activeSeasonId;
 
   const categories = normalizeFantasyCategoryKeys(league.categoriesJson, ['goals']);
   const effectiveRules =
@@ -183,6 +197,7 @@ export async function publishCompetition({
         where: {
           id: league.settingsId,
           competitionRulesVersion: league.settings.competitionRulesVersion,
+          competitionStatus: 'SETUP',
         },
         data: { competitionRulesVersion: { increment: 1 } },
       });
@@ -190,12 +205,16 @@ export async function publishCompetition({
         throw new CompetitionPublicationConflictError();
       }
 
-      // Republishing resets only derived competition data. Delete results provide
-      // bounded audit evidence without retaining arbitrary row snapshots.
+      // Clear any derived competition data left before publication (for example setup lineups).
+      // Delete results provide bounded audit evidence without retaining arbitrary row snapshots.
       const resetSummary = {
         matchupScores: (await tx.leagueMatchupScore.deleteMany({ where: { leagueId } })).count,
         standings: (await tx.leagueStanding.deleteMany({ where: { leagueId } })).count,
-        lineups: (await tx.leagueLineup.deleteMany({ where: { leagueId } })).count,
+        lineups: (
+          await tx.leagueLineup.deleteMany({
+            where: { leagueId, seasonId },
+          })
+        ).count,
         matchups: (await tx.leagueMatchup.deleteMany({ where: { leagueId } })).count,
         competitionRounds: (await tx.leagueCompetitionRound.deleteMany({ where: { leagueId } }))
           .count,
