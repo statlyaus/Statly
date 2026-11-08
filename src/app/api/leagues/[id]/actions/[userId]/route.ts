@@ -1,8 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
@@ -121,22 +119,34 @@ export async function POST(
       return errorResponse(validationResult.error || 'Invalid action', 400);
     }
 
-    // Dropped players leave the roster now, then stay on waivers before free agency.
+    // Dropped players leave the roster now, then stay on waivers before free agency. The roster
+    // delete and the waiver hold commit together, so a reported drop always has its hold.
     const processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const playerId = String(canonicalDetails.playerId);
 
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await prisma.teamAction.create({
-      data: {
-        id: actionId,
-        leagueId,
-        seasonId: await requireActiveSeasonId(prisma, leagueId),
-        memberId: member.id,
-        actionType: 'DROP_PLAYER',
-        // The details came from the parsed JSON request body, so they are JSON values.
-        details: canonicalDetails as Prisma.InputJsonObject,
-        processingAt,
-      },
+    const dropped = await prisma.$transaction(async (tx) => {
+      const removed = await tx.leagueRosterPlayer.deleteMany({
+        where: { leagueId, memberId: member.id, playerId },
+      });
+      if (removed.count === 0) return false;
+      await tx.teamAction.create({
+        data: {
+          id: actionId,
+          leagueId,
+          seasonId: await requireActiveSeasonId(tx, leagueId),
+          memberId: member.id,
+          actionType: 'DROP_PLAYER',
+          // The details came from the parsed JSON request body, so they are JSON values.
+          details: canonicalDetails as Prisma.InputJsonObject,
+          processingAt,
+        },
+      });
+      return true;
     });
+    if (!dropped) {
+      return errorResponse('Player is no longer in your roster', 409);
+    }
 
     const action = {
       id: actionId,
@@ -150,7 +160,7 @@ export async function POST(
       status: 'PENDING',
     };
 
-    await processDropPlayerAction(action.id);
+    await projectCommittedDrop({ actionId, leagueId, memberId: member.id, playerId });
 
     logger.info('Created team action', {
       leagueId,
@@ -262,34 +272,20 @@ async function validateDropPlayerAction(
   return { valid: true };
 }
 
-async function processDropPlayerAction(actionId: string): Promise<void> {
+/**
+ * Runs after the drop and its waiver hold have committed. Projections are best effort: a failure
+ * is logged and never changes or undoes the committed drop.
+ */
+async function projectCommittedDrop(drop: {
+  actionId: string;
+  leagueId: string;
+  memberId: string;
+  playerId: string;
+}): Promise<void> {
   try {
-    const action = await prisma.teamAction.findUnique({ where: { id: actionId } });
-    if (!action || action.status !== 'PENDING' || action.actionType !== 'DROP_PLAYER') {
-      return;
-    }
-
-    const details =
-      action.details && typeof action.details === 'object' && !Array.isArray(action.details)
-        ? action.details
-        : {};
-    const playerId = typeof details.playerId === 'string' ? details.playerId : null;
-    if (!playerId) {
-      throw new Error('Drop action missing playerId');
-    }
-
-    const { leagueId, memberId } = action;
-
-    await prisma.leagueRosterPlayer.deleteMany({
-      where: { leagueId, memberId, playerId },
-    });
+    const { actionId, leagueId, memberId, playerId } = drop;
 
     await new WaiverAvailabilityProjectionService().projectLeague({ leagueId });
-
-    await Promise.allSettled([
-      revalidateTag(tags.league(leagueId), { expire: 0 }),
-      revalidateTag(tags.waivers(leagueId), { expire: 0 }),
-    ]);
 
     logger.info('Processed drop player action into pending waiver hold', {
       actionId,
@@ -298,14 +294,10 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
       playerId,
     });
   } catch (error) {
-    logger.error('Failed to process drop player action', {
-      actionId,
+    logger.warn('Drop committed but its availability projection failed', {
+      actionId: drop.actionId,
+      leagueId: drop.leagueId,
       error: error instanceof Error ? error.message : String(error),
-    });
-
-    await prisma.teamAction.update({
-      where: { id: actionId },
-      data: { status: 'REJECTED', processedAt: new Date() },
     });
   }
 }

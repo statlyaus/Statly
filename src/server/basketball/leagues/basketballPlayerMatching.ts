@@ -78,6 +78,7 @@ const STATUS_TAGS = new Set([
   'P',
   'NA',
   'SUSP',
+  'SSPD',
   'OFS',
   'IR',
   'IL',
@@ -128,24 +129,53 @@ const TEAM_CODES = new Set(
   ].map((code) => code.toLowerCase())
 );
 const SEPARATORS = new Set(['-', '–', '—', '|', '•']);
-const JERSEY_NUMBER = /^#?\d{1,2}$/;
+// Game-time and opponent words in an Opp cell: "7:30 pm", "vs LAL", "@Bos".
+const SCHEDULE_WORDS = new Set(['am', 'pm', 'vs', 'v']);
+// Words that make up a rosters page's headings, column headers and acquisition cells. A line made
+// only of these, numbers, months and weekdays holds no player.
+const PAGE_WORDS = new Set([
+  ...['rosters', 'roster', 'starters', 'bench', 'totals', 'total', 'week', 'pos', 'player'],
+  ...['players', 'opp', 'status', 'slot', 'acq', 'draft', 'trade', 'fa', 'wa', 'add'],
+  ...['min', 'fgma', 'fg', 'ftma', 'ft', '3ptm', 'pts', 'reb', 'ast', 'st', 'stl', 'blk', 'to'],
+  ...['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'],
+  ...['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+]);
+// Yahoo's player-note link text, copied along with the name.
+const NOTE_LABELS = /\b(?:no new player notes|new player notes?|player notes?)\b/gi;
+
+/** Jersey numbers, ranks, minutes, made/attempted, percentages, records: digits and no letters. */
+const isNumber = (token: string) => /\d/.test(token) && !/\p{L}/u.test(token);
 
 function bare(token: string): string {
-  return token.replace(/^[([]+|[)\],;]+$/g, '');
+  return token.replace(/^[([@]+|[)\],;*]+$/g, '');
 }
 
 function isLeadingClutter(token: string): boolean {
   return (
-    SLOT_LABELS.has(token) ||
-    POSITION_LIST.test(token) ||
-    SEPARATORS.has(token) ||
-    JERSEY_NUMBER.test(token)
+    SLOT_LABELS.has(token) || POSITION_LIST.test(token) || SEPARATORS.has(token) || isNumber(token)
   );
 }
 
 function isTrailingClutter(token: string): boolean {
   const value = bare(token);
-  return isLeadingClutter(value) || STATUS_TAGS.has(value) || TEAM_CODES.has(value.toLowerCase());
+  return (
+    isLeadingClutter(value) ||
+    STATUS_TAGS.has(value) ||
+    TEAM_CODES.has(value.toLowerCase()) ||
+    SCHEDULE_WORDS.has(value.toLowerCase())
+  );
+}
+
+function isPageText(name: string): boolean {
+  if ((name.match(/\p{L}/gu) ?? []).length < 2) return true;
+  return name
+    .split(' ')
+    .every(
+      (token) =>
+        isNumber(token) ||
+        isTrailingClutter(token) ||
+        PAGE_WORDS.has(token.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    );
 }
 
 function cleanCell(cell: string): string {
@@ -161,12 +191,15 @@ const hasTwoWords = (text: string) =>
 
 /**
  * The player name in one pasted roster line, or '' when the line holds no name. Only strips slot
- * labels, jersey numbers, positions, team codes and status tags from the ends of the name, never from
- * its middle. A tab-separated row (a copied table row) yields its first cell that reads as a name.
+ * labels, numbers, positions, team codes, status tags and game times from the ends of the name,
+ * never from its middle. A tab-separated row (a copied table row) yields its first cell that reads
+ * as a name. Lines of a whole rosters page that are only headings, column headers, stats or dates
+ * give ''; team names are kept (they find no player).
  */
 export function cleanPastedLine(line: string): string {
-  const cells = line.split('\t').map(cleanCell).filter(Boolean);
-  return cells.find(hasTwoWords) ?? cells[0] ?? '';
+  const cells = line.replace(NOTE_LABELS, ' ').split('\t').map(cleanCell).filter(Boolean);
+  const name = cells.find(hasTwoWords) ?? cells[0] ?? '';
+  return isPageText(name) ? '' : name;
 }
 
 function byActiveThenName<P extends MatchablePlayer>(players: P[]): P[] {

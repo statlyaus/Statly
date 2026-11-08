@@ -112,6 +112,7 @@ describe('daily waiver run', () => {
     await expect(processDueLeagueWaivers(SEVEN_AM, service)).resolves.toEqual({
       ran: false,
       leagues: [],
+      failedLeagueIds: [],
     });
     expect(await statusOf(PLAYERS[0])).toBe('PENDING');
   });
@@ -120,6 +121,7 @@ describe('daily waiver run', () => {
     const run = await processDueLeagueWaivers(SIX_AM, service);
 
     expect(run.ran).toBe(true);
+    expect(run.failedLeagueIds).toEqual([]);
     expect(run.leagues.find((league) => league.leagueId === LEAGUE)).toMatchObject({
       processed: 1,
     });

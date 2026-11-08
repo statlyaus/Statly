@@ -42,7 +42,9 @@ export default function DraftStatusBanner({
     SCHEDULED: {
       label: 'Scheduled',
       title: 'Draft room is ready',
-      description: 'Participants can join now. Start manually or wait for the scheduled launch.',
+      description: onStartDraft
+        ? 'Participants can join now. Start manually or wait for the scheduled launch.'
+        : 'Participants can join now. The commissioner can start early, or it starts at the scheduled time.',
       tone: 'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -221,6 +221,28 @@ describe('ensureDefaultLineups', () => {
     expect(client.leagueLineup.create).not.toHaveBeenCalled();
   });
 
+  it('reads fixtures for the round season, not the calendar year', async () => {
+    mocks.loadLineupRoundSummaries.mockResolvedValue([
+      { round: 2, aflRound: 22, seasonYear: 2025 },
+    ]);
+    const client = buildClient({
+      lineupSlots: { DEF: 0, MID: 1, RUC: 0, FWD: 0, UTIL: 0 },
+      interchangeSlots: 0,
+      roster: [{ memberId: 'member-1', playerId: 'mid', position: 'MID' }],
+    });
+
+    await ensureDefaultLineups({
+      leagueId: 'league-1',
+      round: 2,
+      memberIds: ['member-1'],
+      client: client as never,
+    });
+
+    expect(mocks.loadRoundPlayerFixtures).toHaveBeenCalledWith(
+      expect.objectContaining({ aflRound: 22, season: 2025 })
+    );
+  });
+
   it('still builds a default when the fixture and player feeds fail', async () => {
     mocks.loadLineupRoundSummaries.mockRejectedValue(new Error('down'));
     mocks.loadRoundPlayerFixtures.mockRejectedValue(new Error('down'));

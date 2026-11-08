@@ -15,7 +15,9 @@ describe('GET /api/cron/prune-lobby authorization', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', '');
 
-    const response = await GET(new NextRequest(`${URL_BASE}?token=anything`));
+    const response = await GET(
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer anything' } })
+    );
 
     expect(response.status).toBe(401);
   });
@@ -24,7 +26,9 @@ describe('GET /api/cron/prune-lobby authorization', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', 'cron-secret');
 
-    const response = await GET(new NextRequest(`${URL_BASE}?token=wrong-secret`));
+    const response = await GET(
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer wrong-secret' } })
+    );
 
     expect(response.status).toBe(401);
   });
@@ -33,7 +37,9 @@ describe('GET /api/cron/prune-lobby authorization', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', 'cron-secret');
 
-    const response = await GET(new NextRequest(`${URL_BASE}?token=cron-secret`));
+    const response = await GET(
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer cron-secret' } })
+    );
 
     expect(response.status).toBe(200);
   });

@@ -23,6 +23,11 @@ import {
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import {
+  isSupportedTimeZone,
+  validateLeagueCategories,
+  validateLeagueName,
+} from '@/server/leagues/createLeagueContract';
 import { normalizeLineupSlots } from '@/server/leagues/lineupSettings';
 import type { CategoryDirection, LeagueScoringMode, TradeReview } from '@/types/leagues';
 import {
@@ -450,19 +455,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const nameInput =
         getNestedValue(leagueInput, ['name', 'leagueName']) ??
         getNestedValue(body, ['name', 'leagueName']);
-      const nextName = typeof nameInput === 'string' ? nameInput.trim() : undefined;
-      if (nextName !== undefined && nextName.length < 3) {
+      const nameResult = typeof nameInput === 'string' ? validateLeagueName(nameInput) : undefined;
+      if (nameResult && !nameResult.ok) {
+        return NextResponse.json({ error: nameResult.error }, { status: 400 });
+      }
+      const nextName = nameResult?.value;
+
+      const categoriesInput = scoringInput.categories ?? body.categories;
+      const categoriesResult =
+        categoriesInput === undefined ? undefined : validateLeagueCategories(categoriesInput);
+      if (categoriesResult && !categoriesResult.ok) {
+        return NextResponse.json({ error: categoriesResult.error }, { status: 400 });
+      }
+      const categories =
+        categoriesResult?.value ?? normalizeLeagueCategories(prismaLeague.categoriesJson);
+
+      const timeZoneInput = draftInput.timeZone ?? body.timeZone;
+      if (typeof timeZoneInput === 'string' && !isSupportedTimeZone(timeZoneInput)) {
         return NextResponse.json(
-          { error: 'League name must be at least 3 characters' },
+          { error: 'Time zone must be a valid IANA time zone, such as Australia/Melbourne' },
           { status: 400 }
         );
       }
-
-      const categoriesInput = scoringInput.categories ?? body.categories;
-      const categories =
-        categoriesInput === undefined
-          ? normalizeLeagueCategories(prismaLeague.categoriesJson)
-          : normalizeLeagueCategories(categoriesInput);
       const scoringMode = normalizeLeagueScoringMode(
         scoringInput.scoringMode ?? body.scoringMode,
         prismaLeague.settings.scoringMode as LeagueScoringMode
@@ -565,9 +579,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         prismaLeague.settings.waiverRule
       );
       const timeZone =
-        typeof (draftInput.timeZone ?? body.timeZone) === 'string'
-          ? String(draftInput.timeZone ?? body.timeZone)
-          : prismaLeague.settings.timeZone;
+        typeof timeZoneInput === 'string' ? timeZoneInput.trim() : prismaLeague.settings.timeZone;
 
       const nextTradeReview =
         tradeReview ?? normalizeTradeReview(prismaLeague.settings.tradeReviewMode);

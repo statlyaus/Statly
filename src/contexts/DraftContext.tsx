@@ -1602,7 +1602,13 @@ function useDraftSocket(opts: {
       });
     };
 
-    const onConnect = requestV2Join;
+    // A v1 fallback lasts for one connection. A join that was only slow (a cold start or a busy
+    // database) must not keep the tab on the v1 timestamp protocol, so each new connection asks
+    // for v2 again; a server that answers with a fallback simply grants v1 again.
+    const onConnect = () => {
+      v1Owned = false;
+      requestV2Join();
+    };
     const onDisconnect = () => setStatus('disconnected');
     const onReconnecting = () => setStatus('reconnecting');
 

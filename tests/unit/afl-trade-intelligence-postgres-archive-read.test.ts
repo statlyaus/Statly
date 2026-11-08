@@ -303,6 +303,20 @@ describe('PostgreSQL AFL draft and trade archive reads', () => {
     expect(archiveRepository.listAllRecords).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a failed archive load instead of caching the failure for the release', async () => {
+    const archiveRepository = archiveReader();
+    archiveRepository.listAllRecords.mockRejectedValueOnce(new Error('connection reset'));
+    const repository = createPostgresDraftTradeReadRepository({
+      archiveSelector: activeSelector(),
+      archiveRepository,
+    });
+
+    await expect(repository.listYears()).rejects.toThrow('connection reset');
+    await expect(repository.listYears()).resolves.toEqual([2025]);
+    await expect(repository.getById('trade-1')).resolves.not.toBeNull();
+    expect(archiveRepository.listAllRecords).toHaveBeenCalledTimes(2);
+  });
+
   it('searches one captured release instead of combining independently captured years', async () => {
     const archiveRepository = archiveReader();
     const archiveSelector = activeSelector();

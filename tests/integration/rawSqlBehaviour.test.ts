@@ -284,7 +284,7 @@ describe('team actions route', () => {
     });
   });
 
-  it('removes a dropped player at once and rejects the action when processing fails', async () => {
+  it('removes a dropped player at once and keeps its waiver hold when the projection fails', async () => {
     await prisma.leagueRosterPlayer.create({
       data: { leagueId: LEAGUE, memberId: members[0], playerId: players[0] },
     });
@@ -296,8 +296,14 @@ describe('team actions route', () => {
     expect(
       await prisma.leagueRosterPlayer.count({ where: { leagueId: LEAGUE, memberId: members[0] } })
     ).toBe(0);
+    // The projection mock rejects; the committed drop and its hold must stand regardless.
     const [drop] = await list();
-    expect(drop).toMatchObject({ actionType: 'DROP_PLAYER', status: 'REJECTED' });
-    expect(drop.processedAt).not.toBeNull();
+    expect(drop).toMatchObject({ actionType: 'DROP_PLAYER', status: 'PENDING' });
+    expect(drop.processedAt).toBeNull();
+
+    // A second drop of the same player finds no roster row and is refused, not reported.
+    expect(
+      (await post({ actionType: 'DROP_PLAYER', details: { playerId: players[0] } })).status
+    ).toBe(400);
   });
 });

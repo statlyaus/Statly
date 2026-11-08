@@ -129,7 +129,7 @@ function averageMatchCategory(matchLogs: MatchLog[], key: string): number | null
 }
 
 function buildTrendLabel(recentAverage: number | null, seasonAverage: number | null): string {
-  if (recentAverage === null || seasonAverage === null) return 'Season profile';
+  if (recentAverage === null || seasonAverage === null) return 'No value trend';
   const delta = recentAverage - seasonAverage;
   if (Math.abs(delta) < 3) return 'Holding level';
   return delta > 0 ? `Up ${formatNumber(delta, 1)}` : `Down ${formatNumber(Math.abs(delta), 1)}`;
@@ -170,7 +170,8 @@ function PlayerDecisionDashboard({
   const latestStatlyValue = latestLog ? readMatchStatlyValue(latestLog) : null;
   const categoryRows = categoryProfile.map((category) => ({
     ...category,
-    value: averageMatchCategory(matchLogs, category.key) ?? readPlayerNumber(player, category.key),
+    // Per game over match logs only: the player record mixes one match with season totals.
+    value: averageMatchCategory(matchLogs, category.key),
   }));
   const topCategories = [...categoryRows]
     .filter((category) => category.value !== null)
@@ -194,15 +195,13 @@ function PlayerDecisionDashboard({
         <div>
           <h2 className="text-lg font-semibold text-foreground">Decision Hub</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Player signals calculated from available season totals and match history.
+            Category averages are per game, over the player&apos;s match logs.
           </p>
         </div>
         <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
           {matchLogs.length > 0
             ? buildTrendLabel(recentStatlyValue, seasonStatlyValue)
-            : aggregateStatsAvailable
-              ? 'Aggregate season data'
-              : 'No player data'}
+            : 'No match data'}
         </span>
       </div>
 
@@ -462,7 +461,11 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
                 }}
               />
               <span className="rounded-full border border-border bg-muted px-3 py-1">
-                {aggregateStatsAvailable ? 'Season profile' : 'Limited data'}
+                {loading
+                  ? 'Loading match data'
+                  : matchLogs.length > 0
+                    ? 'Per-game averages'
+                    : 'No match data'}
               </span>
               {getInjuryLabel(player) ? (
                 <span className="rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-destructive">

@@ -37,7 +37,7 @@ function validateCursor(rawCursor: string | null): string | null {
 
 export const GET = withMetrics(async (request: NextRequest) => {
   // Basic public rate limit
-  const guard = withRateLimit(rateLimitConfigs.public)(request);
+  const guard = await withRateLimit(rateLimitConfigs.public)(request);
   if (!guard.success) {
     return NextResponse.json(guard.body, {
       status: guard.status as number,

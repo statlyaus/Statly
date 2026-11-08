@@ -214,24 +214,6 @@ vi.mock('../../src/lib/logger', () => ({
   withTiming: vi.fn((_label: string, work: () => unknown) => work()),
 }));
 
-vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
-}));
-
-vi.mock('@/lib/cacheTags', () => ({
-  tags: {
-    league: (leagueId: string) => `league:${leagueId}`,
-    waivers: (leagueId: string) => `waivers:${leagueId}`,
-  },
-}));
-
-vi.mock('../../src/lib/cacheTags', () => ({
-  tags: {
-    league: (leagueId: string) => `league:${leagueId}`,
-    waivers: (leagueId: string) => `waivers:${leagueId}`,
-  },
-}));
-
 vi.mock('@/lib/metrics', () => ({
   withMetrics: (handler: unknown) => handler,
 }));
@@ -289,6 +271,8 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       userId: 'statly-dev-tester',
+      isActive: true,
+      status: 'ACTIVE',
     });
     prismaMocks.leagueMember.findMany.mockResolvedValue([
       { id: 'member-1', userId: 'statly-dev-tester', draftSlot: 1, joinedAt: new Date() },

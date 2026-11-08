@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { splitDraftCommandError } from '@/server/draft/api/handlePickCommand';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
@@ -12,7 +13,7 @@ export const revalidate = 0;
 
 function commandErrorResponse(error: unknown, draftId: string) {
   const message = error instanceof Error ? error.message : String(error);
-  const [kind, detail] = message.includes(':') ? message.split(':', 2) : ['internal', message];
+  const [kind, detail] = splitDraftCommandError(message);
 
   if (kind === 'not_found') return commonErrors.notFound(detail);
   if (kind === 'bad_request') return commonErrors.badRequest(detail);
