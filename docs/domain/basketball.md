@@ -227,9 +227,11 @@ field for field.
 
 The role outlook ports the sheet's Role Model (version 3 of its `RoleModel.gs` Apps Script): for
 each player it predicts minutes, usage and total usage over his team's next 5 games, and how much
-his injured or returning teammates move his minutes. The engine is pure TypeScript in
-`src/lib/basketball/` (`roleGameRows.ts`, `roleFeatures.ts`, `roleModel.ts`); the stat projections,
-schedule, rest of season and injury mapping build on it separately.
+his injured or returning teammates move his minutes, then projects his stats over those games and
+for the rest of the season. The engine is pure TypeScript in `src/lib/basketball/`: the role model
+(`roleGameRows.ts`, `roleFeatures.ts`, `roleModel.ts`), then the history tables
+(`playerHistory.ts`), injury input (`injuryOutlook.ts`), schedule (`roleSchedule.ts`), next-5 stats
+(`roleStatProjection.ts`) and rest of season (`restOfSeason.ts`).
 
 ### Inputs (`roleGameRows.ts`)
 
@@ -290,6 +292,71 @@ latest game is his third or later for the team with 10+ minutes a game over his 
 rounded total usage next 5, highest first. Values are rounded half up to 0.1 (probabilities 0.01)
 only at the output; the two change columns are differences of the rounded values.
 
+### History (`playerHistory.ts`)
+
+The sheet embeds three per-player tables; Statly recomputes them from earlier seasons' stored box
+scores, joined by player ID:
+
+- Career prior: over up to the 13 seasons before this one, each season weighted 0.5^(seasons ago −
+  1. (last season 1, then 0.5, 0.25, …): per-minute rates Σ weight × stat ÷ Σ weight × minutes for
+     points, threes, rebounds, assists, steals, blocks, turnovers, FGA and FTA, and weighted FGM, FGA,
+     FTM and FTA. Absent (a rookie for the model) under 100 minutes in all.
+- Last season: minutes per game and games played ÷ 82, all teams together, cameos counted.
+- Back-to-back record over the 3 seasons before this one: a second night is a team game the day
+  after the team's previous game, with a next game in the same season. Eligible when he played the
+  first night for that team; a sit when he then missed the second night and played the next game.
+
+Inputs are each player's season totals (minutes with the cameo rule, games, stats) and the
+(team, date, player) tuples of played games with the season's game list.
+
+### Injuries (`injuryOutlook.ts`)
+
+Each injury report row becomes the share of his team's next 5 games he is expected to miss and the
+games he is expected to miss in all, counted over the team's remaining games (not final, today or
+later, Eastern date):
+
+| Report                                  | Next 5 missed     | Games out                        |
+| --------------------------------------- | ----------------- | -------------------------------- |
+| Out for the season                      | 1                 | rest of year                     |
+| Return after the team's last game       | 1                 | rest of year                     |
+| Return date after today                 | min(games, 5) ÷ 5 | team games before it, at least 1 |
+| Return date today or earlier (due back) | 0.1               | 0.5                              |
+| No date, out                            | 0.4               | 2                                |
+| No date, day-to-day                     | 0.1               | 0.5                              |
+
+### Next 5 games (`roleSchedule.ts`, `roleStatProjection.ts`)
+
+- Opponent defence: what each team has allowed per minute this season against the league rate,
+  shrunk to it with 10 games of weight (ln((n × ratio + 10) ÷ (n + 10)), n = its games), averaged
+  over the team's next 5 games. Each stat is multiplied by e^(slope × that), with fitted slopes
+  (points 1.0, threes 0.76, rebounds 1.0, assists 0.90, steals 0.81, blocks 0.94, turnovers 0.98,
+  FGA 0, FTA 1.01). The column shows it as % more or fewer points allowed than average.
+- Stats: per-minute rates over his last 5, last 10 and season games for the team, his career rate
+  weighted by how early in the season it is (1 in his first game, 0 from his 21st), and his
+  predicted change in usage and minutes, with fitted coefficients, times his predicted minutes. The
+  predictions are fed rounded, as the sheet does. FG% and FT%: his makes and attempts plus 100 FGA
+  (50 FTA) at his career % (shrunk to the league's 46.3 % and 77.4 % with 25 FGA and 12.5 FTA, and
+  used from 50 career FGA and 25 FTA), to 0.001. Points = 2 × FG% × FGA + threes + FT% × FTA.
+- Sitting a back-to-back: a fitted logistic of whether the game is a second night, his minutes over
+  his last 10 games, and his back-to-back record (earlier seasons plus this season's by the same
+  rule), shrunk to a 5.5 % base rate with 8 nights of weight.
+- Expected games: for each remaining team game, (1 − injured) × (1 − chance he sits), where injured
+  takes his expected missed share off the front. Next 5 sums the first five; each game in the next
+  14 days is kept so the read model can sum a league's fantasy week.
+
+### Rest of season (`restOfSeason.ts`)
+
+- Minutes per game: a fitted linear model of his minutes over his last 5, last 10 and season (rows
+  from every team he has played for this season, as the script does), last season's minutes per game,
+  and the teammate shift. Teammate shift: for each teammate with games both with and without him, the
+  player's minutes without minus with (shrunk Na ÷ (Na + 3), ±12) times the chance the teammate is
+  absent for the rest of the season (from his injury, or a fitted model of his games missed and
+  current absence streak), his share of games missed and his share of the last 5.
+- Stats: fitted per-minute rate blends of last 5, last 10, season and career, times minutes; no
+  opponent adjustment. FG% and FT% as for the next 5.
+- Expected games: a fitted availability rate (his share of team games played so far, last season's
+  share and minutes) over the team's remaining games, his injured games taken off the front.
+
 ### Parity with the sheet
 
 `roleModel.parity.test.ts` checks the port against `RoleModel.gs` on a synthetic league from a
@@ -300,5 +367,14 @@ compares every fitted constant and a 30-team league. On 8 Nov 2026 every display
 all rows (60 and 289), with raw outputs identical, and the same held on the stored box scores to 6
 Nov 2026 (327 rows) and to 1 Apr 2026 (488 rows).
 
+`roleProjection.parity.test.ts` does the same for the next-5 stats and schedule and the rest of
+season, with the generator's 3 earlier seasons as history (one team without history) and 21 days of
+games still to play; both sides get the port's history tables. On 8 Nov 2026 every displayed column
+matched (60 and 289 rows) with raw outputs identical, and the same held on the stored box scores to 6
+Nov 2026 (327 rows) and to 1 Apr 2026 (488 rows) with the sheet's own history tables.
+
 Deliberate differences so far: players are joined by player ID, not name; minutes are whole minutes
-with the cameo and team-minutes rules above; makes are real makes.
+with the cameo and team-minutes rules above; makes are real makes; history tables are recomputed
+from the seasons Statly stores, not the sheet's 2013-14 to 2025-26 tables; injuries come from the
+provider's status, return date and season-ending flag with the rule above, not the sheet's wording
+rules, and use the Eastern date throughout; the schedule's results come from stored games.
