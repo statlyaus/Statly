@@ -15,7 +15,10 @@ tests, and this document together.
 - Commissioner overrides are authorized at the server boundary and retained in the competition audit
   history.
 - Missing official AFL fixture data is represented as pending state; the UI must not invent a reliable
-  lock time.
+  lock time. A round published before its AFL fixture was loaded stays pending until the hourly
+  scoring job finds the fixture: it then takes the round's first bounce as its start time and becomes
+  scheduled, the same as if the fixture had been there at publication, and is scored once it starts.
+  Publication is not reopened.
 
 ## Category scoring
 
@@ -87,6 +90,13 @@ updates can change an unlocked player's lock time; an unknown start time remains
 ## Interchange autosubs
 
 - Autosubs resolve from official participation evidence after the applicable AFL round is complete.
+  A player did not play when his stat row in a final match shows zero minutes, or when his club has
+  a confirmed bye (recorded as a club bye). The provider writes rows only for players who took the
+  field, so a player his club did not select has no row: he also did not play once his club's match
+  in that AFL round is final and that same match has stat rows for his club that all map to Statly
+  players (the club's team sheet is ingested and identity-mapped; an unmapped row may be the player
+  himself under an unreviewed provider id). In every other case a lineup player without a row keeps
+  the round waiting; it is never scored as a zero.
 - Candidates are considered in persisted interchange order and must be eligible for the vacated slot.
 - A non-playing candidate is skipped. If no candidate qualifies, the active slot scores zero.
 - Each replacement contributes once; active/interchange state and the decision reason are persisted.
