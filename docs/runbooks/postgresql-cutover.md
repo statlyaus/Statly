@@ -82,6 +82,33 @@ Deploy in this order, each against the production database:
    the Firestore copy of waivers and was removed from the code; a deploy that leaves it running keeps
    a second, stale waiver run alive.
 
+### Container images
+
+The root `Dockerfile` builds one image per Cloud Run process. CI's Container images job builds all
+three on every pull request and starts the Socket.IO and worker images against a throwaway Redis and
+a freshly migrated throwaway PostgreSQL. It never pushes. The draft worker refuses to start without a
+reachable database, because it reconciles live draft timers on startup.
+
+| Image     | Build command                                                          | Runs                                                                    | Port                                                            |
+| --------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Socket.IO | `docker build --target socket .`                                       | `node --import tsx src/server/socketioServer.ts`                        | 3002, or `PORT` as Cloud Run sets it; health at `GET /health`   |
+| Worker    | `docker build --target worker .`                                       | `node --import tsx src/server/workers/enhancedDraftWorker.ts` (default) | None: deploy it as a Cloud Run worker pool, not an HTTP service |
+| Web       | `docker build .` (default target), plus the `--build-arg` values below | `node server.js` from the Next.js standalone output                     | 3000                                                            |
+
+The web-vitals worker runs from the worker image with its command overridden to
+`node --import tsx src/server/workers/webVitalsWorker.ts`. The Socket.IO and worker images hold only
+production dependencies, the generated fantasy Prisma client and `src`, run as the non-root `node`
+user, and run TypeScript through `tsx` (a production dependency), as `worker:start` does. They read
+every setting from the environment: production Socket.IO refuses to start without Redis and
+`SOCKET_IO_CORS_ORIGINS`.
+
+The web build refuses to run without the public Firebase web config, so pass
+`NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+and `NEXT_PUBLIC_FIREBASE_APP_ID` (optionally the storage bucket, messaging sender and measurement
+IDs) as `--build-arg`. They are compiled into the browser bundle and are public by design; never pass
+a secret as a build argument. The website itself goes to Netlify (step 1), so the web image is a
+fallback, not a go-live deploy. The stats import is built from `etl/Dockerfile`.
+
 ## 6. Smoke checks
 
 - [ ] `/api/health` reports the relational database healthy.

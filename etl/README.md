@@ -153,7 +153,10 @@ stats, source checksum, source label, and update time. Category keys must stay a
 
 ## Deployment
 
-`Dockerfile` builds the ETL runtime. `deploy.sh` is the existing explicit Cloud Run deployment command;
+`Dockerfile` builds the ETL runtime: Node 22 for the live guard and processor, and R 4.5.1 with
+fitzRoy 1.7.0 on the same pinned base and CRAN snapshot as the trade capture image. The ETL CI job
+builds it on every change and checks that Node, the R packages and `fetch_fw_round.R` are present.
+`deploy.sh` is the existing explicit Cloud Run deployment command;
 it builds, verifies R packages, deploys a no-traffic revision, and requires a separately authorized
 traffic switch. It is not called by the repository's GitHub Actions and must not be treated as an
 automatic deployment.
