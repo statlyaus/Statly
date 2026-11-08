@@ -115,6 +115,15 @@ competition state require an audit record and recalculation of affected future s
 
 The full product contract is in [league competition rules](../product/league-competition-rules.md).
 
+## Transactions
+
+Free-agent adds, waiver claims, and trade proposals, counters, and acceptances open only once the
+league's draft is `COMPLETED`. Every transaction route asks one server guard,
+`src/server/leagues/transactionWindow.ts`, before it writes; until then the request is refused with
+HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and trades open once the
+league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
+cancelling, and commissioner review are not transactions and stay available.
+
 ## Data boundaries
 
 Prisma owns protected fantasy state. Firestore match-stat documents are external scoring evidence and

@@ -6,6 +6,10 @@ import { logger, withTiming } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
+  getTransactionWindow,
+  transactionsClosedResponse,
+} from '@/server/leagues/transactionWindow';
+import {
   PrismaWaiverClaimStore,
   WaiverClaimStoreError,
 } from '@/server/waivers/WaiverProcessingService';
@@ -40,6 +44,8 @@ export const POST = withMetrics(
       if (!access.isMember) {
         return NextResponse.json({ error: 'League membership required' }, { status: 403 });
       }
+      const transactionWindow = await getTransactionWindow(leagueId);
+      if (!transactionWindow.open) return transactionsClosedResponse(transactionWindow);
 
       const requestedPlayerId = String(playerId);
       const activePlayers = await prisma.player.findMany({
@@ -116,26 +122,26 @@ export const POST = withMetrics(
         { status: 201 }
       );
     } catch (err) {
-      if (err instanceof Error) {
-        if (err.message === 'PLAYER_OWNED') {
-          return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
-        }
-        if (
-          err.message === 'INSUFFICIENT_FAAB' ||
-          (err instanceof WaiverClaimStoreError && err.code === 'INSUFFICIENT_FAAB')
-        ) {
-          return NextResponse.json({ error: 'Insufficient FAAB remaining' }, { status: 400 });
-        }
-        if (err instanceof WaiverClaimStoreError && err.code === 'TEAM_NOT_FOUND') {
-          return NextResponse.json({ error: 'Team not found' }, { status: 403 });
-        }
-        if (err instanceof WaiverClaimStoreError && err.code === 'FAAB_BALANCE_UNAVAILABLE') {
-          return NextResponse.json({ error: 'FAAB balance unavailable' }, { status: 400 });
-        }
-      }
+      const refusal = claimRefusal(err);
+      if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
       logger.apiError('POST', '/api/leagues/[id]/waivers/submit', err);
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
   'POST /api/leagues/[id]/waivers/submit'
 );
+
+/** The claim store's expected refusals, as the answer the client shows; null for anything else. */
+function claimRefusal(err: unknown): { error: string; status: number } | null {
+  if (!(err instanceof Error)) return null;
+  const code = err instanceof WaiverClaimStoreError ? err.code : err.message;
+  if (code === 'PLAYER_OWNED') return { error: 'Player already owned', status: 409 };
+  if (code === 'INSUFFICIENT_FAAB') return { error: 'Insufficient FAAB remaining', status: 400 };
+  if (code === 'TEAM_NOT_FOUND' && err instanceof WaiverClaimStoreError) {
+    return { error: 'Team not found', status: 403 };
+  }
+  if (code === 'FAAB_BALANCE_UNAVAILABLE' && err instanceof WaiverClaimStoreError) {
+    return { error: 'FAAB balance unavailable', status: 400 };
+  }
+  return null;
+}
