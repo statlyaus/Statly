@@ -61,6 +61,13 @@ describe('parseOutlookQuery', () => {
     );
     expect(parseOutlookQuery({ sort: 'name' })).toMatchObject({ descending: false });
   });
+
+  it('ignores object prototype names as sort keys', () => {
+    for (const sort of ['valueOf', 'constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(parseOutlookQuery({ sort })).toMatchObject({ sort: 'usage' });
+      expect(parseOutlookQuery({ view: 'ros', sort })).toMatchObject({ sort: 'min' });
+    }
+  });
 });
 
 describe('selectOutlookPlayers', () => {
