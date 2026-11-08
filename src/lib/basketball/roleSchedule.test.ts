@@ -69,7 +69,7 @@ describe('playerSchedule', () => {
   });
 
   it('lists the next 14 days with the chance he plays, injured games off the front', () => {
-    const s = playerSchedule(context, 'p', 'ATL', mine(28), undefined, 0.4);
+    const s = playerSchedule(context, 'p', 'ATL', mine(28), undefined, 2);
     expect(s.upcoming.map((g) => g.date)).toEqual([...upcoming, '2026-11-10']);
     const chances = s.upcoming.map((g) => g.chancePlays);
     expect(chances.slice(0, 2)).toEqual([0, 0]);
@@ -79,6 +79,12 @@ describe('playerSchedule', () => {
       chances.slice(0, 5).reduce((a, b) => a + b),
       15
     );
+  });
+
+  it('keeps a long injury out beyond the next 5 games', () => {
+    const s = playerSchedule(context, 'p', 'ATL', mine(28), undefined, 6);
+    expect(s.upcoming.map((g) => g.chancePlays)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(s.expectedGames).toBe(0);
   });
 
   it('adds this season’s second nights to his history', () => {

@@ -361,8 +361,9 @@ later, Eastern date):
   his last 10 games, and his back-to-back record (earlier seasons plus this season's by the same
   rule), shrunk to a 5.5 % base rate with 8 nights of weight.
 - Expected games: for each remaining team game, (1 − injured) × (1 − chance he sits), where injured
-  takes his expected missed share off the front. Next 5 sums the first five; each game in the next
-  14 days is kept so the read model can sum a league's fantasy week.
+  takes his expected games out off the front (beyond the next 5 too, so a long injury keeps him out
+  of a two-week fantasy week). Next 5 sums the first five; each game in the next 14 days is kept so
+  the read model can sum a league's fantasy week.
 
 ### Rest of season (`restOfSeason.ts`)
 
