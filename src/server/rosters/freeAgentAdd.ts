@@ -1,17 +1,14 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import {
   evaluateRosterExchangeCapacity,
   getLeagueRosterCapacity,
 } from '@/server/rosters/rosterCapacity';
 
 export type FreeAgentAddErrorCode =
-  | 'NOT_ACTIVE_MEMBER'
-  | 'PLAYER_NOT_FOUND'
-  | 'PLAYER_OWNED'
-  | 'PLAYER_ON_WAIVERS'
-  | 'ROSTER_FULL';
+  'NOT_ACTIVE_MEMBER' | 'PLAYER_NOT_FOUND' | 'PLAYER_OWNED' | 'PLAYER_ON_WAIVERS' | 'ROSTER_FULL';
 
 export class FreeAgentAddError extends Error {
   constructor(
@@ -89,6 +86,7 @@ export async function addFreeAgentToRoster(
       const activeWaiverHold = await tx.teamAction.findFirst({
         where: {
           leagueId,
+          ...inActiveSeason(leagueId),
           actionType: 'DROP_PLAYER',
           status: 'PENDING',
           processingAt: { gt: new Date() },

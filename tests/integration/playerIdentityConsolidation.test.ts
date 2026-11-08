@@ -13,6 +13,7 @@ import {
   upsertCanonicalPlayer,
 } from '@/server/players/playerIdentityService';
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const canonicalPlayerId = 'jack_ginnivan';
 const aliasPlayerId = 'jack-ginnivan-hawthorn';
@@ -190,6 +191,7 @@ describe.sequential('player identity consolidation', () => {
       data: {
         id: 'historical-alias-action',
         leagueId: 'league-a',
+        seasonId: await activateLeagueSeason(prisma, 'league-a'),
         memberId: 'member-a',
         actionType: 'WAIVER_CLAIM',
         status: 'PROCESSED',
