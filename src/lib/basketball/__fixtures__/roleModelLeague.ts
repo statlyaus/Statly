@@ -3,12 +3,20 @@
  * generator, no real data. Six teams by default (a new coach, both remapped team codes) with 13
  * players each. Built in: a traded player, cameos (played, 0 seconds), overtime games, DNP rows, a
  * teammate newly out, two coming back, two gone more than 5 team games (one on the injury report),
- * a player with 2 games and two either side of 10 minutes over the last 5.
+ * a player with 2 games and two either side of 10 minutes over the last 5. `futureDays` adds the
+ * games still to play from `today`, drawn after the box scores so they never change them.
  */
 
 import { addDays } from '../fantasyWeeks';
-import type { RoleBoxRow } from '../roleGameRows';
-import type { RoleInjury } from '../roleModel';
+import type { InjuryOutlook } from '../injuryOutlook';
+import {
+  PROJECTED_STATS,
+  type HistoryGame,
+  type Presence,
+  type SeasonTotals,
+} from '../playerHistory';
+import { toRoleGameRows, type RoleBoxRow, type RoleGameRow } from '../roleGameRows';
+import type { ScheduleGame } from '../roleSchedule';
 
 /** Base minutes by roster spot; the 13th man only ever gets a cameo. */
 const BASE_MINUTES = [34, 33, 32, 30, 28, 24, 20, 17, 14, 10, 7, 4, 0.4];
@@ -28,25 +36,37 @@ export function syntheticRoleLeague({
   seed = 7,
   teams = ['ATL', 'BOS', 'DAL', 'NOP', 'PHX', 'SAS'],
   days = 36,
-} = {}): { rows: RoleBoxRow[]; injuries: Map<string, RoleInjury> } {
+  start = '2026-10-21',
+  futureDays = 0,
+} = {}): {
+  rows: RoleBoxRow[];
+  injuries: Map<string, InjuryOutlook>;
+  games: ScheduleGame[];
+  today: string;
+} {
   const rand = random(seed);
   const id = (team: string, n: number) => `${team}-${String(n).padStart(2, '0')}`;
   const [A, B, C, D, E, F] = teams;
   const traded = id(B, 6);
 
-  // Schedule first: each game day, teams paired at random (Fisher-Yates), one or two resting.
-  const games: { day: number; pair: string[]; overtime: boolean }[] = [];
-  for (let day = 0; day < days; day += 1) {
-    if (day % 7 === 6) continue;
-    const order = [...teams];
-    for (let i = order.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(rand() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
+  /** Each game day, teams paired at random (Fisher-Yates), one or two resting. */
+  function pairings(from: number, to: number) {
+    const games: { day: number; pair: string[]; overtime: boolean }[] = [];
+    for (let day = from; day < to; day += 1) {
+      if (day % 7 === 6) continue;
+      const order = [...teams];
+      for (let i = order.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rand() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      for (let g = 0; g + 1 < order.length - 1; g += 2) {
+        games.push({ day, pair: [order[g], order[g + 1]], overtime: rand() < 0.1 });
+      }
     }
-    for (let g = 0; g + 1 < order.length - 1; g += 2) {
-      games.push({ day, pair: [order[g], order[g + 1]], overtime: rand() < 0.1 });
-    }
+    return games;
   }
+  // Schedule first.
+  const games = pairings(0, days);
   const teamDays = new Map(
     teams.map((team) => [team, games.filter((g) => g.pair.includes(team)).map((g) => g.day)])
   );
@@ -95,7 +115,7 @@ export function syntheticRoleLeague({
         return [
           {
             gameId: `${pair.join('-')}-${day}`,
-            gameDate: addDays('2026-10-21', day),
+            gameDate: addDays(start, day),
             teamCode: team,
             playerId,
             played,
@@ -124,10 +144,77 @@ export function syntheticRoleLeague({
         rows.push({ ...row, teamScore: score[side], opponentScore: score[1 - side] });
     });
   }
-  const injuries = new Map<string, RoleInjury>([
-    [id(A, 3), { fracNext5: 0.6 }], // played the team's last game: newly out
-    [id(B, 4), { fracNext5: 0.2 }],
-    [id(C, 2), { fracNext5: 1 }],
+  const injuries = new Map<string, InjuryOutlook>([
+    [id(A, 3), { fracNext5: 0.6, gamesOut: 3 }], // played the team's last game: newly out
+    [id(B, 4), { fracNext5: 0.2, gamesOut: 1 }],
+    [id(C, 2), { fracNext5: 1, gamesOut: 999 }],
   ]);
-  return { rows, injuries };
+  const schedule = [...games, ...pairings(days, days + futureDays)].map(({ day, pair }) => ({
+    date: addDays(start, day),
+    home: pair[0],
+    away: pair[1],
+    final: day < days,
+  }));
+  return { rows, injuries, games: schedule, today: addDays(start, days) };
 }
+
+/**
+ * The 3 seasons before `season` from the same generator (other seeds, without the first team, so
+ * its players have no history), as the history inputs: season totals and played tuples.
+ */
+export function syntheticRoleHistory({
+  seed = 7,
+  teams = ['ATL', 'BOS', 'DAL', 'NOP', 'PHX', 'SAS'],
+  days = 36,
+  season = 2027,
+} = {}): { totals: SeasonTotals[]; games: HistoryGame[]; presence: Presence[] } {
+  const totals: SeasonTotals[] = [];
+  const games: HistoryGame[] = [];
+  const presence: Presence[] = [];
+  for (let ago = 1; ago <= 3; ago += 1) {
+    const league = syntheticRoleLeague({
+      seed: seed + ago,
+      teams: teams.slice(1),
+      days,
+      start: `${season - ago - 1}-10-21`,
+    });
+    const byPlayer = new Map<string, SeasonTotals>();
+    const summed = [...PROJECTED_STATS, 'fgm', 'ftm', 'minutes', 'games'] as const;
+    for (const row of toRoleGameRows(league.rows)) {
+      let t = byPlayer.get(row.playerId);
+      if (!t) {
+        const zeros = Object.fromEntries(summed.map((c) => [c, 0]));
+        t = { ...zeros, playerId: row.playerId, season: season - ago } as SeasonTotals;
+        byPlayer.set(row.playerId, t);
+      }
+      for (const c of summed) t[c] += c === 'games' ? 1 : c === 'minutes' ? row.min : row[c];
+      presence.push({ team: row.team, date: row.date, playerId: row.playerId });
+    }
+    totals.push(...byPlayer.values());
+    games.push(
+      ...league.games.map(({ date, home, away }) => ({ season: season - ago, date, home, away }))
+    );
+  }
+  return { totals, games, presence };
+}
+
+/** One played game for the unit tests: 20 % usage and no box-score stats unless given. */
+export const gameRow = (
+  row: Pick<RoleGameRow, 'date' | 'playerId' | 'team' | 'min'> & Partial<RoleGameRow>
+): RoleGameRow => ({
+  usg: 20,
+  pm: 0,
+  margin: 0,
+  pts: 0,
+  fg3m: 0,
+  reb: 0,
+  ast: 0,
+  stl: 0,
+  blk: 0,
+  fgm: 0,
+  fga: 0,
+  ftm: 0,
+  fta: 0,
+  tov: 0,
+  ...row,
+});
