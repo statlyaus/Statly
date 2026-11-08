@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { normalizeFantasyCategoryKeys } from '@/types/fantasyCategories';
 
+import { activeSeasonIdOf } from './activeSeason';
 import { generateCompetitionSchedule, generateManualCompetitionSchedule } from './fixtureGenerator';
 import {
   normalizeCompetitionRules,
@@ -82,10 +83,12 @@ async function rebuildLeagueStandings(
   tx: Prisma.TransactionClient,
   {
     leagueId,
+    seasonId,
     fixtureVersion,
     scoringMode,
   }: {
     leagueId: string;
+    seasonId: string;
     fixtureVersion: number;
     scoringMode: LeagueScoringMode;
   }
@@ -95,6 +98,7 @@ async function rebuildLeagueStandings(
     tx.leagueMatchupScore.findMany({
       where: {
         leagueId,
+        seasonId,
         status: 'FINAL',
         matchup: { fixtureVersion, phase: 'REGULAR' },
       },
@@ -106,10 +110,10 @@ async function rebuildLeagueStandings(
     finalizedScores,
   });
 
-  await tx.leagueStanding.deleteMany({ where: { leagueId } });
+  await tx.leagueStanding.deleteMany({ where: { leagueId, seasonId } });
   if (standings.length > 0) {
     await tx.leagueStanding.createMany({
-      data: standings.map((standing) => ({ leagueId, ...standing })),
+      data: standings.map((standing) => ({ leagueId, seasonId, ...standing })),
     });
   }
 
@@ -194,8 +198,9 @@ export async function publishCompetition({
       // Republishing resets only derived competition data. Delete results provide
       // bounded audit evidence without retaining arbitrary row snapshots.
       const resetSummary = {
-        matchupScores: (await tx.leagueMatchupScore.deleteMany({ where: { leagueId } })).count,
-        standings: (await tx.leagueStanding.deleteMany({ where: { leagueId } })).count,
+        matchupScores: (await tx.leagueMatchupScore.deleteMany({ where: { leagueId, seasonId } }))
+          .count,
+        standings: (await tx.leagueStanding.deleteMany({ where: { leagueId, seasonId } })).count,
         lineups: (
           await tx.leagueLineup.deleteMany({
             where: { leagueId, seasonId },
@@ -316,14 +321,16 @@ export async function saveCompetitionFixture({
     const league = await tx.league.findUnique({
       where: { id: leagueId },
       select: {
+        activeSeasonId: true,
         settings: { select: { competitionRulesVersion: true, scoringMode: true } },
       },
     });
     const fixtureVersion = league?.settings.competitionRulesVersion ?? 0;
     const scoringMode = league?.settings.scoringMode as LeagueScoringMode | undefined;
-    if (!fixtureVersion || !scoringMode) {
+    if (!league || !fixtureVersion || !scoringMode) {
       return { ok: false as const, error: 'Publish competition rules before editing fixtures.' };
     }
+    const seasonId = activeSeasonIdOf({ id: leagueId, activeSeasonId: league.activeSeasonId });
 
     const competitionRound = await tx.leagueCompetitionRound.findUnique({
       where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
@@ -428,6 +435,7 @@ export async function saveCompetitionFixture({
       removedScores.count > 0
         ? await rebuildLeagueStandings(tx, {
             leagueId,
+            seasonId,
             fixtureVersion,
             scoringMode,
           })
@@ -481,14 +489,16 @@ export async function deleteCompetitionFixture({
     const league = await tx.league.findUnique({
       where: { id: leagueId },
       select: {
+        activeSeasonId: true,
         settings: { select: { competitionRulesVersion: true, scoringMode: true } },
       },
     });
     const fixtureVersion = league?.settings.competitionRulesVersion ?? 0;
     const scoringMode = league?.settings.scoringMode as LeagueScoringMode | undefined;
-    if (!fixtureVersion || !scoringMode) {
+    if (!league || !fixtureVersion || !scoringMode) {
       return { ok: false as const, error: 'Publish competition rules before editing fixtures.' };
     }
+    const seasonId = activeSeasonIdOf({ id: leagueId, activeSeasonId: league.activeSeasonId });
 
     const fixture = await tx.leagueMatchup.findFirst({
       where: { id: matchupId, leagueId, fixtureVersion, round },
@@ -515,6 +525,7 @@ export async function deleteCompetitionFixture({
       removedScores.count > 0
         ? await rebuildLeagueStandings(tx, {
             leagueId,
+            seasonId,
             fixtureVersion,
             scoringMode,
           })

@@ -264,9 +264,17 @@ describe('loadManagerHome', () => {
     expect(league.form).toEqual(['W', 'L', 'D']);
     expect(client.leagueMatchupScore.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { leagueId: 'league-1', memberId: 'member-1', status: 'FINAL' },
+        where: {
+          leagueId: 'league-1',
+          seasonId: 'season-1',
+          memberId: 'member-1',
+          status: 'FINAL',
+        },
         take: 5,
       })
+    );
+    expect(client.leagueStanding.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { leagueId: 'league-1', seasonId: 'season-1' } })
     );
     expect(league.ladder?.map((row) => [row.position, row.teamName, row.isYou])).toEqual([
       [1, 'Hard Ball Gets', false],

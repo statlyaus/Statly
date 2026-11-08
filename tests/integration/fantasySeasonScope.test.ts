@@ -3,10 +3,13 @@
  * waiver priority and team actions carry a seasonId that references a real LeagueSeason, rows of
  * two seasons of one league read apart, and removing a season removes only its own rows.
  */
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('server-only', () => ({}));
 
 import { prisma } from '@/lib/prisma';
 import { loadMemberLineup } from '@/server/leagues/lineupService';
+import { loadLeagueStandingsHistory } from '@/server/leagues/standingsHistoryLoader';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -168,6 +171,20 @@ describe('fantasy season scope', () => {
     const previous = await loadMemberLineup({ leagueId: LEAGUE, memberId: MEMBER, round: 1 });
     expect(previous?.seasonId).toBe(SEASON_2026);
     expect(previous?.players.map((row) => row.slotIndex)).toEqual([0]);
+  });
+
+  it('keeps one ladder row per season and shows the active season’s', async () => {
+    await prisma.leagueStanding.createMany({
+      data: [
+        { leagueId: LEAGUE, seasonId: SEASON_2026, memberId: MEMBER, wins: 9, losses: 2 },
+        { leagueId: LEAGUE, seasonId: SEASON_2027, memberId: MEMBER, wins: 1, losses: 3 },
+      ],
+    });
+
+    const history = await loadLeagueStandingsHistory(LEAGUE);
+    expect(history?.teams.map((team) => [team.memberId, team.wins, team.losses])).toEqual([
+      [MEMBER, 1, 3],
+    ]);
   });
 
   it('refuses a season that does not exist', async () => {

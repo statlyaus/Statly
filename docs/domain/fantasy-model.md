@@ -44,12 +44,14 @@ Every league has an active season (`League.activeSeasonId`): league creation set
 - since 2026-11-08: `LeagueLineup` (and its players and autosubs through the lineup),
   `LeagueMatchupScore`, `LeagueStanding`, `WaiverPriority` and `TeamAction` (waiver claims and drops).
   Existing rows were backfilled to the league's active season. Each column becomes required once its
-  readers and writers carry the season; `LeagueLineup.seasonId` is required, and a member has one
-  lineup per season and round. The others are still nullable.
+  readers and writers carry the season. Required so far: `LeagueLineup` (one lineup per member, season
+  and round), `LeagueMatchupScore` and `LeagueStanding` (one ladder row per member and season). The
+  waiver columns are still nullable.
 
 Season-scoped services take the season from `League.activeSeasonId` through
 `src/server/leagues/activeSeason.ts`, which throws `ActiveSeasonMissingError` instead of falling back
-to league-wide rows. Republishing a competition clears only the active season's lineups.
+to league-wide rows. Republishing a competition clears only the active season's lineups, matchup
+scores and standings, and standings are rebuilt from that season's final scores only.
 
 Not yet season-scoped, pending a season-rollover decision: `LeagueMatchup` (only through its
 competition round), `LeagueRosterPlayer` and `Draft`.
