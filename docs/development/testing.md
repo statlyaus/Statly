@@ -426,8 +426,8 @@ Node tests do not invoke R or write to Firestore. CI separately builds the pinne
 `jsonlite`, and `digest` versions. That test creates only local fixture RDS bytes and makes no provider
 request; external capture commands retain their separate authorization and environment requirements.
 
-ETL `npm run lint` composes `lint:node` with `lint:r`. The R check parses `fetch_fw_round.R` without
-loading fitzRoy or contacting FootyWire. CI pins R 4.5.1 to match the ETL container's build stage; local
+ETL `npm run lint` composes `lint:node` with `lint:r`. The R check parses `fetch_fw_round.R` and
+`fetch_fw_fixture.R` without loading fitzRoy or contacting FootyWire. CI pins R 4.5.1 to match the ETL container's build stage; local
 verification requires an available `Rscript` and may use a newer compatible R release.
 
 ## Database isolation

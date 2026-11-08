@@ -43,8 +43,15 @@ Every league has an active season (`League.activeSeasonId`): league creation set
 - `LeagueCompetitionRound` (nullable);
 - since 2026-11-08: `LeagueLineup` (and its players and autosubs through the lineup),
   `LeagueMatchupScore`, `LeagueStanding`, `WaiverPriority` and `TeamAction` (waiver claims and drops).
-  These five columns are nullable until their readers and writers carry the season, then become
-  required. Existing rows were backfilled to the league's active season.
+  Existing rows were backfilled to the league's active season, and all five columns are required. Keys:
+  one lineup per member, season and round; one ladder row and one waiver priority row per member and
+  season.
+
+Season-scoped services take the season from `League.activeSeasonId` through
+`src/server/leagues/activeSeason.ts`, which throws `ActiveSeasonMissingError` instead of falling back
+to league-wide rows. Waiver queries use the `inActiveSeason(leagueId)` where-filter from the same file
+(the row's season is the league's active season), so a write needs no extra read. Republishing a competition clears only the active season's lineups, matchup
+scores and standings, and standings are rebuilt from that season's final scores only.
 
 Not yet season-scoped, pending a season-rollover decision: `LeagueMatchup` (only through its
 competition round), `LeagueRosterPlayer` and `Draft`.
@@ -78,6 +85,9 @@ client omits optional values:
 - `H2H_EACH_CATEGORY` scoring
 - the real-data nine-category preset
 - normalized active lineup slots and category directions
+- the AFL season of the draft date, or of the creation date when there is none: next season once
+  that year's Grand Final has passed (see
+  [league competition rules](../product/league-competition-rules.md#calendar-and-fixtures))
 
 Clients may expose additional choices, but they must submit values supported by the server contract.
 

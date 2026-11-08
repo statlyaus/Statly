@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { listActiveLeagueMembers } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
@@ -35,6 +36,11 @@ import {
   getMaxTeamsUpdateError,
 } from '@/server/leagues/leagueCapacity';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import {
+  getLeagueSettingsLocks,
+  getScoringSettingsLockedAt,
+  type LeagueSettingsLocks,
+} from '@/server/leagues/settingsLocks';
 
 type DraftTypeValue = 'SNAKE' | 'LINEAR';
 type WaiverRuleValue = 'WEEKLY' | 'ROLLING';
@@ -205,39 +211,60 @@ function parseTradeSettingsUpdate(tradeInput: Record<string, unknown>): TradeSet
   };
 }
 
-function toSettingsResponse(league: {
-  id: string;
-  name: string;
-  inviteCode: string;
-  categoriesJson: unknown;
-  settings: {
-    maxTeams: number;
-    rosterSize: number;
-    benchSize: number;
-    pickSeconds: number;
-    allowAutoPick: boolean;
-    positionLimitsJson: Prisma.JsonValue;
-    autoPickRulesJson: Prisma.JsonValue;
-    draftType: string;
-    pickOrder: string;
-    waiverRule: string;
-    faabBudget: number | null;
-    startAt: Date | null;
-    timeZone: string;
-    locked: boolean;
-    scoringMode: string;
-    fixtureGenerationMode: string;
-    lineupSlotsJson: Prisma.JsonValue;
-    categoryDirectionsJson: Prisma.JsonValue;
-    scoringSettingsLockedAt: Date | null;
-    tradeLimit: number;
-    tradeReviewMode: string;
-    tradeDeadline: Date | null;
-    tradeOfferExpiryHours: number;
-    tradeReviewHours: number;
-    tradeVetoThreshold: number;
-  };
-}) {
+async function readDraftStatus(leagueId: string): Promise<string | null> {
+  const draft = await prisma.draft.findUnique({
+    where: { leagueId },
+    select: { status: true },
+  });
+  return draft?.status ?? null;
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function toSettingsResponse(
+  league: {
+    id: string;
+    name: string;
+    inviteCode: string;
+    categoriesJson: unknown;
+    settings: {
+      maxTeams: number;
+      rosterSize: number;
+      benchSize: number;
+      pickSeconds: number;
+      allowAutoPick: boolean;
+      positionLimitsJson: Prisma.JsonValue;
+      autoPickRulesJson: Prisma.JsonValue;
+      draftType: string;
+      pickOrder: string;
+      waiverRule: string;
+      faabBudget: number | null;
+      startAt: Date | null;
+      timeZone: string;
+      locked: boolean;
+      scoringMode: string;
+      fixtureGenerationMode: string;
+      lineupSlotsJson: Prisma.JsonValue;
+      categoryDirectionsJson: Prisma.JsonValue;
+      scoringSettingsLockedAt: Date | null;
+      competitionPublishedAt?: Date | null;
+      tradeLimit: number;
+      tradeReviewMode: string;
+      tradeDeadline: Date | null;
+      tradeOfferExpiryHours: number;
+      tradeReviewHours: number;
+      tradeVetoThreshold: number;
+    };
+  },
+  draftStatus: string | null
+) {
+  const scoringSettingsLockedAt = getScoringSettingsLockedAt(league.settings);
+  const locks: LeagueSettingsLocks = getLeagueSettingsLocks({
+    scoringSettingsLockedAt,
+    draftStatus,
+  });
   const positionLimits = normalizeDraftPositionLimits(league.settings.positionLimitsJson);
   const autoPickRules = normalizeDraftAutoPickRules(league.settings.autoPickRulesJson);
   const categories = normalizeLeagueCategories(league.categoriesJson);
@@ -260,8 +287,9 @@ function toSettingsResponse(league: {
         categories,
         league.settings.categoryDirectionsJson
       ),
-      scoringSettingsLockedAt: league.settings.scoringSettingsLockedAt?.toISOString() ?? null,
+      scoringSettingsLockedAt: scoringSettingsLockedAt?.toISOString() ?? null,
     },
+    locks,
     roster: {
       rosterSize: league.settings.rosterSize,
       benchSize: league.settings.benchSize,
@@ -310,7 +338,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (prismaLeague?.settings) {
       return NextResponse.json({
         success: true,
-        data: toSettingsResponse(prismaLeague),
+        data: toSettingsResponse(prismaLeague, await readDraftStatus(id)),
       });
     }
 
@@ -497,25 +525,38 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               categories,
               categoryDirectionsInput as Partial<Record<FantasyCategoryKey, CategoryDirection>>
             );
+      const draftStatus = await readDraftStatus(id);
+      const locks = getLeagueSettingsLocks({
+        scoringSettingsLockedAt: getScoringSettingsLockedAt(prismaLeague.settings),
+        draftStatus,
+      });
+      // The settings form sends every field on each save, so a lock refuses changed values only.
+      const currentCategories = normalizeLeagueCategories(prismaLeague.categoriesJson);
       const scoringSettingsChanged =
-        scoringInput.scoringMode !== undefined ||
-        body.scoringMode !== undefined ||
-        scoringInput.fixtureGenerationMode !== undefined ||
-        body.fixtureGenerationMode !== undefined ||
-        scoringInput.lineupSlots !== undefined ||
-        body.lineupSlots !== undefined ||
-        scoringInput.categoryDirections !== undefined ||
-        body.categoryDirections !== undefined ||
-        categoriesInput !== undefined;
-      if (scoringSettingsChanged && prismaLeague.settings.scoringSettingsLockedAt) {
-        return NextResponse.json({ error: 'Scoring settings are locked' }, { status: 409 });
+        !sameValue(categories, currentCategories) ||
+        scoringMode !== prismaLeague.settings.scoringMode ||
+        !sameValue(lineupSlots, normalizeLineupSlots(prismaLeague.settings.lineupSlotsJson)) ||
+        !sameValue(
+          categoryDirections,
+          normalizeCategoryDirections(
+            currentCategories,
+            prismaLeague.settings.categoryDirectionsJson
+          )
+        );
+      if (scoringSettingsChanged && locks.scoring) {
+        return NextResponse.json(
+          { error: locks.scoring, code: 'SCORING_SETTINGS_LOCKED' },
+          { status: 409 }
+        );
       }
       // Balances are derived from the budget when a claim first touches them, so once any claim
       // exists a new budget would leave members on different starting balances.
       if (
         faabBudget !== undefined &&
         faabBudget !== prismaLeague.settings.faabBudget &&
-        (await prisma.teamAction.count({ where: { leagueId: id, actionType: 'WAIVER_CLAIM' } })) > 0
+        (await prisma.teamAction.count({
+          where: { leagueId: id, ...inActiveSeason(id), actionType: 'WAIVER_CLAIM' },
+        })) > 0
       ) {
         return NextResponse.json(
           { error: 'FAAB budget is locked once waiver claims exist' },
@@ -571,6 +612,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const pickOrder = normalizeDraftPickOrderMode(
         draftInput.pickOrder ?? body.pickOrder ?? prismaLeague.settings.pickOrder
       );
+      const draftStructureChanged =
+        !sameValue(
+          positionLimits,
+          normalizeDraftPositionLimits(prismaLeague.settings.positionLimitsJson)
+        ) ||
+        draftType !== prismaLeague.settings.draftType ||
+        pickOrder !== normalizeDraftPickOrderMode(prismaLeague.settings.pickOrder);
+      if (draftStructureChanged && locks.draftStructure) {
+        return NextResponse.json(
+          { error: locks.draftStructure, code: 'DRAFT_STRUCTURE_LOCKED' },
+          { status: 409 }
+        );
+      }
       const waiverRule = normalizeWaiverRule(
         waiverInput.waiverRule ?? body.waiverRule,
         prismaLeague.settings.waiverRule
@@ -635,7 +689,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       return NextResponse.json({
         success: true,
-        data: toSettingsResponse(updatedLeague),
+        data: toSettingsResponse(updatedLeague, draftStatus),
       });
     }
 

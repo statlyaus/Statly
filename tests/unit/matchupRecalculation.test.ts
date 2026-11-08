@@ -37,6 +37,7 @@ import {
 function leagueWithFixtureVersion(competitionRulesVersion: number) {
   return {
     id: 'league-1',
+    activeSeasonId: 'season-1',
     categoriesJson: ['goals'],
     settings: {
       scoringMode: 'H2H_EACH_CATEGORY',
@@ -363,6 +364,13 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
       roundStatus: { hasUnavailableStatus: true },
     });
     expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  beforeEach(() => {
+    // No reviewed Footywire identity links: stats rows keep their own player ids.
+    Object.assign(prismaMocks, {
+      playerExternalIdentity: { findMany: vi.fn().mockResolvedValue([]) },
+    });
   });
 
   it('carries lineups forward for every matchup participant before scoring', async () => {
