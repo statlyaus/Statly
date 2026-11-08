@@ -226,7 +226,7 @@ export function planFootywireIdentityManifest(client: IdentityClient, manifestVa
   return planWithClient(client, validateReviewedFootywireIdentityManifest(manifestValue));
 }
 
-export async function applyFootywireIdentityManifest(
+export function applyFootywireIdentityManifest(
   client: Pick<PrismaClient, '$transaction'>,
   manifestValue: unknown
 ): Promise<{ created: number; unchanged: number }> {
