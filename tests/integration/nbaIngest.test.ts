@@ -99,13 +99,17 @@ function boxScoreFor(externalId: string, homeListed = 10): NbaProviderBoxScore {
   };
 }
 
-function injury(externalId: string): NbaProviderInjury {
+function injury(externalId: string, overrides: Partial<NbaProviderInjury> = {}): NbaProviderInjury {
   return {
     athleteExternalId: externalId,
     status: 'OUT',
     detail: 'Left Ankle',
     expectedReturnOn: '2026-11-20',
     reportedAt: new Date('2026-11-07T22:00:00Z'),
+    comment: 'Player (ankle) is out for Friday.',
+    fantasyStatus: 'OUT',
+    seasonEnding: false,
+    ...overrides,
   };
 }
 
@@ -253,7 +257,13 @@ describe('NBA ingest jobs (PostgreSQL)', () => {
 
   it('replaces the injury report, and a rejected report keeps the previous one', async () => {
     injuryFeed = [
-      ...Array.from({ length: 25 }, (_, index) => injury(playerId(TEAM_CODES[index], 0))),
+      injury(playerId(TEAM_CODES[0], 0), {
+        expectedReturnOn: '2027-10-01',
+        comment: 'Player has sustained a season-ending Achilles injury.',
+        fantasyStatus: 'OFS',
+        seasonEnding: true,
+      }),
+      ...Array.from({ length: 24 }, (_, index) => injury(playerId(TEAM_CODES[index + 1], 0))),
       injury('never-rostered-1'),
       injury('never-rostered-2'),
     ];
@@ -265,14 +275,31 @@ describe('NBA ingest jobs (PostgreSQL)', () => {
       duplicates: 0,
       inSeason: true,
     });
-    const kept = await prisma.nbaPlayerInjury.findMany({
-      select: { playerId: true, status: true, expectedReturnOn: true, fetchedAt: true },
-      orderBy: { playerId: 'asc' },
-    });
+    const select = {
+      playerId: true,
+      status: true,
+      expectedReturnOn: true,
+      comment: true,
+      fantasyStatus: true,
+      seasonEnding: true,
+      fetchedAt: true,
+    } as const;
+    const kept = await prisma.nbaPlayerInjury.findMany({ select, orderBy: { playerId: 'asc' } });
     expect(kept).toHaveLength(25);
-    expect(kept[0]).toMatchObject({
+    expect(kept.filter((row) => row.seasonEnding)).toEqual([
+      expect.objectContaining({
+        status: 'OUT',
+        expectedReturnOn: new Date('2027-10-01T00:00:00Z'),
+        comment: 'Player has sustained a season-ending Achilles injury.',
+        fantasyStatus: 'OFS',
+        fetchedAt: NOW,
+      }),
+    ]);
+    expect(kept.find((row) => !row.seasonEnding)).toMatchObject({
       status: 'OUT',
       expectedReturnOn: new Date('2026-11-20T00:00:00Z'),
+      comment: 'Player (ankle) is out for Friday.',
+      fantasyStatus: 'OUT',
       fetchedAt: NOW,
     });
 
@@ -282,10 +309,7 @@ describe('NBA ingest jobs (PostgreSQL)', () => {
     ).rejects.toMatchObject({ reason: 'out_of_bounds' });
 
     await expect(
-      prisma.nbaPlayerInjury.findMany({
-        select: { playerId: true, status: true, expectedReturnOn: true, fetchedAt: true },
-        orderBy: { playerId: 'asc' },
-      })
+      prisma.nbaPlayerInjury.findMany({ select, orderBy: { playerId: 'asc' } })
     ).resolves.toEqual(kept);
     const lastRun = await prisma.nbaIngestRun.findFirstOrThrow({
       where: { provider: PROVIDER, job: 'INJURIES' },

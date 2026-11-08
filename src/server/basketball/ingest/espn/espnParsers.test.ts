@@ -464,6 +464,9 @@ describe('parseInjuries', () => {
         detail: 'Left Ankle',
         expectedReturnOn: '2026-11-07',
         reportedAt: new Date('2026-11-06T22:06:00Z'),
+        comment: 'Player (ankle) is out.',
+        fantasyStatus: 'OUT',
+        seasonEnding: false,
       },
       {
         athleteExternalId: '5',
@@ -471,8 +474,78 @@ describe('parseInjuries', () => {
         detail: 'Knee',
         expectedReturnOn: null,
         reportedAt: new Date('2026-11-06T22:06:00Z'),
+        comment: 'Player (ankle) is out.',
+        fantasyStatus: 'OUT',
+        seasonEnding: false,
       },
     ]);
+  });
+
+  it('keeps the trimmed note and fantasy status, and nulls them when missing', () => {
+    const [noted, bare] = parseInjuries(
+      injuriesResponse([
+        {
+          id: '1',
+          entries: [
+            {
+              athleteId: '11',
+              status: 'Day-To-Day',
+              fantasyStatus: 'GTD',
+              comment: '  Zed Example (ankle) is questionable for Sunday.  ',
+            },
+            { athleteId: '12', fantasyStatus: null, comment: null },
+          ],
+        },
+      ])
+    );
+
+    expect(noted).toMatchObject({
+      status: 'DAY_TO_DAY',
+      comment: 'Zed Example (ankle) is questionable for Sunday.',
+      fantasyStatus: 'GTD',
+      seasonEnding: false,
+    });
+    expect(bare).toMatchObject({ comment: null, fantasyStatus: null, seasonEnding: false });
+  });
+
+  it('marks a season-ender from the fantasy status OFS, keeping its placeholder return date', () => {
+    const [entry] = parseInjuries(
+      injuriesResponse([
+        {
+          id: '1',
+          entries: [
+            {
+              athleteId: '13',
+              fantasyStatus: 'OFS',
+              returnDate: '2027-10-01',
+              comment: 'Zed Example underwent surgery to repair a torn right Achilles tendon.',
+            },
+          ],
+        },
+      ])
+    );
+
+    expect(entry).toMatchObject({
+      status: 'OUT',
+      fantasyStatus: 'OFS',
+      expectedReturnOn: '2027-10-01',
+      seasonEnding: true,
+    });
+  });
+
+  it('does not read the comment for season-enders without the OFS status', () => {
+    const [entry] = parseInjuries(
+      injuriesResponse([
+        {
+          id: '1',
+          entries: [
+            { athleteId: '14', comment: 'Zed Example (knee) will miss the rest of the season.' },
+          ],
+        },
+      ])
+    );
+
+    expect(entry).toMatchObject({ status: 'OUT', seasonEnding: false });
   });
 
   it('rejects an entry whose link has no athlete id', () => {

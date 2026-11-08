@@ -91,6 +91,9 @@ export async function syncNbaInjuries(
           detail: row.detail,
           expectedReturnOn: row.expectedReturnOn ? stringToDateOnly(row.expectedReturnOn) : null,
           reportedAt: row.reportedAt,
+          comment: row.comment,
+          fantasyStatus: row.fantasyStatus,
+          seasonEnding: row.seasonEnding,
           fetchedAt: now,
         })),
       });

@@ -81,20 +81,40 @@ export function EmptyState({
   );
 }
 
-export function InjuryBadge({ injury }: { injury: PoolPlayerInjury | null }) {
+/**
+ * OUT or DTD; "OUT · season" for a season-ending injury, and "old" when the report is over a day
+ * old (it is still used).
+ */
+export function InjuryBadge({
+  injury,
+  seasonEnding = false,
+  stale = false,
+}: {
+  injury: PoolPlayerInjury | null;
+  seasonEnding?: boolean;
+  stale?: boolean;
+}) {
   if (!injury) return null;
   const out = injury.status === 'OUT';
-  const back = injury.expectedReturnOn ? `, back ${formatGameDate(injury.expectedReturnOn)}` : '';
+  const when = seasonEnding
+    ? ', out for the season'
+    : injury.expectedReturnOn
+      ? `, back ${formatGameDate(injury.expectedReturnOn)}`
+      : '';
+  const old = stale ? ' (injury report over a day old)' : '';
   return (
     <span
       className={badgeStyles({ tone: out ? 'loss' : 'warning', size: 'xs' })}
-      title={`${injury.detail ?? (out ? 'Out' : 'Day-to-day')}${back}`}
+      title={`${injury.detail ?? (out ? 'Out' : 'Day-to-day')}${when}${old}`}
     >
       {out ? 'OUT' : 'DTD'}
+      {seasonEnding ? ' · season' : ''}
+      {stale ? ' · old' : ''}
       <span className="sr-only">
         {out ? ' ruled out' : ' day-to-day'}
         {injury.detail ? `: ${injury.detail}` : ''}
-        {back}
+        {when}
+        {old}
       </span>
     </span>
   );
@@ -106,8 +126,11 @@ export function OwnerLabel({ owner }: { owner: PlayerOwner }) {
       return <span className={badgeStyles({ tone: 'brand', size: 'xs' })}>You</span>;
     case 'OPPONENT':
       return (
-        <span className={badgeStyles({ tone: 'neutral', size: 'xs' })} title="This week's opponent">
-          Opp · {owner.teamName}
+        <span
+          className={`${badgeStyles({ tone: 'neutral', size: 'xs' })} min-w-0 max-w-full`}
+          title={`This week's opponent: ${owner.teamName}`}
+        >
+          <span className="min-w-0 truncate">Opp · {owner.teamName}</span>
         </span>
       );
     case 'TEAM':
