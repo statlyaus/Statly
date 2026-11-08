@@ -16,6 +16,7 @@ import {
   type DraftPickExpiryJobData,
   type DraftStartJobData,
 } from '../queue/draftQueue';
+import { initProcessSentry, reportJobFailure } from '../monitoring/processSentry';
 import { getRedisConnection, ScalableRedisConnection } from '../realtime/scalableConnection';
 
 import type { Job } from 'bullmq';
@@ -349,7 +350,9 @@ class EnhancedDraftWorker {
       }
     } catch (error) {
       this.updateMetrics(Date.now() - start, true);
-      logger.error('Draft job failed', {
+      // A warning here: the `failed` handler reports each failure to Sentry once, with its tags.
+      logger.warn('Draft job failed', {
+        jobId: job.id,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -391,7 +394,8 @@ class EnhancedDraftWorker {
     });
 
     this.worker.on('failed', (job: Job<DraftJobData> | undefined, err: Error) => {
-      logger.error(`Job ${job?.id ?? 'unknown'} failed`, { error: err.message, stack: err.stack });
+      logger.warn('Draft job failed in worker', { jobId: job?.id, error: err.message });
+      reportJobFailure('draftQueue', job, err);
     });
 
     this.worker.on('stalled', (jobId: string) => {
@@ -399,7 +403,8 @@ class EnhancedDraftWorker {
     });
 
     this.queueEvents.on('failed', ({ jobId, failedReason }) => {
-      logger.error('Queue event failed', { jobId, failedReason });
+      // The same failures as the worker's `failed` event, which reports them to Sentry.
+      logger.warn('Queue event failed', { jobId, failedReason });
     });
   }
 
@@ -492,6 +497,7 @@ async function shutdownDirectWorker(
 }
 
 if (isDirectWorkerEntrypoint()) {
+  initProcessSentry('draft-worker');
   const directWorker = new EnhancedDraftWorker(`draft-worker-${process.pid}-${Date.now()}`);
 
   directWorker.start().catch((error) => {

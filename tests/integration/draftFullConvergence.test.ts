@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { DraftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const FIXTURE = {
   leagueId: 'integration-full-draft-league',
@@ -107,6 +108,7 @@ async function seedFixture(): Promise<void> {
         createdAt: startedAt,
       },
     });
+    await activateLeagueSeason(tx, FIXTURE.leagueId);
 
     await tx.leagueMember.createMany({
       data: memberIds.map((id, index) => ({

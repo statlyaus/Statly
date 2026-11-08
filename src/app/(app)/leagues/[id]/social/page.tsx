@@ -1,8 +1,9 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
+import { NotLeagueMember } from '@/components/league/NotLeagueMember';
 import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail';
+import { loadMemberLeagueOptions } from '@/server/leagues/memberLeagueOptions';
 
 import SocialPageClient from './SocialPageClient';
 
@@ -23,25 +24,10 @@ export default async function LeagueSocialPage({
   if (!userId) redirect(`/login?next=${encodeURIComponent(`/leagues/${id}/social`)}`);
 
   const result = await loadAuthorizedLeagueDetail(id, userId);
-  if (!result.ok) {
-    if (result.status === 404) notFound();
-    return (
-        <div className="min-h-screen bg-background px-4 py-10 text-foreground">
-          <section className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-6 text-center">
-            <h1 className="text-xl font-semibold">League social is unavailable</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              You must be a current league member to view chat or message-board content.
-            </p>
-            <Link
-              href="/leagues"
-              className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              View your leagues
-            </Link>
-          </section>
-        </div>
-    );
+  if (!result.ok && (result.status === 403 || result.status === 404)) {
+    return <NotLeagueMember leagues={await loadMemberLeagueOptions(userId)} />;
   }
+  if (!result.ok) throw new Error('League social could not be loaded.');
   if (!result.league) notFound();
 
   return (
@@ -49,9 +35,7 @@ export default async function LeagueSocialPage({
       leagueId={id}
       leagueName={result.league.name}
       userId={userId}
-      initialView={
-        query.view === 'board' || query.view === 'activity' ? query.view : 'chat'
-      }
+      initialView={query.view === 'board' || query.view === 'activity' ? query.view : 'chat'}
       initialPostId={query.post}
     />
   );

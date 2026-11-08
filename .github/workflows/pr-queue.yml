@@ -37,5 +37,9 @@ jobs:
         with:
           persist-credentials: false
       - env:
-          GH_TOKEN: ${{ github.token }}
+          # QUEUE_TOKEN: the owner's fine-grained token (this repository; Contents, Pull requests and
+          # Actions read/write). Branch updates made with it count as the owner, so pull request CI
+          # runs without approval. Without it the queue still dispatches CI but updates no branch.
+          GH_TOKEN: ${{ secrets.QUEUE_TOKEN || github.token }}
+          QUEUE_TOKEN_SET: ${{ secrets.QUEUE_TOKEN != '' }}
         run: node Scripts/ci/pr-queue.mjs

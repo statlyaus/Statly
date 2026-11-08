@@ -31,9 +31,11 @@ import {
 } from '@/server/waivers/WaiverProcessingService';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const ROUNDS = 8;
 const LEAGUE = 'int-concurrency-league';
+let seasonId = '';
 const SETTINGS = 'int-concurrency-settings';
 const DRAFT = 'int-concurrency-draft';
 const users = ['a', 'b'].map((name) => `int-concurrency-user-${name}`);
@@ -96,6 +98,7 @@ async function seedFixture() {
       settingsId: SETTINGS,
     },
   });
+  seasonId = await activateLeagueSeason(prisma, LEAGUE);
   await prisma.leagueMember.createMany({
     data: members.map((id, index) => ({
       id,
@@ -141,7 +144,7 @@ const claim = (overrides: Partial<WaiverClaim>): WaiverClaim => ({
 
 const priorityRow = () =>
   prisma.waiverPriority.findUniqueOrThrow({
-    where: { leagueId_memberId: { leagueId: LEAGUE, memberId: members[0] } },
+    where: { leagueId_seasonId_memberId: { leagueId: LEAGUE, seasonId, memberId: members[0] } },
   });
 
 beforeEach(async () => {
@@ -160,6 +163,7 @@ describe('waiver FAAB under two writers', () => {
       await prisma.waiverPriority.createMany({
         data: members.map((memberId, index) => ({
           leagueId: LEAGUE,
+          seasonId,
           memberId,
           priority: index + 1,
           remainingFAAB: 100,
@@ -226,7 +230,7 @@ describe('waiver FAAB under two writers', () => {
     for (let round = 0; round < ROUNDS; round += 1) {
       await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });
       await prisma.waiverPriority.create({
-        data: { leagueId: LEAGUE, memberId: members[0], priority: 1, remainingFAAB: 100 },
+        data: { leagueId: LEAGUE, seasonId, memberId: members[0], priority: 1, remainingFAAB: 100 },
       });
 
       const results = await Promise.all([
@@ -260,6 +264,7 @@ describe('waiver processing under two runs', () => {
       await prisma.waiverPriority.createMany({
         data: members.map((memberId, index) => ({
           leagueId: LEAGUE,
+          seasonId,
           memberId,
           priority: index + 1,
           remainingFAAB: 100,
@@ -365,6 +370,7 @@ describe('waiver processing after a crash', () => {
     await prisma.waiverPriority.createMany({
       data: members.map((memberId, index) => ({
         leagueId: LEAGUE,
+        seasonId,
         memberId,
         priority: index + 1,
         remainingFAAB: 100,

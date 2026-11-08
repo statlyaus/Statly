@@ -82,7 +82,8 @@ describe('/api/cron/scoring', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     await expect(response.json()).resolves.toMatchObject({ ok: true, leagues: [] });
-    const [query] = findManyMock.mock.calls[0] as [
+    // The first read looks for rounds still waiting for a start time; the last one picks the rounds to score.
+    const [query] = findManyMock.mock.calls.at(-1) as [
       { where: { status: unknown; startsAt: { lte: Date }; league: unknown } },
     ];
     expect(query.where.status).toEqual({ notIn: ['FINAL', 'NO_MATCHUP'] });

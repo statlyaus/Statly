@@ -111,6 +111,14 @@ describe('publishCompetition', () => {
     );
   });
 
+  it('locks scoring settings at the moment the competition is published', async () => {
+    await publishCompetition({ leagueId: 'league-1', actorMemberId: 'member-owner', rules });
+
+    const data = txMocks.leagueSettings.update.mock.calls[0]?.[0].data;
+    expect(data.scoringSettingsLockedAt).toBeInstanceOf(Date);
+    expect(data.scoringSettingsLockedAt).toEqual(data.competitionPublishedAt);
+  });
+
   it('publishes fixtures only for active members, never removed ones', async () => {
     await publishCompetition({ leagueId: 'league-1', actorMemberId: 'member-owner', rules });
 

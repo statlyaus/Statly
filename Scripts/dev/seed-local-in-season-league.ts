@@ -487,6 +487,7 @@ async function main() {
     await prisma.teamAction.create({
       data: {
         leagueId: LEAGUE_ID,
+        seasonId: SEASON_ID,
         memberId: me.id,
         actionType: 'WAIVER_CLAIM',
         details: { note: 'Local fixture claim' },

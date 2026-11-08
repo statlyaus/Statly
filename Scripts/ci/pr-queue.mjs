@@ -6,10 +6,12 @@
 // auto-merge pull request is already running CI or about to merge, it updates the oldest green
 // BEHIND one. One CI run per main move, never one per open pull request.
 //
-// A push made with GITHUB_TOKEN does not trigger workflows, so after updating a branch this
-// dispatches CI on it; the dispatched run's CI Gate check lands on the new head commit. On the
-// schedule it also dispatches CI for a main tip that no CI run covers (merges that GITHUB_TOKEN
-// enabled, such as Dependabot's). See "Pull request queue" in docs/development/delivery.md.
+// It updates branches only with QUEUE_TOKEN, the owner's fine-grained token. An update made with
+// GITHUB_TOKEN commits as github-actions[bot]: GitHub then holds the pull request's own CI run for
+// approval, and a dispatched run's CI Gate is not attached to the pull request, so the required
+// check never appears and the queue waits on it forever (#1237, 8 Nov 2026). With the owner token
+// the update triggers the pull request's CI like any push. On the schedule it also dispatches CI for
+// a main tip that no CI run covers. See "Pull request queue" in docs/development/delivery.md.
 //
 //   GH_TOKEN=... GITHUB_REPOSITORY=owner/name node Scripts/ci/pr-queue.mjs
 
@@ -115,6 +117,14 @@ export function loadPullRequests(repo) {
   });
 }
 
+/**
+ * True when the workflow runs with QUEUE_TOKEN, the only token whose branch updates get CI.
+ * @param {{ QUEUE_TOKEN_SET?: string }} [env]
+ */
+export function canUpdateBranches(env = process.env) {
+  return env.QUEUE_TOKEN_SET === 'true';
+}
+
 function dispatchCi(repo, ref) {
   gh(['workflow', 'run', 'ci.yml', '--repo', repo, '--ref', ref]);
   console.log(`Dispatched CI on ${ref}.`);
@@ -149,14 +159,14 @@ async function updateOldest(repo, prs, candidates) {
       moved = headSha(repo, number) !== pr.headOid;
     }
     if (!moved) {
-      // The no-CI recovery in planQueue dispatches CI once the new head appears.
+      // The pull request's CI starts once GitHub registers the new head.
       console.log(
         `Updated #${number}, but its head has not moved yet; CI is left to the next run.`
       );
       return;
     }
+    // The owner-token push triggers the pull request's own CI; no dispatch needed.
     console.log(`Updated #${number} with main.`);
-    dispatchCi(repo, pr.headRefName);
     return;
   }
   console.log('No BEHIND pull request could be updated.');
@@ -189,7 +199,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const prs = loadPullRequests(repo);
   const plan = planQueue(prs, now);
   console.log(`Plan: ${JSON.stringify(plan)}`);
-  if (plan.action === 'update') await updateOldest(repo, prs, plan.candidates);
+  if (plan.action === 'update') {
+    if (canUpdateBranches()) await updateOldest(repo, prs, plan.candidates);
+    else
+      console.log(
+        'QUEUE_TOKEN is not set, so no branch is updated: a GITHUB_TOKEN update leaves the pull request CI awaiting approval. Update by hand with `gh pr update-branch`.'
+      );
+  }
   if (plan.action === 'dispatch') dispatchCi(repo, plan.headRefName);
   if (process.env.GITHUB_EVENT_NAME === 'schedule') verifyMain(repo, now);
 }

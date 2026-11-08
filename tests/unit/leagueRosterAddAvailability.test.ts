@@ -27,6 +27,9 @@ const prismaMocks = vi.hoisted(() => ({
   teamAction: {
     findFirst: vi.fn(),
   },
+  draft: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -76,6 +79,7 @@ describe('league roster free-agent add eligibility', () => {
 
     authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
     prismaMocks.$executeRaw.mockResolvedValue(1);
+    prismaMocks.draft.findUnique.mockResolvedValue({ status: 'COMPLETED' });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       isActive: true,
@@ -116,6 +120,7 @@ describe('league roster free-agent add eligibility', () => {
     expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
+        season: { activeForLeague: { is: { id: 'league-1' } } },
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
         processingAt: { gt: expect.any(Date) },

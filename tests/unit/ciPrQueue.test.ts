@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { planQueue } from '../../Scripts/ci/pr-queue.mjs';
+import { canUpdateBranches, planQueue } from '../../Scripts/ci/pr-queue.mjs';
 
 const pr = (overrides: Record<string, unknown> = {}) => ({
   number: 1,
@@ -86,5 +86,16 @@ describe('planQueue', () => {
 
   it('leaves a pull request whose merge state GitHub has not computed yet', () => {
     expect(planQueue([pr({ mergeStateStatus: 'UNKNOWN' })])).toEqual({ action: 'none' });
+  });
+});
+
+describe('canUpdateBranches', () => {
+  it('updates branches only with the owner token, so CI runs on the new head without approval', () => {
+    expect(canUpdateBranches({ QUEUE_TOKEN_SET: 'true' })).toBe(true);
+  });
+
+  it('refuses with only GITHUB_TOKEN, whose merge commit leaves pull_request CI awaiting approval', () => {
+    expect(canUpdateBranches({ QUEUE_TOKEN_SET: 'false' })).toBe(false);
+    expect(canUpdateBranches({})).toBe(false);
   });
 });
