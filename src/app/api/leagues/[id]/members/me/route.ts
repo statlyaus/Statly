@@ -1,8 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { adminDb } from '@/lib/firebaseAdmin';
-import { getLeagueMembership, queueLeagueMembershipPatch } from '@/lib/leagueMembership';
+import { getLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -140,18 +139,6 @@ function parseStoredNotificationSettings(
   }
 }
 
-function getMembershipNotificationSettings(
-  value: unknown
-): LeagueMemberNotificationSettings | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-
-  try {
-    return parseNotificationSettings(value);
-  } catch {
-    return undefined;
-  }
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -164,10 +151,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Prisma owns leagues and membership. A league with no Prisma row is legacy data and is not
+    // found; Firestore never decides who may change a team.
+    const league = await prisma.league.findUnique({ where: { id }, select: { id: true } });
+    if (!league) {
+      return NextResponse.json({ error: 'League not found' }, { status: 404 });
+    }
+
     const membership = await getLeagueMembership(id, userId);
-    if (!membership.isMember) {
+    if (!membership.isMember || membership.source !== 'prisma' || !membership.memberDocId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const memberId = membership.memberDocId;
 
     let body: Record<string, unknown>;
     try {
@@ -184,50 +179,34 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       teamLogoZoom?: number;
       notificationSettingsJson?: LeagueMemberNotificationSettings;
     } = {};
-    const firestorePatch: {
-      teamName?: string;
-      teamLogoUrl?: string | null;
-      teamLogoPositionX?: number;
-      teamLogoPositionY?: number;
-      teamLogoZoom?: number;
-      notificationSettings?: LeagueMemberNotificationSettings;
-    } = {};
     const shouldUpdateTeamLogo = hasTeamLogoPatch(body);
 
     try {
       if (hasBodyField(body, 'teamName')) {
-        const teamName = parseTeamName(body.teamName);
-        prismaData.teamName = teamName;
-        firestorePatch.teamName = teamName;
+        prismaData.teamName = parseTeamName(body.teamName);
       }
 
       if (shouldUpdateTeamLogo) {
-        const teamLogoPatch = parseTeamLogoPatch(body);
-        Object.assign(prismaData, teamLogoPatch);
-        Object.assign(firestorePatch, teamLogoPatch);
+        Object.assign(prismaData, parseTeamLogoPatch(body));
       }
 
       if (hasBodyField(body, 'notificationSettings')) {
         const rawSettings = body.notificationSettings as Record<string, unknown>;
         const notificationSettings = parseNotificationSettings(rawSettings);
         if (!hasBodyField(rawSettings, 'social')) {
-          const existingSettings =
-            membership.source === 'prisma' && membership.memberDocId
-              ? parseStoredNotificationSettings(
-                  (
-                    await prisma.leagueMember.findUnique({
-                      where: { id: membership.memberDocId },
-                      select: { notificationSettingsJson: true },
-                    })
-                  )?.notificationSettingsJson
-                )
-              : getMembershipNotificationSettings(membership.data?.notificationSettings);
+          const existingSettings = parseStoredNotificationSettings(
+            (
+              await prisma.leagueMember.findUnique({
+                where: { id: memberId },
+                select: { notificationSettingsJson: true },
+              })
+            )?.notificationSettingsJson
+          );
           if (existingSettings?.social) {
             notificationSettings.social = existingSettings.social;
           }
         }
         prismaData.notificationSettingsJson = notificationSettings;
-        firestorePatch.notificationSettings = notificationSettings;
       }
     } catch (error) {
       if (error instanceof Error) {
@@ -241,90 +220,41 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'No team settings provided' }, { status: 400 });
     }
 
-    if (membership.source === 'prisma' && membership.memberDocId) {
-      const updatedMember = await prisma.leagueMember.update({
-        where: { id: membership.memberDocId },
-        data: prismaData,
-        select: {
-          id: true,
-          leagueId: true,
-          userId: true,
-          role: true,
-          teamName: true,
-          teamLogoUrl: true,
-          teamLogoPositionX: true,
-          teamLogoPositionY: true,
-          teamLogoZoom: true,
-          notificationSettingsJson: true,
-          joinedAt: true,
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          member: {
-            id: updatedMember.id,
-            leagueId: updatedMember.leagueId,
-            userId: updatedMember.userId,
-            role: String(updatedMember.role).toLowerCase(),
-            teamName: updatedMember.teamName,
-            teamLogoUrl: updatedMember.teamLogoUrl ?? undefined,
-            teamLogoPositionX: updatedMember.teamLogoPositionX ?? undefined,
-            teamLogoPositionY: updatedMember.teamLogoPositionY ?? undefined,
-            teamLogoZoom: updatedMember.teamLogoZoom ?? undefined,
-            notificationSettings: parseStoredNotificationSettings(
-              updatedMember.notificationSettingsJson
-            ),
-            joinedAt: updatedMember.joinedAt.toISOString(),
-            isActive: true,
-          },
-        },
-      });
-    }
-
-    const batch = adminDb.batch();
-    queueLeagueMembershipPatch(batch, id, userId, firestorePatch);
-    await batch.commit();
+    const updatedMember = await prisma.leagueMember.update({
+      where: { id: memberId },
+      data: prismaData,
+      select: {
+        id: true,
+        leagueId: true,
+        userId: true,
+        role: true,
+        teamName: true,
+        teamLogoUrl: true,
+        teamLogoPositionX: true,
+        teamLogoPositionY: true,
+        teamLogoZoom: true,
+        notificationSettingsJson: true,
+        joinedAt: true,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       data: {
         member: {
-          id: membership.memberDocId ?? userId,
-          leagueId: id,
-          userId,
-          role: typeof membership.data?.role === 'string' ? membership.data.role : 'member',
-          teamName:
-            firestorePatch.teamName ??
-            (typeof membership.data?.teamName === 'string' ? membership.data.teamName : 'Team'),
-          teamLogoUrl: shouldUpdateTeamLogo
-            ? (firestorePatch.teamLogoUrl ?? undefined)
-            : typeof membership.data?.teamLogoUrl === 'string'
-              ? membership.data.teamLogoUrl
-              : undefined,
-          teamLogoPositionX:
-            firestorePatch.teamLogoPositionX ??
-            (typeof membership.data?.teamLogoPositionX === 'number'
-              ? membership.data.teamLogoPositionX
-              : undefined),
-          teamLogoPositionY:
-            firestorePatch.teamLogoPositionY ??
-            (typeof membership.data?.teamLogoPositionY === 'number'
-              ? membership.data.teamLogoPositionY
-              : undefined),
-          teamLogoZoom:
-            firestorePatch.teamLogoZoom ??
-            (typeof membership.data?.teamLogoZoom === 'number'
-              ? membership.data.teamLogoZoom
-              : undefined),
-          notificationSettings:
-            firestorePatch.notificationSettings ??
-            getMembershipNotificationSettings(membership.data?.notificationSettings),
-          joinedAt:
-            typeof membership.data?.joinedAt === 'string'
-              ? membership.data.joinedAt
-              : new Date().toISOString(),
+          id: updatedMember.id,
+          leagueId: updatedMember.leagueId,
+          userId: updatedMember.userId,
+          role: String(updatedMember.role).toLowerCase(),
+          teamName: updatedMember.teamName,
+          teamLogoUrl: updatedMember.teamLogoUrl ?? undefined,
+          teamLogoPositionX: updatedMember.teamLogoPositionX ?? undefined,
+          teamLogoPositionY: updatedMember.teamLogoPositionY ?? undefined,
+          teamLogoZoom: updatedMember.teamLogoZoom ?? undefined,
+          notificationSettings: parseStoredNotificationSettings(
+            updatedMember.notificationSettingsJson
+          ),
+          joinedAt: updatedMember.joinedAt.toISOString(),
           isActive: true,
         },
       },
