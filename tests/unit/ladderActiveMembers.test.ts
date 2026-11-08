@@ -25,6 +25,7 @@ import { loadLeagueStandingsHistory } from '@/server/leagues/standingsHistoryLoa
 
 const league = {
   id: 'league-1',
+  activeSeasonId: 'season-1',
   categoriesJson: ['goals'],
   settings: {
     scoringMode: 'H2H_EACH_CATEGORY',

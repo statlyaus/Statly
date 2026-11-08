@@ -441,8 +441,22 @@ describe.sequential('player identity consolidation', () => {
         externalId: playerId,
       })),
     });
+    await prisma.leagueSeason.create({
+      data: {
+        id: 'autosub-history-season',
+        leagueId: 'league-b',
+        label: '2026 season',
+        year: 2026,
+      },
+    });
     await prisma.leagueLineup.create({
-      data: { id: 'autosub-history-lineup', leagueId: 'league-b', memberId: 'member-b', round: 1 },
+      data: {
+        id: 'autosub-history-lineup',
+        leagueId: 'league-b',
+        seasonId: 'autosub-history-season',
+        memberId: 'member-b',
+        round: 1,
+      },
     });
     await prisma.leagueLineupAutosub.create({
       data: {
