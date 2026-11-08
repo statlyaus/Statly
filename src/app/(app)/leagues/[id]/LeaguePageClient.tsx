@@ -118,7 +118,7 @@ export default function LeaguePageClient({
             <button
               onClick={() => void retryFetch()}
               disabled={loading}
-              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
             >
               {loading ? 'Retrying…' : 'Retry'}
             </button>
@@ -140,7 +140,7 @@ export default function LeaguePageClient({
             <button
               onClick={() => void retryFetch()}
               disabled={loading}
-              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
             >
               {loading ? 'Retrying…' : 'Retry'}
             </button>

@@ -21,10 +21,48 @@ import { fileURLToPath } from 'node:url';
 const NO_CHECKS_GRACE_MS = 10 * 60 * 1000;
 const RUNNING = new Set(['PENDING', 'EXPECTED']);
 const MERGEABLE = new Set(['CLEAN', 'HAS_HOOKS', 'UNSTABLE']);
+// The Main ruleset's required checks. DeepSource and CodeFactor also report on every pull request
+// but are informational, so GitHub's overall rollup can read FAILURE while the ruleset is satisfied.
+const CI_GATE = 'CI Gate';
+export const REQUIRED_CHECKS = [CI_GATE, 'GitGuardian Security Checks'];
+const PASSED = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
 
 /**
- * Decide the queue's next step. `checks` is the head commit's check rollup state, or null when no
- * CI workflow run has reported on the head commit.
+ * The head commit's checks as the queue sees them, from its rollup contexts (CheckRun nodes with
+ * `name status conclusion startedAt` and the CI workflow name; StatusContext nodes with
+ * `context state`). Only the required checks count. Null when no CI job has reported; PENDING until
+ * CI Gate and every other required check finish; FAILURE when a required check failed or never
+ * reported; otherwise SUCCESS.
+ */
+export function requiredChecksState(contexts) {
+  const hasCi = contexts.some((check) => check.checkSuite?.workflowRun?.workflow?.name === 'CI');
+  if (!hasCi) return null;
+
+  const latest = new Map();
+  for (const check of contexts) {
+    const name = check.name ?? check.context;
+    if (!REQUIRED_CHECKS.includes(name)) continue;
+    const seen = latest.get(name);
+    if (!seen || (check.startedAt ?? '') > (seen.startedAt ?? '')) latest.set(name, check);
+  }
+  const outcome = (check) => {
+    if (!check) return 'MISSING';
+    if (check.state !== undefined) return PASSED.has(check.state) ? 'SUCCESS' : check.state;
+    if (check.status !== 'COMPLETED') return 'PENDING';
+    return PASSED.has(check.conclusion) ? 'SUCCESS' : 'FAILURE';
+  };
+  const outcomes = REQUIRED_CHECKS.map((name) => outcome(latest.get(name)));
+
+  if (outcomes.some((state) => state === 'FAILURE' || state === 'ERROR')) return 'FAILURE';
+  // CI Gate appears only once every CI job has finished; until then the run is still going.
+  if (outcome(latest.get(CI_GATE)) === 'MISSING' || outcomes.some((state) => RUNNING.has(state)))
+    return 'PENDING';
+  return outcomes.every((state) => state === 'SUCCESS') ? 'SUCCESS' : 'FAILURE';
+}
+
+/**
+ * Decide the queue's next step. `checks` is requiredChecksState() of the head commit: null when no
+ * CI job has reported on it.
  */
 export function planQueue(prs, now = Date.now()) {
   const queued = prs
@@ -73,8 +111,12 @@ const QUERY = `query($owner: String!, $name: String!) {
         autoMergeRequest { enabledAt }
         commits(last: 1) { nodes { commit {
           oid committedDate
-          statusCheckRollup { state contexts(first: 100) { nodes {
-            ... on CheckRun { checkSuite { workflowRun { workflow { name } } } }
+          statusCheckRollup { contexts(first: 100) { nodes {
+            ... on CheckRun {
+              name status conclusion startedAt
+              checkSuite { workflowRun { workflow { name } } }
+            }
+            ... on StatusContext { context state }
           } } }
         } } }
       }
@@ -96,12 +138,6 @@ export function loadPullRequests(repo) {
   ]);
   return JSON.parse(stdout).data.repository.pullRequests.nodes.map((node) => {
     const commit = node.commits.nodes[0]?.commit;
-    const rollup = commit?.statusCheckRollup;
-    // CI Gate itself appears only when every job has finished, so look for any job of the CI workflow.
-    const hasCi =
-      rollup?.contexts.nodes.some(
-        (check) => check.checkSuite?.workflowRun?.workflow?.name === 'CI'
-      ) ?? false;
     return {
       number: node.number,
       createdAt: node.createdAt,
@@ -109,7 +145,7 @@ export function loadPullRequests(repo) {
       autoMerge: node.autoMergeRequest !== null,
       sameRepository: !node.isCrossRepository,
       mergeStateStatus: node.mergeStateStatus,
-      checks: hasCi ? rollup.state : null,
+      checks: requiredChecksState(commit?.statusCheckRollup?.contexts.nodes ?? []),
       headRefName: node.headRefName,
       headOid: commit?.oid,
       headCommittedAt: commit?.committedDate,

@@ -16,7 +16,7 @@
 # Examples:
 #   Scripts/dev/curl-admin.sh admin /api/admin/queue
 #   Scripts/dev/curl-admin.sh cron /api/cron/daily
-#   Scripts/dev/curl-admin.sh user /api/user/leagues
+#   Scripts/dev/curl-admin.sh user /api/user/teams
 #
 # Expected local values in .env.local (never committed):
 #   ADMIN_SECRET=<local operator secret>
