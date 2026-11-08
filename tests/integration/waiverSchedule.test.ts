@@ -15,6 +15,7 @@ import {
 import { processDueLeagueWaivers } from '@/server/waivers/waiverSchedule';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const LEAGUE = 'int-waiver-schedule-league';
 const SETTINGS = 'int-waiver-schedule-settings';
@@ -70,6 +71,7 @@ beforeEach(async () => {
       settingsId: SETTINGS,
     },
   });
+  await activateLeagueSeason(prisma, LEAGUE);
   await prisma.leagueMember.create({
     data: { id: MEMBER, leagueId: LEAGUE, userId: USER, role: 'OWNER', teamName: 'Early Risers' },
   });
@@ -110,6 +112,7 @@ describe('daily waiver run', () => {
     await expect(processDueLeagueWaivers(SEVEN_AM, service)).resolves.toEqual({
       ran: false,
       leagues: [],
+      failedLeagueIds: [],
     });
     expect(await statusOf(PLAYERS[0])).toBe('PENDING');
   });
@@ -118,6 +121,7 @@ describe('daily waiver run', () => {
     const run = await processDueLeagueWaivers(SIX_AM, service);
 
     expect(run.ran).toBe(true);
+    expect(run.failedLeagueIds).toEqual([]);
     expect(run.leagues.find((league) => league.leagueId === LEAGUE)).toMatchObject({
       processed: 1,
     });

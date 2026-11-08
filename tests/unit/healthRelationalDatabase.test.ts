@@ -56,9 +56,8 @@ describe('health relational database probe', () => {
     const source = readFileSync(join(process.cwd(), 'src/app/api/health/route.ts'), 'utf8');
 
     expect(source.match(/checkRelationalDatabase\(\)/g)).toHaveLength(1);
-    expect(source).toContain(
-      'const criticalServices = [database, relationalDatabase, metricsCheck]'
-    );
+    expect(source).toContain('database: relationalDatabase,');
+    expect(source).toContain('const criticalServices = [database, metricsCheck]');
     expect(source).toContain('relationalDatabase: relationalDatabase.status');
     expect(source).toContain("adminDb.collection('_health').doc('ping').get()");
     expect(source).not.toContain("doc('health_check')");

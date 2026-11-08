@@ -108,12 +108,8 @@ describe('draft create authorization architecture', () => {
     });
   });
 
-  it('falls back to Firestore league ownership when Prisma access is missing', async () => {
+  it('does not grant access from Firestore league ownership when the league has no Prisma row', async () => {
     vi.mocked(prisma.league.findUnique).mockResolvedValue(null);
-    vi.mocked(getLeagueMembership).mockResolvedValue({
-      isMember: false,
-      source: 'none',
-    });
     vi.mocked(adminDb.collection).mockReturnValue({
       doc: vi.fn().mockReturnValue({
         get: vi.fn().mockResolvedValue({
@@ -128,10 +124,11 @@ describe('draft create authorization architecture', () => {
     expect(access).toEqual({
       leagueId: 'league-1',
       userId: 'user-1',
-      role: 'owner',
-      isMember: true,
-      canManage: true,
+      isMember: false,
+      canManage: false,
     });
+    expect(adminDb.collection).not.toHaveBeenCalled();
+    expect(getLeagueMembership).not.toHaveBeenCalled();
   });
 
   it('does not let Firestore ownership override an active Prisma member role', async () => {

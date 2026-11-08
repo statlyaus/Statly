@@ -2,9 +2,10 @@
 
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { copyText } from '@/lib/copyText';
 import { StandingsLadderCompact } from '@/components/league/standings/StandingsLadderCompact';
 import type { StandingsData } from '@/components/league/standings/standingsFormat';
 import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
@@ -441,6 +442,14 @@ function SetupChecklist({
   onNavigate: (target: OverviewTarget) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  // Set when neither the Clipboard API nor the legacy copy worked: the link is shown to copy by hand.
+  const [manualCopyUrl, setManualCopyUrl] = useState<string | null>(null);
+  const manualCopyRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!manualCopyUrl) return;
+    manualCopyRef.current?.focus();
+    manualCopyRef.current?.select();
+  }, [manualCopyUrl]);
   // Read in the browser only: this panel is server-rendered too.
   const [canShare, setCanShare] = useState(false);
   useEffect(() => setCanShare(typeof navigator.share === 'function'), []);
@@ -452,12 +461,10 @@ function SetupChecklist({
   const needsTeams = draftBlockers.some((b) => b.code === 'insufficient_members');
 
   async function copyInviteLink() {
-    try {
-      await navigator.clipboard.writeText(inviteUrl());
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
+    const url = inviteUrl();
+    const ok = await copyText(url);
+    setCopied(ok);
+    setManualCopyUrl(ok ? null : url);
   }
 
   function shareInvite() {
@@ -501,6 +508,22 @@ function SetupChecklist({
               {copied ? 'Copied' : 'Copy invite link'}
             </button>
           </div>
+          {manualCopyUrl ? (
+            <div className="w-full">
+              <label htmlFor="overview-invite-link" className="text-destructive">
+                Copy failed — select and copy the link
+              </label>
+              <input
+                id="overview-invite-link"
+                ref={manualCopyRef}
+                type="text"
+                readOnly
+                value={manualCopyUrl}
+                onFocus={(event) => event.currentTarget.select()}
+                className="mt-1 min-h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+              />
+            </div>
+          ) : null}
         </li>
         <li className={rowClass}>
           <div>
@@ -539,7 +562,11 @@ function SetupChecklist({
         ) : null}
       </ul>
       <p role="status" className="sr-only">
-        {copied ? 'Invite link copied' : ''}
+        {copied
+          ? 'Invite link copied'
+          : manualCopyUrl
+            ? 'Copy failed — select and copy the link'
+            : ''}
       </p>
     </section>
   );

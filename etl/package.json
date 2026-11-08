@@ -7,7 +7,7 @@
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "lint": "npm run lint:node && npm run lint:r",
     "lint:node": "eslint . --max-warnings=0",
-    "lint:r": "Rscript -e \"invisible(parse(file = 'fetch_fw_round.R'))\"",
+    "lint:r": "Rscript -e \"invisible(parse(file = 'fetch_fw_round.R')); invisible(parse(file = 'fetch_fw_fixture.R'))\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prebuild": "npm run clean",
     "build": "tsc -p tsconfig.json",
@@ -20,6 +20,7 @@
     "process-data": "node dist/processFootywireData.js",
     "validate": "node dist/validateMatchData.js",
     "test-r": "Rscript fetch_fw_round.R 2025 18",
+    "fixture": "npm run build && Rscript fetch_fw_fixture.R | node dist/processFixtureData.js",
     "test-pipeline": "npm run build && Rscript fetch_fw_round.R 2025 18 | node dist/processFootywireData.js",
     "docker-build": "docker build -t statly-etl .",
     "docker-run": "docker run --env-file .env statly-etl"
@@ -31,9 +32,9 @@
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "@types/node": "^22.20.5",
-    "@typescript-eslint/eslint-plugin": "8.72.0",
-    "@typescript-eslint/parser": "8.72.0",
-    "eslint": "10.13.0",
+    "@typescript-eslint/eslint-plugin": "8.72.1",
+    "@typescript-eslint/parser": "8.72.1",
+    "eslint": "10.14.0",
     "globals": "17.13.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

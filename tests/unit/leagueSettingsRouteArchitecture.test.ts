@@ -64,7 +64,8 @@ describe('league settings route architecture', () => {
     expect(source).toContain('lineupSlotsJson: lineupSlots');
     expect(source).toContain('fixtureGenerationMode');
     expect(source).toContain('categoryDirectionsJson: categoryDirections');
-    expect(source).toContain("error: 'Scoring settings are locked'");
+    expect(source).toContain("code: 'SCORING_SETTINGS_LOCKED'");
+    expect(source).toContain("code: 'DRAFT_STRUCTURE_LOCKED'");
   });
 
   it('converges the draft setup after Prisma settings updates', () => {

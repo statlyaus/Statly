@@ -7,9 +7,16 @@ export const DRAFT_QUEUE_NAME = 'draftQueue';
 
 export interface DraftStartJobData {
   kind: 'draft:start-lobby' | 'draft:start';
+  // The draft is the job's identity. A league's next-season draft is a different draft, so its
+  // start jobs never share an id with, or get removed by, an earlier draft's jobs.
+  draftId: string;
   leagueId: string;
   pickClock: number; // milliseconds per pick
-  draftId?: string;
+}
+
+export interface DraftStartTarget {
+  draftId: string;
+  leagueId: string;
 }
 
 export interface DraftPickExpiryJobData {
@@ -24,12 +31,12 @@ export type DraftJobData = DraftStartJobData | DraftPickExpiryJobData;
 // Sanitize job IDs by replacing ':' to meet BullMQ constraints
 const sanitizeJobId = (id: string): string => id.replace(/:/g, '_');
 
-export function getDraftStartJobId(leagueId: string) {
-  return sanitizeJobId(`${leagueId}-start`);
+export function getDraftStartJobId(draftId: string) {
+  return sanitizeJobId(`draft-${draftId}-start`);
 }
 
-export function getDraftLobbyJobId(leagueId: string) {
-  return sanitizeJobId(leagueId);
+export function getDraftLobbyJobId(draftId: string) {
+  return sanitizeJobId(`draft-${draftId}-lobby`);
 }
 
 export function getDraftPickExpiryJobId(draftId: string) {
@@ -87,14 +94,14 @@ async function removeDraftPickExpiryJobs(draftId: string): Promise<void> {
 }
 
 export async function scheduleDraftStart(
-  leagueId: string,
+  { draftId, leagueId }: DraftStartTarget,
   startAt: Date,
   pickClock: number,
   immediateStart = false
 ): Promise<void> {
-  // Remove any existing jobs for this league before scheduling a new one
-  const lobbyJobId = sanitizeJobId(leagueId);
-  const startJobId = getDraftStartJobId(leagueId);
+  // Replace this draft's own start jobs; another draft's jobs (even in the same league) are untouched
+  const lobbyJobId = getDraftLobbyJobId(draftId);
+  const startJobId = getDraftStartJobId(draftId);
   await Promise.allSettled([draftQueue.remove(lobbyJobId), draftQueue.remove(startJobId)]);
 
   const now = Date.now();
@@ -108,7 +115,7 @@ export async function scheduleDraftStart(
     const startDelay = Math.max(0, startTs - now);
     await draftQueue.add(
       'start-draft',
-      { kind: 'draft:start', leagueId, pickClock },
+      { kind: 'draft:start', draftId, leagueId, pickClock },
       {
         delay: startDelay,
         jobId: startJobId,
@@ -129,7 +136,7 @@ export async function scheduleDraftStart(
 
   await draftQueue.add(
     'start',
-    { kind: 'draft:start-lobby', leagueId, pickClock },
+    { kind: 'draft:start-lobby', draftId, leagueId, pickClock },
     {
       delay: lobbyDelay,
       jobId: lobbyJobId,
@@ -138,10 +145,10 @@ export async function scheduleDraftStart(
   );
 }
 
-export async function cancelDraftStart(leagueId: string): Promise<void> {
+export async function cancelDraftStart(draftId: string): Promise<void> {
   await Promise.all([
-    draftQueue.remove(getDraftLobbyJobId(leagueId)),
-    draftQueue.remove(getDraftStartJobId(leagueId)),
+    draftQueue.remove(getDraftLobbyJobId(draftId)),
+    draftQueue.remove(getDraftStartJobId(draftId)),
   ]);
 }
 

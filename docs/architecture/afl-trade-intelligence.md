@@ -128,7 +128,9 @@ impact, objective fairness, or a trade winner. Each public response must identif
 release and its effective-through date.
 
 The archive and factual outcomes must remain useful when numerical valuation is unavailable,
-withdrawn, stale, or unsupported for a cohort. The mandatory valuation milestone answers four
+withdrawn, stale, or unsupported for a cohort. A failed valuation read on the public trade, trade
+detail, or club page is logged and shown as "trade values temporarily unavailable" beside the factual
+record; it never hides that record. The mandatory valuation milestone answers four
 distinct questions when an eligible model publication is active:
 
 1. **At-trade decision value:** the distribution of future contribution knowable at the transaction
@@ -2058,7 +2060,9 @@ row membership, records the count and root once, and rejects all later rows. Val
 activate events require that exact sealed set. Public reads authenticate the active projection and
 sealed set once, then use indexed SQL filters and signed, query-bound keyset cursors; each returned row
 is still checked against its retained canonical bytes and digest. This avoids re-reading and hashing the
-entire projection on every page request without weakening the publication boundary.
+entire projection on every page request without weakening the publication boundary. A cursor bound to
+an earlier projection, query, or signing key is rejected; the public `/draft/outcomes` page then shows
+the first page of the current results with a notice instead of failing.
 
 This is a source-independent, dormant publication boundary. The contracts, migration gates, and
 fixture repositories prove sequencing and integrity but do not provision hosted PostgreSQL or object
