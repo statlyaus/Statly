@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger, withTiming } from '@/lib/logger';
-import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
@@ -112,18 +110,6 @@ export const POST = withMetrics(
         playerId: canonicalPlayerId,
         claimId,
       });
-      try {
-        const results = await Promise.allSettled([
-          revalidateTag(tags.waivers(leagueId), { expire: 0 }),
-          revalidateTag(tags.league(leagueId), { expire: 0 }),
-        ]);
-        const failed = results.filter((r) => r.status === 'rejected').length;
-        if (failed) {
-          logger.warn('Failed to revalidate tags after waiver submit', { leagueId, failed });
-        }
-      } catch (e) {
-        logger.warn('Revalidation error after waiver submit', { leagueId, error: e });
-      }
       // Echo the stored claim so the client confirms what persisted, not what it sent.
       return NextResponse.json(
         {

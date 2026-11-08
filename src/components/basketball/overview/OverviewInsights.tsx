@@ -8,6 +8,8 @@ import { CallChip } from '../analysis/AnalysisBits';
 import { formatChance, formatSigned } from '../analysis/format';
 import { textLinkStyles } from '@/components/ui/controlStyles';
 import { basketballLeagueHref } from '../shell/basketballFormat';
+import { TakenPlayersNotice } from '../shell/TakenPlayersNotice';
+import type { TakenPlayersCheck } from '../shell/takenPlayers';
 
 const TOP_PICKUPS = 5;
 
@@ -74,7 +76,15 @@ function MatchupOdds({ matchup, leagueId }: { matchup: MatchupView; leagueId: st
   );
 }
 
-function TopPickups({ pickups, leagueId }: { pickups: PickupsView; leagueId: string }) {
+function TopPickups({
+  pickups,
+  taken,
+  leagueId,
+}: {
+  pickups: PickupsView;
+  taken: TakenPlayersCheck;
+  leagueId: string;
+}) {
   if (pickups.status !== 'READY') return null;
   const options = pickups.options.slice(0, TOP_PICKUPS);
 
@@ -115,6 +125,7 @@ function TopPickups({ pickups, leagueId }: { pickups: PickupsView; leagueId: str
           ))}
         </ol>
       )}
+      <TakenPlayersNotice check={taken} leagueId={leagueId} className="mt-3" />
       <Link
         href={basketballLeagueHref(leagueId, 'pickups')}
         className={`${textLinkStyles} mt-3 inline-block text-sm`}
@@ -129,17 +140,20 @@ function TopPickups({ pickups, leagueId }: { pickups: PickupsView; leagueId: str
 export function OverviewInsights({
   matchup,
   pickups,
+  taken,
   leagueId,
 }: {
   matchup: MatchupView;
   pickups: PickupsView;
+  /** Whether enough players are marked as taken for the best adds to be real free agents. */
+  taken: TakenPlayersCheck;
   leagueId: string;
 }) {
   if (matchup.status !== 'READY' && pickups.status !== 'READY') return null;
   return (
     <div className="grid gap-5 md:grid-cols-2">
       <MatchupOdds matchup={matchup} leagueId={leagueId} />
-      <TopPickups pickups={pickups} leagueId={leagueId} />
+      <TopPickups pickups={pickups} taken={taken} leagueId={leagueId} />
     </div>
   );
 }

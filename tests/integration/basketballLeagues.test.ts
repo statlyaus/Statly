@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import {
   addBasketballRosterSpots,
   clearBasketballMatchup,
+  clearBasketballTakenPlayers,
   createBasketballLeague,
   deleteBasketballLeague,
   removeBasketballRosterSpot,
@@ -500,6 +501,144 @@ describe('basketball roster spots', () => {
     expect(error).toMatchObject({ details: { fieldErrors: { teamId: expect.any(Array) } } });
     expect((await getBasketballLeagueDetail(OWNER, league.id)).rosterSpots[0].teamId).toBe(
       league.myTeamId
+    );
+  });
+});
+
+describe('players on other teams (rostered elsewhere)', () => {
+  const BULK = 250;
+  const bulkIds = Array.from({ length: BULK }, (_, index) => `${PREFIX}-bulk-${index}`);
+  // Letters only: pasted numbers are stripped as stat clutter. 0 → "Bulk Quixaa", 249 → "Bulk Quixjp".
+  const bulkName = (index: number) =>
+    `Bulk Quix${String.fromCharCode(97 + Math.floor(index / 26), 97 + (index % 26))}`;
+
+  beforeAll(async () => {
+    await prisma.nbaPlayer.createMany({
+      data: bulkIds.map((id, index) => ({
+        id,
+        fullName: bulkName(index),
+        lastName: bulkName(index).split(' ')[1],
+        positions: ['SF'],
+      })),
+    });
+  });
+
+  it('marks a whole league of 250 players as taken in one quick batch', async () => {
+    const league = await createBasketballLeague(OWNER, createInput);
+    // Some are already marked: they stay put, and the batch still covers everyone.
+    await addBasketballRosterSpots(OWNER, league.id, {
+      entries: bulkIds.slice(0, 10).map((playerId) => ({ playerId, teamId: null })),
+    });
+
+    const started = performance.now();
+    const updated = await addBasketballRosterSpots(OWNER, league.id, {
+      entries: bulkIds.map((playerId) => ({ playerId, teamId: null })),
+    });
+    const elapsedMs = performance.now() - started;
+
+    expect(updated.skipped).toEqual([]);
+    expect(updated.rosterSpots.filter((spot) => spot.teamId === null)).toHaveLength(BULK);
+    // A handful of statements, not one round trip per player.
+    expect(elapsedMs).toBeLessThan(2_000);
+  });
+
+  it('leaves players on an entered team alone and reports them as skipped', async () => {
+    const league = await createBasketballLeague(OWNER, createInput);
+    const [mine, second] = league.teams;
+    await addBasketballRosterSpots(OWNER, league.id, {
+      entries: [
+        { playerId: PLAYERS.jokic.id, teamId: mine.id, onInjuredList: true },
+        { playerId: PLAYERS.zeb.id, teamId: second.id },
+      ],
+    });
+
+    const updated = await addBasketballRosterSpots(OWNER, league.id, {
+      entries: [
+        { playerId: PLAYERS.jokic.id, teamId: null },
+        { playerId: PLAYERS.vale.id, teamId: null },
+        { playerId: PLAYERS.zeb.id, teamId: null },
+      ],
+    });
+
+    expect(updated.skipped).toEqual([
+      {
+        playerId: PLAYERS.jokic.id,
+        fullName: 'Nikola Jokić',
+        teamId: mine.id,
+        teamName: 'Bobby Buckets',
+        reason: 'ON_ENTERED_TEAM',
+      },
+      {
+        playerId: PLAYERS.zeb.id,
+        fullName: 'Zebulon Quixley',
+        teamId: second.id,
+        teamName: 'Second Team',
+        reason: 'ON_ENTERED_TEAM',
+      },
+    ]);
+    expect(
+      updated.rosterSpots.map(({ playerId, teamId, onInjuredList }) => [
+        playerId,
+        teamId,
+        onInjuredList,
+      ])
+    ).toEqual([
+      [PLAYERS.jokic.id, mine.id, true],
+      [PLAYERS.vale.id, null, false],
+      [PLAYERS.zeb.id, second.id, false],
+    ]);
+  });
+
+  it('still moves a player between entered teams, and onto one from elsewhere', async () => {
+    const league = await createBasketballLeague(OWNER, createInput);
+    const [mine, second] = league.teams;
+    await addBasketballRosterSpots(OWNER, league.id, {
+      entries: [
+        { playerId: PLAYERS.jokic.id, teamId: null },
+        { playerId: PLAYERS.zeb.id, teamId: second.id },
+      ],
+    });
+
+    const updated = await addBasketballRosterSpots(OWNER, league.id, {
+      entries: [
+        { playerId: PLAYERS.jokic.id, teamId: mine.id },
+        { playerId: PLAYERS.zeb.id, teamId: mine.id },
+      ],
+    });
+
+    expect(updated.skipped).toEqual([]);
+    expect(updated.rosterSpots.map((spot) => spot.teamId)).toEqual([mine.id, mine.id]);
+  });
+
+  it('clears only the players marked as taken', async () => {
+    const league = await createBasketballLeague(OWNER, createInput);
+    await addBasketballRosterSpots(OWNER, league.id, {
+      entries: [
+        { playerId: PLAYERS.jokic.id, teamId: league.myTeamId },
+        { playerId: PLAYERS.zeb.id, teamId: null },
+        { playerId: PLAYERS.vale.id, teamId: null },
+      ],
+    });
+
+    const cleared = await clearBasketballTakenPlayers(OWNER, league.id);
+
+    expect(cleared.removed).toBe(2);
+    expect(cleared.rosterSpots.map((spot) => spot.playerId)).toEqual([PLAYERS.jokic.id]);
+    expect((await clearBasketballTakenPlayers(OWNER, league.id)).removed).toBe(0);
+    await expectError(clearBasketballTakenPlayers(INTRUDER, league.id), 'NOT_FOUND');
+  });
+
+  it('reads a 250-name paste and refuses a longer one', async () => {
+    const league = await createBasketballLeague(OWNER, createInput);
+    const names = Array.from({ length: BULK }, (_, index) => bulkName(index));
+
+    const lines = await matchPastedRoster(OWNER, league.id, { text: names.join('\n') });
+    expect(lines).toHaveLength(BULK);
+    expect(lines.every((line) => line.status === 'matched')).toBe(true);
+
+    await expectError(
+      matchPastedRoster(OWNER, league.id, { text: [...names, 'One Too Many'].join('\n') }),
+      'VALIDATION'
     );
   });
 });

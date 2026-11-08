@@ -42,8 +42,8 @@ describe('Socket.IO room state architecture', () => {
     );
     const v2Abandonment = source.indexOf('await draftSocketV2Session.abandon()');
     const roomReservation = source.indexOf('draftRoomStore.initRoomIfMissing');
-    const primaryJoin = source.indexOf('await socket.join(draftId)');
-    const aliasJoin = source.indexOf('await socket.join(`draft:${draftId}`)');
+    const primaryJoin = source.indexOf('await socket.join(legacyDraftRoom(draftId))');
+    const aliasJoin = source.indexOf('await socket.join(draftRoom(draftId))');
     const baselineRead = source.indexOf(
       'const snapshot = await draftAuthorizedReadService.buildRoomSnapshot'
     );
@@ -96,8 +96,8 @@ describe('Socket.IO room state architecture', () => {
     );
 
     expect(cleanupSource).toContain('Promise.allSettled');
-    expect(cleanupSource).toContain('socket.leave(draftId)');
-    expect(cleanupSource).toContain('socket.leave(`draft:${draftId}`)');
+    expect(cleanupSource).toContain('socket.leave(legacyDraftRoom(draftId))');
+    expect(cleanupSource).toContain('socket.leave(draftRoom(draftId))');
     expect(cleanupSource).toContain('draftRoomStore.removeParticipant(draftId, socket.id)');
     expect(cleanupSource).toContain('delete socket.data.draftRealtimeProtocol');
   });
