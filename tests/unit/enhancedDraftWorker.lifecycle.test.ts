@@ -48,6 +48,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+const reportJobFailure = vi.hoisted(() => vi.fn());
+vi.mock('@/server/monitoring/processSentry', () => ({
+  initProcessSentry: vi.fn(),
+  reportJobFailure,
+}));
+
 vi.mock('@/server/realtime/scalableConnection', () => ({
   getRedisConnection: () => redis,
   ScalableRedisConnection: {
@@ -113,5 +119,23 @@ describe('EnhancedDraftWorker reconciliation lifecycle', () => {
     expect(draftExpiryReconciler.reconcileAllLiveDrafts).toHaveBeenCalledTimes(2);
     expect(workerInstances.at(-1)?.close).toHaveBeenCalledOnce();
     expect(queueEventInstances.at(-1)?.close).toHaveBeenCalledOnce();
+  });
+
+  it('reports a failed draft job to Sentry with the job, so its league is tagged', async () => {
+    const worker = new EnhancedDraftWorker('worker-2');
+    await worker.start();
+
+    const failedHandler = workerInstances
+      .at(-1)
+      ?.on.mock.calls.find(([event]) => event === 'failed')?.[1] as (
+      job: unknown,
+      error: Error
+    ) => void;
+    const job = { id: 'job-9', name: 'draft:pick-expiry', data: { leagueId: 'league-1' } };
+    const error = new Error('pick expiry failed');
+    failedHandler(job, error);
+
+    expect(reportJobFailure).toHaveBeenCalledWith('draftQueue', job, error);
+    await worker.shutdown();
   });
 });
