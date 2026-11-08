@@ -9,7 +9,7 @@ import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { nextWaiverRunAt } from '@/server/waivers/nextWaiverRun';
+import { loadWaiverOnlyHolds } from '@/server/waivers/waiverOnlyPlayers';
 
 // Prisma owns membership, rosters, picks and waiver claims, so it alone decides availability. A failed
 // read is a 500, never an empty result: an empty result would show every player as a free agent.
@@ -75,12 +75,6 @@ function getActionHref(
   if (type === 'waiver') return `/leagues/${league}?tab=waivers&playerId=${player}&action=claim`;
   if (type === 'roster') return `/leagues/${league}?tab=roster&playerId=${player}`;
   return `/leagues/${league}?tab=roster&addPlayerId=${player}`;
-}
-
-function readPlayerIdFromDetails(details: unknown): string | null {
-  if (!details || typeof details !== 'object') return null;
-  const playerId = (details as { playerId?: unknown }).playerId;
-  return typeof playerId === 'string' ? playerId : null;
 }
 
 async function loadUserLeagueContexts(userId: string): Promise<UserLeagueContext[]> {
@@ -291,32 +285,16 @@ async function loadPrismaWaivers(input: {
   const waiversByLeagueId = new Map<string, AvailabilityWaiver>();
   if (input.leagueIds.length === 0 || input.playerIds.length === 0) return waiversByLeagueId;
 
-  const pendingWaiverActions = await prisma.teamAction.findMany({
-    where: {
-      leagueId: { in: input.leagueIds },
-      actionType: { in: ['WAIVER_CLAIM', 'DROP_PLAYER'] },
-      status: 'PENDING',
-      processingAt: { gt: new Date() },
-    },
-    select: {
-      leagueId: true,
-      details: true,
-      processingAt: true,
-    },
-    orderBy: { processingAt: 'asc' },
-  });
-
-  const playerIdSet = new Set(input.playerIds);
-  for (const action of pendingWaiverActions) {
-    const actionPlayerId = readPlayerIdFromDetails(action.details);
-    if (!actionPlayerId || !playerIdSet.has(actionPlayerId)) continue;
-    const current = waiversByLeagueId.get(action.leagueId);
-    waiversByLeagueId.set(action.leagueId, {
-      // A claim is settled by the first daily run at or after its due time, not at the due time.
+  // The same waiver-only rule the free-agent add enforces, so the panel offers Claim, never Add.
+  const holds = await loadWaiverOnlyHolds(prisma, input);
+  for (const hold of holds) {
+    const current = waiversByLeagueId.get(hold.leagueId);
+    waiversByLeagueId.set(hold.leagueId, {
       processingAt:
-        current?.processingAt ??
-        (action.processingAt ? nextWaiverRunAt(action.processingAt) : undefined),
-      pendingClaims: (current?.pendingClaims ?? 0) + 1,
+        current?.processingAt && current.processingAt < hold.processingAt
+          ? current.processingAt
+          : hold.processingAt,
+      pendingClaims: (current?.pendingClaims ?? 0) + (hold.reason === 'PENDING_CLAIM' ? 1 : 0),
     });
   }
 
