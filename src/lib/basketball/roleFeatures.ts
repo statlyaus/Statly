@@ -1,5 +1,5 @@
 /**
- * Role outlook features: the 50 per-game role features of the sheet's Role Model (`RoleModel.gs`,
+ * Role outlook features: the per-game role features of the sheet's Role Model (`RoleModel.gs`,
  * `buildFeats_`) for every game of every player-team sequence, and each game's teammate
  * minutes-drop probability. A rule-for-rule port: same windows, same summation order, same quirks
  * (team margin over 10 games is divided by 10 however few games there are). Pure and isomorphic.
@@ -33,7 +33,7 @@ export interface RoleFeatureSet {
   lastTeamGame: Map<string, number>;
 }
 
-const UNKNOWN_COACH = ['?', 0, 0, 0, 0, 0] as const;
+export const UNKNOWN_COACH = ['?', 0, 0, 0, 0, 0] as const;
 
 const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
 const mean = (values: readonly number[]) => sum(values) / values.length;

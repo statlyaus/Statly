@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { addDays } from './fantasyWeeks';
 import { buildRoleFeatures } from './roleFeatures';
+import { COACH_TRAITS } from './roleModelConstants';
 import type { RoleGameRow } from './roleGameRows';
 
 /** One played game: team game `day` is 21 Oct 2026 plus `day` days. */
@@ -106,8 +107,8 @@ describe('buildRoleFeatures', () => {
 
   it('reads coach traits by team, zeros for an unknown team', () => {
     const atl = gamesOf([played('ATL', 0, 'p', 30)], 'p')[0].features;
-    expect(atl.coach_vol).toBe(-1.0596154475544073);
-    expect(atl.coach_prior_seasons).toBe(12);
+    expect(atl.coach_vol).toBe(COACH_TRAITS.ATL[1]);
+    expect(atl.coach_prior_seasons).toBe(COACH_TRAITS.ATL[5]);
     const unknown = gamesOf([played('XYZ', 0, 'p', 30)], 'p', 'XYZ')[0].features;
     expect(unknown.coach_vol).toBe(0);
   });

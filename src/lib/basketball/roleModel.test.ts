@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from './fantasyWeeks';
 import type { RoleGameRow } from './roleGameRows';
 import { minutesRange80, runRoleModel } from './roleModel';
+import { MINUTES_BAND80 } from './roleModelConstants';
 
 function played(team: string, day: number, playerId: string, min: number): RoleGameRow {
   return {
@@ -101,7 +102,7 @@ describe('runRoleModel', () => {
 
 describe('minutesRange80', () => {
   it('takes the first band whose upper edge reaches the prediction, else the last', () => {
-    expect(minutesRange80(18.294345450144288)).toEqual({ low: 11.9, high: 24 });
+    expect(minutesRange80(MINUTES_BAND80[0].upto)).toEqual({ low: 11.9, high: 24 });
     expect(minutesRange80(18.3)).toEqual({ low: 12.5, high: 23.7 });
     expect(minutesRange80(50)).toEqual({ low: 45.3, high: 52.6 });
   });

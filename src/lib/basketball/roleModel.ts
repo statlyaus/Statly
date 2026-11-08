@@ -8,7 +8,13 @@
  */
 
 import type { EasternDate } from './fantasyWeeks';
-import { buildRoleFeatures, linear, logistic, type RoleSequence } from './roleFeatures';
+import {
+  UNKNOWN_COACH,
+  buildRoleFeatures,
+  linear,
+  logistic,
+  type RoleSequence,
+} from './roleFeatures';
 import type { RoleGameRow } from './roleGameRows';
 import {
   COACH_TRAITS,
@@ -230,7 +236,7 @@ export function runRoleModel(
     out.push({
       playerId: sequence.playerId,
       teamCode: sequence.team,
-      coach: (COACH_TRAITS[sequence.team] ?? ['?'])[0],
+      coach: (COACH_TRAITS[sequence.team] ?? UNKNOWN_COACH)[0],
       gamesPlayed: f.gp,
       lastGameDate: row.date,
       minutesLast5,
