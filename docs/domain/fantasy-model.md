@@ -43,8 +43,15 @@ Every league has an active season (`League.activeSeasonId`): league creation set
 - `LeagueCompetitionRound` (nullable);
 - since 2026-11-08: `LeagueLineup` (and its players and autosubs through the lineup),
   `LeagueMatchupScore`, `LeagueStanding`, `WaiverPriority` and `TeamAction` (waiver claims and drops).
-  These five columns are nullable until their readers and writers carry the season, then become
-  required. Existing rows were backfilled to the league's active season.
+  Existing rows were backfilled to the league's active season, and all five columns are required. Keys:
+  one lineup per member, season and round; one ladder row and one waiver priority row per member and
+  season.
+
+Season-scoped services take the season from `League.activeSeasonId` through
+`src/server/leagues/activeSeason.ts`, which throws `ActiveSeasonMissingError` instead of falling back
+to league-wide rows. Waiver queries use the `inActiveSeason(leagueId)` where-filter from the same file
+(the row's season is the league's active season), so a write needs no extra read. Republishing a competition clears only the active season's lineups, matchup
+scores and standings, and standings are rebuilt from that season's final scores only.
 
 Not yet season-scoped, pending a season-rollover decision: `LeagueMatchup` (only through its
 competition round), `LeagueRosterPlayer` and `Draft`.
@@ -78,6 +85,9 @@ client omits optional values:
 - `H2H_EACH_CATEGORY` scoring
 - the real-data nine-category preset
 - normalized active lineup slots and category directions
+- the AFL season of the draft date, or of the creation date when there is none: next season once
+  that year's Grand Final has passed (see
+  [league competition rules](../product/league-competition-rules.md#calendar-and-fixtures))
 
 Clients may expose additional choices, but they must submit values supported by the server contract.
 
@@ -104,6 +114,22 @@ persisted, and auditable; a player contributes at most once. Commissioner change
 competition state require an audit record and recalculation of affected future state.
 
 The full product contract is in [league competition rules](../product/league-competition-rules.md).
+
+## Transactions
+
+Free-agent adds, waiver claims, and trade proposals, counters, and acceptances open only once the
+league's draft is `COMPLETED`. Every transaction route asks one server guard,
+`src/server/leagues/transactionWindow.ts`, before it writes; until then the request is refused with
+HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and trades open once the
+league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
+cancelling, and commissioner review are not transactions and stay available.
+
+A player is waiver-only, winnable only by a claim at the next 6 am Melbourne waiver run, while he has
+a `PENDING` waiver claim in the league's active season (until a run settles it, even once it is due),
+or was dropped since the last waiver run or is still inside a drop's waiver period.
+`src/server/waivers/waiverOnlyPlayers.ts` decides this for both the free-agent add, which refuses
+with HTTP 409 and code `PLAYER_ON_WAIVERS`, and the player availability panel, which offers Claim
+instead of Add.
 
 ## Data boundaries
 

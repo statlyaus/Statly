@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+import { IN_ACTIVE_SEASON } from '@/server/leagues/activeSeason';
+
 import { nextWaiverRunAt, previousWaiverRunAt } from './nextWaiverRun';
 
 export interface WaiverOnlyHold {
@@ -25,6 +27,8 @@ export async function loadWaiverOnlyHolds(
   const actions = await db.teamAction.findMany({
     where: {
       leagueId: { in: [...input.leagueIds] },
+      // Each league's own active season: an earlier season's claims and drops hold nobody.
+      ...IN_ACTIVE_SEASON,
       status: 'PENDING',
       OR: [
         { actionType: 'WAIVER_CLAIM' },

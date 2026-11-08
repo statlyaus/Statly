@@ -89,6 +89,7 @@ beforeEach(() => {
   mocks.resolveRequestedLineupRound.mockReturnValue(2);
   mocks.loadMemberLineup.mockResolvedValue(null);
   mocks.leagueFindUnique.mockResolvedValue({
+    activeSeasonId: 'season-1',
     id: 'league-1',
     ownerId: 'owner-1',
     settings: {
@@ -149,6 +150,7 @@ beforeEach(() => {
 describe('lineup round route timing failures', () => {
   it('reads game times and fixtures for the round season, not the calendar year', async () => {
     mocks.leagueFindUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
       id: 'league-1',
       ownerId: 'owner-1',
       settings: {
@@ -377,6 +379,7 @@ describe('carried lineup normalization', () => {
 
   it('offers a lineup picked by position when nothing is saved or carried', async () => {
     mocks.leagueFindUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
       id: 'league-1',
       ownerId: 'owner-1',
       settings: {

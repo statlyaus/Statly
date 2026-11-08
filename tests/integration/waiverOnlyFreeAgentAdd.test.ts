@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { addFreeAgentToRoster } from '@/server/rosters/freeAgentAdd';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const LEAGUE = 'int-waiver-only-league';
 const SETTINGS = 'int-waiver-only-settings';
@@ -25,6 +26,8 @@ const PLAYER = 'int-waiver-only-player';
 const NOW = new Date('2026-07-01T00:00:00.000Z');
 const LAST_RUN = new Date('2026-06-30T20:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
+const PAST_SEASON = 'int-waiver-only-2025';
+let seasonId = '';
 
 const removeFixture = () =>
   deleteLeagueFixtures(prisma, {
@@ -49,10 +52,12 @@ async function action(data: {
   status?: 'PENDING' | 'CANCELLED' | 'PROCESSED';
   createdAt: Date;
   processingAt: Date;
+  seasonId?: string;
 }) {
   await prisma.teamAction.create({
     data: {
       leagueId: LEAGUE,
+      seasonId: data.seasonId ?? seasonId,
       memberId: RIVAL_MEMBER,
       actionType: data.actionType,
       status: data.status ?? 'PENDING',
@@ -96,6 +101,10 @@ describe.sequential('free-agent add refuses waiver-only players', () => {
         ownerId: USER,
         settingsId: SETTINGS,
       },
+    });
+    seasonId = await activateLeagueSeason(prisma, LEAGUE);
+    await prisma.leagueSeason.create({
+      data: { id: PAST_SEASON, leagueId: LEAGUE, label: '2025 season', year: 2025 },
     });
     await prisma.leagueMember.createMany({
       data: [
@@ -154,6 +163,17 @@ describe.sequential('free-agent add refuses waiver-only players', () => {
       status: 'CANCELLED',
       createdAt: new Date(NOW.getTime() - HOUR),
       processingAt: new Date(NOW.getTime() + 23 * HOUR),
+    });
+
+    await expect(add()).resolves.toMatchObject({ memberId: MEMBER });
+  });
+
+  it('adds a player whose pending claim belongs to an earlier season', async () => {
+    await action({
+      actionType: 'WAIVER_CLAIM',
+      createdAt: new Date(NOW.getTime() - HOUR),
+      processingAt: new Date(NOW.getTime() + 23 * HOUR),
+      seasonId: PAST_SEASON,
     });
 
     await expect(add()).resolves.toMatchObject({ memberId: MEMBER });

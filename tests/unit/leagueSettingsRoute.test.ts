@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   convergeDraftSetup: vi.fn(),
   countActions: vi.fn(),
+  findDraft: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -31,6 +32,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     leagueSettings: { update: mocks.updateSettings },
     teamAction: { count: mocks.countActions },
+    draft: { findUnique: mocks.findDraft },
     $transaction: mocks.transaction,
   },
 }));
@@ -87,6 +89,7 @@ describe('league settings route draft scheduling', () => {
     mocks.transaction.mockResolvedValue([]);
     mocks.convergeDraftSetup.mockResolvedValue(undefined);
     mocks.countActions.mockResolvedValue(0);
+    mocks.findDraft.mockResolvedValue(null);
   });
 
   it('clears a scheduled draft when the request explicitly sends null', async () => {
@@ -130,7 +133,11 @@ describe('league settings route draft scheduling', () => {
       error: 'FAAB budget is locked once waiver claims exist',
     });
     expect(mocks.countActions).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', actionType: 'WAIVER_CLAIM' },
+      where: {
+        leagueId: 'league-1',
+        season: { activeForLeague: { is: { id: 'league-1' } } },
+        actionType: 'WAIVER_CLAIM',
+      },
     });
     expect(mocks.updateSettings).not.toHaveBeenCalled();
   });
@@ -232,6 +239,148 @@ describe('league settings route draft scheduling', () => {
     expect(response.status).toBe(400);
     expect(mocks.findLeague).not.toHaveBeenCalled();
     expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe('league settings route locks', () => {
+  const publishedAt = new Date('2026-03-01T00:00:00.000Z');
+  const publishedLeague = {
+    ...league,
+    settings: { ...league.settings, scoringSettingsLockedAt: publishedAt },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authenticate.mockResolvedValue('owner-user');
+    mocks.getAccess.mockResolvedValue({ isMember: true, canManage: true });
+    mocks.findLeague.mockResolvedValue(league);
+    mocks.transaction.mockResolvedValue([]);
+    mocks.convergeDraftSetup.mockResolvedValue(undefined);
+    mocks.countActions.mockResolvedValue(0);
+    mocks.findDraft.mockResolvedValue(null);
+  });
+
+  it.each([
+    ['categories', { scoring: { categories: ['goals', 'tackles', 'intercepts'] } }],
+    ['category directions', { scoring: { categoryDirections: { goals: 'LOW_WINS' } } }],
+    ['scoring mode', { scoring: { scoringMode: 'H2H_MOST_CATEGORIES' } }],
+  ])('refuses to change %s once the competition is published', async (_label, body) => {
+    mocks.findLeague.mockResolvedValue(publishedLeague);
+
+    const response = await PUT(settingsRequest(body), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'SCORING_SETTINGS_LOCKED',
+      error: expect.stringContaining('competition was published'),
+    });
+    expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('treats a league published before the lock column was written as locked', async () => {
+    mocks.findLeague.mockResolvedValue({
+      ...league,
+      settings: { ...league.settings, competitionPublishedAt: publishedAt },
+    });
+
+    const response = await PUT(
+      settingsRequest({ scoring: { scoringMode: 'H2H_MOST_CATEGORIES' } }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(409);
+  });
+
+  it('saves the whole form after publication when the locked scoring values are unchanged', async () => {
+    mocks.findLeague.mockResolvedValue(publishedLeague);
+
+    const response = await PUT(
+      settingsRequest({
+        scoring: {
+          categories: REAL_DATA_NINE_CATEGORY_PRESET,
+          scoringMode: 'H2H_EACH_CATEGORY',
+          categoryDirections: {},
+        },
+        trade: { tradeLimit: 5 },
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      where: { id: 'settings-1' },
+      data: expect.objectContaining({ tradeLimit: 5 }),
+    });
+  });
+
+  it.each(['LIVE', 'PAUSED', 'COMPLETED'])(
+    'refuses to change draft structure once the draft is %s',
+    async (status) => {
+      mocks.findDraft.mockResolvedValue({ status });
+
+      for (const body of [
+        { draft: { draftType: 'linear' } },
+        { draft: { pickOrder: 'manual' } },
+        { roster: { positionLimits: { DEF: 6, MID: 6, RUC: 1, FWD: 6, BENCH: 4 } } },
+      ]) {
+        const response = await PUT(settingsRequest(body), {
+          params: Promise.resolve({ id: 'league-1' }),
+        });
+
+        expect(response.status).toBe(409);
+        await expect(response.json()).resolves.toMatchObject({
+          code: 'DRAFT_STRUCTURE_LOCKED',
+          error: expect.stringContaining('draft has started'),
+        });
+      }
+      expect(mocks.updateSettings).not.toHaveBeenCalled();
+    }
+  );
+
+  it('lets the commissioner change draft structure while the draft is scheduled', async () => {
+    mocks.findDraft.mockResolvedValue({ status: 'SCHEDULED' });
+
+    const response = await PUT(settingsRequest({ draft: { draftType: 'linear' } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateSettings).toHaveBeenCalledWith({
+      where: { id: 'settings-1' },
+      data: expect.objectContaining({ draftType: 'LINEAR' }),
+    });
+  });
+
+  it('saves other settings after the draft starts when draft structure is unchanged', async () => {
+    mocks.findDraft.mockResolvedValue({ status: 'LIVE' });
+
+    const response = await PUT(
+      settingsRequest({
+        draft: { draftType: 'snake', pickOrder: 'random' },
+        trade: { tradeLimit: 4 },
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('reports both locks and their reasons in the settings response', async () => {
+    mocks.findLeague.mockResolvedValue(publishedLeague);
+    mocks.findDraft.mockResolvedValue({ status: 'COMPLETED' });
+
+    const response = await PUT(settingsRequest({ trade: { tradeLimit: 4 } }), {
+      params: Promise.resolve({ id: 'league-1' }),
+    });
+
+    const payload = await response.json();
+    expect(payload.data.scoring.scoringSettingsLockedAt).toBe(publishedAt.toISOString());
+    expect(payload.data.locks).toEqual({
+      scoring: expect.stringContaining('competition was published'),
+      draftStructure: expect.stringContaining('draft has started'),
+    });
   });
 });
 

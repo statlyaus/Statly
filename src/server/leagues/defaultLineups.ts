@@ -9,6 +9,7 @@ import {
 } from '@/lib/leagues/lineupAutoFill';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { loadInjuryLookup, type InjuryListing } from '@/server/injuries/injuryListReadModel';
 import { normalizeCompetitionRules } from '@/server/leagues/competitionRules';
@@ -139,19 +140,20 @@ export async function ensureDefaultLineups({
   const uniqueMemberIds = [...new Set(memberIds)];
   if (!Number.isSafeInteger(round) || round <= 0 || uniqueMemberIds.length === 0) return 0;
 
-  const existing = await client.leagueLineup.findMany({
-    where: { leagueId, round, memberId: { in: uniqueMemberIds } },
-    select: { memberId: true },
-  });
-  const withLineup = new Set(existing.map((lineup) => lineup.memberId));
-  const missing = uniqueMemberIds.filter((memberId) => !withLineup.has(memberId));
-  if (missing.length === 0) return 0;
-
   const league = await client.league.findUnique({
     where: { id: leagueId },
     include: { settings: true },
   });
   if (!league?.settings) return 0;
+  const seasonId = activeSeasonIdOf(league);
+
+  const existing = await client.leagueLineup.findMany({
+    where: { leagueId, seasonId, round, memberId: { in: uniqueMemberIds } },
+    select: { memberId: true },
+  });
+  const withLineup = new Set(existing.map((lineup) => lineup.memberId));
+  const missing = uniqueMemberIds.filter((memberId) => !withLineup.has(memberId));
+  if (missing.length === 0) return 0;
   const rules = normalizeCompetitionRules(league.settings.competitionRulesJson, 'goals');
   const spots = buildLineupSpots(
     normalizeLineupSlots(league.settings.lineupSlotsJson),
@@ -207,7 +209,7 @@ export async function ensureDefaultLineups({
     const memberRoster = roster.filter((player) => player.memberId === memberId);
     if (memberRoster.length === 0) continue;
     const previous = await client.leagueLineup.findFirst({
-      where: { leagueId, memberId, round: { lt: round } },
+      where: { leagueId, seasonId, memberId, round: { lt: round } },
       orderBy: { round: 'desc' },
       include: { players: true },
     });
@@ -235,6 +237,7 @@ export async function ensureDefaultLineups({
       await client.leagueLineup.create({
         data: {
           leagueId,
+          seasonId,
           memberId,
           round,
           players: {

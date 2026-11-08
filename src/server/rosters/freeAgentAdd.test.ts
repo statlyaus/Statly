@@ -17,6 +17,7 @@ function makeDb(
     hold?: unknown;
     count?: number;
     createError?: unknown;
+    draft?: unknown;
   } = {}
 ) {
   const tx = {
@@ -46,6 +47,11 @@ function makeDb(
         : vi.fn().mockResolvedValue({ id: 'roster-row-1' }),
     },
     teamAction: { findMany: vi.fn().mockResolvedValue(overrides.hold ? [overrides.hold] : []) },
+    draft: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValue('draft' in overrides ? overrides.draft : { status: 'COMPLETED' }),
+    },
   };
   const db = { $transaction: vi.fn((work: (client: typeof tx) => unknown) => work(tx)) };
   return { db, tx };
@@ -83,6 +89,32 @@ describe('addFreeAgentToRoster', () => {
       },
       select: { id: true },
     });
+  });
+
+  it('refuses with 409 until the league draft is complete', async () => {
+    const { db, tx } = makeDb({ draft: { status: 'LIVE' } });
+
+    const error = await refusal(addFreeAgentToRoster(db as never, INPUT));
+
+    expect(error.status).toBe(409);
+    expect(error.code).toBe('DRAFT_NOT_COMPLETE');
+    expect(error.message).toBe(
+      'Adds, waiver claims and trades open once the league draft is complete.'
+    );
+    expect(tx.draft.findUnique).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1' },
+      select: { status: true },
+    });
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
+  });
+
+  it('does not reveal the draft state to a caller who is not an active manager', async () => {
+    const { db, tx } = makeDb({ member: null, draft: { status: 'LIVE' } });
+
+    const error = await refusal(addFreeAgentToRoster(db as never, INPUT));
+
+    expect(error.code).toBe('NOT_ACTIVE_MEMBER');
+    expect(tx.draft.findUnique).not.toHaveBeenCalled();
   });
 
   it('refuses a removed manager with 403', async () => {

@@ -27,6 +27,9 @@ const prismaMocks = vi.hoisted(() => ({
   teamAction: {
     findMany: vi.fn(),
   },
+  draft: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -76,6 +79,7 @@ describe('league roster free-agent add eligibility', () => {
 
     authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
     prismaMocks.$executeRaw.mockResolvedValue(1);
+    prismaMocks.draft.findUnique.mockResolvedValue({ status: 'COMPLETED' });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       isActive: true,
@@ -123,7 +127,11 @@ describe('league roster free-agent add eligibility', () => {
     });
     expect(prismaMocks.teamAction.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ leagueId: { in: ['league-1'] }, status: 'PENDING' }),
+        where: expect.objectContaining({
+          leagueId: { in: ['league-1'] },
+          season: { activeForLeague: { isNot: null } },
+          status: 'PENDING',
+        }),
       })
     );
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();

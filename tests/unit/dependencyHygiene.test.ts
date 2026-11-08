@@ -41,7 +41,9 @@ describe('dependency and runtime hygiene', () => {
       'npm --prefix "$RESOURCE_DIR" run build',
     ]);
     expect(etlPackageJson.engines?.node).toBe('>=22 <23');
-    expect(etlDockerfile.match(/FROM node:22-alpine/g)).toHaveLength(2);
+    expect(etlDockerfile.match(/FROM node:22-bookworm-slim/g)).toHaveLength(2);
+    expect(etlDockerfile).toMatch(/FROM rocker\/r-ver:4\.5\.1@sha256:[0-9a-f]{64}/);
+    expect(etlDockerfile).not.toContain('alpine');
     expect(etlDockerfile).not.toContain('node:18-alpine');
   });
 
@@ -73,7 +75,7 @@ describe('dependency and runtime hygiene', () => {
     expect(etlPackageJson.scripts).toMatchObject({
       lint: 'npm run lint:node && npm run lint:r',
       'lint:node': 'eslint . --max-warnings=0',
-      'lint:r': `Rscript -e "invisible(parse(file = 'fetch_fw_round.R'))"`,
+      'lint:r': `Rscript -e "invisible(parse(file = 'fetch_fw_round.R')); invisible(parse(file = 'fetch_fw_fixture.R'))"`,
     });
   });
 
