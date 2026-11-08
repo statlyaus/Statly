@@ -117,7 +117,10 @@ export function loadPullRequests(repo) {
   });
 }
 
-/** True when the workflow runs with QUEUE_TOKEN, the only token whose branch updates get CI. */
+/**
+ * True when the workflow runs with QUEUE_TOKEN, the only token whose branch updates get CI.
+ * @param {{ QUEUE_TOKEN_SET?: string }} [env]
+ */
 export function canUpdateBranches(env = process.env) {
   return env.QUEUE_TOKEN_SET === 'true';
 }
