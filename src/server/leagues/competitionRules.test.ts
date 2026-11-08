@@ -4,11 +4,34 @@ import { generateCompetitionSchedule } from './fixtureGenerator';
 import {
   DEFAULT_COMPETITION_RULES,
   getEqualByeRoundHelp,
+  normalizeCompetitionRules,
   validateCompetitionRules,
 } from './competitionRules';
 
 const categories = ['goals', 'tackles'] as const;
 const lineupSlots = { DEF: 5, MID: 5, RUC: 1, FWD: 5, UTIL: 1 };
+
+describe('normalizeCompetitionRules', () => {
+  const saved = {
+    ...DEFAULT_COMPETITION_RULES,
+    regularSeasonRounds: 14,
+    lockPolicy: 'THURSDAY_7PM_AEST' as const,
+    interchangeSlots: 2,
+  };
+
+  it('reads rules stored as a JSON object', () => {
+    expect(normalizeCompetitionRules(saved, 'goals')).toEqual(saved);
+  });
+
+  it('reads rules an earlier save stored as a double-encoded JSON string', () => {
+    expect(normalizeCompetitionRules(JSON.stringify(saved), 'goals')).toEqual(saved);
+  });
+
+  it('falls back to defaults for a string that is not a JSON object', () => {
+    expect(normalizeCompetitionRules('not json', 'goals')).toEqual(DEFAULT_COMPETITION_RULES);
+    expect(normalizeCompetitionRules('[1,2]', 'goals')).toEqual(DEFAULT_COMPETITION_RULES);
+  });
+});
 
 describe('competition rules', () => {
   it('rejects an odd-team automatic season that cannot balance byes', () => {
@@ -51,7 +74,12 @@ describe('generateCompetitionSchedule', () => {
     });
 
     expect(schedule).toHaveLength(4);
-    expect(schedule[1]).toMatchObject({ round: 2, aflRound: 2, status: 'NO_MATCHUP', fixtures: [] });
+    expect(schedule[1]).toMatchObject({
+      round: 2,
+      aflRound: 2,
+      status: 'NO_MATCHUP',
+      fixtures: [],
+    });
     expect(schedule[2]?.fixtures).toHaveLength(2);
     expect(schedule[3]).toMatchObject({ round: 4, aflRound: 4, status: 'SCHEDULED' });
   });

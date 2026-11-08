@@ -131,6 +131,30 @@ work but must not become a second authoritative draft clock.
 
 See [realtime delivery](realtime.md) for command and catch-up invariants.
 
+### Rate limits
+
+HTTP rate limits (`src/lib/rateLimit.ts`) and league social limits
+(`src/server/leagues/social/socialRateLimit.ts`) share one fixed-window counter: Redis `INCR` plus
+`EXPIRE` in one `MULTI`, keyed by limiter, caller, and window. Every web instance therefore spends the
+same budget, and a restart does not reset it.
+
+The caller is the authenticated user id when the route passes one. Otherwise it is the client IP read
+from trusted headers only: `x-nf-client-connection-ip` when `NETLIFY=true` (Netlify's edge overwrites
+it), else the `x-forwarded-for` hop `RATE_LIMIT_TRUSTED_PROXY_COUNT` entries from the right (default
+1). Hops further left are client-written and ignored, so a spoofed header cannot move a caller into
+another bucket. A request with no trustworthy IP shares the `unknown` bucket.
+
+When Redis is missing, reconnecting, erroring, or takes over 500 ms to answer, the behaviour is set
+per limiter:
+
+| Limiter                | Redis unavailable                       | Why                                                                                           |
+| ---------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `auth`, `api`, `heavy` | Fail closed: HTTP 503, `Retry-After: 5` | These guard credentials and expensive work; an unenforced limit is worse than a short outage. |
+| `public`               | Count in this process only              | Anonymous reads stay available, and each instance still caps a single caller instead of none. |
+| League social actions  | Count in this process only              | Unchanged from before: these callers are authenticated and keyed per user and league.         |
+
+Either fallback logs one warning per minute while it lasts.
+
 ## ETL and player identity
 
 The supported source is Footywire through fitzRoy. The pipeline streams source rows through TypeScript

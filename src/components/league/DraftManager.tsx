@@ -230,10 +230,11 @@ export default function DraftManager({
   });
 
   const currentMember = members.find((member) => member.userId === currentUserId);
+  // Mirrors the server's rule (`membership.canManage`): the league owner or a co-commissioner. Every
+  // member carries a role, so a role name is not commissioner access. The server still decides.
   const isCommissioner =
-    currentUserId === league.ownerId ||
-    currentMember?.role === 'owner' ||
-    currentMember?.role === 'manager';
+    (Boolean(currentUserId) && currentUserId === league.ownerId) ||
+    currentMember?.isCoCommissioner === true;
   const hasEnoughMembers = members.length >= 4;
   const canCreateDraft = isCommissioner && hasEnoughMembers && !existingDraft;
   const draftOrderMembers = draftOrderMemberIds
@@ -483,7 +484,9 @@ export default function DraftManager({
     },
     {
       label: 'Commissioner access',
-      detail: isCommissioner ? 'You can configure and launch the draft' : 'Owner or manager only',
+      detail: isCommissioner
+        ? 'You can configure and launch the draft'
+        : 'Owner or co-commissioner only',
       complete: isCommissioner,
       incompleteLabel: 'Commissioner only',
     },

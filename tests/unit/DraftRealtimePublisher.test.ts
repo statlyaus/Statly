@@ -5,7 +5,6 @@ const {
   draftClockCoordinator,
   draftRealtimeDispatcher,
   draftProjectionService,
-  revalidateTags,
   publishLeagueSystemMessage,
   incCounter,
 } = vi.hoisted(() => ({
@@ -30,7 +29,6 @@ const {
   draftProjectionService: {
     buildAuthoritativeDraftState: vi.fn(),
   },
-  revalidateTags: vi.fn(),
   publishLeagueSystemMessage: vi.fn(),
   incCounter: vi.fn(),
 }));
@@ -42,17 +40,6 @@ vi.mock('@/server/metrics', () => ({
     draftRealtimeStatePreparationRetries: 'draft_realtime_state_preparation_retries_total',
   },
   incCounter,
-}));
-
-vi.mock('@/lib/cache', () => ({
-  revalidateTags,
-}));
-
-vi.mock('@/lib/cacheTags', () => ({
-  tags: {
-    draft: (id: string) => `draft:${id}`,
-    league: (id: string) => `league:${id}`,
-  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -155,7 +142,6 @@ describe('DraftRealtimePublisher', () => {
     vi.clearAllMocks();
     draftRepository.transaction.mockImplementation((work) => work({}));
     draftClockCoordinator.ensureReady.mockResolvedValue({ receipt: null, repaired: false });
-    revalidateTags.mockResolvedValue(undefined);
     publishLeagueSystemMessage.mockResolvedValue({});
   });
 

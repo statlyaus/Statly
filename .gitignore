@@ -36,7 +36,6 @@ src/generated/aflTradeOutcomesPrisma/
 
 # --- Firebase ---
 .firebase/
-.firebaserc
 firebase-debug.log
 
 # --- Vercel ---

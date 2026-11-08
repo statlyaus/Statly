@@ -35,16 +35,36 @@ A league is the tenancy boundary for membership, roles, teams, drafts, rosters, 
 waivers. Season-dependent features also carry a `LeagueSeason` identity. Every protected query, write,
 cache key, room, or event must retain the league and applicable season scope.
 
+Every league has an active season (`League.activeSeasonId`): league creation sets one, and the
+2026-11-08 season-scope migration gave one to every league that lacked it. Season-scoped rows carry
+`seasonId`, a foreign key to `LeagueSeason` that cascades on delete:
+
+- social and trade rows, since they were added;
+- `LeagueCompetitionRound` (nullable);
+- since 2026-11-08: `LeagueLineup` (and its players and autosubs through the lineup),
+  `LeagueMatchupScore`, `LeagueStanding`, `WaiverPriority` and `TeamAction` (waiver claims and drops).
+  These five columns are nullable until their readers and writers carry the season, then become
+  required. Existing rows were backfilled to the league's active season.
+
+Not yet season-scoped, pending a season-rollover decision: `LeagueMatchup` (only through its
+competition round), `LeagueRosterPlayer` and `Draft`.
+
 Firebase identity establishes who the user is. Prisma membership and role data decide what that user
 may see or change in a league. Owner, commissioner, member, roster owner, draft participant, and waiver
 claimant permissions are domain decisions, not client navigation decisions.
+
+Every league is created in Prisma, so a league with no Prisma row is legacy data and is treated as not
+found. The user league list (`GET /api/leagues/user/[userId]`) and the league draft read
+(`GET /api/leagues/[id]/draft`) answer from Prisma only and never read Firestore league documents.
 
 Membership changes run as Prisma commands in `src/server/leagues/memberCommands.ts`, which check the
 persisted owner and active membership in the same transaction as the write. The owner may remove a
 manager, and a manager may leave, only until the draft starts; removal renumbers the remaining draft
 slots and rebuilds the draft order. After the draft, rosters, fixtures, and standings depend on every
 team, so managers are not removed. Ownership transfer makes the previous owner a manager.
-Firestore member documents are written afterwards as a compatibility projection.
+Firestore member documents are written afterwards as a compatibility projection. The member list,
+member update and team settings routes treat a league with no Prisma row as not found; they never
+decide existence, membership or a write from Firestore.
 
 ## League creation defaults
 
