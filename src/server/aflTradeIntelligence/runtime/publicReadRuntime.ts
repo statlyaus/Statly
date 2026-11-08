@@ -18,6 +18,7 @@ import {
   createAflDraftHistoryReadService,
   type AflDraftHistoryReadService,
 } from '../outcomes/draftHistoryReadService';
+import { assertOutcomeDatabaseIdentity } from '../outcomes/outcomeDatabaseIdentity';
 import type { AflDraftTradeOutcomeReadService } from '../outcomes/outcomeReadService';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import { createAflTradePromotionBackedArchiveSelector } from '../outcomes/promotionBackedArchiveSelection';
@@ -143,6 +144,9 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
       : null;
   try {
     const client = createPgAflOutcomeSqlClient(pool);
+    // Fail closed before serving anything if the URL points at a database that is not this
+    // application's outcomes database at the schema format this code reads.
+    await assertOutcomeDatabaseIdentity(client);
     const gateRepository = createPostgresAflTradeGateDecisionLedgerRepository(client);
     const now = () => new Date().toISOString();
     const factualRegistryStore = new PostgresAflDraftTradeOutcomeRegistrySnapshotStore(client);

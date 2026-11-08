@@ -61,6 +61,7 @@ describe('publishCompetition', () => {
       activeSeasonId: 'season-1',
       categoriesJson: ['goals'],
       settings: {
+        competitionStatus: 'SETUP',
         competitionRulesVersion: 4,
         competitionRulesJson: null,
         lineupSlotsJson: null,
@@ -90,7 +91,7 @@ describe('publishCompetition', () => {
 
     expect(result).toEqual({ ok: true, fixtureVersion: 5, roundCount: 1 });
     expect(txMocks.leagueSettings.updateMany).toHaveBeenCalledWith({
-      where: { id: 'settings-1', competitionRulesVersion: 4 },
+      where: { id: 'settings-1', competitionRulesVersion: 4, competitionStatus: 'SETUP' },
       data: { competitionRulesVersion: { increment: 1 } },
     });
     expect(txMocks.leagueSettings.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
@@ -110,6 +111,14 @@ describe('publishCompetition', () => {
     );
   });
 
+  it('locks scoring settings at the moment the competition is published', async () => {
+    await publishCompetition({ leagueId: 'league-1', actorMemberId: 'member-owner', rules });
+
+    const data = txMocks.leagueSettings.update.mock.calls[0]?.[0].data;
+    expect(data.scoringSettingsLockedAt).toBeInstanceOf(Date);
+    expect(data.scoringSettingsLockedAt).toEqual(data.competitionPublishedAt);
+  });
+
   it('publishes fixtures only for active members, never removed ones', async () => {
     await publishCompetition({ leagueId: 'league-1', actorMemberId: 'member-owner', rules });
 
@@ -121,6 +130,44 @@ describe('publishCompetition', () => {
       })
     );
   });
+
+  it.each(['PUBLISHED', 'PENDING', 'ACTIVE', 'COMPLETE'])(
+    'refuses to publish again once the competition is %s, keeping scores, standings and lineups',
+    async (competitionStatus) => {
+      prismaMocks.league.findUnique.mockResolvedValue({
+        id: 'league-1',
+        settingsId: 'settings-1',
+        activeSeasonId: 'season-1',
+        categoriesJson: ['goals'],
+        settings: {
+          competitionStatus,
+          competitionRulesVersion: 4,
+          competitionRulesJson: null,
+          lineupSlotsJson: null,
+          rosterSize: 30,
+        },
+        members: ['a', 'b', 'c', 'd'].map((id) => ({ id })),
+      });
+
+      const result = await publishCompetition({
+        leagueId: 'league-1',
+        actorMemberId: 'member-owner',
+        rules,
+      });
+
+      expect(result).toEqual({
+        ok: false,
+        code: 'COMPETITION_ALREADY_PUBLISHED',
+        errors: [
+          'Published competition rules cannot be changed. Use a commissioner override instead.',
+        ],
+      });
+      expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+      expect(txMocks.leagueMatchupScore.deleteMany).not.toHaveBeenCalled();
+      expect(txMocks.leagueStanding.deleteMany).not.toHaveBeenCalled();
+      expect(txMocks.leagueLineup.deleteMany).not.toHaveBeenCalled();
+    }
+  );
 
   it('does not delete derived data when another publisher wins the version claim', async () => {
     txMocks.leagueSettings.updateMany.mockResolvedValue({ count: 0 });
@@ -149,6 +196,7 @@ describe('publishCompetition', () => {
       activeSeason: { year: 2025 },
       categoriesJson: ['goals'],
       settings: {
+        competitionStatus: 'SETUP',
         competitionRulesVersion: 4,
         competitionRulesJson: null,
         lineupSlotsJson: null,

@@ -19,10 +19,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: navigationMocks.useSearchParams,
 }));
 
-vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 import JoinLeaguePage from '../../src/app/(app)/leagues/join/page';
 
 describe('JoinLeaguePage', () => {

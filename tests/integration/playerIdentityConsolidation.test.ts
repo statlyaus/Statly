@@ -13,6 +13,7 @@ import {
   upsertCanonicalPlayer,
 } from '@/server/players/playerIdentityService';
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const canonicalPlayerId = 'jack_ginnivan';
 const aliasPlayerId = 'jack-ginnivan-hawthorn';
@@ -190,6 +191,7 @@ describe.sequential('player identity consolidation', () => {
       data: {
         id: 'historical-alias-action',
         leagueId: 'league-a',
+        seasonId: await activateLeagueSeason(prisma, 'league-a'),
         memberId: 'member-a',
         actionType: 'WAIVER_CLAIM',
         status: 'PROCESSED',
@@ -441,8 +443,22 @@ describe.sequential('player identity consolidation', () => {
         externalId: playerId,
       })),
     });
+    await prisma.leagueSeason.create({
+      data: {
+        id: 'autosub-history-season',
+        leagueId: 'league-b',
+        label: '2026 season',
+        year: 2026,
+      },
+    });
     await prisma.leagueLineup.create({
-      data: { id: 'autosub-history-lineup', leagueId: 'league-b', memberId: 'member-b', round: 1 },
+      data: {
+        id: 'autosub-history-lineup',
+        leagueId: 'league-b',
+        seasonId: 'autosub-history-season',
+        memberId: 'member-b',
+        round: 1,
+      },
     });
     await prisma.leagueLineupAutosub.create({
       data: {

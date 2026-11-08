@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 type PrismaLike = Pick<
   typeof prisma,
-  '$transaction' | 'pick' | 'leagueRosterPlayer' | 'waiverPriority'
+  '$transaction' | 'league' | 'pick' | 'leagueRosterPlayer' | 'waiverPriority'
 >;
 type WaiverAvailabilityProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
@@ -73,11 +74,14 @@ export class RosterProjectionService {
       .map(([memberId, finalPick]) => ({ memberId, finalPick }))
       .sort((a, b) => b.finalPick - a.finalPick);
 
+    const seasonId =
+      waiverPriorityEntries.length > 0 ? await requireActiveSeasonId(this.db, input.leagueId) : '';
     for (const [index, entry] of waiverPriorityEntries.entries()) {
       await this.db.waiverPriority.upsert({
         where: {
-          leagueId_memberId: {
+          leagueId_seasonId_memberId: {
             leagueId: input.leagueId,
+            seasonId,
             memberId: entry.memberId,
           },
         },
@@ -86,6 +90,7 @@ export class RosterProjectionService {
         },
         create: {
           leagueId: input.leagueId,
+          seasonId,
           memberId: entry.memberId,
           priority: index + 1,
         },

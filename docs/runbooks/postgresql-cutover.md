@@ -55,8 +55,8 @@ Cloud Run services use the Cloud SQL connector.
 - [ ] The same values, plus `REDIS_URL` and the server-only Firebase credentials, in Google Secret
       Manager and mounted into each Cloud Run service.
 - [ ] `CRON_SECRET` set in Netlify. The scheduled functions in `netlify/functions/` (daily jobs,
-      trades every 5 minutes, waivers hourly with a 6 am Melbourne run, injuries every 6 hours from
-      1 January to 7 October) call
+      trades every 5 minutes, waivers hourly with a 6 am Melbourne run, round scoring hourly,
+      injuries every 6 hours from 1 January to 7 October) call
       `/api/cron/*` with it,
       and those routes refuse every call without it.
 - [ ] Nothing printed in build logs, committed, or placed in a `NEXT_PUBLIC_` variable.
@@ -118,6 +118,9 @@ fallback, not a go-live deploy. The stats import is built from `etl/Dockerfile`.
 - [ ] Submit a waiver claim with FAAB and confirm the reserved budget, then call `/api/cron/waivers`
       with `CRON_SECRET` during the 6 am Melbourne hour, or wait for it, and confirm the claim is
       processed.
+- [ ] After a round's first AFL match starts, call `/api/cron/scoring` with `CRON_SECRET`, or wait
+      for the hourly run, and confirm the round's matchups show scores. Once every AFL match of the
+      round is final, the next run marks the round `FINAL` and updates the standings.
 - [ ] Propose and accept a trade.
 - [ ] Firestore compatibility projections rebuild from relational state.
 

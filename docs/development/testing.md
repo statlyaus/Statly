@@ -313,6 +313,49 @@ unmatched and ambiguous counts. A fetch failure, a parse failure or more than 60
 nothing. From 8 October to 31 December (Melbourne time) the route reports `skipped: 'off-season'`
 and does not fetch.
 
+`Scripts/dev/curl-admin.sh cron '/api/cron/nba?job=boxscores'` runs one NBA ingest job (`boxscores`,
+`schedule`, `players` or `injuries`) for the current season and returns `{ ok, job, runId, summary }`.
+Any other `job` returns 400. A rejected run returns 422 with its `reason` (`fetch_failed`,
+`parse_failed`, `out_of_bounds` or `unlicensed_provider`) and writes only its `NbaIngestRun` row;
+any other failure returns 500. With `NODE_ENV=production` the ESPN adapter is refused unless
+`NBA_STATS_ALLOW_UNLICENSED_PROVIDER=true`.
+
+To load NBA data locally, use a database of your own, never the development or test database, and
+set both URLs so Prisma does not fall back to `.env`. Run the players and schedule jobs before the
+box scores:
+
+```sh
+createdb -h 127.0.0.1 statly_bball_local
+export DATABASE_URL=postgresql://$USER@127.0.0.1:5432/statly_bball_local
+export DIRECT_DATABASE_URL=$DATABASE_URL
+npx prisma migrate deploy
+npm run nba:sync -- --job players
+npm run nba:sync -- --job schedule
+npm run nba:sync -- --job injuries
+npm run nba:sync -- --job boxscores --limit 20
+npm run nba:backfill -- --season 2026            # dry run: what is stored
+npm run nba:backfill -- --season 2026 --apply    # 2025-26, about 1,300 requests at 1 per second
+```
+
+The backfill is resumable and exits non-zero if ESPN refuses it or any season total differs.
+`--tolerance N` accepts a per-stat difference of up to N from ESPN's season totals (default 0); use
+it only after checking the affected games' box scores against the stored rows, because ESPN's totals
+feed can be one off its own box scores. Both scripts refuse a non-local `DATABASE_URL` without
+`--allow-remote`, and treat a remote database as production for the licensing guard.
+
+`Scripts/dev/curl-admin.sh cron /api/cron/scoring` runs round scoring once, as
+`netlify/functions/cron-scoring.mts` does every hour (`src/server/leagues/roundScoringSchedule.ts`).
+For every league with a published competition it recalculates each round that has an official start
+time in the past and is not `FINAL` or a no-matchup week, through the same
+`recalculateLeagueRoundMatchups` the commissioner route uses, never forcing finalization. A round
+becomes `FINAL`, with standings and finals seeding updated, only when that function decides it: every
+AFL match of the round is final and every matchup with two teams was scored. A round with no official
+start time is left pending. Leagues are scored one at a time; a league whose round throws or is refused
+(`UNSCORED_MATCHUP_IN_FINAL_ROUND`, see `docs/runbooks/unscored-finalized-matchups.md`) stops at that
+round, is logged at error level and listed in `failedLeagueIds`, and the response is 500, while the
+other leagues are still scored. There is no per-league lease: rerunning rewrites the same scores, and
+two overlapping runs are not serialized.
+
 Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must
 succeed. The admin and user contracts are enforced by
 `tests/unit/adminControlPlaneAuthorization.test.ts` and
@@ -383,8 +426,8 @@ Node tests do not invoke R or write to Firestore. CI separately builds the pinne
 `jsonlite`, and `digest` versions. That test creates only local fixture RDS bytes and makes no provider
 request; external capture commands retain their separate authorization and environment requirements.
 
-ETL `npm run lint` composes `lint:node` with `lint:r`. The R check parses `fetch_fw_round.R` without
-loading fitzRoy or contacting FootyWire. CI pins R 4.5.1 to match the ETL container's build stage; local
+ETL `npm run lint` composes `lint:node` with `lint:r`. The R check parses `fetch_fw_round.R` and
+`fetch_fw_fixture.R` without loading fitzRoy or contacting FootyWire. CI pins R 4.5.1 to match the ETL container's build stage; local
 verification requires an available `Rscript` and may use a newer compatible R release.
 
 ## Database isolation
@@ -582,18 +625,6 @@ authority against the same database or Redis namespace.
 
 For responsive changes, verify at least a phone viewport (390px) and the affected desktop layout.
 Realtime and routing changes also need direct-load/refresh evidence, not only client navigation.
-
-## Test data factories
-
-`src/testUtils/playerDataFactory.ts` supplies typed player fixtures:
-
-- `createExamplePlayer(overrides)` for a complete player;
-- `createExamplePlayers(count, overrides)` for lists;
-- `createMinimalPlayer(overrides)` for edge cases; and
-- `PLAYER_VARIATIONS` for injured, suspended, rookie, premium, and bye states.
-
-Prefer these factories over copied production-shaped objects. Override only the fields that matter to
-the test so schema changes remain visible through TypeScript.
 
 ## Flaky-test quarantine
 

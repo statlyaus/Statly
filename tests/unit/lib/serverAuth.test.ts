@@ -37,6 +37,11 @@ import {
   resolveAuthenticatedUserId,
 } from '@/lib/serverAuth';
 
+/** Firebase Admin rejects with an error carrying an `auth/...` code; outages carry other codes or none. */
+function firebaseError(code: string) {
+  return Object.assign(new Error(`Firebase Admin error (${code}).`), { code });
+}
+
 function store(values: Record<string, string>) {
   return {
     get: (name: string) => (name in values ? { value: values[name] } : undefined),
@@ -66,7 +71,7 @@ describe('server authentication boundary', () => {
   });
 
   it('does not downgrade to the legacy cookie when an explicit bearer token is invalid', async () => {
-    mocks.verifyIdToken.mockRejectedValue(new Error('revoked token'));
+    mocks.verifyIdToken.mockRejectedValue(firebaseError('auth/id-token-revoked'));
     mocks.verifySessionCookie.mockResolvedValue({ uid: 'cookie-user' });
 
     await expect(
@@ -91,8 +96,8 @@ describe('server authentication boundary', () => {
   });
 
   it('returns null without logging for missing or rejected credentials', async () => {
-    mocks.verifyIdToken.mockRejectedValue(new Error('invalid token'));
-    mocks.verifySessionCookie.mockRejectedValue(new Error('expired session'));
+    mocks.verifyIdToken.mockRejectedValue(firebaseError('auth/argument-error'));
+    mocks.verifySessionCookie.mockRejectedValue(firebaseError('auth/session-cookie-expired'));
 
     await expect(
       resolveAuthenticatedUserId({
@@ -101,6 +106,42 @@ describe('server authentication boundary', () => {
       })
     ).resolves.toBeNull();
     await expect(resolveAuthenticatedUserId({})).resolves.toBeNull();
+  });
+
+  it.each([
+    'auth/id-token-expired',
+    'auth/id-token-revoked',
+    'auth/argument-error',
+    'auth/user-disabled',
+    'auth/user-not-found',
+  ])('treats a bearer token rejected with %s as signed out', async (code) => {
+    mocks.verifyIdToken.mockRejectedValue(firebaseError(code));
+
+    await expect(resolveAuthenticatedUserId({ authorization: 'Bearer bad-token' })).resolves.toBe(
+      null
+    );
+  });
+
+  it.each([
+    ['a network failure during the revocation lookup', firebaseError('app/network-error')],
+    ['a Firebase Admin internal error', firebaseError('auth/internal-error')],
+    ['a misconfigured Admin credential', firebaseError('auth/invalid-credential')],
+    ['an uncoded failure', new Error('Firebase Admin integration is disabled')],
+  ])('raises %s instead of reporting the bearer token as signed out', async (_label, failure) => {
+    mocks.verifyIdToken.mockRejectedValue(failure);
+
+    await expect(resolveAuthenticatedUserId({ authorization: 'Bearer valid-token' })).rejects.toBe(
+      failure
+    );
+  });
+
+  it('raises a session cookie check that could not run instead of reporting signed out', async () => {
+    const outage = firebaseError('app/network-error');
+    mocks.verifySessionCookie.mockRejectedValue(outage);
+
+    await expect(resolveAuthenticatedUserId({ sessionCookie: 'legacy-session' })).rejects.toBe(
+      outage
+    );
   });
 
   it('keeps explicitly enabled development auth ahead of production credentials', async () => {
@@ -188,7 +229,7 @@ describe('server authentication boundary', () => {
 
   it('does not treat a development bearer token as an explicit Firebase credential', async () => {
     mocks.isServerDevelopmentAuthEnabled.mockReturnValue(true);
-    mocks.verifyIdToken.mockRejectedValue(new Error('not a Firebase token'));
+    mocks.verifyIdToken.mockRejectedValue(firebaseError('auth/argument-error'));
     mocks.headers.mockResolvedValue(new Headers({ authorization: 'Bearer dev:statly-dev-tester' }));
 
     await expect(getExplicitAuthenticatedUserIdFromServerContext()).resolves.toBeNull();
@@ -219,7 +260,7 @@ describe('server authentication boundary', () => {
 
     await expect(requireUser()).resolves.toBe('required-user');
 
-    mocks.verifySessionCookie.mockRejectedValue(new Error('revoked session'));
+    mocks.verifySessionCookie.mockRejectedValue(firebaseError('auth/session-cookie-revoked'));
     await expect(requireUser()).rejects.toThrow('Authenticated user not found');
   });
 });

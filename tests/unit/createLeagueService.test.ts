@@ -67,6 +67,23 @@ describe('canonical league creation', () => {
     expect(result.league).not.toHaveProperty('draftDate');
   });
 
+  it('defaults a league created after the AFL Grand Final to next season', async () => {
+    const { client, tx } = buildPrisma();
+
+    await createCanonicalLeague(
+      { userId: 'owner-user', input: buildInput({ draftDate: undefined }) },
+      {
+        prisma: client as never,
+        now: () => new Date('2026-11-08T00:00:00.000Z'),
+        generateInviteCode: () => 'CODE1234',
+      }
+    );
+
+    expect(tx.leagueSeason.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ label: '2027 season', year: 2027 }),
+    });
+  });
+
   it('persists an explicit schedule and stable identity during controlled adoption', async () => {
     const { client, tx } = buildPrisma();
 
@@ -128,6 +145,25 @@ describe('canonical league creation', () => {
       code: 'VALIDATION',
     } satisfies Partial<LeagueCreationError>);
   });
+
+  it.each([12.5, '12', Number.NaN])(
+    'rejects a league size of %s as a validation error before writing',
+    async (maxTeams) => {
+      const { client } = buildPrisma();
+
+      await expect(
+        createCanonicalLeague(
+          { userId: 'owner-user', input: buildInput({ maxTeams: maxTeams as never }) },
+          { prisma: client as never }
+        )
+      ).rejects.toMatchObject({
+        message: 'League size must be 4-20 teams',
+        status: 400,
+        code: 'VALIDATION',
+      } satisfies Partial<LeagueCreationError>);
+      expect(client.$transaction).not.toHaveBeenCalled();
+    }
+  );
 
   it('rejects malformed trade deadlines at the domain boundary', async () => {
     const { client, tx } = buildPrisma();
