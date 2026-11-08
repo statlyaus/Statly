@@ -377,6 +377,42 @@ later, Eastern date):
 - Expected games: a fitted availability rate (his share of team games played so far, last season's
   share and minutes) over the team's remaining games, his injured games taken off the front.
 
+### Read model (`roleOutlook.ts`)
+
+`src/server/basketball/readModels/roleOutlook.ts` runs the engine for every player of a season at
+once, because each player's features depend on all his teammates and the opponent factors on every
+row, so a league's subset would cost the same.
+
+- `loadSeasonOutlook(client, season, today)` reads the season's final box-score lines (played or
+  not), its games (postponed and cancelled left out) and the whole injury report, plus the history
+  tables, and returns one row per player: role, next 5 and rest of season, with his name,
+  positions, injury and the names of the teammates driving his injury shift. A traded player is
+  shown once, for the team of his latest box score (the engine still models each team spell).
+- History comes from three SQL reads of earlier seasons' final games: per-player season totals for
+  up to 13 seasons (cameos as 0.25 minutes, ordered by player and season so the career sums always
+  add in the same order), and the game list and played tuples of the last 3 seasons, which
+  `backToBackHistory` turns into back-to-back records.
+- `loadOutlook(league, { now, today, client })` labels each player with his owner in the league,
+  adds his expected games in the league's current fantasy week (from today; a two-week matchup
+  counts both weeks) and marks the default view: every rostered player plus the 25 free agents
+  with the most total usage next 5 among those expected to play at least 1 of the next 5. Every
+  player stays in the list for an "All" filter.
+
+Injuries in the read model: a report row counts his current team's remaining games (the team of
+his latest box score; a listed player with no box score this season is in no team's games and is
+skipped). A season-ending row is out for every remaining game whatever its date. A report over a
+day old is still used, and the view flags it (`injuriesStale`, also set when no report was ever
+fetched). The engine takes an injury off a player's first 5 games only; from the 6th game on, which
+only a two-week fantasy week reaches, the read model takes off his expected games out as well.
+
+Caching: the computed output, not the rows, is cached for the season under its latest successful
+box-score ingest, the injury report's fetch time and the Eastern date (five minutes at most, a
+backstop for schedule changes). The history tables are cached per season for a day. On 8 Nov 2026
+a cache miss on the full 2025-26 season (32,148 lines, 468 players) took 0.86 s on a laptop (0.27 s
+of reads, 0.57 s of engine) and its output was 641 KB; the history tables were 0.15 s and 261 KB.
+Both entries are well under the data cache's 2 MB limit, and a miss is quick enough to compute in a
+page request, so the ingest jobs do not warm the cache.
+
 ### Parity with the sheet
 
 `roleModel.parity.test.ts` checks the port against `RoleModel.gs` on a synthetic league from a
@@ -397,4 +433,6 @@ Deliberate differences so far: players are joined by player ID, not name; minute
 with the cameo and team-minutes rules above; makes are real makes; history tables are recomputed
 from the seasons Statly stores, not the sheet's 2013-14 to 2025-26 tables; injuries come from the
 provider's status, return date and season-ending flag with the rule above, not the sheet's wording
-rules, and use the Eastern date throughout; the schedule's results come from stored games.
+rules, and use the Eastern date throughout; the schedule's results come from stored games; a
+traded player is shown once, for his latest team; expected games this week end on the league's
+fantasy week end, not the next Sunday.

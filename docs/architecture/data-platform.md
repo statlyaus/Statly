@@ -264,6 +264,13 @@ difference of up to N per stat, for when ESPN's totals feed disagrees with its o
 2026-27 it is one assist off for RJ Barrett and Kyshawn George after game 401909846, whose box score
 and game logs match the stored rows. The default is 0.
 
+The [role outlook](../domain/basketball.md#read-model-roleoutlookts) reads earlier seasons too:
+the 3 seasons before the current one for back-to-back records and up to 13 for each player's career
+rates. Backfill those 3 (for 2026-27, `--season 2026`, `--season 2025` and `--season 2024`); older
+seasons barely change the projections. Its computed output is cached in the Next.js data cache per
+season, keyed by the latest successful box-score ingest, the injury report's fetch time and the
+Eastern date, and its history tables per season for a day. No table stores either.
+
 ## Rejected alternatives
 
 - Production SQLite on local or network storage: insufficient concurrency and failover behavior.
