@@ -53,6 +53,8 @@ authority when a document and implementation disagree; fix the document in the s
 - [PostgreSQL go-live checklist](runbooks/postgresql-cutover.md) — provisioning, secrets, schema,
   deploy order, and smoke checks for the production fantasy database; not started.
 - [Player identity consolidation](runbooks/player-identity.md) — reviewed production data operation.
+- [Monitoring and alerts](runbooks/monitoring-and-alerts.md) — Sentry Crons monitors for the scheduled
+  jobs, socket server and worker error reporting, and the Sentry settings only the owner can make.
 
 ## Subsystem guides
 

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { isCronRequestAuthorized } from '@/lib/cronAuth';
 import { logger } from '@/lib/logger';
+import { monitorCronRun } from '@/server/cron/cronMonitors';
 import { processDueLeagueWaivers } from '@/server/waivers/waiverSchedule';
 
 export const runtime = 'nodejs';
@@ -17,6 +18,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  return await monitorCronRun('cron-waivers', runScheduledWaivers);
+}
+
+async function runScheduledWaivers(): Promise<NextResponse> {
   try {
     const run = await processDueLeagueWaivers();
     if (run.ran) {
