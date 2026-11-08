@@ -121,8 +121,14 @@ at a time. It runs on every push to `main`, after every `CI` run and every 15 mi
   using the repository secret `QUEUE_TOKEN`, the owner's fine-grained token (this repository only;
   Contents, Pull requests and Actions read/write). The update counts as the owner, so the pull
   request's own `CI` run starts as for any push and its `CI Gate` satisfies the ruleset;
-- a pull request with failed checks, conflicts, an unresolved review thread, a draft, a fork or no
-  auto-merge is skipped, and stays the job of whoever owns it;
+- it judges a pull request by the ruleset's required checks only,
+  `CI Gate` and `GitGuardian Security Checks`, never by GitHub's overall check rollup: DeepSource and
+  CodeFactor are informational and often fail on declined style findings, and reading the rollup left
+  #1231, #1236 and #1206 BEHIND for good (8 November 2026). A pull request counts as running while
+  `CI` jobs exist and `CI Gate` has not reported, and as failed when a required check failed or never
+  reported;
+- a pull request with failed required checks, conflicts, an unresolved review thread, a draft, a fork
+  or no auto-merge is skipped, and stays the job of whoever owns it;
 - an up-to-date auto-merge pull request whose head has had no CI run for ten minutes gets CI dispatched;
 - on the schedule, a `main` tip with no CI run gets one, which covers merges that `GITHUB_TOKEN`
   enabled.

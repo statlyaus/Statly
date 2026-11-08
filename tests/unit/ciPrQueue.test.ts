@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canUpdateBranches, planQueue } from '../../Scripts/ci/pr-queue.mjs';
+import { canUpdateBranches, planQueue, requiredChecksState } from '../../Scripts/ci/pr-queue.mjs';
 
 const pr = (overrides: Record<string, unknown> = {}) => ({
   number: 1,
@@ -13,6 +13,18 @@ const pr = (overrides: Record<string, unknown> = {}) => ({
   headRefName: 'feat/one',
   ...overrides,
 });
+
+const check = (name: string, conclusion: string | null = 'SUCCESS', status = 'COMPLETED') => ({
+  name,
+  status,
+  conclusion,
+  startedAt: '2026-11-08T00:00:00Z',
+});
+const ciJob = (name: string, conclusion: string | null = 'SUCCESS', status = 'COMPLETED') => ({
+  ...check(name, conclusion, status),
+  checkSuite: { workflowRun: { workflow: { name: 'CI' } } },
+});
+const status = (context: string, state: string) => ({ context, state });
 
 describe('planQueue', () => {
   it('updates the oldest green BEHIND auto-merge pull request', () => {
@@ -86,6 +98,90 @@ describe('planQueue', () => {
 
   it('leaves a pull request whose merge state GitHub has not computed yet', () => {
     expect(planQueue([pr({ mergeStateStatus: 'UNKNOWN' })])).toEqual({ action: 'none' });
+  });
+
+  it('updates a BEHIND pull request whose CI Gate is green although DeepSource failed', () => {
+    const checks = requiredChecksState([
+      ciJob('Lint'),
+      ciJob('CI Gate'),
+      check('GitGuardian Security Checks'),
+      status('DeepSource: JavaScript', 'FAILURE'),
+      check('CodeFactor', 'FAILURE'),
+    ]);
+    expect(planQueue([pr({ number: 1231, checks })])).toEqual({
+      action: 'update',
+      candidates: [1231],
+    });
+  });
+
+  it('does not update a BEHIND pull request whose CI Gate failed', () => {
+    const checks = requiredChecksState([
+      ciJob('CI Gate', 'FAILURE'),
+      check('GitGuardian Security Checks'),
+    ]);
+    expect(planQueue([pr({ checks })])).toEqual({ action: 'none' });
+  });
+
+  it('waits on an up-to-date pull request still running CI although DeepSource already failed', () => {
+    const checks = requiredChecksState([
+      ciJob('Lint'),
+      ciJob('Unit tests', null, 'IN_PROGRESS'),
+      check('GitGuardian Security Checks'),
+      status('DeepSource: JavaScript', 'FAILURE'),
+    ]);
+    const plan = planQueue([
+      pr({ number: 2 }),
+      pr({ number: 5, mergeStateStatus: 'BLOCKED', checks }),
+    ]);
+    expect(plan).toEqual({ action: 'wait', number: 5 });
+  });
+});
+
+describe('requiredChecksState', () => {
+  it('reads no CI job as null, so the dispatch grace applies', () => {
+    expect(requiredChecksState([])).toBeNull();
+    expect(requiredChecksState([check('GitGuardian Security Checks')])).toBeNull();
+  });
+
+  it('counts only CI Gate and GitGuardian, not DeepSource or CodeFactor', () => {
+    expect(
+      requiredChecksState([
+        ciJob('CI Gate'),
+        check('GitGuardian Security Checks'),
+        status('DeepSource: JavaScript', 'FAILURE'),
+        check('CodeFactor', 'FAILURE'),
+      ])
+    ).toBe('SUCCESS');
+  });
+
+  it('is PENDING while CI jobs run and CI Gate has not reported', () => {
+    expect(
+      requiredChecksState([ciJob('Lint', 'FAILURE'), check('GitGuardian Security Checks')])
+    ).toBe('PENDING');
+    expect(
+      requiredChecksState([
+        ciJob('CI Gate'),
+        check('GitGuardian Security Checks', null, 'IN_PROGRESS'),
+      ])
+    ).toBe('PENDING');
+  });
+
+  it('is FAILURE when a required check failed or never reported', () => {
+    expect(
+      requiredChecksState([ciJob('CI Gate'), check('GitGuardian Security Checks', 'FAILURE')])
+    ).toBe('FAILURE');
+    expect(requiredChecksState([ciJob('CI Gate')])).toBe('FAILURE');
+  });
+
+  it('judges a re-run required check by its latest run', () => {
+    const rerun = { ...ciJob('CI Gate'), startedAt: '2026-11-08T01:00:00Z' };
+    expect(
+      requiredChecksState([
+        ciJob('CI Gate', 'FAILURE'),
+        rerun,
+        check('GitGuardian Security Checks'),
+      ])
+    ).toBe('SUCCESS');
   });
 });
 
