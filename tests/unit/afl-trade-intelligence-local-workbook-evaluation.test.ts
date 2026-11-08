@@ -135,6 +135,9 @@ function repository(): DraftTradeReadRepository {
     async searchTrades() {
       return [];
     },
+    async releaseAvailability() {
+      return 'active' as const;
+    },
   };
 }
 

@@ -1,9 +1,14 @@
 import { Suspense } from 'react';
 
+import { DraftArchiveUnavailableState } from '@/components/draft/DraftArchiveUnavailableState';
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftTradesExplorer } from '@/components/draft/DraftTradesExplorer';
 import { DraftValuationUnavailableNotice } from '@/components/draft/DraftValuationUnavailableNotice';
-import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/read';
+import {
+  getDraftTradeReleaseAvailability,
+  listDraftTradeYears,
+  listDraftTradesByYear,
+} from '@/lib/draftTrades/read';
 import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
 import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import { readPublicValuationOrUnavailable } from '@/server/aflTradeIntelligence/runtime/publicValuationRead';
@@ -95,11 +100,7 @@ export default async function DraftTradesPage({
     const yearOptions = await listDraftTradeYears();
     if (yearOptions.length === 0) {
       return (
-        <DraftHubState
-          variant="empty"
-          title="No draft trade records found"
-          description="The public AFL trade explorer is ready, but no trade years have been imported yet."
-        />
+        <DraftArchiveUnavailableState availability={await getDraftTradeReleaseAvailability()} />
       );
     }
 

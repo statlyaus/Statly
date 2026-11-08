@@ -964,7 +964,10 @@ to select the legacy Firestore archive only during migration and is not the targ
 The engine can join an archive trade, factual outcome, or published valuation only through stable
 public source identifiers and an exact archive dataset identity recorded by the corresponding
 release. A missing or mismatched join yields an honest unavailable state; it never falls back to a
-workbook lookup or legacy `Expected`/`Actual` field.
+workbook lookup or legacy `Expected`/`Actual` field. When the archive selector serves no release, the
+public trade and club pages say why: no reviewed release is active, the release is withdrawn while a
+source permission is confirmed (`source_blocked`), or it is withheld until its factual review is
+current (`gate2_blocked`).
 
 Redis may coordinate locks, queues, and caches but never owns durable analytical state. A projection
 failure must not cause Firestore, CSV, or a client fallback to become canonical.

@@ -1,6 +1,7 @@
+import { DraftArchiveUnavailableState } from '@/components/draft/DraftArchiveUnavailableState';
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftClubsDirectory } from '@/components/draft/DraftClubsDirectory';
-import { listDraftClubs } from '@/lib/draftTrades/read';
+import { getDraftTradeReleaseAvailability, listDraftClubs } from '@/lib/draftTrades/read';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,11 +11,7 @@ export default async function DraftClubsPage() {
 
     if (clubs.length === 0) {
       return (
-        <DraftHubState
-          variant="empty"
-          title="No club trade records found"
-          description="The club directory is ready, but no club-level trade records have been imported yet."
-        />
+        <DraftArchiveUnavailableState availability={await getDraftTradeReleaseAvailability()} />
       );
     }
 
