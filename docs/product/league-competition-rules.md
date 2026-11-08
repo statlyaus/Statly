@@ -60,6 +60,12 @@ and the commissioner settings page shows locked fields read-only with that reaso
   that distributes fantasy byes fairly.
 - Manual or commissioner fixture changes invalidate/recalculate affected future competition state and
   create an audit entry. Completed finals remain historical records.
+- A league plays one AFL season, its active `LeagueSeason.year`. A league created (or drafting)
+  after the AFL Grand Final defaults to next season; the Grand Final is taken as the last Saturday
+  of September, Melbourne time, because Statly loads no finals fixture. The commissioner can change
+  the season only while the competition is in `SETUP` (`PUT /api/leagues/[id]/season-state`, 409
+  otherwise), because publication builds fixtures and round timings from it. Owned by
+  `src/server/leagues/seasonYear.ts`.
 
 ## Lineups and locks
 
