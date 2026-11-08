@@ -692,12 +692,13 @@ export async function loadLeagueMatchupReadModel({
       },
     }),
     prisma.leagueStanding.findMany({
-      where: { leagueId },
+      where: { leagueId, seasonId: activeSeasonIdOf(settings.league) },
       orderBy: [{ wins: 'desc' }, { categoryWins: 'desc' }],
     }),
     prisma.leagueMatchupScore.findMany({
       where: {
         leagueId,
+        seasonId: activeSeasonIdOf(settings.league),
         status: 'FINAL',
         matchup: {
           fixtureVersion: settings.league.settings.competitionRulesVersion,
@@ -1063,6 +1064,7 @@ export async function recalculateLeagueRoundMatchups({
           },
           create: {
             leagueId,
+            seasonId,
             matchupId: scored.matchupId,
             memberId: scored.homeMemberId,
             round,
@@ -1098,6 +1100,7 @@ export async function recalculateLeagueRoundMatchups({
           },
           create: {
             leagueId,
+            seasonId,
             matchupId: scored.matchupId,
             memberId: scored.awayMemberId,
             round,
@@ -1153,6 +1156,7 @@ export async function recalculateLeagueRoundMatchups({
       const finalizedScores = await tx.leagueMatchupScore.findMany({
         where: {
           leagueId,
+          seasonId,
           status: 'FINAL',
           matchup: { fixtureVersion, phase: 'REGULAR' },
         },
@@ -1165,8 +1169,10 @@ export async function recalculateLeagueRoundMatchups({
 
       for (const standing of standings) {
         await tx.leagueStanding.upsert({
-          where: { leagueId_memberId: { leagueId, memberId: standing.memberId } },
-          create: { leagueId, ...standing },
+          where: {
+            leagueId_seasonId_memberId: { leagueId, seasonId, memberId: standing.memberId },
+          },
+          create: { leagueId, seasonId, ...standing },
           update: standing,
         });
       }

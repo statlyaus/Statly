@@ -285,7 +285,7 @@ export async function loadManagerHome(
 
         const round = seasonState ? focusRound(seasonState.schedule) : null;
         const standingRows = await client.leagueStanding.findMany({
-          where: { leagueId: league.id },
+          where: { leagueId: league.id, seasonId: activeSeasonIdOf(league) },
           select: {
             id: true,
             memberId: true,
@@ -329,7 +329,12 @@ export async function loadManagerHome(
         }
 
         const recent = await client.leagueMatchupScore.findMany({
-          where: { leagueId: league.id, memberId: membership.id, status: 'FINAL' },
+          where: {
+            leagueId: league.id,
+            seasonId: activeSeasonIdOf(league),
+            memberId: membership.id,
+            status: 'FINAL',
+          },
           orderBy: { round: 'desc' },
           take: 5,
           select: { matchupWin: true, matchupLoss: true },
