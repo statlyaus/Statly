@@ -18,6 +18,7 @@ const read = (path: string) => readFileSync(join(root, path), 'utf8');
 describe('RosterProjectionService', () => {
   it('projects each pick into one league-wide player ownership row', async () => {
     const db = {
+      league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
       pick: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -71,10 +72,17 @@ describe('RosterProjectionService', () => {
       leagueId: 'league-1',
     });
     expect(db.waiverPriority.upsert).toHaveBeenCalledWith({
-      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
+      where: {
+        leagueId_seasonId_memberId: {
+          leagueId: 'league-1',
+          seasonId: 'season-1',
+          memberId: 'member-1',
+        },
+      },
       update: { priority: 1 },
       create: {
         leagueId: 'league-1',
+        seasonId: 'season-1',
         memberId: 'member-1',
         priority: 1,
       },
@@ -84,6 +92,7 @@ describe('RosterProjectionService', () => {
 
   it('keeps completed draft roster projection successful when waiver availability projection is unavailable', async () => {
     const db = {
+      league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
       pick: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -122,6 +131,7 @@ describe('RosterProjectionService', () => {
 
   it('seeds waiver priority from reverse final draft pick order', async () => {
     const db = {
+      league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
       pick: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -170,19 +180,33 @@ describe('RosterProjectionService', () => {
     await service.projectDraft({ leagueId: 'league-1', draftId: 'draft-1' });
 
     expect(db.waiverPriority.upsert).toHaveBeenNthCalledWith(1, {
-      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
+      where: {
+        leagueId_seasonId_memberId: {
+          leagueId: 'league-1',
+          seasonId: 'season-1',
+          memberId: 'member-1',
+        },
+      },
       update: { priority: 1 },
       create: {
         leagueId: 'league-1',
+        seasonId: 'season-1',
         memberId: 'member-1',
         priority: 1,
       },
     });
     expect(db.waiverPriority.upsert).toHaveBeenNthCalledWith(2, {
-      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-2' } },
+      where: {
+        leagueId_seasonId_memberId: {
+          leagueId: 'league-1',
+          seasonId: 'season-1',
+          memberId: 'member-2',
+        },
+      },
       update: { priority: 2 },
       create: {
         leagueId: 'league-1',
+        seasonId: 'season-1',
         memberId: 'member-2',
         priority: 2,
       },
@@ -201,12 +225,10 @@ describe('RosterProjectionService', () => {
   it('updates bench position on LeagueRosterPlayer when saving preferences', async () => {
     const tx = {
       leagueRosterPlayer: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            { playerId: 'player-2', player: { id: 'player-2' }, updatedAt: new Date() },
-            { playerId: 'player-1', player: { id: 'player-1' }, updatedAt: new Date() },
-          ]),
+        findMany: vi.fn().mockResolvedValue([
+          { playerId: 'player-2', player: { id: 'player-2' }, updatedAt: new Date() },
+          { playerId: 'player-1', player: { id: 'player-1' }, updatedAt: new Date() },
+        ]),
         updateMany: vi.fn().mockResolvedValue({ count: 2 }),
         update: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
         findFirst: vi.fn().mockResolvedValue({

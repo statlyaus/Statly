@@ -69,6 +69,9 @@ worker acts on that draft only after checking it still belongs to the league and
 Rescheduling or cancelling replaces only that draft's jobs, never another draft's in the same league.
 A start job without a draft id (enqueued before this keying) is refused and logged rather than
 resolved to "the league's draft"; rescheduling the draft enqueues a keyed job.
+Draft structure (position limits and bench, draft type, pick order) can change only while the draft
+is `SCHEDULED`; the league settings API refuses a change after that with 409
+`DRAFT_STRUCTURE_LOCKED`. See [settings locks](../product/league-competition-rules.md#settings-locks).
 Clock commands commit Prisma timing state and an outbox event without depending on Redis. Outbox
 delivery and the worker's startup/periodic repair loop both reconcile the latest persisted LIVE clock
 into an immutable, revision-addressed BullMQ job. They never schedule from stale event data. Missing
@@ -143,6 +146,11 @@ Firestore free agents or offers its own claim buttons.
 Processed claims (won or lost) are published as `WAIVER_SUCCESSFUL` and `WAIVER_FAILED` system messages
 in the league's social Activity channel; submitted and cancelled claims, and their bids, stay private.
 
+Waiver state is season-scoped (2026-11-08). Claims and drops (`TeamAction`) and each member's priority
+and FAAB balance (`WaiverPriority`, one row per member per season) carry the season they were created
+in. Every waiver read and write is filtered to the league's active season, so a claim from an earlier
+season never shows, settles or holds a player, and balances start again in a new season.
+
 Claims validate membership, league settings, player availability, optional drop ownership, roster
 capacity, and priority/FAAB rules at the server boundary. Only an active member can submit a claim, and a
 pending claim whose member has since been removed from the league is rejected at settlement ("Team
@@ -158,7 +166,7 @@ rather than standing in the league budget.
 Waiver settings live in Prisma's `LeagueSettings`. A league uses FAAB when `faabBudget` is set (each
 member's budget); otherwise a `ROLLING` league uses priority order. Commissioners set or clear the
 budget through the league settings API (`waiver.faabBudget`: a whole number of at least 1, or
-`null`). The minimum bid is 1 and the waiver period is 24 hours. The budget is locked once the league has any waiver
+`null`). The minimum bid is 1 and the waiver period is 24 hours. The budget is locked once the active season has any waiver
 claim, because members' balances are derived from it when a claim first touches them. Firestore holds no waiver settings.
 
 ### Concurrent writers

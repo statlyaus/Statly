@@ -34,6 +34,23 @@ the signed z-score, so the entries add up to the total.
 The default preset and valid category registry live in `src/types/fantasyCategories.ts`. See
 [fantasy model](../domain/fantasy-model.md).
 
+## Settings locks
+
+Settings that shape a season stop being editable once the season they shape has started. The
+league settings API refuses a changed value with 409, a `code`, and the reason; resending the
+current value is accepted, so the commissioner can still save the rest of the form.
+
+- **Scoring** (categories, category directions, scoring mode, lineup slots) locks when the
+  competition is published. Publication writes `LeagueSettings.scoringSettingsLockedAt`; a league
+  published before that write is locked from `competitionPublishedAt`. Code
+  `SCORING_SETTINGS_LOCKED`.
+- **Draft structure** (position limits and bench, so roster and bench size, draft type, pick order)
+  locks once the league's draft leaves `SCHEDULED`. Code `DRAFT_STRUCTURE_LOCKED`.
+
+The settings response carries `locks.scoring` and `locks.draftStructure` (the reason, or `null`),
+and the commissioner settings page shows locked fields read-only with that reason. Owned by
+`src/server/leagues/settingsLocks.ts`.
+
 ## Calendar and fixtures
 
 - Fantasy rounds are distinct from AFL rounds and retain stable fantasy-round identities.

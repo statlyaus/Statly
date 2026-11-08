@@ -3,7 +3,7 @@ import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
-import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
+import { activeSeasonIdOf, IN_ACTIVE_SEASON } from '@/server/leagues/activeSeason';
 import { normalizeLineupSlots, totalActiveLineupSlots } from '@/server/leagues/lineupSettings';
 import { parseStoredCategoryRows } from '@/server/leagues/matchupReadModel';
 import { isActivePrismaMembership } from '@/server/leagues/membership';
@@ -225,7 +225,12 @@ export async function loadManagerHome(
       select: { recipientMemberId: true, expiresAt: true },
     }),
     client.teamAction.findMany({
-      where: { memberId: { in: memberIds }, actionType: 'WAIVER_CLAIM', status: 'PENDING' },
+      where: {
+        memberId: { in: memberIds },
+        ...IN_ACTIVE_SEASON,
+        actionType: 'WAIVER_CLAIM',
+        status: 'PENDING',
+      },
       select: { memberId: true },
     }),
   ]);
