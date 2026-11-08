@@ -148,6 +148,31 @@ describe('projectNextFive', () => {
   });
 });
 
+describe('projectNextFive floors', () => {
+  const at = (projectRows: typeof rows, minutesNext5: number, usageNext5: number) =>
+    projectNextFive(
+      projectRows,
+      [{ ...role, minutesNext5, usageNext5 }],
+      context('CHI'),
+      history(),
+      NONE
+    )[0];
+
+  it('reads predicted minutes below 5 as 5 for the rate, then scales by the minutes', () => {
+    const two = at(rows, 2, 22).raw.stats;
+    const five = at(rows, 5, 22).raw.stats;
+    for (const stat of PROJECTED_STATS) expect(two[stat]).toBeCloseTo(five[stat] * 0.4, 12);
+  });
+
+  it('never projects a negative stat', () => {
+    // A 45 % usage season with a 5 % prediction pushes the usage-driven rates below zero.
+    const highUsage = rows.map((row) => (row.playerId === 'p' ? { ...row, usg: 45 } : row));
+    const { stats, raw } = at(highUsage, 31, 5);
+    expect(raw.stats.tov).toBe(0);
+    expect(stats.tov).toBe(0);
+  });
+});
+
 describe('shootingPercentages', () => {
   // 10 of 20 from the field and 8 of 10 at the line over 2 games.
   const games = [0, 1].map((i) =>

@@ -297,10 +297,10 @@ only at the output; the two change columns are differences of the rounded values
 The sheet embeds three per-player tables; Statly recomputes them from earlier seasons' stored box
 scores, joined by player ID:
 
-- Career prior: over up to the 13 seasons before this one, each season weighted 0.5^(seasons ago −
-  1. (last season 1, then 0.5, 0.25, …): per-minute rates Σ weight × stat ÷ Σ weight × minutes for
-     points, threes, rebounds, assists, steals, blocks, turnovers, FGA and FTA, and weighted FGM, FGA,
-     FTM and FTA. Absent (a rookie for the model) under 100 minutes in all.
+- Career prior: over up to the 13 seasons before this one, a season k years back weighted
+  0.5^(k − 1) (last season 1, then 0.5, 0.25, …): per-minute rates Σ weight × stat ÷ Σ weight ×
+  minutes for points, threes, rebounds, assists, steals, blocks, turnovers, FGA and FTA, and
+  weighted FGM, FGA, FTM and FTA. Absent (a rookie for the model) under 100 minutes in all.
 - Last season: minutes per game and games played ÷ 82, all teams together, cameos counted.
 - Back-to-back record over the 3 seasons before this one: a second night is a team game the day
   after the team's previous game, with a next game in the same season. Eligible when he played the
