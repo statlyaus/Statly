@@ -15,6 +15,8 @@ export type RawRoundMatch = RawValueRecord;
 export interface NormalizedLiveStatRow {
   playerId: string;
   matchId: string | null;
+  /** The club the row was recorded for, as the provider names it. */
+  team: string | null;
   round: number | null;
   season: number | null;
   gameStartsAt: Date | null;
@@ -157,6 +159,7 @@ export function normalizeLiveStatRows(
     return {
       playerId,
       matchId,
+      team: readString(row, ['team', 'club']),
       round: readNumber(row, ['round_number', 'round']) || null,
       season: readNumber(row, ['season']) || null,
       gameStartsAt,
