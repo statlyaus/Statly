@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { metricsCollector } from '@/lib/metrics';
+import { countRateLimitHit, getTrustedClientIp } from '@/lib/rateLimit';
 import { timingSafeEqual, createHash } from 'node:crypto';
 
 export const runtime = 'nodejs';
@@ -10,10 +11,10 @@ export const dynamic = 'force-dynamic';
 const METRICS_API_KEY = (process.env.METRICS_API_KEY || '').trim();
 const METRICS_BEARER_TOKEN = (process.env.METRICS_BEARER_TOKEN || '').trim();
 
-// Simple in-process rate limiter
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute
+// Shared Redis-backed fixed window: 10 requests per minute per credential (see "Rate limits" in
+// docs/architecture/data-platform.md).
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const RATE_LIMIT_MAX_REQUESTS = 10;
 
 // Retry-After header value for unconfigured metrics service (in seconds)
 const RETRY_AFTER_ON_UNCONFIGURED = 60;
@@ -59,61 +60,26 @@ function getClientIdentifier(req: NextRequest): string {
     }
   }
 
-  // Fallback to IP-based identification if no credentials present
-  const reqAny = req as unknown as { ip?: string | null | undefined };
-  const directIp = (reqAny.ip ?? '').toString().trim();
-
-  if (directIp) return `ip:${directIp}`;
-
-  const forwardedRaw = req.headers.get('x-forwarded-for') || '';
-  const realIpRaw = req.headers.get('x-real-ip') || '';
-  const cfConnectingIpRaw = req.headers.get('cf-connecting-ip') || '';
-
-  const forwarded = forwardedRaw
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)[0];
-
-  const realIp = realIpRaw.trim();
-  const cfConnectingIp = cfConnectingIpRaw.trim();
-
-  const ipIdentifier = forwarded || realIp || cfConnectingIp;
-  return ipIdentifier ? `ip:${ipIdentifier}` : 'unknown';
+  // Fallback to the trusted client IP if no credentials present
+  return `ip:${getTrustedClientIp(req.headers) ?? 'unknown'}`;
 }
 
-function checkRateLimit(clientId: string): {
+async function checkRateLimit(clientId: string): Promise<{
   allowed: boolean;
   remaining: number;
   reset: number;
   limit: number;
-} {
-  const now = Date.now();
-
-  // Opportunistically prune stale entries
-  for (const [key, value] of rateLimitMap) {
-    if (value.resetTime < now) {
-      rateLimitMap.delete(key);
-    }
-  }
-
-  let clientData = rateLimitMap.get(clientId);
-  if (!clientData || now > clientData.resetTime) {
-    clientData = { count: 0, resetTime: now + RATE_LIMIT_WINDOW };
-  }
-
-  const remaining = Math.max(0, RATE_LIMIT_MAX_REQUESTS - clientData.count);
-  const allowed = remaining > 0;
-
-  if (allowed) {
-    clientData.count += 1;
-  }
-
-  rateLimitMap.set(clientId, clientData);
-
+}> {
+  const { count, resetAt } = await countRateLimitHit({
+    key: `rate-limit:metrics:${clientId}`,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+    // Matches the per-process counter this route used before it moved to Redis.
+    whenRedisUnavailable: 'memory',
+  });
   return {
-    allowed,
-    remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - clientData.count),
-    reset: clientData.resetTime,
+    allowed: count <= RATE_LIMIT_MAX_REQUESTS,
+    remaining: Math.max(0, RATE_LIMIT_MAX_REQUESTS - count),
+    reset: resetAt,
     limit: RATE_LIMIT_MAX_REQUESTS,
   };
 }
@@ -176,7 +142,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     // Rate limiting check
     const clientId = getClientIdentifier(req);
-    const rate = checkRateLimit(clientId);
+    const rate = await checkRateLimit(clientId);
     if (!rate.allowed) {
       console.error('GET /api/metrics failed: Rate limit exceeded for client:', clientId);
       // Compute a safe Retry-After value in whole seconds (minimum 1)
