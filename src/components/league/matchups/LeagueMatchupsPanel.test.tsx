@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authenticatedFetchMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/authenticatedFetch', () => ({ authenticatedFetch: authenticatedFetchMock }));
 
-import { LeagueMatchupsPanel } from './LeagueMatchupsPanel';
+import { LeagueMatchupsPanel, LIVE_SCORING_REFRESH_MS } from './LeagueMatchupsPanel';
 
 type Status = 'SCHEDULED' | 'LIVE' | 'FINAL';
 
@@ -186,5 +186,79 @@ describe('LeagueMatchupsPanel before any fixtures exist', () => {
     render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
 
     expect(screen.getByRole('status')).toHaveTextContent(/loading matchups/i);
+  });
+});
+
+describe('LeagueMatchupsPanel live refresh', () => {
+  let visibility: DocumentVisibilityState = 'visible';
+
+  beforeEach(() => {
+    authenticatedFetchMock.mockReset();
+    visibility = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  // The table appears at commit, but polling starts in a passive effect that React runs on a later
+  // real task (RTL turns the act environment off inside findBy/waitFor). Advancing the fake clock
+  // before that effect runs would skip the first tick, so wait until polling is installed.
+  async function livePollingStarted(setIntervalSpy: ReturnType<typeof vi.spyOn>) {
+    await waitFor(() =>
+      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), LIVE_SCORING_REFRESH_MS)
+    );
+  }
+
+  it('refreshes the scores while a matchup is live, without blanking the page', async () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    authenticatedFetchMock.mockImplementation(respond('LIVE'));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+    await totalsTable();
+    await livePollingStarted(setIntervalSpy);
+    expect(authenticatedFetchMock).toHaveBeenCalledTimes(1);
+
+    authenticatedFetchMock.mockImplementation(() => new Promise(() => {}));
+    await act(async () => {
+      vi.advanceTimersByTime(LIVE_SCORING_REFRESH_MS);
+    });
+
+    expect(authenticatedFetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/loading matchups/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /totals by scoring category/i })).toBeInTheDocument();
+  });
+
+  it('pauses while the tab is hidden and catches up when it is shown again', async () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    authenticatedFetchMock.mockImplementation(respond('LIVE'));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+    await totalsTable();
+    await livePollingStarted(setIntervalSpy);
+
+    visibility = 'hidden';
+    await act(async () => {
+      vi.advanceTimersByTime(LIVE_SCORING_REFRESH_MS * 3);
+    });
+    expect(authenticatedFetchMock).toHaveBeenCalledTimes(1);
+
+    visibility = 'visible';
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() => expect(authenticatedFetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not poll when no matchup is live', async () => {
+    authenticatedFetchMock.mockImplementation(respond('FINAL'));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+    await totalsTable();
+
+    await act(async () => {
+      vi.advanceTimersByTime(LIVE_SCORING_REFRESH_MS * 2);
+    });
+    expect(authenticatedFetchMock).toHaveBeenCalledTimes(1);
   });
 });
