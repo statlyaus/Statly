@@ -1,7 +1,9 @@
 import type React from 'react';
 import LeaguePageClient from './LeaguePageClient';
+import { NotLeagueMember } from '@/components/league/NotLeagueMember';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail';
+import { loadMemberLeagueOptions } from '@/server/leagues/memberLeagueOptions';
 import {
   loadAuthorizedLeagueTradeCentre,
   loadAuthorizedLeagueTradeDigest,
@@ -25,6 +27,10 @@ export default async function LeaguePage({
   const query = searchParams ? await searchParams : {};
   const userId = await getAuthenticatedUserIdFromServerContext();
   const result = await loadAuthorizedLeagueDetail(id, userId);
+
+  if (!result.ok && userId && (result.status === 403 || result.status === 404)) {
+    return <NotLeagueMember leagues={await loadMemberLeagueOptions(userId)} />;
+  }
 
   if (!result.ok) {
     return (
@@ -103,7 +109,5 @@ async function loadTradeDigest(leagueId: string, userId: string | null) {
 
 function toLeaguePageError(status: number): string {
   if (status === 401) return 'Sign in to view this league.';
-  if (status === 403) return 'You do not have access to this league.';
-  if (status === 404) return 'This league does not exist or has been deleted.';
   return "We couldn't load this league. Try again in a moment.";
 }

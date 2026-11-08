@@ -620,7 +620,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {activeDraft.status !== 'LIVE' && (
             <DraftStatusBanner
               status={activeDraft.status}
-              onStartDraft={draft.startDraft}
+              // Only a commissioner may start early; the server refuses everyone else.
+              onStartDraft={isOwner ? draft.startDraft : undefined}
               isLoading={draft.isSaving}
             />
           )}

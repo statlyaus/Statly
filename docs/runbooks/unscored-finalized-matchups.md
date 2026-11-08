@@ -40,9 +40,10 @@ transaction.
 
 - **Matchups** come from the competition round itself (`LeagueMatchup.competitionRoundId`). Legacy
   matchups with no link are matched by league, fixture version and round number.
-- **Lineups** are keyed by league, member and round number only. They carry no season or fixture version.
-  When the league has another competition round with the same round number (another season or fixture
-  version), the lineup found may belong to that round. The side is then reported as
+- **Lineups** are keyed by league, season, member and round number (season since 2026-11-08,
+  backfilled to the league's active season). They carry no fixture version. When the round's season
+  has another competition round with the same round number (another fixture version), or the round
+  has no season, the lineup found may belong to that other round. The side is then reported as
   `LINEUP_SCOPE_AMBIGUOUS` and not classified.
 - **Set time** is per player (`LeagueLineupPlayer.createdAt`), not the lineup's first save. A save deletes
   and recreates every player whose game has not started and keeps players whose game has, so a player's

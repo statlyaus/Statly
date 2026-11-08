@@ -1,5 +1,6 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 
@@ -29,6 +30,7 @@ export class WaiverAvailabilityProjectionService {
     const waiverHolds = await this.db.teamAction.findMany({
       where: {
         leagueId: input.leagueId,
+        ...inActiveSeason(input.leagueId),
         actionType: 'DROP_PLAYER',
         status: 'PENDING',
         processingAt: { gt: new Date() },

@@ -1,6 +1,4 @@
 import { logger } from '@/lib/logger';
-import { revalidateTags } from '@/lib/cache';
-import { tags } from '@/lib/cacheTags';
 import { publishLeagueSystemMessage } from '@/server/leagues/social/socialSystemEvents';
 import { incCounter, METRICS } from '@/server/metrics';
 import type { CanonicalLiveDraftState } from '@/services/realtime/draftStateWire';
@@ -267,16 +265,6 @@ export class DraftRealtimePublisher {
       );
       throw error;
     }
-
-    await revalidateTags([tags.draft(result.leagueId), tags.league(result.leagueId)]).catch(
-      (error) => {
-        logger.warn('Failed to revalidate draft realtime publisher tags', {
-          draftId: result.draftId,
-          leagueId: result.leagueId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    );
 
     return state;
   }

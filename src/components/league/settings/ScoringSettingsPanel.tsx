@@ -19,6 +19,8 @@ interface ScoringSettingsValue {
 
 interface ScoringSettingsPanelProps {
   value: ScoringSettingsValue;
+  // Why scoring can no longer change, from the settings API.
+  lockReason?: string | null;
   disabled?: boolean;
   onChange: (value: ScoringSettingsValue) => void;
 }
@@ -31,8 +33,13 @@ const SLOT_LABELS: Record<keyof LeagueLineupSlotSettings, string> = {
   UTIL: 'Utility',
 };
 
-export function ScoringSettingsPanel({ value, disabled, onChange }: ScoringSettingsPanelProps) {
-  const isLocked = Boolean(value.scoringSettingsLockedAt);
+export function ScoringSettingsPanel({
+  value,
+  lockReason,
+  disabled,
+  onChange,
+}: ScoringSettingsPanelProps) {
+  const isLocked = Boolean(lockReason ?? value.scoringSettingsLockedAt);
 
   return (
     <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
@@ -44,6 +51,11 @@ export function ScoringSettingsPanel({ value, disabled, onChange }: ScoringSetti
           <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
             Configure H2H mode, active lineup slots, and category directions before fixtures lock.
           </p>
+          {isLocked && (
+            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+              {lockReason ?? 'Scoring settings are locked because the competition was published.'}
+            </p>
+          )}
         </div>
         {isLocked && (
           <span className="rounded-full border border-[color:var(--league-border)] px-3 py-1 text-xs font-semibold text-[color:var(--league-text-muted)]">

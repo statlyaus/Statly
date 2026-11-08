@@ -9,10 +9,16 @@ tests, and this document together.
 - Competition state is scoped to a league and `LeagueSeason`.
 - Commissioners configure scoring, fixtures, lineup slots, locks, and finals before publication.
 - Publication records the rules/version used to calculate the competition.
+- Publication happens once, from setup. Published rules are read-only: the server refuses another
+  save or publish (409), so a live season's scores, standings, and lineups are never reset. Later
+  changes go through commissioner overrides.
 - Commissioner overrides are authorized at the server boundary and retained in the competition audit
   history.
 - Missing official AFL fixture data is represented as pending state; the UI must not invent a reliable
-  lock time.
+  lock time. A round published before its AFL fixture was loaded stays pending until the hourly
+  scoring job finds the fixture: it then takes the round's first bounce as its start time and becomes
+  scheduled, the same as if the fixture had been there at publication, and is scored once it starts.
+  Publication is not reopened.
 
 ## Category scoring
 
@@ -31,6 +37,23 @@ the signed z-score, so the entries add up to the total.
 The default preset and valid category registry live in `src/types/fantasyCategories.ts`. See
 [fantasy model](../domain/fantasy-model.md).
 
+## Settings locks
+
+Settings that shape a season stop being editable once the season they shape has started. The
+league settings API refuses a changed value with 409, a `code`, and the reason; resending the
+current value is accepted, so the commissioner can still save the rest of the form.
+
+- **Scoring** (categories, category directions, scoring mode, lineup slots) locks when the
+  competition is published. Publication writes `LeagueSettings.scoringSettingsLockedAt`; a league
+  published before that write is locked from `competitionPublishedAt`. Code
+  `SCORING_SETTINGS_LOCKED`.
+- **Draft structure** (position limits and bench, so roster and bench size, draft type, pick order)
+  locks once the league's draft leaves `SCHEDULED`. Code `DRAFT_STRUCTURE_LOCKED`.
+
+The settings response carries `locks.scoring` and `locks.draftStructure` (the reason, or `null`),
+and the commissioner settings page shows locked fields read-only with that reason. Owned by
+`src/server/leagues/settingsLocks.ts`.
+
 ## Calendar and fixtures
 
 - Fantasy rounds are distinct from AFL rounds and retain stable fantasy-round identities.
@@ -40,6 +63,12 @@ The default preset and valid category registry live in `src/types/fantasyCategor
   that distributes fantasy byes fairly.
 - Manual or commissioner fixture changes invalidate/recalculate affected future competition state and
   create an audit entry. Completed finals remain historical records.
+- A league plays one AFL season, its active `LeagueSeason.year`. A league created (or drafting)
+  after the AFL Grand Final defaults to next season; the Grand Final is taken as the last Saturday
+  of September, Melbourne time, because Statly loads no finals fixture. The commissioner can change
+  the season only while the competition is in `SETUP` (`PUT /api/leagues/[id]/season-state`, 409
+  otherwise), because publication builds fixtures and round timings from it. Owned by
+  `src/server/leagues/seasonYear.ts`.
 
 ## Lineups and locks
 
@@ -61,6 +90,13 @@ updates can change an unlocked player's lock time; an unknown start time remains
 ## Interchange autosubs
 
 - Autosubs resolve from official participation evidence after the applicable AFL round is complete.
+  A player did not play when his stat row in a final match shows zero minutes, or when his club has
+  a confirmed bye (recorded as a club bye). The provider writes rows only for players who took the
+  field, so a player his club did not select has no row: he also did not play once his club's match
+  in that AFL round is final and that same match has stat rows for his club that all map to Statly
+  players (the club's team sheet is ingested and identity-mapped; an unmapped row may be the player
+  himself under an unreviewed provider id). In every other case a lineup player without a row keeps
+  the round waiting; it is never scored as a zero.
 - Candidates are considered in persisted interchange order and must be eligible for the vacated slot.
 - A non-playing candidate is skipped. If no candidate qualifies, the active slot scores zero.
 - Each replacement contributes once; active/interchange state and the decision reason are persisted.

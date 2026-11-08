@@ -31,8 +31,10 @@ import {
   WaiverClaimStoreError,
   type WaiverClaim,
 } from '@/server/waivers/WaiverProcessingService';
+import { activateLeagueSeason } from './helpers/leagueSeason';
 
 const LEAGUE = 'int-raw-sql-league';
+let seasonId = '';
 const SETTINGS = 'int-raw-sql-settings';
 const DRAFT = 'int-raw-sql-draft';
 const users = ['a', 'b', 'c'].map((name) => `int-raw-sql-user-${name}`);
@@ -102,6 +104,7 @@ async function seedFixture() {
       categoriesJson: [],
     },
   });
+  seasonId = await activateLeagueSeason(prisma, LEAGUE);
   await prisma.leagueMember.createMany({
     data: members.map((id, index) => ({
       id,
@@ -238,6 +241,7 @@ describe('team actions route', () => {
     await prisma.teamAction.create({
       data: {
         leagueId: LEAGUE,
+        seasonId,
         memberId: members[0],
         actionType: 'TRADE_PROPOSAL',
         details: {},
@@ -245,11 +249,18 @@ describe('team actions route', () => {
       },
     });
     await prisma.teamAction.create({
-      data: { leagueId: LEAGUE, memberId: members[1], actionType: 'TRADE_PROPOSAL', details: {} },
+      data: {
+        leagueId: LEAGUE,
+        seasonId,
+        memberId: members[1],
+        actionType: 'TRADE_PROPOSAL',
+        details: {},
+      },
     });
     await prisma.teamAction.create({
       data: {
         leagueId: LEAGUE,
+        seasonId,
         memberId: members[0],
         actionType: 'WAIVER_CLAIM',
         details: { playerId: players[3], dropPlayerId: players[0] },
@@ -273,7 +284,7 @@ describe('team actions route', () => {
     });
   });
 
-  it('removes a dropped player at once and rejects the action when processing fails', async () => {
+  it('removes a dropped player at once and keeps its waiver hold when the projection fails', async () => {
     await prisma.leagueRosterPlayer.create({
       data: { leagueId: LEAGUE, memberId: members[0], playerId: players[0] },
     });
@@ -285,8 +296,14 @@ describe('team actions route', () => {
     expect(
       await prisma.leagueRosterPlayer.count({ where: { leagueId: LEAGUE, memberId: members[0] } })
     ).toBe(0);
+    // The projection mock rejects; the committed drop and its hold must stand regardless.
     const [drop] = await list();
-    expect(drop).toMatchObject({ actionType: 'DROP_PLAYER', status: 'REJECTED' });
-    expect(drop.processedAt).not.toBeNull();
+    expect(drop).toMatchObject({ actionType: 'DROP_PLAYER', status: 'PENDING' });
+    expect(drop.processedAt).toBeNull();
+
+    // A second drop of the same player finds no roster row and is refused, not reported.
+    expect(
+      (await post({ actionType: 'DROP_PLAYER', details: { playerId: players[0] } })).status
+    ).toBe(400);
   });
 });
