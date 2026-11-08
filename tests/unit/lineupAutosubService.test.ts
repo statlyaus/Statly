@@ -42,13 +42,25 @@ describe('resolveAndPersistLineupAutosubs', () => {
       nonPlayingReasonByPlayerId: new Map([['active-1', 'DID_NOT_PLAY']]),
       players: [
         { id: 'assignment-1', playerId: 'active-1', slot: 'DEF', slotIndex: 0 },
-        { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+        {
+          id: 'assignment-2',
+          playerId: 'interchange-1',
+          slot: 'INTERCHANGE',
+          slotIndex: 0,
+          player: { position: 'DEF' },
+        },
       ],
     });
 
     expect(players).toEqual([
       { id: 'assignment-1', playerId: 'active-1', slot: 'INTERCHANGE', slotIndex: 0 },
-      { id: 'assignment-2', playerId: 'interchange-1', slot: 'DEF', slotIndex: 0 },
+      {
+        id: 'assignment-2',
+        playerId: 'interchange-1',
+        slot: 'DEF',
+        slotIndex: 0,
+        player: { position: 'DEF' },
+      },
     ]);
     expect(txMocks.leagueLineupAutosub.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -95,6 +107,30 @@ describe('resolveAndPersistLineupAutosubs', () => {
     expect(txMocks.leagueCompetitionAudit.create).toHaveBeenCalledOnce();
   });
 
+  it('does not bring on an interchange player who is not listed for the vacated slot', async () => {
+    const input = [
+      { id: 'assignment-1', playerId: 'active-1', slot: 'DEF' as const, slotIndex: 0 },
+      {
+        id: 'assignment-2',
+        playerId: 'interchange-1',
+        slot: 'INTERCHANGE' as const,
+        slotIndex: 0,
+        player: { position: 'RUC' },
+      },
+    ];
+
+    await expect(
+      resolveAndPersistLineupAutosubs({
+        leagueId: 'league-1',
+        lineupId: 'lineup-1',
+        nonPlayingReasonByPlayerId: new Map([['active-1', 'DID_NOT_PLAY']]),
+        players: input,
+      })
+    ).resolves.toEqual(input);
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+    expect(txMocks.leagueLineupAutosub.create).not.toHaveBeenCalled();
+  });
+
   it('does not write when no active player is confirmed as a non-player', async () => {
     const input = [
       { id: 'assignment-1', playerId: 'active-1', slot: 'DEF' as const, slotIndex: 0 },
@@ -124,7 +160,13 @@ describe('resolveAndPersistLineupAutosubs', () => {
       nonPlayingReasonByPlayerId: new Map([['active-1', 'CLUB_BYE']]),
       players: [
         { id: 'assignment-1', playerId: 'active-1', slot: 'DEF', slotIndex: 0 },
-        { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+        {
+          id: 'assignment-2',
+          playerId: 'interchange-1',
+          slot: 'INTERCHANGE',
+          slotIndex: 0,
+          player: { position: 'DEF' },
+        },
       ],
     });
 
@@ -143,7 +185,13 @@ describe('resolveAndPersistLineupAutosubs', () => {
         nonPlayingReasonByPlayerId: new Map([['active-1', 'DID_NOT_PLAY']]),
         players: [
           { id: 'assignment-1', playerId: 'active-1', slot: 'DEF', slotIndex: 0 },
-          { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+          {
+            id: 'assignment-2',
+            playerId: 'interchange-1',
+            slot: 'INTERCHANGE',
+            slotIndex: 0,
+            player: { position: 'DEF' },
+          },
         ],
       })
     ).rejects.toThrow('Autosub assignments changed before they could be persisted.');
@@ -157,27 +205,53 @@ describe('resolveAndPersistLineupAutosubs', () => {
   it.each([
     [
       'outgoing lineup',
-      [{ id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 }],
+      [
+        {
+          id: 'assignment-2',
+          playerId: 'interchange-1',
+          slot: 'INTERCHANGE',
+          slotIndex: 0,
+          player: { position: 'DEF' },
+        },
+      ],
     ],
     [
       'outgoing player',
       [
         { id: 'assignment-1', playerId: 'other-player', slot: 'DEF', slotIndex: 0 },
-        { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+        {
+          id: 'assignment-2',
+          playerId: 'interchange-1',
+          slot: 'INTERCHANGE',
+          slotIndex: 0,
+          player: { position: 'DEF' },
+        },
       ],
     ],
     [
       'outgoing slot',
       [
         { id: 'assignment-1', playerId: 'active-1', slot: 'FWD', slotIndex: 0 },
-        { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+        {
+          id: 'assignment-2',
+          playerId: 'interchange-1',
+          slot: 'INTERCHANGE',
+          slotIndex: 0,
+          player: { position: 'DEF' },
+        },
       ],
     ],
     [
       'outgoing slot index',
       [
         { id: 'assignment-1', playerId: 'active-1', slot: 'DEF', slotIndex: 1 },
-        { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+        {
+          id: 'assignment-2',
+          playerId: 'interchange-1',
+          slot: 'INTERCHANGE',
+          slotIndex: 0,
+          player: { position: 'DEF' },
+        },
       ],
     ],
     [
@@ -215,7 +289,13 @@ describe('resolveAndPersistLineupAutosubs', () => {
         nonPlayingReasonByPlayerId: new Map([['active-1', 'DID_NOT_PLAY']]),
         players: [
           { id: 'assignment-1', playerId: 'active-1', slot: 'DEF', slotIndex: 0 },
-          { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+          {
+            id: 'assignment-2',
+            playerId: 'interchange-1',
+            slot: 'INTERCHANGE',
+            slotIndex: 0,
+            player: { position: 'DEF' },
+          },
         ],
       })
     ).rejects.toThrow('Autosub assignments changed before they could be persisted.');
@@ -239,7 +319,13 @@ describe('resolveAndPersistLineupAutosubs', () => {
           nonPlayingReasonByPlayerId: new Map([['active-1', 'DID_NOT_PLAY']]),
           players: [
             { id: 'assignment-1', playerId: 'active-1', slot: 'DEF', slotIndex: 0 },
-            { id: 'assignment-2', playerId: 'interchange-1', slot: 'INTERCHANGE', slotIndex: 0 },
+            {
+              id: 'assignment-2',
+              playerId: 'interchange-1',
+              slot: 'INTERCHANGE',
+              slotIndex: 0,
+              player: { position: 'DEF' },
+            },
           ],
         })
       ).rejects.toThrow('Autosub assignments changed before they could be persisted.');

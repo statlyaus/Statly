@@ -3,7 +3,8 @@
 import { useState, useCallback, memo, useRef, useEffect } from 'react';
 
 import { useConfirmation } from '@/components/ui/Modal';
-import { useNotification } from '@/hooks/useNotification';
+import { NotificationToast, useNotification } from '@/hooks/useNotification';
+import { fetchApi } from '@/lib/api';
 import type { DraftStatus } from '@/types/draft';
 
 interface DraftControlsProps {
@@ -21,7 +22,7 @@ const DraftControls = memo(function DraftControls({
 }: DraftControlsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { confirm, ConfirmationModal } = useConfirmation();
-  const { showNotification } = useNotification();
+  const { notification, showNotification } = useNotification();
   const abortControllerRef = useRef<AbortController | null>(null);
   const isPaused = draftStatus === 'PAUSED';
   const actionLabel = isPaused ? 'Resume draft' : 'Pause draft';
@@ -64,23 +65,11 @@ const DraftControls = memo(function DraftControls({
           // Create new AbortController for this request
           abortControllerRef.current = new AbortController();
 
-          const response = await fetch(`/api/drafts/${draftId}/pause`, {
+          // fetchApi sends the credential and reads the server's nested error message.
+          await fetchApi(`drafts/${draftId}/pause`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             signal: abortControllerRef.current.signal,
           });
-
-          if (!response.ok) {
-            let errorMessage = 'Failed to pause draft';
-            try {
-              const error = await response.json();
-              errorMessage = error.message || errorMessage;
-            } catch {
-              // Use status text if JSON parsing fails
-              errorMessage = response.statusText || errorMessage;
-            }
-            throw new Error(errorMessage);
-          }
 
           showNotification('success', 'Draft paused successfully. Only you can resume it.');
           onStatusChange?.();
@@ -114,23 +103,11 @@ const DraftControls = memo(function DraftControls({
           // Create new AbortController for this request
           abortControllerRef.current = new AbortController();
 
-          const response = await fetch(`/api/drafts/${draftId}/resume`, {
+          // fetchApi sends the credential and reads the server's nested error message.
+          await fetchApi(`drafts/${draftId}/resume`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             signal: abortControllerRef.current.signal,
           });
-
-          if (!response.ok) {
-            let errorMessage = 'Failed to resume draft';
-            try {
-              const error = await response.json();
-              errorMessage = error.message || errorMessage;
-            } catch {
-              // Use status text if JSON parsing fails
-              errorMessage = response.statusText || errorMessage;
-            }
-            throw new Error(errorMessage);
-          }
 
           showNotification('success', 'Draft resumed successfully!');
           onStatusChange?.();
@@ -157,6 +134,7 @@ const DraftControls = memo(function DraftControls({
   return (
     <>
       {ConfirmationModal}
+      <NotificationToast notification={notification} />
       {(draftStatus === 'LIVE' || isPaused) && (
         <section className="w-full px-4 pt-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-5 py-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] sm:flex-row sm:items-center sm:justify-between">

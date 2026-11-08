@@ -50,7 +50,11 @@ test('sets up a basketball league, builds the roster and keeps it after a reload
   await test.step('paste two names and resolve the ambiguous one', async () => {
     await page.getByText('Paste a roster instead').click();
     await page.getByLabel('Paste players, one per line').fill('PG Caleb Young LAL\nJ. Price');
-    await page.getByRole('button', { name: 'Find players' }).click();
+    // The roster page has a second paste box, under Players on other teams.
+    await page
+      .getByRole('region', { name: 'Add players' })
+      .getByRole('button', { name: 'Find players' })
+      .click();
 
     const ambiguous = page.getByRole('group', { name: /Line 2: J\. Price/ });
     await expect(ambiguous).toContainText('Pick one');
@@ -106,6 +110,72 @@ test('sets up a basketball league, builds the roster and keeps it after a reload
 
     // Back to the one seeded league.
     await expect(page).toHaveURL(new RegExp(`/basketball/${E2E_BASKETBALL_LEAGUE_ID}$`));
+  });
+
+  expect(runtimeErrors).toEqual([]);
+});
+
+test('marks the players on other teams as taken, leaving my team alone', async ({ page }) => {
+  test.setTimeout(90_000);
+  const runtimeErrors = collectRuntimeErrors(page);
+  await authenticateAsDevelopmentUser(page);
+  const roster = `/basketball/${E2E_BASKETBALL_LEAGUE_ID}/roster`;
+  const otherTeams = page.getByRole('region', { name: 'Players on other teams' });
+
+  await test.step('paste three names, one of them already on my team', async () => {
+    await page.goto(roster);
+    await expect(page.getByRole('region', { name: 'Set up in three steps' })).toContainText(
+      '0 players on other teams (at least 80 needed)'
+    );
+    await otherTeams
+      .getByLabel("Paste your league's rosters")
+      .fill(
+        'Rim Runners\nPos\tPlayer\tOpp\tStatus\nLuca Moretti\nDarius Holt LAL - F\nMarcus Hale'
+      );
+    await otherTeams.getByRole('button', { name: 'Find players' }).click();
+
+    await expect(otherTeams.getByRole('list', { name: 'What was found' })).toContainText(
+      '3 matched'
+    );
+    await expect(otherTeams).toContainText('1 already on a team you entered: left alone');
+    await otherTeams.getByRole('button', { name: 'Mark 2 players as taken' }).click();
+
+    await expect(
+      page.getByText(
+        'Marked 2 players as taken. Skipped 1 on a team you entered: Marcus Hale (Dev Dunkers).'
+      )
+    ).toBeVisible();
+    await expect(otherTeams).toContainText('2 players marked as taken');
+    // Focus returns to the emptied paste box rather than dropping to the page.
+    await expect(otherTeams.getByLabel("Paste your league's rosters")).toBeFocused();
+    await expect(
+      page
+        .getByRole('region', { name: 'Dev Dunkers roster' })
+        .getByRole('listitem')
+        .filter({ hasText: 'Marcus Hale' })
+    ).toBeVisible();
+  });
+
+  await test.step('Pickups no longer lists them', async () => {
+    await page.goto(`/basketball/${E2E_BASKETBALL_LEAGUE_ID}/pickups`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Pickups' })).toBeVisible();
+    await expect(
+      page.getByText('Statly knows 2 players on other teams (at least 80 needed)', { exact: false })
+    ).toBeVisible();
+    for (const name of ['Luca Moretti', 'Darius Holt']) {
+      await expect(page.getByText(name)).toHaveCount(0);
+    }
+  });
+
+  await test.step('clear the taken players again', async () => {
+    await page.goto(roster);
+    await otherTeams.getByRole('button', { name: 'Clear all taken players' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Clear all taken players?' })
+      .getByRole('button', { name: 'Clear taken players' })
+      .click();
+    await expect(page.getByText('Cleared 2 players marked as taken.')).toBeVisible();
+    await expect(otherTeams).toContainText('0 players marked as taken');
   });
 
   expect(runtimeErrors).toEqual([]);

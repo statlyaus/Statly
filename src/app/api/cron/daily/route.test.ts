@@ -16,7 +16,9 @@ describe('GET /api/cron/daily authorization', () => {
     vi.stubEnv('CRON_SECRET', '');
 
     const unauthenticated = await GET(new NextRequest(URL_BASE));
-    const withToken = await GET(new NextRequest(`${URL_BASE}?token=anything`));
+    const withToken = await GET(
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer anything' } })
+    );
 
     expect(unauthenticated.status).toBe(401);
     expect(withToken.status).toBe(401);
@@ -33,12 +35,20 @@ describe('GET /api/cron/daily authorization', () => {
 
   it.each([
     ['missing', new NextRequest(URL_BASE)],
-    ['wrong query token', new NextRequest(`${URL_BASE}?token=wrong-secret`)],
+    // The secret is accepted only in the Authorization header, never where access logs record it.
+    ['correct query token', new NextRequest(`${URL_BASE}?token=cron-secret`)],
+    [
+      'correct x-cron-secret header',
+      new NextRequest(URL_BASE, { headers: { 'x-cron-secret': 'cron-secret' } }),
+    ],
     [
       'wrong bearer token',
       new NextRequest(URL_BASE, { headers: { authorization: 'Bearer wrong-secret' } }),
     ],
-    ['secret prefix', new NextRequest(`${URL_BASE}?token=cron-secre`)],
+    [
+      'secret prefix',
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer cron-secre' } }),
+    ],
   ])('rejects a %s secret', async (_label, request) => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', 'cron-secret');
@@ -50,13 +60,8 @@ describe('GET /api/cron/daily authorization', () => {
   });
 
   it.each([
-    ['query token', new NextRequest(`${URL_BASE}?token=cron-secret`)],
     [
-      'x-cron-secret header',
-      new NextRequest(URL_BASE, { headers: { 'x-cron-secret': 'cron-secret' } }),
-    ],
-    [
-      'Vercel bearer header',
+      'bearer header',
       new NextRequest(URL_BASE, { headers: { authorization: 'Bearer cron-secret' } }),
     ],
   ])('accepts the correct secret via %s', async (_label, request) => {

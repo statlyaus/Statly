@@ -66,6 +66,42 @@ describe('AFL Draft & Trade outcomes page', () => {
     );
   });
 
+  it('shows the first page when a bookmarked cursor no longer matches the active release', async () => {
+    outcomeService.list
+      .mockRejectedValueOnce(
+        new AflDraftTradeOutcomeReadError(
+          'INVALID_REQUEST',
+          'The factual projection cursor is invalid.'
+        )
+      )
+      .mockResolvedValueOnce({ consistency: { selection: 'active' } });
+
+    render(
+      await AflDraftTradeOutcomesPage({
+        searchParams: Promise.resolve({ metric: 'games', cursor: 'cursor-from-old-release' }),
+      })
+    );
+
+    expect(outcomeService.list).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ metric: 'games', cursor: null })
+    );
+    expect(screen.getByTestId('metric')).toHaveTextContent('games');
+    expect(screen.getByTestId('cursor')).toHaveTextContent('none');
+    expect(screen.getByRole('status')).toHaveTextContent(/showing the first page/i);
+  });
+
+  it('still fails an invalid request that carries no cursor', async () => {
+    outcomeService.list.mockRejectedValueOnce(
+      new AflDraftTradeOutcomeReadError('INVALID_REQUEST', 'The request is invalid.')
+    );
+
+    await expect(
+      AflDraftTradeOutcomesPage({ searchParams: Promise.resolve({ metric: 'games' }) })
+    ).rejects.toThrow('The request is invalid.');
+    expect(outcomeService.list).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores retired workbook acquisition filters and reads only the governed release', async () => {
     outcomeService.list.mockResolvedValue({ consistency: { selection: 'none' } });
 

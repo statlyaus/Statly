@@ -145,6 +145,7 @@ export async function GET(
     rules.lockPolicy === 'INDIVIDUAL_GAME_START'
       ? await loadRoundPlayerGameStarts({
           aflRound: effectiveContext?.aflRound ?? null,
+          season: effectiveContext?.seasonYear ?? undefined,
           players: [...timingPlayers.values()],
         })
       : {
@@ -192,6 +193,7 @@ export async function GET(
   // Fixture context for every squad row: AFL opponent, home or away, start time and byes.
   const fixtureResult = await loadRoundPlayerFixtures({
     aflRound: effectiveContext?.aflRound ?? null,
+    season: effectiveContext?.seasonYear ?? undefined,
     players: [...timingPlayers.values()],
   }).catch(() => ({ ok: false as const }));
   const fixturesByPlayerId = fixtureResult.ok ? fixtureResult.fixturesByPlayerId : new Map();

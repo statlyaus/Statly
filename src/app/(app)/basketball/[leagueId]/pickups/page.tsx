@@ -9,6 +9,8 @@ import {
 import { formatGameDate } from '@/components/basketball/analysis/format';
 import { firstParam, type SearchParams } from '@/components/basketball/analysis/searchParams';
 import { DropSelect } from '@/components/basketball/pickups/DropSelect';
+import { TakenPlayersNotice } from '@/components/basketball/shell/TakenPlayersNotice';
+import { takenPlayersCheck } from '@/components/basketball/shell/takenPlayers';
 import {
   PickupsNow,
   PickupsTable,
@@ -78,6 +80,10 @@ export default async function BasketballPickupsPage({
         </EmptyState>
       ) : (
         <>
+          <TakenPlayersNotice
+            check={takenPlayersCheck(league, view.status === 'READY' ? view.opponentTeam.id : null)}
+            leagueId={league.id}
+          />
           <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
             <DropSelect
               path={path}
@@ -125,8 +131,10 @@ export default async function BasketballPickupsPage({
           <strong>Free agents</strong> are players nobody holds in this league profile, not ruled
           out, averaging at least {PICKUP_MIN_MINUTES} minutes. Every one whose NBA team still plays
           this week after the add takes effect is ranked, however low his season value; without an
-          opponent, the best {PICKUP_LIMIT} by season value are listed. Mark a player as taken when
-          a team you have not entered holds him.
+          opponent, the best {PICKUP_LIMIT} by season value are listed. Statly only knows the
+          players you enter, so paste every rostered player in your league under Players on other
+          teams on the Roster page, or mark a player as taken here when a team you have not entered
+          holds him.
         </p>
         <p>
           <strong>The swap.</strong> The player you drop loses his remaining games. The free agent

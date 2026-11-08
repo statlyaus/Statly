@@ -14,7 +14,7 @@ import {
 import type { League, LeagueMember } from '@/types/leagues';
 
 import { normalizeCategoryDirections } from './categoryDirections';
-import { DEFAULT_ACTIVE_LINEUP_SLOTS, normalizeLineupSlots } from './lineupSettings';
+import { normalizeLineupSlots } from './lineupSettings';
 
 export type LeagueDetailSuccess = {
   ok: true;
@@ -34,15 +34,13 @@ export async function loadAuthorizedLeagueDetail(
   leagueId: string,
   userId: string | null
 ): Promise<LeagueDetailResult> {
-  if (leagueId !== 'test-league-id') {
-    if (!userId) {
-      return { ok: false, status: 401, error: 'Unauthorized' };
-    }
+  if (!userId) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
 
-    const access = await getLeagueMembershipAccess(leagueId, userId);
-    if (!access.isMember) {
-      return { ok: false, status: 403, error: 'Forbidden' };
-    }
+  const access = await getLeagueMembershipAccess(leagueId, userId);
+  if (!access.isMember) {
+    return { ok: false, status: 403, error: 'Forbidden' };
   }
 
   return loadLeagueDetail(leagueId);
@@ -149,14 +147,6 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
       };
     }
 
-    if (leagueId === 'test-league-id') {
-      return {
-        ok: true,
-        league: createTestLeague(),
-        members: createTestMembers(),
-      };
-    }
-
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
 
     if (!leagueDoc.exists) {
@@ -189,175 +179,10 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
   }
 }
 
-function createTestLeague(): League {
-  return {
-    id: 'test-league-id',
-    name: 'Test AFL Champions League',
-    description: 'Test league for development and demonstration',
-    type: 'public',
-    code: '123ABC',
-    maxTeams: 12,
-    currentTeams: 12,
-    ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-    categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
-    scoringMode: 'H2H_EACH_CATEGORY',
-    fixtureGenerationMode: 'AUTOMATIC',
-    lineupSlots: DEFAULT_ACTIVE_LINEUP_SLOTS,
-    categoryDirections: normalizeCategoryDirections([...REAL_DATA_NINE_CATEGORY_PRESET], null),
-    status: 'active',
-    draftDate: new Date(Date.now() + 86400000 * 3).toISOString(),
-    draftType: 'snake',
-    pickOrder: 'random',
-    waiverRule: 'weekly',
-    createdAt: new Date().toISOString(),
-    tradeSettings: {
-      tradeLimit: 10,
-      tradeReview: 'none',
-      offerExpiryHours: 72,
-      reviewHours: 24,
-      vetoThreshold: 3,
-    },
-    waiverWire: {
-      waiverOrder: [],
-      waiverPeriodHours: 24,
-      waiverResetPolicy: 'weekly',
-    },
-  };
-}
-
 function toTradeReview(value: string | null | undefined): League['tradeSettings']['tradeReview'] {
   if (value === 'ADMIN') return 'admin';
   if (value === 'VETO') return 'veto';
   return 'none';
-}
-
-function createTestMembers(): LeagueMember[] {
-  return [
-    {
-      id: 'test-member-1',
-      leagueId: 'test-league-id',
-      userId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-      teamName: 'Robbo Rockers',
-      teamLogoUrl: 'https://placehold.co/160x160/0f2f47/ffffff.png?text=RR',
-      teamLogoPositionX: 50,
-      teamLogoPositionY: 50,
-      teamLogoZoom: 1,
-      joinedAt: new Date().toISOString(),
-      isActive: true,
-      role: 'owner',
-    },
-    {
-      id: 'bot-member-1',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-1',
-      teamName: 'AFL Legends',
-      teamLogoUrl: 'https://placehold.co/160x160/304d6d/ffffff.png?text=AL',
-      teamLogoPositionX: 50,
-      teamLogoPositionY: 50,
-      teamLogoZoom: 1,
-      joinedAt: new Date(Date.now() - 86400000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-2',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-2',
-      teamName: 'Footy Fanatics',
-      teamLogoUrl: 'https://placehold.co/160x160/7c2d12/ffffff.png?text=FF',
-      teamLogoPositionX: 50,
-      teamLogoPositionY: 50,
-      teamLogoZoom: 1,
-      joinedAt: new Date(Date.now() - 172800000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-3',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-3',
-      teamName: 'Goal Getters',
-      teamLogoUrl: 'https://placehold.co/160x160/166534/ffffff.png?text=GG',
-      teamLogoPositionX: 50,
-      teamLogoPositionY: 50,
-      teamLogoZoom: 1,
-      joinedAt: new Date(Date.now() - 259200000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-4',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-4',
-      teamName: 'Mark Masters',
-      joinedAt: new Date(Date.now() - 345600000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-5',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-5',
-      teamName: 'Tackle Titans',
-      joinedAt: new Date(Date.now() - 432000000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-6',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-6',
-      teamName: 'Disposal Dynamos',
-      joinedAt: new Date(Date.now() - 518400000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-7',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-7',
-      teamName: 'Inside 50 Kings',
-      joinedAt: new Date(Date.now() - 604800000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-8',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-8',
-      teamName: 'Brownlow Medalists',
-      joinedAt: new Date(Date.now() - 691200000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-9',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-9',
-      teamName: 'Grand Final Heroes',
-      joinedAt: new Date(Date.now() - 777600000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-10',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-10',
-      teamName: 'Rising Stars',
-      joinedAt: new Date(Date.now() - 864000000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-    {
-      id: 'bot-member-11',
-      leagueId: 'test-league-id',
-      userId: 'bot-user-11',
-      teamName: 'Elite Defenders',
-      joinedAt: new Date(Date.now() - 950400000).toISOString(),
-      isActive: true,
-      role: 'member',
-    },
-  ];
 }
 
 function toApiLeagueMember(member: Awaited<ReturnType<typeof listActiveLeagueMembers>>[number]) {
