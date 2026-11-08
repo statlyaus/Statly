@@ -6,6 +6,8 @@ import type { PickupsView } from '@/server/basketball/readModels/pickupsModel';
 
 import { OverviewInsights } from './OverviewInsights';
 
+const ENOUGH_TAKEN = { taken: 80, expected: 80, enough: true };
+
 const noOpponentMatchup = { status: 'NO_OPPONENT' } as unknown as MatchupView;
 const noOpponentPickups = { status: 'NO_OPPONENT' } as unknown as PickupsView;
 
@@ -44,13 +46,25 @@ const readyPickups = {
 describe('OverviewInsights', () => {
   it('renders nothing until there is an opponent', () => {
     const { container } = render(
-      <OverviewInsights matchup={noOpponentMatchup} pickups={noOpponentPickups} leagueId="l1" />
+      <OverviewInsights
+        matchup={noOpponentMatchup}
+        pickups={noOpponentPickups}
+        taken={ENOUGH_TAKEN}
+        leagueId="l1"
+      />
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   it('shows the win chance, the closest categories and the best adds', () => {
-    render(<OverviewInsights matchup={readyMatchup} pickups={readyPickups} leagueId="l1" />);
+    render(
+      <OverviewInsights
+        matchup={readyMatchup}
+        pickups={readyPickups}
+        taken={ENOUGH_TAKEN}
+        leagueId="l1"
+      />
+    );
     expect(screen.getByText(/chance to win the week/)).toBeInTheDocument();
     const closest = screen.getAllByRole('listitem').slice(0, 3);
     expect(closest.map((item) => item.textContent)).toEqual([
@@ -60,5 +74,34 @@ describe('OverviewInsights', () => {
     ]);
     expect(screen.getByText('Streaming Guard')).toBeInTheDocument();
     expect(screen.getByText(/If you drop Drop Candidate/)).toBeInTheDocument();
+  });
+
+  it('warns under the best adds while too few players are marked as taken', () => {
+    const { rerender } = render(
+      <OverviewInsights
+        matchup={readyMatchup}
+        pickups={readyPickups}
+        taken={{ taken: 12, expected: 80, enough: false }}
+        leagueId="l1"
+      />
+    );
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent(
+      'Statly knows 12 players on other teams (at least 80 needed), so some suggestions may already be rostered.'
+    );
+    expect(screen.getByRole('link', { name: "Add the other teams' players" })).toHaveAttribute(
+      'href',
+      '/basketball/l1/roster#other-teams'
+    );
+
+    rerender(
+      <OverviewInsights
+        matchup={readyMatchup}
+        pickups={readyPickups}
+        taken={ENOUGH_TAKEN}
+        leagueId="l1"
+      />
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

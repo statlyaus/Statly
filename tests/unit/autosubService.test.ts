@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  resolveAutosubs,
+  resolveAutosubs as resolveAutosubsWithPositions,
   type AutosubActiveAssignment,
   type AutosubInterchangeAssignment,
   type ResolveAutosubsInput,
@@ -17,6 +17,22 @@ function active(
 
 function interchange(playerId: string, slotIndex: number): AutosubInterchangeAssignment {
   return { playerId, slot: 'INTERCHANGE', slotIndex };
+}
+
+/** Interchange players are listed in every position unless a test gives their listing. */
+function resolveAutosubs(
+  input: Omit<ResolveAutosubsInput, 'positionByPlayerId'> & {
+    positionByPlayerId?: ResolveAutosubsInput['positionByPlayerId'];
+  }
+) {
+  return resolveAutosubsWithPositions({
+    ...input,
+    positionByPlayerId:
+      input.positionByPlayerId ??
+      new Map(
+        input.interchangeAssignments.map((assignment) => [assignment.playerId, 'DEF/MID/RUC/FWD'])
+      ),
+  });
 }
 
 describe('resolveAutosubs', () => {
@@ -153,8 +169,61 @@ describe('resolveAutosubs', () => {
     );
   });
 
+  it('only brings on an interchange player listed for the vacated slot', () => {
+    const resolution = resolveAutosubs({
+      activeAssignments: [active('def-out', 'DEF', 0)],
+      interchangeAssignments: [interchange('ruck', 0), interchange('defender', 1)],
+      confirmedDidNotPlayPlayerIds: ['def-out'],
+      positionByPlayerId: new Map([
+        ['ruck', 'RUC'],
+        ['defender', 'DEF'],
+      ]),
+    });
+
+    expect(resolution.activeAssignments).toEqual([active('defender', 'DEF', 0)]);
+    expect(resolution.interchangeAssignments).toEqual([
+      interchange('ruck', 0),
+      interchange('def-out', 1),
+    ]);
+    expect(resolution.decisions).toEqual([
+      expect.objectContaining({ replacementPlayerId: 'defender', interchangeIndex: 1 }),
+    ]);
+  });
+
+  it('leaves a position slot unfilled when no candidate is eligible, and still fills UTIL', () => {
+    const resolution = resolveAutosubs({
+      activeAssignments: [active('def-out', 'DEF', 0), active('util-out', 'UTIL', 0)],
+      interchangeAssignments: [interchange('ruck', 0), interchange('unlisted', 1)],
+      confirmedDidNotPlayPlayerIds: ['def-out', 'util-out'],
+      positionByPlayerId: new Map([['ruck', 'RUC']]),
+    });
+
+    expect(resolution.activeAssignments).toEqual([
+      active('def-out', 'DEF', 0),
+      active('ruck', 'UTIL', 0),
+    ]);
+    expect(resolution.decisions).toEqual([
+      expect.objectContaining({
+        outgoingPlayerId: 'util-out',
+        replacementPlayerId: 'ruck',
+        originalSlot: 'UTIL',
+      }),
+    ]);
+  });
+
+  it('accepts a dual-position listing for either of its slots', () => {
+    const resolution = resolveAutosubs({
+      activeAssignments: [active('fwd-out', 'FWD', 0)],
+      interchangeAssignments: [interchange('mid-fwd', 0)],
+      confirmedDidNotPlayPlayerIds: ['fwd-out'],
+      positionByPlayerId: new Map([['mid-fwd', 'MID/FWD']]),
+    });
+
+    expect(resolution.activeAssignments).toEqual([active('mid-fwd', 'FWD', 0)]);
+  });
+
   it('returns stable sorted copies when no autosubs are required', () => {
-    const input: ResolveAutosubsInput = {
+    const input: Parameters<typeof resolveAutosubs>[0] = {
       activeAssignments: [
         active('util', 'UTIL', 0),
         active('def-1', 'DEF', 1),
@@ -180,7 +249,7 @@ describe('resolveAutosubs', () => {
   });
 
   it('does not mutate its input assignments or confirmed non-player list', () => {
-    const input: ResolveAutosubsInput = {
+    const input: Parameters<typeof resolveAutosubs>[0] = {
       activeAssignments: [active('def-out', 'DEF', 0)],
       interchangeAssignments: [interchange('replacement', 0)],
       confirmedDidNotPlayPlayerIds: ['def-out'],

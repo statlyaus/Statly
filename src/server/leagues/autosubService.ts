@@ -1,3 +1,5 @@
+import { positionSuitsSlot } from '@/lib/leagues/lineupAutoFill';
+
 export const AUTOSUB_ACTIVE_SLOT_ORDER = ['DEF', 'MID', 'RUC', 'FWD', 'UTIL'] as const;
 
 export type AutosubActiveSlot = (typeof AUTOSUB_ACTIVE_SLOT_ORDER)[number];
@@ -19,6 +21,12 @@ export interface ResolveAutosubsInput {
   activeAssignments: readonly AutosubActiveAssignment[];
   interchangeAssignments: readonly AutosubInterchangeAssignment[];
   confirmedDidNotPlayPlayerIds: readonly string[];
+  /**
+   * Each player's listed AFL position. A candidate must be listed for the vacated DEF, MID, RUC
+   * or FWD slot (UTIL takes anyone), the same rule a manual lineup save enforces. A player with
+   * no listed position is not eligible for a position slot.
+   */
+  positionByPlayerId: ReadonlyMap<string, string | null>;
 }
 
 export type AutosubDecision = {
@@ -132,8 +140,12 @@ export function resolveAutosubs(input: ResolveAutosubsInput): AutosubResolution 
   for (const activeAssignment of activeAssignments) {
     if (!confirmedDidNotPlay.has(activeAssignment.playerId)) continue;
 
-    const replacement = availableReplacements.shift();
-    if (!replacement) break;
+    // The first remaining candidate, in interchange order, who may play the vacated slot.
+    const replacementIndex = availableReplacements.findIndex((candidate) =>
+      positionSuitsSlot(input.positionByPlayerId.get(candidate.playerId), activeAssignment.slot)
+    );
+    if (replacementIndex < 0) continue;
+    const [replacement] = availableReplacements.splice(replacementIndex, 1);
 
     const outgoingPlayerId = activeAssignment.playerId;
     activeAssignment.playerId = replacement.playerId;

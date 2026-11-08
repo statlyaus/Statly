@@ -81,6 +81,20 @@ export interface BasketballLeagueDetail {
   updatedAt: string;
 }
 
+/** A player an "elsewhere" add left alone, because he is on a team the user has entered. */
+export interface BasketballRosterSkip {
+  playerId: string;
+  fullName: string;
+  teamId: string;
+  teamName: string;
+  reason: 'ON_ENTERED_TEAM';
+}
+
+/** The league read back after an add, plus the players the add skipped. */
+export interface BasketballRosterAddResult extends BasketballLeagueDetail {
+  skipped: BasketballRosterSkip[];
+}
+
 /** An NBA player proposed for a pasted line, and where he already sits in this league. */
 export interface NbaPlayerCandidate {
   id: string;

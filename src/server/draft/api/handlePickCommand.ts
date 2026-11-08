@@ -37,6 +37,7 @@ export async function handlePickCommand(
     let userId = await getAuthenticatedUserId(request);
     requestContext.hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
+    // In development only, the header stands in for a missing credential. It never overrides one.
     if (!userId && isServerDevelopmentAuthEnabled()) {
       const devUser = request.headers.get('x-dev-user-id');
       if (devUser) {
@@ -68,10 +69,6 @@ export async function handlePickCommand(
       return commonErrors.badRequest('Invalid request body');
     }
 
-    const devOverrideUserId = isServerDevelopmentAuthEnabled()
-      ? request.headers.get('x-dev-user-id') || undefined
-      : undefined;
-    const effectiveUserId = devOverrideUserId || userId;
     const canonicalPlayerId = await resolveCanonicalPlayerId(parsed.data.playerId);
     if (!canonicalPlayerId) {
       return commonErrors.notFound('Player not found');
@@ -79,7 +76,7 @@ export async function handlePickCommand(
 
     const result = await draftApplicationService.makePick({
       draftId,
-      actorUserId: effectiveUserId,
+      actorUserId: userId,
       playerId: canonicalPlayerId,
     });
 

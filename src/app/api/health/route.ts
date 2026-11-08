@@ -15,16 +15,20 @@ interface ServiceStatus {
 }
 
 interface ServiceChecks {
+  // Prisma is the authoritative database; `relationalDatabase` is the same probe under its older name.
   database: ServiceStatus;
   relationalDatabase: ServiceStatus;
+  firestoreProjection: ServiceStatus;
   memory: ServiceStatus;
   redis: ServiceStatus;
   metrics: ServiceStatus;
 }
 
-// The route is public, so one round of checks (a Firestore read, a Prisma query and Redis writes)
+// The route is public, so one round of checks (a Prisma query, a Firestore read and Redis writes)
 // serves every caller for this long instead of running per request.
 const CHECK_TTL_MS = 10_000;
+// A fresh instance's Redis client is still connecting; ioredis queues the ping until it is ready.
+const REDIS_PING_TIMEOUT_MS = 2_000;
 let cachedChecks: { at: number; result: Promise<ServiceChecks> } | null = null;
 
 function isProductionEnvironment(): boolean {
@@ -55,7 +59,9 @@ function redisFailureStatus(error: string, responseTime: number): ServiceStatus 
   };
 }
 
-async function checkDatabase(): Promise<ServiceStatus> {
+// Firestore is an ingestion and compatibility projection, never the authority, so its failure
+// degrades the service rather than making it unhealthy.
+async function checkFirestoreProjection(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
     await adminDb.collection('_health').doc('ping').get();
@@ -69,11 +75,11 @@ async function checkDatabase(): Promise<ServiceStatus> {
     };
   } catch (error) {
     return {
-      status: 'unhealthy',
+      status: 'degraded',
       responseTime: Date.now() - start,
       error:
         process.env.NODE_ENV === 'production'
-          ? 'Database connectivity issue'
+          ? 'Firestore projection connectivity issue'
           : error instanceof Error
             ? error.message
             : String(error),
@@ -82,15 +88,19 @@ async function checkDatabase(): Promise<ServiceStatus> {
   }
 }
 
+function pingRedisWithin(timeoutMs: number): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Redis not connected')), timeoutMs);
+  });
+  return Promise.race([redisClient.ping(), timeout]).finally(() => clearTimeout(timer));
+}
+
 async function checkRedis(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
-    if (!redisClient.isConnected()) {
-      return redisFailureStatus('Redis not connected', Date.now() - start);
-    }
-
-    // Test basic operations
-    await redisClient.ping();
+    // Waits for a connection still being made on a cold start instead of failing it.
+    await pingRedisWithin(REDIS_PING_TIMEOUT_MS);
 
     // Test set/get/delete operations
     const testKey = 'health_check:' + Date.now();
@@ -183,13 +193,14 @@ function runChecks(): Promise<ServiceChecks> {
     return cachedChecks.result;
   }
   const result = Promise.all([
-    checkDatabase(),
     checkRelationalDatabase(),
+    checkFirestoreProjection(),
     checkRedis(),
     checkMetrics(),
-  ]).then(([database, relationalDatabase, redis, metrics]) => ({
-    database,
+  ]).then(([relationalDatabase, firestoreProjection, redis, metrics]) => ({
+    database: relationalDatabase,
     relationalDatabase,
+    firestoreProjection,
     memory: checkMemory(),
     redis,
     metrics,
@@ -243,6 +254,7 @@ export async function GET(req: NextRequest) {
           services: {
             database: services.database.status,
             relationalDatabase: services.relationalDatabase.status,
+            firestoreProjection: services.firestoreProjection.status,
             memory: services.memory.status,
             redis: services.redis.status,
             metrics: services.metrics.status,
@@ -285,10 +297,17 @@ export async function PATCH(req: NextRequest) {
   const tracer = withRequestTracing(req, { endpoint: 'health-readiness' });
 
   try {
-    const { database, relationalDatabase, redis, metrics: metricsCheck } = await runChecks();
+    const {
+      database,
+      relationalDatabase,
+      firestoreProjection,
+      redis,
+      metrics: metricsCheck,
+    } = await runChecks();
 
-    // For readiness, we require all critical services to be healthy
-    const criticalServices = [database, relationalDatabase, metricsCheck];
+    // For readiness, we require all critical services to be healthy. The Firestore projection is
+    // reported but not critical.
+    const criticalServices = [database, metricsCheck];
     const redisReady = isRedisRequired()
       ? redis.status === 'healthy'
       : redis.status !== 'unhealthy';
@@ -307,6 +326,7 @@ export async function PATCH(req: NextRequest) {
         services: {
           database: database.status,
           relationalDatabase: relationalDatabase.status,
+          firestoreProjection: firestoreProjection.status,
           redis: redis.status,
           metrics: metricsCheck.status,
         },
