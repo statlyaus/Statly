@@ -361,8 +361,9 @@ later, Eastern date):
   his last 10 games, and his back-to-back record (earlier seasons plus this season's by the same
   rule), shrunk to a 5.5 % base rate with 8 nights of weight.
 - Expected games: for each remaining team game, (1 − injured) × (1 − chance he sits), where injured
-  takes his expected missed share off the front. Next 5 sums the first five; each game in the next
-  14 days is kept so the read model can sum a league's fantasy week.
+  takes his expected games out off the front (beyond the next 5 too, so a long injury keeps him out
+  of a two-week fantasy week). Next 5 sums the first five; each game in the next 14 days is kept so
+  the read model can sum a league's fantasy week.
 
 ### Rest of season (`restOfSeason.ts`)
 
@@ -402,8 +403,8 @@ Injuries in the read model: a report row counts his current team's remaining gam
 his latest box score; a listed player with no box score this season is in no team's games and is
 skipped). A season-ending row is out for every remaining game whatever its date. A report over a
 day old is still used, and the view flags it (`injuriesStale`, also set when no report was ever
-fetched). The engine takes an injury off a player's first 5 games only; from the 6th game on, which
-only a two-week fantasy week reaches, the read model takes off his expected games out as well.
+fetched). The engine keeps a long injury out beyond the next 5 games, so a two-week fantasy week
+counts it too.
 
 Caching: the computed output, not the rows, is cached for the season under its latest successful
 box-score ingest, the injury report's fetch time and the Eastern date (five minutes at most, a

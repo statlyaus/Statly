@@ -119,7 +119,9 @@ export function upcomingGames(context: ScheduleContext, team: string): TeamGame[
 
 /**
  * `games` are his rows for `team` in date order; `history` his earlier seasons' back-to-back
- * record; `fracNext5` his injury input (0 when healthy).
+ * record; `gamesOut` the upcoming games his injury rules him out of (0 when healthy). Within the
+ * next 5 this equals the script's `fracNext5 × 5`; beyond them it keeps him out, as
+ * `restOfSeason` does.
  */
 export function playerSchedule(
   context: ScheduleContext,
@@ -127,7 +129,7 @@ export function playerSchedule(
   team: string,
   games: readonly RoleGameRow[],
   history: BackToBackRecord | undefined,
-  fracNext5: number
+  gamesOut: number
 ): PlayerSchedule {
   const all = context.teamGames.get(team) ?? [];
   const up = upcomingGames(context, team);
@@ -167,7 +169,7 @@ export function playerSchedule(
   const upcoming: UpcomingGame[] = [];
   up.forEach((game, i) => {
     const b2b = dates.has(addDays(game.date, -1)) ? 1 : 0;
-    const out = clamp(fracNext5 * 5 - i, 0, 1);
+    const out = clamp(gamesOut - i, 0, 1);
     const chancePlays = (1 - out) * (1 - sit(b2b));
     if (i < 5) {
       expectedGames += chancePlays;
