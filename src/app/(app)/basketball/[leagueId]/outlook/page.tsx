@@ -84,19 +84,6 @@ export default async function BasketballOutlookPage({
         )
       ) : (
         <>
-          <section aria-labelledby="outlook-movers" className="space-y-3">
-            <div>
-              <h2 id="outlook-movers" className="font-display text-xl font-bold text-foreground">
-                Biggest movers
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Across the NBA, not just this league. Players expected to miss most of the next 5
-                games are left out.
-              </p>
-            </div>
-            <OutlookPanels panels={outlookPanels(view.players)} stale={view.injuriesStale} />
-          </section>
-
           <section aria-labelledby="outlook-players" className="scroll-mt-20 space-y-3">
             <h2 id="outlook-players" className="font-display text-xl font-bold text-foreground">
               Players
@@ -137,6 +124,19 @@ export default async function BasketballOutlookPage({
                 </p>
               </>
             )}
+          </section>
+
+          <section aria-labelledby="outlook-movers" className="space-y-3">
+            <div>
+              <h2 id="outlook-movers" className="font-display text-xl font-bold text-foreground">
+                Biggest movers
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Across the NBA, not just this league. Players expected to miss most of the next 5
+                games are left out.
+              </p>
+            </div>
+            <OutlookPanels panels={outlookPanels(view.players)} stale={view.injuriesStale} />
           </section>
         </>
       )}

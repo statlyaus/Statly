@@ -420,12 +420,13 @@ request, so the ingest jobs do not warm the cache.
 The Outlook page (`/basketball/[leagueId]/outlook`, the tab after Rotation) is a server page over
 `loadOutlook` for the owner's league; there is no API route. Its view state is in the URL.
 
-- Biggest movers: the sheet's 'Role Model Charts' as three ranked lists over every player with an
-  outlook, not just the league's, each with his owner: the 10 biggest rises and 10 biggest falls in
-  minutes (next 5 against last 5), the 15 largest injury minutes shifts (0.5 or more either way,
-  with the teammates driving them) and the 15 largest gaps between projected points next 5 and his
-  season average. Players under 1 expected game in the next 5 are left out, and the minutes and
-  points lists need 15+ minutes a game over the last 5, as in the sheet. Ties keep the season order.
+- Biggest movers, below the table as in the sheet: its 'Role Model Charts' as three ranked lists
+  over every player with an outlook, not just the league's, each with his owner: the 10 biggest
+  rises and 10 biggest falls in minutes (next 5 against last 5), the 15 largest injury minutes
+  shifts (0.5 or more either way, with the teammates driving them) and the 15 largest gaps between
+  projected points next 5 and his season average. Players under 1 expected game in the next 5 are
+  left out, and the minutes and points lists need 15+ minutes a game over the last 5, as in the
+  sheet. Ties keep the season order.
 - Table: the next 5 games (default) or the rest of season (`view=ros`); who it lists (`show`:
   rostered players and the top free agents by default, or mine, this week's opponent, free agents,
   all rostered, all); and a sort on any column (`sort`, `dir`; default total usage next 5, or
@@ -435,8 +436,8 @@ The Outlook page (`/basketball/[leagueId]/outlook`, the tab after Rotation) is a
   and the chance he sits one) and this fantasy week, the seven counting stats, FG%, FT% and
   opponent defence. Rest of season: minutes, teammate shift, expected games, team games left and
   the same stats.
-- Injury badges read OUT, DTD or "OUT · season"; "old" marks a report over a day old, which is still
-  used, and a notice says so. Stale box scores get the shared notice.
+- Injury badges (the shared `InjuryBadge`) read OUT, DTD or "OUT · season"; "old" marks a report
+  over a day old, which is still used, and a notice says so. Stale box scores get the shared notice.
 - Empty states: no box-score ingest yet ("NBA stats haven't been loaded yet"), and no player with an
   outlook yet ("The outlook starts after a player's third game").
 - In the data but not shown: the coach, FGA, FTA, the chances of usage ±15 % and rebounds and
