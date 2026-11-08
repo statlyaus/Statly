@@ -93,11 +93,25 @@ function normalizeExcludedAflRounds(value: unknown): number[] {
   ].sort((left, right) => left - right);
 }
 
+/** Rules saved before the settings PUT stored objects were written as a double-encoded JSON string. */
+function parseStoredRules(input: unknown): unknown {
+  if (typeof input !== 'string') return input;
+  try {
+    return JSON.parse(input) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeCompetitionRules(
   input: unknown,
   fallbackCategory: FantasyCategoryKey
 ): CompetitionRules {
-  const source = input && typeof input === 'object' ? (input as Partial<CompetitionRules>) : {};
+  const parsed = parseStoredRules(input);
+  const source =
+    parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Partial<CompetitionRules>)
+      : {};
   const seasonStartAflRound = asPositiveInteger(
     source.seasonStartAflRound,
     DEFAULT_COMPETITION_RULES.seasonStartAflRound
