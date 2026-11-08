@@ -15,6 +15,9 @@ function injuries(count: number): NbaProviderInjury[] {
     detail: 'Ankle',
     expectedReturnOn: null,
     reportedAt: null,
+    comment: null,
+    fantasyStatus: null,
+    seasonEnding: false,
   }));
 }
 
@@ -73,6 +76,50 @@ describe('syncNbaInjuries', () => {
       'unexpected transaction'
     );
     expect(forbiddenWrites).toEqual(['$transaction']);
+  });
+
+  it('stores the note, fantasy status and season-ending flag with each row', async () => {
+    const { prisma, transactionCalls } = fakeIngestPrisma(
+      {
+        nbaPlayerIdentity: {
+          findMany: (async () => [{ externalId: '7', playerId: 'player-7' }]) as never,
+        },
+      },
+      { transaction: () => undefined }
+    );
+    const provider = fakeProvider({
+      fetchInjuries: async () => [
+        {
+          athleteExternalId: '7',
+          status: 'OUT',
+          detail: 'Right Achilles',
+          expectedReturnOn: '2027-10-01',
+          reportedAt: null,
+          comment: 'Zed Example has sustained a season-ending Achilles injury.',
+          fantasyStatus: 'OFS',
+          seasonEnding: true,
+        },
+      ],
+    });
+
+    await syncNbaInjuries({ prisma, provider, season: 2027, now: NOW });
+
+    const created = transactionCalls.find((call) => call.method === 'createMany');
+    expect(created?.args).toEqual({
+      data: [
+        {
+          playerId: 'player-7',
+          status: 'OUT',
+          detail: 'Right Achilles',
+          expectedReturnOn: new Date('2027-10-01T00:00:00Z'),
+          reportedAt: null,
+          comment: 'Zed Example has sustained a season-ending Achilles injury.',
+          fantasyStatus: 'OFS',
+          seasonEnding: true,
+          fetchedAt: NOW,
+        },
+      ],
+    });
   });
 
   it('rejects a fetch failure before writing', async () => {
