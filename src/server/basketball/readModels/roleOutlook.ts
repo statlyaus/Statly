@@ -14,10 +14,7 @@ import {
   backToBackHistory,
   careerPriors,
   lastSeasonLines,
-  type BackToBackRecord,
-  type CareerPrior,
   type HistoryGame,
-  type LastSeasonLine,
   type PlayerHistory,
   type Presence,
   type SeasonTotals,
@@ -120,13 +117,6 @@ interface InjuryRow {
   fetchedAt: Date;
 }
 
-/** The history tables as the data cache stores them (JSON: map entries). */
-interface CachedHistory {
-  priors: [string, CareerPrior][];
-  lastSeason: [string, LastSeasonLine][];
-  backToBack: [string, BackToBackRecord][];
-}
-
 /** Every listed player's line in the season's final games, played or not. */
 function readSeasonRows(client: OutlookReadClient, season: number): Promise<RoleBoxRow[]> {
   return client.$queryRaw<RoleBoxRow[]>`
@@ -164,9 +154,11 @@ async function readSeasonGames(client: OutlookReadClient, season: number): Promi
 /**
  * The history tables from earlier seasons' final games: season totals for up to 13 seasons (cameos
  * as 0.25 minutes), and the game list and played tuples of the last 3 for back-to-backs. Totals are
- * ordered so the career sums always add in the same order.
+ * ordered so the career sums always add in the same order. Read on every miss of the season's
+ * cache: an `unstable_cache` nested in another never reads its entry, and a separate daily entry
+ * would cost every page view a read for a 0.2 s saving every half hour.
  */
-async function readHistory(client: OutlookReadClient, season: number): Promise<CachedHistory> {
+async function readHistory(client: OutlookReadClient, season: number): Promise<PlayerHistory> {
   const [totals, games, presence] = await Promise.all([
     client.$queryRaw<SeasonTotals[]>`
       SELECT s."playerId", g.season, count(*)::int AS games,
@@ -195,23 +187,9 @@ async function readHistory(client: OutlookReadClient, season: number): Promise<C
       WHERE s.played AND g.status = 'FINAL' AND g.season < ${season} AND g.season >= ${season - 3}`,
   ]);
   return {
-    priors: [...careerPriors(totals, season)],
-    lastSeason: [...lastSeasonLines(totals, season)],
-    backToBack: [...backToBackHistory(games, presence, season)],
-  };
-}
-
-/** Earlier seasons do not change during a season, so the tables are kept for a day. */
-async function loadHistory(client: OutlookReadClient, season: number): Promise<PlayerHistory> {
-  const cached = await unstable_cache(
-    () => readHistory(client, season),
-    ['basketball:role-history', String(season)],
-    { revalidate: 86_400 }
-  )();
-  return {
-    priors: new Map(cached.priors),
-    lastSeason: new Map(cached.lastSeason),
-    backToBack: new Map(cached.backToBack),
+    priors: careerPriors(totals, season),
+    lastSeason: lastSeasonLines(totals, season),
+    backToBack: backToBackHistory(games, presence, season),
   };
 }
 
@@ -243,7 +221,7 @@ async function computeSeasonOutlook(
   const [box, games, history] = await Promise.all([
     readSeasonRows(client, season),
     readSeasonGames(client, season),
-    loadHistory(client, season),
+    readHistory(client, season),
   ]);
   // Sorted by date, game, team and player whatever order the database returns.
   const rows = toRoleGameRows(box);

@@ -269,7 +269,7 @@ the 3 seasons before the current one for back-to-back records and up to 13 for e
 rates. Backfill those 3 (for 2026-27, `--season 2026`, `--season 2025` and `--season 2024`); older
 seasons barely change the projections. Its computed output is cached in the Next.js data cache per
 season, keyed by the latest successful box-score ingest, the injury report's fetch time and the
-Eastern date, and its history tables per season for a day. No table stores either.
+Eastern date; no table stores it.
 
 ## Rejected alternatives
 

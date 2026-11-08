@@ -407,11 +407,12 @@ only a two-week fantasy week reaches, the read model takes off his expected game
 
 Caching: the computed output, not the rows, is cached for the season under its latest successful
 box-score ingest, the injury report's fetch time and the Eastern date (five minutes at most, a
-backstop for schedule changes). The history tables are cached per season for a day. On 8 Nov 2026
-a cache miss on the full 2025-26 season (32,148 lines, 468 players) took 0.86 s on a laptop (0.27 s
-of reads, 0.57 s of engine) and its output was 641 KB; the history tables were 0.15 s and 261 KB.
-Both entries are well under the data cache's 2 MB limit, and a miss is quick enough to compute in a
-page request, so the ingest jobs do not warm the cache.
+backstop for schedule changes). The history tables are read again on each miss: Next.js never reads
+an `unstable_cache` entry nested inside another, and a separate entry would cost every page view a
+read. On 8 Nov 2026 a miss on the full 2025-26 season (32,148 lines, 468 players, 2 earlier seasons
+stored) took 0.86 s on a laptop: 0.27 s of reads (history 0.15 s), 0.57 s of engine. The output was
+641 KB, well under the data cache's 2 MB entry limit. A miss is quick enough to compute in a page
+request, so the ingest jobs do not warm the cache.
 
 ### Parity with the sheet
 
