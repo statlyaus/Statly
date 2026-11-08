@@ -48,6 +48,19 @@ The Prisma authority resolves a caller through `getLeagueMembershipAccess`:
 - `canManage` is `league.ownerId === userId || member.isCoCommissioner`. The membership `role` value
   is not consulted.
 
+## Non-members on league pages
+
+League APIs refuse a signed-in non-member with 403, and a league that does not exist gets the same
+403, because the membership check runs before the league is loaded. League pages
+(`/leagues/[id]` and its tabs, `/leagues/[id]/social`, `/leagues/[id]/teams/[memberId]`) render
+`src/components/league/NotLeagueMember.tsx` for that refusal instead of an error. It says the viewer
+is not in this league without naming it, so a missing league and a private league look identical,
+and offers the viewer's own leagues (`loadMemberLeagueOptions`, or `/leagues` when they have none),
+the invite-code join at `/leagues/join`, and `/leagues/new`. Statly has no public league directory or
+open join: `League.visibility` is stored at creation but nothing lists or joins by it, so the page
+offers no public league. The retired `/leaderboard?league=` redirect only ever lands on a league the
+viewer is in.
+
 Two further implementations of the same decision exist and must stay consistent:
 
 - `src/server/leagues/trades/tradeService.ts` computes `isCommissioner` inline as

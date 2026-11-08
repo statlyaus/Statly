@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { runFetchPipeline } from './fetchPipeline';
+import { runFetchPipeline, runFixturePipeline } from './fetchPipeline';
+import { FINAL_STATS_WINDOW_MS, statsWindowOpen, type FixtureMatch } from './fixtureIngest';
 
 // Initialize Firebase Admin using same pattern as main project
 if (getApps().length === 0) {
@@ -34,23 +35,28 @@ if (getApps().length === 0) {
 const db = getFirestore();
 
 /**
- * Check if any matches are currently in progress
- * @returns true if any match has status == "in_progress"
+ * Whether the stats pipeline should run: a game is in progress, or a game that started recently has
+ * just turned final (see statsWindowOpen). Games that started before the window are not read.
  */
-async function isLiveWindow(): Promise<boolean> {
+async function isLiveWindow(now = new Date()): Promise<boolean> {
   try {
-    const snapshot = await db
-      .collection('matches')
-      .where('status', '==', 'in_progress')
-      .limit(1)
-      .get();
-
-    const hasLiveMatches = !snapshot.empty;
-    console.log(
-      `Live window check: ${hasLiveMatches ? 'ACTIVE' : 'INACTIVE'} (${snapshot.size} live matches)`
+    const since = new Date(now.getTime() - FINAL_STATS_WINDOW_MS).toISOString();
+    const [inProgress, recent] = await Promise.all([
+      db.collection('matches').where('status', '==', 'in_progress').limit(1).get(),
+      db
+        .collection('matches')
+        .where('start_time_utc', '>=', since)
+        .where('start_time_utc', '<=', now.toISOString())
+        .get(),
+    ]);
+    const matches = [...inProgress.docs, ...recent.docs].map(
+      (doc) => doc.data() as Pick<FixtureMatch, 'status' | 'start_time_utc'>
     );
-
-    return hasLiveMatches;
+    const open = statsWindowOpen(matches, now);
+    console.log(
+      `Live window check: ${open ? 'ACTIVE' : 'INACTIVE'} (${matches.length} recent matches)`
+    );
+    return open;
   } catch (error) {
     console.error('Error checking live window:', error);
     return false;
@@ -80,6 +86,20 @@ function sleep(baseMs: number, jitterMs: number = 15000): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+const FIXTURE_REFRESH_MS = Number(process.env.FIXTURE_REFRESH_MS) || 15 * 60 * 1000;
+let lastFixtureRefreshAt = 0;
+
+/**
+ * Refresh Firestore `matches` from the Footywire fixture when it is older than
+ * FIXTURE_REFRESH_MS. Match status (scheduled, in_progress, final) comes from this refresh, so a
+ * failure is thrown: the caller skips the stats cycle rather than gating on stale statuses.
+ */
+async function refreshFixtureIfDue(now = Date.now()): Promise<void> {
+  if (now - lastFixtureRefreshAt < FIXTURE_REFRESH_MS) return;
+  await runFixturePipeline({ season: process.env.SEASON || new Date().getFullYear() });
+  lastFixtureRefreshAt = now;
+}
+
 /**
  * Main guard loop
  */
@@ -88,6 +108,14 @@ async function runGuardLoop(): Promise<void> {
 
   while (true) {
     try {
+      try {
+        await refreshFixtureIfDue();
+      } catch (error) {
+        console.error('Fixture refresh failed; skipping this cycle:', error);
+        await sleep(60000, 30000);
+        continue;
+      }
+
       const isLive = await isLiveWindow();
 
       if (!isLive) {
@@ -130,4 +158,4 @@ if (require.main === module) {
   });
 }
 
-export { isLiveWindow, runFetchCycle };
+export { isLiveWindow, refreshFixtureIfDue, runFetchCycle };
