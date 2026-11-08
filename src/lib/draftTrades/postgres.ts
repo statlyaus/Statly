@@ -290,6 +290,13 @@ export function createPostgresDraftTradeReadRepository(dependencies: {
         left.clubName.localeCompare(right.clubName)
       );
     },
+    async releaseAvailability() {
+      const snapshot = await dependencies.archiveSelector.capture(
+        dependencies.scopeKey ?? AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE
+      );
+      if (snapshot.selection) return 'active';
+      return snapshot.unavailabilityReason ?? 'no_active_release';
+    },
     async searchTrades(query, limit) {
       const normalizedQuery = query.trim().toLowerCase();
       const boundedLimit = Math.max(1, Math.min(limit, 200));

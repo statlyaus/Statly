@@ -18,6 +18,13 @@ export type {
   DraftTradePartyItem,
 } from './firestore';
 
+/**
+ * Why the public archive is (or is not) serving records. `active` means a governed release is
+ * selected; the other values come from the release selector and are never shown as "not imported".
+ */
+export type DraftTradeReleaseAvailability =
+  'active' | 'no_active_release' | 'source_blocked' | 'gate2_blocked';
+
 export interface DraftTradeReadRepository {
   listTradesByYear(
     year: number,
@@ -32,6 +39,7 @@ export interface DraftTradeReadRepository {
   listRefsByClub(clubSlug: string): Promise<DraftClubTradeRefItem[]>;
   listClubs(): Promise<DraftClubListItem[]>;
   searchTrades(query: string, limit: number): Promise<DraftTradeListItem[]>;
+  releaseAvailability(): Promise<DraftTradeReleaseAvailability>;
 }
 
 async function resolveDraftTradeReadRepository(): Promise<DraftTradeReadRepository> {
@@ -71,4 +79,8 @@ export async function listDraftClubs() {
 
 export async function searchDraftTradeArchive(query: string, limit: number) {
   return (await resolveDraftTradeReadRepository()).searchTrades(query, limit);
+}
+
+export async function getDraftTradeReleaseAvailability() {
+  return (await resolveDraftTradeReadRepository()).releaseAvailability();
 }
