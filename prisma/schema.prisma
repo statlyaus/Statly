@@ -665,8 +665,8 @@ model LeagueMatchup {
 model LeagueLineup {
   id        String    @id @default(cuid())
   leagueId  String
-  /// Season scope (2026-11-08). Nullable until the lineup readers and writers carry it.
-  seasonId  String?
+  /// Season scope (2026-11-08): the league's active season when the lineup was created.
+  seasonId  String
   memberId  String
   round     Int
   lockedAt  DateTime?
@@ -674,13 +674,12 @@ model LeagueLineup {
   updatedAt DateTime  @updatedAt
 
   league   League                @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season   LeagueSeason?         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season   LeagueSeason          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   member   LeagueMember          @relation(fields: [memberId], references: [id], onDelete: Cascade)
   players  LeagueLineupPlayer[]
   autosubs LeagueLineupAutosub[]
 
-  @@unique([leagueId, memberId, round])
-  @@index([leagueId, round])
+  @@unique([leagueId, seasonId, memberId, round])
   @@index([leagueId, seasonId, round])
   @@index([memberId])
 }
@@ -766,8 +765,8 @@ model LeagueCompetitionAudit {
 model LeagueMatchupScore {
   id             String              @id @default(cuid())
   leagueId       String
-  /// Season scope (2026-11-08). Nullable until the score readers and writers carry it.
-  seasonId       String?
+  /// Season scope (2026-11-08): the league's active season when the score was calculated.
+  seasonId       String
   matchupId      String
   memberId       String
   round          Int
@@ -785,12 +784,11 @@ model LeagueMatchupScore {
   finalizedAt    DateTime?
 
   league  League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season  LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season  LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   matchup LeagueMatchup @relation(fields: [matchupId], references: [id], onDelete: Cascade)
   member  LeagueMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([matchupId, memberId])
-  @@index([leagueId, round])
   @@index([leagueId, seasonId, round])
   @@index([leagueId, status])
   @@index([memberId])
@@ -799,8 +797,8 @@ model LeagueMatchupScore {
 model LeagueStanding {
   id             String   @id @default(cuid())
   leagueId       String
-  /// Season scope (2026-11-08). Nullable until the standings readers and writers carry it.
-  seasonId       String?
+  /// Season scope (2026-11-08): one ladder row per member per season.
+  seasonId       String
   memberId       String
   wins           Int      @default(0)
   losses         Int      @default(0)
@@ -812,13 +810,11 @@ model LeagueStanding {
   pointsAgainst  Float    @default(0)
   updatedAt      DateTime @updatedAt
 
-  league League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  member LeagueMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season LeagueSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@unique([leagueId, memberId])
-  @@index([leagueId])
-  @@index([leagueId, seasonId])
+  @@unique([leagueId, seasonId, memberId])
   @@index([memberId])
 }
 
@@ -1539,7 +1535,8 @@ model NbaPlayerGameStat {
 }
 
 /// Current injury-report status per player, replaced as a whole list from the provider's feed in one
-/// transaction. A player with no row is not on the report.
+/// transaction. A player with no row is not on the report. `seasonEnding` is derived by the provider
+/// adapter (see docs/domain/basketball.md); `fantasyStatus` is the provider's own code, as given.
 model NbaPlayerInjury {
   id               String          @id @default(cuid())
   playerId         String          @unique
@@ -1547,6 +1544,9 @@ model NbaPlayerInjury {
   detail           String?
   expectedReturnOn DateTime?       @db.Date
   reportedAt       DateTime?
+  comment          String?
+  fantasyStatus    String?
+  seasonEnding     Boolean         @default(false)
   fetchedAt        DateTime
 
   player NbaPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)

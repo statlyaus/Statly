@@ -3,6 +3,7 @@ import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
 import { normalizeLineupSlots, totalActiveLineupSlots } from '@/server/leagues/lineupSettings';
 import { parseStoredCategoryRows } from '@/server/leagues/matchupReadModel';
 import { isActivePrismaMembership } from '@/server/leagues/membership';
@@ -179,6 +180,7 @@ export async function loadManagerHome(
             id: true,
             name: true,
             categoriesJson: true,
+            activeSeasonId: true,
             settings: {
               select: { maxTeams: true, timeZone: true, startAt: true, lineupSlotsJson: true },
             },
@@ -283,7 +285,7 @@ export async function loadManagerHome(
 
         const round = seasonState ? focusRound(seasonState.schedule) : null;
         const standingRows = await client.leagueStanding.findMany({
-          where: { leagueId: league.id },
+          where: { leagueId: league.id, seasonId: activeSeasonIdOf(league) },
           select: {
             id: true,
             memberId: true,
@@ -327,7 +329,12 @@ export async function loadManagerHome(
         }
 
         const recent = await client.leagueMatchupScore.findMany({
-          where: { leagueId: league.id, memberId: membership.id, status: 'FINAL' },
+          where: {
+            leagueId: league.id,
+            seasonId: activeSeasonIdOf(league),
+            memberId: membership.id,
+            status: 'FINAL',
+          },
           orderBy: { round: 'desc' },
           take: 5,
           select: { matchupWin: true, matchupLoss: true },
@@ -406,8 +413,9 @@ export async function loadManagerHome(
         if (nextRound) {
           const saved = await client.leagueLineup.findUnique({
             where: {
-              leagueId_memberId_round: {
+              leagueId_seasonId_memberId_round: {
                 leagueId: league.id,
+                seasonId: activeSeasonIdOf(league),
                 memberId: membership.id,
                 round: nextRound.round,
               },
