@@ -12,8 +12,9 @@ import {
 /**
  * The ETL writes stat rows only for players who took the field, so a player his club did not
  * select has no row at all. He is inferred DID_NOT_PLAY only when his club's match in the round is
- * final and that same match has a stat row for his club that reaches a Statly player, i.e. the
- * club's team sheet is ingested and identity-mapped. Anything less keeps the round waiting
+ * final and every stat row for his club in that match reaches a Statly player, i.e. the club's team
+ * sheet is ingested and identity-mapped. An unlinked row may be the player himself under an
+ * unreviewed ETL id, so anything less keeps the round waiting
  * (docs/product/league-competition-rules.md, "Interchange autosubs").
  */
 
@@ -74,6 +75,6 @@ export function inferUnselectedDidNotPlay({
   ...evidence
 }: RoundEvidence & { statlyPlayerIds: ReadonlySet<string> }): string[] {
   return playersWithoutRows(evidence)
-    .filter(({ rows }) => rows.some((row) => statlyPlayerIds.has(row.playerId)))
+    .filter(({ rows }) => rows.length > 0 && rows.every((row) => statlyPlayerIds.has(row.playerId)))
     .map(({ playerId }) => playerId);
 }

@@ -11,6 +11,8 @@ const prismaMocks = vi.hoisted(() => {
     $executeRaw: vi.fn(),
     league: { findUnique: vi.fn() },
     player: { findMany: vi.fn() },
+    // No reviewed Footywire identity links: stat rows keep their own player ids.
+    playerExternalIdentity: { findMany: vi.fn().mockResolvedValue([]) },
     leagueCompetitionRound: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn() },
     leagueMatchup: { findMany: vi.fn(), update: vi.fn() },
     leagueMatchupScore: { upsert: vi.fn(), findMany: vi.fn() },
@@ -205,6 +207,23 @@ describe('a lineup player his club did not select', () => {
         statRow('opponent', 'Collingwood', 1),
       ],
       statlyPlayerIds: ['sub', 'opponent'],
+    });
+
+    expectNothingWritten(
+      await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4, finalize: true })
+    );
+  });
+
+  it('keeps the round waiting while one of his club rows in the final match reaches no Statly player', async () => {
+    // The unlinked row may be the lineup player himself under an unreviewed ETL id.
+    givenRound({
+      stats: [
+        statRow('gws-clubmate', 'GWS Giants', 0),
+        statRow('ply_gws_unlinked', 'GWS Giants', 2),
+        statRow('sub', 'Collingwood', 3),
+        statRow('opponent', 'Collingwood', 1),
+      ],
+      statlyPlayerIds: ['gws-clubmate', 'sub', 'opponent'],
     });
 
     expectNothingWritten(

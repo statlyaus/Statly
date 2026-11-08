@@ -159,6 +159,7 @@ describe('Footywire identity provider', () => {
     // The unreviewed player's stats stay under the ETL id: no name guess links them to OTHER.
     expect(live.totalsByPlayerId.has(OTHER)).toBe(false);
 
+    // His stats may be the unlinked Carlton row, so he is not inferred unselected: the round waits.
     const unmappedLive = await loadLivePlayerTotalsForRound(2026, 7, [
       { playerId: OTHER, club: 'Carlton' },
     ]);
