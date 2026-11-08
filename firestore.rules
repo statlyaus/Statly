@@ -41,37 +41,6 @@ service cloud.firestore {
         );
     }
 
-    function isResourceUser(resource) {
-      return request.auth.uid == resource.data.userId;
-    }
-
-    function isSelfMemberPreferenceUpdate(userId) {
-      return request.auth.uid == userId
-        && request.resource.data.leagueId == resource.data.leagueId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'draftPreferences',
-          'scoringPreferences',
-          'notificationSettings'
-        ]);
-    }
-
-    function isRosterLineupUpdate(leagueId) {
-      return request.resource.data.leagueId == resource.data.leagueId
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'teamName',
-          'captain',
-          'viceCaptain',
-          'bench',
-          'emergencies',
-          'updatedAt'
-        ]);
-    }
-
-    function hasLeagueId(leagueId) {
-      return request.resource.data.leagueId == leagueId;
-    }
-
     match /players/{playerId} {
       allow read: if isAuthenticated();
       allow write: if false;
@@ -103,18 +72,12 @@ service cloud.firestore {
 
       match /members/{userId} {
         allow read: if isLeagueMember(leagueId);
-        allow create: if false;
-        allow update: if isSelfMemberPreferenceUpdate(userId);
-        allow delete: if false;
+        allow write: if false;
       }
 
       match /rosters/{teamId} {
         allow read: if isLeagueMember(leagueId);
-        allow create: if false;
-        allow update: if isLeagueMember(leagueId)
-          && (isResourceUser(resource) || isLeagueManager(leagueId))
-          && isRosterLineupUpdate(leagueId);
-        allow delete: if false;
+        allow write: if false;
       }
 
       match /draft/{draftDoc} {

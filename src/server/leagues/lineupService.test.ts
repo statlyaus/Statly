@@ -602,3 +602,142 @@ describe('save boundary invariants', () => {
     expect(result).toMatchObject({ ok: true });
   });
 });
+
+describe('players whose AFL game start is unknown', () => {
+  const startedRound = { ...scheduledRound, startsAt: new Date('2026-01-01T09:00:00.000Z') };
+  const futureGwsGame = {
+    season: 2026,
+    round_number: 17,
+    home_team: 'GWS Giants',
+    away_team: 'Sydney Swans',
+    start_time_utc: '2099-07-18T09:00:00.000Z',
+    status: 'scheduled',
+    confirmed_bye_teams: ['Carlton'],
+  };
+
+  function arrangeStartedRound(existingPlayers: Array<Record<string, unknown>>) {
+    mocks.prisma.player.findMany.mockResolvedValue([
+      { id: 'player-1' },
+      { id: 'unmatched-player' },
+      { id: 'bye-player' },
+    ]);
+    mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+    mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([
+      rosterPlayer('player-1', 'GWS'),
+      rosterPlayer('unmatched-player', 'Unknown Club'),
+      rosterPlayer('bye-player', 'Carlton'),
+    ]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue(startedRound);
+    mocks.getRoundMatchesResult.mockResolvedValue({ ok: true, matches: [futureGwsGame] });
+    mocks.prisma.leagueLineup.findUnique.mockResolvedValue({
+      id: 'lineup-1',
+      players: existingPlayers,
+    });
+    mocks.prisma.leagueLineup.upsert.mockResolvedValue({ id: 'lineup-1' });
+  }
+
+  it('keeps an unmatched player in place once the round has started', async () => {
+    arrangeStartedRound([
+      { id: 'row-1', playerId: 'unmatched-player', slot: 'MID', slotIndex: 0, lockedAt: null },
+    ]);
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'INVALID_LINEUP',
+      errors: ['Player unmatched-player is locked and must remain in place.'],
+    });
+    expect(mocks.prisma.leagueLineupPlayer.deleteMany).not.toHaveBeenCalled();
+    // No lock time is invented for him: nothing is written to his row.
+    expect(mocks.prisma.leagueLineupPlayer.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses to bring an unmatched player into the lineup once the round has started', async () => {
+    arrangeStartedRound([]);
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [{ playerId: 'unmatched-player', slot: 'MID', slotIndex: 0 }],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'INVALID_LINEUP',
+      errors: [
+        'Player unmatched-player is locked: his AFL game start time is not known and the round has started.',
+      ],
+    });
+    expect(mocks.prisma.leagueLineupPlayer.createMany).not.toHaveBeenCalled();
+  });
+
+  it('still lets a manager move a player on a confirmed bye or with a later game', async () => {
+    arrangeStartedRound([
+      { id: 'row-1', playerId: 'bye-player', slot: 'MID', slotIndex: 0, lockedAt: null },
+    ]);
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [{ playerId: 'player-1', slot: 'MID', slotIndex: 0 }],
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.prisma.leagueLineupPlayer.createMany).toHaveBeenCalledWith({
+      data: [{ lineupId: 'lineup-1', playerId: 'player-1', slot: 'MID', slotIndex: 0 }],
+    });
+  });
+
+  it('lets a manager move an unmatched player before the round starts', async () => {
+    arrangeStartedRound([
+      { id: 'row-1', playerId: 'unmatched-player', slot: 'MID', slotIndex: 0, lockedAt: null },
+    ]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2099-07-18T09:00:00.000Z'),
+    });
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [],
+    });
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it('treats the round as started once its first official game has started', async () => {
+    arrangeStartedRound([
+      { id: 'row-1', playerId: 'unmatched-player', slot: 'MID', slotIndex: 0, lockedAt: null },
+    ]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: null,
+    });
+    mocks.getRoundMatchesResult.mockResolvedValue({
+      ok: true,
+      matches: [{ ...futureGwsGame, start_time_utc: '2026-01-01T09:00:00.000Z' }],
+    });
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      errors: ['Player unmatched-player is locked and must remain in place.'],
+    });
+  });
+});

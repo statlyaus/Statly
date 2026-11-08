@@ -292,13 +292,14 @@ export class DraftApplicationService {
   }
 
   async openScheduledLobby(input: {
+    draftId: string;
     leagueId: string;
   }): Promise<DraftCommandResult<LifecycleCommandData>> {
-    const { leagueId } = input;
+    const { draftId, leagueId } = input;
 
     return draftRepository.transaction(async (tx) => {
-      const draft = await draftRepository.findDraftScheduleByLeagueId(tx, leagueId);
-      if (!draft?.league?.settings) {
+      const draft = await draftRepository.findDraftScheduleById(tx, draftId);
+      if (!draft?.league?.settings || draft.leagueId !== leagueId) {
         throw new Error('not_found:Draft not found');
       }
       const scheduledStartAt = draft.league.settings.startAt;

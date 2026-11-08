@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,10 +14,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/AuthContext', () => ({
   useAuth: () => ({ user: { uid: 'commissioner-1' } }),
-}));
-
-vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -132,5 +127,46 @@ describe('NewLeaguePage draft schedule', () => {
       timeZone: 'Australia/Melbourne',
     });
     expect(mocks.push).toHaveBeenCalledWith('/leagues/league-1');
+  });
+  it('shows the reason the server refused the league', async () => {
+    mocks.fetchApi.mockRejectedValue(
+      Object.assign(new Error('League size must be 4-20 teams'), { status: 400 })
+    );
+    render(<NewLeaguePage />);
+
+    fireEvent.change(screen.getByLabelText(/League name/), {
+      target: { value: 'Accessible AFL League' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create league' }));
+
+    expect(await screen.findByText('League size must be 4-20 teams')).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a server failure',
+      Object.assign(new Error('HTTP 500: Internal Server Error'), { status: 500 }),
+    ],
+    ['a network failure', new TypeError('Failed to fetch')],
+  ])('keeps the generic retry message for %s', async (_label, failure) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.fetchApi.mockRejectedValue(failure);
+    render(<NewLeaguePage />);
+
+    fireEvent.change(screen.getByLabelText(/League name/), {
+      target: { value: 'Accessible AFL League' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create league' }));
+
+    expect(
+      await screen.findByText('Failed to create league. Please try again.')
+    ).toBeInTheDocument();
+  });
+
+  it('holds the league name to the API maximum of 50 characters', () => {
+    render(<NewLeaguePage />);
+
+    expect(screen.getByLabelText(/League name/)).toHaveAttribute('maxLength', '50');
   });
 });
