@@ -64,6 +64,12 @@ updates can change an unlocked player's lock time; an unknown start time remains
 ## Interchange autosubs
 
 - Autosubs resolve from official participation evidence after the applicable AFL round is complete.
+  A player did not play when his stat row in a final match shows zero minutes, or when his club has
+  a confirmed bye (recorded as a club bye). The provider writes rows only for players who took the
+  field, so a player his club did not select has no row: he also did not play once his club's match
+  in that AFL round is final and that same match has at least one stat row for his club that maps
+  to a Statly player (the club's team sheet is ingested and identity-mapped). In every other case
+  a lineup player without a row keeps the round waiting; it is never scored as a zero.
 - Candidates are considered in persisted interchange order and must be eligible for the vacated slot.
 - A non-playing candidate is skipped. If no candidate qualifies, the active slot scores zero.
 - Each replacement contributes once; active/interchange state and the decision reason are persisted.
