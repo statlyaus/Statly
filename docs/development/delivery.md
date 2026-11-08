@@ -117,9 +117,10 @@ at a time. It runs on every push to `main`, after every `CI` run and every 15 mi
 
 - when an auto-merge pull request is already running CI, or is green, up to date and about to merge,
   it waits;
-- otherwise it merges `main` into the oldest green BEHIND auto-merge pull request (`update-branch`) and
-  dispatches `CI` on that branch, because a push made with `GITHUB_TOKEN` starts no workflows; the
-  dispatched run's `CI Gate` lands on the new head commit and satisfies the ruleset;
+- otherwise it merges `main` into the oldest green BEHIND auto-merge pull request (`update-branch`)
+  using the repository secret `QUEUE_TOKEN`, the owner's fine-grained token (this repository only;
+  Contents, Pull requests and Actions read/write). The update counts as the owner, so the pull
+  request's own `CI` run starts as for any push and its `CI Gate` satisfies the ruleset;
 - a pull request with failed checks, conflicts, an unresolved review thread, a draft, a fork or no
   auto-merge is skipped, and stays the job of whoever owns it;
 - an up-to-date auto-merge pull request whose head has had no CI run for ten minutes gets CI dispatched;
@@ -129,8 +130,15 @@ at a time. It runs on every push to `main`, after every `CI` run and every 15 mi
 That is one CI run per move of `main`, not one per open pull request, which is why the 2026-10-04
 poller that updated every BEHIND pull request was dropped. Sessions leave a green BEHIND auto-merge
 pull request to the queue. An update that would bring a `.github/workflows` change into the branch
-fails, because `GITHUB_TOKEN` may not push workflow files; the queue moves to the next pull request
-and that one needs `gh pr update-branch` by hand.
+fails unless the token may push workflow files; the queue moves to the next pull request and that one
+needs `gh pr update-branch` by hand.
+
+Without `QUEUE_TOKEN` the queue updates no branch and says so in its log. An update made with
+`GITHUB_TOKEN` commits as `github-actions[bot]`. GitHub then holds the pull request's `CI` run for
+approval (`action_required`), and a dispatched run's `CI Gate` is not attached to the pull request, so
+the required check never appears and the queue waits on that pull request forever (#1237, 8 November
+2026). Until the secret exists, sessions update their own green BEHIND pull requests with
+`gh pr update-branch`.
 
 ### Dependabot auto-merge
 
