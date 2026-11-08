@@ -403,8 +403,8 @@ Injuries in the read model: a report row counts his current team's remaining gam
 his latest box score; a listed player with no box score this season is in no team's games and is
 skipped). A season-ending row is out for every remaining game whatever its date. A report over a
 day old is still used, and the view flags it (`injuriesStale`, also set when no report was ever
-fetched). The engine takes an injury off a player's first 5 games only; from the 6th game on, which
-only a two-week fantasy week reaches, the read model takes off his expected games out as well.
+fetched). The engine keeps a long injury out beyond the next 5 games, so a two-week fantasy week
+counts it too.
 
 Caching: the computed output, not the rows, is cached for the season under its latest successful
 box-score ingest, the injury report's fetch time and the Eastern date (five minutes at most, a

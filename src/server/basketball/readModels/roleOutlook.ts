@@ -24,7 +24,6 @@ import { toRoleGameRows, type RoleBoxRow } from '@/lib/basketball/roleGameRows';
 import { round1, runRoleModel, type RoleDriver, type RoleRow } from '@/lib/basketball/roleModel';
 import {
   buildScheduleContext,
-  clamp,
   upcomingGames,
   type ScheduleGame,
 } from '@/lib/basketball/roleSchedule';
@@ -201,17 +200,6 @@ const shown = <T extends { playerId: string; teamCode: string; raw: unknown }>({
   ...rest
 }: T) => rest;
 
-/**
- * The engine takes an injury off the first 5 games only (the sheet never shows more), but a
- * two-week fantasy week can hold more: from the 6th game on, his expected games out apply.
- */
-const upcoming = (projection: NextFiveProjection, injury: InjuryOutlook | undefined) =>
-  projection.upcoming.map((game, i) =>
-    i < 5 || !injury
-      ? game
-      : { ...game, chancePlays: game.chancePlays * (1 - clamp(injury.gamesOut - i, 0, 1)) }
-  );
-
 async function computeSeasonOutlook(
   client: OutlookReadClient,
   season: number,
@@ -286,7 +274,7 @@ async function computeSeasonOutlook(
           }
         : null,
       role: { ...shown(role), drivers: drivers.map((d) => ({ ...d, name: nameOf(d.playerId) })) },
-      next5: { ...shown(next5[i]), upcoming: upcoming(next5[i], injuryInputs.get(playerId)) },
+      next5: shown(next5[i]),
       restOfSeason: shown(ros[i]),
     };
   });
