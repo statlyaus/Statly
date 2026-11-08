@@ -72,7 +72,8 @@ export const defaultDescending = (sort: string) => sort !== 'name';
 export function parseOutlookQuery(params: SearchParams): OutlookQuery {
   const view: OutlookTableView = firstParam(params, 'view') === 'ros' ? 'ROS' : 'NEXT5';
   const sortParam = firstParam(params, 'sort') ?? '';
-  const sort = sortParam === 'name' || sortParam in SORTS[view] ? sortParam : DEFAULT_SORT[view];
+  const sort =
+    sortParam === 'name' || Object.hasOwn(SORTS[view], sortParam) ? sortParam : DEFAULT_SORT[view];
   const dir = firstParam(params, 'dir');
   return {
     view,

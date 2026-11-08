@@ -59,7 +59,8 @@ export function OutlookFilters({
               onClick={() => {
                 if (pressed) return;
                 // A sort the other view lacks would silently fall back: drop it with its direction.
-                const keep = query.sort === 'name' || query.sort in SORTS[option.value];
+                const keep =
+                  query.sort === 'name' || Object.hasOwn(SORTS[option.value], query.sort);
                 update({ view: option.param, ...(keep ? {} : { sort: null, dir: null }) }, () =>
                   setState({ view: option.value })
                 );
