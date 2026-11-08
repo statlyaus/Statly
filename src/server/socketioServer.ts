@@ -55,6 +55,10 @@ import {
   type SocketRedisAdapterLifecycle,
 } from '@/server/socketRedisAdapter';
 import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
+import { flushProcessSentry, initProcessSentry } from '@/server/monitoring/processSentry';
+
+// Report errors to Sentry before anything else can fail (docs/runbooks/monitoring-and-alerts.md).
+initProcessSentry('socket-server');
 
 // Validate configuration before starting
 try {
@@ -1033,8 +1037,8 @@ process.on('uncaughtException', (error) => {
     timestamp: new Date().toISOString(),
   });
 
-  // Attempt graceful shutdown
-  gracefulShutdown('uncaughtException');
+  // Sentry's own handler has captured it; send that before shutting down.
+  void flushProcessSentry().finally(() => gracefulShutdown('uncaughtException'));
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -1044,8 +1048,7 @@ process.on('unhandledRejection', (reason, promise) => {
     timestamp: new Date().toISOString(),
   });
 
-  // Attempt graceful shutdown
-  gracefulShutdown('unhandledRejection');
+  void flushProcessSentry().finally(() => gracefulShutdown('unhandledRejection'));
 });
 
 // Start the server only after the cross-instance broadcast adapter is ready.

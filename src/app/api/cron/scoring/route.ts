@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { isCronRequestAuthorized } from '@/lib/cronAuth';
 import { logger } from '@/lib/logger';
+import { monitorCronRun } from '@/server/cron/cronMonitors';
 import { scoreStartedLeagueRounds } from '@/server/leagues/roundScoringSchedule';
 
 export const runtime = 'nodejs';
@@ -18,6 +19,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  return monitorCronRun('cron-scoring', runScheduledScoring);
+}
+
+async function runScheduledScoring(): Promise<NextResponse> {
   try {
     const run = await scoreStartedLeagueRounds();
     const ok = run.failedLeagueIds.length === 0;

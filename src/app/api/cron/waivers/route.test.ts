@@ -13,6 +13,13 @@ vi.mock('@/server/waivers/waiverSchedule', () => ({
   processDueLeagueWaivers: (...args: unknown[]) => processDueLeagueWaiversMock(...args),
 }));
 
+const monitorCronRunMock = vi.fn(
+  async (_slug: string, run: () => Promise<Response>): Promise<Response> => run()
+);
+vi.mock('@/server/cron/cronMonitors', () => ({
+  monitorCronRun: (slug: string, run: () => Promise<Response>) => monitorCronRunMock(slug, run),
+}));
+
 const { GET, POST } = await import('./route');
 
 const URL_BASE = 'http://localhost/api/cron/waivers';
@@ -25,6 +32,18 @@ describe('/api/cron/waivers', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     processDueLeagueWaiversMock.mockReset();
+    monitorCronRunMock.mockClear();
+  });
+
+  it('checks the authorised run in to the cron-waivers Sentry monitor, and never an unauthorised one', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+
+    await GET(new NextRequest(URL_BASE, { headers: { authorization: 'Bearer wrong-secret' } }));
+    expect(monitorCronRunMock).not.toHaveBeenCalled();
+
+    await GET(new NextRequest(URL_BASE, { headers: { authorization: 'Bearer cron-secret' } }));
+    expect(monitorCronRunMock).toHaveBeenCalledWith('cron-waivers', expect.any(Function));
   });
 
   it('rejects every request when CRON_SECRET is unset outside development', async () => {
