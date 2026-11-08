@@ -171,12 +171,14 @@ export async function ensureDefaultLineups({
   }));
 
   // Byes, injuries and form. Each is best effort: without it the default still fills by position.
-  const aflRound = await loadLineupRoundSummaries(leagueId, now)
-    .then((summaries) => summaries.find((summary) => summary.round === round)?.aflRound ?? null)
-    .catch(() => null);
-  const fixtureResult = await loadRoundPlayerFixtures({ aflRound, players: roster }).catch(() => ({
-    ok: false as const,
-  }));
+  const roundSummary = await loadLineupRoundSummaries(leagueId, now)
+    .then((summaries) => summaries.find((summary) => summary.round === round))
+    .catch(() => undefined);
+  const fixtureResult = await loadRoundPlayerFixtures({
+    aflRound: roundSummary?.aflRound ?? null,
+    season: roundSummary?.seasonYear ?? undefined,
+    players: roster,
+  }).catch(() => ({ ok: false as const }));
   const fixturesByPlayerId = fixtureResult.ok
     ? fixtureResult.fixturesByPlayerId
     : new Map<string, RoundPlayerFixture>();

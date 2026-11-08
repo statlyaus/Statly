@@ -78,12 +78,20 @@ export default async function AflDraftTradeOutcomesPage({
       limit: 25,
     });
   } catch (error) {
-    if (!(error instanceof AflDraftTradeOutcomeReadError) || error.code !== 'UNSUPPORTED_METRIC') {
+    if (!(error instanceof AflDraftTradeOutcomeReadError)) throw error;
+    if (error.code === 'UNSUPPORTED_METRIC') {
+      const requestedMetric = query.metric?.replaceAll('_', ' ') ?? 'requested metric';
+      filterNotice = `The active factual release does not include ${requestedMetric}. Showing all metrics supported by that release instead.`;
+      query = { ...query, metric: null, cursor: null };
+    } else if (error.code === 'INVALID_REQUEST' && query.cursor !== null) {
+      // Cursors are bound to one release and one query. A bookmarked or shared page link from an
+      // earlier release (or before a cursor-secret rotation) restarts at the first page.
+      filterNotice =
+        'These results have changed since that page link was made. Showing the first page of the current results.';
+      query = { ...query, cursor: null };
+    } else {
       throw error;
     }
-    const requestedMetric = query.metric?.replaceAll('_', ' ') ?? 'requested metric';
-    filterNotice = `The active factual release does not include ${requestedMetric}. Showing all metrics supported by that release instead.`;
-    query = { ...query, metric: null, cursor: null };
     response = await outcomeReadService.list({
       scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
       ...query,

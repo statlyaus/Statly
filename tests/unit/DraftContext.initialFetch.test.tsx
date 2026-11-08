@@ -764,6 +764,84 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('draft-name')).not.toHaveTextContent('Late V2 Draft');
   });
 
+  it('negotiates v2 again on the next connection after a slow join fell back to v1', async () => {
+    vi.useFakeTimers();
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const v2Joins: Array<{ generation: number; acknowledge?: (value: unknown) => void }> = [];
+    const emit = vi.fn((event: string, data?: any, acknowledge?: (value: unknown) => void) => {
+      if (event === 'draft:join:v2') v2Joins.push({ generation: data.generation, acknowledge });
+    });
+    socketState.current = {
+      connected: true,
+      emit,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => handlers.set(event, handler)),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockResolvedValue({
+      success: true,
+      data: { players: [], pagination: { hasMore: false }, queue: [], watchlist: [] },
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Initial Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 1,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    // The first join is slower than the timeout, so this connection falls back to v1.
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(emit).toHaveBeenCalledWith('draft:join', {
+      draftId: 'draft-1',
+      realtimeProtocols: [1],
+    });
+    expect(v2Joins).toHaveLength(1);
+
+    // The socket drops and reconnects: the new connection asks for v2 again.
+    emit.mockClear();
+    act(() => {
+      handlers.get('disconnect')?.();
+      handlers.get('connect')?.();
+    });
+
+    expect(v2Joins).toHaveLength(2);
+    expect(emit).not.toHaveBeenCalledWith('draft:join', expect.anything());
+
+    const retry = v2Joins[1];
+    act(() => retry.acknowledge?.(makeV2Acknowledgement(6, retry.generation, 'V2 Again Draft')));
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('V2 Again Draft');
+
+    // v1 traffic left over from the fallback no longer mutates the room.
+    act(() => {
+      handlers.get('draft:snapshot')?.({
+        ...makeV2Acknowledgement(3, 1, 'Stale V1 Draft').snapshot,
+        schemaVersion: 1,
+      });
+    });
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('V2 Again Draft');
+  });
+
   it('orders initial snapshot picks by overall number', () => {
     render(
       <DraftProvider

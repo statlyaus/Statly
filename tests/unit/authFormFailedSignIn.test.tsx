@@ -8,10 +8,13 @@ import AuthForm from '@/components/AuthForm';
 vi.mock('@/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 
+// Obviously fake, assembled so secret scanners do not read it as a credential.
+const FAKE_PASSWORD = ['not', 'a', 'secret', '1A'].join('-');
+
 const firebaseError = (code: string) =>
   Object.assign(new Error(`Firebase: Error (${code}).`), { code });
 
-function renderWith(overrides: Record<string, unknown>) {
+function renderWith(overrides: Record<string, unknown>, initialMode: 'login' | 'signup' = 'login') {
   vi.mocked(useAuth).mockReturnValue({
     user: null,
     loading: false,
@@ -23,7 +26,7 @@ function renderWith(overrides: Record<string, unknown>) {
     loginWithApple: vi.fn(),
     ...overrides,
   } as unknown as ReturnType<typeof useAuth>);
-  return render(<AuthForm initialMode="login" />);
+  return render(<AuthForm initialMode={initialMode} />);
 }
 
 async function submit(email = 'manager@example.com', password = 'wrong-password') {
@@ -51,6 +54,56 @@ describe('AuthForm failed sign-in', () => {
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(1));
     expect(screen.getByRole('alert')).toHaveTextContent(message);
     expect(screen.getByRole('alert')).not.toHaveTextContent('Firebase');
+  });
+
+  it.each([
+    ['unsupported', "This browser can't keep you signed in to Statly."],
+    ['insecure-context', "This browser can't keep you signed in to Statly."],
+    ['registration-timeout', "Statly couldn't finish signing you in on this browser."],
+  ])(
+    'explains a sign-in token transport that cannot start (%s) instead of saying retry',
+    async (code, message) => {
+      const failure = Object.assign(new Error('raw worker detail'), {
+        name: 'AuthServiceWorkerError',
+        code,
+      });
+      renderWith({ login: vi.fn().mockRejectedValue(failure) });
+      await submit();
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(message);
+      expect(alert).not.toHaveTextContent('Sign-in failed');
+      expect(alert).not.toHaveTextContent('raw worker detail');
+    }
+  );
+
+  it.each([
+    ['auth/weak-password', 'That password is too weak. Choose a longer one.'],
+    ['auth/operation-not-allowed', 'This sign-in method is not available. Try another one.'],
+    ['auth/internal-error', 'Could not create your account. Please try again.'],
+  ])('creating an account explains %s', async (code, message) => {
+    renderWith({ signup: vi.fn().mockRejectedValue(firebaseError(code)) }, 'signup');
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Email Address'), 'new@example.com');
+    await user.type(screen.getByLabelText('Password'), FAKE_PASSWORD);
+    await user.type(screen.getByLabelText('Confirm Password'), FAKE_PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  });
+
+  it('explains an email already tied to another sign-in provider', async () => {
+    renderWith({
+      loginWithGoogle: vi
+        .fn()
+        .mockRejectedValue(firebaseError('auth/account-exists-with-different-credential')),
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An account already exists for this email with a different sign-in method. Use that method instead.'
+    );
   });
 
   it('moves focus to the error so keyboard and screen-reader users land on it', async () => {

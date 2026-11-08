@@ -15,15 +15,15 @@ describe('user league list route architecture', () => {
     );
   });
 
-  it('returns Prisma league memberships before legacy Firestore memberships', () => {
+  it('lists leagues from Prisma memberships only, never Firestore league documents', () => {
     const source = readUserLeagueRoute();
 
     expect(source).toContain("import { prisma } from '@/lib/prisma'");
     expect(source).toContain('prisma.leagueMember.findMany');
     expect(source).toContain('normalizeCategories(league.categoriesJson)');
-    expect(source.indexOf('prisma.leagueMember.findMany')).toBeLessThan(
-      source.indexOf('listActiveUserLeagueMemberships(userId)')
-    );
+    expect(source).not.toContain('firebaseAdmin');
+    expect(source).not.toContain('adminDb');
+    expect(source).not.toContain('listActiveUserLeagueMemberships');
   });
 
   it('does not return stale hard-coded development league ids', () => {

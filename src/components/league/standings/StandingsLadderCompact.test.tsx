@@ -51,6 +51,8 @@ const history = buildStandingsHistory({
     { ...game(3, 'alpha', 'delta', 0, 0), status: 'SCHEDULED' as const, winnerMemberId: null },
   ],
   finalsTeams: 2,
+  scoringMode: 'H2H_MOST_CATEGORIES',
+  categoryCount: 9,
 });
 
 describe('StandingsLadderCompact', () => {
@@ -86,6 +88,8 @@ describe('StandingsLadderCompact', () => {
       ladder: [team('alpha', 'Alpha FC', 1, 0), team('you', 'Robbo Rockers', 0, 1)],
       matchups: [game(1, 'alpha', 'you', 6, 3)],
       finalsTeams: 0,
+      scoringMode: 'H2H_MOST_CATEGORIES',
+      categoryCount: 9,
     });
     render(
       <StandingsLadderCompact

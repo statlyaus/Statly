@@ -10,15 +10,16 @@ datasource db {
 }
 
 model User {
-  id           String         @id @default(cuid())
-  email        String         @unique
-  passwordHash String
-  displayName  String
-  timeZone     String         @default("UTC")
-  leagues      LeagueMember[]
-  sessions     Session[]
-  ownedLeagues League[]       @relation("LeagueOwner")
-  createdAt    DateTime       @default(now())
+  id                String             @id @default(cuid())
+  email             String             @unique
+  passwordHash      String
+  displayName       String
+  timeZone          String             @default("UTC")
+  leagues           LeagueMember[]
+  sessions          Session[]
+  ownedLeagues      League[]           @relation("LeagueOwner")
+  basketballLeagues BasketballLeague[]
+  createdAt         DateTime           @default(now())
 
   @@index([createdAt])
 }
@@ -175,6 +176,11 @@ model LeagueSeason {
   tradeThreads            LeagueTradeThread[]
   tradeCommands           LeagueTradeCommand[]
   tradeOutboxEvents       LeagueTradeOutboxEvent[]
+  lineups                 LeagueLineup[]
+  matchupScores           LeagueMatchupScore[]
+  standings               LeagueStanding[]
+  waiverPriorities        WaiverPriority[]
+  teamActions             TeamAction[]
 
   @@unique([leagueId, year])
   @@index([leagueId, createdAt])
@@ -659,6 +665,8 @@ model LeagueMatchup {
 model LeagueLineup {
   id        String    @id @default(cuid())
   leagueId  String
+  /// Season scope (2026-11-08). Nullable until the lineup readers and writers carry it.
+  seasonId  String?
   memberId  String
   round     Int
   lockedAt  DateTime?
@@ -666,12 +674,14 @@ model LeagueLineup {
   updatedAt DateTime  @updatedAt
 
   league   League                @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season   LeagueSeason?         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   member   LeagueMember          @relation(fields: [memberId], references: [id], onDelete: Cascade)
   players  LeagueLineupPlayer[]
   autosubs LeagueLineupAutosub[]
 
   @@unique([leagueId, memberId, round])
   @@index([leagueId, round])
+  @@index([leagueId, seasonId, round])
   @@index([memberId])
 }
 
@@ -756,6 +766,8 @@ model LeagueCompetitionAudit {
 model LeagueMatchupScore {
   id             String              @id @default(cuid())
   leagueId       String
+  /// Season scope (2026-11-08). Nullable until the score readers and writers carry it.
+  seasonId       String?
   matchupId      String
   memberId       String
   round          Int
@@ -773,11 +785,13 @@ model LeagueMatchupScore {
   finalizedAt    DateTime?
 
   league  League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season  LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   matchup LeagueMatchup @relation(fields: [matchupId], references: [id], onDelete: Cascade)
   member  LeagueMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([matchupId, memberId])
   @@index([leagueId, round])
+  @@index([leagueId, seasonId, round])
   @@index([leagueId, status])
   @@index([memberId])
 }
@@ -785,6 +799,8 @@ model LeagueMatchupScore {
 model LeagueStanding {
   id             String   @id @default(cuid())
   leagueId       String
+  /// Season scope (2026-11-08). Nullable until the standings readers and writers carry it.
+  seasonId       String?
   memberId       String
   wins           Int      @default(0)
   losses         Int      @default(0)
@@ -796,11 +812,13 @@ model LeagueStanding {
   pointsAgainst  Float    @default(0)
   updatedAt      DateTime @updatedAt
 
-  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  league League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  member LeagueMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([leagueId, memberId])
   @@index([leagueId])
+  @@index([leagueId, seasonId])
   @@index([memberId])
 }
 
@@ -1293,6 +1311,8 @@ model LeagueTradeOutboxEvent {
 model TeamAction {
   id             String         @id @default(cuid())
   leagueId       String
+  /// Season scope (2026-11-08). Nullable until the waiver readers and writers carry it.
+  seasonId       String?
   memberId       String
   actionType     TeamActionType
   status         ActionStatus   @default(PENDING)
@@ -1303,7 +1323,10 @@ model TeamAction {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
+  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
   @@index([leagueId, status])
+  @@index([leagueId, seasonId, status])
   @@index([memberId])
   @@index([actionType])
   @@index([processingAt])
@@ -1312,6 +1335,8 @@ model TeamAction {
 model WaiverPriority {
   id              String   @id @default(cuid())
   leagueId        String
+  /// Season scope (2026-11-08). Nullable until the waiver readers and writers carry it.
+  seasonId        String?
   memberId        String
   priority        Int
   remainingFAAB   Float?
@@ -1319,8 +1344,11 @@ model WaiverPriority {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  season LeagueSeason? @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
   @@unique([leagueId, memberId])
   @@index([leagueId, priority])
+  @@index([leagueId, seasonId, priority])
   @@index([memberId])
 }
 
@@ -1336,4 +1364,312 @@ enum ActionStatus {
   REJECTED
   PROCESSED
   CANCELLED
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Fantasy basketball (NBA): a separate product track. See docs/domain/basketball.md.
+// Nba* models are global NBA reference data, written only by src/server/basketball/ingest.
+// Basketball* models are private, owner-scoped league profiles, written only by
+// src/server/basketball/leagues. Every foreign key into Nba* restricts deletes.
+// ---------------------------------------------------------------------------------------------------
+
+enum NbaGameStatus {
+  SCHEDULED
+  IN_PROGRESS
+  FINAL
+  POSTPONED
+  CANCELLED
+}
+
+enum NbaDnpReason {
+  COACH_DECISION
+  INJURY
+  REST
+  SUSPENDED
+  PERSONAL
+  OTHER
+}
+
+enum NbaInjuryStatus {
+  OUT
+  DAY_TO_DAY
+}
+
+enum NbaIngestJob {
+  BOX_SCORES
+  SCHEDULE
+  PLAYERS
+  INJURIES
+  BACKFILL
+}
+
+enum NbaIngestOutcome {
+  SUCCEEDED
+  REJECTED
+  FAILED
+}
+
+/// An NBA franchise. `code` is the standard three-letter abbreviation (GSW, NYK, SAS, NOP, UTA, WAS),
+/// never a provider's own spelling: provider adapters map their codes to it.
+model NbaTeam {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  players   NbaPlayer[]
+  homeGames NbaGame[]           @relation("NbaGameHomeTeam")
+  awayGames NbaGame[]           @relation("NbaGameAwayTeam")
+  gameStats NbaPlayerGameStat[]
+}
+
+/// An NBA player. Identity is the provider ID in NbaPlayerIdentity, never a name match.
+model NbaPlayer {
+  id        String    @id @default(cuid())
+  fullName  String
+  firstName String?
+  lastName  String?
+  /// Positions as the provider lists them, e.g. ["PG"] or ["G"]. The engine expands generic G/F into
+  /// slot eligibility. Providers list fewer positions than Yahoo grants, so eligibility is conservative.
+  positions String[]
+  teamId    String?
+  birthDate DateTime? @db.Date
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  team        NbaTeam?               @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  identities  NbaPlayerIdentity[]
+  gameStats   NbaPlayerGameStat[]
+  injury      NbaPlayerInjury?
+  rosterSpots BasketballRosterSpot[]
+
+  @@index([teamId])
+  @@index([fullName])
+}
+
+/// A provider's ID for an NBA player. A provider switch adds rows here through a reviewed mapping.
+model NbaPlayerIdentity {
+  id         String   @id @default(cuid())
+  playerId   String
+  provider   String
+  externalId String
+  createdAt  DateTime @default(now())
+
+  player NbaPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, externalId])
+  @@unique([playerId, provider])
+}
+
+/// One regular-season NBA game. `season` is the year the season ends (2026-27 is 2027). `gameDate` is
+/// the US Eastern calendar date, which is what fantasy weeks count. The natural key
+/// (season, gameDate, home, away) lets a second provider write into the same rows.
+/// Invariant held by the ingest: regular-season games only (ESPN season type 2). Preseason, play-in,
+/// playoff games and the NBA Cup final (whose stats do not count in season totals) are never stored.
+model NbaGame {
+  id                  String        @id @default(cuid())
+  provider            String
+  externalId          String
+  season              Int
+  startsAt            DateTime
+  gameDate            DateTime      @db.Date
+  homeTeamId          String
+  awayTeamId          String
+  status              NbaGameStatus
+  homeScore           Int?
+  awayScore           Int?
+  /// First successful box-score ingest; null until the game is FINAL and ingested.
+  boxScoreIngestedAt  DateTime?
+  /// Set by the one re-ingest at least 12 hours after the first, which picks up stat corrections.
+  boxScoreFinalisedAt DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  homeTeam    NbaTeam             @relation("NbaGameHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam    NbaTeam             @relation("NbaGameAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  playerStats NbaPlayerGameStat[]
+
+  @@unique([provider, externalId])
+  @@unique([season, gameDate, homeTeamId, awayTeamId])
+  @@index([season, gameDate])
+  @@index([homeTeamId, gameDate])
+  @@index([awayTeamId, gameDate])
+  @@index([status, boxScoreIngestedAt])
+}
+
+/// One player's line in one game, for every player the box score lists (did-not-play rows carry zero
+/// stats). Players the box score does not list (inactive, not dressed) have no row.
+model NbaPlayerGameStat {
+  id                     String        @id @default(cuid())
+  gameId                 String
+  playerId               String
+  teamId                 String
+  starter                Boolean
+  played                 Boolean
+  dnpReason              NbaDnpReason?
+  secondsPlayed          Int
+  points                 Int
+  rebounds               Int
+  offensiveRebounds      Int
+  defensiveRebounds      Int
+  assists                Int
+  steals                 Int
+  blocks                 Int
+  turnovers              Int
+  fieldGoalsMade         Int
+  fieldGoalsAttempted    Int
+  threePointersMade      Int
+  threePointersAttempted Int
+  freeThrowsMade         Int
+  freeThrowsAttempted    Int
+  personalFouls          Int
+  plusMinus              Int
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  game   NbaGame   @relation(fields: [gameId], references: [id], onDelete: Restrict)
+  player NbaPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  team   NbaTeam   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  @@unique([gameId, playerId])
+  @@index([playerId])
+  @@index([teamId, gameId])
+}
+
+/// Current injury-report status per player, replaced as a whole list from the provider's feed in one
+/// transaction. A player with no row is not on the report.
+model NbaPlayerInjury {
+  id               String          @id @default(cuid())
+  playerId         String          @unique
+  status           NbaInjuryStatus
+  detail           String?
+  expectedReturnOn DateTime?       @db.Date
+  reportedAt       DateTime?
+  fetchedAt        DateTime
+
+  player NbaPlayer @relation(fields: [playerId], references: [id], onDelete: Restrict)
+}
+
+/// Audit row for every NBA ingest invocation. On a rejected run it is the only write.
+model NbaIngestRun {
+  id          String            @id @default(cuid())
+  job         NbaIngestJob
+  provider    String
+  startedAt   DateTime          @default(now())
+  finishedAt  DateTime?
+  outcome     NbaIngestOutcome?
+  reason      String?
+  summaryJson Json?
+
+  @@index([job, startedAt])
+}
+
+enum BasketballPlatform {
+  YAHOO
+  ESPN
+  SLEEPER
+  FANTRAX
+  OTHER
+}
+
+enum BasketballScoringFormat {
+  H2H_MOST_CATEGORIES
+  H2H_EACH_CATEGORY
+}
+
+/// A user's private fantasy basketball league profile, bound to one NBA season. Owner-only: every read
+/// and write filters by ownerId, and non-owners get 404.
+model BasketballLeague {
+  id                  String                  @id @default(cuid())
+  ownerId             String
+  name                String
+  platform            BasketballPlatform
+  season              Int
+  format              BasketballScoringFormat
+  /// Category ids from src/types/basketball.ts, validated on write.
+  categories          String[]
+  /// Subset of categories the user is punting; excluded from player value.
+  puntCategories      String[]
+  teamCount           Int
+  /// Count per roster slot type, e.g. {"PG":1,"SG":1,...,"BN":3,"IL":3}; validated on write.
+  rosterSlotsJson     Json
+  /// Monday (or the league's first day) of fantasy week 1, as a US Eastern date.
+  weekOneStartsOn     DateTime                @db.Date
+  regularSeasonEndsOn DateTime                @db.Date
+  /// Fantasy week numbers that span 14 Eastern dates instead of 7 (e.g. Yahoo's All-Star break
+  /// matchup). Every later week shifts by seven days.
+  twoWeekMatchups     Int[]                   @default([])
+  auctionBudget       Int?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  owner       User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  teams       BasketballLeagueTeam[]
+  rosterSpots BasketballRosterSpot[]
+  matchups    BasketballMatchup[]
+
+  @@index([ownerId, season])
+}
+
+/// A team in a basketball league profile. Exactly one team per league may be the user's own: enforced
+/// by the partial unique index BasketballLeagueTeam_one_mine_per_league in the migration.
+model BasketballLeagueTeam {
+  id        String   @id @default(cuid())
+  leagueId  String
+  name      String
+  isMine    Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  league             BasketballLeague       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  rosterSpots        BasketballRosterSpot[]
+  matchupsAsTeam     BasketballMatchup[]    @relation("BasketballMatchupTeam")
+  matchupsAsOpponent BasketballMatchup[]    @relation("BasketballMatchupOpponent")
+
+  @@unique([leagueId, name])
+}
+
+/// A player held in a league profile. teamId null means rostered by a team the user has not entered.
+/// The service checks that teamId belongs to leagueId before every write.
+model BasketballRosterSpot {
+  id            String   @id @default(cuid())
+  leagueId      String
+  teamId        String?
+  playerId      String
+  onInjuredList Boolean  @default(false)
+  /// First US Eastern game date this player counts for the team. Defaults to the first day of the
+  /// current fantasy week, so a mid-week setup still counts the whole week.
+  acquiredOn    DateTime @db.Date
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  league BasketballLeague      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  team   BasketballLeagueTeam? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player NbaPlayer             @relation(fields: [playerId], references: [id], onDelete: Restrict)
+
+  @@unique([leagueId, playerId])
+  @@index([teamId])
+  @@index([playerId])
+}
+
+/// Head-to-head opponent for one team in one fantasy week of a league profile.
+model BasketballMatchup {
+  id             String   @id @default(cuid())
+  leagueId       String
+  week           Int
+  teamId         String
+  opponentTeamId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  league   BasketballLeague     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  team     BasketballLeagueTeam @relation("BasketballMatchupTeam", fields: [teamId], references: [id], onDelete: Cascade)
+  opponent BasketballLeagueTeam @relation("BasketballMatchupOpponent", fields: [opponentTeamId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, week, teamId])
+  @@index([teamId])
+  @@index([opponentTeamId])
 }
