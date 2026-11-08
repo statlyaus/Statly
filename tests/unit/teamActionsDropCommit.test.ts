@@ -6,6 +6,7 @@ const membershipMocks = vi.hoisted(() => ({ verifyLeagueMembership: vi.fn() }));
 const projectLeague = vi.hoisted(() => vi.fn());
 
 const tx = vi.hoisted(() => ({
+  league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
   leagueRosterPlayer: { deleteMany: vi.fn() },
   teamAction: { create: vi.fn() },
 }));
@@ -53,9 +54,7 @@ describe('team action drop commit', () => {
     membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: true });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue({ playerId: 'player-1' });
-    prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) =>
-      work(tx)
-    );
+    prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) => work(tx));
     tx.leagueRosterPlayer.deleteMany.mockResolvedValue({ count: 1 });
     tx.teamAction.create.mockResolvedValue({ id: 'action-1' });
     projectLeague.mockResolvedValue({ owned: 0, available: 1 });
@@ -72,6 +71,7 @@ describe('team action drop commit', () => {
     expect(tx.teamAction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         leagueId: 'league-1',
+        seasonId: 'season-1',
         memberId: 'member-1',
         actionType: 'DROP_PLAYER',
         details: { playerId: 'player-1' },

@@ -178,12 +178,14 @@ export async function seedWaiverScenario(): Promise<void> {
         data: [
           {
             leagueId,
+            seasonId: season.id,
             memberId: rival.memberId,
             priority: 1,
             remainingFAAB: WAIVER_SCENARIO.faabBudget,
           },
           {
             leagueId,
+            seasonId: season.id,
             memberId: commissioner.memberId,
             priority: 2,
             remainingFAAB: WAIVER_SCENARIO.faabBudget,
