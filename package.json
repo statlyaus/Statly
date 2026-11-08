@@ -113,6 +113,7 @@
     "outcomes:valuation:provision-and-dispatch-local": "tsx Scripts/dev/provision-local-afl-private-valuation.ts",
     "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
     "player-identity:consolidate": "tsx Scripts/player-identity-consolidation.ts",
+    "player-identity:footywire": "tsx Scripts/footywire-player-identity.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",
     "test:int": "vitest run --config vitest.config.int.ts",
     "test:outcomes:int": "tsx Scripts/dev/run-disposable-afl-trade-outcomes-tests.ts",

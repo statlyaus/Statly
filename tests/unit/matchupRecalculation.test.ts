@@ -366,6 +366,13 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
     expect(prismaMocks.$transaction).not.toHaveBeenCalled();
   });
 
+  beforeEach(() => {
+    // No reviewed Footywire identity links: stats rows keep their own player ids.
+    Object.assign(prismaMocks, {
+      playerExternalIdentity: { findMany: vi.fn().mockResolvedValue([]) },
+    });
+  });
+
   it('carries lineups forward for every matchup participant before scoring', async () => {
     prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
     prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
