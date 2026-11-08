@@ -177,8 +177,12 @@ unique key is re-read outside the aborted transaction: it is replayed as idempot
 holds the player that call sent, and refused otherwise. Two first claims in a league can both create
 priority rows; the second keeps the first's rows, but the two members can end up sharing a priority
 number, because priority is not unique. That is accepted. Waivers run automatically once a day, at 6 am Melbourne time: a Netlify scheduled function calls
-`/api/cron/waivers` hourly, and only the run in the 6 am Melbourne hour processes leagues with due
-claims, so the time holds through daylight saving. Leagues are processed one at a time; a league
+`/api/cron/waivers` hourly, and the run in the 6 am Melbourne hour processes leagues with due
+claims, so the time holds through daylight saving. If that run fails or is missed, any later hourly
+call the same Melbourne day catches it up: it settles only claims due by that day's 6 am run, so a
+league whose 6 am run completed has nothing left and is not touched, and a claim due after 6 am still
+waits for the next day's run. Before 6 am nothing runs, and a day's missed run is caught up only on
+that day; its claims then settle at the next 6 am run. Leagues are processed one at a time; a league
 whose run throws keeps its claims pending and the others still run, but the route then answers
 HTTP 500 with the failed league ids and logs an error, so the scheduler records a failed run. Only one waiver processing run per league proceeds at a
 time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refused as already running

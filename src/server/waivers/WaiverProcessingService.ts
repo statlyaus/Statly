@@ -59,7 +59,7 @@ interface ClaimStore {
   acquireProcessingLease?(leagueId: string): Promise<Date | null>;
   releaseProcessingLease?(leagueId: string, startedAt: Date): Promise<void>;
   loadWaiverSettings?(leagueId: string): Promise<WaiverSettings>;
-  loadPendingClaims?(leagueId: string): Promise<WaiverClaim[]>;
+  loadPendingClaims?(leagueId: string, dueBy?: Date): Promise<WaiverClaim[]>;
   // A claim settles in one transaction: these take the settling transaction and never commit alone.
   claimPending(tx: WaiverSettlementTransaction, claim: WaiverClaim): Promise<Date | null>;
   rejectClaim(tx: WaiverSettlementTransaction, claim: WaiverClaim, isFAAB: boolean): Promise<void>;
@@ -275,7 +275,8 @@ export class WaiverProcessingService {
     private readonly projectionService: ProjectionLike = new WaiverAvailabilityProjectionService()
   ) {}
 
-  async processLeague(input: { leagueId: string }): Promise<WaiverProcessingResult> {
+  /** `dueBy` limits the run to claims due by then; a catch-up run passes the missed 6 am run. */
+  async processLeague(input: { leagueId: string; dueBy?: Date }): Promise<WaiverProcessingResult> {
     // One run per league: two runs would each load the same pending claims, debit them twice, and
     // could award one player to two members.
     const lease = await this.claimStore.acquireProcessingLease?.(input.leagueId);
@@ -284,7 +285,7 @@ export class WaiverProcessingService {
     try {
       const [waiverSettings, claims] = await Promise.all([
         this.claimStore.loadWaiverSettings?.(input.leagueId) ?? Promise.resolve({}),
-        this.claimStore.loadPendingClaims?.(input.leagueId) ?? Promise.resolve([]),
+        this.claimStore.loadPendingClaims?.(input.leagueId, input.dueBy) ?? Promise.resolve([]),
       ]);
 
       return await this.processClaims({
@@ -663,14 +664,14 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     };
   }
 
-  async loadPendingClaims(leagueId: string): Promise<WaiverClaim[]> {
+  async loadPendingClaims(leagueId: string, dueBy = new Date()): Promise<WaiverClaim[]> {
     const actions = (await this.db.teamAction.findMany({
       where: {
         leagueId,
         ...inActiveSeason(leagueId),
         actionType: 'WAIVER_CLAIM',
         status: 'PENDING',
-        OR: [{ processingAt: null }, { processingAt: { lte: new Date() } }],
+        OR: [{ processingAt: null }, { processingAt: { lte: dueBy } }],
       },
       orderBy: [{ processingAt: 'asc' }, { createdAt: 'asc' }],
       select: {

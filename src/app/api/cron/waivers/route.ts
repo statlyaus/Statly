@@ -8,7 +8,8 @@ import { processDueLeagueWaivers } from '@/server/waivers/waiverSchedule';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Called hourly by netlify/functions/cron-waivers.mts; processes waivers only at 6 am Melbourne time.
+// Called hourly by netlify/functions/cron-waivers.mts. Processes waivers at 6 am Melbourne time, and
+// in any later hour that day if the 6 am run failed or was missed (see processDueLeagueWaivers).
 export async function GET(request: NextRequest) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json(
