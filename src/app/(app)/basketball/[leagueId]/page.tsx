@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { BasketballOverviewView } from '@/components/basketball/overview/BasketballOverviewView';
 import { OverviewInsights } from '@/components/basketball/overview/OverviewInsights';
 import { BasketballPageHeading } from '@/components/basketball/shell/BasketballPageHeading';
+import { takenPlayersCheck } from '@/components/basketball/shell/takenPlayers';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import { loadOwnedBasketballLeague } from '@/server/basketball/leagues/basketballLeagueQueries';
 import { loadMatchup } from '@/server/basketball/readModels/matchupModel';
@@ -42,7 +43,17 @@ export default async function BasketballOverviewPage({
         overview={overview}
         leagueId={league.id}
         now={now}
-        insights={<OverviewInsights matchup={matchup} pickups={pickups} leagueId={league.id} />}
+        insights={
+          <OverviewInsights
+            matchup={matchup}
+            pickups={pickups}
+            taken={takenPlayersCheck(
+              league,
+              pickups.status === 'READY' ? pickups.opponentTeam.id : null
+            )}
+            leagueId={league.id}
+          />
+        }
       />
     </div>
   );

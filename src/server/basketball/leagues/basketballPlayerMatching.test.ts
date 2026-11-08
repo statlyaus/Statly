@@ -58,6 +58,89 @@ describe('cleanPastedLine', () => {
     }
   });
 
+  it('drops header, stat, date and acquisition lines from a whole rosters page', () => {
+    for (const line of [
+      'Pos\tPlayer\tOpp\tStatus',
+      'Pos Player Opp Status',
+      'Pos\tPlayer\tOpp\tStatus\tMIN*\tFGM/A*\tFG%\tFTM/A*\tFT%\t3PTM\tPTS\tREB\tAST\tST\tBLK\tTO',
+      'SLOT\tPLAYER\tACQ',
+      'STARTERS',
+      'Totals\t\t\t\t31:40\t38/81\t.469\t17/21\t.810\t11\t104\t44\t25\t7\t5\t13',
+      '34:12  7/15  .467  2/2  1.000  3  24',
+      '(5-2-0)',
+      'Week 3 (Nov 9 - 15)',
+      'Mon, Nov 9',
+      'vs LAL',
+      '@Bos',
+      '7:30 pm',
+      'Draft',
+      'No new player Notes',
+      'W',
+    ]) {
+      expect(cleanPastedLine(line)).toBe('');
+    }
+  });
+
+  it('strips Yahoo note labels and stat cells around a name', () => {
+    expect(cleanPastedLine('No new player Notes Ravi Okafor Bos - PG')).toBe('Ravi Okafor');
+    expect(cleanPastedLine('SG\tNew Player Note\tTheo Lindqvist Den - SG,SF\tvs LAL\tGTD')).toBe(
+      'Theo Lindqvist'
+    );
+    expect(cleanPastedLine('Bram Okonkwo Utah - C 31:05 6/11 .545 24')).toBe('Bram Okonkwo');
+    expect(cleanPastedLine('Hugo Mbeki Sac - C SSPD')).toBe('Hugo Mbeki');
+  });
+
+  it('reads only the players from hand-made whole-page Yahoo and ESPN pastes', () => {
+    const names = (page: string) => page.split('\n').map(cleanPastedLine).filter(Boolean);
+    const yahoo = [
+      'Rosters',
+      'Week 3 (Nov 9 - 15)',
+      'Rim Runners',
+      'Pos\tPlayer\tOpp\tStatus',
+      'PG\tNo new player Notes\tRavi Okafor Bos - PG\t@NYK\t',
+      'SG\tTheo Lindqvist Den - SG,SF\tvs LAL\tGTD',
+      'Util\tMarco Bellamy Jr. Ind - PG,SG\t\t',
+      'BN\tSilas Ferreira-Diaz Phi - PF,C\t@Bos\tINJ',
+      'IL+\tHugo Mbeki Sac - C\t\tO',
+      'Paint Patrol',
+      'Pos\tPlayer\tOpp\tStatus',
+      'C\tBram Okonkwo Utah - C\t7:30 pm\t',
+    ].join('\n');
+    const espn = [
+      'Paint Patrol',
+      '(PP)',
+      '(5-2-0)',
+      'SLOT\tPLAYER\tACQ',
+      'STARTERS',
+      'PG',
+      'Elliot Park',
+      'Chi',
+      'PG',
+      'DTD',
+      'Draft',
+      'C',
+      'Desmond Vuković',
+      'Mia',
+      'SF, PF',
+      'Trade',
+      'BENCH',
+      'IR',
+    ].join('\n');
+
+    expect(names(yahoo)).toEqual([
+      'Rim Runners',
+      'Ravi Okafor',
+      'Theo Lindqvist',
+      'Marco Bellamy Jr.',
+      'Silas Ferreira-Diaz',
+      'Hugo Mbeki',
+      'Paint Patrol',
+      'Bram Okonkwo',
+    ]);
+    // Team names and ESPN's team abbreviation are kept: they come back as "No match".
+    expect(names(espn)).toEqual(['Paint Patrol', '(PP)', 'Elliot Park', 'Desmond Vuković']);
+  });
+
   it('never strips a name token from the middle', () => {
     expect(cleanPastedLine('Mo Bamba')).toBe('Mo Bamba');
     expect(cleanPastedLine('C.J. McCollum NO - SG')).toBe('C.J. McCollum');

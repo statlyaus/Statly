@@ -24,14 +24,34 @@ import { getBrowserTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 import { normalizeCreateLeagueResponse } from '@/server/leagues/createLeagueContract';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import { LEAGUE_CONSTRAINTS } from '@/types/leagues';
 
 const teamCounts = [8, 10, 12, 14, 16, 18];
+const LEAGUE_NAME_MAX_LENGTH = LEAGUE_CONSTRAINTS.name.maxLength;
 
 function getLeagueNameError(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return 'Enter a league name.';
   if (trimmed.length < 3) return 'League name must be at least 3 characters.';
+  if (trimmed.length > LEAGUE_NAME_MAX_LENGTH) {
+    return `League name must be ${LEAGUE_NAME_MAX_LENGTH} characters or fewer.`;
+  }
   return null;
+}
+
+/** A 4xx carries the server's validation message; anything else gets the generic retry prompt. */
+function getCreateLeagueErrorMessage(err: unknown): string {
+  const status = (err as { status?: unknown } | null)?.status;
+  if (
+    err instanceof Error &&
+    err.message &&
+    typeof status === 'number' &&
+    status >= 400 &&
+    status < 500
+  ) {
+    return err.message;
+  }
+  return 'Failed to create league. Please try again.';
 }
 
 export default function NewLeaguePage() {
@@ -119,7 +139,7 @@ export default function NewLeaguePage() {
       const createdLeague = normalizeCreateLeagueResponse(response);
       router.push(`/leagues/${createdLeague.id}`);
     } catch (err) {
-      setError('Failed to create league. Please try again.');
+      setError(getCreateLeagueErrorMessage(err));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -178,6 +198,7 @@ export default function NewLeaguePage() {
                   onBlur={() => setHasTouchedLeagueName(true)}
                   required
                   minLength={3}
+                  maxLength={LEAGUE_NAME_MAX_LENGTH}
                   aria-invalid={Boolean(visibleLeagueNameError)}
                   aria-describedby={
                     visibleLeagueNameError ? 'leagueName-help leagueName-error' : 'leagueName-help'
@@ -193,7 +214,7 @@ export default function NewLeaguePage() {
                   id="leagueName-help"
                   className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]"
                 >
-                  Use at least 3 characters so managers can recognise the league.
+                  Use 3 to {LEAGUE_NAME_MAX_LENGTH} characters so managers can recognise the league.
                 </p>
                 {visibleLeagueNameError && (
                   <p
@@ -327,7 +348,7 @@ export default function NewLeaguePage() {
                     <p className="font-semibold">Complete the highlighted field</p>
                     <p className="mt-1">
                       {validationIssue === 'leagueName'
-                        ? 'Enter a league name with at least 3 characters.'
+                        ? `Enter a league name with 3 to ${LEAGUE_NAME_MAX_LENGTH} characters.`
                         : 'Review the draft date, time, and time zone before continuing.'}
                     </p>
                   </div>

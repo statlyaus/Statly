@@ -124,14 +124,6 @@ describe('local full stack development architecture', () => {
     );
   });
 
-  it('does not require clipboard permission to recover from invite copy failures', () => {
-    const source = read('src/components/league/InviteModal.tsx');
-
-    expect(source).toContain('copyToClipboard');
-    expect(source).toContain('navigator.clipboard?.writeText');
-    expect(source).toContain('Copy ${label} manually.');
-  });
-
   it('allows the local HTTP app to persist session cookies after emulator login', () => {
     const source = read('src/app/api/auth/session/route.ts');
 

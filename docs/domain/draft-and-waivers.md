@@ -64,6 +64,11 @@ in-memory shadow stores must not restore stale strategy state.
 ## Scheduling
 
 Draft start times are stored as instants with an explicit league timezone for display and scheduling.
+The lobby-open and draft-start BullMQ jobs are keyed by draft id and carry it with the league id; the
+worker acts on that draft only after checking it still belongs to the league and is `SCHEDULED`.
+Rescheduling or cancelling replaces only that draft's jobs, never another draft's in the same league.
+A start job without a draft id (enqueued before this keying) is refused and logged rather than
+resolved to "the league's draft"; rescheduling the draft enqueues a keyed job.
 Clock commands commit Prisma timing state and an outbox event without depending on Redis. Outbox
 delivery and the worker's startup/periodic repair loop both reconcile the latest persisted LIVE clock
 into an immutable, revision-addressed BullMQ job. They never schedule from stale event data. Missing
@@ -141,7 +146,9 @@ in the league's social Activity channel; submitted and cancelled claims, and the
 Claims validate membership, league settings, player availability, optional drop ownership, roster
 capacity, and priority/FAAB rules at the server boundary. Roster capacity is the league's
 `rosterSize` plus `benchSize`, the same total the draft fills (`src/server/rosters/rosterCapacity.ts`,
-shared with trades), so a team with a full drafted roster can still claim with a drop. Processing must be deterministic and safe to
+shared with trades), so a team with a full drafted roster can still claim with a drop. Only an active
+member can submit a claim, and a pending claim whose member has since been removed from the league is
+rejected at settlement ("Team no longer active"), which releases its bid. Processing must be deterministic and safe to
 retry; failures do not partially assign the same player to multiple teams.
 The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
 waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
@@ -168,7 +175,9 @@ holds the player that call sent, and refused otherwise. Two first claims in a le
 priority rows; the second keeps the first's rows, but the two members can end up sharing a priority
 number, because priority is not unique. That is accepted. Waivers run automatically once a day, at 6 am Melbourne time: a Netlify scheduled function calls
 `/api/cron/waivers` hourly, and only the run in the 6 am Melbourne hour processes leagues with due
-claims, so the time holds through daylight saving. Only one waiver processing run per league proceeds at a
+claims, so the time holds through daylight saving. Leagues are processed one at a time; a league
+whose run throws keeps its claims pending and the others still run, but the route then answers
+HTTP 500 with the failed league ids and logs an error, so the scheduler records a failed run. Only one waiver processing run per league proceeds at a
 time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refused as already running
 (HTTP 409) rather than debiting and awarding the same claims again. A run that dies releases the
 lease implicitly after 15 minutes. Each claim settles in one transaction: it is taken only while still
