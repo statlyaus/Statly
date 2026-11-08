@@ -39,6 +39,7 @@ import {
 } from './leagueTabPanelUtils';
 import { CompetitionSettingsPanel } from './settings/CompetitionSettingsPanel';
 import { ScoringSettingsPanel } from './settings/ScoringSettingsPanel';
+import { SeasonYearControl } from './settings/SeasonYearControl';
 
 type TeamNotificationToggleKey = 'tradePush' | 'waiverPush' | 'draftReminder' | 'scoringAlerts';
 
@@ -1088,6 +1089,7 @@ export function LeagueSettingsPanel({
                 className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
             </label>
+            <SeasonYearControl leagueId={league.id} currentUserId={currentUserId} />
             <div className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
               Team Count
               <div className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-3">
