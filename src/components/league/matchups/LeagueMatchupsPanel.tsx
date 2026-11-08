@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ArrowDown } from 'lucide-react';
 
@@ -90,6 +90,9 @@ interface MatchupReadModel {
   permissions?: { canManage?: boolean };
 }
 
+/** How often Live Scoring refetches while a matchup is live and the tab is visible. */
+export const LIVE_SCORING_REFRESH_MS = 60_000;
+
 const BOX_SCORE_SLOT_LABELS: Record<string, string> = { INTERCHANGE: 'INT' };
 
 function formatStatValue(value: number): string {
@@ -120,9 +123,16 @@ export function LeagueMatchupsPanel({
     return Number.isInteger(requested) && requested > 0 ? requested : null;
   });
 
-  async function loadMatchups() {
-    setStatus('loading');
-    setMessage(null);
+  // Only the latest request may update the page, so a slow refresh cannot overwrite a newer round.
+  const latestRequestRef = useRef(0);
+
+  /** A background refresh keeps what is on screen while it loads and if it fails. */
+  async function loadMatchups({ background = false }: { background?: boolean } = {}) {
+    const requestId = ++latestRequestRef.current;
+    if (!background) {
+      setStatus('loading');
+      setMessage(null);
+    }
     try {
       const roundQuery = selectedRound ? `?round=${selectedRound}` : '';
       const response = await authenticatedFetch(
@@ -134,9 +144,13 @@ export function LeagueMatchupsPanel({
       if (!response.ok || !payload.success) {
         throw new Error(payload.error ?? 'Failed to load matchups.');
       }
+      if (requestId !== latestRequestRef.current) return;
       setData(payload.data);
       setStatus('ready');
+      setMessage(null);
     } catch (error) {
+      // A failed background refresh leaves the last scores up; the next tick retries.
+      if (background || requestId !== latestRequestRef.current) return;
       setMessage(error instanceof Error ? error.message : 'Failed to load matchups.');
       setStatus('error');
     }
@@ -145,6 +159,22 @@ export function LeagueMatchupsPanel({
   useEffect(() => {
     void loadMatchups();
   }, [leagueId, currentUserId, selectedRound]);
+
+  // No realtime event carries live scores, so poll while a matchup is live. Paused while the tab is
+  // hidden; showing it again refreshes at once.
+  const anyMatchupLive = data?.matchups.some((matchup) => matchup.status === 'LIVE') ?? false;
+  useEffect(() => {
+    if (!anyMatchupLive) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadMatchups({ background: true });
+    };
+    const intervalId = window.setInterval(refresh, LIVE_SCORING_REFRESH_MS);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [anyMatchupLive, leagueId, currentUserId, selectedRound]);
 
   if (status === 'loading') {
     return (
