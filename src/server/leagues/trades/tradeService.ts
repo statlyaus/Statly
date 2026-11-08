@@ -6,6 +6,7 @@ import { Prisma, type TradeReviewMode } from '@prisma/client';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
   evaluateRosterExchangeCapacity,
@@ -92,6 +93,7 @@ export async function createLeagueTrade(
   if (!selection.ok) throw new TradeServiceError('INVALID_INPUT', selection.error);
 
   const access = await requireTradeAccess(leagueId, userId);
+  await enforceTransactionWindow(leagueId);
   enforceTradeDeadline(access, now);
 
   return executeIdempotentTradeCommand(
@@ -125,6 +127,9 @@ export async function executeLeagueTradeAction(
     };
   }
   const access = await requireTradeAccess(leagueId, userId);
+  if (canonicalInput.action === 'accept' || canonicalInput.action === 'counter') {
+    await enforceTransactionWindow(leagueId);
+  }
 
   return executeIdempotentTradeCommand(
     access,
@@ -953,6 +958,11 @@ async function requireTradeAccessByMember(
       actorMemberId === null,
     settings: league.settings,
   };
+}
+
+async function enforceTransactionWindow(leagueId: string): Promise<void> {
+  const window = await getTransactionWindow(leagueId);
+  if (!window.open) throw new TradeServiceError(window.code, window.reason, 409);
 }
 
 function enforceTradeDeadline(access: TradeAccess, now: Date): void {

@@ -97,10 +97,16 @@ async function loadBatch(
       const scored = new Set(matchup.scores.map((score) => score.memberId));
       for (const memberId of [matchup.homeMemberId, matchup.awayMemberId]) {
         if (!memberId || scored.has(memberId)) continue;
-        const lineup = await tx.leagueLineup.findUnique({
+        // Lineups are keyed by season and round number. A round with no season (its season was
+        // deleted) matches that round number in any season, and is flagged ambiguous below.
+        const lineup = await tx.leagueLineup.findFirst({
           where: {
-            leagueId_memberId_round: { leagueId: round.leagueId, memberId, round: round.round },
+            leagueId: round.leagueId,
+            ...(round.seasonId ? { seasonId: round.seasonId } : {}),
+            memberId,
+            round: round.round,
           },
+          orderBy: { createdAt: 'desc' },
           select: {
             createdAt: true,
             updatedAt: true,
@@ -128,8 +134,14 @@ async function loadBatch(
     }
 
     if (unscoredSides.length > 0) {
+      // Another fixture version of the same season shares this season's lineups.
       const sharedRoundNumber = await tx.leagueCompetitionRound.count({
-        where: { leagueId: round.leagueId, round: round.round, id: { not: round.id } },
+        where: {
+          leagueId: round.leagueId,
+          round: round.round,
+          id: { not: round.id },
+          ...(round.seasonId ? { seasonId: round.seasonId } : {}),
+        },
       });
       flagged.push({
         id: round.id,
