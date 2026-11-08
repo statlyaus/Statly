@@ -7,7 +7,7 @@ const collectAllMetricsMock = vi.hoisted(() => vi.fn());
 
 // The route reads its secret at import time.
 vi.hoisted(() => {
-  process.env.METRICS_API_KEY = 'test-metrics-key';
+  process.env.METRICS_API_KEY = 'test-metrics-key'; // skipcq: SCT-A000 test value, not a credential
 });
 
 vi.mock('@/lib/metrics', () => ({
