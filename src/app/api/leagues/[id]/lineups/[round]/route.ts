@@ -33,6 +33,7 @@ import {
   saveMemberLineup,
   synchronizeLineupPlayerLocks,
 } from '@/server/leagues/lineupService';
+import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 
 async function resolveRoundNumber(leagueId: string, round: string): Promise<number | null> {
@@ -114,7 +115,12 @@ export async function GET(
   const carriedLineup = lineup
     ? null
     : await prisma.leagueLineup.findFirst({
-        where: { leagueId: id, memberId, round: { lt: roundNumber } },
+        where: {
+          leagueId: id,
+          seasonId: activeSeasonIdOf(league),
+          memberId,
+          round: { lt: roundNumber },
+        },
         include: {
           players: {
             include: { player: true },

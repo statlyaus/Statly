@@ -149,6 +149,7 @@ export async function publishCompetition({
   }
   if (!league.activeSeasonId)
     return { ok: false, errors: ['An active league season is required.'] };
+  const seasonId = league.activeSeasonId;
 
   const categories = normalizeFantasyCategoryKeys(league.categoriesJson, ['goals']);
   const effectiveRules =
@@ -209,7 +210,11 @@ export async function publishCompetition({
       const resetSummary = {
         matchupScores: (await tx.leagueMatchupScore.deleteMany({ where: { leagueId } })).count,
         standings: (await tx.leagueStanding.deleteMany({ where: { leagueId } })).count,
-        lineups: (await tx.leagueLineup.deleteMany({ where: { leagueId } })).count,
+        lineups: (
+          await tx.leagueLineup.deleteMany({
+            where: { leagueId, seasonId },
+          })
+        ).count,
         matchups: (await tx.leagueMatchup.deleteMany({ where: { leagueId } })).count,
         competitionRounds: (await tx.leagueCompetitionRound.deleteMany({ where: { leagueId } }))
           .count,

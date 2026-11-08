@@ -39,6 +39,7 @@ function membership(overrides: Record<string, unknown> = {}) {
     league: {
       id: 'league-1',
       name: 'Friday Night League',
+      activeSeasonId: 'season-1',
       categoriesJson: ['goals', 'tackles'],
       settings: {
         maxTeams: 10,

@@ -6,6 +6,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
+import { loadMemberLineup } from '@/server/leagues/lineupService';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -19,7 +20,7 @@ const SEASON_2027 = 'int-season-scope-2027';
 const removeFixture = () =>
   deleteLeagueFixtures(prisma, {
     leagueIds: [LEAGUE],
-    playerIds: [],
+    playerIds: ['int-season-scope-player'],
     settingsIds: [SETTINGS],
     userIds: [OWNER],
   });
@@ -131,6 +132,42 @@ describe('fantasy season scope', () => {
     expect(await prisma.leagueLineup.count({ where })).toBe(0);
     expect(await prisma.leagueStanding.count({ where })).toBe(0);
     expect(await prisma.waiverPriority.count({ where })).toBe(0);
+  });
+
+  it('keeps one lineup per season for the same member and round, and loads the active one', async () => {
+    const player = await prisma.player.upsert({
+      where: { id: 'int-season-scope-player' },
+      update: {},
+      create: {
+        id: 'int-season-scope-player',
+        name: 'Season Scope',
+        club: 'Club',
+        position: 'MID',
+      },
+    });
+    for (const [seasonId, slotIndex] of [
+      [SEASON_2026, 0],
+      [SEASON_2027, 1],
+    ] as const) {
+      await prisma.leagueLineup.create({
+        data: {
+          leagueId: LEAGUE,
+          seasonId,
+          memberId: MEMBER,
+          round: 1,
+          players: { create: { playerId: player.id, slot: 'MID', slotIndex } },
+        },
+      });
+    }
+
+    const active = await loadMemberLineup({ leagueId: LEAGUE, memberId: MEMBER, round: 1 });
+    expect(active?.seasonId).toBe(SEASON_2027);
+    expect(active?.players.map((row) => row.slotIndex)).toEqual([1]);
+
+    await prisma.league.update({ where: { id: LEAGUE }, data: { activeSeasonId: SEASON_2026 } });
+    const previous = await loadMemberLineup({ leagueId: LEAGUE, memberId: MEMBER, round: 1 });
+    expect(previous?.seasonId).toBe(SEASON_2026);
+    expect(previous?.players.map((row) => row.slotIndex)).toEqual([0]);
   });
 
   it('refuses a season that does not exist', async () => {
