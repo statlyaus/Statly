@@ -28,6 +28,7 @@ import {
   type LeagueMember,
 } from '@/types/leagues';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import { defaultLeagueSeasonYear, leagueSeasonData } from '@/server/leagues/seasonYear';
 
 type LeagueCreationClient = Pick<PrismaClient, '$transaction' | 'league'>;
 const COMPATIBILITY_PROJECTION_ATTEMPTS = 3;
@@ -146,14 +147,11 @@ export async function createCanonicalLeague(
         },
       });
 
-      const year = (draftStart ?? now).getUTCFullYear();
+      // A draft after the Grand Final, or a league created after it, plays next season.
       const season = await tx.leagueSeason.create({
         data: {
           leagueId: league.id,
-          label: `${year} season`,
-          year,
-          startsAt: new Date(Date.UTC(year, 0, 1)),
-          endsAt: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)),
+          ...leagueSeasonData(defaultLeagueSeasonYear(draftStart ?? now)),
         },
       });
       await tx.league.update({

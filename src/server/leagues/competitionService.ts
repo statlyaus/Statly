@@ -271,6 +271,8 @@ export async function publishCompetition({
           competitionStatus: 'PENDING',
           competitionRulesJson: effectiveRules,
           competitionPublishedAt: publishedAt,
+          // Categories, directions and scoring mode stop being editable from this moment.
+          scoringSettingsLockedAt: publishedAt,
         },
       });
       await tx.leagueCompetitionAudit.create({
