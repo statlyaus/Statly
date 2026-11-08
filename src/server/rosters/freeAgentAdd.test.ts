@@ -46,7 +46,7 @@ function makeDb(
         ? vi.fn().mockRejectedValue(overrides.createError)
         : vi.fn().mockResolvedValue({ id: 'roster-row-1' }),
     },
-    teamAction: { findFirst: vi.fn().mockResolvedValue(overrides.hold ?? null) },
+    teamAction: { findMany: vi.fn().mockResolvedValue(overrides.hold ? [overrides.hold] : []) },
     draft: {
       findUnique: vi
         .fn()
@@ -167,7 +167,14 @@ describe('addFreeAgentToRoster', () => {
   });
 
   it('refuses a player still on a drop waiver hold with 409', async () => {
-    const { db, tx } = makeDb({ hold: { id: 'drop-1' } });
+    const { db, tx } = makeDb({
+      hold: {
+        leagueId: 'league-1',
+        actionType: 'DROP_PLAYER',
+        details: { playerId: 'player-1-alias' },
+        processingAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
 
     const error = await refusal(addFreeAgentToRoster(db as never, INPUT));
 
