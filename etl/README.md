@@ -38,9 +38,13 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
   writes match/player-stat documents. A row's `match_uid` is the fixture's `<HOME>-<AWAY>` match for
   its two clubs, whichever club the row belongs to (the stats feed lists the player's own club first).
   A row whose game is not in the loaded fixture fails and is not written; load the fixture first.
+  Live runs store a game's stats while it is `in_progress` or `final` (Footywire posts match stats
+  after full time, when the fixture marks the game final) and skip a `scheduled`, unknown or missing
+  status. Backfill (`BACKFILL_MODE=true`) stores historical games whatever their status.
 - `liveGuard.ts` refreshes the fixture every `FIXTURE_REFRESH_MS` (default 15 minutes), then runs the
-  stats pipeline only while Firestore reports a live match window. A failed fixture refresh skips the
-  cycle.
+  stats pipeline only during a live window: a game is `in_progress`, or a game that started in the
+  last 6 hours is `final`, so the last game of a day still has its stats fetched once they are posted.
+  A failed fixture refresh skips the cycle.
 - `backfill.ts` loads each season's fixture, then uses the same shared pipeline for bounded historical
   seasons/rounds, and fails the command if the fixture or any requested round fails.
 - `validateMatchData.ts` checks match and player-stat invariants.

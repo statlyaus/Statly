@@ -6,6 +6,8 @@ const {
   changedFixtureMatches,
   findFixtureMatch,
   ingestFixtureRows,
+  shouldStoreMatchStats,
+  statsWindowOpen,
 } = require('../dist/fixtureIngest');
 
 // Rows as etl/fetch_fw_fixture.R emits them. Footywire's fixture times are venue-local wall
@@ -331,4 +333,31 @@ test("puts both clubs' stats rows on the fixture's one home-away match", () => {
   assert.equal(away, home);
   assert.equal(findFixtureMatch(fixture, 'COL', 'GWS').match_uid, '2025-R0-GWS-COL');
   assert.equal(findFixtureMatch(fixture, 'SYD', 'COL'), undefined);
+});
+
+test('stores stats for a live or final game and skips a game that has not started', () => {
+  // Footywire posts match stats after full time, when the fixture marks the game final.
+  assert.equal(shouldStoreMatchStats('final', false), true);
+  assert.equal(shouldStoreMatchStats('in_progress', false), true);
+  assert.equal(shouldStoreMatchStats('scheduled', false), false);
+  assert.equal(shouldStoreMatchStats('unknown', false), false);
+  assert.equal(shouldStoreMatchStats(undefined, false), false);
+});
+
+test('backfill stores stats whatever the stored match status', () => {
+  for (const status of ['final', 'in_progress', 'scheduled', 'unknown', undefined]) {
+    assert.equal(shouldStoreMatchStats(status, true), true);
+  }
+});
+
+test('keeps the live stats window open until a recently finished game has its stats run', () => {
+  const now = new Date('2025-03-16T12:00:00Z');
+  const game = (status, start) => ({ status, start_time_utc: start });
+
+  assert.equal(statsWindowOpen([game('in_progress', '2025-03-16T09:00:00.000Z')], now), true);
+  // Final 4 hours after the bounce: its stats were just posted, so one more cycle must run.
+  assert.equal(statsWindowOpen([game('final', '2025-03-16T08:00:00.000Z')], now), true);
+  assert.equal(statsWindowOpen([game('final', '2025-03-16T05:00:00.000Z')], now), false);
+  assert.equal(statsWindowOpen([game('scheduled', '2025-03-16T13:00:00.000Z')], now), false);
+  assert.equal(statsWindowOpen([], now), false);
 });

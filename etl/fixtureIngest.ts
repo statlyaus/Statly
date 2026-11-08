@@ -293,3 +293,32 @@ export function findFixtureMatch<T extends Pick<FixtureMatch, 'home_team' | 'awa
     (match) => [club(match.home_team).abbr, club(match.away_team).abbr].sort().join('|') === clubs
   );
 }
+
+/**
+ * Whether the stats processor may store a game's stats. Footywire posts match stats after full time,
+ * when the fixture marks the game final, so live and final games are stored. A game that has not
+ * started, or whose status is unknown or missing, is skipped. Backfill stores historical games
+ * whatever their stored status.
+ */
+export function shouldStoreMatchStats(status: unknown, backfill: boolean): boolean {
+  return backfill || status === 'in_progress' || status === 'final';
+}
+
+/** How long after the first bounce a final game keeps the live stats window open. */
+export const FINAL_STATS_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Whether liveGuard should run the stats pipeline: a game is in progress, or a game that started in
+ * the last FINAL_STATS_WINDOW_MS is final. Without the second case the last game of a window turns
+ * final (its stats just posted) with nothing left in progress, and its stats are never fetched.
+ */
+export function statsWindowOpen(
+  matches: readonly Pick<FixtureMatch, 'status' | 'start_time_utc'>[],
+  now: Date
+): boolean {
+  return matches.some((match) => {
+    if (match.status === 'in_progress') return true;
+    const startedAgo = now.getTime() - Date.parse(match.start_time_utc);
+    return match.status === 'final' && startedAgo >= 0 && startedAgo <= FINAL_STATS_WINDOW_MS;
+  });
+}

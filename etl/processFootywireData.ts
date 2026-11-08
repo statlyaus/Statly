@@ -4,7 +4,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import * as readline from 'readline';
 
-import { findFixtureMatch, type FixtureMatch } from './fixtureIngest';
+import { findFixtureMatch, shouldStoreMatchStats, type FixtureMatch } from './fixtureIngest';
 import { normalizePlayerRow, toProcessedStats, type PlayerRow } from './normalizePlayerRow';
 
 // Initialize Firebase Admin using same pattern as main project
@@ -148,16 +148,10 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
   const playerUid = `ply_${slugify(row.player_name)}`;
   const docId = `${matchUid}_${playerUid}`;
 
-  // Check if we're in backfill mode (skip match status validation for historical data)
-  const isBackfillMode = process.env.BACKFILL_MODE === 'true';
-
-  // Check if match is still in progress before processing (skip in backfill mode)
-  if (!isBackfillMode) {
-    const matchStatus = match.status;
-    if (matchStatus !== 'in_progress') {
-      console.log(`Skipping ${docId} - match status: ${matchStatus}`);
-      return;
-    }
+  // Live runs store live and final games only; backfill stores historical games whatever their status.
+  if (!shouldStoreMatchStats(match.status, process.env.BACKFILL_MODE === 'true')) {
+    console.log(`Skipping ${docId} - match status: ${match.status ?? 'missing'}`);
+    return;
   }
 
   // Compute checksum of raw data
