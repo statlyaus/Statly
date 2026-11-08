@@ -28,6 +28,8 @@ interface MatchupModel {
   id?: string;
   round?: number;
   status?: 'SCHEDULED' | 'LIVE' | 'FINAL';
+  /** Totals come from live stats and can still change until the round is final. */
+  provisional?: boolean;
   startsAt?: string | null;
   finalizedAt?: string | null;
   homeMember?: MatchupTeamSummary | null;
@@ -239,7 +241,7 @@ export function LeagueMatchupsPanel({
 }
 
 function matchupStatusLabel(matchup: MatchupModel, timeZone?: string): string {
-  if (matchup.status === 'LIVE') return 'Live';
+  if (matchup.status === 'LIVE') return matchup.provisional ? 'Live · provisional' : 'Live';
   if (matchup.status === 'FINAL') return 'Final';
   const startsAt = formatDateTime(matchup.startsAt, timeZone);
   return startsAt ? `Starts ${startsAt}` : 'Not started';

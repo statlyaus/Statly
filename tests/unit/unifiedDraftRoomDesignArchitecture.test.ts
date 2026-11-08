@@ -60,7 +60,7 @@ describe('unified draft room design architecture', () => {
   it('wires scheduled draft start to the authenticated draft context command', () => {
     const roomSource = source();
 
-    expect(roomSource).toContain('onStartDraft={draft.startDraft}');
+    expect(roomSource).toContain('onStartDraft={isOwner ? draft.startDraft : undefined}');
     expect(roomSource).not.toContain('onStartDraft={() => draft.forceRefresh()}');
   });
 

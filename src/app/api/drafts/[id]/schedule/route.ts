@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Schedule the draft start
     try {
       await scheduleDraftStart(
-        draft.leagueId,
+        { draftId, leagueId: draft.leagueId },
         scheduledDate,
         timePerPick * 1000 // Convert seconds to milliseconds
       );
