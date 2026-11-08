@@ -89,6 +89,7 @@ beforeEach(() => {
   mocks.resolveRequestedLineupRound.mockReturnValue(2);
   mocks.loadMemberLineup.mockResolvedValue(null);
   mocks.leagueFindUnique.mockResolvedValue({
+    activeSeasonId: 'season-1',
     id: 'league-1',
     ownerId: 'owner-1',
     settings: {
@@ -147,6 +148,46 @@ beforeEach(() => {
 });
 
 describe('lineup round route timing failures', () => {
+  it('reads game times and fixtures for the round season, not the calendar year', async () => {
+    mocks.leagueFindUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      id: 'league-1',
+      ownerId: 'owner-1',
+      settings: {
+        competitionStatus: 'ACTIVE',
+        competitionRulesJson: { lockPolicy: 'INDIVIDUAL_GAME_START' },
+        lineupSlotsJson: null,
+      },
+      members: [{ isCoCommissioner: false }],
+    });
+    mocks.loadMemberLineupRoundContext.mockResolvedValue({
+      source: 'PUBLISHED',
+      round: 2,
+      aflRound: 17,
+      seasonYear: 2025,
+      phase: 'REGULAR',
+      roundStatus: 'SCHEDULED',
+      startsAt: new Date('2099-07-18T09:00:00.000Z'),
+      fallbackLockAt: null,
+      lockAt: null,
+      lockState: 'OPEN',
+      opponent: null,
+    });
+
+    const response = await GET(
+      new NextRequest('http://localhost/api/leagues/league-1/lineups/2'),
+      params
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.loadRoundPlayerGameStarts).toHaveBeenCalledWith(
+      expect.objectContaining({ aflRound: 17, season: 2025 })
+    );
+    expect(mocks.loadRoundPlayerFixtures).toHaveBeenCalledWith(
+      expect.objectContaining({ aflRound: 17, season: 2025 })
+    );
+  });
+
   it('returns 503 when a PATCH cannot verify official timing', async () => {
     mocks.saveMemberLineup.mockResolvedValue({
       ok: false,
@@ -338,6 +379,7 @@ describe('carried lineup normalization', () => {
 
   it('offers a lineup picked by position when nothing is saved or carried', async () => {
     mocks.leagueFindUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
       id: 'league-1',
       ownerId: 'owner-1',
       settings: {

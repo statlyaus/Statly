@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger } from '@/lib/logger';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import { prisma } from '@/lib/prisma';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
@@ -164,6 +165,7 @@ async function loadAvailablePlayers(input: {
   const waiverHolds = await prisma.teamAction.findMany({
     where: {
       leagueId: input.leagueId,
+      ...inActiveSeason(input.leagueId),
       actionType: 'DROP_PLAYER',
       status: 'PENDING',
       processingAt: { gt: new Date() },

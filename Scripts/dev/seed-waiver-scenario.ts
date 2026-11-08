@@ -230,8 +230,13 @@ async function main() {
   // Waiver order is the reverse of the final draft pick: the rival picked last, so goes first.
   await prisma.waiverPriority.createMany({
     data: [
-      { leagueId: LEAGUE_ID, memberId: 'waiver-test-rival', priority: 1 },
-      { leagueId: LEAGUE_ID, memberId: 'waiver-test-commissioner', priority: 2 },
+      { leagueId: LEAGUE_ID, seasonId: season.id, memberId: 'waiver-test-rival', priority: 1 },
+      {
+        leagueId: LEAGUE_ID,
+        seasonId: season.id,
+        memberId: 'waiver-test-commissioner',
+        priority: 2,
+      },
     ],
   });
 

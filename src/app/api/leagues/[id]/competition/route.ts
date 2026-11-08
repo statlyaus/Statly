@@ -45,6 +45,15 @@ async function parseRequestObject(request: NextRequest): Promise<Record<string, 
     : null;
 }
 
+function publishedRulesLockedResponse() {
+  return NextResponse.json(
+    {
+      error: 'Published competition rules cannot be changed. Use a commissioner override instead.',
+    },
+    { status: 409 }
+  );
+}
+
 function invalidMutationBodyResponse() {
   return NextResponse.json({ error: 'A valid JSON object is required.' }, { status: 400 });
 }
@@ -171,13 +180,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if ('error' in authorization) return authorization.error;
   if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (authorization.league.settings.competitionStatus !== 'SETUP') {
-    return NextResponse.json(
-      {
-        error:
-          'Published competition rules cannot be changed. Use a commissioner override instead.',
-      },
-      { status: 409 }
-    );
+    return publishedRulesLockedResponse();
   }
 
   const body = await parseRequestObject(request);
@@ -199,6 +202,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if ('error' in authorization) return authorization.error;
   if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!authorization.member) return missingActorMemberResponse();
+  if (authorization.league.settings.competitionStatus !== 'SETUP') {
+    return publishedRulesLockedResponse();
+  }
 
   const body = await parseRequestObject(request);
   if (!body) return invalidMutationBodyResponse();
@@ -215,6 +221,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     actorMemberId: authorization.member.id,
     rules,
   });
+  if (!result.ok && result.code === 'COMPETITION_ALREADY_PUBLISHED') {
+    return publishedRulesLockedResponse();
+  }
   if (!result.ok)
     return NextResponse.json(
       { error: 'Competition cannot be published', details: result.errors },
