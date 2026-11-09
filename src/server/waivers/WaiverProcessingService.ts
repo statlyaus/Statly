@@ -9,6 +9,7 @@ import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService
 import {
   evaluateRosterExchangeCapacity,
   getLeagueRosterCapacity,
+  type RosterCapacitySettings,
 } from '@/server/rosters/rosterCapacity';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 import {
@@ -126,7 +127,11 @@ export class WaiverClaimStoreError extends Error {
       | 'INSUFFICIENT_FAAB'
       | 'FAAB_BALANCE_UNAVAILABLE'
       | 'CLAIM_NOT_FOUND'
-      | 'CLAIM_NOT_PENDING',
+      | 'CLAIM_NOT_PENDING'
+      | 'DROP_NOT_ON_ROSTER'
+      | 'ROSTER_FULL'
+      | 'DUPLICATE_CLAIM'
+      | 'INVALID_BID',
     message: string
   ) {
     super(message);
@@ -146,7 +151,14 @@ type PrismaLike = Pick<
 
 type PrismaWaiverStoreDb = Pick<
   typeof prisma,
-  '$transaction' | 'league' | 'leagueMember' | 'teamAction' | 'waiverPriority' | 'pick'
+  | '$transaction'
+  | 'league'
+  | 'leagueMember'
+  | 'leagueRosterPlayer'
+  | 'player'
+  | 'teamAction'
+  | 'waiverPriority'
+  | 'pick'
 >;
 
 type WaiverSettlementTransaction = Pick<
@@ -532,35 +544,18 @@ export class WaiverProcessingService {
       return { status: 'FAILED', reason: 'Player already owned' };
     }
 
-    const currentRosterCount = await tx.leagueRosterPlayer.count({
-      where: { leagueId, memberId },
+    const rosterFit = await checkClaimFitsRoster(tx, {
+      leagueId,
+      memberId,
+      dropPlayerId: claim.dropPlayerId,
+      activePlayers,
+      settings: league.settings,
     });
-    let storedDropPlayerId: string | undefined;
-    if (claim.dropPlayerId) {
-      const dropRowPlayerId = await this.findDropRosterPlayerId(
-        tx,
-        leagueId,
-        memberId,
-        claim.dropPlayerId,
-        activePlayers
-      );
-      if (!dropRowPlayerId) {
-        return { status: 'FAILED', reason: 'Drop player not on roster' };
-      }
-      // The stored id is what the drop deletes, so it must be the row that actually exists.
-      storedDropPlayerId = dropRowPlayerId;
+    if (!rosterFit.ok) {
+      return { status: 'FAILED', reason: rosterFit.reason };
     }
-
-    // The draft fills rosterSize + benchSize, so the waiver limit is the same shared capacity.
-    const capacity = evaluateRosterExchangeCapacity({
-      currentCount: currentRosterCount,
-      outgoingCount: storedDropPlayerId ? 1 : 0,
-      incomingCount: 1,
-      capacity: getLeagueRosterCapacity(league.settings),
-    });
-    if (!capacity.isAllowed) {
-      return { status: 'FAILED', reason: 'Roster limit reached' };
-    }
+    // The stored id is what the drop deletes, so it must be the row that actually exists.
+    const storedDropPlayerId = rosterFit.dropRosterPlayerId;
 
     return {
       status: 'READY',
@@ -569,35 +564,83 @@ export class WaiverProcessingService {
       ...(storedDropPlayerId ? { dropPlayerId: storedDropPlayerId } : {}),
     };
   }
+}
 
-  /** The member's roster row for the drop player, matched by every alias since rows can hold one. */
-  private async findDropRosterPlayerId(
-    tx: PrismaTransactionClient,
-    leagueId: string,
-    memberId: string,
-    dropPlayerId: string,
-    activePlayers: WaiverIdentityPlayer[]
-  ): Promise<string | null> {
-    const canonicalDropPlayerId =
-      (await resolveCanonicalPlayerId(dropPlayerId, undefined, tx)) ?? dropPlayerId;
-    const aliasGroup = groupWaiverPlayersByIdentity(activePlayers).find((group) =>
-      group.aliases.some(
-        (player) => player.id === dropPlayerId || player.id === canonicalDropPlayerId
-      )
-    );
-    const dropAliasIds = [
-      ...new Set([
-        dropPlayerId,
-        canonicalDropPlayerId,
-        ...(aliasGroup?.aliases.map((player) => player.id) ?? []),
-      ]),
-    ];
-    const dropOwnership = await tx.leagueRosterPlayer.findFirst({
-      where: { leagueId, memberId, playerId: { in: dropAliasIds } },
-      select: { playerId: true },
-    });
-    return dropOwnership?.playerId ?? null;
+type ClaimRosterDb = Pick<PrismaTransactionClient, 'leagueRosterPlayer' | 'player'> &
+  Partial<Pick<PrismaTransactionClient, 'playerExternalIdentity'>>;
+
+export type ClaimRosterFit =
+  | { ok: true; dropRosterPlayerId?: string }
+  | { ok: false; reason: 'Drop player not on roster' | 'Roster limit reached' };
+
+/**
+ * Whether a claim fits the member's roster: the drop player must be on it, and the roster after the
+ * exchange must fit rosterSize + benchSize, the capacity the draft fills. Submit and settlement both
+ * ask; settlement asks again because the roster can change while a claim waits. A roster is one set
+ * of league-scoped rows per member, so the league and member scope every read.
+ */
+export async function checkClaimFitsRoster(
+  db: ClaimRosterDb,
+  input: {
+    leagueId: string;
+    memberId: string;
+    dropPlayerId?: string;
+    activePlayers: WaiverIdentityPlayer[];
+    settings: RosterCapacitySettings;
   }
+): Promise<ClaimRosterFit> {
+  const { leagueId, memberId, dropPlayerId } = input;
+  let dropRosterPlayerId: string | undefined;
+  if (dropPlayerId) {
+    const found = await findDropRosterPlayerId(
+      db,
+      leagueId,
+      memberId,
+      dropPlayerId,
+      input.activePlayers
+    );
+    if (!found) return { ok: false, reason: 'Drop player not on roster' };
+    dropRosterPlayerId = found;
+  }
+
+  const currentCount = await db.leagueRosterPlayer.count({ where: { leagueId, memberId } });
+  const capacity = evaluateRosterExchangeCapacity({
+    currentCount,
+    outgoingCount: dropRosterPlayerId ? 1 : 0,
+    incomingCount: 1,
+    capacity: getLeagueRosterCapacity(input.settings),
+  });
+  if (!capacity.isAllowed) return { ok: false, reason: 'Roster limit reached' };
+  return { ok: true, ...(dropRosterPlayerId ? { dropRosterPlayerId } : {}) };
+}
+
+/** The member's roster row for the drop player, matched by every alias since rows can hold one. */
+async function findDropRosterPlayerId(
+  db: ClaimRosterDb,
+  leagueId: string,
+  memberId: string,
+  dropPlayerId: string,
+  activePlayers: WaiverIdentityPlayer[]
+): Promise<string | null> {
+  const canonicalDropPlayerId =
+    (await resolveCanonicalPlayerId(dropPlayerId, undefined, db)) ?? dropPlayerId;
+  const aliasGroup = groupWaiverPlayersByIdentity(activePlayers).find((group) =>
+    group.aliases.some(
+      (player) => player.id === dropPlayerId || player.id === canonicalDropPlayerId
+    )
+  );
+  const dropAliasIds = [
+    ...new Set([
+      dropPlayerId,
+      canonicalDropPlayerId,
+      ...(aliasGroup?.aliases.map((player) => player.id) ?? []),
+    ]),
+  ];
+  const dropOwnership = await db.leagueRosterPlayer.findFirst({
+    where: { leagueId, memberId, playerId: { in: dropAliasIds } },
+    select: { playerId: true },
+  });
+  return dropOwnership?.playerId ?? null;
 }
 
 interface CanonicalWaiverActionRow {
@@ -766,7 +809,51 @@ export class PrismaWaiverClaimStore implements ClaimStore {
     return claim ?? null;
   }
 
+  // Refused up front so a manager is not told a day later; settlement checks again.
+  private async assertClaimFitsRoster(
+    tx: PrismaWaiverStoreTransaction,
+    input: SubmitWaiverClaimInput,
+    memberId: string
+  ): Promise<void> {
+    const [league, activePlayers] = await Promise.all([
+      tx.league.findUnique({
+        where: { id: input.leagueId },
+        select: { settings: { select: { rosterSize: true, benchSize: true } } },
+      }),
+      input.dropPlayerId
+        ? tx.player.findMany({
+            where: { active: true },
+            select: { id: true, name: true, club: true, position: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    if (!league?.settings) throw new WaiverClaimStoreError('TEAM_NOT_FOUND', 'Team not found');
+
+    const fit = await checkClaimFitsRoster(tx, {
+      leagueId: input.leagueId,
+      memberId,
+      dropPlayerId: input.dropPlayerId,
+      activePlayers,
+      settings: league.settings,
+    });
+    if (!fit.ok) {
+      throw fit.reason === 'Roster limit reached'
+        ? new WaiverClaimStoreError('ROSTER_FULL', 'Your roster is full: choose a player to drop')
+        : new WaiverClaimStoreError(
+            'DROP_NOT_ON_ROSTER',
+            'The player you chose to drop is not on your roster'
+          );
+    }
+  }
+
   async submitClaim(input: SubmitWaiverClaimInput): Promise<{ id: string; processingAt: Date }> {
+    if (
+      input.bidAmount !== undefined &&
+      (!Number.isInteger(input.bidAmount) || input.bidAmount < 0)
+    ) {
+      throw new WaiverClaimStoreError('INVALID_BID', 'Bid must be a whole number');
+    }
+
     const member = await this.db.leagueMember.findFirst({
       where: {
         id: input.teamId,
@@ -791,8 +878,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
 
     const action = await this.db.$transaction(async (tx) => {
       const seasonId = await requireActiveSeasonId(tx, input.leagueId);
+      await this.assertClaimFitsRoster(tx, input, member.id);
       await this.ensureLeaguePriorityRows(tx, input.leagueId, seasonId, input.waiverSettings);
 
+      // Both paths write the member's priority row. That row lock serialises this member's submits,
+      // so the duplicate check below sees a racing claim for the same player once it commits.
       if (input.waiverSettings.system === 'FAAB' && typeof input.bidAmount === 'number') {
         await this.reservePendingBid(tx, {
           leagueId: input.leagueId,
@@ -800,6 +890,33 @@ export class PrismaWaiverClaimStore implements ClaimStore {
           bidAmount: input.bidAmount,
           waiverSettings: input.waiverSettings,
         });
+      } else {
+        await tx.waiverPriority.updateMany({
+          where: {
+            leagueId: input.leagueId,
+            ...inActiveSeason(input.leagueId),
+            memberId: member.id,
+          },
+          data: { pendingBidTotal: { increment: 0 } },
+        });
+      }
+
+      const duplicate = await tx.teamAction.findFirst({
+        where: {
+          leagueId: input.leagueId,
+          seasonId,
+          memberId: member.id,
+          actionType: 'WAIVER_CLAIM',
+          status: 'PENDING',
+          details: { path: ['playerId'], equals: input.playerId },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new WaiverClaimStoreError(
+          'DUPLICATE_CLAIM',
+          'You already have a pending claim for this player'
+        );
       }
 
       return tx.teamAction.create({

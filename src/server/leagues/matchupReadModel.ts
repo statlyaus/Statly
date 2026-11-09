@@ -1017,12 +1017,15 @@ export async function recalculateLeagueRoundMatchups({
       roundStatus: { ...roundStatus, hasUnavailableStatus: true },
     };
   }
-  const unresolvedMatchups = matchups.filter(
-    (matchup) => matchup.homeMemberId && matchup.awayMemberId && !scorableMatchups.includes(matchup)
-  ).length;
+  const unresolvedMatchupIds = matchups
+    .filter(
+      (matchup) =>
+        matchup.homeMemberId && matchup.awayMemberId && !scorableMatchups.includes(matchup)
+    )
+    .map((matchup) => matchup.id);
   const status = resolveRecalculatedMatchupStatus({
     finalize: Boolean(finalize),
-    unresolvedMatchups,
+    unresolvedMatchups: unresolvedMatchupIds.length,
     roundStatus,
   });
   const resolvedLineups =
@@ -1286,6 +1289,8 @@ export async function recalculateLeagueRoundMatchups({
     status,
     recalculated: calculatedScores.length,
     scores: calculatedScores.map(({ matchupId, result }) => ({ matchupId, result })),
+    // Matchups with two teams left unscored (a team with no lineup); they keep the round from FINAL.
+    unresolvedMatchupIds,
     roundStatus,
   };
 }

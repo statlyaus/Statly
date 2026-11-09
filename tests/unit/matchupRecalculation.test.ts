@@ -432,7 +432,11 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
 
     const result = await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
 
-    expect(result).toMatchObject({ round: 4, recalculated: 1 });
+    expect(result).toMatchObject({
+      round: 4,
+      recalculated: 1,
+      unresolvedMatchupIds: ['matchup-2'],
+    });
     expect(prismaMocks.$transaction).toHaveBeenCalledTimes(1);
     expect(prismaMocks.leagueMatchup.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'matchup-1' } })

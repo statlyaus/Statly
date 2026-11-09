@@ -33,6 +33,7 @@ FOOTYWIRE_COLUMNS <- c(
   MG = "metres_gained",
   CM = "contested_marks",
   ED = "effective_disposals",
+  DE = "disposal_efficiency",
   SI = "score_involvements",
   TOG = "tog_pct"
 )

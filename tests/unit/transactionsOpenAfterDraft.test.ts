@@ -128,6 +128,22 @@ describe('waiver claim refusals once transactions are open', () => {
       400,
       'FAAB balance unavailable',
     ],
+    [
+      new mocks.WaiverClaimStoreError('DROP_NOT_ON_ROSTER', 'x'),
+      409,
+      'The player you chose to drop is not on your roster',
+    ],
+    [
+      new mocks.WaiverClaimStoreError('ROSTER_FULL', 'x'),
+      409,
+      'Your roster is full: choose a player to drop',
+    ],
+    [
+      new mocks.WaiverClaimStoreError('DUPLICATE_CLAIM', 'x'),
+      409,
+      'You already have a pending claim for this player',
+    ],
+    [new mocks.WaiverClaimStoreError('INVALID_BID', 'x'), 400, 'Bid must be a whole number'],
     [new Error('TEAM_NOT_FOUND'), 500, 'Internal Server Error'],
     [new Error('boom'), 500, 'Internal Server Error'],
   ])('answers %s with %i', async (error, status, message) => {
@@ -144,5 +160,22 @@ describe('waiver claim refusals once transactions are open', () => {
 
     expect(response.status).toBe(status);
     await expect(response.json()).resolves.toEqual({ error: message });
+  });
+
+  it.each([7.5, '7', -1])('refuses the FAAB bid %s before storing anything', async (bidAmount) => {
+    mocks.loadWaiverSettings.mockResolvedValue({ system: 'FAAB', faabBudget: 100, minimumBid: 0 });
+    const { POST } = await import('@/app/api/leagues/[id]/waivers/submit/route');
+
+    const response = await POST(
+      jsonRequest('http://localhost/api/leagues/league-1/waivers/submit', {
+        teamId: 'team-1',
+        playerId: 'player-1',
+        bidAmount,
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.submitClaim).not.toHaveBeenCalled();
   });
 });

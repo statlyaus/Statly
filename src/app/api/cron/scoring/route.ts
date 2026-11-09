@@ -9,9 +9,9 @@ import { scoreStartedLeagueRounds } from '@/server/leagues/roundScoringSchedule'
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Called hourly by netlify/functions/cron-scoring.mts. Any league that fails, or any round stalled on
-// unavailable stats past its grace period, answers 500, so the scheduler and the Sentry cron monitor log
-// the run as failed; the other leagues and rounds are still scored.
+// Called hourly by netlify/functions/cron-scoring.mts. Any league that fails, or any round still not
+// FINAL past its grace period, answers 500, so the scheduler and the Sentry cron monitor log the run as
+// failed; the other leagues and rounds are still scored.
 export async function GET(request: NextRequest) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json(
