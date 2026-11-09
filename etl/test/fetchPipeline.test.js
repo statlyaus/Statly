@@ -101,6 +101,25 @@ test('compiled ETL rejects malformed player rows before persistence', () => {
   );
 });
 
+test('compiled ETL keeps disposal efficiency as a percentage and drops it with no disposals', () => {
+  const identity = { season: 2025, round: 5, team: 'Adelaide', player_name: 'Player' };
+  assert.equal(
+    normalizePlayerRow({ ...identity, disposals: 28, disposal_efficiency: '71.4' })
+      .disposal_efficiency,
+    71.4
+  );
+
+  // Footywire's DE for a player with no disposals is not a result; 0% would win LOW_WINS leagues.
+  const noDisposals = normalizePlayerRow({ ...identity, disposals: 0, disposal_efficiency: 0 });
+  assert.equal(Object.hasOwn(noDisposals, 'disposal_efficiency'), false);
+  assert.equal(noDisposals.disposals, 0);
+
+  assert.throws(
+    () => normalizePlayerRow({ ...identity, disposals: 20, disposal_efficiency: 714 }),
+    /disposal_efficiency must be a percentage from 0 to 100/
+  );
+});
+
 const FETCHER = path.join(__dirname, '..', 'fetch_fw_round.R');
 const FITZROY_FIXTURE = path.join(__dirname, 'fixtures', 'fitzroy-footywire-player-stats.csv');
 const PRESET_STATS = [
@@ -161,10 +180,9 @@ test('fetcher maps fitzRoy Footywire columns into rows the normalizer accepts', 
   const [crouch] = rows;
   assert.deepEqual(
     Object.fromEntries(
-      [...PRESET_STATS, 'kicks', 'handballs', 'disposals', 'tog_pct'].map((stat) => [
-        stat,
-        crouch[stat],
-      ])
+      [...PRESET_STATS, 'kicks', 'handballs', 'disposals', 'disposal_efficiency', 'tog_pct'].map(
+        (stat) => [stat, crouch[stat]]
+      )
     ),
     {
       goals: 0,
@@ -179,6 +197,7 @@ test('fetcher maps fitzRoy Footywire columns into rows the normalizer accepts', 
       kicks: 10,
       handballs: 18,
       disposals: 28,
+      disposal_efficiency: 71.4,
       tog_pct: 63,
     }
   );
@@ -223,6 +242,10 @@ test('fetcher fails closed when fitzRoy drops a required column or the round has
   const missing = exportFixtureRows({ round: '5L', dropColumn: 'ITC' });
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /missing required columns: ITC/);
+
+  const noEfficiency = exportFixtureRows({ round: '5L', dropColumn: 'DE' });
+  assert.notEqual(noEfficiency.status, 0);
+  assert.match(noEfficiency.stderr, /missing required columns: DE/);
 
   const empty = exportFixtureRows({ round: '7L' });
   assert.notEqual(empty.status, 0);

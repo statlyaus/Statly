@@ -43,7 +43,7 @@ export interface NormalizedRoundMatchStatus {
 
 // Field names a stats row may carry for each category. The ETL stores Footywire stats under the
 // snake_case names in etl/normalizePlayerRow.ts (`stats.hit_outs`, `stats.tog_pct`, ...); every
-// category the ETL exports must list that name here. disposalEffPct has no ETL source yet.
+// category the ETL exports must list that name here. Disposal efficiency is stored as `disposal_efficiency`.
 const CATEGORY_FIELD_ALIASES: Record<FantasyCategoryKey, string[]> = {
   goals: ['goals'],
   kicks: ['kicks'],

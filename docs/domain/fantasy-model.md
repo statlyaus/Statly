@@ -28,8 +28,8 @@ The default real-data preset is defined in `src/types/fantasyCategories.ts`:
 
 The supported category registry, labels, formats, and aliases live in that same source file. Do not
 duplicate the registry in documentation or UI-specific constants. League scoring maps each category to
-the stats field the ETL stores through `src/server/leagues/liveStatsAdapter.ts`; every category except
-disposal efficiency (`disposalEffPct`) has an ETL source (see `etl/README.md`).
+the stats field the ETL stores through `src/server/leagues/liveStatsAdapter.ts`; every category has an
+ETL source (see `etl/README.md`).
 
 ## League and season scope
 

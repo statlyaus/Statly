@@ -45,8 +45,11 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
   the canonical row shape without initializing Firebase or performing writes. League scoring reads
   these stored names (`stats.hit_outs`, `stats.tog_pct`, ...) through the category aliases in
   `src/server/leagues/liveStatsAdapter.ts`; a new or renamed field needs an alias there, and
-  `tests/unit/liveStatsAdapter.test.ts` fails until it has one. Disposal efficiency
-  (`disposalEffPct`) has no ETL field.
+  `tests/unit/liveStatsAdapter.test.ts` fails until it has one.
+  `disposal_efficiency` (the `disposalEffPct` category) is Footywire's own `DE` column, a percentage
+  from 0 to 100; the fetch fails if fitzRoy stops returning it. A player with no disposals has no
+  efficiency, so the value is dropped and stored as `null`, never 0. A value outside 0 to 100 fails
+  the row.
 - `processFootywireData.ts` consumes normalized rows, adds deterministic identifiers and checksums, and
   writes match/player-stat documents. A row's `match_uid` is the fixture's `<HOME>-<AWAY>` match for
   its two clubs, whichever club the row belongs to (the stats feed lists the player's own club first).

@@ -31,7 +31,7 @@ const ETL_FIELD_BY_CATEGORY: Record<FantasyCategoryKey, string | null> = {
   onePercenters: 'one_percenters',
   goalAssists: 'goal_assists',
   timeOnGroundPct: 'tog_pct',
-  disposalEffPct: null,
+  disposalEffPct: 'disposal_efficiency',
   turnovers: 'turnovers',
   intercepts: 'intercepts',
   metresGained: 'metres_gained',
