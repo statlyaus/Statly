@@ -158,8 +158,15 @@ capacity, and priority/FAAB rules at the server boundary. Roster capacity is the
 `rosterSize` plus `benchSize`, the same total the draft fills (`src/server/rosters/rosterCapacity.ts`,
 shared with trades), so a team with a full drafted roster can still claim with a drop. Only an active
 member can submit a claim, and a pending claim whose member has since been removed from the league is
-rejected at settlement ("Team no longer active"), which releases its bid. Processing must be deterministic and safe to
-retry; failures do not partially assign the same player to multiple teams.
+rejected at settlement ("Team no longer active"), which releases its bid. Submit refuses, before
+storing the claim or reserving a bid: a drop player who is not on the member's roster in that league
+(409), a claim that would not fit the roster without a drop (409), a second pending claim this season
+by the same member for the same player (409), and a bid that is not a whole number (400). Roster fit
+uses the same `checkClaimFitsRoster` helper settlement uses
+(`src/server/waivers/WaiverProcessingService.ts`), and settlement checks again because the roster can
+change while a claim waits. The duplicate check runs after the submit locks the member's waiver
+priority row, so two identical submits at once store one claim. Processing must be deterministic and
+safe to retry; failures do not partially assign the same player to multiple teams.
 The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab
 waits for it: it confirms only that stored claim, and on a refusal keeps the bid and shows the server's
 reason. FAAB Remaining shows a loading state until the first waiver snapshot answers, "Not used" in a

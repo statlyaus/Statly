@@ -27,6 +27,7 @@ const prismaMocks = vi.hoisted(() => ({
   leagueRosterPlayer: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
+    count: vi.fn(),
   },
   player: {
     findMany: vi.fn(),
@@ -270,8 +271,9 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.league.findUnique.mockResolvedValue({
       id: 'league-1',
       activeSeasonId: 'season-1',
-      settings: { waiverRule: 'WEEKLY', faabBudget: null },
+      settings: { waiverRule: 'WEEKLY', faabBudget: null, rosterSize: 18, benchSize: 4 },
     });
+    prismaMocks.leagueRosterPlayer.count.mockResolvedValue(0);
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       userId: 'statly-dev-tester',
@@ -405,6 +407,26 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
         }),
       })
     );
+  });
+
+  it('refuses a claim on a full roster and bench that drops no one, before storing it', async () => {
+    prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
+    prismaMocks.leagueRosterPlayer.count.mockResolvedValue(22);
+
+    const { POST } = await import('../../src/app/api/leagues/[id]/waivers/submit/route');
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/waivers/submit', {
+        teamId: 'member-1',
+        playerId: 'free-player',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Your roster is full: choose a player to drop',
+    });
+    expect(prismaMocks.teamAction.create).not.toHaveBeenCalled();
   });
 
   it('accepts a claim Prisma allows even when the Firestore ownership projection says owned', async () => {

@@ -108,7 +108,19 @@ function createClaimStoreMock() {
 
 function createSubmitDbMock() {
   const db = {
-    league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
+    league: {
+      findUnique: vi.fn().mockResolvedValue({
+        activeSeasonId: 'season-1',
+        settings: { rosterSize: 2, benchSize: 1 },
+      }),
+    },
+    leagueRosterPlayer: {
+      count: vi.fn().mockResolvedValue(2),
+      findFirst: vi.fn(async ({ where }: { where: { playerId: { in: string[] } } }) =>
+        where.playerId.in.includes('old-player') ? { playerId: 'old-player' } : null
+      ),
+    },
+    player: { findMany: vi.fn().mockResolvedValue([]) },
     leagueMember: {
       findFirst: vi
         .fn()
@@ -121,6 +133,7 @@ function createSubmitDbMock() {
     },
     teamAction: {
       create: vi.fn().mockResolvedValue({ id: 'action-1' }),
+      findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({ id: 'action-1' }),
     },
     waiverPriority: {
@@ -852,6 +865,120 @@ describe('PrismaWaiverClaimStore', () => {
     expect(db.waiverPriority.updateMany).not.toHaveBeenCalled();
   });
 
+  const SUBMIT = {
+    leagueId: 'league-1',
+    userId: 'user-1',
+    teamId: 'member-1',
+    playerId: 'free-player',
+    priority: 1,
+  };
+  const FAAB_SETTINGS = { system: 'FAAB', faabBudget: 100 };
+
+  it('refuses a claim whose drop player is not on the caller roster', async () => {
+    const db = createSubmitDbMock();
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({
+        ...SUBMIT,
+        dropPlayerId: 'someone-elses-player',
+        bidAmount: 7,
+        waiverSettings: FAAB_SETTINGS,
+      })
+    ).rejects.toMatchObject({ code: 'DROP_NOT_ON_ROSTER' });
+    // The drop must be on the caller's roster in this league, not anyone's.
+    expect(db.leagueRosterPlayer.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({ leagueId: 'league-1', memberId: 'member-1' }),
+      select: { playerId: true },
+    });
+    expect(db.teamAction.create).not.toHaveBeenCalled();
+    expect(db.waiverPriority.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a claim with no drop when the roster and bench are full', async () => {
+    const db = createSubmitDbMock();
+    db.leagueRosterPlayer.count.mockResolvedValue(3);
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({ ...SUBMIT, bidAmount: 7, waiverSettings: FAAB_SETTINGS })
+    ).rejects.toMatchObject({ code: 'ROSTER_FULL' });
+    expect(db.leagueRosterPlayer.count).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1' },
+    });
+    expect(db.teamAction.create).not.toHaveBeenCalled();
+    expect(db.waiverPriority.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('accepts a claim on a full roster and bench when it drops a rostered player', async () => {
+    const db = createSubmitDbMock();
+    db.leagueRosterPlayer.count.mockResolvedValue(3);
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({
+        ...SUBMIT,
+        dropPlayerId: 'old-player',
+        waiverSettings: { system: 'PRIORITY' },
+      })
+    ).resolves.toMatchObject({ id: 'action-1' });
+    expect(db.teamAction.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a second pending claim for the same player by the same member this season', async () => {
+    const db = createSubmitDbMock();
+    db.teamAction.findFirst.mockResolvedValue({ id: 'earlier-claim' });
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({ ...SUBMIT, waiverSettings: { system: 'PRIORITY' } })
+    ).rejects.toMatchObject({ code: 'DUPLICATE_CLAIM' });
+    expect(db.teamAction.findFirst).toHaveBeenCalledWith({
+      where: {
+        leagueId: 'league-1',
+        seasonId: 'season-1',
+        memberId: 'member-1',
+        actionType: 'WAIVER_CLAIM',
+        status: 'PENDING',
+        details: { path: ['playerId'], equals: 'free-player' },
+      },
+      select: { id: true },
+    });
+    expect(db.teamAction.create).not.toHaveBeenCalled();
+  });
+
+  it('checks for a duplicate only after locking the member priority row', async () => {
+    const db = createSubmitDbMock();
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await store.submitClaim({ ...SUBMIT, waiverSettings: { system: 'PRIORITY' } });
+
+    // A no-op update takes the row lock, so a racing duplicate waits and then sees this claim.
+    expect(db.waiverPriority.updateMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', ...ACTIVE_SEASON, memberId: 'member-1' },
+      data: { pendingBidTotal: { increment: 0 } },
+    });
+    expect(db.waiverPriority.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      db.teamAction.findFirst.mock.invocationCallOrder[0]
+    );
+  });
+
+  it.each([7.5, -1, Number.NaN])('refuses a bid of %s', async (bidAmount) => {
+    const db = createSubmitDbMock();
+    const { firestore } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.submitClaim({ ...SUBMIT, bidAmount, waiverSettings: FAAB_SETTINGS })
+    ).rejects.toMatchObject({ code: 'INVALID_BID' });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it('keeps a submitted claim when the Firestore compatibility projection fails', async () => {
     const db = createSubmitDbMock();
     const { firestore, waiverDoc } = createCompatibilityProjectionMock();
@@ -880,7 +1007,13 @@ describe('PrismaWaiverClaimStore', () => {
   it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
     const joinedAt = new Date('2026-06-01T00:00:00.000Z');
     const db = {
-      league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
+      league: {
+        findUnique: vi.fn().mockResolvedValue({
+          activeSeasonId: 'season-1',
+          settings: { rosterSize: 2, benchSize: 1 },
+        }),
+      },
+      leagueRosterPlayer: { count: vi.fn().mockResolvedValue(0) },
       leagueMember: {
         findFirst: vi.fn().mockResolvedValue({
           id: 'member-2',
@@ -895,9 +1028,11 @@ describe('PrismaWaiverClaimStore', () => {
       },
       teamAction: {
         create: vi.fn().mockResolvedValue({ id: 'action-1' }),
+        findFirst: vi.fn().mockResolvedValue(null),
         update: vi.fn().mockResolvedValue({ id: 'action-1' }),
       },
       waiverPriority: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         findMany: vi
           .fn()
           .mockResolvedValueOnce([])
