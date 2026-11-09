@@ -21,9 +21,19 @@ export interface ScheduledRoundScoringLeague {
 export const STALLED_ROUND_GRACE_HOURS = 12;
 
 /**
- * A started round that is still not scored past the grace period because its stats or match status are
- * unavailable, usually a lineup player without totals (no reviewed Footywire link, or the ETL never
- * loaded them). Every run reports it again until it is scored.
+ * Why a started round is still not FINAL past the grace period:
+ * - `unavailable-stats`: its stats or match status are unavailable, usually a lineup player without
+ *   totals (no reviewed Footywire link, or the ETL never loaded them).
+ * - `afl-matches-not-final`: an AFL match of the round never reached a final status.
+ * - `unresolved-matchups`: every AFL match is final but a matchup with two teams was not scored (a team
+ *   with no lineup), so standings and finals seeding wait on it.
+ */
+export type StalledRoundReason =
+  'unavailable-stats' | 'afl-matches-not-final' | 'unresolved-matchups';
+
+/**
+ * A started round that is still not FINAL past the grace period. Every run reports it again until it
+ * is scored.
  */
 export interface StalledLeagueRound {
   leagueId: string;
@@ -33,8 +43,13 @@ export interface StalledLeagueRound {
   status: 'SCHEDULED' | 'LIVE';
   /** When the grace period ended. */
   stalledSince: string;
+  reason: StalledRoundReason;
   /** Lineup players with no stat totals, when the scoring service reported them. */
   missingPlayerIds: string[];
+  /** For `afl-matches-not-final`: the AFL match uids not final yet. */
+  aflMatchIdsNotFinal?: string[];
+  /** For `unresolved-matchups`: the matchups with two teams left unscored. */
+  unresolvedMatchupIds?: string[];
 }
 
 export interface ScheduledRoundScoringRun {
@@ -120,9 +135,9 @@ export async function fillPendingRoundStartTimes(): Promise<number> {
  * round is final and every matchup with two teams was scored. Rerunning it rewrites the same scores,
  * and FINAL rounds are never selected again.
  *
- * A round that stays unscored because its stats are unavailable is not a league failure (later rounds
- * still score), but once it is past `STALLED_ROUND_GRACE_HOURS` it is returned in `stalledRounds` and
- * logged as an error, so the cron run reports a failure instead of a success.
+ * A round that stays open is not a league failure (later rounds still score), but once it is still not
+ * FINAL past `STALLED_ROUND_GRACE_HOURS` it is returned in `stalledRounds` with its `reason` and logged
+ * as an error, so the cron run reports a failure instead of a success.
  */
 export async function scoreStartedLeagueRounds(
   now = new Date(),
@@ -192,7 +207,7 @@ export async function scoreStartedLeagueRounds(
           break;
         }
         league.rounds.push({ round, status: result.status, recalculated: result.recalculated });
-        if (result.status !== 'FINAL' && result.roundStatus.hasUnavailableStatus) {
+        if (result.status !== 'FINAL') {
           const stalledSince = stalledRoundDeadline(startsAt, result.roundStatus.matches);
           if (stalledSince && stalledSince <= now) {
             const stalled: StalledLeagueRound = {
@@ -201,7 +216,7 @@ export async function scoreStartedLeagueRounds(
               round,
               status: result.status,
               stalledSince: stalledSince.toISOString(),
-              missingPlayerIds: ('missingPlayerIds' in result && result.missingPlayerIds) || [],
+              ...stalledRoundCause(result),
             };
             stalledRounds.push(stalled);
             logger.error('Scheduled round scoring is stalled for a league round', { ...stalled });
@@ -223,6 +238,38 @@ export async function scoreStartedLeagueRounds(
     leagues,
     failedLeagueIds: leagues.flatMap((league) => (league.error ? [league.leagueId] : [])),
     stalledRounds,
+  };
+}
+
+/** Why a recalculated round that is not FINAL is still open. */
+function stalledRoundCause(result: {
+  roundStatus: {
+    hasUnavailableStatus: boolean;
+    allFinal: boolean;
+    matches: ReadonlyArray<{ matchId: string | null; status: string }>;
+  };
+  missingPlayerIds?: string[];
+  unresolvedMatchupIds?: string[];
+}): Pick<
+  StalledLeagueRound,
+  'reason' | 'missingPlayerIds' | 'aflMatchIdsNotFinal' | 'unresolvedMatchupIds'
+> {
+  if (result.roundStatus.hasUnavailableStatus) {
+    return { reason: 'unavailable-stats', missingPlayerIds: result.missingPlayerIds ?? [] };
+  }
+  if (!result.roundStatus.allFinal) {
+    return {
+      reason: 'afl-matches-not-final',
+      missingPlayerIds: [],
+      aflMatchIdsNotFinal: result.roundStatus.matches.flatMap((match) =>
+        match.status !== 'final' && match.matchId ? [match.matchId] : []
+      ),
+    };
+  }
+  return {
+    reason: 'unresolved-matchups',
+    missingPlayerIds: [],
+    unresolvedMatchupIds: result.unresolvedMatchupIds ?? [],
   };
 }
 
