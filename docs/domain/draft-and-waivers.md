@@ -29,6 +29,12 @@ An accepted pick is persisted before it is broadcast. A pick command must:
 5. schedule or reconcile the next timer with an idempotent identity; and
 6. publish or enqueue external effects only after commit, using the outbox retry/reconciliation path.
 
+The pick that completes the draft writes every `LeagueRosterPlayer` row and seeds `WaiverPriority`
+(`RosterProjectionService.projectDraftInTx`) in that same transaction. If the projection fails, the
+final pick and the `COMPLETED` status roll back together, the draft stays `LIVE`, and the pick can be
+retried. Only the Firestore waiver availability projection runs after the commit, and its failure is
+logged without changing the outcome.
+
 Stale, duplicate, or concurrent commands must be rejected or converge to the same committed result.
 Client success is never inferred from a local timer reaching zero or an optimistic row update.
 
