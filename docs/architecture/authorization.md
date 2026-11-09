@@ -29,6 +29,13 @@ belonging to a disabled or deleted user) to no identity. A verification that cou
 Firebase Admin being unreachable or misconfigured, rejects instead: pages show the error boundary and
 routes fail with a server error, rather than sending a signed-in browser to `/login` and back.
 
+A browser the server sends to `/login` while Firebase still holds a cached ID token (valid for up to
+an hour after the account is revoked or disabled) does not bounce straight back. `AuthForm` forces a
+token refresh first: a refresh Firebase refuses signs the browser out and shows "Your session ended.
+Sign in again."; a refresh that could not run (offline) keeps the session and offers a retry. A
+browser sent back to `/login` for the same destination within 10 seconds of the last automatic
+redirect is signed out the same way, so a fresh token the server still rejects cannot loop.
+
 ## League roles
 
 `LeagueRole` has two values: `OWNER` and `MANAGER`. `MANAGER` is the ordinary participant, the team

@@ -45,6 +45,9 @@ interface AuthContextType {
   loginWithFacebook: () => Promise<void>;
   loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
+  // Forces a fresh Firebase ID token, so a revoked or disabled account fails now, not when the
+  // cached token expires up to an hour later. Rejects with the Firebase error.
+  refreshIdToken: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -195,6 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       if (!auth) throw new Error('Firebase Auth not available');
       await clearLegacyServerSession();
       return signOut(auth);
+    },
+    refreshIdToken: async () => {
+      if (!auth?.currentUser) return;
+      await auth.currentUser.getIdToken(true);
     },
   };
 

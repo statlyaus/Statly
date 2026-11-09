@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -76,6 +76,52 @@ const authErrorMessage = (err: unknown, isSignup: boolean): string | null => {
   return err instanceof Error ? err.message : fallback;
 };
 
+// /login reached with a signed-in browser means the server rejected the credential. The cached ID
+// token can outlive a revoked or disabled account by up to an hour, so it is refreshed before any
+// redirect: these refresh failures mean the account itself is signed out.
+const ENDED_SESSION_ERROR_CODES = new Set([
+  'auth/user-token-expired',
+  'auth/user-disabled',
+  'auth/user-not-found',
+  'auth/invalid-user-token',
+]);
+const SESSION_ENDED_MESSAGE = 'Your session ended. Sign in again.';
+const SESSION_CHECK_FAILED_MESSAGE =
+  "We couldn't check your session. Check your connection and try again.";
+// A fresh token the server still rejects would bounce between /login and the page forever. Being
+// sent back to /login for the same destination within this window ends the session instead.
+const AUTO_REDIRECT_KEY = 'statly:login-auto-redirect';
+const AUTO_REDIRECT_LOOP_WINDOW_MS = 10_000;
+
+function isRepeatAutoRedirect(destination: string): boolean {
+  try {
+    const last = JSON.parse(window.sessionStorage.getItem(AUTO_REDIRECT_KEY) ?? 'null') as {
+      destination?: unknown;
+      at?: unknown;
+    } | null;
+    return (
+      last?.destination === destination &&
+      typeof last.at === 'number' &&
+      Date.now() - last.at < AUTO_REDIRECT_LOOP_WINDOW_MS
+    );
+  } catch {
+    return false;
+  }
+}
+
+function recordAutoRedirect(destination: string | null): void {
+  try {
+    if (destination === null) window.sessionStorage.removeItem(AUTO_REDIRECT_KEY);
+    else
+      window.sessionStorage.setItem(
+        AUTO_REDIRECT_KEY,
+        JSON.stringify({ destination, at: Date.now() })
+      );
+  } catch {
+    // Storage unavailable: the loop guard is best effort.
+  }
+}
+
 interface FormValidation {
   email: {
     isValid: boolean;
@@ -104,6 +150,7 @@ const AuthForm = ({
     loginWithFacebook,
     loading,
     loginWithApple,
+    refreshIdToken,
   } = useAuth();
   const router = useRouter();
   const { notification, showNotification } = useNotification();
@@ -124,6 +171,7 @@ const AuthForm = ({
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionCheck, setSessionCheck] = useState<'checking' | 'failed' | 'ended'>('checking');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [touched, setTouched] = useState({
     email: false,
@@ -283,14 +331,48 @@ const AuthForm = ({
     if (error) errorRef.current?.focus();
   }, [error]);
 
-  // Optional: redirect immediately if already authenticated
-  useEffect(() => {
-    if (autoRedirectIfAuthenticated && user && !hasStartedRedirect.current) {
-      const destination = toSafeRedirect(nextUrl) || '/dashboard';
-      hasStartedRedirect.current = true;
-      router.replace(destination);
+  // Optional: redirect if already authenticated, once the account is confirmed still signed in.
+  const checkSessionAndRedirect = useCallback(async () => {
+    const destination = toSafeRedirect(nextUrl) || '/dashboard';
+    const endSession = async () => {
+      recordAutoRedirect(null);
+      setSessionCheck('ended');
+      setError(SESSION_ENDED_MESSAGE);
+      await logout().catch(() => undefined);
+    };
+    setSessionCheck('checking');
+    setError(null);
+    try {
+      await refreshIdToken();
+    } catch (err: unknown) {
+      const code = (err as { code?: unknown } | null)?.code;
+      if (typeof code === 'string' && ENDED_SESSION_ERROR_CODES.has(code)) {
+        await endSession();
+      } else {
+        setSessionCheck('failed');
+        setError(SESSION_CHECK_FAILED_MESSAGE);
+      }
+      return;
     }
-  }, [autoRedirectIfAuthenticated, nextUrl, router, user]);
+    if (isRepeatAutoRedirect(destination)) {
+      await endSession();
+      return;
+    }
+    recordAutoRedirect(destination);
+    router.replace(destination);
+  }, [logout, nextUrl, refreshIdToken, router]);
+
+  useEffect(() => {
+    // Signed out (for example after an ended session): a later sign-in here runs the check again.
+    if (!user) {
+      hasStartedRedirect.current = false;
+      return;
+    }
+    if (autoRedirectIfAuthenticated && !hasStartedRedirect.current) {
+      hasStartedRedirect.current = true;
+      void checkSessionAndRedirect();
+    }
+  }, [autoRedirectIfAuthenticated, checkSessionAndRedirect, user]);
 
   const handleModeSwitch = () => {
     setIsSignup(!isSignup);
@@ -329,11 +411,32 @@ const AuthForm = ({
     );
   }
 
-  if (user && autoRedirectIfAuthenticated) {
-    return null;
+  if (user && autoRedirectIfAuthenticated && sessionCheck === 'checking') {
+    return (
+      <div className={`flex items-center justify-center p-8 ${className}`}>
+        <p className="text-muted-foreground">Checking your session...</p>
+      </div>
+    );
   }
 
-  if (user) {
+  if (user && autoRedirectIfAuthenticated && sessionCheck === 'failed') {
+    return (
+      <div className={`space-y-4 p-8 text-center ${className}`}>
+        <p role="alert" className="text-sm font-medium text-result-loss">
+          {error}
+        </p>
+        <button
+          type="button"
+          onClick={() => void checkSessionAndRedirect()}
+          className={buttonStyles({ variant: 'outline' })}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (user && sessionCheck !== 'ended') {
     return (
       <section
         aria-labelledby="auth-signed-in-heading"
