@@ -16,7 +16,8 @@ const { draftRepository } = vi.hoisted(() => ({
 vi.mock('@/server/draft/repository/DraftRepository', () => ({ draftRepository }));
 vi.mock('@/server/rosters/RosterProjectionService', () => ({
   RosterProjectionService: class {
-    projectDraft = vi.fn();
+    projectDraftInTx = vi.fn();
+    refreshWaiverAvailability = vi.fn();
   },
 }));
 
@@ -124,10 +125,10 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
           expect.objectContaining({
             event: 'draft:started',
             publishState: true,
-          payload: {
-            status: DraftStatus.LIVE,
-            schedulingVersion: 5,
-            durationSeconds: 120,
+            payload: {
+              status: DraftStatus.LIVE,
+              schedulingVersion: 5,
+              durationSeconds: 120,
               serverNow: '2026-06-07T00:00:30.000Z',
               pickStartedAt: '2026-06-07T00:00:30.000Z',
               pickDeadlineAt: '2026-06-07T00:02:30.000Z',
@@ -204,10 +205,10 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
           expect.objectContaining({
             event: 'draft:resumed',
             publishState: true,
-          payload: {
-            status: DraftStatus.LIVE,
-            schedulingVersion: 6,
-            durationSeconds: 37,
+            payload: {
+              status: DraftStatus.LIVE,
+              schedulingVersion: 6,
+              durationSeconds: 37,
               serverNow: '2026-06-07T00:00:30.000Z',
               pickStartedAt: '2026-06-07T00:00:30.000Z',
               pickDeadlineAt: '2026-06-07T00:01:07.000Z',
@@ -223,7 +224,13 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
     const withMember = {
       participants: [
         ...aggregate().participants,
-        { memberId: 'member-2', userId: 'manager-2', slot: 2, displayName: 'Manager', role: 'MANAGER' },
+        {
+          memberId: 'member-2',
+          userId: 'manager-2',
+          slot: 2,
+          displayName: 'Manager',
+          role: 'MANAGER',
+        },
       ],
     };
     const service = new DraftApplicationService();
