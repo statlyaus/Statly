@@ -1,3 +1,7 @@
+import type { Prisma } from '@prisma/client';
+
+import { defaultLeagueSeasonYear, leagueSeasonData } from '@/server/leagues/seasonYear';
+
 /**
  * The season a league's fantasy state belongs to. Every league has an active season: league creation
  * sets one, and the 2026-11-08 season-scope migration gave one to every league that lacked it.
@@ -36,6 +40,22 @@ export async function requireActiveSeasonId(
     select: { activeSeasonId: true },
   });
   return activeSeasonIdOf({ id: leagueId, activeSeasonId: league?.activeSeasonId ?? null });
+}
+
+/**
+ * Creates a new league's season and makes it the active one; call it in the transaction that creates
+ * the league. A league drafting (or created) after the Grand Final plays next season.
+ */
+export async function startLeagueSeason(
+  tx: Prisma.TransactionClient,
+  leagueId: string,
+  draftOrCreatedAt: Date
+): Promise<string> {
+  const season = await tx.leagueSeason.create({
+    data: { leagueId, ...leagueSeasonData(defaultLeagueSeasonYear(draftOrCreatedAt)) },
+  });
+  await tx.league.update({ where: { id: leagueId }, data: { activeSeasonId: season.id } });
+  return season.id;
 }
 
 /**

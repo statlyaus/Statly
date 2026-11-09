@@ -16,6 +16,7 @@ import {
   getRosterSizeFromPositionLimits,
 } from '@/lib/draftSettings';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
+import { startLeagueSeason } from '@/server/leagues/activeSeason';
 import {
   developmentToolsNotFoundResponse,
   isDevelopmentToolsEnabled,
@@ -66,6 +67,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // The league's owner must exist before the league (League_ownerId_fkey); a fresh database has no
+      // development user until this tool creates one.
+      await tx.user.upsert({
+        where: { id: DEVELOPMENT_AUTH_USER_ID },
+        update: {},
+        create: {
+          id: DEVELOPMENT_AUTH_USER_ID,
+          email: DEVELOPMENT_AUTH_EMAIL,
+          passwordHash: 'test_hash',
+          displayName: DEVELOPMENT_AUTH_DISPLAY_NAME,
+          timeZone: 'Australia/Melbourne',
+        },
+      });
+
       // Create league
       const league = await tx.league.create({
         data: {
@@ -78,6 +93,8 @@ export async function POST(request: NextRequest) {
           categoriesJson: [...REAL_DATA_NINE_CATEGORY_PRESET],
         },
       });
+      // The final pick seeds waiver priority in the active season, so the draft needs one to complete.
+      await startLeagueSeason(tx, league.id, draftStartTime);
 
       // Create draft
       const draft = await tx.draft.create({
