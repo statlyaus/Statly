@@ -18,18 +18,27 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
 - `fixtureIngest.ts` turns those rows into `matches` documents (`match_uid`
   `<season>-R<round>-<HOME>-<AWAY>`, `season`, `round_number`, `round`, `home_team`, `away_team`,
   `venue`, `start_time_utc`, `status`, `confirmed_bye_teams`). Lineup locks, competition round timing,
-  live matchup totals, `liveGuard.ts` and the stats processor's live gate all read this collection.
+  live matchup totals, the `/matches/[round]` page and `GET /api/matches`, `liveGuard.ts` and the
+  stats processor's live gate all read this collection.
   - Footywire prints start times in the venue's local time (fitzRoy labels them UTC). Each venue maps
     to its time zone; an unknown venue fails the run.
   - `status` is `final` for the first N games of the season, where N is Footywire's posted-stats count
     (Footywire posts match stats in fixture order), `in_progress` for a game that has started without
     posted stats, and `scheduled` otherwise. A count larger than the number of started games fails the
     run.
-  - Only numbered home-and-away rounds (`Round N`) are written, matching the stats fetcher. Clubs with
-    no game in a numbered round are its `confirmed_bye_teams`.
+  - Home-and-away rounds keep Footywire's number (`Round 0` is the Opening Round). Footywire names
+    finals instead of numbering them, so each finals week is numbered on from the season's last
+    home-and-away round, as the AFL does: Qualifying and Elimination Finals are last + 1, Semi Finals
+    - 2, Preliminary Finals + 3 and the Grand Final + 4 (2025: Round 24, then finals rounds 25 to 28,
+      so the Grand Final is `2025-R28-<HOME>-<AWAY>`). `fetch_fw_round.R` numbers stats rows by the same
+      rule, so a final's stats carry the fixture's `match_uid`. Any other round label fails the run.
+  - Clubs with no game in a round are its `confirmed_bye_teams`; in a finals round that is every club
+    not playing that week.
   - Every row is checked before the first write, and only documents whose fields changed are written.
 
-- `fetch_fw_round.R` loads Footywire data through fitzRoy and emits one JSON row per line.
+- `fetch_fw_round.R` loads Footywire data through fitzRoy and emits one JSON row per line, for the
+  requested round or, when none is given, the season's latest round (finals included). Finals are
+  numbered by the fixture rule above; an unknown round label fails the fetch.
 - `fetchPipeline.ts` resolves the same assets from source and compiled runtimes. It **streams the R
   fetcher output directly** into the compiled processor and propagates process/pipe failures.
 - `normalizePlayerRow.ts` validates required identity fields and converts supported numeric values into

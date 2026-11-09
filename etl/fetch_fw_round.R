@@ -37,18 +37,40 @@ FOOTYWIRE_COLUMNS <- c(
   TOG = "tog_pct"
 )
 
-# Footywire labels home-and-away rounds "Round N". Finals carry names instead of
-# numbers and become NA, so they are never exported as a numbered round.
+# Footywire labels home-and-away rounds "Round N" and names finals. Each finals
+# week is numbered on from the season's last home-and-away round (2025's Round 24
+# is followed by finals rounds 25 to 28), the same rule etl/fixtureIngest.ts uses,
+# so a final's stats carry the fixture's match_uid. An unknown label fails closed.
+FOOTYWIRE_FINALS_WEEK <- c(
+  "Qualifying Final" = 1L,
+  "Elimination Final" = 1L,
+  "Semi Final" = 2L,
+  "Preliminary Final" = 3L,
+  "Grand Final" = 4L
+)
+
 footywire_round_number <- function(label) {
   label <- trimws(as.character(label))
   numbered <- grepl("^Round [0-9]+$", label)
   out <- rep(NA_integer_, length(label))
   out[numbered] <- as.integer(sub("^Round ", "", label[numbered]))
+
+  finals <- !numbered
+  unknown <- unique(label[finals & !(label %in% names(FOOTYWIRE_FINALS_WEEK))])
+  if (length(unknown) > 0) {
+    stop("Unknown Footywire round: ", paste(unknown, collapse = ", "), call. = FALSE)
+  }
+  if (any(finals)) {
+    if (!any(numbered)) {
+      stop("Footywire stats have finals but no numbered home-and-away round", call. = FALSE)
+    }
+    out[finals] <- max(out[numbered]) + unname(FOOTYWIRE_FINALS_WEEK[label[finals]])
+  }
   out
 }
 
 # fitzRoy returns every round of the season (it ignores round_number for
-# Footywire), so keep the requested round, or the latest numbered round.
+# Footywire), so keep the requested round, or the latest round (finals included).
 footywire_export_rows <- function(df, round_number = NA_integer_) {
   df <- as.data.frame(df, stringsAsFactors = FALSE)
   missing <- setdiff(names(FOOTYWIRE_COLUMNS), names(df))

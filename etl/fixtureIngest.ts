@@ -97,9 +97,38 @@ function club(name: string) {
   return found;
 }
 
-function roundNumber(label: string): number | null {
-  const match = /^Round (\d+)$/.exec(String(label ?? '').trim());
-  return match ? Number(match[1]) : null;
+/**
+ * Footywire names finals instead of numbering them. Each finals week is numbered on from the
+ * season's last home-and-away round (the AFL's own numbering: 2025's Round 24 is followed by
+ * finals rounds 25 to 28). etl/fetch_fw_round.R numbers the stats rows by the same rule, so a
+ * final's stats carry the fixture's match_uid.
+ */
+const FINALS_WEEK: Record<string, number> = {
+  'Qualifying Final': 1,
+  'Elimination Final': 1,
+  'Semi Final': 2,
+  'Preliminary Final': 3,
+  'Grand Final': 4,
+};
+
+/** Numbers every round label, or throws on one it cannot number. */
+function roundNumbers(labels: readonly string[]): number[] {
+  const trimmed = labels.map((label) => String(label ?? '').trim());
+  const numbered = trimmed.map((label) => {
+    const match = /^Round (\d+)$/.exec(label);
+    return match ? Number(match[1]) : null;
+  });
+  const homeAndAway = numbered.filter((round): round is number => round !== null);
+  return trimmed.map((label, index) => {
+    const round = numbered[index];
+    if (round !== null) return round;
+    const week = FINALS_WEEK[label];
+    if (week === undefined) throw new Error(`Unknown Footywire round "${label}"`);
+    if (homeAndAway.length === 0) {
+      throw new Error('Footywire fixture has finals but no numbered home-and-away round');
+    }
+    return Math.max(...homeAndAway) + week;
+  });
 }
 
 function zoneOffsetMs(utcMs: number, timeZone: string): number {
@@ -158,7 +187,8 @@ export function buildFixtureMatches(
     throw new Error(`Unreadable completed-match count "${rows[0].completed_match_count}"`);
   }
 
-  const placed = rows.map((row) => {
+  const rounds = roundNumbers(rows.map((row) => row.round_label));
+  const placed = rows.map((row, index) => {
     if (Number(row.season) !== season) throw new Error('Fixture rows span more than one season');
     if (Number(row.completed_match_count) !== completedCount) {
       throw new Error('Fixture rows disagree on the completed-match count');
@@ -168,7 +198,7 @@ export function buildFixtureMatches(
     }
     return {
       seasonGame: Number(row.season_game),
-      round: roundNumber(row.round_label),
+      round: rounds[index],
       home: club(row.home_team),
       away: club(row.away_team),
       venue: String(row.venue).trim(),
@@ -194,7 +224,6 @@ export function buildFixtureMatches(
 
   const clubsByRound = new Map<number, Set<string>>();
   for (const game of placed) {
-    if (game.round === null) continue;
     const clubs = clubsByRound.get(game.round) ?? new Set<string>();
     clubs.add(game.home.name).add(game.away.name);
     clubsByRound.set(game.round, clubs);
@@ -202,7 +231,6 @@ export function buildFixtureMatches(
 
   const seen = new Set<string>();
   const matches = placed.flatMap((game): FixtureMatch[] => {
-    if (game.round === null) return [];
     if (options.round !== undefined && game.round !== options.round) return [];
 
     const matchUid = `${season}-R${game.round}-${game.home.abbr}-${game.away.abbr}`;

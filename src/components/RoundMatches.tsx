@@ -9,6 +9,7 @@ import { isAbortError } from '@/lib/utils';
 
 type RoundMatchesProps = {
   round: number;
+  season?: number;
   initialMatches?: ApiMatch[];
 };
 
@@ -20,9 +21,12 @@ type ApiMatch = {
   scoreHome: number | null;
   scoreAway: number | null;
   round: number;
+  status?: 'scheduled' | 'in_progress' | 'final';
 };
 
-export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
+const STATUS_LABELS = { scheduled: 'Scheduled', in_progress: 'Live', final: 'Final' } as const;
+
+export const RoundMatches = ({ round, season, initialMatches }: RoundMatchesProps) => {
   const [matches, setMatches] = useState<ApiMatch[]>(initialMatches ?? []);
   const [loading, setLoading] = useState(!initialMatches);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +49,8 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetchApi(`matches?round=${round}`, { signal: ac.signal });
+        const seasonQuery = season === undefined ? '' : `&season=${season}`;
+        const res = await fetchApi(`matches?round=${round}${seasonQuery}`, { signal: ac.signal });
         const data = Array.isArray(res)
           ? res
           : res && typeof res === 'object' && 'data' in res && Array.isArray(res.data)
@@ -66,7 +71,7 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
       mounted = false;
       ac.abort();
     };
-  }, [round, initialMatches]);
+  }, [round, season, initialMatches]);
 
   if (loading) {
     return (
@@ -126,7 +131,9 @@ export const RoundMatches = ({ round, initialMatches }: RoundMatchesProps) => {
                   {match.scoreHome} - {match.scoreAway}
                 </p>
               ) : (
-                <p className="text-sm text-gray-500">Scheduled</p>
+                <p className="text-sm text-gray-500">
+                  {STATUS_LABELS[match.status ?? 'scheduled'] ?? 'Scheduled'}
+                </p>
               )}
               {match.matchDate && (
                 <p className="text-sm text-gray-500 mt-1">
