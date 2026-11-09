@@ -67,6 +67,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // The league's owner must exist before the league (League_ownerId_fkey); a fresh database has no
+      // development user until this tool creates one.
+      await tx.user.upsert({
+        where: { id: DEVELOPMENT_AUTH_USER_ID },
+        update: {},
+        create: {
+          id: DEVELOPMENT_AUTH_USER_ID,
+          email: DEVELOPMENT_AUTH_EMAIL,
+          passwordHash: 'test_hash',
+          displayName: DEVELOPMENT_AUTH_DISPLAY_NAME,
+          timeZone: 'Australia/Melbourne',
+        },
+      });
+
       // Create league
       const league = await tx.league.create({
         data: {
