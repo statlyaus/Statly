@@ -42,7 +42,11 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
 - `fetchPipeline.ts` resolves the same assets from source and compiled runtimes. It **streams the R
   fetcher output directly** into the compiled processor and propagates process/pipe failures.
 - `normalizePlayerRow.ts` validates required identity fields and converts supported numeric values into
-  the canonical row shape without initializing Firebase or performing writes.
+  the canonical row shape without initializing Firebase or performing writes. League scoring reads
+  these stored names (`stats.hit_outs`, `stats.tog_pct`, ...) through the category aliases in
+  `src/server/leagues/liveStatsAdapter.ts`; a new or renamed field needs an alias there, and
+  `tests/unit/liveStatsAdapter.test.ts` fails until it has one. Disposal efficiency
+  (`disposalEffPct`) has no ETL field.
 - `processFootywireData.ts` consumes normalized rows, adds deterministic identifiers and checksums, and
   writes match/player-stat documents. A row's `match_uid` is the fixture's `<HOME>-<AWAY>` match for
   its two clubs, whichever club the row belongs to (the stats feed lists the player's own club first).
