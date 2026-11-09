@@ -172,10 +172,51 @@ test('marks clubs absent from a numbered round as confirmed byes', () => {
   }
 });
 
-test('leaves finals out because the stats ETL only numbers home-and-away rounds', () => {
+test('numbers finals on from the last home-and-away round, one round per finals week', () => {
+  const finals = [
+    ['Qualifying Final', 'Collingwood', 'Adelaide'],
+    ['Elimination Final', 'Gold Coast', 'GWS'],
+    ['Semi Final', 'Geelong', 'Hawthorn'],
+    ['Preliminary Final', 'Brisbane Lions', 'Collingwood'],
+    ['Grand Final', 'Geelong', 'Brisbane Lions'],
+  ];
   const matches = buildFixtureMatches(
     [
-      row(),
+      row({ round_label: 'Round 0' }),
+      row({
+        season_game: 2,
+        round_label: 'Round 24',
+        home_team: 'Geelong',
+        away_team: 'West Coast',
+        venue: 'Kardinia Park',
+      }),
+      ...finals.map(([round_label, home_team, away_team], index) =>
+        row({ season_game: 3 + index, round_label, home_team, away_team, venue: 'M.C.G.' })
+      ),
+    ],
+    BEFORE_SEASON
+  );
+
+  assert.deepEqual(
+    matches.map((match) => [match.match_uid, match.round_number, match.round]),
+    [
+      ['2025-R0-ADE-STK', 0, 0],
+      ['2025-R24-GEE-WCE', 24, 24],
+      ['2025-R25-COL-ADE', 25, 25],
+      ['2025-R25-GCS-GWS', 25, 25],
+      ['2025-R26-GEE-HAW', 26, 26],
+      ['2025-R27-BRL-COL', 27, 27],
+      ['2025-R28-GEE-BRL', 28, 28],
+    ]
+  );
+  // The other clubs are out of the finals week, so they are listed as not playing that round.
+  assert.equal(matches.at(-1).confirmed_bye_teams.length, 16);
+});
+
+test('keeps only the requested finals round when one is given', () => {
+  const matches = buildFixtureMatches(
+    [
+      row({ round_label: 'Round 24' }),
       row({
         season_game: 2,
         round_label: 'Grand Final',
@@ -184,12 +225,28 @@ test('leaves finals out because the stats ETL only numbers home-and-away rounds'
         venue: 'M.C.G.',
       }),
     ],
-    BEFORE_SEASON
+    BEFORE_SEASON,
+    { round: 28 }
   );
 
   assert.deepEqual(
     matches.map((match) => match.match_uid),
-    ['2025-R1-ADE-STK']
+    ['2025-R28-BRL-GEE']
+  );
+});
+
+test('fails closed on a round label it cannot number', () => {
+  assert.throws(
+    () =>
+      buildFixtureMatches(
+        [row(), row({ season_game: 2, round_label: 'Finals Week 1' })],
+        BEFORE_SEASON
+      ),
+    /Unknown Footywire round "Finals Week 1"/
+  );
+  assert.throws(
+    () => buildFixtureMatches([row({ round_label: 'Grand Final' })], BEFORE_SEASON),
+    /finals but no numbered home-and-away round/
   );
 });
 

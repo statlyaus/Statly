@@ -1,41 +1,29 @@
 export const runtime = 'nodejs';
 
 import type { NextRequest } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { mapMatchEventToDTO } from '@/lib/matchMapper';
+import { mapRoundFixture, parseFixtureRound, parseFixtureSeason } from '@/lib/matchMapper';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getRoundMatchesResult } from '@/server/etl/etlRoundData';
 
-interface MatchEvent {
-  matchDate: FirebaseFirestore.Timestamp | Date;
-  homeTeam: string;
-  awayTeam: string;
-  scoreHome?: number;
-  scoreAway?: number;
-  round: number;
-}
-
+/** A round's AFL fixture, as the ETL wrote it to Firestore `matches`. */
 export async function GET(request: NextRequest) {
-  const roundParam = request.nextUrl.searchParams.get('round');
-  const round = Number(roundParam);
-  if (!Number.isInteger(round) || round <= 0) {
-    return commonErrors.badRequest('Invalid round parameter');
-  }
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) return commonErrors.unauthorized();
 
-  try {
-    const snapshot = await adminDb.collection('MatchEvent').where('round', '==', round).get();
+  const round = parseFixtureRound(request.nextUrl.searchParams.get('round'));
+  if (round === null) return commonErrors.badRequest('Invalid round parameter');
+  const season = parseFixtureSeason(request.nextUrl.searchParams.get('season'), new Date());
+  if (season === null) return commonErrors.badRequest('Invalid season parameter');
 
-    if (snapshot.empty) {
-      return successResponse([]);
-    }
-
-    const matches = snapshot.docs.map((doc) =>
-      mapMatchEventToDTO(doc.id, doc.data() as MatchEvent)
-    );
-
-    return successResponse(matches);
-  } catch (error) {
-    logger.error(`Failed to fetch matches for round ${round}`, error, { round });
+  const result = await getRoundMatchesResult(season, round);
+  if (!result.ok) {
+    logger.error(`Failed to fetch matches for ${season} round ${round}`, result.error, {
+      season,
+      round,
+    });
     return commonErrors.internalServerError('Internal server error');
   }
+  return successResponse(mapRoundFixture(result.matches));
 }

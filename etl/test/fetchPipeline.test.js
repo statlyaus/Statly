@@ -117,12 +117,16 @@ const PRESET_STATS = [
 
 // Sources the fetcher (which must not fetch when sourced) and maps rows recorded from fitzRoy's
 // fetch_player_stats(source = "footywire"), with the column names exactly as fitzRoy returns them.
-function exportFixtureRows({ round = 'NA_integer_', dropColumn } = {}) {
+function exportFixtureRows({ round = 'NA_integer_', dropColumn, relabel } = {}) {
   const drop = dropColumn ? `fixture[[${JSON.stringify(dropColumn)}]] <- NULL;` : '';
+  const rename = relabel
+    ? `fixture$Round[fixture$Round == ${JSON.stringify(relabel[0])}] <- ${JSON.stringify(relabel[1])};`
+    : '';
   const expression = [
     `source(${JSON.stringify(FETCHER)});`,
     `fixture <- read.csv(${JSON.stringify(FITZROY_FIXTURE)}, check.names = FALSE, stringsAsFactors = FALSE);`,
     drop,
+    rename,
     `write.csv(footywire_export_rows(fixture, ${round}), stdout(), row.names = FALSE)`,
   ].join(' ');
   const result = spawnSync('Rscript', ['--vanilla', '-e', expression], { encoding: 'utf8' });
@@ -180,16 +184,39 @@ test('fetcher maps fitzRoy Footywire columns into rows the normalizer accepts', 
   );
 });
 
-test('fetcher without a requested round exports only the latest numbered round', () => {
+test('fetcher without a requested round exports only the latest round, finals included', () => {
   const result = exportFixtureRows();
   assert.equal(result.status, 0, result.stderr);
+  // The fixture's last home-and-away round is 5, so its Qualifying Final is round 6.
   assert.deepEqual(
     parseCsv(result.stdout).map((row) => [row.round, row.player_name]),
-    [
-      ['5', 'Matt Crouch'],
-      ['5', 'Mitchell Hinge'],
-    ]
+    [['6', 'Dylan Moore']]
   );
+});
+
+test('fetcher numbers finals on from the last home-and-away round, as the fixture ingest does', () => {
+  const weeks = [
+    ['Qualifying Final', '6'],
+    ['Elimination Final', '6'],
+    ['Semi Final', '7'],
+    ['Preliminary Final', '8'],
+    ['Grand Final', '9'],
+  ];
+  for (const [label, round] of weeks) {
+    const result = exportFixtureRows({ round: `${round}L`, relabel: ['Qualifying Final', label] });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(
+      parseCsv(result.stdout).map((row) => [row.round, row.player_name]),
+      [[round, 'Dylan Moore']],
+      label
+    );
+  }
+});
+
+test('fetcher fails closed on a round label it cannot number', () => {
+  const result = exportFixtureRows({ round: '5L', relabel: ['Qualifying Final', 'Finals Week 1'] });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unknown Footywire round: Finals Week 1/);
 });
 
 test('fetcher fails closed when fitzRoy drops a required column or the round has no rows', () => {
