@@ -9,6 +9,11 @@ import { buttonStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 import { toSafeRedirect } from '@/lib/safeRedirect';
 import {
+  clearLoginAutoRedirect,
+  isRepeatLoginAutoRedirect,
+  recordLoginAutoRedirect,
+} from '@/lib/loginLoopGuard';
+import {
   EyeIcon,
   EyeSlashIcon,
   UserIcon,
@@ -88,40 +93,6 @@ const ENDED_SESSION_ERROR_CODES = new Set([
 const SESSION_ENDED_MESSAGE = 'Your session ended. Sign in again.';
 const SESSION_CHECK_FAILED_MESSAGE =
   "We couldn't check your session. Check your connection and try again.";
-// A fresh token the server still rejects would bounce between /login and the page forever. Being
-// sent back to /login for the same destination within this window ends the session instead.
-const AUTO_REDIRECT_KEY = 'statly:login-auto-redirect';
-const AUTO_REDIRECT_LOOP_WINDOW_MS = 10_000;
-
-function isRepeatAutoRedirect(destination: string): boolean {
-  try {
-    const last = JSON.parse(window.sessionStorage.getItem(AUTO_REDIRECT_KEY) ?? 'null') as {
-      destination?: unknown;
-      at?: unknown;
-    } | null;
-    return (
-      last?.destination === destination &&
-      typeof last.at === 'number' &&
-      Date.now() - last.at < AUTO_REDIRECT_LOOP_WINDOW_MS
-    );
-  } catch {
-    return false;
-  }
-}
-
-function recordAutoRedirect(destination: string | null): void {
-  try {
-    if (destination === null) window.sessionStorage.removeItem(AUTO_REDIRECT_KEY);
-    else
-      window.sessionStorage.setItem(
-        AUTO_REDIRECT_KEY,
-        JSON.stringify({ destination, at: Date.now() })
-      );
-  } catch {
-    // Storage unavailable: the loop guard is best effort.
-  }
-}
-
 interface FormValidation {
   email: {
     isValid: boolean;
@@ -335,7 +306,7 @@ const AuthForm = ({
   const checkSessionAndRedirect = useCallback(async () => {
     const destination = toSafeRedirect(nextUrl) || '/dashboard';
     const endSession = async () => {
-      recordAutoRedirect(null);
+      clearLoginAutoRedirect();
       setSessionCheck('ended');
       setError(SESSION_ENDED_MESSAGE);
       await logout().catch(() => undefined);
@@ -354,11 +325,11 @@ const AuthForm = ({
       }
       return;
     }
-    if (isRepeatAutoRedirect(destination)) {
+    if (isRepeatLoginAutoRedirect(destination)) {
       await endSession();
       return;
     }
-    recordAutoRedirect(destination);
+    recordLoginAutoRedirect(destination);
     router.replace(destination);
   }, [logout, nextUrl, refreshIdToken, router]);
 

@@ -34,7 +34,10 @@ an hour after the account is revoked or disabled) does not bounce straight back.
 token refresh first: a refresh Firebase refuses signs the browser out and shows "Your session ended.
 Sign in again."; a refresh that could not run (offline) keeps the session and offers a retry. A
 browser sent back to `/login` for the same destination within 10 seconds of the last automatic
-redirect is signed out the same way, so a fresh token the server still rejects cannot loop.
+redirect is signed out the same way, so a fresh token the server still rejects cannot loop. The
+signed-in app shell (`AppLayout`) clears that record when it renders, so only a server bounce back
+to `/login` before the destination page renders counts; a healthy user who opens `/login` twice in
+quick succession is redirected both times (`src/lib/loginLoopGuard.ts`).
 
 ## League roles
 
