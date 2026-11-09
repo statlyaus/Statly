@@ -12,9 +12,35 @@ export interface ScheduledRoundScoringLeague {
   error?: string;
 }
 
+/**
+ * Hours after a round's last AFL match starts (or after the round starts, when no match times are
+ * known) that the round may stay unscored before a run reports it as stalled. A match lasts about three
+ * hours and the ETL loads its stats within a few more, so 12 hours leaves room for a slow load while
+ * still alerting the morning after a round that cannot be scored.
+ */
+export const STALLED_ROUND_GRACE_HOURS = 12;
+
+/**
+ * A started round that is still not scored past the grace period because its stats or match status are
+ * unavailable, usually a lineup player without totals (no reviewed Footywire link, or the ETL never
+ * loaded them). Every run reports it again until it is scored.
+ */
+export interface StalledLeagueRound {
+  leagueId: string;
+  /** The AFL season year of the competition round. */
+  season: number | null;
+  round: number;
+  status: 'SCHEDULED' | 'LIVE';
+  /** When the grace period ended. */
+  stalledSince: string;
+  /** Lineup players with no stat totals, when the scoring service reported them. */
+  missingPlayerIds: string[];
+}
+
 export interface ScheduledRoundScoringRun {
   leagues: ScheduledRoundScoringLeague[];
   failedLeagueIds: string[];
+  stalledRounds: StalledLeagueRound[];
 }
 
 /**
@@ -93,6 +119,10 @@ export async function fillPendingRoundStartTimes(): Promise<number> {
  * becomes FINAL only when `recalculateLeagueRoundMatchups` itself decides it: every AFL match of the
  * round is final and every matchup with two teams was scored. Rerunning it rewrites the same scores,
  * and FINAL rounds are never selected again.
+ *
+ * A round that stays unscored because its stats are unavailable is not a league failure (later rounds
+ * still score), but once it is past `STALLED_ROUND_GRACE_HOURS` it is returned in `stalledRounds` and
+ * logged as an error, so the cron run reports a failure instead of a success.
  */
 export async function scoreStartedLeagueRounds(
   now = new Date(),
@@ -112,13 +142,18 @@ export async function scoreStartedLeagueRounds(
     select: {
       leagueId: true,
       round: true,
+      startsAt: true,
+      season: { select: { year: true } },
       fixtureVersion: true,
       league: { select: { settings: { select: { competitionRulesVersion: true } } } },
     },
     orderBy: [{ leagueId: 'asc' }, { round: 'asc' }],
   });
 
-  const roundsByLeagueId = new Map<string, number[]>();
+  const roundsByLeagueId = new Map<
+    string,
+    Array<{ round: number; startsAt: Date | null; season: number | null }>
+  >();
   for (const competitionRound of startedRounds) {
     // Recalculation reads the league's current fixture version only.
     if (
@@ -127,16 +162,21 @@ export async function scoreStartedLeagueRounds(
       continue;
     }
     const rounds = roundsByLeagueId.get(competitionRound.leagueId) ?? [];
-    rounds.push(competitionRound.round);
+    rounds.push({
+      round: competitionRound.round,
+      startsAt: competitionRound.startsAt,
+      season: competitionRound.season?.year ?? null,
+    });
     roundsByLeagueId.set(competitionRound.leagueId, rounds);
   }
 
   const leagues: ScheduledRoundScoringLeague[] = [];
+  const stalledRounds: StalledLeagueRound[] = [];
   // One league at a time, so a failure in one league never stops the others.
   for (const [leagueId, rounds] of roundsByLeagueId) {
     const league: ScheduledRoundScoringLeague = { leagueId, rounds: [] };
     leagues.push(league);
-    for (const round of rounds) {
+    for (const { round, startsAt, season } of rounds) {
       try {
         const result = await recalculate({ leagueId, round, finalize: false });
         if (!result) break; // The league was deleted after the rounds were read.
@@ -152,6 +192,21 @@ export async function scoreStartedLeagueRounds(
           break;
         }
         league.rounds.push({ round, status: result.status, recalculated: result.recalculated });
+        if (result.status !== 'FINAL' && result.roundStatus.hasUnavailableStatus) {
+          const stalledSince = stalledRoundDeadline(startsAt, result.roundStatus.matches);
+          if (stalledSince && stalledSince <= now) {
+            const stalled: StalledLeagueRound = {
+              leagueId,
+              season,
+              round,
+              status: result.status,
+              stalledSince: stalledSince.toISOString(),
+              missingPlayerIds: ('missingPlayerIds' in result && result.missingPlayerIds) || [],
+            };
+            stalledRounds.push(stalled);
+            logger.error('Scheduled round scoring is stalled for a league round', { ...stalled });
+          }
+        }
       } catch (error) {
         league.error = error instanceof Error ? error.message : String(error);
         logger.error('Scheduled round scoring failed for a league', {
@@ -167,5 +222,18 @@ export async function scoreStartedLeagueRounds(
   return {
     leagues,
     failedLeagueIds: leagues.flatMap((league) => (league.error ? [league.leagueId] : [])),
+    stalledRounds,
   };
+}
+
+/** The end of the grace period: after the last known match start, else after the round start. */
+function stalledRoundDeadline(
+  roundStartsAt: Date | null,
+  matches: ReadonlyArray<{ startsAt: Date | null }>
+): Date | null {
+  const lastMatchStart = Math.max(
+    ...matches.flatMap((match) => (match.startsAt ? [match.startsAt.getTime()] : []))
+  );
+  const base = Number.isFinite(lastMatchStart) ? lastMatchStart : roundStartsAt?.getTime();
+  return base === undefined ? null : new Date(base + STALLED_ROUND_GRACE_HOURS * 60 * 60 * 1000);
 }

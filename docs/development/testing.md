@@ -356,7 +356,13 @@ AFL match of the round is final and every matchup with two teams was scored. A r
 start time is left pending. Leagues are scored one at a time; a league whose round throws or is refused
 (`UNSCORED_MATCHUP_IN_FINAL_ROUND`, see `docs/runbooks/unscored-finalized-matchups.md`) stops at that
 round, is logged at error level and listed in `failedLeagueIds`, and the response is 500, while the
-other leagues are still scored. There is no per-league lease: rerunning rewrites the same scores, and
+other leagues are still scored. A round left unscored because its stats are unavailable (usually a
+lineup player with no totals, such as one without a reviewed Footywire link, see
+`docs/runbooks/player-identity.md`) does not stop the league, but once it is still not `FINAL`
+`STALLED_ROUND_GRACE_HOURS` (12) hours after its last AFL match starts (or after the round starts, when
+no match times are known) it is listed in `stalledRounds` with its league, season, round and the
+players without totals, logged at error level, and the response is 500, so the `cron-scoring` Sentry
+monitor alerts on every run until the round is scored. There is no per-league lease: rerunning rewrites the same scores, and
 two overlapping runs are not serialized.
 
 Calling without the credential must return 403 (admin) or 401 (cron, user); calling with it must

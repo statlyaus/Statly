@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuth } from '@/AuthContext';
 import AuthForm from '@/components/AuthForm';
+import { clearLoginAutoRedirect } from '@/lib/loginLoopGuard';
 
 const replace = vi.fn();
 vi.mock('@/AuthContext', () => ({ useAuth: vi.fn() }));
@@ -96,5 +97,21 @@ describe('AuthForm on /login with a signed-in browser', () => {
     );
     expect(auth.logout).toHaveBeenCalledTimes(1);
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('redirects again, without signing out, when the destination rendered before the second visit', async () => {
+    const first = renderLogin({});
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/leagues/abc'));
+    cleanup();
+
+    // The signed-in app shell mounted on the destination and cleared the marker.
+    clearLoginAutoRedirect();
+    replace.mockClear();
+
+    const second = renderLogin({});
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/leagues/abc'));
+    expect(first.logout).not.toHaveBeenCalled();
+    expect(second.logout).not.toHaveBeenCalled();
   });
 });

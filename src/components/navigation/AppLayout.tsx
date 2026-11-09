@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 import type React from 'react';
 import { usePathname } from 'next/navigation';
 
+import { clearLoginAutoRedirect } from '@/lib/loginLoopGuard';
 import { SectionErrorBoundary } from '../ui/ErrorBoundary';
 import MainNavigation from './MainNavigation';
 
@@ -33,6 +34,8 @@ export default function AppLayout({
   const isNested = outer !== null;
   const basketballVisible = showBasketball ?? outer?.showBasketball ?? false;
   const pathname = usePathname();
+  // Only server-authenticated pages render this shell: reaching it means the /login redirect landed.
+  useEffect(clearLoginAutoRedirect, []);
   const shell = (
     <div data-app-shell className="min-h-screen w-full min-w-0 bg-background">
       <a
