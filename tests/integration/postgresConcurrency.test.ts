@@ -227,6 +227,50 @@ describe('waiver FAAB under two writers', () => {
     }
   });
 
+  it('stores one pending claim when a member submits the same player twice at once', async () => {
+    for (let round = 0; round < ROUNDS; round += 1) {
+      await prisma.teamAction.deleteMany({ where: { leagueId: LEAGUE } });
+      await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });
+      // Odd rounds start with the priority rows in place, even rounds race to create them.
+      if (round % 2 === 1) {
+        await prisma.waiverPriority.createMany({
+          data: members.map((memberId, index) => ({
+            leagueId: LEAGUE,
+            seasonId,
+            memberId,
+            priority: index + 1,
+          })),
+        });
+      }
+
+      const results = await Promise.allSettled(
+        [0, 1].map(() =>
+          store().submitClaim({
+            leagueId: LEAGUE,
+            userId: users[0],
+            teamId: members[0],
+            playerId: players[0],
+            priority: 1,
+            waiverSettings: { system: 'PRIORITY' },
+          })
+        )
+      );
+
+      expect(
+        results.filter((result) => result.status === 'fulfilled'),
+        `round ${round}`
+      ).toHaveLength(1);
+      expect(
+        results.flatMap((result) => (result.status === 'rejected' ? [result.reason.code] : [])),
+        `round ${round}`
+      ).toEqual(['DUPLICATE_CLAIM']);
+      expect(
+        await prisma.teamAction.count({ where: { leagueId: LEAGUE, status: 'PENDING' } }),
+        `round ${round}`
+      ).toBe(1);
+    }
+  });
+
   it('applies both debits when two debits race', async () => {
     for (let round = 0; round < ROUNDS; round += 1) {
       await prisma.waiverPriority.deleteMany({ where: { leagueId: LEAGUE } });

@@ -82,7 +82,7 @@ export const POST = withMetrics(
 
       if (isFAAB) {
         const minBid = ws?.minimumBid ?? 1;
-        if (typeof bidAmount !== 'number' || bidAmount < minBid) {
+        if (!Number.isInteger(bidAmount) || bidAmount < minBid) {
           return NextResponse.json({ error: 'Invalid bid amount' }, { status: 400 });
         }
         validatedBid = bidAmount;
@@ -142,6 +142,17 @@ function claimRefusal(err: unknown): { error: string; status: number } | null {
   }
   if (code === 'FAAB_BALANCE_UNAVAILABLE' && err instanceof WaiverClaimStoreError) {
     return { error: 'FAAB balance unavailable', status: 400 };
+  }
+  if (!(err instanceof WaiverClaimStoreError)) return null;
+  switch (code) {
+    case 'DROP_NOT_ON_ROSTER':
+      return { error: 'The player you chose to drop is not on your roster', status: 409 };
+    case 'ROSTER_FULL':
+      return { error: 'Your roster is full: choose a player to drop', status: 409 };
+    case 'DUPLICATE_CLAIM':
+      return { error: 'You already have a pending claim for this player', status: 409 };
+    case 'INVALID_BID':
+      return { error: 'Bid must be a whole number', status: 400 };
   }
   return null;
 }
