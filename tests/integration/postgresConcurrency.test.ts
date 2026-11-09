@@ -12,7 +12,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/server/rosters/RosterProjectionService', () => ({
   RosterProjectionService: class {
-    async projectDraft(): Promise<void> {}
+    async projectDraftInTx(): Promise<void> {}
+    async refreshWaiverAvailability(): Promise<void> {}
   },
 }));
 vi.mock('@/server/leagues/membership', () => ({
@@ -488,7 +489,10 @@ describe('waiver processing after a crash', () => {
 
 describe('draft pick under two writers', () => {
   it('refuses a player drafted at another slot instead of failing the aborted transaction', async () => {
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
     // A stale client submits a player who already holds a later slot: the insert violates
     // (draftId, playerId), which PostgreSQL answers by aborting the whole transaction.
     await prisma.pick.create({
@@ -511,7 +515,10 @@ describe('draft pick under two writers', () => {
   });
 
   it('persists exactly one pick when the member on the clock submits twice at once', async () => {
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
 
     for (let round = 0; round < ROUNDS; round += 1) {
       // Events are keyed by clock revision, which follows schedulingVersion, so the previous round's

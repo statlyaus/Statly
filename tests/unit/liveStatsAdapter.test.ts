@@ -6,6 +6,39 @@ import {
   type RawLiveStatRow,
   type RawRoundMatch,
 } from '@/server/leagues/liveStatsAdapter';
+import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
+
+import { normalizePlayerRow, toProcessedStats } from '../../etl/normalizePlayerRow';
+
+// Every fantasy category and the stats field the ETL stores it under (etl/normalizePlayerRow.ts).
+// null: the ETL exports no source for that category.
+const ETL_FIELD_BY_CATEGORY: Record<FantasyCategoryKey, string | null> = {
+  goals: 'goals',
+  kicks: 'kicks',
+  handballs: 'handballs',
+  marks: 'marks',
+  tackles: 'tackles',
+  hitouts: 'hit_outs',
+  clearances: 'clearances',
+  inside50s: 'inside_50s',
+  rebound50s: 'rebound_50s',
+  clangers: 'clangers',
+  contestedPossessions: 'contested_possessions',
+  uncontestedPossessions: 'uncontested_possessions',
+  freesFor: 'frees_for',
+  freesAgainst: 'frees_against',
+  onePercenters: 'one_percenters',
+  goalAssists: 'goal_assists',
+  timeOnGroundPct: 'tog_pct',
+  disposalEffPct: 'disposal_efficiency',
+  turnovers: 'turnovers',
+  intercepts: 'intercepts',
+  metresGained: 'metres_gained',
+  contestedMarks: 'contested_marks',
+  effectiveDisposals: 'effective_disposals',
+  scoreInvolvements: 'score_involvements',
+};
 
 describe('liveStatsAdapter', () => {
   it('normalizes ETL nested stats into fantasy category totals', () => {
@@ -38,6 +71,39 @@ describe('liveStatsAdapter', () => {
         scoreInvolvements: 6,
       },
     });
+  });
+
+  it('reads every category the ETL stores from an ETL-shaped stats row', () => {
+    const etlFields = Object.values(ETL_FIELD_BY_CATEGORY).filter(
+      (field): field is string => field !== null
+    );
+    // A distinct value per field, so a category reading the wrong field cannot pass.
+    const raw = Object.fromEntries(etlFields.map((field, index) => [field, index + 1]));
+    const stats = toProcessedStats(
+      normalizePlayerRow({
+        season: 2026,
+        round: 5,
+        team: 'Carlton',
+        opposition: 'Collingwood',
+        player_name: 'Test Player',
+        ...raw,
+      })
+    );
+
+    const [row] = normalizeLiveStatRows([
+      { match_uid: 'CARL-COLL', player_uid: 'player-etl', stats } satisfies RawLiveStatRow,
+    ]);
+
+    expect(Object.keys(ETL_FIELD_BY_CATEGORY).sort()).toEqual(
+      Object.keys(FANTASY_CATEGORIES).sort()
+    );
+    for (const [category, field] of Object.entries(ETL_FIELD_BY_CATEGORY)) {
+      if (field === null) continue;
+      expect({ category, value: row.totals[category as FantasyCategoryKey] }).toEqual({
+        category,
+        value: raw[field],
+      });
+    }
   });
 
   it('normalizes top-level snake-case projections into fantasy category totals', () => {

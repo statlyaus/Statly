@@ -108,7 +108,11 @@ async function seedLeaguePublishedWithoutFixture() {
 }
 
 const recalculate = vi.fn(({ round }: { round: number }) =>
-  Promise.resolve({ status: 'LIVE' as const, recalculated: round })
+  Promise.resolve({
+    status: 'LIVE' as const,
+    recalculated: round,
+    roundStatus: { hasUnavailableStatus: false, matches: [] },
+  })
 );
 
 function currentRound() {

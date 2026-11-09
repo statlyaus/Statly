@@ -95,14 +95,26 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof PrismaNS.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-// Runs a pick transaction. A unique violation is re-read outside the aborted transaction: the slot is
-// replayed only when it holds the player this call asked for; anything else is refused.
+// Runs a pick transaction. The pick that completes the draft projects the rosters and waiver priority
+// in the same transaction, so a projection failure rolls the pick back and the draft stays LIVE.
+// A unique violation is re-read outside the aborted transaction: the slot is replayed only when it
+// holds the player this call asked for; anything else is refused.
 async function transactPick(
   draftId: string,
+  rosterProjection: Pick<RosterProjectionService, 'projectDraftInTx'>,
   work: (tx: PrismaNS.TransactionClient) => Promise<PickResult>
 ): Promise<PickResult> {
   try {
-    return await draftRepository.transaction(work);
+    return await draftRepository.transaction(async (tx) => {
+      const result = await work(tx);
+      if (result.isComplete) {
+        await rosterProjection.projectDraftInTx(tx, {
+          leagueId: result.leagueId,
+          draftId: result.draftId,
+        });
+      }
+      return result;
+    });
   } catch (error) {
     if (!(error instanceof PickSlotTakenError)) throw error;
     const existing = await draftRepository.transaction((tx) =>
@@ -387,7 +399,7 @@ export class DraftApplicationService {
   }): Promise<DraftCommandResult<PickCommandData>> {
     const { draftId, actorUserId, playerId } = input;
 
-    const result = await transactPick(draftId, async (tx) => {
+    const result = await transactPick(draftId, this.rosterProjectionService, async (tx) => {
       const draft = await draftRepository.getDraftAggregate(tx, draftId);
       if (!draft) {
         throw new Error('not_found:Draft not found');
@@ -543,7 +555,7 @@ export class DraftApplicationService {
     });
 
     if (result.isComplete) {
-      await this.rosterProjectionService.projectDraft({
+      await this.rosterProjectionService.refreshWaiverAvailability({
         leagueId: result.leagueId,
         draftId: result.draftId,
       });
@@ -560,7 +572,7 @@ export class DraftApplicationService {
   }): Promise<DraftCommandResult<PickCommandData>> {
     const { draftId } = input;
 
-    const result = await transactPick(draftId, async (tx) => {
+    const result = await transactPick(draftId, this.rosterProjectionService, async (tx) => {
       const draft = await draftRepository.getDraftAggregate(tx, draftId);
       if (!draft) {
         throw new Error('not_found:Draft not found');
@@ -743,7 +755,7 @@ export class DraftApplicationService {
     });
 
     if (result.isComplete) {
-      await this.rosterProjectionService.projectDraft({
+      await this.rosterProjectionService.refreshWaiverAvailability({
         leagueId: result.leagueId,
         draftId: result.draftId,
       });
