@@ -1,8 +1,8 @@
 // Which AFL season a league plays, and when the commissioner may change it.
 //
 // A league created after the AFL Grand Final has nothing left to play that year, so it defaults to
-// next season. The Grand Final is taken as the last Saturday of September, Melbourne time; Statly
-// holds no finals fixture to read it from (the fixture ingest writes numbered rounds only).
+// next season. The Grand Final is taken as the last Saturday of September, Melbourne time: a fixed
+// rule, so the default does not wait for the finals fixture to be loaded.
 
 const LEAGUE_TIME_ZONE = 'Australia/Melbourne';
 
