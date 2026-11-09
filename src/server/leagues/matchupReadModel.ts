@@ -606,15 +606,14 @@ export async function loadLivePlayerTotalsForRound(
     }),
   });
 
-  const available =
-    statsResult.ok &&
-    matchesResult.ok &&
-    [...new Set(expectedPlayers.map((player) => player.playerId))].every((playerId) =>
-      totalsByPlayerId.has(playerId)
-    );
+  const missingPlayerIds = [...new Set(expectedPlayers.map((player) => player.playerId))].filter(
+    (playerId) => !totalsByPlayerId.has(playerId)
+  );
+  const available = statsResult.ok && matchesResult.ok && missingPlayerIds.length === 0;
 
   return {
     available,
+    missingPlayerIds,
     totalsByPlayerId,
     nonPlayingReasonByPlayerId,
     roundStatus: normalizeRoundMatchStatus(rawMatches),
@@ -996,7 +995,7 @@ export async function recalculateLeagueRoundMatchups({
       },
     };
   }
-  const { available, totalsByPlayerId, nonPlayingReasonByPlayerId, roundStatus } =
+  const { available, missingPlayerIds, totalsByPlayerId, nonPlayingReasonByPlayerId, roundStatus } =
     await loadLivePlayerTotalsForRound(
       competitionRound?.season?.year ?? new Date().getFullYear(),
       aflRound,
@@ -1013,6 +1012,8 @@ export async function recalculateLeagueRoundMatchups({
       status: 'SCHEDULED' as const,
       recalculated: 0,
       scores: [],
+      // Lineup players with no stat totals; the scheduled job reports them when the round stalls.
+      missingPlayerIds,
       roundStatus: { ...roundStatus, hasUnavailableStatus: true },
     };
   }
