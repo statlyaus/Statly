@@ -43,6 +43,10 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
   fetcher output directly** into the compiled processor and propagates process/pipe failures.
 - `normalizePlayerRow.ts` validates required identity fields and converts supported numeric values into
   the canonical row shape without initializing Firebase or performing writes.
+  `disposal_efficiency` (the `disposalEffPct` category) is Footywire's own `DE` column, a percentage
+  from 0 to 100; the fetch fails if fitzRoy stops returning it. A player with no disposals has no
+  efficiency, so the value is dropped and stored as `null`, never 0. A value outside 0 to 100 fails
+  the row.
 - `processFootywireData.ts` consumes normalized rows, adds deterministic identifiers and checksums, and
   writes match/player-stat documents. A row's `match_uid` is the fixture's `<HOME>-<AWAY>` match for
   its two clubs, whichever club the row belongs to (the stats feed lists the player's own club first).

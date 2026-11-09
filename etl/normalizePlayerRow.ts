@@ -27,6 +27,8 @@ interface PlayerRow {
   metres_gained?: number;
   contested_marks?: number;
   effective_disposals?: number;
+  /** Footywire's DE: effective disposals as a percentage of disposals (0 to 100). */
+  disposal_efficiency?: number;
   score_involvements?: number;
   minutes?: number;
   tog_pct?: number;
@@ -56,6 +58,7 @@ const PLAYER_NUMERIC_FIELDS = [
   'metres_gained',
   'contested_marks',
   'effective_disposals',
+  'disposal_efficiency',
   'score_involvements',
   'minutes',
   'tog_pct',
@@ -103,6 +106,16 @@ function normalizePlayerRow(input: unknown): PlayerRow {
       return value === undefined ? [] : [[field, value] as const];
     })
   ) as Partial<Pick<PlayerRow, PlayerNumericField>>;
+
+  // A player with no disposals has no efficiency: Footywire's figure for them is not a result,
+  // so it stays missing rather than reading as 0% and winning LOW_WINS leagues.
+  if (numericStats.disposals === 0) {
+    delete numericStats.disposal_efficiency;
+  }
+  const efficiency = numericStats.disposal_efficiency;
+  if (efficiency !== undefined && (efficiency < 0 || efficiency > 100)) {
+    throw new Error('disposal_efficiency must be a percentage from 0 to 100');
+  }
 
   return {
     season: requiredFiniteNumber(row.season, 'season'),
