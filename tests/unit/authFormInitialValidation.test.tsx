@@ -39,11 +39,13 @@ const mockAuthContext = {
   loginWithGoogle: vi.fn(),
   loginWithFacebook: vi.fn(),
   loginWithApple: vi.fn(),
+  refreshIdToken: () => Promise.resolve(),
 };
 
 describe('AuthForm initial validation state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     vi.mocked(useAuth).mockReturnValue(mockAuthContext);
   });
 
