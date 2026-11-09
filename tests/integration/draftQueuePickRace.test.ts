@@ -225,7 +225,8 @@ describe.sequential('draft queue request ordering and accepted-pick convergence'
     }));
     vi.doMock('@/server/rosters/RosterProjectionService', () => ({
       RosterProjectionService: class {
-        async projectDraft(): Promise<void> {}
+        async projectDraftInTx(): Promise<void> {}
+        async refreshWaiverAvailability(): Promise<void> {}
       },
     }));
     vi.doMock('@/server/leagues/membership', () => ({
@@ -240,7 +241,10 @@ describe.sequential('draft queue request ordering and accepted-pick convergence'
       import('@/server/draft/services/DraftApplicationService'),
     ]);
     privateStateService = new DraftPrivateStateService();
-    applicationService = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    applicationService = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
   }, 60_000);
 
   afterAll(async () => {

@@ -1,11 +1,14 @@
+import type { Prisma } from '@prisma/client';
+
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
-type PrismaLike = Pick<
-  typeof prisma,
-  '$transaction' | 'league' | 'pick' | 'leagueRosterPlayer' | 'waiverPriority'
+type PrismaLike = Pick<typeof prisma, '$transaction'>;
+type ProjectionClient = Pick<
+  Prisma.TransactionClient,
+  'league' | 'pick' | 'leagueRosterPlayer' | 'waiverPriority'
 >;
 type WaiverAvailabilityProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
@@ -30,36 +33,47 @@ export class RosterProjectionService {
     private readonly waiverAvailabilityProjectionService: WaiverAvailabilityProjectionLike = new WaiverAvailabilityProjectionService()
   ) {}
 
-  async projectDraft(input: {
-    leagueId: string;
-    draftId: string;
-  }): Promise<RosterProjectionResult> {
-    const picks = await this.db.pick.findMany({
+  /**
+   * Writes the drafted rosters and seeds waiver priority on the caller's transaction. The draft
+   * service runs it inside the final pick's transaction, so the pick, the COMPLETED draft and the
+   * rosters commit together or not at all.
+   */
+  async projectDraftInTx(
+    tx: ProjectionClient,
+    input: { leagueId: string; draftId: string }
+  ): Promise<RosterProjectionResult> {
+    const picks = await tx.pick.findMany({
       where: { draftId: input.draftId },
       orderBy: { overall: 'asc' },
       select: { id: true, draftId: true, playerId: true, memberId: true, overall: true },
     });
 
-    for (const pick of picks) {
-      await this.db.leagueRosterPlayer.upsert({
-        where: {
-          leagueId_playerId: {
-            leagueId: input.leagueId,
-            playerId: pick.playerId,
-          },
-        },
-        update: {
-          memberId: pick.memberId,
-          draftId: pick.draftId,
-          pickId: pick.id,
-          acquiredBy: 'DRAFT',
-        },
-        create: {
+    // A fresh league owns none of these players yet: create them in one statement and update only
+    // rows a previous draft of the same league left behind.
+    const existing = await tx.leagueRosterPlayer.findMany({
+      where: { leagueId: input.leagueId, playerId: { in: picks.map((pick) => pick.playerId) } },
+      select: { playerId: true },
+    });
+    const existingPlayerIds = new Set(existing.map(({ playerId }) => playerId));
+    await tx.leagueRosterPlayer.createMany({
+      data: picks
+        .filter((pick) => !existingPlayerIds.has(pick.playerId))
+        .map((pick) => ({
           leagueId: input.leagueId,
           memberId: pick.memberId,
           draftId: pick.draftId,
           pickId: pick.id,
           playerId: pick.playerId,
+          acquiredBy: 'DRAFT',
+        })),
+    });
+    for (const pick of picks.filter((candidate) => existingPlayerIds.has(candidate.playerId))) {
+      await tx.leagueRosterPlayer.update({
+        where: { leagueId_playerId: { leagueId: input.leagueId, playerId: pick.playerId } },
+        data: {
+          memberId: pick.memberId,
+          draftId: pick.draftId,
+          pickId: pick.id,
           acquiredBy: 'DRAFT',
         },
       });
@@ -75,9 +89,9 @@ export class RosterProjectionService {
       .sort((a, b) => b.finalPick - a.finalPick);
 
     const seasonId =
-      waiverPriorityEntries.length > 0 ? await requireActiveSeasonId(this.db, input.leagueId) : '';
+      waiverPriorityEntries.length > 0 ? await requireActiveSeasonId(tx, input.leagueId) : '';
     for (const [index, entry] of waiverPriorityEntries.entries()) {
-      await this.db.waiverPriority.upsert({
+      await tx.waiverPriority.upsert({
         where: {
           leagueId_seasonId_memberId: {
             leagueId: input.leagueId,
@@ -97,6 +111,14 @@ export class RosterProjectionService {
       });
     }
 
+    return { projected: picks.length };
+  }
+
+  /**
+   * Refreshes the Firestore waiver availability projection after the draft has committed. Firestore
+   * is a projection, never canonical, so a failure is logged and the committed draft stands.
+   */
+  async refreshWaiverAvailability(input: { leagueId: string; draftId: string }): Promise<void> {
     try {
       await this.waiverAvailabilityProjectionService.projectLeague({ leagueId: input.leagueId });
     } catch (error) {
@@ -106,8 +128,6 @@ export class RosterProjectionService {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-
-    return { projected: picks.length };
   }
 
   async updateMemberPreferences(input: {
