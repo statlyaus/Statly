@@ -53,7 +53,8 @@ vi.mock('@/server/draft/repository/DraftRepository', () => ({
 
 vi.mock('@/server/rosters/RosterProjectionService', () => ({
   RosterProjectionService: class {
-    projectDraft = vi.fn();
+    projectDraftInTx = vi.fn();
+    refreshWaiverAvailability = vi.fn();
   },
 }));
 
@@ -183,7 +184,10 @@ describe('DraftApplicationService completion projection', () => {
       },
     });
 
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
     await service.makePick({ draftId: 'draft-1', actorUserId: 'user-1', playerId: 'player-1' });
 
     expect(draftRepository.removePlayerFromAllDraftQueues).toHaveBeenCalledWith(
@@ -251,7 +255,8 @@ describe('DraftApplicationService completion projection', () => {
       ],
     });
     const rosterProjectionService = {
-      projectDraft: vi.fn().mockResolvedValue({ projected: 2 }),
+      projectDraftInTx: vi.fn().mockResolvedValue({ projected: 2 }),
+      refreshWaiverAvailability: vi.fn().mockResolvedValue(undefined),
     };
     const service = new DraftApplicationService(rosterProjectionService as never);
 
@@ -278,7 +283,12 @@ describe('DraftApplicationService completion projection', () => {
         clockDurationSeconds: 120,
       })
     );
-    expect(rosterProjectionService.projectDraft).toHaveBeenCalledWith({
+    // Rosters are written on the pick's transaction client; availability after the commit.
+    expect(rosterProjectionService.projectDraftInTx).toHaveBeenCalledWith(
+      {},
+      { leagueId: 'league-1', draftId: 'draft-1' }
+    );
+    expect(rosterProjectionService.refreshWaiverAvailability).toHaveBeenCalledWith({
       leagueId: 'league-1',
       draftId: 'draft-1',
     });
@@ -376,7 +386,10 @@ describe('DraftApplicationService completion projection', () => {
       },
     });
 
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
 
     await service.autoPick({
       draftId: 'draft-1',
@@ -467,7 +480,10 @@ describe('DraftApplicationService completion projection', () => {
       },
     });
 
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
 
     const result = await service.autoPick({
       draftId: 'draft-1',
@@ -525,7 +541,10 @@ describe('DraftApplicationService completion projection', () => {
       picks: [],
     });
 
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
 
     await expect(
       service.autoPick({
@@ -585,7 +604,10 @@ describe('DraftApplicationService completion projection', () => {
       ],
     });
 
-    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    const service = new DraftApplicationService({
+      projectDraftInTx: vi.fn(),
+      refreshWaiverAvailability: vi.fn(),
+    } as never);
 
     await expect(
       service.autoPick({

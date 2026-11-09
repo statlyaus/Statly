@@ -28,6 +28,7 @@ function startedRound(leagueId: string, round: number, fixtureVersion = 1, publi
   return {
     leagueId,
     round,
+    startsAt: new Date(),
     fixtureVersion,
     league: { settings: { competitionRulesVersion: published } },
   };
@@ -195,6 +196,47 @@ describe('/api/cron/scoring', () => {
       failedLeagueIds: ['league-a'],
       leagues: [{ leagueId: 'league-a', error: 'UNSCORED_MATCHUP_IN_FINAL_ROUND' }],
     });
+  });
+
+  it('reports a round stalled on missing stats as a failed run', async () => {
+    findManyMock.mockResolvedValue([
+      { ...startedRound('league-a', 2), startsAt: new Date('2020-04-02T08:30:00Z') },
+      startedRound('league-b', 1),
+    ]);
+    recalculateMock.mockImplementation(async ({ leagueId, round }) =>
+      leagueId === 'league-a'
+        ? {
+            round,
+            status: 'SCHEDULED',
+            recalculated: 0,
+            scores: [],
+            missingPlayerIds: ['player-9'],
+            roundStatus: { hasUnavailableStatus: true, matches: [] },
+          }
+        : recalculated(round)
+    );
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      failedLeagueIds: [],
+      stalledRounds: [
+        { leagueId: 'league-a', round: 2, status: 'SCHEDULED', missingPlayerIds: ['player-9'] },
+      ],
+      leagues: [
+        { leagueId: 'league-a', rounds: [{ round: 2, status: 'SCHEDULED', recalculated: 0 }] },
+        { leagueId: 'league-b', rounds: [{ round: 1, status: 'LIVE' }] },
+      ],
+    });
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      'Scheduled round scoring failed',
+      expect.objectContaining({
+        stalledRounds: [expect.objectContaining({ leagueId: 'league-a' })],
+      })
+    );
   });
 
   it('returns 500 when the started rounds cannot be read', async () => {
