@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import {
   aggregateFinalizedCategoryTotals,
+  mirrorCategoryRows,
   parseStoredCategoryRows,
   resolveCurrentCompetitionRound,
   resolveRoundPlayerAvailability,
@@ -135,6 +136,109 @@ describe('matchupReadModel helpers', () => {
       ['home-member', 17],
       ['away-member', 8],
     ]);
+  });
+
+  // Owner decision 2026-11-11: a season DE% is season effective disposals / season disposals,
+  // never a sum or a mean of the round percentages.
+  describe('season disposal efficiency', () => {
+    const deRow = (homeValue: number | null, numerator?: number, denominator?: number) => ({
+      memberId: 'm',
+      categoriesJson: [
+        {
+          category: 'disposalEffPct',
+          homeValue,
+          awayValue: 0,
+          ...(numerator === undefined ? {} : { homeRatio: { numerator, denominator } }),
+          direction: 'HIGH_WINS',
+          winner: 'draw',
+        },
+      ],
+    });
+
+    it('pools effective disposals over disposals across rounds of different volume', () => {
+      const totals = aggregateFinalizedCategoryTotals(
+        [
+          { ...deRow(90, 18, 20), memberId: 'a' },
+          { ...deRow(50, 30, 60), memberId: 'a' },
+        ],
+        'disposalEffPct'
+      );
+
+      // 48 / 80 = 60%, not 140 (sum of round DE%) or 70 (mean of round DE%).
+      expect(totals.get('a')).toBe(60);
+    });
+
+    it('has no season DE% for a team with no season disposals', () => {
+      const totals = aggregateFinalizedCategoryTotals(
+        [
+          { ...deRow(null, 0, 0), memberId: 'a' },
+          { ...deRow(null, 0, 0), memberId: 'a' },
+        ],
+        'disposalEffPct'
+      );
+
+      expect(totals.has('a')).toBe(true);
+      expect(totals.get('a')).toBeNull();
+    });
+
+    it('skips a round stored without its effective disposals and disposals', () => {
+      const totals = aggregateFinalizedCategoryTotals(
+        [
+          { ...deRow(90), memberId: 'a' },
+          { ...deRow(50, 30, 60), memberId: 'a' },
+          { ...deRow(80), memberId: 'b' },
+        ],
+        'disposalEffPct'
+      );
+
+      expect(totals.get('a')).toBe(50);
+      expect(totals.get('b')).toBeNull();
+    });
+
+    it('reads stored ratio parts and drops malformed ones', () => {
+      const [row] = parseStoredCategoryRows([
+        {
+          category: 'disposalEffPct',
+          homeValue: 75,
+          awayValue: null,
+          homeRatio: { numerator: 15, denominator: 20 },
+          awayRatio: { numerator: 'x', denominator: 0 },
+          direction: 'HIGH_WINS',
+          winner: 'draw',
+        },
+      ]);
+
+      expect(row.homeRatio).toEqual({ numerator: 15, denominator: 20 });
+      expect(row.awayRatio).toBeUndefined();
+    });
+
+    it("mirrors a matchup's rows for the away member, ratio parts included", () => {
+      expect(
+        mirrorCategoryRows([
+          {
+            category: 'disposalEffPct',
+            homeValue: 75,
+            awayValue: null,
+            homeRatio: { numerator: 15, denominator: 20 },
+            awayRatio: { numerator: 0, denominator: 0 },
+            direction: 'HIGH_WINS',
+            winner: 'draw',
+          },
+          { category: 'goals', homeValue: 3, awayValue: 1, direction: 'HIGH_WINS', winner: 'home' },
+        ])
+      ).toEqual([
+        {
+          category: 'disposalEffPct',
+          homeValue: null,
+          awayValue: 75,
+          homeRatio: { numerator: 0, denominator: 0 },
+          awayRatio: { numerator: 15, denominator: 20 },
+          direction: 'HIGH_WINS',
+          winner: 'draw',
+        },
+        { category: 'goals', homeValue: 1, awayValue: 3, direction: 'HIGH_WINS', winner: 'away' },
+      ]);
+    });
   });
 
   it('distinguishes confirmed zero-minute players from players on a club bye', () => {

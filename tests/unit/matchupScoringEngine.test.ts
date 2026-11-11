@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateLineupCategoryTotals,
   scoreHeadToHeadCategories,
+  sumCategoryTotals,
 } from '@/server/leagues/matchupScoringEngine';
 import { categoryStatInputs, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
@@ -139,6 +140,9 @@ describe('matchup scoring engine', () => {
         category: 'disposalEffPct',
         homeValue: null,
         awayValue: 80,
+        // The round's effective disposals and disposals are kept so a season DE% can be pooled.
+        homeRatio: { numerator: 0, denominator: 0 },
+        awayRatio: { numerator: 8, denominator: 10 },
         direction: 'HIGH_WINS',
         winner: 'draw',
       });
@@ -148,6 +152,28 @@ describe('matchup scoring engine', () => {
         drawnCategories: 1,
       });
     });
+  });
+
+  it('leaves a ratio category out of pointsFor, which adds up count categories only', () => {
+    expect(
+      sumCategoryTotals({ goals: 3, tackles: 10, disposalEffPct: 66.7 }, [
+        'goals',
+        'tackles',
+        'disposalEffPct',
+      ])
+    ).toBe(13);
+  });
+
+  it('keeps no ratio parts on a sum category row', () => {
+    const result = scoreHeadToHeadCategories({
+      categories: ['goals'],
+      categoryDirections: {},
+      homeTotals: { goals: 2 },
+      awayTotals: { goals: 1 },
+      scoringMode: 'H2H_EACH_CATEGORY',
+    });
+
+    expect(result.categories[0]).not.toHaveProperty('homeRatio');
   });
 
   it('names the per-player stats each category is computed from', () => {

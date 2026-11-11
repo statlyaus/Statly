@@ -10,6 +10,7 @@ import type {
   LeagueLineupSlot,
   LeagueScoringMode,
   MatchupScoreResult,
+  RatioParts,
 } from './scoringTypes';
 
 /**
@@ -46,7 +47,8 @@ function readTotal(totals: CategoryTotals, key: ScoringStatKey): number {
  * A team's value per category across its counted players (bench and interchange excluded). Each
  * category's aggregation rule lives on its definition in `fantasyCategories.ts`: most categories
  * sum; disposal efficiency is total effective disposals / total disposals x 100, and is left out
- * (unavailable) when the team had no disposals.
+ * (unavailable) when the team had no disposals. A ratio's numerator and denominator totals are kept
+ * too, so the round's result can store them for a season ratio.
  */
 export function aggregateLineupCategoryTotals(
   input: AggregateLineupCategoryTotalsInput
@@ -64,9 +66,12 @@ export function aggregateLineupCategoryTotals(
       totals[category] = sumOf(category);
       continue;
     }
+    const numerator = sumOf(aggregation.numerator);
     const denominator = sumOf(aggregation.denominator);
+    totals[aggregation.numerator] = numerator;
+    totals[aggregation.denominator] = denominator;
     if (denominator > 0) {
-      totals[category] = (sumOf(aggregation.numerator) / denominator) * aggregation.scale;
+      totals[category] = (numerator / denominator) * aggregation.scale;
     }
   }
 
@@ -80,11 +85,28 @@ function readCategoryValue(totals: CategoryTotals, category: FantasyCategoryKey)
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function readRatioParts(totals: CategoryTotals, category: FantasyCategoryKey): RatioParts | null {
+  const aggregation = categoryAggregation(category);
+  if (aggregation.kind !== 'ratio') return null;
+  return {
+    numerator: readTotal(totals, aggregation.numerator),
+    denominator: readTotal(totals, aggregation.denominator),
+  };
+}
+
+/**
+ * `pointsFor`: the team's count categories added together. A ratio category (DE%) is a rate, not
+ * a count, so it is left out rather than added to goals and tackles.
+ */
 export function sumCategoryTotals(
   totals: CategoryTotals,
   categories: readonly FantasyCategoryKey[]
 ): number {
-  return categories.reduce((sum, category) => sum + readTotal(totals, category), 0);
+  return categories.reduce(
+    (sum, category) =>
+      categoryAggregation(category).kind === 'sum' ? sum + readTotal(totals, category) : sum,
+    0
+  );
 }
 
 export function scoreHeadToHeadCategories(
@@ -108,7 +130,16 @@ export function scoreHeadToHeadCategories(
     if (winner === 'away') awayCategoryWins += 1;
     if (winner === 'draw') drawnCategories += 1;
 
-    return { category, homeValue, awayValue, direction, winner };
+    const homeRatio = readRatioParts(input.homeTotals, category);
+    const awayRatio = readRatioParts(input.awayTotals, category);
+    return {
+      category,
+      homeValue,
+      awayValue,
+      ...(homeRatio && awayRatio ? { homeRatio, awayRatio } : {}),
+      direction,
+      winner,
+    };
   });
 
   const homeMatchupWin = homeCategoryWins > awayCategoryWins;
