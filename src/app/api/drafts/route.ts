@@ -16,7 +16,6 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
-import { startLeagueSeason } from '@/server/leagues/activeSeason';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -56,7 +55,6 @@ interface CreateDraftRequest {
     name: string;
     maxTeams: number;
     categories: string[];
-    ownerId: string;
   };
   participants?: Array<{
     userId: string;
@@ -205,14 +203,15 @@ export async function POST(request: NextRequest) {
 
     const body: CreateDraftRequest = await request.json();
 
-    if (process.env.NODE_ENV === 'production' && !body.leagueId) {
+    // Drafts belong to a league; there is no standalone draft without one.
+    if (!body.leagueId) {
       return NextResponse.json(
         { success: false, error: 'League draft creation requires a leagueId' },
         { status: 400 }
       );
     }
 
-    if (body.leagueId && !(await canManageLeague(body.leagueId, userId))) {
+    if (!(await canManageLeague(body.leagueId, userId))) {
       return NextResponse.json(
         { success: false, error: 'Commissioner access required' },
         { status: 403 }
@@ -232,281 +231,93 @@ export async function POST(request: NextRequest) {
     const benchSize = getBenchSizeFromPositionLimits(positionLimits);
     const activePlayerCount = await prisma.player.count({ where: { active: true } });
 
-    // Create draft in database transaction
+    const leagueId = body.leagueId;
     const result = await prisma.$transaction(async (tx) => {
-      let league;
-      let settings;
-      const leagueId = body.leagueId;
+      const league = await tx.league.findUnique({
+        where: { id: leagueId },
+        include: {
+          settings: true,
+          members: { where: { isActive: true }, include: { user: true } },
+        },
+      });
 
-      // If leagueId is provided, use existing league
-      if (leagueId) {
-        league = await tx.league.findUnique({
-          where: { id: leagueId },
-          include: {
-            settings: true,
-            members: { where: { isActive: true }, include: { user: true } },
-          },
-        });
-
-        if (!league) {
-          throw new Error('League not found');
-        }
-
-        const leagueCategories = normalizeLeagueCategories(body.leagueData?.categories);
-        if (!hasStoredLeagueCategories(league.categoriesJson)) {
-          await tx.league.update({
-            where: { id: league.id },
-            data: { categoriesJson: leagueCategories },
-          });
-        }
-
-        const orderedMembers = orderMembersForDraft(league.members, body.participants, pickOrder);
-        const capacity = calculateDraftCapacity({
-          teamCount: orderedMembers.length,
-          positionLimits,
-          activePlayerCount,
-        });
-        const settingsData = {
-          pickSeconds: body.timePerPick,
-          allowAutoPick: autoPickRules.enabled,
-          positionLimitsJson: positionLimits,
-          autoPickRulesJson: autoPickRules,
-          draftType: body.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
-          pickOrder: pickOrder === 'manual' ? PickOrder.MANUAL : PickOrder.RANDOM,
-          rosterSize,
-          benchSize,
-          startAt: scheduledStartTime,
-          timeZone,
-        };
-
-        settings = await tx.leagueSettings.update({
-          where: { id: league.settings.id },
-          data: settingsData,
-        });
-
-        // Verify participants match league members if provided
-        if (body.participants && body.participants.length !== league.members.length) {
-          throw new Error('Participant count does not match league member count');
-        }
-
-        for (let i = 0; i < orderedMembers.length; i++) {
-          if (orderedMembers[i].draftSlot !== i + 1) {
-            await tx.leagueMember.update({
-              where: { id: orderedMembers[i].id },
-              data: { draftSlot: i + 1 },
-            });
-          }
-        }
-
-        // Create draft with existing league
-        const draft = await tx.draft.create({
-          data: {
-            leagueId: league.id,
-            status: DraftStatus.SCHEDULED,
-            lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN',
-            lobbyOpenAt: body.scheduledTime ? undefined : new Date(),
-            currentPick: 1,
-            totalPicks: capacity.totalPicks,
-            round: 1,
-            direction: DraftDirection.FORWARD,
-            startedAt: body.scheduledTime ? undefined : new Date(),
-          },
-        });
-
-        // Create draft orders from existing league members
-        for (let i = 0; i < orderedMembers.length; i++) {
-          await tx.draftOrder.create({
-            data: {
-              draftId: draft.id,
-              memberId: orderedMembers[i].id,
-              slot: i + 1,
-            },
-          });
-        }
-
-        return { draft, league, members: orderedMembers, settings };
-      } else {
-        const capacity = calculateDraftCapacity({
-          teamCount: body.leagueSize,
-          positionLimits,
-          activePlayerCount,
-        });
-
-        // Create new temporary league for standalone draft (existing logic)
-        settings = await tx.leagueSettings.create({
-          data: {
-            rosterSize,
-            benchSize,
-            maxTeams: body.leagueSize,
-            pickSeconds: body.timePerPick,
-            allowAutoPick: autoPickRules.enabled,
-            positionLimitsJson: positionLimits,
-            autoPickRulesJson: autoPickRules,
-            draftType: body.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
-            pickOrder: pickOrder === 'manual' ? PickOrder.MANUAL : PickOrder.RANDOM,
-            startAt: scheduledStartTime || new Date(),
-            timeZone,
-            locked: false,
-          },
-        });
-
-        // Create a temporary league for this draft
-        league = await tx.league.create({
-          data: {
-            name: body.leagueData?.name || body.name,
-            inviteCode: `DRAFT_${Date.now()}`,
-            ownerId: body.leagueData?.ownerId || 'temp_owner', // Will be updated after creating the first user
-            settingsId: settings.id,
-            categoriesJson: normalizeLeagueCategories(body.leagueData?.categories),
-          },
-        });
-        // The final pick seeds waiver priority in the active season, so the draft needs one to complete.
-        await startLeagueSeason(tx, league.id, scheduledStartTime);
-
-        // Create draft
-        const draft = await tx.draft.create({
-          data: {
-            leagueId: league.id,
-            status: DraftStatus.SCHEDULED,
-            lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN', // Open lobby immediately if no time specified
-            lobbyOpenAt: body.scheduledTime ? undefined : new Date(), // Open lobby now if no time specified
-            currentPick: 1,
-            totalPicks: capacity.totalPicks,
-            round: 1,
-            direction: DraftDirection.FORWARD,
-            startedAt: body.scheduledTime ? undefined : new Date(),
-          },
-        });
-
-        // Create league members - you get special privileges, rest are dummy users
-        const members = [];
-        let firstUserId: string | null = null;
-
-        // If participants are provided, use them; otherwise create dummy users
-        if (body.participants && body.participants.length > 0) {
-          for (let i = 0; i < body.participants.length; i++) {
-            const participant = body.participants[i];
-
-            // Create or find user
-            let user;
-            try {
-              user = await tx.user.findFirst({
-                where: {
-                  OR: [{ id: participant.userId }, { email: `${participant.userId}@draft.local` }],
-                },
-              });
-              if (!user) {
-                // Preserve external identity so downstream auth (Firebase UID) matches league members
-                user = await tx.user.create({
-                  data: {
-                    id: participant.userId,
-                    email: `${participant.userId}_${Date.now()}@draft.local`,
-                    passwordHash: 'draft_hash',
-                    displayName: participant.displayName,
-                    timeZone: 'Australia/Melbourne',
-                  },
-                });
-              }
-            } catch {
-              user = await tx.user.create({
-                data: {
-                  id: participant.userId,
-                  email: `${participant.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}@draft.local`,
-                  passwordHash: 'draft_hash',
-                  displayName: participant.displayName,
-                  timeZone: 'Australia/Melbourne',
-                },
-              });
-            }
-
-            if (!firstUserId && participant.isOwner) firstUserId = user.id;
-
-            const member = await tx.leagueMember.create({
-              data: {
-                leagueId: league.id,
-                userId: user.id,
-                role: participant.isOwner ? 'OWNER' : 'MANAGER',
-                teamName: participant.displayName,
-                draftSlot: participant.draftOrder,
-              },
-            });
-
-            members.push(member);
-          }
-        } else {
-          // Create you as the first member with special privileges
-          const yourUser = await tx.user.create({
-            data: {
-              email: `admin_${Date.now()}@statly.local`,
-              passwordHash: 'admin_hash',
-              displayName: 'You (Admin)',
-              timeZone: 'Australia/Melbourne',
-            },
-          });
-
-          firstUserId = yourUser.id;
-
-          const yourMember = await tx.leagueMember.create({
-            data: {
-              leagueId: league.id,
-              userId: yourUser.id,
-              role: 'OWNER',
-              teamName: 'Your Team',
-            },
-          });
-
-          members.push(yourMember);
-
-          // Create dummy users for the rest of the spots
-          for (let i = 1; i < body.leagueSize; i++) {
-            const dummyUser = await tx.user.create({
-              data: {
-                email: `dummy_${i}_${Date.now()}_${Math.random().toString(36).substring(7)}@bot.local`,
-                passwordHash: 'dummy_hash',
-                displayName: `CPU Team ${i}`,
-                timeZone: 'UTC',
-              },
-            });
-
-            const dummyMember = await tx.leagueMember.create({
-              data: {
-                leagueId: league.id,
-                userId: dummyUser.id,
-                role: 'MANAGER',
-                teamName: `CPU Team ${i}`,
-              },
-            });
-
-            members.push(dummyMember);
-          }
-        }
-
-        // Update league owner
-        if (firstUserId) {
-          await tx.league.update({
-            where: { id: league.id },
-            data: { ownerId: firstUserId },
-          });
-        }
-
-        // Create draft order
-        const orderedMembers = orderMembersForDraft(
-          members as LeagueMemberWithUser[],
-          body.participants,
-          pickOrder
-        );
-        for (let i = 0; i < orderedMembers.length; i++) {
-          await tx.draftOrder.create({
-            data: {
-              draftId: draft.id,
-              slot: i + 1,
-              memberId: orderedMembers[i].id,
-            },
-          });
-        }
-
-        return { draft, league, members: orderedMembers, settings };
+      if (!league) {
+        throw new Error('League not found');
       }
+
+      const leagueCategories = normalizeLeagueCategories(body.leagueData?.categories);
+      if (!hasStoredLeagueCategories(league.categoriesJson)) {
+        await tx.league.update({
+          where: { id: league.id },
+          data: { categoriesJson: leagueCategories },
+        });
+      }
+
+      const orderedMembers = orderMembersForDraft(league.members, body.participants, pickOrder);
+      const capacity = calculateDraftCapacity({
+        teamCount: orderedMembers.length,
+        positionLimits,
+        activePlayerCount,
+      });
+      const settingsData = {
+        pickSeconds: body.timePerPick,
+        allowAutoPick: autoPickRules.enabled,
+        positionLimitsJson: positionLimits,
+        autoPickRulesJson: autoPickRules,
+        draftType: body.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
+        pickOrder: pickOrder === 'manual' ? PickOrder.MANUAL : PickOrder.RANDOM,
+        rosterSize,
+        benchSize,
+        startAt: scheduledStartTime,
+        timeZone,
+      };
+
+      const settings = await tx.leagueSettings.update({
+        where: { id: league.settings.id },
+        data: settingsData,
+      });
+
+      // Verify participants match league members if provided
+      if (body.participants && body.participants.length !== league.members.length) {
+        throw new Error('Participant count does not match league member count');
+      }
+
+      for (let i = 0; i < orderedMembers.length; i++) {
+        if (orderedMembers[i].draftSlot !== i + 1) {
+          await tx.leagueMember.update({
+            where: { id: orderedMembers[i].id },
+            data: { draftSlot: i + 1 },
+          });
+        }
+      }
+
+      // Create draft with existing league
+      const draft = await tx.draft.create({
+        data: {
+          leagueId: league.id,
+          status: DraftStatus.SCHEDULED,
+          lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN',
+          lobbyOpenAt: body.scheduledTime ? undefined : new Date(),
+          currentPick: 1,
+          totalPicks: capacity.totalPicks,
+          round: 1,
+          direction: DraftDirection.FORWARD,
+          startedAt: body.scheduledTime ? undefined : new Date(),
+        },
+      });
+
+      // Create draft orders from existing league members
+      for (let i = 0; i < orderedMembers.length; i++) {
+        await tx.draftOrder.create({
+          data: {
+            draftId: draft.id,
+            memberId: orderedMembers[i].id,
+            slot: i + 1,
+          },
+        });
+      }
+
+      return { draft, league, members: orderedMembers, settings };
     });
 
     // Schedule draft start

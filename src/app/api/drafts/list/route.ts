@@ -2,10 +2,10 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { prisma } from '@/lib/prisma';
+import { listMemberLeagueDrafts } from '@/server/draft/readModels/memberLeagueDraftsReadModel';
 
 /**
- * List all drafts for debugging
+ * Drafts of the leagues the viewer has an active team in, newest first.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -14,44 +14,11 @@ export async function GET(request: NextRequest) {
       return errorResponse('Unauthorized', 401);
     }
 
-    const drafts = await prisma.draft.findMany({
-      where: { league: { members: { some: { userId, isActive: true } } } },
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        league: {
-          select: {
-            id: true,
-            name: true,
-            settings: {
-              select: {
-                startAt: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 10, // Last 10 drafts
-    });
-
-    const result = {
-      count: drafts.length,
-      drafts: drafts.map((draft) => ({
-        id: draft.id,
-        status: draft.status,
-        leagueName: draft.league?.name || 'Unknown',
-        startAt: draft.league?.settings?.startAt,
-        createdAt: draft.createdAt,
-      })),
-    };
+    const drafts = await listMemberLeagueDrafts(userId);
 
     logger.info('Listed drafts', { count: drafts.length });
 
-    return successResponse(result);
+    return successResponse({ count: drafts.length, drafts });
   } catch (error) {
     logger.error('Failed to list drafts', {
       error: error instanceof Error ? error.message : String(error),

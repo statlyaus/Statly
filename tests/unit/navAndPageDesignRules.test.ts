@@ -8,8 +8,6 @@ import { describe, expect, it } from 'vitest';
 const files = [
   'src/components/navigation/MainNavigation.tsx',
   'src/app/(app)/drafts/page.tsx',
-  'src/app/(app)/drafts/create/page.tsx',
-  'src/app/(app)/drafts/settings/page.tsx',
   'src/app/(app)/leagues/join/page.tsx',
 ];
 
@@ -32,14 +30,5 @@ describe('navigation and page design rules', () => {
     expect(source).not.toMatch(/rounded-\[/);
     expect(source).not.toMatch(/shadow-\[/);
     expect(source).not.toMatch(/tracking-\[/);
-  });
-
-  it('pick room settings use colour tokens, not raw palette classes', () => {
-    const source = read('src/app/(app)/drafts/settings/page.tsx');
-
-    expect(source).not.toMatch(
-      /\b(?:bg|text|border|ring)-(?:gray|slate|zinc|neutral|blue|red|green)-\d{2,3}\b/
-    );
-    expect(source).not.toMatch(/\bbg-white\b/);
   });
 });
