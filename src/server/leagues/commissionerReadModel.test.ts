@@ -68,6 +68,7 @@ describe('loadCommissionerLeagues', () => {
         inviteCode: 'OPEN1',
         maxTeams: 8,
         memberRemovalOpen: true,
+        memberRemovalClosedReason: null,
         members: [
           {
             userId: 'owner',
@@ -91,6 +92,7 @@ describe('loadCommissionerLeagues', () => {
         inviteCode: 'DRAFT1',
         maxTeams: 4,
         memberRemovalOpen: false,
+        memberRemovalClosedReason: 'Managers can only be removed before the draft starts.',
         members: [
           {
             userId: 'owner',
@@ -102,5 +104,26 @@ describe('loadCommissionerLeagues', () => {
         ],
       },
     ]);
+  });
+
+  it('closes removal once the competition is published, even before the draft starts', async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: 'league-published',
+        name: 'Published League',
+        inviteCode: 'PUB1',
+        settings: { maxTeams: 8, competitionPublishedAt: joinedAt },
+        drafts: [],
+        members: [member({ userId: 'owner', role: LeagueRole.OWNER })],
+      },
+    ]);
+
+    const [league] = await loadCommissionerLeagues('owner', { league: { findMany } });
+
+    expect(league).toMatchObject({
+      memberRemovalOpen: false,
+      memberRemovalClosedReason:
+        'The season is published, so managers can no longer be removed or leave.',
+    });
   });
 });

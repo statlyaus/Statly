@@ -84,6 +84,9 @@ const nextConfig = {
         destination: '/dashboard',
         permanent: false,
       },
+      // Drafts are created from a league's Draft tab; the standalone create and settings pages are gone.
+      { source: '/drafts/create', destination: '/drafts', permanent: true },
+      { source: '/drafts/settings', destination: '/drafts', permanent: true },
     ];
   },
 
