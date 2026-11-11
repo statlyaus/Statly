@@ -224,3 +224,51 @@ describe('getLeagueDraftOperationalReadiness', () => {
     expect(convergenceSource).not.toContain('currentPickDeadline');
   });
 });
+
+describe('Bloodsucker draft readiness (BR-02, BR-06)', () => {
+  async function readinessFor(input: { leagueFormat: string; bloodsuckerMemberId: string | null }) {
+    const client = buildClient({
+      startAt: new Date('2026-05-02T00:00:00.000Z'),
+      availablePlayers: 100,
+    });
+    const league = await client.league.findUnique();
+    client.league.findUnique.mockResolvedValue({
+      ...league,
+      settings: { ...league.settings, ...input },
+    });
+    return getLeagueDraftOperationalReadiness(client as any, {
+      leagueId: 'league-1',
+      now: new Date('2026-05-02T00:05:00.000Z'),
+    });
+  }
+
+  it('blocks the start with "Choose a Bloodsucker" and the 8-team minimum', async () => {
+    const readiness = await readinessFor({
+      leagueFormat: 'BLOODSUCKER',
+      bloodsuckerMemberId: null,
+    });
+
+    expect(readiness.status).toBe('blocked');
+    expect(readiness.lifecycle.canStartClock).toBe(false);
+    expect(readiness.lifecycle.canEnterRoom).toBe(false);
+    expect(readiness.blockers.map((blocker) => blocker.message)).toEqual([
+      'Choose a Bloodsucker.',
+      'A Bloodsucker league needs at least 8 teams (12 recommended).',
+    ]);
+  });
+
+  it('blocks again once the chosen Bloodsucker is no longer an active member', async () => {
+    const readiness = await readinessFor({
+      leagueFormat: 'BLOODSUCKER',
+      bloodsuckerMemberId: 'member-gone',
+    });
+
+    expect(readiness.blockers.map((blocker) => blocker.code)).toContain('bloodsucker_missing');
+  });
+
+  it('adds no format blocker to a standard league', async () => {
+    const readiness = await readinessFor({ leagueFormat: 'STANDARD', bloodsuckerMemberId: null });
+
+    expect(readiness.blockers).toEqual([]);
+  });
+});

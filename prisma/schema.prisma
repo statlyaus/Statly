@@ -116,6 +116,7 @@ model LeagueMember {
   matchupScores             LeagueMatchupScore[]
   standings                 LeagueStanding[]
   competitionAuditEvents    LeagueCompetitionAudit[] @relation("CompetitionAuditActor")
+  bloodsuckerOfSettings     LeagueSettings[]         @relation("BloodsuckerMember")
   socialMessages            SocialMessage[]          @relation("SocialMessageAuthor")
   socialPosts               SocialPost[]             @relation("SocialPostAuthor")
   socialReplies             SocialReply[]            @relation("SocialReplyAuthor")
@@ -218,6 +219,10 @@ model LeagueSettings {
   locked                  Boolean                     @default(false)
   scoringMode             LeagueScoringMode           @default(H2H_EACH_CATEGORY)
   fixtureGenerationMode   LeagueFixtureGenerationMode @default(AUTOMATIC)
+  /// League format, independent of scoring mode and categories; locks with the draft structure.
+  leagueFormat            LeagueFormat                @default(STANDARD)
+  /// The member who skips the draft in a BLOODSUCKER league; cleared when that member leaves.
+  bloodsuckerMemberId     String?
   lineupSlotsJson         Json?
   categoryDirectionsJson  Json?
   scoringSettingsLockedAt DateTime?
@@ -232,7 +237,10 @@ model LeagueSettings {
   tradeReviewHours        Int                         @default(24)
   tradeVetoThreshold      Int                         @default(3)
 
-  league League?
+  league            League?
+  bloodsuckerMember LeagueMember? @relation("BloodsuckerMember", fields: [bloodsuckerMemberId], references: [id], onDelete: SetNull)
+
+  @@index([bloodsuckerMemberId])
 }
 
 enum DraftType {
@@ -253,6 +261,11 @@ enum WaiverRule {
 enum LeagueScoringMode {
   H2H_EACH_CATEGORY
   H2H_MOST_CATEGORIES
+}
+
+enum LeagueFormat {
+  STANDARD
+  BLOODSUCKER
 }
 
 enum LeagueFixtureGenerationMode {
@@ -313,6 +326,8 @@ enum LeagueCompetitionAuditEventType {
   FIXTURE_DATA_PENDING
   /// A recalculation changed a FINAL matchup's stored result; the payload holds before and after.
   FINAL_ROUND_RESCORED
+  /// The league format or the Bloodsucker member changed; the payload holds before, after and reason.
+  LEAGUE_FORMAT_CHANGED
 }
 
 enum LeagueAutosubReason {

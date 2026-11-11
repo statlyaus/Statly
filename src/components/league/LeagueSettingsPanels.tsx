@@ -38,7 +38,10 @@ import {
   normalizeFantasyCategoryList,
 } from './leagueTabPanelUtils';
 import { CompetitionSettingsPanel } from './settings/CompetitionSettingsPanel';
-import { ScoringSettingsPanel } from './settings/ScoringSettingsPanel';
+import {
+  ScoringSettingsPanel,
+  type LeagueFormatSettingsValue,
+} from './settings/ScoringSettingsPanel';
 import { SeasonYearControl } from './settings/SeasonYearControl';
 
 type TeamNotificationToggleKey = 'tradePush' | 'waiverPush' | 'draftReminder' | 'scoringAlerts';
@@ -63,6 +66,8 @@ interface LeagueSettingsResponse {
     categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
     scoringSettingsLockedAt: string | null;
   };
+  // League format (Bloodsucker, epic #1275); locks with the draft structure.
+  format: LeagueFormatSettingsValue;
   // Why scoring or draft structure can no longer change; null while it is still editable.
   locks: {
     scoring: string | null;
@@ -167,6 +172,11 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
       scoringSettingsLockedAt: league.scoringSettingsLockedAt ?? null,
     },
     locks: { scoring: null, draftStructure: null },
+    format: {
+      leagueFormat: league.leagueFormat ?? 'STANDARD',
+      bloodsuckerMemberId: null,
+      candidates: [],
+    },
     roster: {
       rosterSize: 18,
       benchSize: DEFAULT_DRAFT_POSITION_LIMITS.BENCH,
@@ -184,6 +194,26 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
       waiverRule: league.waiverRule ?? 'weekly',
       faabBudget: null,
     },
+  };
+}
+
+function normalizeLeagueFormatSettings(
+  value: unknown,
+  fallback: LeagueFormatSettingsValue
+): LeagueFormatSettingsValue {
+  const source = isRecord(value) ? value : {};
+  return {
+    leagueFormat: source.leagueFormat === 'BLOODSUCKER' ? 'BLOODSUCKER' : fallback.leagueFormat,
+    bloodsuckerMemberId:
+      typeof source.bloodsuckerMemberId === 'string' ? source.bloodsuckerMemberId : null,
+    candidates: Array.isArray(source.candidates)
+      ? source.candidates.filter(
+          (candidate): candidate is LeagueFormatSettingsValue['candidates'][number] =>
+            isRecord(candidate) &&
+            typeof candidate.memberId === 'string' &&
+            typeof candidate.teamName === 'string'
+        )
+      : [],
   };
 }
 
@@ -227,6 +257,7 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
           ? scoringSource.scoringSettingsLockedAt
           : null,
     },
+    format: normalizeLeagueFormatSettings(source.format, fallback.format),
     locks: {
       scoring: typeof locksSource.scoring === 'string' ? locksSource.scoring : null,
       draftStructure:
@@ -1113,6 +1144,20 @@ export function LeagueSettingsPanel({
           lockReason={settings.locks.scoring}
           disabled={!isAdmin || isSaving}
           onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
+          format={settings.format}
+          formatLockReason={draftStructureLock}
+          onFormatChange={(format) =>
+            setSettings((current) => ({
+              ...current,
+              format,
+              // A Bloodsucker league runs rolling waivers with no FAAB (BR-03).
+              ...(format.leagueFormat === 'BLOODSUCKER'
+                ? {
+                    waiver: { ...current.waiver, waiverRule: 'rolling' as const, faabBudget: null },
+                  }
+                : {}),
+            }))
+          }
         />
 
         <CompetitionSettingsPanel
@@ -1280,7 +1325,9 @@ export function LeagueSettingsPanel({
                 }
                 className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               >
-                <option value="weekly">Weekly</option>
+                <option value="weekly" disabled={settings.format.leagueFormat === 'BLOODSUCKER'}>
+                  Weekly
+                </option>
                 <option value="rolling">Rolling</option>
               </select>
             </label>
@@ -1291,6 +1338,7 @@ export function LeagueSettingsPanel({
                 min={1}
                 step={1}
                 placeholder="Off"
+                disabled={settings.format.leagueFormat === 'BLOODSUCKER'}
                 value={settings.waiver.faabBudget ?? ''}
                 onChange={(event) =>
                   setSettings((current) => ({

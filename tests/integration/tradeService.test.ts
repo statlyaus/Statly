@@ -28,6 +28,8 @@ type TradeReadModelModule = typeof import('@/server/leagues/trades/tradeReadMode
 let prisma: PrismaClient;
 let service: TradeServiceModule;
 let readModel: TradeReadModelModule;
+// Each refresh of the Firestore ownership projection, with the owners it would read at that moment.
+const projectedOwners: Array<Record<string, string>> = [];
 
 describe.sequential('league trade service transactions', () => {
   beforeAll(async () => {
@@ -39,17 +41,31 @@ describe.sequential('league trade service transactions', () => {
 
     vi.resetModules();
     vi.doMock('@/lib/prisma', () => ({ prisma }));
+    vi.doMock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
+      WaiverAvailabilityProjectionService: class {
+        async projectLeague({ leagueId }: { leagueId: string }) {
+          const rows = await prisma.leagueRosterPlayer.findMany({
+            where: { leagueId, playerId: { in: [ids.firstPlayer, ids.secondPlayer] } },
+            select: { playerId: true, memberId: true },
+          });
+          projectedOwners.push(Object.fromEntries(rows.map((row) => [row.playerId, row.memberId])));
+          return { owned: rows.length, available: 0 };
+        }
+      },
+    }));
     service = await import('@/server/leagues/trades/tradeService');
     readModel = await import('@/server/leagues/trades/tradeReadModel');
   }, 60_000);
 
   afterAll(async () => {
     vi.doUnmock('@/lib/prisma');
+    vi.doUnmock('@/server/waivers/WaiverAvailabilityProjectionService');
     if (prisma) await deleteFixtures();
     await prisma?.$disconnect();
   });
 
   beforeEach(async () => {
+    projectedOwners.length = 0;
     await resetTradeState();
   });
 
@@ -379,6 +395,40 @@ describe.sequential('league trade service transactions', () => {
         where: { eventType: 'COMPLETED', thread: { leagueId: ids.league } },
       })
     ).resolves.toBe(1);
+  });
+
+  it('refreshes the ownership projection with the new owners once a trade commits', async () => {
+    const created = await createTrade();
+    await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      { action: 'accept', expectedVersion: created.version, idempotencyKey: 'accept-proj-0001' },
+      now
+    );
+
+    expect(projectedOwners).toEqual([
+      { [ids.firstPlayer]: ids.secondMember, [ids.secondPlayer]: ids.firstMember },
+    ]);
+  });
+
+  it('refreshes the ownership projection when a due VETO trade completes', async () => {
+    await setReviewMode('VETO', 3);
+    const created = await createTrade();
+    await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      { action: 'accept', expectedVersion: created.version, idempotencyKey: 'accept-proj-veto-01' },
+      now
+    );
+    expect(projectedOwners).toEqual([]);
+
+    await service.processDueLeagueTrades(new Date(now.getTime() + 25 * 60 * 60 * 1000));
+
+    expect(projectedOwners).toEqual([
+      { [ids.firstPlayer]: ids.secondMember, [ids.secondPlayer]: ids.firstMember },
+    ]);
   });
 
   it('invalidates an accepted offer when ownership changed after proposal', async () => {

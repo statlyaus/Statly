@@ -7,10 +7,12 @@ import { Prisma, type TradeReviewMode } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import {
-  describeLockedPlayers,
-  findPlayersLockedForMove,
-  removePlayersFromOpenLineups,
-} from '@/server/leagues/playerMoveLock';
+  assertRosterPlayersMovable,
+  invalidatePendingTradesForPlayers,
+  refreshOwnershipProjection,
+  RosterSwapError,
+  swapRosterPlayers,
+} from '@/server/leagues/rosterSwap';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -73,8 +75,6 @@ export async function authorizeLeagueTradeAccess(
   const access = await requireTradeAccess(leagueId, userId);
   return access.leagueId;
 }
-
-const activeThreadStatuses = ['OPEN', 'PENDING_ADMIN_REVIEW', 'PENDING_VETO_REVIEW'] as const;
 
 export async function createLeagueTrade(
   leagueId: string,
@@ -150,13 +150,15 @@ export async function executeLeagueTradeAction(
     await enforcePlayersMovable(leagueId, await loadOfferedPlayerIds(leagueId, threadId), now);
   }
 
-  return executeIdempotentTradeCommand(
+  const result = await executeIdempotentTradeCommand(
     access,
     canonicalInput.idempotencyKey,
     `TRADE_${canonicalInput.action.toUpperCase()}`,
     { threadId, ...canonicalInput },
     async (tx) => executeActionInTransaction(tx, access, threadId, canonicalInput, now)
   );
+  if (result.status === 'COMPLETED') await refreshOwnershipProjection(leagueId);
+  return result;
 }
 
 async function resolveTradePlayerSelection(
@@ -184,10 +186,13 @@ async function enforcePlayersMovable(
   playerIds: readonly string[],
   now: Date
 ): Promise<void> {
-  const lock = await findPlayersLockedForMove({ leagueId, playerIds, now });
-  if (!lock.ok) throw new TradeServiceError('TIMING_UNAVAILABLE', lock.error, 503);
-  if (lock.lockedPlayers.length > 0) {
-    throw new TradeServiceError('PLAYER_LOCKED', describeLockedPlayers(lock.lockedPlayers), 409);
+  try {
+    await assertRosterPlayersMovable({ leagueId, playerIds, now });
+  } catch (error) {
+    if (error instanceof RosterSwapError) {
+      throw new TradeServiceError(error.code, error.message, error.status);
+    }
+    throw error;
   }
 }
 
@@ -226,7 +231,7 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
         );
       }
 
-      await prisma.$transaction(async (tx) => {
+      const completed = await prisma.$transaction(async (tx) => {
         const thread = await loadTradeForMutation(tx, candidate.id);
         if (!thread || thread.version !== candidate.version) return;
 
@@ -256,10 +261,12 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
           thread.reviewEndsAt &&
           thread.reviewEndsAt <= now
         ) {
-          await finalizeTrade(tx, thread, null, now);
+          const result = await finalizeTrade(tx, thread, null, now);
           processed += 1;
+          return result.status === 'COMPLETED';
         }
       });
+      if (completed) await refreshOwnershipProjection(candidate.leagueId);
     } catch (error) {
       if (error instanceof TradeServiceError) continue;
       // A thread that keeps failing stays first in updatedAt order, so skipping it keeps the rest moving.
@@ -624,11 +631,25 @@ async function finalizeTrade(
     resolvedAt: now,
     reviewEndsAt: null,
   });
-  await moveRosterPlayers(tx, thread.leagueId, thread.memberOneId, thread.memberTwoId, {
-    firstPlayerIds,
-    secondPlayerIds,
-    now,
-  });
+  try {
+    await swapRosterPlayers(tx, {
+      leagueId: thread.leagueId,
+      seasonId: thread.seasonId,
+      fromMemberId: thread.memberOneId,
+      toMemberId: thread.memberTwoId,
+      fromPlayerIds: firstPlayerIds,
+      toPlayerIds: secondPlayerIds,
+      acquiredBy: 'TRADE',
+      invalidationReason: 'PLAYER_TRADED_ELSEWHERE',
+      excludeThreadId: thread.id,
+      now,
+    });
+  } catch (error) {
+    if (error instanceof RosterSwapError && error.code === 'ROSTER_CHANGED') {
+      throw new TradeServiceError('ROSTER_CHANGED', 'A traded player changed teams.', 409);
+    }
+    throw error;
+  }
   await tx.leagueTradeOffer.update({
     where: { id: thread.currentOffer.id },
     data: {
@@ -637,7 +658,6 @@ async function finalizeTrade(
       resolvedAt: now,
     },
   });
-  await invalidateConflictingTrades(tx, thread, [...firstPlayerIds, ...secondPlayerIds], now);
   await recordTradeEvent(
     tx,
     { ...access, memberId: actorMemberId },
@@ -657,96 +677,19 @@ async function finalizeTrade(
   };
 }
 
-async function moveRosterPlayers(
-  tx: Transaction,
-  leagueId: string,
-  firstMemberId: string,
-  secondMemberId: string,
-  input: { firstPlayerIds: string[]; secondPlayerIds: string[]; now: Date }
-): Promise<void> {
-  const firstMoved = await tx.leagueRosterPlayer.updateMany({
-    where: { leagueId, memberId: firstMemberId, playerId: { in: input.firstPlayerIds } },
-    data: { memberId: secondMemberId, acquiredBy: 'TRADE', acquiredAt: input.now },
-  });
-  const secondMoved = await tx.leagueRosterPlayer.updateMany({
-    where: { leagueId, memberId: secondMemberId, playerId: { in: input.secondPlayerIds } },
-    data: { memberId: firstMemberId, acquiredBy: 'TRADE', acquiredAt: input.now },
-  });
-  if (
-    firstMoved.count !== input.firstPlayerIds.length ||
-    secondMoved.count !== input.secondPlayerIds.length
-  ) {
-    throw new TradeServiceError('ROSTER_CHANGED', 'A traded player changed teams.', 409);
-  }
-
-  await removePlayersFromOpenLineups(tx, {
-    leagueId,
-    memberId: firstMemberId,
-    playerIds: input.firstPlayerIds,
-    now: input.now,
-  });
-  await removePlayersFromOpenLineups(tx, {
-    leagueId,
-    memberId: secondMemberId,
-    playerIds: input.secondPlayerIds,
-    now: input.now,
-  });
-}
-
 export async function invalidateConflictingTrades(
   tx: Transaction,
   completedThread: LoadedTrade,
   playerIds: string[],
   now: Date
 ): Promise<void> {
-  const conflicts = await tx.leagueTradeThread.findMany({
-    where: {
-      id: { not: completedThread.id },
-      leagueId: completedThread.leagueId,
-      status: { in: [...activeThreadStatuses] },
-      currentOffer: { players: { some: { playerId: { in: playerIds } } } },
-    },
-    select: { id: true, currentOfferId: true, status: true },
-  });
-  if (!conflicts.length) return;
-
-  await tx.leagueTradeThread.updateMany({
-    where: { id: { in: conflicts.map((conflict) => conflict.id) } },
-    data: {
-      status: 'INVALIDATED',
-      resolvedAt: now,
-      reviewEndsAt: null,
-      version: { increment: 1 },
-    },
-  });
-  await tx.leagueTradeOffer.updateMany({
-    where: { id: { in: conflicts.flatMap((conflict) => conflict.currentOfferId ?? []) } },
-    data: { status: 'INVALIDATED', resolvedAt: now, version: { increment: 1 } },
-  });
-  await tx.leagueTradeEvent.createMany({
-    data: conflicts.map((conflict) => ({
-      threadId: conflict.id,
-      offerId: conflict.currentOfferId,
-      eventType: 'INVALIDATED',
-      previousStatus: conflict.status,
-      nextStatus: 'INVALIDATED',
-      reasonCode: 'PLAYER_TRADED_ELSEWHERE',
-    })),
-  });
-  // Same outbox row recordTradeEvent writes, so clients and notifications hear about the invalidation.
-  await tx.leagueTradeOutboxEvent.createMany({
-    data: conflicts.map((conflict) => ({
-      leagueId: completedThread.leagueId,
-      seasonId: completedThread.seasonId,
-      threadId: conflict.id,
-      offerId: conflict.currentOfferId,
-      eventType: 'trade:invalidated',
-      payloadJson: {
-        threadId: conflict.id,
-        offerId: conflict.currentOfferId,
-        status: 'INVALIDATED',
-      },
-    })),
+  await invalidatePendingTradesForPlayers(tx, {
+    leagueId: completedThread.leagueId,
+    seasonId: completedThread.seasonId,
+    playerIds,
+    reasonCode: 'PLAYER_TRADED_ELSEWHERE',
+    excludeThreadId: completedThread.id,
+    now,
   });
 }
 

@@ -8,6 +8,8 @@ export type DraftReadinessBlockerCode =
   | 'player_pool_empty'
   | 'player_pool_shortage'
   | 'position_pool_shortage'
+  | 'bloodsucker_missing'
+  | 'bloodsucker_insufficient_teams'
   | 'draft_completed';
 
 export interface DraftReadinessBlocker {

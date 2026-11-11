@@ -65,12 +65,15 @@ function aggregate(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// startDraft reads the league format inside the transaction; a standard league has no blocker.
+const tx = { league: { findUnique: vi.fn().mockResolvedValue(null) } };
+
 describe('DraftApplicationService lifecycle clock outbox', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-07T00:00:30.000Z'));
-    draftRepository.transaction.mockImplementation((work) => work({}));
+    draftRepository.transaction.mockImplementation((work) => work(tx));
     draftRepository.updateDraftStatus.mockResolvedValue({ count: 1 });
     draftRepository.updateDraftLobbyState.mockResolvedValue({ count: 1 });
     draftRepository.updateDraftTiming.mockResolvedValue({ count: 1 });
@@ -117,7 +120,7 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
       schedulingVersion: 5,
     });
     expect(draftRepository.transitionDraftClock).toHaveBeenCalledWith(
-      {},
+      tx,
       expect.objectContaining({
         status: DraftStatus.LIVE,
         clockDurationSeconds: 120,
@@ -153,7 +156,7 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
       schedulingVersion: 5,
     });
     expect(draftRepository.transitionDraftClock).toHaveBeenCalledWith(
-      {},
+      tx,
       expect.objectContaining({
         status: DraftStatus.PAUSED,
         pausedRemainingSeconds: 37,
@@ -197,7 +200,7 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
       schedulingVersion: 6,
     });
     expect(draftRepository.transitionDraftClock).toHaveBeenCalledWith(
-      {},
+      tx,
       expect.objectContaining({
         status: DraftStatus.LIVE,
         clockDurationSeconds: 37,

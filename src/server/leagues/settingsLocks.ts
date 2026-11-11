@@ -2,8 +2,8 @@
 //
 // Scoring (categories, their directions, the scoring mode and lineup slots) locks when the
 // competition is published: fixtures and every later result are computed from it.
-// Draft structure (roster and bench sizes, draft type, pick order) locks once the draft leaves
-// SCHEDULED: picks already made were made against it.
+// Draft structure (roster and bench sizes, draft type, pick order, the league format and the
+// Bloodsucker member) locks once the draft leaves SCHEDULED: picks already made were made against it.
 
 export type LeagueSettingsLockCode = 'SCORING_SETTINGS_LOCKED' | 'DRAFT_STRUCTURE_LOCKED';
 
