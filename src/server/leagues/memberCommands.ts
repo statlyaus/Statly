@@ -17,7 +17,8 @@ export type MemberCommandFailureCode =
   | 'forbidden'
   | 'member-not-found'
   | 'owner-cannot-be-removed'
-  | 'draft-started';
+  | 'draft-started'
+  | 'competition-published';
 
 export type JoinLeagueFailureCode =
   'league-not-found' | 'draft-started' | 'league-full' | 'already-member' | 'team-name-taken';
@@ -46,6 +47,7 @@ async function loadLeagueForCommand(tx: Prisma.TransactionClient, leagueId: stri
     select: {
       id: true,
       ownerId: true,
+      settings: { select: { competitionPublishedAt: true } },
       members: {
         orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
         select: { id: true, userId: true, isActive: true, status: true, draftSlot: true },
@@ -88,9 +90,36 @@ export function hasDraftStarted(
   );
 }
 
+type DraftForRemoval = Parameters<typeof hasDraftStarted>[0];
+
 /**
- * Removes a member while the league is still forming. Once a draft starts, rosters, fixtures and
- * standings depend on every team, so the member stays.
+ * Why a member can no longer be removed or leave, or null while the league is still forming.
+ * Publication builds fixtures for every team, so a removal after it would leave matchups that can
+ * never be scored, even when the draft has not started. Shared by the command and the commissioner
+ * page so both give the same reason.
+ */
+export function memberRemovalBlock(
+  draft: DraftForRemoval,
+  competitionPublishedAt: Date | null | undefined
+): { code: 'draft-started' | 'competition-published'; message: string } | null {
+  if (hasDraftStarted(draft)) {
+    return {
+      code: 'draft-started',
+      message: 'Managers can only be removed before the draft starts.',
+    };
+  }
+  if (competitionPublishedAt) {
+    return {
+      code: 'competition-published',
+      message: 'The season is published, so managers can no longer be removed or leave.',
+    };
+  }
+  return null;
+}
+
+/**
+ * Removes a member while the league is still forming. Once a draft starts or the competition is
+ * published, rosters, fixtures and standings depend on every team, so the member stays.
  */
 export async function removeLeagueMember(
   input: MemberCommandInput,
@@ -117,9 +146,8 @@ export async function removeLeagueMember(
     if (!target) return fail('member-not-found', 'That manager is not in this league.');
 
     const draft = league.drafts[0];
-    if (hasDraftStarted(draft)) {
-      return fail('draft-started', 'Managers can only be removed before the draft starts.');
-    }
+    const block = memberRemovalBlock(draft, league.settings?.competitionPublishedAt);
+    if (block) return fail(block.code, block.message);
 
     await tx.leagueMember.update({
       where: { id: target.id },

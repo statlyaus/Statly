@@ -248,6 +248,7 @@ const MEMBER_COMMAND_STATUS: Record<MemberCommandFailureCode | UpdateMemberFailu
   'member-not-found': 404,
   'owner-cannot-be-removed': 400,
   'draft-started': 409,
+  'competition-published': 409,
   'team-name-taken': 400,
 };
 
