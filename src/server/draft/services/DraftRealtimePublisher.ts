@@ -299,20 +299,35 @@ export class DraftRealtimePublisher {
       return 0;
     }
 
-    try {
-      await this.drainOutboxEvents(outboxEvents);
-      await this.publishSocialDraftActivity(outboxEvents);
-      await this.markOutboxPublished(outboxEvents.map((event) => event.id));
-      this.recordFlush('batch', 'success', outboxEvents.length);
-      return outboxEvents.length;
-    } catch (error) {
-      this.recordFlush('batch', 'failed', outboxEvents.length);
-      await this.markOutboxFailed(
-        outboxEvents.map((event) => event.id),
-        error instanceof Error ? error.message : String(error)
-      );
-      throw error;
+    // Each draft drains on its own, so an event that keeps failing holds back only its own draft.
+    const eventsByDraft = new Map<string, DraftOutboxEventRecord[]>();
+    for (const event of outboxEvents) {
+      eventsByDraft.set(event.draftId, [...(eventsByDraft.get(event.draftId) ?? []), event]);
     }
+
+    const publishedIds: string[] = [];
+    let firstError: unknown = null;
+    for (const draftEvents of eventsByDraft.values()) {
+      try {
+        await this.drainOutboxEvents(draftEvents);
+        await this.publishSocialDraftActivity(draftEvents);
+        publishedIds.push(...draftEvents.map((event) => event.id));
+      } catch (error) {
+        this.recordFlush('batch', 'failed', draftEvents.length);
+        await this.markOutboxFailed(
+          draftEvents.map((event) => event.id),
+          error instanceof Error ? error.message : String(error)
+        );
+        firstError ??= error;
+      }
+    }
+
+    if (publishedIds.length > 0) {
+      await this.markOutboxPublished(publishedIds);
+      this.recordFlush('batch', 'success', publishedIds.length);
+    }
+    if (firstError) throw firstError;
+    return publishedIds.length;
   }
 
   async publishDraftState(draftId: string): Promise<CanonicalLiveDraftState | null> {

@@ -49,8 +49,12 @@ export function getRosterPickLimit(draft: DraftAggregate): number {
   return draft.settings.rosterSize + draft.settings.benchSize;
 }
 
+/**
+ * The stored total, capped by the player pool when the draft was set up. The pick timers and replay
+ * stop at the same number, so completion must too.
+ */
 export function getExpectedTotalPicks(draft: DraftAggregate): number {
-  return draft.participants.length * getRosterPickLimit(draft);
+  return draft.totalPicks;
 }
 
 export function assertDraftIsLive(draft: DraftAggregate): void {
