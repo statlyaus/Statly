@@ -1,4 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const moveLock = vi.hoisted(() => ({ findPlayersLockedForMove: vi.fn() }));
+vi.mock('@/server/leagues/playerMoveLock', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/leagues/playerMoveLock')>()),
+  findPlayersLockedForMove: moveLock.findPlayersLockedForMove,
+}));
 
 import { addFreeAgentToRoster, FreeAgentAddError } from './freeAgentAdd';
 
@@ -8,6 +14,7 @@ const INPUT = {
   playerId: 'player-1',
   playerAliasIds: ['player-1', 'player-1-alias'],
 };
+const NOW = new Date('2026-07-18T06:00:00.000Z');
 
 function makeDb(
   overrides: {
@@ -69,6 +76,48 @@ async function refusal(promise: Promise<unknown>): Promise<FreeAgentAddError> {
 }
 
 describe('addFreeAgentToRoster', () => {
+  beforeEach(() => {
+    moveLock.findPlayersLockedForMove.mockReset();
+    moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
+  });
+
+  it('refuses with 409 a player whose game has started this round, before any write', async () => {
+    moveLock.findPlayersLockedForMove.mockResolvedValue({
+      ok: true,
+      lockedPlayers: [{ playerId: 'player-1', name: 'Sam Walsh' }],
+    });
+    const { db } = makeDb();
+
+    const error = await refusal(addFreeAgentToRoster(db as never, { ...INPUT, now: NOW }));
+
+    expect(error.status).toBe(409);
+    expect(error.code).toBe('PLAYER_LOCKED');
+    expect(error.message).toBe(
+      "Sam Walsh's game has started; he can be picked up after the round ends."
+    );
+    expect(moveLock.findPlayersLockedForMove).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      playerIds: ['player-1'],
+      now: NOW,
+    });
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 503 when the round game times cannot be read', async () => {
+    moveLock.findPlayersLockedForMove.mockResolvedValue({
+      ok: false,
+      error: 'Fixture timing is unavailable',
+    });
+    const { db } = makeDb();
+
+    const error = await refusal(addFreeAgentToRoster(db as never, INPUT));
+
+    expect(error.status).toBe(503);
+    expect(error.code).toBe('TIMING_UNAVAILABLE');
+    expect(error.message).toBe('Fixture timing is unavailable');
+    expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
   it('adds the player inside one transaction after locking the caller’s member row', async () => {
     const { db, tx } = makeDb({ count: 2 });
 
