@@ -5,6 +5,11 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
+import {
+  describeLockedPlayers,
+  findPlayersLockedForMove,
+  removePlayersFromOpenLineups,
+} from '@/server/leagues/playerMoveLock';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import {
   evaluateRosterExchangeCapacity,
@@ -346,12 +351,24 @@ export class WaiverProcessingService {
       }
 
       // A rethrown error leaves this claim PENDING and ends the run: a later claim must not be
-      // settled ahead of one whose outcome is unknown.
+      // settled ahead of one whose outcome is unknown. Match timing is read before the settling
+      // transaction, so that transaction never waits on Firestore.
+      const dropLock = claim.dropPlayerId
+        ? await findPlayersLockedForMove({
+            leagueId: input.leagueId,
+            playerIds: [claim.dropPlayerId],
+          })
+        : null;
+      if (dropLock && !dropLock.ok) throw new Error(dropLock.error);
+      const dropLockedReason = dropLock?.lockedPlayers.length
+        ? describeLockedPlayers(dropLock.lockedPlayers)
+        : undefined;
       const settlement = await this.settleClaim(
         input.leagueId,
         claim,
         input.waiverSettings,
-        isFAAB
+        isFAAB,
+        dropLockedReason
       );
       if (settlement.status === 'SKIPPED') {
         logger.info('Skipped a waiver claim another run already settled', {
@@ -406,7 +423,8 @@ export class WaiverProcessingService {
     leagueId: string,
     claim: WaiverClaim,
     waiverSettings: WaiverSettings,
-    isFAAB: boolean
+    isFAAB: boolean,
+    dropLockedReason?: string
   ): Promise<ClaimSettlement> {
     return this.db.$transaction(async (tx: PrismaTransactionClient): Promise<ClaimSettlement> => {
       const processedAt = await this.claimStore.claimPending(tx, claim);
@@ -416,6 +434,9 @@ export class WaiverProcessingService {
         await this.claimStore.rejectClaim(tx, claim, isFAAB);
         return { status: 'FAILED', processedAt, reason };
       };
+
+      // A drop player whose game has started this round cannot leave the roster until it ends.
+      if (dropLockedReason) return reject(dropLockedReason);
 
       // The roster check runs before the debit, so a claim that cannot be awarded is never charged.
       const plan = await this.buildCanonicalRosterPlan(tx, leagueId, claim);
@@ -442,6 +463,11 @@ export class WaiverProcessingService {
     if (plan.dropPlayerId) {
       await tx.leagueRosterPlayer.deleteMany({
         where: { leagueId, memberId: plan.memberId, playerId: plan.dropPlayerId },
+      });
+      await removePlayersFromOpenLineups(tx, {
+        leagueId,
+        memberId: plan.memberId,
+        playerIds: [plan.dropPlayerId],
       });
       await tx.teamAction.create({
         data: {

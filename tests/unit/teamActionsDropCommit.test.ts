@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const authMocks = vi.hoisted(() => ({ getAuthenticatedUserId: vi.fn() }));
 const membershipMocks = vi.hoisted(() => ({ verifyLeagueMembership: vi.fn() }));
 const projectLeague = vi.hoisted(() => vi.fn());
+const moveLock = vi.hoisted(() => ({
+  findPlayersLockedForMove: vi.fn(),
+  removePlayersFromOpenLineups: vi.fn(),
+  describeLockedPlayers: (players: Array<{ name: string }>) =>
+    `${players[0]?.name}'s game has started; he can be moved after the round ends.`,
+}));
 
 const tx = vi.hoisted(() => ({
   league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
@@ -28,6 +34,7 @@ vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }));
 vi.mock('@/server/players/playerIdentityService', () => ({
   resolveCanonicalPlayerIds: vi.fn(async () => new Map()),
 }));
+vi.mock('@/server/leagues/playerMoveLock', () => moveLock);
 vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
   WaiverAvailabilityProjectionService: vi.fn(() => ({ projectLeague })),
 }));
@@ -58,6 +65,51 @@ describe('team action drop commit', () => {
     tx.leagueRosterPlayer.deleteMany.mockResolvedValue({ count: 1 });
     tx.teamAction.create.mockResolvedValue({ id: 'action-1' });
     projectLeague.mockResolvedValue({ owned: 0, available: 1 });
+    moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
+    moveLock.removePlayersFromOpenLineups.mockResolvedValue(1);
+  });
+
+  it("removes the dropped player's open lineup rows in the drop transaction", async () => {
+    const response = await drop();
+
+    expect(response.status).toBe(200);
+    expect(moveLock.findPlayersLockedForMove).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      playerIds: ['player-1'],
+    });
+    expect(moveLock.removePlayersFromOpenLineups).toHaveBeenCalledWith(tx, {
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      playerIds: ['player-1'],
+    });
+  });
+
+  it("refuses with 409 when the player's game has started this round, and drops nothing", async () => {
+    moveLock.findPlayersLockedForMove.mockResolvedValue({
+      ok: true,
+      lockedPlayers: [{ playerId: 'player-1', name: 'Sam Walsh' }],
+    });
+
+    const response = await drop();
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(JSON.stringify(body)).toContain(
+      "Sam Walsh's game has started; he can be moved after the round ends."
+    );
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 503 when match timing cannot be read during a round, and drops nothing', async () => {
+    moveLock.findPlayersLockedForMove.mockResolvedValue({
+      ok: false,
+      error: 'Official AFL match timing is temporarily unavailable.',
+    });
+
+    const response = await drop();
+
+    expect(response.status).toBe(503);
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
   });
 
   it('removes the roster row and writes the waiver hold in one transaction', async () => {

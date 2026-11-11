@@ -170,7 +170,12 @@ storing the claim or reserving a bid: a drop player who is not on the member's r
 by the same member for the same player (409), and a bid that is not a whole number (400). Roster fit
 uses the same `checkClaimFitsRoster` helper settlement uses
 (`src/server/waivers/WaiverProcessingService.ts`), and settlement checks again because the roster can
-change while a claim waits. The duplicate check runs after the submit locks the member's waiver
+change while a claim waits. At settlement a claim whose drop player's AFL game has started in the
+round in progress fails ("<name>'s game has started; he can be moved after the round ends."), with no
+debit and no roster change; submit does not refuse it, because the claim may settle after the round
+ends. If match timing cannot be read the run stops and the claim stays pending. A settled drop also
+removes the player from the member's unlocked lineups from the round in progress onward (see
+[league competition rules](../product/league-competition-rules.md)). The duplicate check runs after the submit locks the member's waiver
 priority row, so two identical submits at once store one claim. Processing must be deterministic and
 safe to retry; failures do not partially assign the same player to multiple teams.
 The submit route returns the claim it stored (id, canonical player, drop player, bid). The Waivers tab

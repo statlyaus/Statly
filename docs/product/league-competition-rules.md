@@ -92,6 +92,17 @@ display only. Competition rules carry no timezone; a `leagueTimeZone` key left i
 is ignored. Locked players cannot be moved, removed, or replaced manually. Official fixture
 updates can change an unlocked player's lock time; an unknown start time remains explicitly pending.
 
+A player whose AFL game has started in the round in progress cannot leave his roster until the round
+ends (owner decision 2026-11-08), whatever the lock policy: a free-agent drop answers 409, a waiver
+claim that would drop him fails at settlement, and a trade that includes him is refused at proposal,
+counter, acceptance and commissioner approval (409, code `PLAYER_LOCKED`); a vetoable trade whose
+review ends mid-round waits and completes at the first run after the round ends. The check reads the
+official fixture start times (the source lineup locks use), not a lineup row's stamped `lockedAt`; a
+player whose game start is unknown is held once the round has started, and unreadable match timing
+refuses the move (503) rather than guessing. A player who does leave a roster is removed from that
+member's unlocked lineup rows from the round in progress onward; scored rounds keep him. Owned by
+`src/server/leagues/playerMoveLock.ts`.
+
 ## Interchange autosubs
 
 - Autosubs resolve from official participation evidence after the applicable AFL round is complete.
