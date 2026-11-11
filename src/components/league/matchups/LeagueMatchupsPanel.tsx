@@ -12,6 +12,7 @@ import {
 } from '@/components/scores/MatchupScore';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
+import { formatCategoryValue } from '@/types/fantasyCategories';
 
 interface LeagueMatchupsPanelProps {
   leagueId: string;
@@ -60,8 +61,9 @@ interface MatchupCategoryRow {
   category: string;
   label: string;
   shortLabel: string;
-  homeValue: number;
-  awayValue: number;
+  /** Null when the side has no value, such as DE% for a team with no disposals. */
+  homeValue: number | null;
+  awayValue: number | null;
   direction: 'HIGH_WINS' | 'LOW_WINS';
   winner: 'home' | 'away' | 'draw';
 }
@@ -94,10 +96,6 @@ interface MatchupReadModel {
 export const LIVE_SCORING_REFRESH_MS = 60_000;
 
 const BOX_SCORE_SLOT_LABELS: Record<string, string> = { INTERCHANGE: 'INT' };
-
-function formatStatValue(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
 
 function formatDateTime(value: string | null | undefined, timeZone?: string): string | null {
   if (!value) return null;
@@ -422,7 +420,7 @@ function CategoryTotalsRow({
             }`}
           >
             <span className="inline-flex items-center justify-center gap-1.5">
-              {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+              {formatCategoryValue(side === 'home' ? row.homeValue : row.awayValue, row.category)}
               {started ? (
                 <ResultChip
                   result={result}
@@ -558,7 +556,10 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
                       key={row.category}
                       className={`px-2 py-2 text-right tabular-nums ${won ? 'font-bold' : 'font-medium text-[color:var(--league-text-muted)]'}`}
                     >
-                      {formatStatValue(side === 'home' ? row.homeValue : row.awayValue)}
+                      {formatCategoryValue(
+                        side === 'home' ? row.homeValue : row.awayValue,
+                        row.category
+                      )}
                     </td>
                   );
                 })}
@@ -602,7 +603,7 @@ function PlayerCategoryCell({
     <td
       className={`px-2 py-2 text-right tabular-nums ${hasValue ? 'font-medium text-[color:var(--league-text)]' : 'text-[color:var(--league-text-muted)]'}`}
     >
-      {hasValue ? formatStatValue(value) : '–'}
+      {hasValue ? formatCategoryValue(value, category.category) : '–'}
     </td>
   );
 }

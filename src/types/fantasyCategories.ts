@@ -24,6 +24,18 @@ export type FantasyCategoryKey =
   | 'effectiveDisposals'
   | 'scoreInvolvements';
 
+/** A per-player stat a team's category value is computed from: a category, or disposals. */
+export type ScoringStatKey = FantasyCategoryKey | 'disposals';
+
+/**
+ * How a team's value for a category is built from its counted players. `sum` (the default) adds
+ * the players' values. `ratio` is sum(numerator) / sum(denominator) x scale, and is unavailable
+ * when the denominator sums to 0.
+ */
+export type CategoryAggregation =
+  | { kind: 'sum' }
+  | { kind: 'ratio'; numerator: ScoringStatKey; denominator: ScoringStatKey; scale: number };
+
 export interface FantasyCategory {
   id: FantasyCategoryKey;
   label: string;
@@ -32,6 +44,10 @@ export interface FantasyCategory {
   format: 'number' | 'percentage' | 'decimal';
   color?: 'red' | 'green' | 'blue' | 'orange' | 'purple' | 'yellow';
   description?: string;
+  /** Defaults to `sum`. */
+  aggregation?: CategoryAggregation;
+  /** False for a stat shown for display that a league cannot score. Defaults to true. */
+  selectable?: false;
 }
 
 export interface PlayerStats {
@@ -240,6 +256,8 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
     format: 'percentage',
     color: 'yellow',
     description: 'Percentage of game time on ground',
+    // Owner decision 2026-11-11: shown for display, never a scoring category.
+    selectable: false,
   },
   disposalEffPct: {
     id: 'disposalEffPct',
@@ -249,6 +267,13 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
     format: 'percentage',
     color: 'blue',
     description: 'Percentage of disposals that reach their target',
+    // Owner decision 2026-11-11: a team's DE% is its effective disposals over its disposals.
+    aggregation: {
+      kind: 'ratio',
+      numerator: 'effectiveDisposals',
+      denominator: 'disposals',
+      scale: 100,
+    },
   },
   turnovers: {
     id: 'turnovers',
@@ -314,6 +339,25 @@ const FANTASY_CATEGORY_KEY_SET = new Set<FantasyCategoryKey>(FANTASY_CATEGORY_KE
 
 export function isFantasyCategoryKey(value: unknown): value is FantasyCategoryKey {
   return typeof value === 'string' && FANTASY_CATEGORY_KEY_SET.has(value as FantasyCategoryKey);
+}
+
+const SUM_AGGREGATION: CategoryAggregation = { kind: 'sum' };
+
+export function categoryAggregation(category: FantasyCategoryKey): CategoryAggregation {
+  return FANTASY_CATEGORIES[category].aggregation ?? SUM_AGGREGATION;
+}
+
+/** The per-player stats a team's value for this category is computed from. */
+export function categoryStatInputs(category: FantasyCategoryKey): ScoringStatKey[] {
+  const aggregation = categoryAggregation(category);
+  return aggregation.kind === 'ratio'
+    ? [aggregation.numerator, aggregation.denominator]
+    : [category];
+}
+
+/** Whether a league may score this category. */
+export function isSelectableFantasyCategory(category: FantasyCategoryKey): boolean {
+  return FANTASY_CATEGORIES[category].selectable !== false;
 }
 
 export function normalizeFantasyCategoryKeys(
@@ -447,6 +491,19 @@ export function formatStatValue(
     default:
       return value.toFixed(1);
   }
+}
+
+/**
+ * A team or player category value on a scoreboard: "–" when unavailable (a team with no
+ * disposals has no DE%), a percentage category to one decimal with "%", otherwise whole numbers
+ * as they are and fractions to one decimal.
+ */
+export function formatCategoryValue(value: number | null | undefined, category: string): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '–';
+  if (isFantasyCategoryKey(category) && FANTASY_CATEGORIES[category].format === 'percentage') {
+    return `${value.toFixed(1)}%`;
+  }
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 /**

@@ -22,8 +22,12 @@ tests, and this document together.
 
 ## Category scoring
 
-Each matchup aggregates the selected categories for active lineup players. Category direction decides
-whether higher or lower wins; equal values are draws. Screens follow the stored direction: the draft
+Each matchup aggregates the selected categories for active lineup players. Counting categories are
+summed. Disposal efficiency is the team's ratio, total effective disposals / total disposals x 100,
+never a sum or average of player percentages; a team with no disposals has no DE% ("–") and that
+category is drawn. Time on ground % is display-only and cannot be selected as a scoring category
+(both owner decisions, 2026-11-11). Category direction decides whether higher or lower wins; equal
+values are draws. Screens follow the stored direction: the draft
 room's category sort puts the best value first (lowest for `LOW_WINS`), and the matchup totals mark
 each `LOW_WINS` category as "lower wins". Statly Z, the default draft and waiver ranking and the
 auto-pick choice, sums each selected category's z-score against the available pool, negated for a

@@ -202,6 +202,21 @@ describe('liveStatsAdapter', () => {
       true,
       true,
     ]);
+    // Team DE% is effective disposals over disposals: both are read, and a player with no
+    // disposals has no effective disposals to report either.
+    expect(rows.map((row) => row.totals.disposals)).toEqual([0, 0, 12, undefined]);
+    expect(rows.map((row) => row.unreportedCategories.includes('effectiveDisposals'))).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(rows.map((row) => row.unreportedCategories.includes('disposals'))).toEqual([
+      false,
+      false,
+      false,
+      true,
+    ]);
   });
 
   it('normalizes round match final and live status variants', () => {
