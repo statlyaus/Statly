@@ -85,7 +85,7 @@ export async function findLeagueFormatStartBlocker(
       members: { where: { isActive: true }, select: { id: true, isActive: true, status: true } },
     },
   });
-  if (!league?.settings || league.settings.leagueFormat !== 'BLOODSUCKER') return null;
+  if (!league?.settings) return null;
   return (
     getLeagueFormatDraftBlockers({
       leagueFormat: league.settings.leagueFormat,

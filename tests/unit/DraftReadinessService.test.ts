@@ -46,6 +46,8 @@ function buildMember(id: string, draftSlot: number) {
     teamName: `Team ${draftSlot}`,
     draftSlot,
     joinedAt: new Date('2026-05-01T00:00:00.000Z'),
+    isActive: true,
+    status: 'active',
   };
 }
 
@@ -226,7 +228,10 @@ describe('getLeagueDraftOperationalReadiness', () => {
 });
 
 describe('Bloodsucker draft readiness (BR-02, BR-06)', () => {
-  async function readinessFor(input: { leagueFormat: string; bloodsuckerMemberId: string | null }) {
+  async function readinessFor(
+    input: { leagueFormat: string; bloodsuckerMemberId: string | null },
+    memberStatus: Record<string, string> = {}
+  ) {
     const client = buildClient({
       startAt: new Date('2026-05-02T00:00:00.000Z'),
       availablePlayers: 100,
@@ -235,6 +240,10 @@ describe('Bloodsucker draft readiness (BR-02, BR-06)', () => {
     client.league.findUnique.mockResolvedValue({
       ...league,
       settings: { ...league.settings, ...input },
+      members: league.members.map((member: { id: string; status: string }) => ({
+        ...member,
+        status: memberStatus[member.id] ?? member.status,
+      })),
     });
     return getLeagueDraftOperationalReadiness(client as any, {
       leagueId: 'league-1',
@@ -262,6 +271,15 @@ describe('Bloodsucker draft readiness (BR-02, BR-06)', () => {
       leagueFormat: 'BLOODSUCKER',
       bloodsuckerMemberId: 'member-gone',
     });
+
+    expect(readiness.blockers.map((blocker) => blocker.code)).toContain('bloodsucker_missing');
+  });
+
+  it('treats a removed member as gone, as the draft-start guard does', async () => {
+    const readiness = await readinessFor(
+      { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
+      { 'member-2': 'removed' }
+    );
 
     expect(readiness.blockers.map((blocker) => blocker.code)).toContain('bloodsucker_missing');
   });

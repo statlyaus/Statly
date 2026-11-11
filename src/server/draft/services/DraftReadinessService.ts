@@ -7,6 +7,7 @@ import {
   countActiveDraftPlayersByPosition,
   type DraftCapacity,
 } from '@/server/draft/domain/draftCapacity';
+import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { getLeagueFormatDraftBlockers } from '@/server/leagues/leagueFormat';
 import type { DraftOperationalReadiness, DraftReadinessBlocker } from '@/types/draftReadiness';
 
@@ -137,7 +138,7 @@ function buildBlockers(input: {
   for (const formatBlocker of getLeagueFormatDraftBlockers({
     leagueFormat: league.settings.leagueFormat,
     bloodsuckerMemberId: league.settings.bloodsuckerMemberId,
-    activeMemberIds: league.members.map((member) => member.id),
+    activeMemberIds: league.members.filter(isActivePrismaMembership).map((member) => member.id),
   })) {
     blockers.push({ id: formatBlocker.code, ...formatBlocker });
   }
