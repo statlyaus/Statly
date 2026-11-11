@@ -559,6 +559,42 @@ model InjuryListEntry {
   @@index([playerId])
 }
 
+/// One official AFL match result from Footywire (fitzRoy fetch_results), written by the ETL
+/// (etl/resultIngest.ts). Season-scoped shared data, never league data: one row serves every league.
+/// A changed result is never updated in place: a new row is inserted and the old one points at it
+/// through supersededById with the reason, so the current result of a match is the one row with
+/// supersededById null (enforced by a partial unique index in the migration). homePoints, awayPoints
+/// and margin are null only for ABANDONED (CHECK constraint).
+model AflMatchResult {
+  id              String               @id @default(cuid())
+  season          Int
+  round           Int // finals numbered on from the last home-and-away round, as the fixture does
+  matchId         String // Footywire match id (ft_match_statistics?mid=)
+  matchUid        String // Statly fixture id, e.g. 2025-R18-GEE-HAW; player stat rows carry it
+  homeClub        String // canonical club name, as the fixture stores it
+  awayClub        String
+  homePoints      Int?
+  awayPoints      Int?
+  margin          Int? // homePoints - awayPoints
+  status          AflMatchResultStatus
+  fetchedAt       DateTime
+  contentHash     String // sha256 of the stored result fields, see etl/resultIngest.ts
+  supersededById  String?              @unique
+  supersedeReason String?
+  createdAt       DateTime             @default(now())
+  supersededBy    AflMatchResult?      @relation("AflMatchResultSupersede", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes      AflMatchResult?      @relation("AflMatchResultSupersede")
+
+  @@unique([season, matchId, contentHash])
+  @@index([season, round])
+  @@index([season, matchUid])
+}
+
+enum AflMatchResultStatus {
+  FINAL
+  ABANDONED
+}
+
 model Pick {
   id            String               @id @default(cuid())
   draftId       String

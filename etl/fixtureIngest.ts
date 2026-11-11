@@ -91,7 +91,8 @@ const VENUE_TIME_ZONES: Record<string, string> = {
   'UTAS Stadium': 'Australia/Hobart',
 };
 
-function club(name: string) {
+/** A Footywire fixture club label to its canonical name and abbreviation, or throws. */
+export function footywireClub(name: string): { name: string; abbr: string } {
   const found = CLUBS[String(name ?? '').trim()];
   if (!found) throw new Error(`Unknown Footywire club "${name}"`);
   return found;
@@ -103,7 +104,7 @@ function club(name: string) {
  * finals rounds 25 to 28). etl/fetch_fw_round.R numbers the stats rows by the same rule, so a
  * final's stats carry the fixture's match_uid.
  */
-const FINALS_WEEK: Record<string, number> = {
+export const FINALS_WEEK: Readonly<Record<string, number>> = {
   'Qualifying Final': 1,
   'Elimination Final': 1,
   'Semi Final': 2,
@@ -199,8 +200,8 @@ export function buildFixtureMatches(
     return {
       seasonGame: Number(row.season_game),
       round: rounds[index],
-      home: club(row.home_team),
-      away: club(row.away_team),
+      home: footywireClub(row.home_team),
+      away: footywireClub(row.away_team),
       venue: String(row.venue).trim(),
       startsAt: venueLocalToUtc(row.local_start, row.venue),
     };
@@ -318,7 +319,10 @@ export function findFixtureMatch<T extends Pick<FixtureMatch, 'home_team' | 'awa
 ): T | undefined {
   const clubs = [teamAbbr, oppAbbr].sort().join('|');
   return matches.find(
-    (match) => [club(match.home_team).abbr, club(match.away_team).abbr].sort().join('|') === clubs
+    (match) =>
+      [footywireClub(match.home_team).abbr, footywireClub(match.away_team).abbr]
+        .sort()
+        .join('|') === clubs
   );
 }
 

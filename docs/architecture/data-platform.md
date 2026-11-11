@@ -1,7 +1,7 @@
 # Runtime and data platform
 
 - Status: accepted ownership model; PostgreSQL production cutover is not complete
-- Last verified against source: 2026-10-04
+- Last verified against source: 2026-11-11
 
 ## Current state
 
@@ -20,6 +20,7 @@ it has been deployed. Go-live remains blocked until the
 | User identity and tokens                                                          | Firebase Authentication                       | Server code verifies identity before domain authorization.                 |
 | Leagues, seasons, membership, drafts, rosters, lineups, matchups, trades, waivers | Prisma services                               | Canonical protected state; every operation is league- and season-scoped.   |
 | Live AFL stat evidence                                                            | Footywire/fitzRoy ETL and Firestore ingestion | External data is normalized before fantasy calculations.                   |
+| AFL match results                                                                 | Prisma `AflMatchResult`, written by the ETL   | Season-scoped shared data; supersede, never update; fails closed.          |
 | AFL injury list                                                                   | Prisma snapshots of the Footywire list        | Append-only, 48-hour freshness, exact name-and-club identity match only.   |
 | NBA reference data for fantasy basketball                                         | Prisma `Nba*` tables, written by NBA ingest   | Provider-ID identity only; bounded jobs fail closed; licensing guard.      |
 | Compatibility projections                                                         | Firestore, temporarily                        | Rebuild from canonical relational state; never reverse ownership silently. |
@@ -166,6 +167,43 @@ fails the cycle; production does not substitute mock data.
 Player identity may be tolerant at read boundaries, but canonical repairs are explicit data
 operations. Firestore match-stat evidence must not create or merge protected player ownership by
 guessing. Use the [player identity runbook](../runbooks/player-identity.md) for reviewed consolidation.
+
+### AFL match results
+
+The No Losers format (epic #1290) scores a player by his club's official result, so the ETL stores
+every AFL match result in the fantasy PostgreSQL table `AflMatchResult`. Results are season-scoped
+shared data: one row serves every league, and no league id is on it.
+
+`etl/fetch_fw_results.R` reads them with fitzRoy `fetch_results(source = "footywire")`, at the same
+pin as the stats fetch. fitzRoy does not return Footywire's match id, so the script reads Footywire's
+season match list before and after the fetch and refuses the run if it changed (a match posted
+mid-run could misalign ids and rows). Finals are numbered on from the season's last home-and-away
+round, as the fixture and stats are. `etl/resultIngest.ts` validates the batch, and
+`etl/resultStore.ts` writes it in one transaction under a per-season advisory lock. The ETL image has
+no Prisma client, so the store writes SQL through `pg`; the schema is Prisma's, and an integration
+test runs the store against the migrated database. The live guard (`etl/liveGuard.ts`) runs the
+ingest for Footywire's last 18 matches every 10 minutes while a stats window is open; it needs
+`DATABASE_URL`.
+
+Each row records season, round, Footywire match id (`matchId`), the fixture's `matchUid` (the id
+player stat rows carry, so a stat row resolves to its own game's result), home and away club,
+points, margin (home minus away), status (`FINAL`, or `ABANDONED` with no scores) and `fetchedAt`,
+plus a sha256 `contentHash` of the stored fields. `(season, matchId, contentHash)` is unique.
+
+A result never changes in place. When Footywire's score for a match changes, the current row is
+marked `supersededById` the new row with a `supersedeReason` naming both scores, then the new row is
+inserted; the current result of a match is the one row nothing supersedes (a partial unique index).
+Re-ingesting an unchanged result writes nothing. A change back to an earlier, superseded version is
+refused for an operator to review.
+
+Ingestion fails closed. A fitzRoy failure, a missing column, an unknown club or round, a score that
+is not a whole number, a duplicate match, or output that ends before the script's end-of-results line
+rejects the whole batch and writes nothing. There is no mock or fallback source. Footywire posts a
+match page only for a played match, so every ingested row is `FINAL`; an abandoned game is recorded
+by hand. A result still missing 6 hours after a game's scheduled end raises a Sentry error from the
+hourly `/api/cron/afl-results` check (see the
+[monitoring runbook](../runbooks/monitoring-and-alerts.md#missing-afl-match-result), which also says
+how to re-run the ingest).
 
 ### Injury list snapshots
 

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { runFetchPipeline, runFixturePipeline } from './fetchPipeline';
+import { runFetchPipeline, runFixturePipeline, runResultPipeline } from './fetchPipeline';
 import { FINAL_STATS_WINDOW_MS, statsWindowOpen, type FixtureMatch } from './fixtureIngest';
 
 // Initialize Firebase Admin using same pattern as main project
@@ -77,6 +77,30 @@ async function runFetchCycle(): Promise<void> {
   console.log('✅ Fetch cycle completed successfully');
 }
 
+// Results are posted once a game ends; NFR-3 (#1290) wants them within 2 hours, so every 10 minutes
+// in a live window is plenty. The last 18 Footywire matches cover the latest two rounds, finals
+// included, which is where a result appears or is corrected.
+const RESULTS_REFRESH_MS = Number(process.env.RESULTS_REFRESH_MS) || 10 * 60 * 1000;
+const RESULTS_LAST_MATCHES = Number(process.env.RESULTS_LAST_MATCHES) || 18;
+let lastResultsRefreshAt = 0;
+
+/**
+ * Store recent AFL match results in PostgreSQL when the last attempt is older than
+ * RESULTS_REFRESH_MS. A failure writes nothing and waits for the next attempt like a success does,
+ * so a broken run never re-reads Footywire every live cycle; it never blocks stats.
+ */
+async function refreshResultsIfDue(now = Date.now()): Promise<void> {
+  if (now - lastResultsRefreshAt < RESULTS_REFRESH_MS) return;
+  lastResultsRefreshAt = now;
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set; AFL match results are not stored');
+  }
+  await runResultPipeline({
+    season: process.env.SEASON || new Date().getFullYear(),
+    lastMatches: RESULTS_LAST_MATCHES,
+  });
+}
+
 /**
  * Sleep with jitter
  */
@@ -131,6 +155,12 @@ async function runGuardLoop(): Promise<void> {
         console.error('Fetch cycle failed:', error);
       }
 
+      try {
+        await refreshResultsIfDue();
+      } catch (error) {
+        console.error('AFL results ingest failed; nothing was written:', error);
+      }
+
       // Sleep between live cycles
       await sleep(30000, 15000); // 30-45s with jitter
     } catch (error) {
@@ -158,4 +188,4 @@ if (require.main === module) {
   });
 }
 
-export { isLiveWindow, refreshFixtureIfDue, runFetchCycle };
+export { isLiveWindow, refreshFixtureIfDue, refreshResultsIfDue, runFetchCycle };
