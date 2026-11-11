@@ -10,8 +10,8 @@ import {
 } from './lineupService';
 
 /**
- * A player whose AFL game has started in the league's round in progress cannot be dropped or
- * traded until the round ends (owner decision 2026-11-08). The lock comes from the official fixture
+ * A player whose AFL game has started in the league's round in progress cannot be dropped, traded
+ * or picked up as a free agent until the round ends (owner decisions 2026-11-08 and 2026-11-11). The lock comes from the official fixture
  * start times, the same source lineup locks use, never from a lineup row's lazily stamped
  * `lockedAt`.
  */
@@ -115,13 +115,16 @@ export async function findPlayersLockedForMove({
   return { ok: true, lockedPlayers };
 }
 
-export function describeLockedPlayers(lockedPlayers: readonly LockedPlayer[]): string {
+export function describeLockedPlayers(
+  lockedPlayers: readonly LockedPlayer[],
+  move: 'moved' | 'picked up' = 'moved'
+): string {
   if (lockedPlayers.length === 1) {
-    return `${lockedPlayers[0]!.name}'s game has started; he can be moved after the round ends.`;
+    return `${lockedPlayers[0]!.name}'s game has started; he can be ${move} after the round ends.`;
   }
   const names = lockedPlayers.map((player) => player.name);
   const list = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-  return `Games have started for ${list}; they can be moved after the round ends.`;
+  return `Games have started for ${list}; they can be ${move} after the round ends.`;
 }
 
 type LineupCleanupDb = Pick<

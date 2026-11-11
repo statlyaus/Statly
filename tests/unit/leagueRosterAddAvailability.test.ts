@@ -32,6 +32,13 @@ const prismaMocks = vi.hoisted(() => ({
   },
 }));
 
+const moveLock = vi.hoisted(() => ({ findPlayersLockedForMove: vi.fn() }));
+
+vi.mock('@/server/leagues/playerMoveLock', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/leagues/playerMoveLock')>()),
+  findPlayersLockedForMove: moveLock.findPlayersLockedForMove,
+}));
+
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
 }));
@@ -78,6 +85,7 @@ describe('league roster free-agent add eligibility', () => {
     vi.clearAllMocks();
 
     authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
+    moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
     prismaMocks.$executeRaw.mockResolvedValue(1);
     prismaMocks.draft.findUnique.mockResolvedValue({ status: 'COMPLETED' });
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
@@ -134,6 +142,47 @@ describe('league roster free-agent add eligibility', () => {
         }),
       })
     );
+    expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 409 a free agent whose game has started this round', async () => {
+    prismaMocks.teamAction.findMany.mockResolvedValue([]);
+    moveLock.findPlayersLockedForMove.mockResolvedValue({
+      ok: true,
+      lockedPlayers: [{ playerId: 'held-player', name: 'Sam Walsh' }],
+    });
+    const { POST } = await import('../../src/app/api/leagues/[id]/roster/add/route');
+
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/roster/add', { playerId: 'held-player' }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toEqual({
+      message: "Sam Walsh's game has started; he can be picked up after the round ends.",
+      code: 'PLAYER_LOCKED',
+    });
+    expect(moveLock.findPlayersLockedForMove).toHaveBeenCalledWith(
+      expect.objectContaining({ leagueId: 'league-1', playerIds: ['held-player'] })
+    );
+    expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 503 when the round game times cannot be read', async () => {
+    prismaMocks.teamAction.findMany.mockResolvedValue([]);
+    moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: false, error: 'Timing unavailable' });
+    const { POST } = await import('../../src/app/api/leagues/[id]/roster/add/route');
+
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/roster/add', { playerId: 'held-player' }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe('TIMING_UNAVAILABLE');
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 

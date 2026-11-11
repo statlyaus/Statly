@@ -103,6 +103,12 @@ refuses the move (503) rather than guessing. A player who does leave a roster is
 member's unlocked lineup rows from the round in progress onward; scored rounds keep him. Owned by
 `src/server/leagues/playerMoveLock.ts`.
 
+The same rule keeps a free agent whose AFL game has started in the round in progress from joining a
+roster until the round ends (owner decision 2026-11-11): free-agent Add
+(`POST /api/leagues/[id]/roster/add`, through `src/server/rosters/freeAgentAdd.ts`) answers 409 with
+code `PLAYER_LOCKED` ("<name>'s game has started; he can be picked up after the round ends."), and 503
+with code `TIMING_UNAVAILABLE` when match timing cannot be read.
+
 ## Interchange autosubs
 
 - Autosubs resolve from official participation evidence after the applicable AFL round is complete.

@@ -156,4 +156,10 @@ describe('describeLockedPlayers', () => {
       'Games have started for Sam Walsh and Nick Daicos; they can be moved after the round ends.'
     );
   });
+
+  it('says a started free agent can be picked up after the round ends', () => {
+    expect(describeLockedPlayers([{ playerId: 'a', name: 'Sam Walsh' }], 'picked up')).toBe(
+      "Sam Walsh's game has started; he can be picked up after the round ends."
+    );
+  });
 });

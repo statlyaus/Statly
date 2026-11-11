@@ -147,7 +147,9 @@ hold a compatibility projection, but relational state remains authoritative and 
 rebuildable from it. Each league's Waivers tab reads a member's claims, FAAB balance and activity feed
 from Prisma. Its player list leaves out only rostered players: a waiver-only player (a pending claim,
 or a drop since the last run or still inside its waiver period; see `docs/domain/fantasy-model.md`)
-is listed and claimable there, because free-agent Add refuses him. `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
+is listed and claimable there, because free-agent Add refuses him. Free-agent Add also refuses (409)
+a player whose AFL game has started in the round in progress, until the round ends, and refuses (503)
+when match timing cannot be read (see [league competition rules](../product/league-competition-rules.md)). `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
 the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
 the viewer has no league. `/rosters` does the same for the league's Roster tab; it no longer reads
 Firestore free agents or offers its own claim buttons.
