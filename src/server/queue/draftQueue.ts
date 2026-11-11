@@ -39,10 +39,6 @@ export function getDraftLobbyJobId(draftId: string) {
   return sanitizeJobId(`draft-${draftId}-lobby`);
 }
 
-export function getDraftPickExpiryJobId(draftId: string) {
-  return sanitizeJobId(`${draftId}-pick-expiry`);
-}
-
 export function getDraftPickExpiryVersionedJobId(draftId: string, schedulingVersion: number) {
   return sanitizeJobId(`${draftId}-pick-expiry-v${schedulingVersion}`);
 }
@@ -66,32 +62,6 @@ export const draftQueue: Queue<DraftJobData> =
           removeOnFail: { age: 24 * 3600, count: 1000 },
         },
       });
-
-async function removeDraftPickExpiryJobs(draftId: string): Promise<void> {
-  const legacyJobId = getDraftPickExpiryJobId(draftId);
-  await draftQueue.remove(legacyJobId).catch(() => 0);
-
-  const jobs = await draftQueue.getJobs(
-    ['delayed', 'waiting', 'active', 'prioritized'],
-    0,
-    200,
-    true
-  );
-  const removals = jobs
-    .filter((job) => {
-      if (job.name !== 'draft:pick-expiry') {
-        return false;
-      }
-
-      const data = job.data as Partial<DraftPickExpiryJobData> | undefined;
-      return data?.draftId === draftId;
-    })
-    .map((job) => job.remove().catch(() => 0));
-
-  if (removals.length > 0) {
-    await Promise.allSettled(removals);
-  }
-}
 
 export async function scheduleDraftStart(
   { draftId, leagueId }: DraftStartTarget,
@@ -164,8 +134,4 @@ export async function scheduleDraftPickExpiry(
     jobId: getDraftPickExpiryVersionedJobId(input.draftId, input.schedulingVersion),
     ...DRAFT_JOB_OPTIONS,
   });
-}
-
-export async function cancelDraftPickExpiry(draftId: string): Promise<void> {
-  await removeDraftPickExpiryJobs(draftId);
 }

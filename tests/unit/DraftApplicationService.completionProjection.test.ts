@@ -10,8 +10,6 @@ const { draftRepository, statlyZStatsLookup } = vi.hoisted(() => ({
     listAvailableAutoPickCandidates: vi.fn(),
     createPick: vi.fn(),
     removePlayerFromAllDraftQueues: vi.fn(),
-    advanceDraft: vi.fn(),
-    updateDraftTiming: vi.fn(),
     transitionDraftClock: vi.fn(),
     toEventPick: vi.fn(),
     createDraftEvents: vi.fn(),
@@ -107,8 +105,6 @@ describe('DraftApplicationService completion projection', () => {
         },
       },
     });
-    draftRepository.advanceDraft.mockResolvedValue({ count: 1 });
-    draftRepository.updateDraftTiming.mockResolvedValue({ count: 1 });
     draftRepository.transitionDraftClock.mockResolvedValue({
       count: 1,
       schedulingVersion: 4,

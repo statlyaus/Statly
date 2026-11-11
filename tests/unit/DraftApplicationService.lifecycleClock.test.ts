@@ -5,9 +5,7 @@ const { draftRepository } = vi.hoisted(() => ({
   draftRepository: {
     transaction: vi.fn(),
     getDraftAggregate: vi.fn(),
-    updateDraftStatus: vi.fn(),
     updateDraftLobbyState: vi.fn(),
-    updateDraftTiming: vi.fn(),
     transitionDraftClock: vi.fn(),
     createDraftEvents: vi.fn(),
   },
@@ -74,9 +72,7 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-07T00:00:30.000Z'));
     draftRepository.transaction.mockImplementation((work) => work(tx));
-    draftRepository.updateDraftStatus.mockResolvedValue({ count: 1 });
     draftRepository.updateDraftLobbyState.mockResolvedValue({ count: 1 });
-    draftRepository.updateDraftTiming.mockResolvedValue({ count: 1 });
     draftRepository.transitionDraftClock.mockImplementation(async (_tx, input) => ({
       count: 1,
       schedulingVersion: input.currentSchedulingVersion + 1,

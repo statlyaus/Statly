@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { cancelDraftPickExpiry, scheduleDraftPickExpiry } from '@/server/queue/draftQueue';
+import { scheduleDraftPickExpiry } from '@/server/queue/draftQueue';
 
 export class DraftScheduler {
   async schedulePickExpiry(input: {
@@ -24,11 +24,6 @@ export class DraftScheduler {
       schedulingVersion: input.schedulingVersion,
       pickDeadlineAt: input.pickDeadlineAt.toISOString(),
     });
-  }
-
-  async cancelPickExpiry(draftId: string): Promise<void> {
-    await cancelDraftPickExpiry(draftId);
-    logger.info('Cancelled draft pick expiry', { draftId });
   }
 }
 

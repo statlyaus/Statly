@@ -10,7 +10,6 @@ import { draftRealtimeDispatcher } from './DraftRealtimeDispatcher';
 import { draftProjectionService } from './DraftProjectionService';
 
 import type {
-  DraftCommandEventType,
   DraftCommandResult,
   DraftLifecycleEventPayload,
   DraftOutboxEventRecord,
@@ -319,38 +318,6 @@ export class DraftRealtimePublisher {
     const state = await this.buildSchedulingReadyState(draftId);
     if (!state) {
       logger.warn('Unable to publish authoritative draft state', { draftId });
-      return null;
-    }
-
-    await draftRealtimeDispatcher.publishState(state);
-    return state;
-  }
-
-  async publishDraftEvent(
-    draftId: string,
-    event: Exclude<DraftCommandEventType, 'draft:started' | 'draft:queue-updated'>,
-    payload?: DraftPickEventPayload | DraftLifecycleEventPayload
-  ): Promise<CanonicalLiveDraftState | null> {
-    const state = await this.buildSchedulingReadyState(draftId);
-
-    if (event === 'draft:pick-made' || event === 'draft:auto-pick') {
-      if (isDraftPickEventPayload(payload)) {
-        await draftRealtimeDispatcher.publishDraftEvent(draftId, event, payload);
-      } else {
-        logger.warn('Skipping compatibility draft pick event without payload', { draftId, event });
-      }
-    } else if (event === 'draft:paused' || event === 'draft:resumed') {
-      await draftRealtimeDispatcher.publishDraftEvent(
-        draftId,
-        event,
-        isDraftLifecycleEventPayload(payload) ? payload : undefined
-      );
-    } else if (event !== 'draft:clock-repaired') {
-      await draftRealtimeDispatcher.publishDraftEvent(draftId, event);
-    }
-
-    if (!state) {
-      logger.warn('Unable to publish authoritative draft state after event', { draftId, event });
       return null;
     }
 
