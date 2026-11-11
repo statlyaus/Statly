@@ -60,7 +60,7 @@ export async function handlePickCommand(
 
     requestContext.userId = userId;
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
     const schema = z.object({
       playerId: z.string().min(1),
     });

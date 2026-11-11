@@ -187,7 +187,11 @@ function buildParticipants(
     picksByMemberId.set(pick.member.id, memberPicks);
   }
 
+  // The draft order is the set of teams that drafted; members who left before it are not teams.
+  const participantIds = new Set([...slotByMemberId.keys(), ...picksByMemberId.keys()]);
+
   return record.league.members
+    .filter((member) => participantIds.has(member.id))
     .map((member) => {
       const memberPicks = (picksByMemberId.get(member.id) ?? []).sort(
         (a, b) => a.overall - b.overall
