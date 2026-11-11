@@ -37,8 +37,8 @@ A league is the tenancy boundary for membership, roles, teams, drafts, rosters, 
 waivers. Season-dependent features also carry a `LeagueSeason` identity. Every protected query, write,
 cache key, room, or event must retain the league and applicable season scope.
 
-Every league has an active season (`League.activeSeasonId`): league creation, the development
-test draft and the standalone draft path set one in the transaction that creates the league
+Every league has an active season (`League.activeSeasonId`): league creation and the development
+test draft set one in the transaction that creates the league
 (`startLeagueSeason`), and the 2026-11-08 season-scope migration gave one to every league that
 lacked it. A draft's final pick needs it: the roster projection seeds waiver priority in that season. Season-scoped rows carry
 `seasonId`, a foreign key to `LeagueSeason` that cascades on delete:
