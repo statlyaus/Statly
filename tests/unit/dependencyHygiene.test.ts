@@ -75,7 +75,7 @@ describe('dependency and runtime hygiene', () => {
     expect(etlPackageJson.scripts).toMatchObject({
       lint: 'npm run lint:node && npm run lint:r',
       'lint:node': 'eslint . --max-warnings=0',
-      'lint:r': `Rscript -e "invisible(parse(file = 'fetch_fw_round.R')); invisible(parse(file = 'fetch_fw_fixture.R'))"`,
+      'lint:r': `Rscript -e "invisible(parse(file = 'fetch_fw_round.R')); invisible(parse(file = 'fetch_fw_fixture.R')); invisible(parse(file = 'fetch_fw_results.R'))"`,
     });
   });
 

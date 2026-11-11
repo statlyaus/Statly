@@ -31,6 +31,10 @@ if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" ]; then
     exit 1
 fi
 
+if [ -z "$DATABASE_URL" ]; then
+    echo "⚠️  DATABASE_URL is not set: AFL match results will not be stored (each ingest fails closed)"
+fi
+
 echo "✅ Requirements met"
 
 # Build and test
@@ -54,7 +58,7 @@ gcloud run deploy $SERVICE_NAME \
     --region $REGION \
     --project $PROJECT_ID \
     --allow-unauthenticated \
-    --set-env-vars="FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" \
+    --set-env-vars="FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64${DATABASE_URL:+,DATABASE_URL=$DATABASE_URL}" \
     --memory 512Mi \
     --cpu 1 \
     --timeout 900 \

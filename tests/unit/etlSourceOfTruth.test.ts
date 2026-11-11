@@ -33,9 +33,10 @@ describe('ETL source-of-truth architecture', () => {
     const processor = read('etl/processFootywireData.ts');
 
     expect(liveGuard).toContain(
-      "import { runFetchPipeline, runFixturePipeline } from './fetchPipeline'"
+      "import { runFetchPipeline, runFixturePipeline, runResultPipeline } from './fetchPipeline'"
     );
     expect(liveGuard).toContain('await runFetchPipeline({');
+    expect(liveGuard).toContain('await runResultPipeline({');
     expect(backfill).toContain(
       "import { runFetchPipeline, runFixturePipeline } from './fetchPipeline'"
     );
