@@ -35,7 +35,13 @@ import {
   MIN_LEAGUE_TEAMS,
   getMaxTeamsUpdateError,
 } from '@/server/leagues/leagueCapacity';
+import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import {
+  buildLeagueFormatAudit,
+  getLeagueFormatWaiverError,
+  normalizeLeagueFormat,
+} from '@/server/leagues/leagueFormat';
 import {
   getLeagueSettingsLocks,
   getScoringSettingsLockedAt,
@@ -59,7 +65,10 @@ async function authorizeLeagueSettingsRead(request: NextRequest, leagueId: strin
   return null;
 }
 
-async function authorizeLeagueSettingsWrite(request: NextRequest, leagueId: string) {
+async function authorizeLeagueSettingsWrite(
+  request: NextRequest,
+  leagueId: string
+): Promise<NextResponse | { actorMemberId: string | null }> {
   const userId = await getAuthenticatedUserId(request);
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -70,7 +79,7 @@ async function authorizeLeagueSettingsWrite(request: NextRequest, leagueId: stri
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return null;
+  return { actorMemberId: access.memberId ?? null };
 }
 
 function getNestedValue(source: Record<string, unknown>, keys: string[]): unknown {
@@ -223,12 +232,20 @@ function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+// Active members, for the Bloodsucker picker. Prisma ids, because the setting stores a Prisma id.
+const BLOODSUCKER_CANDIDATES = {
+  where: { isActive: true },
+  orderBy: { joinedAt: 'asc' },
+  select: { id: true, teamName: true, isActive: true, status: true },
+} satisfies Prisma.League$membersArgs;
+
 function toSettingsResponse(
   league: {
     id: string;
     name: string;
     inviteCode: string;
     categoriesJson: unknown;
+    members?: { id: string; teamName: string; isActive: boolean; status: string }[];
     settings: {
       maxTeams: number;
       rosterSize: number;
@@ -246,6 +263,8 @@ function toSettingsResponse(
       locked: boolean;
       scoringMode: string;
       fixtureGenerationMode: string;
+      leagueFormat?: string;
+      bloodsuckerMemberId?: string | null;
       lineupSlotsJson: Prisma.JsonValue;
       categoryDirectionsJson: Prisma.JsonValue;
       scoringSettingsLockedAt: Date | null;
@@ -290,6 +309,13 @@ function toSettingsResponse(
       scoringSettingsLockedAt: scoringSettingsLockedAt?.toISOString() ?? null,
     },
     locks,
+    format: {
+      leagueFormat: normalizeLeagueFormat(league.settings.leagueFormat),
+      bloodsuckerMemberId: league.settings.bloodsuckerMemberId ?? null,
+      candidates: (league.members ?? [])
+        .filter(isActivePrismaMembership)
+        .map((member) => ({ memberId: member.id, teamName: member.teamName })),
+    },
     roster: {
       rosterSize: league.settings.rosterSize,
       benchSize: league.settings.benchSize,
@@ -332,7 +358,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const prismaLeague = await prisma.league.findUnique({
       where: { id },
-      include: { settings: true },
+      include: { settings: true, members: BLOODSUCKER_CANDIDATES },
     });
 
     if (prismaLeague?.settings) {
@@ -412,9 +438,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
 
-    const authError = await authorizeLeagueSettingsWrite(request, id);
-    if (authError) {
-      return authError;
+    const writeAccess = await authorizeLeagueSettingsWrite(request, id);
+    if (writeAccess instanceof NextResponse) {
+      return writeAccess;
     }
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -438,6 +464,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       string,
       unknown
     >;
+    const formatInput = (
+      body.format && typeof body.format === 'object' ? body.format : {}
+    ) as Record<string, unknown>;
+    const bloodsuckerInput = formatInput.bloodsuckerMemberId;
+    if (
+      bloodsuckerInput !== undefined &&
+      bloodsuckerInput !== null &&
+      (typeof bloodsuckerInput !== 'string' || !bloodsuckerInput.trim())
+    ) {
+      return NextResponse.json(
+        { error: 'bloodsuckerMemberId must be a member id, or null' },
+        { status: 400 }
+      );
+    }
     const tradeSettingsResult = parseTradeSettingsUpdate(tradeInput);
     if (!tradeSettingsResult.ok) {
       return NextResponse.json({ error: tradeSettingsResult.error }, { status: 400 });
@@ -612,13 +652,33 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const pickOrder = normalizeDraftPickOrderMode(
         draftInput.pickOrder ?? body.pickOrder ?? prismaLeague.settings.pickOrder
       );
+      // The format and the Bloodsucker belong to the draft structure (BR-05). A STANDARD league has
+      // no Bloodsucker.
+      const currentFormat = {
+        leagueFormat: normalizeLeagueFormat(prismaLeague.settings.leagueFormat),
+        bloodsuckerMemberId: prismaLeague.settings.bloodsuckerMemberId ?? null,
+      };
+      const leagueFormat = normalizeLeagueFormat(
+        formatInput.leagueFormat,
+        currentFormat.leagueFormat
+      );
+      const bloodsuckerMemberId =
+        leagueFormat === 'STANDARD'
+          ? null
+          : bloodsuckerInput === undefined
+            ? currentFormat.bloodsuckerMemberId
+            : (bloodsuckerInput as string | null);
+      const formatChanged =
+        leagueFormat !== currentFormat.leagueFormat ||
+        bloodsuckerMemberId !== currentFormat.bloodsuckerMemberId;
       const draftStructureChanged =
         !sameValue(
           positionLimits,
           normalizeDraftPositionLimits(prismaLeague.settings.positionLimitsJson)
         ) ||
         draftType !== prismaLeague.settings.draftType ||
-        pickOrder !== normalizeDraftPickOrderMode(prismaLeague.settings.pickOrder);
+        pickOrder !== normalizeDraftPickOrderMode(prismaLeague.settings.pickOrder) ||
+        formatChanged;
       if (draftStructureChanged && locks.draftStructure) {
         return NextResponse.json(
           { error: locks.draftStructure, code: 'DRAFT_STRUCTURE_LOCKED' },
@@ -629,6 +689,29 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         waiverInput.waiverRule ?? body.waiverRule,
         prismaLeague.settings.waiverRule
       );
+      const waiverFormatError = getLeagueFormatWaiverError({
+        leagueFormat,
+        waiverRule,
+        faabBudget:
+          faabBudget !== undefined
+            ? (faabBudget as number | null)
+            : prismaLeague.settings.faabBudget,
+      });
+      if (waiverFormatError) {
+        return NextResponse.json(waiverFormatError, { status: 400 });
+      }
+      if (bloodsuckerMemberId && bloodsuckerMemberId !== currentFormat.bloodsuckerMemberId) {
+        const bloodsucker = await prisma.leagueMember.findFirst({
+          where: { id: bloodsuckerMemberId, leagueId: id },
+          select: { isActive: true, status: true },
+        });
+        if (!bloodsucker || !isActivePrismaMembership(bloodsucker)) {
+          return NextResponse.json(
+            { error: 'The Bloodsucker must be an active member of this league' },
+            { status: 400 }
+          );
+        }
+      }
       const timeZone =
         typeof timeZoneInput === 'string' ? timeZoneInput.trim() : prismaLeague.settings.timeZone;
 
@@ -661,6 +744,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             autoPickRulesJson: autoPickRules,
             scoringMode,
             fixtureGenerationMode,
+            leagueFormat,
+            bloodsuckerMemberId,
             lineupSlotsJson: lineupSlots,
             categoryDirectionsJson: categoryDirections,
             tradeLimit: tradeLimit ?? prismaLeague.settings.tradeLimit,
@@ -671,6 +756,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             tradeVetoThreshold: vetoThreshold ?? prismaLeague.settings.tradeVetoThreshold,
           },
         }),
+        ...(formatChanged
+          ? [
+              prisma.leagueCompetitionAudit.create({
+                data: buildLeagueFormatAudit({
+                  leagueId: id,
+                  actorMemberId: writeAccess.actorMemberId,
+                  before: currentFormat,
+                  after: { leagueFormat, bloodsuckerMemberId },
+                  reason: 'SETTINGS_UPDATED',
+                }),
+              }),
+            ]
+          : []),
       ]);
 
       await ensureLeagueDraftSetupConverged({
@@ -680,7 +778,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       const updatedLeague = await prisma.league.findUnique({
         where: { id },
-        include: { settings: true },
+        include: { settings: true, members: BLOODSUCKER_CANDIDATES },
       });
 
       if (!updatedLeague?.settings) {

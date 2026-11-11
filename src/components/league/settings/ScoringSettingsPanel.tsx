@@ -3,6 +3,7 @@ import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type {
   CategoryDirection,
   LeagueFixtureGenerationMode,
+  LeagueFormat,
   LeagueLineupSlotSettings,
   LeagueScoringMode,
 } from '@/types/leagues';
@@ -17,13 +18,27 @@ interface ScoringSettingsValue {
   scoringSettingsLockedAt: string | null;
 }
 
+export interface LeagueFormatSettingsValue {
+  leagueFormat: LeagueFormat;
+  bloodsuckerMemberId: string | null;
+  // Active members the commissioner can choose as the Bloodsucker.
+  candidates: { memberId: string; teamName: string }[];
+}
+
 interface ScoringSettingsPanelProps {
   value: ScoringSettingsValue;
   // Why scoring can no longer change, from the settings API.
   lockReason?: string | null;
   disabled?: boolean;
   onChange: (value: ScoringSettingsValue) => void;
+  // The league format is independent of scoring but sits beside it; it locks with the draft.
+  format?: LeagueFormatSettingsValue;
+  formatLockReason?: string | null;
+  onFormatChange?: (format: LeagueFormatSettingsValue) => void;
 }
+
+const SELECT_CLASS =
+  'h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
 
 const SLOT_LABELS: Record<keyof LeagueLineupSlotSettings, string> = {
   FWD: 'Forwards',
@@ -38,8 +53,12 @@ export function ScoringSettingsPanel({
   lockReason,
   disabled,
   onChange,
+  format,
+  formatLockReason,
+  onFormatChange,
 }: ScoringSettingsPanelProps) {
   const isLocked = Boolean(lockReason ?? value.scoringSettingsLockedAt);
+  const isFormatLocked = Boolean(formatLockReason);
 
   return (
     <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
@@ -64,7 +83,7 @@ export function ScoringSettingsPanel({
         )}
       </div>
 
-      <div className="mt-4 max-w-xl">
+      <div className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
           Scoring mode
           <select
@@ -79,6 +98,49 @@ export function ScoringSettingsPanel({
             <option value="H2H_MOST_CATEGORIES">H2H Most Categories</option>
           </select>
         </label>
+        {format && onFormatChange && (
+          <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            League format
+            <select
+              value={format.leagueFormat}
+              disabled={disabled || isFormatLocked}
+              onChange={(event) =>
+                onFormatChange({
+                  ...format,
+                  leagueFormat: event.target.value === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD',
+                })
+              }
+              className={SELECT_CLASS}
+            >
+              <option value="STANDARD">Standard</option>
+              <option value="BLOODSUCKER">Bloodsucker</option>
+            </select>
+          </label>
+        )}
+        {format && onFormatChange && format.leagueFormat === 'BLOODSUCKER' && (
+          <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)] sm:col-span-2">
+            Bloodsucker
+            <select
+              value={format.bloodsuckerMemberId ?? ''}
+              disabled={disabled || isFormatLocked}
+              onChange={(event) =>
+                onFormatChange({ ...format, bloodsuckerMemberId: event.target.value || null })
+              }
+              className={SELECT_CLASS}
+            >
+              <option value="">Choose a Bloodsucker</option>
+              {format.candidates.map((candidate) => (
+                <option key={candidate.memberId} value={candidate.memberId}>
+                  {candidate.teamName}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs font-normal text-[color:var(--league-text-muted)]">
+              {formatLockReason ??
+                'Skips the draft and takes a player from each team it beats. Needs at least 8 teams (12 recommended), rolling waivers and no FAAB.'}
+            </span>
+          </label>
+        )}
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

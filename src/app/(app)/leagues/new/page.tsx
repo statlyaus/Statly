@@ -66,6 +66,7 @@ export default function NewLeaguePage() {
   const [draftType, setDraftType] = useState('snake');
   const [pickOrder, setPickOrder] = useState('random');
   const [waiverRule, setWaiverRule] = useState('weekly');
+  const [leagueFormat, setLeagueFormat] = useState<'STANDARD' | 'BLOODSUCKER'>('STANDARD');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasTouchedLeagueName, setHasTouchedLeagueName] = useState(false);
@@ -134,6 +135,7 @@ export default function NewLeaguePage() {
           draftType,
           pickOrder,
           waiverRule,
+          leagueFormat,
         }),
       });
       const createdLeague = normalizeCreateLeagueResponse(response);
@@ -267,6 +269,38 @@ export default function NewLeaguePage() {
                 </div>
               </div>
 
+              <div>
+                <label
+                  htmlFor="leagueFormat"
+                  className="text-sm font-semibold text-[color:var(--league-text)]"
+                >
+                  League format
+                </label>
+                <select
+                  id="leagueFormat"
+                  value={leagueFormat}
+                  aria-describedby="leagueFormat-help"
+                  onChange={(e) => {
+                    const nextFormat = e.target.value === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD';
+                    setLeagueFormat(nextFormat);
+                    // A Bloodsucker league runs rolling waivers with no FAAB.
+                    if (nextFormat === 'BLOODSUCKER') setWaiverRule('rolling');
+                  }}
+                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                >
+                  <option value="STANDARD">Standard</option>
+                  <option value="BLOODSUCKER">Bloodsucker</option>
+                </select>
+                <p
+                  id="leagueFormat-help"
+                  className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]"
+                >
+                  {leagueFormat === 'BLOODSUCKER'
+                    ? 'One manager skips the draft and takes a player from each team it beats. Needs at least 8 teams (12 recommended) and rolling waivers. Choose the Bloodsucker in league settings once managers join.'
+                    : 'Every manager drafts. Works with either scoring mode.'}
+                </p>
+              </div>
+
               <DraftScheduleField
                 value={draftSchedule}
                 onChange={(nextSchedule) => {
@@ -332,7 +366,9 @@ export default function NewLeaguePage() {
                     onChange={(e) => setWaiverRule(e.target.value)}
                     className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   >
-                    <option value="weekly">Weekly reset</option>
+                    <option value="weekly" disabled={leagueFormat === 'BLOODSUCKER'}>
+                      Weekly reset
+                    </option>
                     <option value="rolling">Rolling</option>
                   </select>
                 </div>

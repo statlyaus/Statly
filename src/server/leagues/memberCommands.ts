@@ -6,6 +6,7 @@ import { generateDeterministicMemberId } from '@/utils/firestore';
 
 import { isActivePrismaMembership } from './activeMembership';
 import { isLeagueAtCapacity } from './leagueCapacity';
+import { clearBloodsuckerOnDeparture } from './leagueFormat';
 
 /**
  * Prisma owns league membership. These commands authorize against the persisted league owner and
@@ -124,6 +125,13 @@ export async function removeLeagueMember(
     await tx.leagueMember.update({
       where: { id: target.id },
       data: { isActive: false, status: 'REMOVED', leftAt: new Date(), draftSlot: null },
+    });
+    // BR-07: a departing Bloodsucker clears the setting, so the draft blocks until a new one is set.
+    await clearBloodsuckerOnDeparture(tx, {
+      leagueId: league.id,
+      memberId: target.id,
+      actorMemberId:
+        activeMembers.find((member) => member.userId === input.actorUserId)?.id ?? null,
     });
 
     const remaining = activeMembers.filter((member) => member.id !== target.id);

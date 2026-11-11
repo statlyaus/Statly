@@ -8,6 +8,8 @@ import {
   type WaiverRule,
 } from '@prisma/client';
 
+import { clearBloodsuckerOnDeparture } from '@/server/leagues/leagueFormat';
+
 import { prisma } from './prisma';
 import { getLeagueMemberDocId, isActiveMembershipData } from './leagueMembership';
 import type { DraftAutoPickRules, DraftPositionLimits } from './draftSettings';
@@ -191,6 +193,11 @@ export async function syncPrismaLeagueMember(
           status: 'REMOVED',
           leftAt: new Date(),
         },
+      });
+      await clearBloodsuckerOnDeparture(tx, {
+        leagueId: input.leagueId,
+        memberId: member.id,
+        actorMemberId: null,
       });
       return { synced: true, action: 'deactivated' as const };
     }
