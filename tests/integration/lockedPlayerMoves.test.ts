@@ -1,7 +1,7 @@
 /**
- * A player whose AFL game has started this round cannot be dropped or traded until the round ends,
- * and a player who leaves a roster leaves that member's open lineups with him (process-map finding
- * transactions-05). Run against PostgreSQL because the lineup cleanup filters on relations.
+ * A player whose AFL game has started this round cannot be dropped, traded or picked up as a free
+ * agent until the round ends, and a player who leaves a roster leaves that member's open lineups
+ * with him (process-map findings transactions-05 and roster-scoring-20). Run against PostgreSQL because the lineup cleanup filters on relations.
  */
 import type { NextRequest } from 'next/server';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,6 +49,7 @@ import {
   executeLeagueTradeAction,
   processDueLeagueTrades,
 } from '@/server/leagues/trades/tradeService';
+import { addFreeAgentToRoster } from '@/server/rosters/freeAgentAdd';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -65,6 +66,8 @@ const P = {
   firstSpare: 'int-locked-moves-first-geelong-spare',
   secondWaiting: 'int-locked-moves-second-geelong',
   secondStarted: 'int-locked-moves-second-carlton',
+  freeStarted: 'int-locked-moves-free-carlton',
+  freeWaiting: 'int-locked-moves-free-geelong',
 } as const;
 
 // Saturday of round 2: the Carlton game has started, the Geelong game has not.
@@ -133,6 +136,8 @@ async function seed() {
       { id: P.firstSpare, name: 'First Spare', club: 'Geelong', position: 'FWD' },
       { id: P.secondWaiting, name: 'Second Waiting', club: 'Geelong', position: 'DEF' },
       { id: P.secondStarted, name: 'Second Started', club: 'Carlton', position: 'RUC' },
+      { id: P.freeStarted, name: 'Free Started', club: 'Carlton', position: 'FWD' },
+      { id: P.freeWaiting, name: 'Free Waiting', club: 'Geelong', position: 'DEF' },
     ],
   });
   await prisma.leagueRosterPlayer.createMany({
@@ -233,6 +238,16 @@ async function drop(playerId: string): Promise<Response> {
   return response;
 }
 
+function pickUp(playerId: string, now: Date) {
+  return addFreeAgentToRoster(prisma, {
+    leagueId: LEAGUE,
+    userId: FIRST_USER,
+    playerId,
+    playerAliasIds: [playerId],
+    now,
+  });
+}
+
 function propose(sending: string, receiving: string, now: Date, key: string) {
   return createLeagueTrade(
     LEAGUE,
@@ -277,6 +292,25 @@ describe('players whose game has started this round', () => {
     await expect(ownerOf(P.firstSpare)).resolves.toBeUndefined();
     // Round 1 is scored history; rounds 2 (in progress, his game not started) and 3 are open.
     await expect(lineupRounds(FIRST, P.firstSpare)).resolves.toEqual([1]);
+  });
+
+  it('refuses to pick up a free agent whose game has started this round', async () => {
+    await expect(pickUp(P.freeStarted, MID_ROUND)).rejects.toMatchObject({
+      code: 'PLAYER_LOCKED',
+      status: 409,
+      message: "Free Started's game has started; he can be picked up after the round ends.",
+    });
+    await expect(ownerOf(P.freeStarted)).resolves.toBeUndefined();
+  });
+
+  it('picks up a free agent whose game has not started, and a started one after the round', async () => {
+    await expect(pickUp(P.freeWaiting, MID_ROUND)).resolves.toMatchObject({ memberId: FIRST });
+    await expect(ownerOf(P.freeWaiting)).resolves.toBe(FIRST);
+
+    const afterRound = new Date('2026-07-20T00:00:00.000Z');
+    vi.setSystemTime(afterRound);
+    await expect(pickUp(P.freeStarted, afterRound)).resolves.toMatchObject({ memberId: FIRST });
+    await expect(ownerOf(P.freeStarted)).resolves.toBe(FIRST);
   });
 
   it('refuses a trade proposal that includes a started player', async () => {

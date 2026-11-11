@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { describeLockedPlayers, findPlayersLockedForMove } from '@/server/leagues/playerMoveLock';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import {
   evaluateRosterExchangeCapacity,
@@ -14,13 +15,15 @@ export type FreeAgentAddErrorCode =
   | 'PLAYER_NOT_FOUND'
   | 'PLAYER_OWNED'
   | 'PLAYER_ON_WAIVERS'
+  | 'PLAYER_LOCKED'
+  | 'TIMING_UNAVAILABLE'
   | 'ROSTER_FULL';
 
 export class FreeAgentAddError extends Error {
   constructor(
     public readonly code: FreeAgentAddErrorCode,
     message: string,
-    public readonly status: 403 | 404 | 409 | 422
+    public readonly status: 403 | 404 | 409 | 422 | 503
   ) {
     super(message);
     this.name = 'FreeAgentAddError';
@@ -48,7 +51,8 @@ type FreeAgentAddDb = Pick<PrismaClient, '$transaction'>;
  * Adds an unowned player to the caller's roster in one transaction. The caller must be an active
  * member of a league whose draft is complete, the player must be unowned (under any alias) and not
  * waiver-only (a pending claim, or a drop since the last waiver run or still in its waiver period),
- * and the roster must have room under the same rosterSize + benchSize capacity the draft, trades and waivers use.
+ * his AFL game must not have started in the round in progress (he can be picked up after the round
+ * ends), and the roster must have room under the same rosterSize + benchSize capacity the draft, trades and waivers use.
  */
 export async function addFreeAgentToRoster(
   db: FreeAgentAddDb,
@@ -56,6 +60,18 @@ export async function addFreeAgentToRoster(
 ): Promise<FreeAgentAddResult> {
   const { leagueId, userId, playerId } = input;
   const playerAliasIds = [...new Set([playerId, ...input.playerAliasIds])];
+
+  // Checked before the transaction, as drops and trades do, so the member row lock never waits on
+  // the fixture read. Unreadable game times fail closed.
+  const lock = await findPlayersLockedForMove({ leagueId, playerIds: [playerId], now: input.now });
+  if (!lock.ok) throw new FreeAgentAddError('TIMING_UNAVAILABLE', lock.error, 503);
+  if (lock.lockedPlayers.length > 0) {
+    throw new FreeAgentAddError(
+      'PLAYER_LOCKED',
+      describeLockedPlayers(lock.lockedPlayers, 'picked up'),
+      409
+    );
+  }
 
   try {
     return await db.$transaction(async (tx: Prisma.TransactionClient) => {

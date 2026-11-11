@@ -28,6 +28,7 @@ export async function POST(
     leagueId: id,
     round: roundNumber,
     finalize: body.finalize === true,
+    actorMemberId: access.memberId,
   });
   if (!data) return NextResponse.json({ error: 'League not found' }, { status: 404 });
   if ('blocked' in data) {
