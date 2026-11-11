@@ -7,6 +7,7 @@ import {
   countActiveDraftPlayersByPosition,
   type DraftCapacity,
 } from '@/server/draft/domain/draftCapacity';
+import { getLeagueFormatDraftBlockers } from '@/server/leagues/leagueFormat';
 import type { DraftOperationalReadiness, DraftReadinessBlocker } from '@/types/draftReadiness';
 
 type ReadinessClient = Pick<PrismaClient, 'league' | 'player'> | Prisma.TransactionClient;
@@ -132,6 +133,15 @@ function buildBlockers(input: {
     });
   }
 
+  // BR-02 and BR-06: a Bloodsucker league needs its Bloodsucker set and at least 8 teams.
+  for (const formatBlocker of getLeagueFormatDraftBlockers({
+    leagueFormat: league.settings.leagueFormat,
+    bloodsuckerMemberId: league.settings.bloodsuckerMemberId,
+    activeMemberIds: league.members.map((member) => member.id),
+  })) {
+    blockers.push({ id: formatBlocker.code, ...formatBlocker });
+  }
+
   if (draft?.status === DraftStatus.COMPLETED) {
     blockers.push({
       id: 'draft_completed',
@@ -229,6 +239,8 @@ export async function getLeagueDraftOperationalReadiness(
       'player_pool_empty',
       'player_pool_shortage',
       'position_pool_shortage',
+      'bloodsucker_missing',
+      'bloodsucker_insufficient_teams',
       'draft_completed',
     ].includes(blocker.code)
   );

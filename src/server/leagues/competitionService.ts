@@ -14,6 +14,7 @@ import {
   type CompetitionRules,
   validateCompetitionRules,
 } from './competitionRules';
+import { resolveBloodsuckerMemberId } from './leagueFormat';
 import { normalizeLineupSlots } from './lineupSettings';
 import { normalizeRoundMatchStatus, type RawRoundMatch } from './liveStatsAdapter';
 import type { LeagueScoringMode } from './scoringTypes';
@@ -56,7 +57,11 @@ async function hydrateOfficialRoundTimings(
 
 export type PublishCompetitionResult =
   | { ok: true; fixtureVersion: number; roundCount: number }
-  | { ok: false; errors: string[]; code?: 'COMPETITION_ALREADY_PUBLISHED' };
+  | {
+      ok: false;
+      errors: string[];
+      code?: 'COMPETITION_ALREADY_PUBLISHED' | 'BLOODSUCKER_MISSING';
+    };
 
 const PUBLISHED_COMPETITION_RULES_LOCKED_MESSAGE =
   'Published competition rules cannot be changed. Use a commissioner override instead.';
@@ -153,6 +158,20 @@ export async function publishCompetition({
   }
   if (!league.activeSeasonId)
     return { ok: false, errors: ['An active league season is required.'] };
+  // BR-08: a Bloodsucker league publishes only once its Bloodsucker is set and still active.
+  if (
+    league.settings.leagueFormat === 'BLOODSUCKER' &&
+    !resolveBloodsuckerMemberId(
+      league.settings,
+      league.members.map((member) => member.id)
+    )
+  ) {
+    return {
+      ok: false,
+      code: 'BLOODSUCKER_MISSING',
+      errors: ['Choose a Bloodsucker before publishing the competition.'],
+    };
+  }
   const seasonId = league.activeSeasonId;
 
   const categories = normalizeFantasyCategoryKeys(league.categoriesJson, ['goals']);

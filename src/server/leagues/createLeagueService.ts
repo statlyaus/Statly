@@ -29,6 +29,7 @@ import {
 } from '@/types/leagues';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import { startLeagueSeason } from '@/server/leagues/activeSeason';
+import { getLeagueFormatWaiverError } from '@/server/leagues/leagueFormat';
 
 type LeagueCreationClient = Pick<PrismaClient, '$transaction' | 'league'>;
 const COMPATIBILITY_PROJECTION_ATTEMPTS = 3;
@@ -63,7 +64,7 @@ export class LeagueCreationError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code: 'VALIDATION' | 'CONFLICT' | 'PROJECTION'
+    readonly code: 'VALIDATION' | 'CONFLICT' | 'PROJECTION' | 'BLOODSUCKER_REQUIRES_ROLLING'
   ) {
     super(message);
     this.name = 'LeagueCreationError';
@@ -240,7 +241,24 @@ function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreate
       'VALIDATION'
     );
   }
+  // BR-03: a Bloodsucker league defaults to rolling waivers and refuses weekly ones.
+  const waiverError = getLeagueFormatWaiverError({
+    leagueFormat: normalized.leagueFormat,
+    waiverRule: resolveWaiverRule(input) === WaiverRule.ROLLING ? 'ROLLING' : 'WEEKLY',
+    faabBudget: null,
+  });
+  if (waiverError) {
+    throw new LeagueCreationError(waiverError.error, 400, waiverError.code);
+  }
   return normalized;
+}
+
+function resolveWaiverRule(input: CreateLeagueRequest): WaiverRule {
+  if (input.waiverRule === 'rolling') return WaiverRule.ROLLING;
+  if (input.waiverRule === undefined && input.leagueFormat === 'BLOODSUCKER') {
+    return WaiverRule.ROLLING;
+  }
+  return WaiverRule.WEEKLY;
 }
 
 function parseDraftStart(value: string | undefined): Date | null {
@@ -321,12 +339,13 @@ function buildSettingsData(
     allowAutoPick: true,
     draftType: input.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
     pickOrder: input.pickOrder === 'manual' ? PickOrder.MANUAL : PickOrder.RANDOM,
-    waiverRule: input.waiverRule === 'rolling' ? WaiverRule.ROLLING : WaiverRule.WEEKLY,
+    waiverRule: resolveWaiverRule(input),
     startAt: draftStart,
     timeZone: normalized.timeZone,
     locked: false,
     scoringMode: normalized.scoringMode,
     fixtureGenerationMode: normalized.fixtureGenerationMode,
+    leagueFormat: normalized.leagueFormat,
     lineupSlotsJson: normalized.lineupSlots,
     categoryDirectionsJson: normalized.categoryDirections,
     tradeLimit: input.tradeSettings?.tradeLimit ?? 10,
@@ -370,7 +389,8 @@ function buildLeagueResponse(input: {
     waiverWire: {
       waiverOrder: [],
       waiverPeriodHours: input.command.input.waiverWire?.waiverPeriodHours ?? 24,
-      waiverResetPolicy: input.command.input.waiverRule ?? 'weekly',
+      waiverResetPolicy:
+        resolveWaiverRule(input.command.input) === WaiverRule.ROLLING ? 'rolling' : 'weekly',
     },
     createdAt: input.createdAt.toISOString(),
     status: 'preseason',
@@ -379,9 +399,11 @@ function buildLeagueResponse(input: {
     ...(input.draftStart ? { draftDate: input.draftStart.toISOString() } : {}),
     draftType: input.command.input.draftType ?? 'snake',
     pickOrder: input.command.input.pickOrder ?? 'random',
-    waiverRule: input.command.input.waiverRule ?? 'weekly',
+    waiverRule:
+      resolveWaiverRule(input.command.input) === WaiverRule.ROLLING ? 'rolling' : 'weekly',
     scoringMode: input.normalized.scoringMode,
     fixtureGenerationMode: input.normalized.fixtureGenerationMode,
+    leagueFormat: input.normalized.leagueFormat,
     lineupSlots: input.normalized.lineupSlots,
     categoryDirections: input.normalized.categoryDirections,
   };

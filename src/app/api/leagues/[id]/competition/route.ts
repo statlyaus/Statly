@@ -226,7 +226,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   if (!result.ok)
     return NextResponse.json(
-      { error: 'Competition cannot be published', details: result.errors },
+      {
+        error: 'Competition cannot be published',
+        details: result.errors,
+        ...(result.code ? { code: result.code } : {}),
+      },
       { status: 400 }
     );
 

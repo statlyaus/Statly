@@ -13,6 +13,8 @@ export type DraftTypeOption = 'snake' | 'linear';
 export type DraftPickOrder = 'random' | 'manual';
 export type LeagueScoringMode = 'H2H_EACH_CATEGORY' | 'H2H_MOST_CATEGORIES';
 export type LeagueFixtureGenerationMode = 'AUTOMATIC' | 'MANUAL';
+/** A league format is independent of scoring mode and categories (Bloodsucker, epic #1275). */
+export type LeagueFormat = 'STANDARD' | 'BLOODSUCKER';
 export type ActiveLineupSlot = 'FWD' | 'DEF' | 'MID' | 'RUC' | 'UTIL';
 export type LeagueLineupSlot = ActiveLineupSlot | 'INTERCHANGE' | 'BENCH';
 export type CategoryDirection = 'HIGH_WINS' | 'LOW_WINS';
@@ -56,6 +58,7 @@ export interface League {
   waiverRule?: WaiverResetPolicy;
   scoringMode?: LeagueScoringMode;
   fixtureGenerationMode?: LeagueFixtureGenerationMode;
+  leagueFormat?: LeagueFormat;
   lineupSlots?: LeagueLineupSlotSettings;
   categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
   scoringSettingsLockedAt?: string;
@@ -124,6 +127,7 @@ export interface CreateLeagueRequest {
   waiverRule?: WaiverResetPolicy;
   scoringMode?: LeagueScoringMode;
   fixtureGenerationMode?: LeagueFixtureGenerationMode;
+  leagueFormat?: LeagueFormat;
   lineupSlots?: LeagueLineupSlotSettings;
   categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }
