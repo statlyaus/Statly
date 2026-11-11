@@ -70,9 +70,11 @@ found. The user league list (`GET /api/leagues/user/[userId]`) and the league dr
 
 Membership changes run as Prisma commands in `src/server/leagues/memberCommands.ts`, which check the
 persisted owner and active membership in the same transaction as the write. The owner may remove a
-manager, and a manager may leave, only until the draft starts; removal renumbers the remaining draft
-slots and rebuilds the draft order. After the draft, rosters, fixtures, and standings depend on every
-team, so managers are not removed. Ownership transfer makes the previous owner a manager.
+manager, and a manager may leave, only until the draft starts or the competition is published,
+whichever comes first; removal renumbers the remaining draft slots and rebuilds the draft order.
+After either, rosters, fixtures, and standings depend on every team, so managers are not removed: the
+command refuses with 409, code `draft-started` or `competition-published`, and the commissioner page
+shows the same reason (`memberRemovalBlock`). Ownership transfer makes the previous owner a manager.
 Firestore member documents are written afterwards as a compatibility projection. The member list,
 member update and team settings routes treat a league with no Prisma row as not found; they never
 decide existence, membership or a write from Firestore.
