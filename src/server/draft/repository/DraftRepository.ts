@@ -508,61 +508,6 @@ export class DraftRepository {
     });
   }
 
-  async advanceDraft(
-    tx: TxClient,
-    draftId: string,
-    currentPick: number,
-    update: {
-      nextPick: number;
-      nextRound: number;
-      nextDirection:
-        PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set'] | 'FORWARD' | 'REVERSE';
-      isComplete: boolean;
-    }
-  ) {
-    return tx.draft.updateMany({
-      where: {
-        id: draftId,
-        status: DraftStatus.LIVE,
-        currentPick,
-      },
-      data: update.isComplete
-        ? {
-            currentPick: update.nextPick,
-            status: DraftStatus.COMPLETED,
-            completedAt: new Date(),
-          }
-        : {
-            currentPick: update.nextPick,
-            round: update.nextRound,
-            direction: update.nextDirection,
-          },
-    });
-  }
-
-  async updateDraftStatus(
-    tx: TxClient,
-    input: {
-      draftId: string;
-      fromStatus: DraftStatus;
-      toStatus: DraftStatus;
-      startedAt?: Date | null;
-      completedAt?: Date | null;
-    }
-  ) {
-    return tx.draft.updateMany({
-      where: {
-        id: input.draftId,
-        status: input.fromStatus,
-      },
-      data: {
-        status: input.toStatus,
-        ...(input.startedAt !== undefined ? { startedAt: input.startedAt } : {}),
-        ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
-      },
-    });
-  }
-
   async updateDraftLobbyState(
     tx: TxClient,
     input: {
@@ -588,41 +533,6 @@ export class DraftRepository {
     });
   }
 
-  async updateDraftTiming(
-    tx: TxClient,
-    input: {
-      draftId: string;
-      currentSchedulingVersion: number;
-      pickStartedAt?: Date | null;
-      pickDeadlineAt?: Date | null;
-      pausedRemainingSeconds?: number | null;
-      incrementSchedulingVersion?: boolean;
-      clockDurationSeconds?: number | null;
-    }
-  ) {
-    return tx.draft.updateMany({
-      where: {
-        id: input.draftId,
-        schedulingVersion: input.currentSchedulingVersion,
-      },
-      data: {
-        ...(input.pickStartedAt !== undefined ? { pickStartedAt: input.pickStartedAt } : {}),
-        ...(input.pickDeadlineAt !== undefined ? { pickDeadlineAt: input.pickDeadlineAt } : {}),
-        ...(input.pausedRemainingSeconds !== undefined
-          ? { pausedRemainingSeconds: input.pausedRemainingSeconds }
-          : {}),
-        ...(input.clockDurationSeconds !== undefined
-          ? { clockDurationSeconds: input.clockDurationSeconds }
-          : {}),
-        ...(input.incrementSchedulingVersion ? { schedulingVersion: { increment: 1 } } : {}),
-      },
-    });
-  }
-
-  /**
-   * Commits one complete clock revision and its authoritative outbox intent in the caller's
-   * Prisma transaction. A failed compare-and-swap writes neither the clock nor any events.
-   */
   async transitionDraftClock(
     tx: TxClient,
     input: {

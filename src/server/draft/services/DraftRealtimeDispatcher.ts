@@ -91,28 +91,6 @@ export class DraftRealtimeDispatcher {
     await draftPubSub.publish(draftId, event, eventPayload);
   }
 
-  async publishTimerTick(draftId: string, timeRemaining: number): Promise<void> {
-    const payload = { timeRemaining };
-    this.dispatchToLocal(draftId, 'draft:timer-tick', payload);
-    await draftPubSub.publish(draftId, 'draft:timer-tick', payload);
-  }
-
-  async publishTimerExpired(draftId: string): Promise<void> {
-    const payload = { draftId, timestamp: new Date().toISOString() };
-    this.dispatchToLocal(draftId, 'draft:timer-expired', payload);
-    await draftPubSub.publish(draftId, 'draft:timer-expired', payload);
-  }
-
-  async publishAdminMessage(
-    draftId: string,
-    type: 'joined' | 'left',
-    userId: string
-  ): Promise<void> {
-    const payload = { type, userId };
-    this.dispatchToLocal(draftId, 'draft:admin-message', payload);
-    await draftPubSub.publish(draftId, 'draft:admin-message', payload);
-  }
-
   private dispatchEnvelope(msg: DraftRealtimeEnvelope): void {
     if (msg.v === 2) {
       this.dispatchV2ToLocal(msg.message);
