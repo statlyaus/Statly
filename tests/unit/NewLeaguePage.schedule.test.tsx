@@ -164,6 +164,28 @@ describe('NewLeaguePage draft schedule', () => {
     ).toBeInTheDocument();
   });
 
+  it('creates a Bloodsucker league with rolling waivers and no weekly option (BR-03)', async () => {
+    render(<NewLeaguePage />);
+
+    fireEvent.change(screen.getByLabelText(/League name/), {
+      target: { value: 'Bloodsucker League' },
+    });
+    fireEvent.change(screen.getByLabelText(/League format/), {
+      target: { value: 'BLOODSUCKER' },
+    });
+
+    expect(screen.getByRole('option', { name: /weekly/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create league' }));
+    await waitFor(() => expect(mocks.fetchApi).toHaveBeenCalledTimes(1));
+
+    const [, request] = mocks.fetchApi.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(request.body)).toMatchObject({
+      leagueFormat: 'BLOODSUCKER',
+      waiverRule: 'rolling',
+    });
+  });
+
   it('holds the league name to the API maximum of 50 characters', () => {
     render(<NewLeaguePage />);
 
