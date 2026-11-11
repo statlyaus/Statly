@@ -8,6 +8,7 @@ import { resolveFootywirePlayerIds } from '@/server/players/footywireIdentity';
 import { getTeamName } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
+  categoryStatInputs,
   isFantasyCategoryKey,
   normalizeFantasyCategoryKeys,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -61,8 +62,9 @@ export interface LeagueMatchupCategoryRow {
   category: FantasyCategoryKey;
   label: string;
   shortLabel: string;
-  homeValue: number;
-  awayValue: number;
+  /** Null when the side has no value, such as DE% for a team with no disposals. */
+  homeValue: number | null;
+  awayValue: number | null;
   direction: 'HIGH_WINS' | 'LOW_WINS';
   winner: MatchupTeamSide;
 }
@@ -136,10 +138,17 @@ function toIsoString(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
+/** A stored null (a team with no disposals has no DE%) stays unavailable; anything else reads as before. */
+function readStoredCategoryValue(value: unknown): number | null {
+  if (value === null) return null;
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function parseStoredCategoryRows(categoriesJson: unknown): Array<{
   category: FantasyCategoryKey;
-  homeValue: number;
-  awayValue: number;
+  homeValue: number | null;
+  awayValue: number | null;
   direction: 'HIGH_WINS' | 'LOW_WINS';
   winner: MatchupTeamSide;
 }> {
@@ -150,16 +159,14 @@ export function parseStoredCategoryRows(categoriesJson: unknown): Array<{
     const source = row as Record<string, unknown>;
     const category = source.category;
     if (!isFantasyCategoryKey(category)) return [];
-    const homeValue = Number(source.homeValue ?? 0);
-    const awayValue = Number(source.awayValue ?? 0);
     const winner = source.winner;
     const direction = source.direction;
 
     return [
       {
         category,
-        homeValue: Number.isFinite(homeValue) ? homeValue : 0,
-        awayValue: Number.isFinite(awayValue) ? awayValue : 0,
+        homeValue: readStoredCategoryValue(source.homeValue),
+        awayValue: readStoredCategoryValue(source.awayValue),
         direction: direction === 'LOW_WINS' ? 'LOW_WINS' : 'HIGH_WINS',
         winner: winner === 'home' || winner === 'away' || winner === 'draw' ? winner : 'draw',
       },
@@ -208,8 +215,8 @@ function buildCategoryRows({
       category,
       label: meta?.label ?? category,
       shortLabel: meta?.shortLabel ?? meta?.abbrev ?? category,
-      homeValue: storedRow?.homeValue ?? 0,
-      awayValue: storedRow?.awayValue ?? 0,
+      homeValue: storedRow ? storedRow.homeValue : 0,
+      awayValue: storedRow ? storedRow.awayValue : 0,
       direction: storedRow?.direction ?? categoryDirections[category] ?? 'HIGH_WINS',
       winner: storedRow?.winner ?? 'draw',
     };
@@ -581,7 +588,7 @@ export async function loadLivePlayerTotalsForRound(
   season: number,
   round: number,
   expectedPlayers: readonly { playerId: string; club: string | null }[] = [],
-  /** The league's scoring categories: a row lacking a value for one counts as missing. */
+  /** The league's scoring categories: a row lacking a stat one is computed from counts as missing. */
   categories: readonly FantasyCategoryKey[] = []
 ) {
   const [statsResult, matchesResult] = await Promise.all([
@@ -608,14 +615,17 @@ export async function loadLivePlayerTotalsForRound(
     }),
   });
 
-  // An unreported stat is unavailable, never 0: a player who played but whose row lacks one of
-  // the league's categories holds the round unscored, like a player with no row at all.
+  // An unreported stat is unavailable, never 0: a player who played but whose row lacks a stat one
+  // of the league's categories is computed from (for DE%, effective disposals and disposals) holds
+  // the round unscored, like a player with no row at all.
   const incompletePlayerIds = new Set(
     normalizedStats
       .filter(
         (row) =>
           !row.confirmedDidNotPlay &&
-          categories.some((category) => row.unreportedCategories.includes(category))
+          categories
+            .flatMap(categoryStatInputs)
+            .some((key) => row.unreportedCategories.includes(key))
       )
       .map((row) => row.playerId)
   );

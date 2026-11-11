@@ -1,5 +1,7 @@
 import {
+  FANTASY_CATEGORIES,
   isFantasyCategoryKey,
+  isSelectableFantasyCategory,
   normalizeFantasyCategoryKeys,
   REAL_DATA_NINE_CATEGORY_PRESET,
   type FantasyCategoryKey,
@@ -56,12 +58,22 @@ export function validateLeagueName(name: string): LeagueValidation<string> {
 }
 
 /**
- * A league scores 3-10 known categories. Unknown keys are rejected rather than dropped, so a typo
- * never silently becomes a different category set.
+ * A league scores 3-10 known, selectable categories. Unknown keys are rejected rather than dropped,
+ * so a typo never silently becomes a different category set; a display-only stat (time on ground %)
+ * is rejected by name.
  */
 export function validateLeagueCategories(value: unknown): LeagueValidation<FantasyCategoryKey[]> {
   if (!Array.isArray(value) || value.some((key) => !isFantasyCategoryKey(key))) {
     return { ok: false, error: 'One or more scoring categories are invalid' };
+  }
+  const unselectable = (value as FantasyCategoryKey[]).find(
+    (key) => !isSelectableFantasyCategory(key)
+  );
+  if (unselectable) {
+    return {
+      ok: false,
+      error: `${FANTASY_CATEGORIES[unselectable].label} is not a scoring category`,
+    };
   }
   const categories = normalizeFantasyCategoryKeys(value, []);
   const { min, max } = LEAGUE_CONSTRAINTS.categories;

@@ -97,21 +97,34 @@ Clients may expose additional choices, but they must submit values supported by 
 
 ## Matchup calculation
 
-For each category, active player totals are summed for both teams and compared in the configured
+For each category, active player totals are aggregated for both teams and compared in the configured
 direction. The result records home/away totals, the category winner or draw, category win counts, and
-the overall matchup result.
+the overall matchup result. Each category's aggregation rule lives on its definition in
+`src/types/fantasyCategories.ts` (`aggregation`, `sum` by default) and is applied in one place,
+`aggregateLineupCategoryTotals` in `src/server/leagues/matchupScoringEngine.ts`.
+
+Disposal efficiency is a ratio, not a sum or an average of player percentages (owner decision,
+2026-11-11): team DE% = total effective disposals / total disposals x 100 across the team's counted
+players. A player with no disposals adds 0 to both totals. A team with no disposals has no DE%: its
+value is stored as `null`, shown as "–", and the category is a draw, since neither side can be
+compared. The player totals therefore carry `disposals` (the ETL's `disposals`, or kicks plus
+handballs when both are reported) even though it is not a category.
+
+Time on ground % is read and shown for players but is not a scoring category (owner decision,
+2026-11-11): it is marked `selectable: false`, and league creation and the settings save refuse it.
 
 A stat the provider did not report is unavailable, never a real 0 (owner decision, 2026-11-09);
 a reported 0 stays 0. `src/server/leagues/liveStatsAdapter.ts` leaves a missing, null or non-numeric
 value out of a player's totals and lists it in the row's `unreportedCategories`. A lineup player who
-played but whose row lacks one of the league's scoring categories counts as missing, exactly like a
+played but whose row lacks a stat one of the league's scoring categories is computed from (for DE%,
+effective disposals and disposals) counts as missing, exactly like a
 player with no row: the round stays unscored, the player is in `missingPlayerIds`, and the stalled-round
 alert reports him once the grace period passes. Players confirmed as not playing (zero minutes in a
 final match, a club bye, or left out of a mapped team sheet) are not affected.
 
-Disposal efficiency is the one exception. A player with no disposals has no efficiency to report, so
-when the row reports 0 disposals (or 0 kicks and 0 handballs) his missing efficiency is empty, not
-missing: he adds nothing to his team's summed disposal efficiency and does not hold the round.
+A player with no disposals is the one exception. He has no efficiency and no effective disposals to
+report, so when the row reports 0 disposals (or 0 kicks and 0 handballs) those missing values are
+empty, not missing: he adds 0 to both sides of his team's DE% and does not hold the round.
 
 Standings retain both matchup and category records. `H2H_EACH_CATEGORY` ranks by the accumulated
 category result; `H2H_MOST_CATEGORIES` ranks by matchup wins/losses/draws while retaining category
