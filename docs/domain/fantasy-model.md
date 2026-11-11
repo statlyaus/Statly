@@ -110,6 +110,21 @@ value is stored as `null`, shown as "–", and the category is a draw, since nei
 compared. The player totals therefore carry `disposals` (the ETL's `disposals`, or kicks plus
 handballs when both are reported) even though it is not a category.
 
+A season DE% follows the same rule: season effective disposals / season disposals x 100, never a
+sum or mean of round percentages. Each round's stored category row for a ratio category
+(`LeagueMatchupScore.categoriesJson`) keeps both sides' numerator and denominator as `homeRatio` and
+`awayRatio` (`{ numerator, denominator }`), so no schema change is needed. The standings tie-break
+total and the team category profile pool these (`aggregateFinalizedCategoryTotals` in
+`matchupReadModel.ts`); the profile's league average for DE% is the league's pooled ratio. A round
+with no disposals adds 0 to both sides and is not counted as 0%. A team with no season disposals has
+no season DE%: it ranks below every team with a value, in the tie-break and the profile, whatever the
+direction. A round stored before the parts were kept adds nothing to the season ratio until it is
+recalculated.
+
+`pointsFor` (and each player's `total` on the matchup card) adds up the count categories only. A
+ratio category is a rate, so DE% is left out. Neither value orders the standings or is shown on a
+screen; they are kept on score and standing rows and in the matchup API.
+
 Time on ground % is read and shown for players but is not a scoring category (owner decision,
 2026-11-11): it is marked `selectable: false`, and league creation and the settings save refuse it.
 

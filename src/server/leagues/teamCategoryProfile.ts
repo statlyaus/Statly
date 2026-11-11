@@ -1,20 +1,29 @@
 import { prisma } from '@/lib/prisma';
-import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  FANTASY_CATEGORIES,
+  categoryAggregation,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 
 import { activeSeasonIdOf } from './activeSeason';
 import { isActivePrismaMembership } from './membership';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { parseLeagueCategories } from './defaultLineups';
-import { parseStoredCategoryRows } from './matchupReadModel';
+import { aggregateFinalizedCategoryTotals, parseStoredCategoryRows } from './matchupReadModel';
 import type { CategoryDirection } from './scoringTypes';
 
 export interface TeamCategoryStanding {
   key: FantasyCategoryKey;
   label: string;
-  /** The viewer's per-round average across finalized regular-season rounds. */
-  average: number;
-  leagueAverage: number;
-  /** 1 is best in the league, honouring low-wins categories. */
+  /**
+   * The viewer's per-round average across finalized regular-season rounds. A ratio category (DE%)
+   * is the season ratio instead (season effective disposals / season disposals), null when the
+   * team had no season disposals.
+   */
+  average: number | null;
+  /** The mean of the teams' averages; for a ratio category, the league's pooled season ratio. */
+  leagueAverage: number | null;
+  /** 1 is best in the league, honouring low-wins categories. A team with no value ranks last. */
   rank: number;
   lowWins: boolean;
 }
@@ -36,6 +45,8 @@ interface BuildInput {
 }
 
 const roundToTenth = (value: number) => Math.round(value * 10) / 10;
+// Pools every team's rows under one key to get the league's season ratio.
+const POOLED_LEAGUE_KEY = '\u0000league';
 
 /** Per-round category averages for every team, then the viewer's rank in each category. */
 export function buildTeamCategoryProfile(input: BuildInput): TeamCategoryProfile | null {
@@ -66,28 +77,50 @@ export function buildTeamCategoryProfile(input: BuildInput): TeamCategoryProfile
   };
   if (roundsPlayed === 0) return { ...base, categories: [] };
 
-  const averagesFor = (category: FantasyCategoryKey) =>
-    [...roundsByMember.entries()].map(([memberId, rounds]) => ({
+  const memberScores = input.finalizedScores.filter((score) => memberIds.has(score.memberId));
+  const averagesFor = (
+    category: FantasyCategoryKey
+  ): Array<{ memberId: string; average: number | null }> => {
+    if (categoryAggregation(category).kind === 'sum') {
+      return [...roundsByMember.entries()].map(([memberId, rounds]) => ({
+        memberId,
+        average: (totalsByMember.get(memberId)?.get(category) ?? 0) / rounds,
+      }));
+    }
+    const seasonValues = aggregateFinalizedCategoryTotals(memberScores, category);
+    return [...roundsByMember.keys()].map((memberId) => ({
       memberId,
-      average: (totalsByMember.get(memberId)?.get(category) ?? 0) / rounds,
+      average: seasonValues.get(memberId) ?? null,
     }));
+  };
+  const leagueAverageFor = (
+    category: FantasyCategoryKey,
+    averages: ReadonlyArray<{ average: number | null }>
+  ): number | null => {
+    if (categoryAggregation(category).kind !== 'sum') {
+      const pooled = memberScores.map((score) => ({ ...score, memberId: POOLED_LEAGUE_KEY }));
+      return aggregateFinalizedCategoryTotals(pooled, category).get(POOLED_LEAGUE_KEY) ?? null;
+    }
+    return averages.reduce((sum, entry) => sum + (entry.average ?? 0), 0) / averages.length;
+  };
 
   return {
     ...base,
     categories: input.categories.map((category) => {
       const lowWins = input.categoryDirections[category] === 'LOW_WINS';
       const averages = averagesFor(category);
-      const average = averages.find((entry) => entry.memberId === viewer.id)?.average ?? 0;
-      const better = averages.filter((entry) =>
-        lowWins ? entry.average < average : entry.average > average
-      ).length;
+      const average = averages.find((entry) => entry.memberId === viewer.id)?.average ?? null;
+      const valued = averages.flatMap((entry) => (entry.average === null ? [] : [entry.average]));
+      const better =
+        average === null
+          ? valued.length
+          : valued.filter((value) => (lowWins ? value < average : value > average)).length;
+      const leagueAverage = leagueAverageFor(category, averages);
       return {
         key: category,
         label: FANTASY_CATEGORIES[category]?.label ?? category,
-        average: roundToTenth(average),
-        leagueAverage: roundToTenth(
-          averages.reduce((sum, entry) => sum + entry.average, 0) / averages.length
-        ),
+        average: average === null ? null : roundToTenth(average),
+        leagueAverage: leagueAverage === null ? null : roundToTenth(leagueAverage),
         rank: better + 1,
         lowWins,
       };
