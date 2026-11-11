@@ -26,6 +26,10 @@ These are quality references, not assets or layouts to copy.
 - Type is Saira for text (`font-sans`) and Saira Extra Condensed for headings and scores
   (`font-display`, set in uppercase by the base layer; add `normal-case` to opt out). Numbers are
   tabular across the app so stats line up in columns.
+- Navigation icons come from `StatlyIcon` (`src/components/ui/StatlyIcon.tsx`): stroke-only,
+  `currentColor`, secondary strokes at reduced opacity. Each animates when its link or button is
+  hovered or focused and once for the current page (`aria-current="page"`), and stays still under
+  reduced motion. Add a glyph there rather than inlining another SVG in a nav item.
 - Add a new abstraction only when immediate reuse exists; fix the owning shared primitive when a shared
   behavior is wrong.
 
