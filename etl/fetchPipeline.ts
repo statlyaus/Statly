@@ -202,11 +202,50 @@ async function runFixturePipeline(options: {
   });
 }
 
+function resolveResultRuntimePaths(runtimeDirectory: string = __dirname) {
+  const { etlRoot } = resolveEtlRuntimePaths(runtimeDirectory);
+  return {
+    etlRoot,
+    fetcher: path.join(etlRoot, 'fetch_fw_results.R'),
+    processor: path.join(etlRoot, 'dist', 'processResultData.js'),
+  };
+}
+
+/**
+ * Store a season's AFL match results (optionally only Footywire's last N matches) in the fantasy
+ * PostgreSQL `AflMatchResult` table. Fails closed: any fetch, parse or write failure writes nothing.
+ */
+async function runResultPipeline(options: {
+  season: number | string;
+  lastMatches?: number;
+  timeoutMs?: number | null;
+}): Promise<void> {
+  const { etlRoot, fetcher, processor } = resolveResultRuntimePaths();
+
+  await runRPipeline({
+    etlRoot,
+    fetcher,
+    fetcherArgs: [
+      String(options.season),
+      options.lastMatches === undefined ? '' : String(options.lastMatches),
+    ],
+    processor,
+    env: {},
+    label: 'Footywire results',
+    timeoutMs: resolveFetchPipelineTimeout({
+      season: options.season,
+      timeoutMs: options.timeoutMs,
+    }),
+  });
+}
+
 export {
   resolveEtlRuntimePaths,
   resolveFetchPipelineTimeout,
   resolveFixtureRuntimePaths,
+  resolveResultRuntimePaths,
   runFetchPipeline,
   runFixturePipeline,
+  runResultPipeline,
 };
 export type { EtlRuntimePaths, FetchPipelineOptions };
