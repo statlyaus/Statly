@@ -311,6 +311,8 @@ enum LeagueCompetitionAuditEventType {
   LINEUP_INVALIDATED
   AUTOSUB_RESOLVED
   FIXTURE_DATA_PENDING
+  /// A recalculation changed a FINAL matchup's stored result; the payload holds before and after.
+  FINAL_ROUND_RESCORED
 }
 
 enum LeagueAutosubReason {

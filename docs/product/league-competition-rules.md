@@ -37,6 +37,10 @@ auto-pick choice, sums each selected category's z-score against the available po
 `LOW_WINS` category, so a higher value there lowers the score. Its breakdown shows the raw stat and
 the signed z-score, so the entries add up to the total.
 
+A `LOW_WINS` counting category is summed like any other: an empty lineup slot or a starter who did not
+play adds 0, which helps that team in a lower-wins category. This is the accepted rule, not a defect
+(owner decision 2026-11-11, closes process-map finding roster-scoring-16).
+
 - `H2H_EACH_CATEGORY` adds each category win/loss/draw to standings.
 - `H2H_MOST_CATEGORIES` awards the weekly matchup to the team winning more categories; equal category
   wins produce a matchup draw.
@@ -135,6 +139,17 @@ evidence, slot eligibility, and candidate order.
 Standings preserve matchup and category wins/losses/draws plus totals used for deterministic ordering.
 The selected standings tie-break category must be one of the league's enabled categories; its configured
 direction applies to ordering. Remaining ties use stable competition data rather than browser order.
+
+A round becomes `FINAL` only when every AFL match in it is final and every matchup with two teams was
+scored. A commissioner's finalize request on a round with an AFL match not yet final is refused
+(`AFL_MATCHES_NOT_FINAL`, HTTP 409). A `FINAL` round may still be recalculated, for example after a stat
+correction, but every change to a `FINAL` matchup's stored result (status, winner, category
+wins/draws, each side's category rows and points for) writes one `FINAL_ROUND_RESCORED` competition
+audit entry per changed matchup, in the same transaction as the new scores. Its payload holds the
+season, round, matchup, trigger (`manual` with the commissioner as actor, or `cron`), and the result
+before and after. A recalculation that reproduces the stored result writes none. Standings are
+recomputed from the corrected round as usual (owner decision 2026-11-11, process-map finding
+roster-scoring-11).
 
 Supported finals sizes are 4, 6, and 8 teams. Seeding comes from finalized regular-season standings.
 Finals progression is persisted and recalculated only through the competition service. A drawn final is

@@ -20,6 +20,11 @@ import { activeSeasonIdOf } from './activeSeason';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { normalizeCompetitionRules } from './competitionRules';
 import { synchronizeFinalsFixtures } from './finalsService';
+import {
+  loadFinalMatchupSnapshots,
+  recordFinalRoundRescores,
+  type MatchupResultSnapshot,
+} from './finalRoundRescoreAudit';
 import type { FinalsTeamCount } from './finalsProgression';
 import { resolveAndPersistLineupAutosubs } from './lineupAutosubService';
 import {
@@ -949,10 +954,13 @@ export async function recalculateLeagueRoundMatchups({
   leagueId,
   round,
   finalize,
+  actorMemberId,
 }: {
   leagueId: string;
   round: number;
   finalize?: boolean;
+  /** The commissioner who asked for it; none means the scheduled job. Recorded on FINAL rescores. */
+  actorMemberId?: string;
 }) {
   const settings = await loadLeagueCompetitionSettings(leagueId);
   if (!settings) return null;
@@ -1099,6 +1107,17 @@ export async function recalculateLeagueRoundMatchups({
       roundStatus: { ...roundStatus, hasUnavailableStatus: true },
     };
   }
+  // A commissioner cannot finalize a round before every AFL match in it is final.
+  if (finalize && !roundStatus.allFinal) {
+    return {
+      round,
+      status: 'SCHEDULED' as const,
+      recalculated: 0,
+      scores: [],
+      blocked: 'AFL_MATCHES_NOT_FINAL' as const,
+      roundStatus,
+    };
+  }
   const unresolvedMatchupIds = matchups
     .filter(
       (matchup) =>
@@ -1179,22 +1198,48 @@ export async function recalculateLeagueRoundMatchups({
   const finalized = await prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`UPDATE "League" SET "ownerId" = "ownerId" WHERE "id" = ${leagueId}`;
+      const finalBefore = await loadFinalMatchupSnapshots(
+        tx,
+        leagueId,
+        calculatedScores.map((scored) => scored.matchupId)
+      );
+      const resultAfter = new Map<string, MatchupResultSnapshot>();
 
       for (const scored of calculatedScores) {
+        const winnerMemberId = scored.result.matchupDraw
+          ? null
+          : scored.result.homeMatchupWin
+            ? scored.homeMemberId
+            : scored.awayMemberId;
         await tx.leagueMatchup.update({
           where: { id: scored.matchupId },
           data: {
             status,
             finalizedAt,
-            winnerMemberId: scored.result.matchupDraw
-              ? null
-              : scored.result.homeMatchupWin
-                ? scored.homeMemberId
-                : scored.awayMemberId,
+            winnerMemberId,
             homeCategoryWins: scored.result.homeCategoryWins,
             awayCategoryWins: scored.result.awayCategoryWins,
             drawnCategories: scored.result.drawnCategories,
           },
+        });
+        resultAfter.set(scored.matchupId, {
+          status,
+          winnerMemberId,
+          homeCategoryWins: scored.result.homeCategoryWins,
+          awayCategoryWins: scored.result.awayCategoryWins,
+          drawnCategories: scored.result.drawnCategories,
+          scores: [
+            {
+              memberId: scored.homeMemberId,
+              categoriesJson: scored.result.categories,
+              pointsFor: scored.homePointsFor,
+            },
+            {
+              memberId: scored.awayMemberId,
+              categoriesJson: mirrorCategoryRows(scored.result.categories),
+              pointsFor: scored.awayPointsFor,
+            },
+          ],
         });
         await tx.leagueMatchupScore.upsert({
           where: {
@@ -1269,6 +1314,14 @@ export async function recalculateLeagueRoundMatchups({
           },
         });
       }
+      await recordFinalRoundRescores(tx, {
+        leagueId,
+        seasonId,
+        round,
+        actorMemberId: actorMemberId ?? null,
+        before: finalBefore,
+        after: resultAfter,
+      });
 
       if (status !== 'FINAL') return null;
 
