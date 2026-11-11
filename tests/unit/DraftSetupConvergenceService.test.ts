@@ -269,6 +269,24 @@ describe('ensureLeagueDraftSetupConverged', () => {
     expect(tx.draft.update).not.toHaveBeenCalled();
   });
 
+  it('rebuilds a scheduled draft order when one member is swapped for another', async () => {
+    const startAt = new Date('2026-05-02T00:00:00.000Z');
+    const league = buildLeagueWithDraft(startAt);
+    // Same count as the stored order, different people: member-2 left, member-3 joined.
+    const members = [buildMembers()[0], { ...buildMembers()[1], id: 'member-3', draftSlot: 2 }];
+    const { tx, client } = buildConvergenceMocks({ ...league, members });
+
+    await ensureLeagueDraftSetupConverged({
+      prismaClient: client as never,
+      leagueId: 'league-1',
+      now: new Date('2026-05-02T00:05:00.000Z'),
+    });
+
+    expect(tx.draftOrder.deleteMany).toHaveBeenCalledWith({ where: { draftId: 'draft-1' } });
+    const memberIds = tx.draftOrder.create.mock.calls.map((call) => call[0].data.memberId);
+    expect(memberIds).toEqual(['member-1', 'member-3']);
+  });
+
   it('leaves a declined member with an active flag out of the draft order', async () => {
     const startAt = new Date('2026-05-02T00:00:00.000Z');
     const league = buildLeagueWithDraft(startAt);

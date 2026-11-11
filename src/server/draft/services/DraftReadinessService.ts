@@ -245,7 +245,10 @@ export async function getLeagueDraftOperationalReadiness(
       'draft_completed',
     ].includes(blocker.code)
   );
-  const canEnterRoom = Boolean(draft && roomIsOpen && !isComplete && !hasHardStartBlocker);
+  // Setup blockers gate entry only before the draft runs; a running draft stays enterable.
+  const canEnterRoom = Boolean(
+    draft && !isComplete && (isRunning || (roomIsOpen && !hasHardStartBlocker))
+  );
 
   return {
     leagueId: league.id,

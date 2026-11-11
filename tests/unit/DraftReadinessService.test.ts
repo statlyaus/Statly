@@ -290,3 +290,42 @@ describe('Bloodsucker draft readiness (BR-02, BR-06)', () => {
     expect(readiness.blockers).toEqual([]);
   });
 });
+
+describe('draft room entry once the draft is running', () => {
+  it.each([DraftStatus.LIVE, DraftStatus.PAUSED])(
+    'keeps a %s draft enterable when the player pool falls short mid-draft',
+    async (draftStatus) => {
+      const readiness = await getLeagueDraftOperationalReadiness(
+        buildClient({
+          startAt: new Date('2026-05-02T00:00:00.000Z'),
+          availablePlayers: 0,
+          draftStatus,
+          lobbyStatus: 'LIVE',
+        }) as any,
+        {
+          leagueId: 'league-1',
+          now: new Date('2026-05-02T00:30:00.000Z'),
+        }
+      );
+
+      expect(readiness.blockers.map((blocker) => blocker.code)).toContain('player_pool_empty');
+      expect(readiness.lifecycle.canEnterRoom).toBe(true);
+    }
+  );
+
+  it('still keeps a scheduled draft out of the room while a setup blocker stands', async () => {
+    const readiness = await getLeagueDraftOperationalReadiness(
+      buildClient({
+        startAt: new Date('2026-05-02T00:00:00.000Z'),
+        availablePlayers: 0,
+        lobbyStatus: 'OPEN',
+      }) as any,
+      {
+        leagueId: 'league-1',
+        now: new Date('2026-05-02T00:30:00.000Z'),
+      }
+    );
+
+    expect(readiness.lifecycle.canEnterRoom).toBe(false);
+  });
+});

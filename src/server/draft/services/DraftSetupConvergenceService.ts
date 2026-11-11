@@ -73,7 +73,11 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
     const totalPicks = capacity.totalPicks;
 
     if (existingDraft) {
-      if (existingDraft.orders.length === members.length) {
+      const orderMemberIds = new Set(existingDraft.orders.map((order) => order.memberId));
+      const orderIsCurrent =
+        existingDraft.orders.length === members.length &&
+        members.every((member) => orderMemberIds.has(member.id));
+      if (orderIsCurrent) {
         if (existingDraft.totalPicks !== totalPicks) {
           await tx.draft.update({
             where: { id: existingDraft.id },
