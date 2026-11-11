@@ -8,10 +8,13 @@
   display: block;
   flex-shrink: 0;
   overflow: visible;
+  shape-rendering: geometricPrecision;
 }
 
 .soft {
-  opacity: 0.55;
+  /* Inner detail: full-strength colour at a finer weight so it reads crisp at 16px. */
+  opacity: 0.9;
+  stroke-width: 1.5;
 }
 
 .part {
@@ -75,7 +78,7 @@
 @keyframes blink {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 0.9;
     transform: scale(1);
   }
   50% {
