@@ -8,7 +8,6 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import {
   assertRosterPlayersMovable,
-  invalidatePendingTradesForPlayers,
   refreshOwnershipProjection,
   RosterSwapError,
   swapRosterPlayers,
@@ -675,22 +674,6 @@ async function finalizeTrade(
     status: 'COMPLETED',
     version: thread.version + 1,
   };
-}
-
-export async function invalidateConflictingTrades(
-  tx: Transaction,
-  completedThread: LoadedTrade,
-  playerIds: string[],
-  now: Date
-): Promise<void> {
-  await invalidatePendingTradesForPlayers(tx, {
-    leagueId: completedThread.leagueId,
-    seasonId: completedThread.seasonId,
-    playerIds,
-    reasonCode: 'PLAYER_TRADED_ELSEWHERE',
-    excludeThreadId: completedThread.id,
-    now,
-  });
 }
 
 async function resolveThread(

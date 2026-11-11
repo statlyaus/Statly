@@ -11,10 +11,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import {
-  invalidateConflictingTrades,
-  processDueLeagueTrades,
-} from '@/server/leagues/trades/tradeService';
+import { invalidatePendingTradesForPlayers } from '@/server/leagues/rosterSwap';
+import { processDueLeagueTrades } from '@/server/leagues/trades/tradeService';
 
 describe('processDueLeagueTrades', () => {
   beforeEach(() => {
@@ -40,7 +38,7 @@ describe('processDueLeagueTrades', () => {
   });
 });
 
-describe('invalidateConflictingTrades', () => {
+describe('invalidatePendingTradesForPlayers', () => {
   it('clears the review window and writes an outbox row for each invalidated conflict', async () => {
     const tx = {
       leagueTradeThread: {
@@ -55,18 +53,14 @@ describe('invalidateConflictingTrades', () => {
       leagueTradeEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
       leagueTradeOutboxEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };
-    const completedThread = {
-      id: 'thread-a',
+    await invalidatePendingTradesForPlayers(tx as never, {
       leagueId: 'league-1',
       seasonId: 'season-1',
-    };
-
-    await invalidateConflictingTrades(
-      tx as never,
-      completedThread as never,
-      ['player-1'],
-      new Date('2026-10-14T00:00:00Z')
-    );
+      playerIds: ['player-1'],
+      reasonCode: 'PLAYER_TRADED_ELSEWHERE',
+      excludeThreadId: 'thread-a',
+      now: new Date('2026-10-14T00:00:00Z'),
+    });
 
     expect(tx.leagueTradeThread.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['thread-b'] } },
