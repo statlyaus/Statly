@@ -88,3 +88,22 @@ describe('handlePickCommand development identity', () => {
     expect(mocks.makePick).not.toHaveBeenCalled();
   });
 });
+
+describe('handlePickCommand request body', () => {
+  it('answers 400, not 500, when the body is not JSON', async () => {
+    mocks.makePick.mockReset();
+    mocks.getAuthenticatedUserId.mockResolvedValue('signed-in-user');
+
+    const response = await handlePickCommand(
+      new NextRequest('http://localhost/api/drafts/draft-1/pick', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{not json',
+      }),
+      Promise.resolve({ id: 'draft-1' })
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.makePick).not.toHaveBeenCalled();
+  });
+});

@@ -401,11 +401,54 @@ describe('DraftRealtimePublisher', () => {
       status: 'LIVE',
     });
 
-    expect(incCounter).toHaveBeenCalledWith(
-      'draft_realtime_state_preparation_retries_total',
-      1,
-      { reason: 'concurrent_clock_transition' }
-    );
+    expect(incCounter).toHaveBeenCalledWith('draft_realtime_state_preparation_retries_total', 1, {
+      reason: 'concurrent_clock_transition',
+    });
     expect(incCounter).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('batch flush isolation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    draftRepository.transaction.mockImplementation((work) => work({}));
+    draftClockCoordinator.ensureReady.mockResolvedValue({ receipt: null, repaired: false });
+    publishLeagueSystemMessage.mockResolvedValue({});
+  });
+
+  it('still publishes other drafts when one draft event keeps failing', async () => {
+    const event = (id: string, draftId: string, name: string) => ({
+      id,
+      draftId,
+      leagueId: `league-${draftId}`,
+      event: name,
+      payload: null,
+      publishState: false,
+      attempts: 3,
+      lastError: null,
+      lockedAt: null,
+      lockedBy: null,
+      publishedAt: null,
+      createdAt: new Date('2026-06-05T00:00:00.000Z'),
+    });
+    const events = [
+      event('event-bad', 'draft-1', 'draft:paused'),
+      event('event-ok', 'draft-2', 'draft:completed'),
+    ] as any;
+    draftRepository.listPendingDraftEventsBatch.mockResolvedValue(events);
+    draftRepository.claimDraftEvents.mockResolvedValue(events.length);
+    draftRepository.listClaimedDraftEvents.mockResolvedValue(events);
+    draftRealtimeDispatcher.publishDraftEvent.mockRejectedValueOnce(new Error('bad envelope'));
+
+    await expect(new DraftRealtimePublisher().flushPendingDraftEventsBatch(50)).rejects.toThrow(
+      'bad envelope'
+    );
+
+    expect(draftRepository.markDraftEventsFailed).toHaveBeenCalledWith(
+      {},
+      ['event-bad'],
+      'bad envelope'
+    );
+    expect(draftRepository.markDraftEventsPublished).toHaveBeenCalledWith({}, ['event-ok']);
   });
 });

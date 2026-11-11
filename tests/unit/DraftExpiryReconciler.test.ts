@@ -35,6 +35,7 @@ describe('DraftExpiryReconciler', () => {
       scheduledCount: 1,
       repairedCount: 0,
       skippedCount: 0,
+      failedCount: 0,
     });
     expect(draftClockCoordinator.ensureReady).toHaveBeenCalledWith('draft-1');
   });
@@ -46,6 +47,7 @@ describe('DraftExpiryReconciler', () => {
       scheduledCount: 0,
       repairedCount: 0,
       skippedCount: 1,
+      failedCount: 0,
     });
     expect(draftClockCoordinator.ensureReady).toHaveBeenCalledWith('draft-1');
   });
@@ -57,6 +59,7 @@ describe('DraftExpiryReconciler', () => {
       scheduledCount: 0,
       repairedCount: 1,
       skippedCount: 0,
+      failedCount: 0,
     });
     expect(draftClockCoordinator.ensureReady).toHaveBeenCalledWith('draft-1');
   });
@@ -68,5 +71,25 @@ describe('DraftExpiryReconciler', () => {
       'redis unavailable'
     );
     expect(draftClockCoordinator.ensureReady).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps sweeping the other live drafts when one draft fails', async () => {
+    draftRepository.listLiveDraftPickExpirySchedules.mockResolvedValue([
+      { draftId: 'draft-1' },
+      { draftId: 'draft-2' },
+      { draftId: 'draft-3' },
+    ]);
+    draftClockCoordinator.ensureReady.mockImplementation(async (draftId: string) => {
+      if (draftId === 'draft-2') throw new Error('LIVE draft has invalid pick duration');
+      return { receipt, repaired: false };
+    });
+
+    await expect(new DraftExpiryReconciler().reconcileAllLiveDrafts()).resolves.toEqual({
+      scheduledCount: 2,
+      repairedCount: 0,
+      skippedCount: 0,
+      failedCount: 1,
+    });
+    expect(draftClockCoordinator.ensureReady).toHaveBeenCalledWith('draft-3');
   });
 });
