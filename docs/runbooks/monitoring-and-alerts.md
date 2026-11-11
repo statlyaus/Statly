@@ -14,6 +14,7 @@ goes to the one Sentry project the web app already uses; no other vendor is invo
 | Socket.IO server: uncaught exception or unhandled rejection | Sentry's Node handlers, flushed before shutdown                                                             | `src/server/socketioServer.ts`           |
 | Draft worker or web-vitals worker: a job fails              | `reportJobFailure`, tagged `queue`, `job_name`, `league_id`, `season_id`, `draft_id` where the job has them | `src/server/monitoring/processSentry.ts` |
 | Either worker: uncaught exception or unhandled rejection    | Sentry's Node handlers                                                                                      | same                                     |
+| An AFL match result is missing 6 h after the game's end     | `logger.error` per game from the hourly `/api/cron/afl-results` check                                       | `src/server/etl/missingAflResults.ts`    |
 
 Every process tags its events with `service` (`socket-server`, `draft-worker`, `web-vitals-worker`;
 web app events have none). Job failures are reported once, from the worker's `failed` event; the
@@ -36,6 +37,31 @@ An issue resolves after one good run. The waivers route runs hourly and processe
 The other crons (daily, injuries, trades, the other NBA jobs) are not monitored: each monitor past
 the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` and wrap its route in
 `monitorCronRun`; a unit test keeps each monitor's schedule equal to its Netlify function's.
+
+## Missing AFL match result
+
+`netlify/functions/cron-afl-results.mts` calls `/api/cron/afl-results` hourly at :35 UTC. For every
+AFL game in the Firestore fixture that started in the last 14 days and whose scheduled end (start + 3
+hours) was more than 6 hours ago, it looks for a current `AflMatchResult` row (same season, round and
+two clubs). Each game without one is logged as `Missing AFL result: {home} v {away} ({match_uid}) …`,
+which reaches Sentry, and the run answers 500. The check writes nothing. It is not a Crons monitor
+(billing), so a scheduler outage is silent; the waivers and scoring monitors cover the scheduler.
+
+What to do:
+
+1. Look at the ETL logs (Cloud Run `statly-etl`) for `AFL results ingest failed`. The usual causes are
+   a Footywire or fitzRoy failure, `DATABASE_URL` unset, or a database outage. Every failure writes
+   nothing; the ETL retries every 10 minutes while a stats window is open (6 hours after each start).
+2. Re-run the ingest by hand from `etl/` with `DATABASE_URL` naming the fantasy database. For the
+   season's last 18 matches: `npm run build && Rscript fetch_fw_results.R 2026 18 | node dist/processResultData.js`.
+   Leave the count off to re-read the whole season (about 10 minutes, one page per match). Unchanged
+   results are a no-op; a changed one supersedes the stored row.
+3. `reverted to a superseded result` means Footywire changed a score back to an earlier version. The
+   ingest refuses it; read the match's rows (`WHERE "matchId" = …` ordered by `createdAt`), confirm
+   the official score, then decide by hand.
+4. A game that was abandoned has no Footywire match page, so the ingest never records it. Insert its
+   `ABANDONED` row by hand (no scores, no margin; the table's CHECK constraint enforces this) with
+   the Footywire match id if there is one, or `abandoned-{match_uid}` if not.
 
 ## Settings only the owner can make
 

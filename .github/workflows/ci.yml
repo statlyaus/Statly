@@ -129,9 +129,9 @@ jobs:
       - name: Verify live ETL image runtimes
         run: >-
           docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m statly-etl:ci
-          bash -c "node -e \"require.resolve('/etl/dist/liveGuard.js'); require.resolve('/etl/dist/processFootywireData.js')\"
+          bash -c "node -e \"require.resolve('/etl/dist/liveGuard.js'); require.resolve('/etl/dist/processFootywireData.js'); require.resolve('/etl/dist/processResultData.js'); require.resolve('pg')\"
           && Rscript --vanilla -e \"for (p in c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr')) library(p, character.only = TRUE)\"
-          && test -r /etl/fetch_fw_round.R"
+          && test -r /etl/fetch_fw_round.R && test -r /etl/fetch_fw_results.R"
       - name: Build pinned AFL trade capture runtime
         run: docker build --tag statly-afl-trade-capture:ci --file afl-trade-intelligence/Dockerfile afl-trade-intelligence
       - name: Verify offline fitzRoy decoder contract

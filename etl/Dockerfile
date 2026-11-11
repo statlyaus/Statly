@@ -1,6 +1,8 @@
 # Live ETL runtime: node dist/liveGuard.js spawns `Rscript fetch_fw_round.R` and pipes its NDJSON
-# into dist/processFootywireData.js. R uses the same pinned base and CRAN snapshot as the trade
-# capture image (afl-trade-intelligence/Dockerfile). CI builds this image on every change.
+# into dist/processFootywireData.js, and every 10 minutes in a live window pipes fetch_fw_results.R
+# into dist/processResultData.js (AFL match results to PostgreSQL, DATABASE_URL). R uses the same
+# pinned base and CRAN snapshot as the trade capture image (afl-trade-intelligence/Dockerfile).
+# CI builds this image on every change.
 
 FROM node:22-bookworm-slim AS node-build
 WORKDIR /etl
