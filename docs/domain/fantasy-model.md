@@ -95,9 +95,21 @@ Clients may expose additional choices, but they must submit values supported by 
 
 ## Matchup calculation
 
-For each category, active player totals are aggregated for both teams and compared in the configured
-direction. Missing or non-finite values normalize to zero at the scoring boundary. The result records
-home/away totals, the category winner or draw, category win counts, and the overall matchup result.
+For each category, active player totals are summed for both teams and compared in the configured
+direction. The result records home/away totals, the category winner or draw, category win counts, and
+the overall matchup result.
+
+A stat the provider did not report is unavailable, never a real 0 (owner decision, 2026-11-09);
+a reported 0 stays 0. `src/server/leagues/liveStatsAdapter.ts` leaves a missing, null or non-numeric
+value out of a player's totals and lists it in the row's `unreportedCategories`. A lineup player who
+played but whose row lacks one of the league's scoring categories counts as missing, exactly like a
+player with no row: the round stays unscored, the player is in `missingPlayerIds`, and the stalled-round
+alert reports him once the grace period passes. Players confirmed as not playing (zero minutes in a
+final match, a club bye, or left out of a mapped team sheet) are not affected.
+
+Disposal efficiency is the one exception. A player with no disposals has no efficiency to report, so
+when the row reports 0 disposals (or 0 kicks and 0 handballs) his missing efficiency is empty, not
+missing: he adds nothing to his team's summed disposal efficiency and does not hold the round.
 
 Standings retain both matchup and category records. `H2H_EACH_CATEGORY` ranks by the accumulated
 category result; `H2H_MOST_CATEGORIES` ranks by matchup wins/losses/draws while retaining category

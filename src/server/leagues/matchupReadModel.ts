@@ -580,7 +580,9 @@ async function linkEtlStatsToPlayers(
 export async function loadLivePlayerTotalsForRound(
   season: number,
   round: number,
-  expectedPlayers: readonly { playerId: string; club: string | null }[] = []
+  expectedPlayers: readonly { playerId: string; club: string | null }[] = [],
+  /** The league's scoring categories: a row lacking a value for one counts as missing. */
+  categories: readonly FantasyCategoryKey[] = []
 ) {
   const [statsResult, matchesResult] = await Promise.all([
     getRoundPlayerStatsResult(season, round),
@@ -606,8 +608,19 @@ export async function loadLivePlayerTotalsForRound(
     }),
   });
 
+  // An unreported stat is unavailable, never 0: a player who played but whose row lacks one of
+  // the league's categories holds the round unscored, like a player with no row at all.
+  const incompletePlayerIds = new Set(
+    normalizedStats
+      .filter(
+        (row) =>
+          !row.confirmedDidNotPlay &&
+          categories.some((category) => row.unreportedCategories.includes(category))
+      )
+      .map((row) => row.playerId)
+  );
   const missingPlayerIds = [...new Set(expectedPlayers.map((player) => player.playerId))].filter(
-    (playerId) => !totalsByPlayerId.has(playerId)
+    (playerId) => !totalsByPlayerId.has(playerId) || incompletePlayerIds.has(playerId)
   );
   const available = statsResult.ok && matchesResult.ok && missingPlayerIds.length === 0;
 
@@ -1004,7 +1017,8 @@ export async function recalculateLeagueRoundMatchups({
           playerId: assignment.playerId,
           club: assignment.player.club,
         }))
-      )
+      ),
+      settings.categories
     );
   if (!available) {
     return {

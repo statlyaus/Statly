@@ -23,7 +23,13 @@ export interface NormalizedLiveStatRow {
   gameStatus: NormalizedGameStatus;
   statusUnavailable: boolean;
   confirmedDidNotPlay: boolean;
+  /** Only the categories the provider reported; an unreported stat is absent, never 0. */
   totals: CategoryTotals;
+  /**
+   * Categories the row has no value for. Disposal efficiency is left out when the player had no
+   * disposals: it has no value to report, so it is empty rather than missing.
+   */
+  unreportedCategories: FantasyCategoryKey[];
   lastSeenAt: Date | null;
 }
 
@@ -121,19 +127,49 @@ function normalizeStatus(value: unknown): NormalizedGameStatus {
   return 'unknown';
 }
 
-function readCategoryTotals(source: RawValueRecord): CategoryTotals {
+function readCategoryNumber(
+  nestedStats: RawValueRecord,
+  source: RawValueRecord,
+  keys: readonly string[]
+): number | null {
+  return readOptionalNumber(nestedStats, keys) ?? readOptionalNumber(source, keys);
+}
+
+function readCategoryTotals(source: RawValueRecord): {
+  totals: CategoryTotals;
+  unreportedCategories: FantasyCategoryKey[];
+} {
   const nestedStats =
     source.stats && typeof source.stats === 'object' ? (source.stats as RawValueRecord) : {};
   const totals: CategoryTotals = {};
+  const unreportedCategories: FantasyCategoryKey[] = [];
 
   for (const [category, aliases] of Object.entries(CATEGORY_FIELD_ALIASES) as Array<
     [FantasyCategoryKey, string[]]
   >) {
-    const value = readNumber(nestedStats, aliases) || readNumber(source, aliases);
-    totals[category] = value;
+    // A missing, null or non-numeric stat is unavailable: reading it as 0 would let a stat the
+    // provider never reported win a LOW_WINS category.
+    const value = readCategoryNumber(nestedStats, source, aliases);
+    if (value === null) unreportedCategories.push(category);
+    else totals[category] = value;
   }
 
-  return totals;
+  return {
+    totals,
+    unreportedCategories: hadNoDisposals(nestedStats, source)
+      ? unreportedCategories.filter((category) => category !== 'disposalEffPct')
+      : unreportedCategories,
+  };
+}
+
+/** True only when the provider reported zero disposals (or zero kicks and zero handballs). */
+function hadNoDisposals(nestedStats: RawValueRecord, source: RawValueRecord): boolean {
+  const disposals = readCategoryNumber(nestedStats, source, ['disposals']);
+  if (disposals !== null) return disposals === 0;
+  return (
+    readCategoryNumber(nestedStats, source, CATEGORY_FIELD_ALIASES.kicks) === 0 &&
+    readCategoryNumber(nestedStats, source, CATEGORY_FIELD_ALIASES.handballs) === 0
+  );
 }
 
 export function normalizeLiveStatRows(
@@ -169,7 +205,7 @@ export function normalizeLiveStatRows(
       gameStatus,
       statusUnavailable: !gameStartsAt && gameStatus === 'unknown',
       confirmedDidNotPlay: gameStatus === 'final' && minutes === 0,
-      totals: readCategoryTotals(row),
+      ...readCategoryTotals(row),
       lastSeenAt: readDate(row, ['last_seen_at', 'lastSeenAt']),
     };
   });
