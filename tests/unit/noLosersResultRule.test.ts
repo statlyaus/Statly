@@ -197,6 +197,7 @@ describe('No Losers result rule', () => {
   it.each([
     ['RESULT_MISSING', player({ matchId: 'm9' })],
     ['CLUB_NOT_IN_MATCH', player({ club: 'Geelong' })],
+    ['CLUB_NOT_IN_MATCH', player({ club: 'Carlton Blues' })],
     ['STATS_WITHOUT_MATCH', player({ matchId: null })],
   ])('never guesses a result: %s is unavailable (BR-08)', (reason, p) => {
     const output = applyNoLosersResultRule({ players: [p], results: game(90, 60) });

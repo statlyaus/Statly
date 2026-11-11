@@ -1,6 +1,6 @@
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 
-import type { CategoryTotals, LineupScoringPlayer } from './matchupScoringEngine';
+import { isCountedSlot, type CategoryTotals, type LineupScoringPlayer } from './matchupScoringEngine';
 
 /**
  * The No Losers result rule (epic #1290, BR-10 to BR-17): a counted player's stats are multiplied
@@ -10,7 +10,7 @@ import type { CategoryTotals, LineupScoringPlayer } from './matchupScoringEngine
  */
 export const NO_LOSERS_RESULT_RULE_VERSION = 'no-losers-result-rule/v1';
 
-/** A loss by fewer points than this (under a goal) counts half (BR-14). */
+/** A loss by this many points or fewer (under a goal) counts half (BR-14). */
 const CLOSE_LOSS_MAX_MARGIN = 5;
 
 /** An official AFL match result, keyed by its Footywire match id (BR-06). */
@@ -25,6 +25,11 @@ export interface NoLosersMatchResult {
 export interface NoLosersLineupPlayer extends LineupScoringPlayer {
   /** The Footywire match id of the player's stat row; null when he has no stat row. */
   matchId: string | null;
+  /**
+   * The club of the player's stat row (his club in that match, not his current club), spelled
+   * exactly as the fixture's `homeClub`/`awayClub` store it. Any other spelling resolves to
+   * CLUB_NOT_IN_MATCH: the rule never guesses which side he played for.
+   */
   club: string;
 }
 
@@ -78,7 +83,7 @@ function resolveOutcome(
   player: NoLosersLineupPlayer,
   results: ApplyNoLosersResultRuleInput['results']
 ): NoLosersPlayerOutcome {
-  if (player.slot === 'BENCH' || player.slot === 'INTERCHANGE') return { kind: 'NOT_COUNTED_SLOT' };
+  if (!isCountedSlot(player.slot)) return { kind: 'NOT_COUNTED_SLOT' };
   if (player.matchId === null) {
     return hasStats(player.totals)
       ? { kind: 'UNAVAILABLE', reason: 'STATS_WITHOUT_MATCH' }
@@ -125,7 +130,7 @@ function multiplyTotals(totals: CategoryTotals, multiplier: NoLosersMultiplier):
       key as keyof typeof FANTASY_CATEGORIES
     ];
     const isRate = category?.aggregation?.kind === 'ratio';
-    counted[key] = isRate || !Number.isFinite(value) ? value : value * multiplier;
+    counted[key] = isRate ? value : value * multiplier;
   }
   return counted;
 }
