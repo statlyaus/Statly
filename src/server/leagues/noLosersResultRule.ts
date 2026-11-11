@@ -1,6 +1,10 @@
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 
-import { isCountedSlot, type CategoryTotals, type LineupScoringPlayer } from './matchupScoringEngine';
+import {
+  isCountedSlot,
+  type CategoryTotals,
+  type LineupScoringPlayer,
+} from './matchupScoringEngine';
 
 /**
  * The No Losers result rule (epic #1290, BR-10 to BR-17): a counted player's stats are multiplied
