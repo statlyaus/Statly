@@ -30,6 +30,7 @@ function buildTx(overrides: Record<string, unknown> = {}) {
     },
     leagueSettings: {
       create: vi.fn(async () => ({ id: 'settings-1' })),
+      findFirst: vi.fn(async () => null),
       update: vi.fn(async (args) => args.data),
     },
     user: {

@@ -58,12 +58,39 @@ current value is accepted, so the commissioner can still save the rest of the fo
   competition is published. Publication writes `LeagueSettings.scoringSettingsLockedAt`; a league
   published before that write is locked from `competitionPublishedAt`. Code
   `SCORING_SETTINGS_LOCKED`.
-- **Draft structure** (position limits and bench, so roster and bench size, draft type, pick order)
-  locks once the league's draft leaves `SCHEDULED`. Code `DRAFT_STRUCTURE_LOCKED`.
+- **Draft structure** (position limits and bench, so roster and bench size, draft type, pick order,
+  the league format and the Bloodsucker member) locks once the league's draft leaves `SCHEDULED`.
+  Code `DRAFT_STRUCTURE_LOCKED`.
 
 The settings response carries `locks.scoring` and `locks.draftStructure` (the reason, or `null`),
 and the commissioner settings page shows locked fields read-only with that reason. Owned by
 `src/server/leagues/settingsLocks.ts`.
+
+## League formats
+
+A league's format is `STANDARD` (the default) or `BLOODSUCKER` (epic #1275). It is stored in
+`LeagueSettings.leagueFormat`, not in the competition rules, and is independent of scoring mode and
+category selection: every combination is valid.
+
+In a **Bloodsucker** league one member, the Bloodsucker, skips the draft and takes a player from each
+team it beats. The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat.ts`):
+
+- The commissioner chooses the Bloodsucker (`LeagueSettings.bloodsuckerMemberId`) from the active
+  members in league settings. A league is created with the format only; the member is chosen once
+  managers have joined.
+- Waivers must be `ROLLING` with no FAAB budget. Create and settings refuse anything else with code
+  `BLOODSUCKER_REQUIRES_ROLLING`; a Bloodsucker league created without a waiver rule gets rolling.
+- The format and the Bloodsucker lock with the draft structure (see [Settings locks](#settings-locks)).
+- If the Bloodsucker leaves or is removed, the setting is cleared and the change audited. A
+  Bloodsucker who is no longer active also counts as unset everywhere it is read.
+- The draft cannot start while no Bloodsucker is set (readiness shows "Choose a Bloodsucker.") or
+  while the league has fewer than 8 teams; 12 is recommended.
+- Publication refuses a Bloodsucker league with no Bloodsucker (code `BLOODSUCKER_MISSING`).
+- Every format or Bloodsucker change writes a `LEAGUE_FORMAT_CHANGED` competition audit row with the
+  actor, the before and after values, and the reason.
+
+Draft exclusion, the exclusive free-agency window, pinned waiver priority and bites are later epic
+tickets and are not live yet.
 
 ## Calendar and fixtures
 

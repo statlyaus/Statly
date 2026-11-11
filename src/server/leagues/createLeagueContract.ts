@@ -10,6 +10,7 @@ import {
   LEAGUE_CONSTRAINTS,
   type CategoryDirection,
   type LeagueFixtureGenerationMode,
+  type LeagueFormat,
   type LeagueScoringMode,
 } from '@/types/leagues';
 
@@ -29,6 +30,7 @@ export interface CreateLeagueInput {
   timeZone?: string;
   scoringMode?: LeagueScoringMode;
   fixtureGenerationMode?: LeagueFixtureGenerationMode;
+  leagueFormat?: LeagueFormat;
   lineupSlots?: Partial<LineupSlotSettings>;
   categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }
@@ -41,6 +43,8 @@ export interface NormalizedCreateLeagueInput {
   timeZone: string;
   scoringMode: LeagueScoringMode;
   fixtureGenerationMode: LeagueFixtureGenerationMode;
+  /** The Bloodsucker member is chosen later, in settings, once managers have joined. */
+  leagueFormat: LeagueFormat;
   lineupSlots: LineupSlotSettings;
   categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
 }
@@ -109,6 +113,7 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
   const scoringMode =
     input.scoringMode === 'H2H_MOST_CATEGORIES' ? 'H2H_MOST_CATEGORIES' : 'H2H_EACH_CATEGORY';
   const fixtureGenerationMode = input.fixtureGenerationMode === 'MANUAL' ? 'MANUAL' : 'AUTOMATIC';
+  const leagueFormat = input.leagueFormat === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD';
   const visibility =
     (input.visibility ?? input.privacy ?? input.type ?? 'private').toLowerCase() === 'public'
       ? 'PUBLIC'
@@ -122,6 +127,7 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
     timeZone: normalizeTimeZone(input.timeZone),
     scoringMode,
     fixtureGenerationMode,
+    leagueFormat,
     lineupSlots: input.lineupSlots
       ? normalizeLineupSlots(input.lineupSlots)
       : DEFAULT_ACTIVE_LINEUP_SLOTS,
