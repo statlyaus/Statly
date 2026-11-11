@@ -21,22 +21,28 @@ export interface PersistedLeagueStanding {
 export interface LeagueStandingReadRow extends PersistedLeagueStanding {
   teamName: string;
   teamLogoUrl: string | null;
-  tieBreakCategoryTotal: number;
+  /** Null when the team has no value, such as no season DE% because it had no disposals. */
+  tieBreakCategoryTotal: number | null;
   draftSlot: number | null;
 }
 
 export function buildLeagueStandings({
   members,
   standings,
-  tieBreakCategoryTotalByMemberId = new Map<string, number>(),
+  tieBreakCategoryTotalByMemberId = new Map<string, number | null>(),
   tieBreakDirection = 'HIGH_WINS',
 }: {
   members: readonly CurrentLeagueMember[];
   standings: readonly PersistedLeagueStanding[];
-  tieBreakCategoryTotalByMemberId?: ReadonlyMap<string, number>;
+  tieBreakCategoryTotalByMemberId?: ReadonlyMap<string, number | null>;
   tieBreakDirection?: 'HIGH_WINS' | 'LOW_WINS';
 }): LeagueStandingReadRow[] {
   const membersById = new Map(members.map((member) => [member.id, member]));
+  // A member with no score rows yet has a total of 0; a stored null (no value) stays null.
+  const tieBreakValue = (memberId: string) => {
+    const value = tieBreakCategoryTotalByMemberId.get(memberId);
+    return value === undefined ? 0 : value;
+  };
   const standingMemberIds = new Set(standings.map((standing) => standing.memberId));
 
   const resolvedStandings = standings.flatMap((standing) => {
@@ -48,7 +54,7 @@ export function buildLeagueStandings({
         ...standing,
         teamName: member.teamName,
         teamLogoUrl: member.teamLogoUrl,
-        tieBreakCategoryTotal: tieBreakCategoryTotalByMemberId.get(member.id) ?? 0,
+        tieBreakCategoryTotal: tieBreakValue(member.id),
         draftSlot: member.draftSlot ?? null,
       },
     ];
@@ -69,14 +75,19 @@ export function buildLeagueStandings({
       categoryDraws: 0,
       pointsFor: 0,
       pointsAgainst: 0,
-      tieBreakCategoryTotal: tieBreakCategoryTotalByMemberId.get(member.id) ?? 0,
+      tieBreakCategoryTotal: tieBreakValue(member.id),
       draftSlot: member.draftSlot ?? null,
     }));
 
-  const compareTieBreakTotal = (left: LeagueStandingReadRow, right: LeagueStandingReadRow) =>
-    tieBreakDirection === 'LOW_WINS'
-      ? left.tieBreakCategoryTotal - right.tieBreakCategoryTotal
-      : right.tieBreakCategoryTotal - left.tieBreakCategoryTotal;
+  // A team with no tie-break value ranks below every team with one, whatever the direction.
+  const compareTieBreakTotal = (left: LeagueStandingReadRow, right: LeagueStandingReadRow) => {
+    const leftTotal = left.tieBreakCategoryTotal;
+    const rightTotal = right.tieBreakCategoryTotal;
+    if (leftTotal === null || rightTotal === null) {
+      return (leftTotal === null ? 1 : 0) - (rightTotal === null ? 1 : 0);
+    }
+    return tieBreakDirection === 'LOW_WINS' ? leftTotal - rightTotal : rightTotal - leftTotal;
+  };
 
   return [...resolvedStandings, ...missingMemberRows].sort(
     (left, right) =>

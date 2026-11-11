@@ -8,6 +8,7 @@ import { resolveFootywirePlayerIds } from '@/server/players/footywireIdentity';
 import { getTeamName } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
+  categoryAggregation,
   categoryStatInputs,
   isFantasyCategoryKey,
   normalizeFantasyCategoryKeys,
@@ -39,7 +40,12 @@ import { calculateStandingsRows } from './standingsService';
 import { inferUnselectedDidNotPlay, loadTeamSheetStatlyPlayerIds } from './unselectedPlayers';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
 import { normalizeLineupSlots } from './lineupSettings';
-import type { LeagueLineupSlot, LeagueScoringMode } from './scoringTypes';
+import type {
+  CategoryScoreResult,
+  LeagueLineupSlot,
+  LeagueScoringMode,
+  RatioParts,
+} from './scoringTypes';
 
 type MatchupTeamSide = 'home' | 'away' | 'draw';
 
@@ -145,10 +151,24 @@ function readStoredCategoryValue(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** A stored ratio category's round inputs; anything malformed reads as absent. */
+function readStoredRatioParts(value: unknown): RatioParts | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { numerator, denominator } = value as Record<string, unknown>;
+  return typeof numerator === 'number' &&
+    Number.isFinite(numerator) &&
+    typeof denominator === 'number' &&
+    Number.isFinite(denominator)
+    ? { numerator, denominator }
+    : undefined;
+}
+
 export function parseStoredCategoryRows(categoriesJson: unknown): Array<{
   category: FantasyCategoryKey;
   homeValue: number | null;
   awayValue: number | null;
+  homeRatio?: RatioParts;
+  awayRatio?: RatioParts;
   direction: 'HIGH_WINS' | 'LOW_WINS';
   winner: MatchupTeamSide;
 }> {
@@ -161,12 +181,16 @@ export function parseStoredCategoryRows(categoriesJson: unknown): Array<{
     if (!isFantasyCategoryKey(category)) return [];
     const winner = source.winner;
     const direction = source.direction;
+    const homeRatio = readStoredRatioParts(source.homeRatio);
+    const awayRatio = readStoredRatioParts(source.awayRatio);
 
     return [
       {
         category,
         homeValue: readStoredCategoryValue(source.homeValue),
         awayValue: readStoredCategoryValue(source.awayValue),
+        ...(homeRatio ? { homeRatio } : {}),
+        ...(awayRatio ? { awayRatio } : {}),
         direction: direction === 'LOW_WINS' ? 'LOW_WINS' : 'HIGH_WINS',
         winner: winner === 'home' || winner === 'away' || winner === 'draw' ? winner : 'draw',
       },
@@ -174,11 +198,20 @@ export function parseStoredCategoryRows(categoriesJson: unknown): Array<{
   });
 }
 
+/**
+ * Each member's season value for one category across finalized score rows. A sum category adds
+ * the round values. A ratio category (DE%) is the season numerator over the season denominator
+ * (owner decision 2026-11-11), never a sum or mean of round percentages, and is null when the
+ * member had no season denominator. A round stored without its ratio parts (scored before they
+ * were kept) adds nothing to the ratio.
+ */
 export function aggregateFinalizedCategoryTotals(
   scores: ReadonlyArray<{ memberId: string; categoriesJson: unknown }>,
   category: FantasyCategoryKey
-): Map<string, number> {
+): Map<string, number | null> {
+  const aggregation = categoryAggregation(category);
   const totalsByMemberId = new Map<string, number>();
+  const partsByMemberId = new Map<string, RatioParts>();
 
   for (const score of scores) {
     // Finalized score rows are normalized so the owning member is the home side.
@@ -189,9 +222,34 @@ export function aggregateFinalizedCategoryTotals(
       score.memberId,
       (totalsByMemberId.get(score.memberId) ?? 0) + (selectedCategory?.homeValue ?? 0)
     );
+    const parts = partsByMemberId.get(score.memberId) ?? { numerator: 0, denominator: 0 };
+    partsByMemberId.set(score.memberId, {
+      numerator: parts.numerator + (selectedCategory?.homeRatio?.numerator ?? 0),
+      denominator: parts.denominator + (selectedCategory?.homeRatio?.denominator ?? 0),
+    });
   }
 
-  return totalsByMemberId;
+  if (aggregation.kind === 'sum') return totalsByMemberId;
+  return new Map(
+    [...partsByMemberId].map(([memberId, { numerator, denominator }]) => [
+      memberId,
+      denominator > 0 ? (numerator / denominator) * aggregation.scale : null,
+    ])
+  );
+}
+
+/** A matchup's category rows from the away member's side: values, ratio parts and winner swapped. */
+export function mirrorCategoryRows<Row extends CategoryScoreResult>(rows: readonly Row[]): Row[] {
+  return rows.map((row) => {
+    const { homeRatio, awayRatio, ...rest } = row;
+    return {
+      ...rest,
+      homeValue: row.awayValue,
+      awayValue: row.homeValue,
+      ...(homeRatio && awayRatio ? { homeRatio: awayRatio, awayRatio: homeRatio } : {}),
+      winner: row.winner === 'home' ? 'away' : row.winner === 'away' ? 'home' : 'draw',
+    } as Row;
+  });
 }
 
 function buildCategoryRows({
@@ -1184,13 +1242,7 @@ export async function recalculateLeagueRoundMatchups({
             matchupId: scored.matchupId,
             memberId: scored.awayMemberId,
             round,
-            categoriesJson: scored.result.categories.map((category) => ({
-              ...category,
-              homeValue: category.awayValue,
-              awayValue: category.homeValue,
-              winner:
-                category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
-            })),
+            categoriesJson: mirrorCategoryRows(scored.result.categories),
             categoryWins: scored.result.awayCategoryWins,
             categoryLosses: scored.result.homeCategoryWins,
             categoryDraws: scored.result.drawnCategories,
@@ -1203,13 +1255,7 @@ export async function recalculateLeagueRoundMatchups({
             finalizedAt,
           },
           update: {
-            categoriesJson: scored.result.categories.map((category) => ({
-              ...category,
-              homeValue: category.awayValue,
-              awayValue: category.homeValue,
-              winner:
-                category.winner === 'home' ? 'away' : category.winner === 'away' ? 'home' : 'draw',
-            })),
+            categoriesJson: mirrorCategoryRows(scored.result.categories),
             categoryWins: scored.result.awayCategoryWins,
             categoryLosses: scored.result.homeCategoryWins,
             categoryDraws: scored.result.drawnCategories,

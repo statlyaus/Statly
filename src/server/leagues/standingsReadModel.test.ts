@@ -141,4 +141,34 @@ describe('buildLeagueStandings', () => {
 
     expect(standings.map((standing) => standing.memberId)).toEqual(['member-2', 'member-1']);
   });
+
+  it('ranks a team with no tie-break value (no season DE%) below every team with one', () => {
+    for (const tieBreakDirection of ['HIGH_WINS', 'LOW_WINS'] as const) {
+      const standings = buildLeagueStandings({
+        members: [
+          { id: 'member-1', teamName: 'No disposals', teamLogoUrl: null, draftSlot: 1 },
+          { id: 'member-2', teamName: 'Has DE', teamLogoUrl: null, draftSlot: 2 },
+        ],
+        standings: ['member-1', 'member-2'].map((memberId) => ({
+          id: `standing-${memberId}`,
+          memberId,
+          wins: 4,
+          losses: 2,
+          draws: 0,
+          categoryWins: 20,
+          categoryLosses: 10,
+          categoryDraws: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+        })),
+        tieBreakCategoryTotalByMemberId: new Map([
+          ['member-1', null],
+          ['member-2', 60],
+        ]),
+        tieBreakDirection,
+      });
+
+      expect(standings.map((standing) => standing.memberId)).toEqual(['member-2', 'member-1']);
+    }
+  });
 });

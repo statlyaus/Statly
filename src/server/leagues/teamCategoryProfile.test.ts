@@ -51,6 +51,79 @@ describe('buildTeamCategoryProfile', () => {
     ]);
   });
 
+  it('reports DE% as season effective disposals over season disposals', () => {
+    const de = (memberId: string, numerator: number, denominator: number) => ({
+      memberId,
+      categoriesJson: [
+        {
+          category: 'disposalEffPct',
+          homeValue: denominator > 0 ? (numerator / denominator) * 100 : null,
+          awayValue: 0,
+          homeRatio: { numerator, denominator },
+        },
+      ],
+    });
+    const profile = buildTeamCategoryProfile({
+      viewerMemberId: 'you',
+      members,
+      categories: ['disposalEffPct'],
+      categoryDirections: {},
+      finalizedScores: [
+        de('you', 18, 20),
+        de('you', 30, 60),
+        de('b', 35, 50),
+        de('b', 35, 50),
+        de('c', 0, 0),
+        de('c', 0, 0),
+      ],
+    });
+
+    // You: 48/80 = 60 (the mean of 90 and 50 would be 70). League: 118/180 = 65.6.
+    expect(profile?.categories).toEqual([
+      {
+        key: 'disposalEffPct',
+        label: 'Disposal Efficiency %',
+        average: 60,
+        leagueAverage: 65.6,
+        rank: 2,
+        lowWins: false,
+      },
+    ]);
+  });
+
+  it('gives a team with no season disposals no DE% and ranks it last', () => {
+    const profile = buildTeamCategoryProfile({
+      viewerMemberId: 'you',
+      members,
+      categories: ['disposalEffPct'],
+      categoryDirections: { disposalEffPct: 'LOW_WINS' },
+      finalizedScores: [
+        {
+          memberId: 'you',
+          categoriesJson: [
+            {
+              category: 'disposalEffPct',
+              homeValue: null,
+              homeRatio: { numerator: 0, denominator: 0 },
+            },
+          ],
+        },
+        {
+          memberId: 'b',
+          categoriesJson: [
+            {
+              category: 'disposalEffPct',
+              homeValue: 80,
+              homeRatio: { numerator: 8, denominator: 10 },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(profile?.categories[0]).toMatchObject({ average: null, leagueAverage: 80, rank: 2 });
+  });
+
   it('returns an empty profile before any round is final', () => {
     const profile = buildTeamCategoryProfile({
       viewerMemberId: 'you',

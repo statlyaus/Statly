@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import type { TeamCategoryProfile } from '@/server/leagues/teamCategoryProfile';
+import { formatCategoryValue } from '@/types/fantasyCategories';
 
 const ordinal = (value: number) => {
   const suffix =
@@ -100,10 +101,10 @@ export function TeamCategoryProfileTable({
                   ) : null}
                 </th>
                 <td className="px-4 py-3 text-right font-semibold text-foreground">
-                  {category.average}
+                  {formatCategoryValue(category.average, category.key)}
                 </td>
                 <td className="px-4 py-3 text-right text-muted-foreground">
-                  {category.leagueAverage}
+                  {formatCategoryValue(category.leagueAverage, category.key)}
                 </td>
                 <td className="px-4 py-3 text-right text-foreground">
                   {ordinal(category.rank)}
