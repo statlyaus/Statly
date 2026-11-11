@@ -17,7 +17,6 @@ const names: StatlyIconName[] = [
   'team',
   'commissioner',
   'help',
-  'clock',
 ];
 
 describe('StatlyIcon', () => {

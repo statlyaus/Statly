@@ -22,8 +22,7 @@ export type StatlyIconName =
   | 'ladder'
   | 'team'
   | 'commissioner'
-  | 'help'
-  | 'clock';
+  | 'help';
 
 const cx = (...names: Array<string | undefined | false>) => names.filter(Boolean).join(' ');
 
@@ -162,13 +161,6 @@ const glyphs: Record<StatlyIconName, ReactNode> = {
       <circle cx="12" cy="12" r="9" className={s.soft} />
       <Draw d="M9.25 9.5a2.85 2.85 0 0 1 5.5 1c0 1.9-2.75 2.4-2.75 4" />
       <path d="M12 17.5h.01" strokeWidth={2.5} className={cx(s.part, s.drop)} />
-    </>
-  ),
-  clock: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 12V6.5" className={cx(s.part, s.originPivot, s.spin)} />
-      <path d="M12 12h3.5" className={s.soft} />
     </>
   ),
 };
