@@ -161,6 +161,49 @@ describe('liveStatsAdapter', () => {
     ]);
   });
 
+  it('leaves an unreported stat unavailable instead of reading it as 0', () => {
+    const [row] = normalizeLiveStatRows([
+      {
+        player_uid: 'player-missing',
+        tackles: 9,
+        stats: { goals: null, tackles: 0, inside_50s: 'n/a', intercepts: '' },
+      } satisfies RawLiveStatRow,
+    ]);
+
+    expect(row.totals.goals).toBeUndefined();
+    expect(row.totals.inside50s).toBeUndefined();
+    expect(row.totals.intercepts).toBeUndefined();
+    expect(row.totals.contestedMarks).toBeUndefined();
+    expect(row.unreportedCategories).toEqual(
+      expect.arrayContaining(['goals', 'inside50s', 'intercepts', 'contestedMarks'])
+    );
+    // A reported 0 is a real result, and a nested 0 is not overridden by a top-level field.
+    expect(row.totals.tackles).toBe(0);
+    expect(row.unreportedCategories).not.toContain('tackles');
+  });
+
+  it('treats disposal efficiency as reported-empty, not missing, for a player with no disposals', () => {
+    const rows = normalizeLiveStatRows([
+      { player_uid: 'no-disposals', stats: { disposals: 0, disposal_efficiency: null } },
+      { player_uid: 'no-kicks-or-handballs', stats: { kicks: 0, handballs: 0 } },
+      { player_uid: 'unreported-de', stats: { disposals: 12 } },
+      { player_uid: 'nothing-reported', stats: {} },
+    ]);
+
+    expect(rows.map((row) => [row.playerId, row.totals.disposalEffPct])).toEqual([
+      ['no-disposals', undefined],
+      ['no-kicks-or-handballs', undefined],
+      ['unreported-de', undefined],
+      ['nothing-reported', undefined],
+    ]);
+    expect(rows.map((row) => row.unreportedCategories.includes('disposalEffPct'))).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
+
   it('normalizes round match final and live status variants', () => {
     const status = normalizeRoundMatchStatus([
       { match_uid: 'm1', status: 'completed', start_time_utc: '2026-07-04T08:00:00.000Z' },
