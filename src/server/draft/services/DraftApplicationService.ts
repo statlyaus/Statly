@@ -2,6 +2,7 @@ import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 
 import { draftRepository } from '../repository/DraftRepository';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
+import { findLeagueFormatStartBlocker } from '@/server/leagues/leagueFormat';
 import {
   buildAvailableDraftPlayer,
   calculateStatlyZScores,
@@ -239,6 +240,12 @@ export class DraftApplicationService {
 
       if (draft.participants.length === 0) {
         throw new Error('bad_request:Draft configuration is incomplete');
+      }
+
+      // BR-02, BR-06: the format and Bloodsucker lock once the draft starts, so check them here.
+      const formatBlocker = await findLeagueFormatStartBlocker(tx, draft.leagueId);
+      if (formatBlocker) {
+        throw new Error(`bad_request:${formatBlocker.message}`);
       }
 
       const startedAt = new Date();

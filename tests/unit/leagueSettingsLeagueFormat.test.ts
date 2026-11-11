@@ -183,6 +183,18 @@ describe('league format settings', () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it('refuses resending a Bloodsucker who has since left, while the draft is editable', async () => {
+    Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });
+    mocks.findMember.mockResolvedValue({ isActive: false, status: 'REMOVED' });
+
+    const { status } = await put({
+      format: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
+    });
+
+    expect(status).toBe(400);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it('audits a format or Bloodsucker change with the actor, before and after', async () => {
     await put({ format: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' } });
 

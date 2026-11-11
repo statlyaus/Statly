@@ -286,6 +286,11 @@ async function syncActiveMembers(
         leftAt: new Date(),
       },
     });
+    await clearBloodsuckerOnDeparture(tx, {
+      leagueId: snapshot.leagueId,
+      memberId: member.id,
+      actorMemberId: null,
+    });
   }
 }
 

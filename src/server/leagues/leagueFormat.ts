@@ -6,6 +6,8 @@ import type { Prisma } from '@prisma/client';
 
 import type { LeagueFormat } from '@/types/leagues';
 
+import { isActivePrismaMembership } from './activeMembership';
+
 export type { LeagueFormat };
 
 export const BLOODSUCKER_MIN_TEAMS = 8;
@@ -66,6 +68,31 @@ export function getLeagueFormatDraftBlockers(input: {
     });
   }
   return blockers;
+}
+
+/**
+ * The first format blocker for a league, read inside the draft-start transaction so a Bloodsucker
+ * draft can never start (from the room or the scheduled worker) without its Bloodsucker or 8 teams.
+ */
+export async function findLeagueFormatStartBlocker(
+  tx: Prisma.TransactionClient,
+  leagueId: string
+): Promise<LeagueFormatBlocker | null> {
+  const league = await tx.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      settings: { select: { leagueFormat: true, bloodsuckerMemberId: true } },
+      members: { where: { isActive: true }, select: { id: true, isActive: true, status: true } },
+    },
+  });
+  if (!league?.settings || league.settings.leagueFormat !== 'BLOODSUCKER') return null;
+  return (
+    getLeagueFormatDraftBlockers({
+      leagueFormat: league.settings.leagueFormat,
+      bloodsuckerMemberId: league.settings.bloodsuckerMemberId,
+      activeMemberIds: league.members.filter(isActivePrismaMembership).map((member) => member.id),
+    })[0] ?? null
+  );
 }
 
 export interface LeagueFormatState {
