@@ -61,7 +61,7 @@ const primaryNavigationItems: NavigationItem[] = [
     name: 'Dashboard',
     href: '/dashboard',
     description: 'Your product home and recent activity',
-    icon: <StatlyIcon name="activity" />,
+    icon: <StatlyIcon name="gauge" />,
   },
   {
     name: 'Players',

@@ -10,7 +10,7 @@ import s from './StatlyIcon.module.css';
  */
 export type StatlyIconName =
   | 'home'
-  | 'activity'
+  | 'gauge'
   | 'bolt'
   | 'players'
   | 'draft'
@@ -40,17 +40,16 @@ const glyphs: Record<StatlyIconName, ReactNode> = {
       <path d="M10 20v-5h4v5" className={cx(s.soft, s.part, s.swing)} />
     </>
   ),
-  activity: (
+  gauge: (
     <>
-      <Draw d="M2.5 12h4l2.5-6.5 4.5 13 2.5-6.5h3" />
-      <circle
-        cx="21.5"
-        cy="12"
-        r="0.9"
-        fill="currentColor"
-        stroke="none"
-        className={cx(s.soft, s.part, s.blink)}
+      <path d="M4 17a8 8 0 0 1 16 0" />
+      <path
+        d="M12 9v1.6M6.3 11.3l1.1 1.1M17.7 11.3l-1.1 1.1M4 17h1.6M20 17h-1.6"
+        className={s.soft}
       />
+      <path d="M12 17l3.6-4.4" className={cx(s.part, s.originPivotLeft, s.sweep)} />
+      <circle cx="12" cy="17" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M7 21h10" className={s.soft} />
     </>
   ),
   bolt: (
@@ -59,16 +58,11 @@ const glyphs: Record<StatlyIconName, ReactNode> = {
     </g>
   ),
   players: (
-    <>
-      <g className={cx(s.part, s.bob)}>
-        <circle cx="8.5" cy="8" r="3" />
-        <path d="M3 20v-1.5a5.5 5.5 0 0 1 11 0V20" />
-      </g>
-      <g className={cx(s.soft, s.part, s.bob)} style={{ animationDelay: '0.15s' }}>
-        <circle cx="16.5" cy="8.5" r="2.5" />
-        <path d="M16 13.5a5 5 0 0 1 5 5V20" />
-      </g>
-    </>
+    <g className={cx(s.part, s.originTop, s.sway)}>
+      <path d="M9 3 6.5 3.8C7.2 6.2 6.6 8 5 9v12h14V9c-1.6-1-2.2-2.8-1.5-5.2L15 3" />
+      <path d="M9 3q3 4 6 0" />
+      <Draw d="M10 11.5h4l-2.5 6" className={s.soft} />
+    </g>
   ),
   draft: (
     <>

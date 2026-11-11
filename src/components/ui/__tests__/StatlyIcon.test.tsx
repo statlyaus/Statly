@@ -4,7 +4,7 @@ import StatlyIcon, { type StatlyIconName } from '../StatlyIcon';
 
 const names: StatlyIconName[] = [
   'home',
-  'activity',
+  'gauge',
   'bolt',
   'players',
   'draft',
