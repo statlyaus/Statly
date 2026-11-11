@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
+import {
+  describeLockedPlayers,
+  findPlayersLockedForMove,
+  removePlayersFromOpenLineups,
+} from '@/server/leagues/playerMoveLock';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
@@ -124,12 +129,24 @@ export async function POST(
     const processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const playerId = String(canonicalDetails.playerId);
 
+    // A player whose game has started this round stays until the round ends.
+    const lock = await findPlayersLockedForMove({ leagueId, playerIds: [playerId] });
+    if (!lock.ok) return errorResponse(lock.error, 503);
+    if (lock.lockedPlayers.length > 0) {
+      return errorResponse(describeLockedPlayers(lock.lockedPlayers), 409);
+    }
+
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const dropped = await prisma.$transaction(async (tx) => {
       const removed = await tx.leagueRosterPlayer.deleteMany({
         where: { leagueId, memberId: member.id, playerId },
       });
       if (removed.count === 0) return false;
+      await removePlayersFromOpenLineups(tx, {
+        leagueId,
+        memberId: member.id,
+        playerIds: [playerId],
+      });
       await tx.teamAction.create({
         data: {
           id: actionId,

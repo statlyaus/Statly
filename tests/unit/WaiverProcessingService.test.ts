@@ -8,6 +8,14 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {},
 }));
 
+const moveLock = vi.hoisted(() => ({
+  findPlayersLockedForMove: vi.fn().mockResolvedValue({ ok: true, lockedPlayers: [] }),
+  removePlayersFromOpenLineups: vi.fn().mockResolvedValue(0),
+  describeLockedPlayers: (players: Array<{ name: string }>) =>
+    `${players[0]?.name}'s game has started; he can be moved after the round ends.`,
+}));
+vi.mock('@/server/leagues/playerMoveLock', () => moveLock);
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -542,6 +550,84 @@ describe('WaiverProcessingService', () => {
     ).rejects.toThrow('connection lost');
     expect(claimStore.publishSettlement).not.toHaveBeenCalled();
     expect(claimStore.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it("removes the dropped player's open lineup rows when the claim settles", async () => {
+    const { db, tx } = createDbMock();
+    const service = new WaiverProcessingService(db as never, createClaimStoreMock(), {
+      projectLeague: vi.fn(),
+    });
+
+    await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ dropPlayerId: 'old-player' })],
+    });
+
+    expect(moveLock.findPlayersLockedForMove).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      playerIds: ['old-player'],
+    });
+    expect(moveLock.removePlayersFromOpenLineups).toHaveBeenCalledWith(tx, {
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      playerIds: ['old-player'],
+    });
+  });
+
+  it('fails a claim whose drop player has started his game this round, without debit or roster change', async () => {
+    moveLock.findPlayersLockedForMove.mockResolvedValueOnce({
+      ok: true,
+      lockedPlayers: [{ playerId: 'old-player', name: 'Old Player' }],
+    });
+    const { db, tx } = createDbMock();
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'FAAB', faabBudget: 100 },
+      claims: [claim({ dropPlayerId: 'old-player', bidAmount: 12 })],
+    });
+
+    expect(result.results).toEqual([
+      {
+        id: 'claim-1',
+        status: 'FAILED',
+        reason: "Old Player's game has started; he can be moved after the round ends.",
+      },
+    ]);
+    expect(claimStore.rejectClaim).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ id: 'claim-1' }),
+      true
+    );
+    expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+  });
+
+  it('leaves a claim pending and ends the run when match timing for its drop cannot be read', async () => {
+    moveLock.findPlayersLockedForMove.mockResolvedValueOnce({
+      ok: false,
+      error: 'Official AFL match timing is temporarily unavailable.',
+    });
+    const { db } = createDbMock();
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    await expect(
+      service.processClaims({
+        leagueId: 'league-1',
+        waiverSettings: { system: 'PRIORITY' },
+        claims: [claim({ dropPlayerId: 'old-player' })],
+      })
+    ).rejects.toThrow('Official AFL match timing is temporarily unavailable.');
+    expect(claimStore.claimPending).not.toHaveBeenCalled();
   });
 
   it('rejects a claim when another alias for the logical player is already owned', async () => {

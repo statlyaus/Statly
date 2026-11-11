@@ -6,6 +6,11 @@ import { Prisma, type TradeReviewMode } from '@prisma/client';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import {
+  describeLockedPlayers,
+  findPlayersLockedForMove,
+  removePlayersFromOpenLineups,
+} from '@/server/leagues/playerMoveLock';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -95,6 +100,11 @@ export async function createLeagueTrade(
   const access = await requireTradeAccess(leagueId, userId);
   await enforceTransactionWindow(leagueId);
   enforceTradeDeadline(access, now);
+  await enforcePlayersMovable(
+    leagueId,
+    [...canonicalInput.sendingPlayerIds, ...canonicalInput.receivingPlayerIds],
+    now
+  );
 
   return executeIdempotentTradeCommand(
     access,
@@ -130,6 +140,15 @@ export async function executeLeagueTradeAction(
   if (canonicalInput.action === 'accept' || canonicalInput.action === 'counter') {
     await enforceTransactionWindow(leagueId);
   }
+  if (canonicalInput.action === 'counter') {
+    await enforcePlayersMovable(
+      leagueId,
+      [...canonicalInput.sendingPlayerIds, ...canonicalInput.receivingPlayerIds],
+      now
+    );
+  } else if (canonicalInput.action === 'accept' || canonicalInput.action === 'approve') {
+    await enforcePlayersMovable(leagueId, await loadOfferedPlayerIds(leagueId, threadId), now);
+  }
 
   return executeIdempotentTradeCommand(
     access,
@@ -156,6 +175,30 @@ async function resolveTradePlayerSelection(
   };
 }
 
+/**
+ * A player whose AFL game has started this round cannot be traded until the round ends. Match
+ * timing is read before the trade transaction, so the transaction never waits on Firestore.
+ */
+async function enforcePlayersMovable(
+  leagueId: string,
+  playerIds: readonly string[],
+  now: Date
+): Promise<void> {
+  const lock = await findPlayersLockedForMove({ leagueId, playerIds, now });
+  if (!lock.ok) throw new TradeServiceError('TIMING_UNAVAILABLE', lock.error, 503);
+  if (lock.lockedPlayers.length > 0) {
+    throw new TradeServiceError('PLAYER_LOCKED', describeLockedPlayers(lock.lockedPlayers), 409);
+  }
+}
+
+async function loadOfferedPlayerIds(leagueId: string, threadId: string): Promise<string[]> {
+  const thread = await prisma.leagueTradeThread.findFirst({
+    where: { id: threadId, leagueId },
+    select: { currentOffer: { select: { players: { select: { playerId: true } } } } },
+  });
+  return thread?.currentOffer?.players.map((player) => player.playerId) ?? [];
+}
+
 export async function processDueLeagueTrades(now = new Date(), limit = 50): Promise<number> {
   const due = await prisma.leagueTradeThread.findMany({
     where: {
@@ -164,7 +207,7 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
         { status: 'OPEN', currentOffer: { expiresAt: { lte: now } } },
       ],
     },
-    select: { id: true, status: true, version: true },
+    select: { id: true, leagueId: true, status: true, version: true },
     orderBy: { updatedAt: 'asc' },
     take: Math.min(Math.max(limit, 1), 100),
   });
@@ -173,6 +216,16 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
   const failures: unknown[] = [];
   for (const candidate of due) {
     try {
+      // A trade whose review ends mid-round waits for a later run once a traded player's game
+      // has started (or match timing is unreadable); it completes after the round ends.
+      if (candidate.status === 'PENDING_VETO_REVIEW') {
+        await enforcePlayersMovable(
+          candidate.leagueId,
+          await loadOfferedPlayerIds(candidate.leagueId, candidate.id),
+          now
+        );
+      }
+
       await prisma.$transaction(async (tx) => {
         const thread = await loadTradeForMutation(tx, candidate.id);
         if (!thread || thread.version !== candidate.version) return;
@@ -626,20 +679,17 @@ async function moveRosterPlayers(
     throw new TradeServiceError('ROSTER_CHANGED', 'A traded player changed teams.', 409);
   }
 
-  await tx.leagueLineupPlayer.deleteMany({
-    where: {
-      lockedAt: null,
-      OR: [
-        {
-          playerId: { in: input.firstPlayerIds },
-          lineup: { leagueId, memberId: firstMemberId, lockedAt: null },
-        },
-        {
-          playerId: { in: input.secondPlayerIds },
-          lineup: { leagueId, memberId: secondMemberId, lockedAt: null },
-        },
-      ],
-    },
+  await removePlayersFromOpenLineups(tx, {
+    leagueId,
+    memberId: firstMemberId,
+    playerIds: input.firstPlayerIds,
+    now: input.now,
+  });
+  await removePlayersFromOpenLineups(tx, {
+    leagueId,
+    memberId: secondMemberId,
+    playerIds: input.secondPlayerIds,
+    now: input.now,
   });
 }
 

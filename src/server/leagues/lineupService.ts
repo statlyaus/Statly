@@ -453,7 +453,7 @@ function indexRoundMatchStarts(matches: readonly RoundMatch[]) {
  * official game, whichever is earlier), a player whose own game start is unknown stays where he
  * is. No lock time is stored for him, so a later official start time still applies.
  */
-function resolveStartUnknownHeldPlayerIds(
+export function resolveStartUnknownHeldPlayerIds(
   timingResult: RoundPlayerGameStartsResult,
   competitionRound: { startsAt: Date | null } | null,
   now: Date

@@ -189,13 +189,15 @@ export type TradeServiceErrorCode =
   | 'TRADE_LIMIT_REACHED'
   | 'ROSTER_CHANGED'
   | 'ROSTER_LIMIT_EXCEEDED'
-  | 'DRAFT_NOT_COMPLETE';
+  | 'DRAFT_NOT_COMPLETE'
+  | 'PLAYER_LOCKED'
+  | 'TIMING_UNAVAILABLE';
 
 export class TradeServiceError extends Error {
   constructor(
     public readonly code: TradeServiceErrorCode,
     message: string,
-    public readonly status: 400 | 401 | 403 | 404 | 409 = 400
+    public readonly status: 400 | 401 | 403 | 404 | 409 | 503 = 400
   ) {
     super(message);
     this.name = 'TradeServiceError';
