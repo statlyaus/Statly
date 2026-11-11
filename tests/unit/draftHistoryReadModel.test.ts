@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
   calculateDraftCompletionPct,
+  getDraftHistoryDetail,
+  getDraftHistoryList,
   groupPicksByRound,
   parseDraftHistoryLimit,
   type DraftHistoryPick,
@@ -65,6 +67,52 @@ describe('draft history read model helpers', () => {
     expect(calculateDraftCompletionPct(0, 0)).toBe(0);
     expect(calculateDraftCompletionPct(2, 4)).toBe(50);
     expect(calculateDraftCompletionPct(5, 4)).toBe(100);
+  });
+
+  it('lists only the teams in the draft order, not members who left before it', async () => {
+    const user = (id: string) => ({ id, displayName: id, email: null });
+    const member = (id: string, draftSlot: number) => ({
+      id,
+      userId: `user-${id}`,
+      teamName: `Team ${id}`,
+      role: 'MANAGER',
+      draftSlot,
+      user: user(`user-${id}`),
+    });
+    const record = {
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: 'COMPLETED',
+      totalPicks: 2,
+      createdAt: new Date('2026-06-01T00:00:00.000Z'),
+      startedAt: new Date('2026-06-01T00:00:00.000Z'),
+      completedAt: new Date('2026-06-01T01:00:00.000Z'),
+      league: {
+        name: 'AFL Legends',
+        categoriesJson: [],
+        settings: { rosterSize: 1, benchSize: 0 },
+        members: [member('member-1', 1), member('member-gone', 2), member('member-2', 3)],
+      },
+      orders: [
+        { memberId: 'member-1', slot: 1 },
+        { memberId: 'member-2', slot: 2 },
+      ],
+      picks: [],
+    };
+    const db = {
+      draft: { findFirst: vi.fn().mockResolvedValue(record), findMany: vi.fn() },
+    };
+    db.draft.findMany.mockResolvedValue([record]);
+
+    const detail = await getDraftHistoryDetail(db as never, 'user-member-1', 'draft-1');
+    const list = await getDraftHistoryList(db as never, 'user-member-1');
+
+    expect(detail?.participants.map((participant) => participant.id)).toEqual([
+      'member-1',
+      'member-2',
+    ]);
+    expect(detail?.teamCount).toBe(2);
+    expect(list.metrics.teamCount).toBe(2);
   });
 
   it('supports selected-league scoping at the Prisma read boundary', () => {

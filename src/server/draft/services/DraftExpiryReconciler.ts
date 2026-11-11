@@ -7,9 +7,10 @@ export type DraftExpiryReconciliationResult = {
   scheduledCount: number;
   repairedCount: number;
   skippedCount: number;
+  failedCount: number;
 };
 
-type ReconciliationOutcome = 'scheduled' | 'repaired' | 'skipped';
+type ReconciliationOutcome = 'scheduled' | 'repaired' | 'skipped' | 'failed';
 
 function summarize(outcomes: ReconciliationOutcome[]): DraftExpiryReconciliationResult {
   return outcomes.reduce<DraftExpiryReconciliationResult>(
@@ -17,8 +18,9 @@ function summarize(outcomes: ReconciliationOutcome[]): DraftExpiryReconciliation
       scheduledCount: result.scheduledCount + (outcome === 'scheduled' ? 1 : 0),
       repairedCount: result.repairedCount + (outcome === 'repaired' ? 1 : 0),
       skippedCount: result.skippedCount + (outcome === 'skipped' ? 1 : 0),
+      failedCount: result.failedCount + (outcome === 'failed' ? 1 : 0),
     }),
-    { scheduledCount: 0, repairedCount: 0, skippedCount: 0 }
+    { scheduledCount: 0, repairedCount: 0, skippedCount: 0, failedCount: 0 }
   );
 }
 
@@ -47,8 +49,17 @@ export class DraftExpiryReconciler {
     );
     const outcomes: ReconciliationOutcome[] = [];
 
+    // One broken draft must not leave every later live draft without a pick timer.
     for (const schedule of schedules) {
-      outcomes.push(await this.reconcileDraftSchedule(schedule.draftId));
+      try {
+        outcomes.push(await this.reconcileDraftSchedule(schedule.draftId));
+      } catch (error) {
+        logger.warn('Failed to reconcile draft pick expiry job', {
+          draftId: schedule.draftId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        outcomes.push('failed');
+      }
     }
 
     const result = summarize(outcomes);
