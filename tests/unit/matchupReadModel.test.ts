@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import {
   aggregateFinalizedCategoryTotals,
+  parseStoredCategoryRows,
   resolveCurrentCompetitionRound,
   resolveRoundPlayerAvailability,
   toMatchupStatusFromRoundStatus,
@@ -17,6 +18,30 @@ function readRepoFile(path: string): string {
 }
 
 describe('matchupReadModel helpers', () => {
+  it('keeps a stored unavailable category value (DE% for a team with no disposals) as null', () => {
+    expect(
+      parseStoredCategoryRows([
+        {
+          category: 'disposalEffPct',
+          homeValue: null,
+          awayValue: 72.5,
+          direction: 'HIGH_WINS',
+          winner: 'draw',
+        },
+        { category: 'goals', homeValue: 'x', direction: 'HIGH_WINS', winner: 'home' },
+      ])
+    ).toEqual([
+      {
+        category: 'disposalEffPct',
+        homeValue: null,
+        awayValue: 72.5,
+        direction: 'HIGH_WINS',
+        winner: 'draw',
+      },
+      { category: 'goals', homeValue: 0, awayValue: 0, direction: 'HIGH_WINS', winner: 'home' },
+    ]);
+  });
+
   it('derives matchup status from live/final round status', () => {
     expect(toMatchupStatusFromRoundStatus({ anyLive: true, allFinal: false })).toBe('LIVE');
     expect(toMatchupStatusFromRoundStatus({ anyLive: false, allFinal: true })).toBe('FINAL');

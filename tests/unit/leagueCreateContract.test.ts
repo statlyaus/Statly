@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeCreateLeagueInput,
   normalizeCreateLeagueResponse,
+  validateLeagueCategories,
 } from '../../src/server/leagues/createLeagueContract';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategories';
 
@@ -88,6 +89,19 @@ describe('league creation contract', () => {
   it('extracts created league id from the API success envelope', () => {
     expect(normalizeCreateLeagueResponse({ success: true, data: { id: 'league-123' } })).toEqual({
       id: 'league-123',
+    });
+  });
+
+  // Owner decision 2026-11-11: time on ground % is not a scoring category. It is still read for
+  // display, but a league cannot select it.
+  it('refuses time on ground % as a scoring category', () => {
+    expect(validateLeagueCategories(['goals', 'tackles', 'timeOnGroundPct'])).toEqual({
+      ok: false,
+      error: 'Time on Ground % is not a scoring category',
+    });
+    expect(validateLeagueCategories(['goals', 'tackles', 'disposalEffPct'])).toEqual({
+      ok: true,
+      value: ['goals', 'tackles', 'disposalEffPct'],
     });
   });
 });

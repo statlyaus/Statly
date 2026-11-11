@@ -124,7 +124,7 @@ describe('a missing stat is unavailable, not 0', () => {
 
   it('scores a player with no disposals, whose disposal efficiency is empty, not missing', async () => {
     givenRound(['disposalEffPct'], {
-      'player-1': { disposals: 10, disposal_efficiency: 70 },
+      'player-1': { disposals: 10, effective_disposals: 7, disposal_efficiency: 70 },
       'player-2': { disposals: 0, disposal_efficiency: null },
     });
 
@@ -134,10 +134,24 @@ describe('a missing stat is unavailable, not 0', () => {
     expect(prismaMocks.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('holds the round when disposal efficiency is unreported for a player who had disposals', async () => {
+  // Team disposal efficiency is effective disposals over disposals (owner decision 2026-11-11), so
+  // a player who had disposals but whose effective disposals are unreported is missing for DE.
+  it('holds the round when effective disposals are unreported for a player who had disposals', async () => {
     givenRound(['disposalEffPct'], {
-      'player-1': { disposals: 10, disposal_efficiency: 70 },
-      'player-2': { disposals: 12 },
+      'player-1': { disposals: 10, effective_disposals: 7, disposal_efficiency: 70 },
+      'player-2': { disposals: 12, disposal_efficiency: 75 },
+    });
+
+    const result = await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });
+
+    expect(result).toMatchObject({ recalculated: 0, missingPlayerIds: ['player-2'] });
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('holds the round when disposals are unreported for a disposal efficiency league', async () => {
+    givenRound(['disposalEffPct'], {
+      'player-1': { disposals: 10, effective_disposals: 7, disposal_efficiency: 70 },
+      'player-2': { effective_disposals: 9, disposal_efficiency: 75 },
     });
 
     const result = await recalculateLeagueRoundMatchups({ leagueId: 'league-1', round: 4 });

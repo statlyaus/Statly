@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   FANTASY_CATEGORIES,
+  formatCategoryValue,
   formatStatValue,
   normalizeFantasyCategoryKeys,
   type FantasyCategoryKey,
@@ -46,6 +47,12 @@ describe('league category source of truth', () => {
     expect(formatStatValue(74.24, FANTASY_CATEGORIES.disposalEffPct)).toBe('74.2%');
     expect(formatStatValue(null, FANTASY_CATEGORIES.goals)).toBe('—');
     expect(formatStatValue(Number.NaN, FANTASY_CATEGORIES.goals)).toBe('—');
+  });
+
+  it('shows a team category value as a count, a percentage, or "–" when unavailable', () => {
+    expect(formatCategoryValue(12, 'goals')).toBe('12');
+    expect(formatCategoryValue(66.6667, 'disposalEffPct')).toBe('66.7%');
+    expect(formatCategoryValue(null, 'disposalEffPct')).toBe('–');
   });
 
   it.each([

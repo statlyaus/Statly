@@ -190,6 +190,10 @@ describe('league settings route draft scheduling', () => {
       },
     ],
     ['categories that are not a list', { scoring: { categories: 'goals' } }],
+    [
+      'time on ground %, which is not a scoring category',
+      { scoring: { categories: ['goals', 'tackles', 'timeOnGroundPct'] } },
+    ],
     ['a league name over 50 characters', { league: { name: 'L'.repeat(51) } }],
     ['a league name under 3 characters', { league: { name: 'AB' } }],
     ['an unknown time zone', { draft: { timeZone: 'Mars/Base' } }],

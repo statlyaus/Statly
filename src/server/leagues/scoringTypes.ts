@@ -9,8 +9,9 @@ export type LineupSlotSettings = Record<ActiveLineupSlot, number>;
 
 export type CategoryScoreResult = {
   category: FantasyCategoryKey;
-  homeValue: number;
-  awayValue: number;
+  /** Null when the side has no value, such as DE% for a team with no disposals. */
+  homeValue: number | null;
+  awayValue: number | null;
   direction: CategoryDirection;
   winner: 'home' | 'away' | 'draw';
 };

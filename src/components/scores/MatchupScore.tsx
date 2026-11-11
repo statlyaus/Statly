@@ -1,6 +1,7 @@
 import type React from 'react';
 
 import { getTeamInitials } from '@/components/league/leagueTabPanelUtils';
+import { formatCategoryValue } from '@/types/fantasyCategories';
 
 /** Shared score presentation for category head-to-head matchups (manager home, public homepage). */
 
@@ -169,7 +170,7 @@ export function CategoryBoxScore({
                     key={category.key}
                     className={`py-1.5 text-center ${sideWon ? 'font-bold text-foreground' : 'text-muted-foreground'}`}
                   >
-                    {value ?? '–'}
+                    {formatCategoryValue(value, category.key)}
                     {sideWon ? <span className="sr-only"> (won {category.label})</span> : null}
                   </td>
                 );

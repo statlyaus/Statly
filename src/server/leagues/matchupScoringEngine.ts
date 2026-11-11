@@ -1,4 +1,8 @@
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  categoryAggregation,
+  type FantasyCategoryKey,
+  type ScoringStatKey,
+} from '@/types/fantasyCategories';
 
 import { compareCategoryValues } from './categoryDirections';
 import type {
@@ -8,7 +12,11 @@ import type {
   MatchupScoreResult,
 } from './scoringTypes';
 
-export type CategoryTotals = Partial<Record<FantasyCategoryKey, number>>;
+/**
+ * A player's or a team's values by stat. A player's totals also carry `disposals`, which is not a
+ * category but is what team disposal efficiency is computed from. An absent value is unavailable.
+ */
+export type CategoryTotals = Partial<Record<ScoringStatKey, number>>;
 
 export interface LineupScoringPlayer {
   playerId: string;
@@ -29,29 +37,47 @@ export interface ScoreHeadToHeadCategoriesInput {
   scoringMode: LeagueScoringMode;
 }
 
-function readTotal(totals: CategoryTotals, category: FantasyCategoryKey): number {
-  const value = totals[category];
+function readTotal(totals: CategoryTotals, key: ScoringStatKey): number {
+  const value = totals[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/**
+ * A team's value per category across its counted players (bench and interchange excluded). Each
+ * category's aggregation rule lives on its definition in `fantasyCategories.ts`: most categories
+ * sum; disposal efficiency is total effective disposals / total disposals x 100, and is left out
+ * (unavailable) when the team had no disposals.
+ */
 export function aggregateLineupCategoryTotals(
   input: AggregateLineupCategoryTotalsInput
 ): CategoryTotals {
+  const counted = input.players.filter(
+    (player) => player.slot !== 'BENCH' && player.slot !== 'INTERCHANGE'
+  );
+  const sumOf = (key: ScoringStatKey) =>
+    counted.reduce((sum, player) => sum + readTotal(player.totals, key), 0);
   const totals: CategoryTotals = {};
 
   for (const category of input.categories) {
-    totals[category] = 0;
-  }
-
-  for (const player of input.players) {
-    if (player.slot === 'BENCH' || player.slot === 'INTERCHANGE') continue;
-
-    for (const category of input.categories) {
-      totals[category] = readTotal(totals, category) + readTotal(player.totals, category);
+    const aggregation = categoryAggregation(category);
+    if (aggregation.kind === 'sum') {
+      totals[category] = sumOf(category);
+      continue;
+    }
+    const denominator = sumOf(aggregation.denominator);
+    if (denominator > 0) {
+      totals[category] = (sumOf(aggregation.numerator) / denominator) * aggregation.scale;
     }
   }
 
   return totals;
+}
+
+/** A ratio category's value is unavailable (null) when its denominator was 0. */
+function readCategoryValue(totals: CategoryTotals, category: FantasyCategoryKey): number | null {
+  if (categoryAggregation(category).kind === 'sum') return readTotal(totals, category);
+  const value = totals[category];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export function sumCategoryTotals(
@@ -69,10 +95,14 @@ export function scoreHeadToHeadCategories(
   let drawnCategories = 0;
 
   const categories = input.categories.map((category) => {
-    const homeValue = readTotal(input.homeTotals, category);
-    const awayValue = readTotal(input.awayTotals, category);
+    const homeValue = readCategoryValue(input.homeTotals, category);
+    const awayValue = readCategoryValue(input.awayTotals, category);
     const direction = input.categoryDirections[category] ?? 'HIGH_WINS';
-    const winner = compareCategoryValues(homeValue, awayValue, direction);
+    // A side with no value (a team with no disposals has no DE%) cannot win or lose the category.
+    const winner =
+      homeValue === null || awayValue === null
+        ? 'draw'
+        : compareCategoryValues(homeValue, awayValue, direction);
 
     if (winner === 'home') homeCategoryWins += 1;
     if (winner === 'away') awayCategoryWins += 1;

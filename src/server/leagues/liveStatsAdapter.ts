@@ -1,4 +1,4 @@
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { FantasyCategoryKey, ScoringStatKey } from '@/types/fantasyCategories';
 
 import type { CategoryTotals } from './matchupScoringEngine';
 
@@ -23,13 +23,16 @@ export interface NormalizedLiveStatRow {
   gameStatus: NormalizedGameStatus;
   statusUnavailable: boolean;
   confirmedDidNotPlay: boolean;
-  /** Only the categories the provider reported; an unreported stat is absent, never 0. */
+  /**
+   * Only the stats the provider reported (every category, plus `disposals`, which team disposal
+   * efficiency is computed from); an unreported stat is absent, never 0.
+   */
   totals: CategoryTotals;
   /**
-   * Categories the row has no value for. Disposal efficiency is left out when the player had no
-   * disposals: it has no value to report, so it is empty rather than missing.
+   * Stats the row has no value for. Disposal efficiency and effective disposals are left out when
+   * the player had no disposals: there is nothing to report, so they are empty rather than missing.
    */
-  unreportedCategories: FantasyCategoryKey[];
+  unreportedCategories: ScoringStatKey[];
   lastSeenAt: Date | null;
 }
 
@@ -137,12 +140,12 @@ function readCategoryNumber(
 
 function readCategoryTotals(source: RawValueRecord): {
   totals: CategoryTotals;
-  unreportedCategories: FantasyCategoryKey[];
+  unreportedCategories: ScoringStatKey[];
 } {
   const nestedStats =
     source.stats && typeof source.stats === 'object' ? (source.stats as RawValueRecord) : {};
   const totals: CategoryTotals = {};
-  const unreportedCategories: FantasyCategoryKey[] = [];
+  const unreportedCategories: ScoringStatKey[] = [];
 
   for (const [category, aliases] of Object.entries(CATEGORY_FIELD_ALIASES) as Array<
     [FantasyCategoryKey, string[]]
@@ -154,22 +157,28 @@ function readCategoryTotals(source: RawValueRecord): {
     else totals[category] = value;
   }
 
+  const disposals = readDisposals(nestedStats, source);
+  if (disposals === null) unreportedCategories.push('disposals');
+  else totals.disposals = disposals;
+
   return {
     totals,
-    unreportedCategories: hadNoDisposals(nestedStats, source)
-      ? unreportedCategories.filter((category) => category !== 'disposalEffPct')
-      : unreportedCategories,
+    unreportedCategories:
+      disposals === 0
+        ? unreportedCategories.filter(
+            (key) => key !== 'disposalEffPct' && key !== 'effectiveDisposals'
+          )
+        : unreportedCategories,
   };
 }
 
-/** True only when the provider reported zero disposals (or zero kicks and zero handballs). */
-function hadNoDisposals(nestedStats: RawValueRecord, source: RawValueRecord): boolean {
+/** Reported disposals, or kicks plus handballs when both are reported; otherwise unavailable. */
+function readDisposals(nestedStats: RawValueRecord, source: RawValueRecord): number | null {
   const disposals = readCategoryNumber(nestedStats, source, ['disposals']);
-  if (disposals !== null) return disposals === 0;
-  return (
-    readCategoryNumber(nestedStats, source, CATEGORY_FIELD_ALIASES.kicks) === 0 &&
-    readCategoryNumber(nestedStats, source, CATEGORY_FIELD_ALIASES.handballs) === 0
-  );
+  if (disposals !== null) return disposals;
+  const kicks = readCategoryNumber(nestedStats, source, CATEGORY_FIELD_ALIASES.kicks);
+  const handballs = readCategoryNumber(nestedStats, source, CATEGORY_FIELD_ALIASES.handballs);
+  return kicks === null || handballs === null ? null : kicks + handballs;
 }
 
 export function normalizeLiveStatRows(
