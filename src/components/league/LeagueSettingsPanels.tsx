@@ -197,6 +197,26 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
   };
 }
 
+function normalizeLeagueFormatSettings(
+  value: unknown,
+  fallback: LeagueFormatSettingsValue
+): LeagueFormatSettingsValue {
+  const source = isRecord(value) ? value : {};
+  return {
+    leagueFormat: source.leagueFormat === 'BLOODSUCKER' ? 'BLOODSUCKER' : fallback.leagueFormat,
+    bloodsuckerMemberId:
+      typeof source.bloodsuckerMemberId === 'string' ? source.bloodsuckerMemberId : null,
+    candidates: Array.isArray(source.candidates)
+      ? source.candidates.filter(
+          (candidate): candidate is LeagueFormatSettingsValue['candidates'][number] =>
+            isRecord(candidate) &&
+            typeof candidate.memberId === 'string' &&
+            typeof candidate.teamName === 'string'
+        )
+      : [],
+  };
+}
+
 function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueSettingsResponse {
   const fallback = createFallbackLeagueSettings(league);
   const source = isRecord(value) ? value : {};
@@ -206,7 +226,6 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
   const draftSource = isRecord(source.draft) ? source.draft : {};
   const waiverSource = isRecord(source.waiver) ? source.waiver : {};
   const locksSource = isRecord(source.locks) ? source.locks : {};
-  const formatSource = isRecord(source.format) ? source.format : {};
 
   return {
     league: {
@@ -238,22 +257,7 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
           ? scoringSource.scoringSettingsLockedAt
           : null,
     },
-    format: {
-      leagueFormat:
-        formatSource.leagueFormat === 'BLOODSUCKER' ? 'BLOODSUCKER' : fallback.format.leagueFormat,
-      bloodsuckerMemberId:
-        typeof formatSource.bloodsuckerMemberId === 'string'
-          ? formatSource.bloodsuckerMemberId
-          : null,
-      candidates: Array.isArray(formatSource.candidates)
-        ? formatSource.candidates.filter(
-            (candidate): candidate is LeagueFormatSettingsValue['candidates'][number] =>
-              isRecord(candidate) &&
-              typeof candidate.memberId === 'string' &&
-              typeof candidate.teamName === 'string'
-          )
-        : [],
-    },
+    format: normalizeLeagueFormatSettings(source.format, fallback.format),
     locks: {
       scoring: typeof locksSource.scoring === 'string' ? locksSource.scoring : null,
       draftStructure:
