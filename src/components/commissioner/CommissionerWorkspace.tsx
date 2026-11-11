@@ -149,8 +149,8 @@ export default function CommissionerWorkspace({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {league.memberRemovalOpen
-              ? 'You can remove managers until the draft starts.'
-              : 'The draft has started, so managers can no longer be removed.'}
+              ? 'You can remove managers until the draft starts or the season is published.'
+              : league.memberRemovalClosedReason}
           </p>
         </div>
         <div className="overflow-x-auto">

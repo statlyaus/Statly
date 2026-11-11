@@ -4,7 +4,7 @@ import { LeagueRole } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 
 import { isActivePrismaMembership } from './activeMembership';
-import { hasDraftStarted } from './memberCommands';
+import { memberRemovalBlock } from './memberCommands';
 
 export interface CommissionerLeagueMember {
   userId: string;
@@ -21,6 +21,8 @@ export interface CommissionerLeague {
   maxTeams: number;
   /** Mirrors the removeLeagueMember rule so the page can explain it; the command still enforces it. */
   memberRemovalOpen: boolean;
+  /** Why removal is closed (the command's own message), or null while it is open. */
+  memberRemovalClosedReason: string | null;
   members: CommissionerLeagueMember[];
 }
 
@@ -28,7 +30,7 @@ const commissionerLeagueSelect = {
   id: true,
   name: true,
   inviteCode: true,
-  settings: { select: { maxTeams: true } },
+  settings: { select: { maxTeams: true, competitionPublishedAt: true } },
   drafts: {
     orderBy: { createdAt: 'desc' },
     take: 1,
@@ -55,6 +57,14 @@ const commissionerLeagueSelect = {
 
 type CommissionerClient = { league: Pick<PrismaClient['league'], 'findMany'> };
 
+function memberRemovalState(
+  draft: Parameters<typeof memberRemovalBlock>[0],
+  competitionPublishedAt: Date | null
+): Pick<CommissionerLeague, 'memberRemovalOpen' | 'memberRemovalClosedReason'> {
+  const block = memberRemovalBlock(draft, competitionPublishedAt);
+  return { memberRemovalOpen: block === null, memberRemovalClosedReason: block?.message ?? null };
+}
+
 /** Leagues the user owns, which are the leagues whose members they may remove or hand over. */
 export async function loadCommissionerLeagues(
   userId: string,
@@ -71,7 +81,7 @@ export async function loadCommissionerLeagues(
     name: league.name,
     inviteCode: league.inviteCode,
     maxTeams: league.settings.maxTeams,
-    memberRemovalOpen: !hasDraftStarted(league.drafts[0]),
+    ...memberRemovalState(league.drafts[0], league.settings.competitionPublishedAt),
     members: league.members.filter(isActivePrismaMembership).map((member) => ({
       userId: member.userId,
       teamName: member.teamName,

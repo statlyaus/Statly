@@ -21,6 +21,7 @@ function league(overrides: Partial<CommissionerLeague> = {}): CommissionerLeague
     inviteCode: 'KEEP01',
     maxTeams: 8,
     memberRemovalOpen: true,
+    memberRemovalClosedReason: null,
     members: [
       { userId: 'owner', teamName: 'Owner FC', managerName: 'Olive', isOwner: true, joinedAt },
       { userId: 'alpha', teamName: 'Alpha FC', managerName: 'Alex', isOwner: false, joinedAt },
@@ -72,10 +73,13 @@ describe('CommissionerWorkspace', () => {
     expect(mocks.refresh).toHaveBeenCalled();
   });
 
-  it('explains that removal closes once the draft starts', () => {
+  it.each([
+    'Managers can only be removed before the draft starts.',
+    'The season is published, so managers can no longer be removed or leave.',
+  ])('shows why removal is closed: %s', (reason) => {
     render(
       <CommissionerWorkspace
-        leagues={[league({ memberRemovalOpen: false })]}
+        leagues={[league({ memberRemovalOpen: false, memberRemovalClosedReason: reason })]}
         selectedLeagueId="league-1"
       />
     );
@@ -83,9 +87,7 @@ describe('CommissionerWorkspace', () => {
     expect(
       within(memberRow('Alpha FC')).queryByRole('button', { name: /Remove/ })
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByText('The draft has started, so managers can no longer be removed.')
-    ).toBeInTheDocument();
+    expect(screen.getByText(reason)).toBeInTheDocument();
   });
 
   it('announces a refused command without refreshing', async () => {

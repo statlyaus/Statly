@@ -267,6 +267,32 @@ describe('league member commands', () => {
     expect(member.isActive).toBe(true);
   });
 
+  it('refuses removal and leaving once the competition is published, even before the draft', async () => {
+    await prisma.leagueSettings.update({
+      where: { id: FIXTURE.settingsId },
+      data: { competitionPublishedAt: new Date() },
+    });
+
+    const removal = await removeLeagueMember({
+      leagueId: FIXTURE.leagueId,
+      actorUserId: ownerUserId,
+      targetUserId: bravoUserId,
+    });
+    const leaving = await removeLeagueMember({
+      leagueId: FIXTURE.leagueId,
+      actorUserId: charlieUserId,
+      targetUserId: charlieUserId,
+    });
+
+    expect(removal).toMatchObject({ ok: false, code: 'competition-published' });
+    expect(leaving).toMatchObject({ ok: false, code: 'competition-published' });
+    const members = await prisma.leagueMember.findMany({
+      where: { id: { in: [memberIds[2], memberIds[3]] } },
+    });
+    expect(members.every((member) => member.isActive)).toBe(true);
+    expect(await draftOrder()).toHaveLength(4);
+  });
+
   it('reports an unknown league without touching another league', async () => {
     const result = await removeLeagueMember({
       leagueId: 'integration-member-commands-missing',
