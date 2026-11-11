@@ -25,6 +25,11 @@ export interface LineupScoringPlayer {
   totals: CategoryTotals;
 }
 
+/** Bench and interchange players never count toward a team's totals. */
+export function isCountedSlot(slot: LineupScoringPlayer['slot']): boolean {
+  return slot !== 'BENCH' && slot !== 'INTERCHANGE';
+}
+
 export interface AggregateLineupCategoryTotalsInput {
   categories: readonly FantasyCategoryKey[];
   players: readonly LineupScoringPlayer[];
@@ -53,9 +58,7 @@ function readTotal(totals: CategoryTotals, key: ScoringStatKey): number {
 export function aggregateLineupCategoryTotals(
   input: AggregateLineupCategoryTotalsInput
 ): CategoryTotals {
-  const counted = input.players.filter(
-    (player) => player.slot !== 'BENCH' && player.slot !== 'INTERCHANGE'
-  );
+  const counted = input.players.filter((player) => isCountedSlot(player.slot));
   const sumOf = (key: ScoringStatKey) =>
     counted.reduce((sum, player) => sum + readTotal(player.totals, key), 0);
   const totals: CategoryTotals = {};

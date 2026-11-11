@@ -702,10 +702,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       // Checked on every editable save, not only on change, so a Bloodsucker who left by a path that
       // could not clear the setting is caught instead of being resent forever.
-      if (
-        bloodsuckerMemberId &&
-        (bloodsuckerMemberId !== currentFormat.bloodsuckerMemberId || !locks.draftStructure)
-      ) {
+      // A changed id under the lock has already been refused above.
+      if (bloodsuckerMemberId && !locks.draftStructure) {
         const bloodsucker = await prisma.leagueMember.findFirst({
           where: { id: bloodsuckerMemberId, leagueId: id },
           select: { isActive: true, status: true },

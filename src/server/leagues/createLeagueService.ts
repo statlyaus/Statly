@@ -244,7 +244,7 @@ function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreate
   // BR-03: a Bloodsucker league defaults to rolling waivers and refuses weekly ones.
   const waiverError = getLeagueFormatWaiverError({
     leagueFormat: normalized.leagueFormat,
-    waiverRule: resolveWaiverRule(input) === WaiverRule.ROLLING ? 'ROLLING' : 'WEEKLY',
+    waiverRule: resolveWaiverRule(input),
     faabBudget: null,
   });
   if (waiverError) {

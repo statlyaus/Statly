@@ -32,9 +32,9 @@ interface ScoringSettingsPanelProps {
   disabled?: boolean;
   onChange: (value: ScoringSettingsValue) => void;
   // The league format is independent of scoring but sits beside it; it locks with the draft.
-  format?: LeagueFormatSettingsValue;
+  format: LeagueFormatSettingsValue;
   formatLockReason?: string | null;
-  onFormatChange?: (format: LeagueFormatSettingsValue) => void;
+  onFormatChange: (format: LeagueFormatSettingsValue) => void;
 }
 
 const SELECT_CLASS =
@@ -98,26 +98,24 @@ export function ScoringSettingsPanel({
             <option value="H2H_MOST_CATEGORIES">H2H Most Categories</option>
           </select>
         </label>
-        {format && onFormatChange && (
-          <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-            League format
-            <select
-              value={format.leagueFormat}
-              disabled={disabled || isFormatLocked}
-              onChange={(event) =>
-                onFormatChange({
-                  ...format,
-                  leagueFormat: event.target.value === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD',
-                })
-              }
-              className={SELECT_CLASS}
-            >
-              <option value="STANDARD">Standard</option>
-              <option value="BLOODSUCKER">Bloodsucker</option>
-            </select>
-          </label>
-        )}
-        {format && onFormatChange && format.leagueFormat === 'BLOODSUCKER' && (
+        <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+          League format
+          <select
+            value={format.leagueFormat}
+            disabled={disabled || isFormatLocked}
+            onChange={(event) =>
+              onFormatChange({
+                ...format,
+                leagueFormat: event.target.value === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD',
+              })
+            }
+            className={SELECT_CLASS}
+          >
+            <option value="STANDARD">Standard</option>
+            <option value="BLOODSUCKER">Bloodsucker</option>
+          </select>
+        </label>
+        {format.leagueFormat === 'BLOODSUCKER' && (
           <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)] sm:col-span-2">
             Bloodsucker
             <select
