@@ -30,12 +30,13 @@ main <- function() {
   if (!exists("fetch_footywire_match_ids", envir = asNamespace("fitzRoy"))) {
     stop("fitzRoy no longer provides fetch_footywire_match_ids", call. = FALSE)
   }
-  ids_before <- fitzRoy:::fetch_footywire_match_ids(season)
+  fetch_match_ids <- get("fetch_footywire_match_ids", envir = asNamespace("fitzRoy"))
+  ids_before <- fetch_match_ids(season)
   if (length(ids_before) == 0) stop("Footywire lists no completed matches for ", season, call. = FALSE)
   n <- if (is.na(last_n)) length(ids_before) else min(last_n, length(ids_before))
 
   results <- as.data.frame(fetch_results(season = season, source = "footywire", last_n_matches = n))
-  ids_after <- fitzRoy:::fetch_footywire_match_ids(season)
+  ids_after <- fetch_match_ids(season)
   if (!identical(ids_before, ids_after)) {
     stop("Footywire's match list changed during the fetch; retry", call. = FALSE)
   }
