@@ -57,6 +57,28 @@ function unavailable(round: number, matchStarts: Date[], missingPlayerIds = ['pl
   };
 }
 
+function scored(
+  round: number,
+  status: 'SCHEDULED' | 'LIVE' | 'FINAL',
+  matches: Array<{ matchId: string; startsAt: Date; status: 'scheduled' | 'live' | 'final' }>
+) {
+  return {
+    round,
+    status,
+    recalculated: 2,
+    scores: [],
+    unresolvedMatchupIds: [] as string[],
+    roundStatus: {
+      earliestStartAt: matches[0]?.startsAt ?? null,
+      latestEndAt: null,
+      anyLive: matches.some((match) => match.status === 'live'),
+      allFinal: matches.length > 0 && matches.every((match) => match.status === 'final'),
+      hasUnavailableStatus: false,
+      matches: matches.map((match) => ({ ...match, statusUnavailable: false })),
+    },
+  };
+}
+
 const lastMatchStart = new Date(ROUND_START.getTime() + 72 * HOUR);
 
 describe('scoreStartedLeagueRounds stalled rounds', () => {
@@ -83,6 +105,7 @@ describe('scoreStartedLeagueRounds stalled rounds', () => {
         stalledSince: new Date(
           lastMatchStart.getTime() + STALLED_ROUND_GRACE_HOURS * HOUR
         ).toISOString(),
+        reason: 'unavailable-stats',
         missingPlayerIds: ['player-1', 'player-2'],
       },
     ]);
@@ -135,5 +158,81 @@ describe('scoreStartedLeagueRounds stalled rounds', () => {
 
     expect(run.stalledRounds).toEqual([]);
     expect(run.leagues[0].rounds).toEqual([{ round: 3, status: 'FINAL', recalculated: 2 }]);
+  });
+
+  it('reports a round whose AFL matches never go final past the grace period', async () => {
+    findManyMock.mockResolvedValue([startedRound('league-a', 3)]);
+    const recalculate = vi.fn(async () =>
+      scored(3, 'LIVE', [
+        { matchId: 'm1', startsAt: ROUND_START, status: 'final' },
+        { matchId: 'm2', startsAt: lastMatchStart, status: 'live' },
+        { matchId: 'm3', startsAt: lastMatchStart, status: 'scheduled' },
+      ])
+    );
+    const now = new Date(lastMatchStart.getTime() + (STALLED_ROUND_GRACE_HOURS + 1) * HOUR);
+
+    const run = await scoreStartedLeagueRounds(now, recalculate as never);
+
+    expect(run.stalledRounds).toEqual([
+      {
+        leagueId: 'league-a',
+        season: 2026,
+        round: 3,
+        status: 'LIVE',
+        stalledSince: new Date(
+          lastMatchStart.getTime() + STALLED_ROUND_GRACE_HOURS * HOUR
+        ).toISOString(),
+        reason: 'afl-matches-not-final',
+        missingPlayerIds: [],
+        aflMatchIdsNotFinal: ['m2', 'm3'],
+      },
+    ]);
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      'Scheduled round scoring is stalled for a league round',
+      expect.objectContaining({
+        reason: 'afl-matches-not-final',
+        aflMatchIdsNotFinal: ['m2', 'm3'],
+      })
+    );
+  });
+
+  it('reports a round held open by an unresolved matchup past the grace period', async () => {
+    findManyMock.mockResolvedValue([startedRound('league-a', 3)]);
+    const recalculate = vi.fn(async () => ({
+      ...scored(3, 'SCHEDULED', [
+        { matchId: 'm1', startsAt: ROUND_START, status: 'final' },
+        { matchId: 'm2', startsAt: lastMatchStart, status: 'final' },
+      ]),
+      unresolvedMatchupIds: ['matchup-7'],
+    }));
+    const now = new Date(lastMatchStart.getTime() + (STALLED_ROUND_GRACE_HOURS + 1) * HOUR);
+
+    const run = await scoreStartedLeagueRounds(now, recalculate as never);
+
+    expect(run.stalledRounds).toEqual([
+      expect.objectContaining({
+        leagueId: 'league-a',
+        round: 3,
+        status: 'SCHEDULED',
+        reason: 'unresolved-matchups',
+        missingPlayerIds: [],
+        unresolvedMatchupIds: ['matchup-7'],
+      }),
+    ]);
+    expect(run.failedLeagueIds).toEqual([]);
+  });
+
+  it('does not report an unfinished round inside the grace period', async () => {
+    findManyMock.mockResolvedValue([startedRound('league-a', 3)]);
+    const recalculate = vi.fn(async () => ({
+      ...scored(3, 'LIVE', [{ matchId: 'm2', startsAt: lastMatchStart, status: 'live' }]),
+      unresolvedMatchupIds: ['matchup-7'],
+    }));
+    const now = new Date(lastMatchStart.getTime() + (STALLED_ROUND_GRACE_HOURS - 1) * HOUR);
+
+    const run = await scoreStartedLeagueRounds(now, recalculate as never);
+
+    expect(run.stalledRounds).toEqual([]);
+    expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 });

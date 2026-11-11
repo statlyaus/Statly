@@ -16,6 +16,7 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
+import { startLeagueSeason } from '@/server/leagues/activeSeason';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -359,6 +360,8 @@ export async function POST(request: NextRequest) {
             categoriesJson: normalizeLeagueCategories(body.leagueData?.categories),
           },
         });
+        // The final pick seeds waiver priority in the active season, so the draft needs one to complete.
+        await startLeagueSeason(tx, league.id, scheduledStartTime);
 
         // Create draft
         const draft = await tx.draft.create({

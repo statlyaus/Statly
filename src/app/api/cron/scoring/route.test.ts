@@ -35,7 +35,14 @@ function startedRound(leagueId: string, round: number, fixtureVersion = 1, publi
 }
 
 function recalculated(round: number, status: 'LIVE' | 'FINAL' = 'LIVE') {
-  return { round, status, recalculated: 2, scores: [], roundStatus: {} };
+  return {
+    round,
+    status,
+    recalculated: 2,
+    scores: [],
+    unresolvedMatchupIds: [],
+    roundStatus: { hasUnavailableStatus: false, allFinal: status === 'FINAL', matches: [] },
+  };
 }
 
 describe('/api/cron/scoring', () => {
@@ -224,7 +231,13 @@ describe('/api/cron/scoring', () => {
       ok: false,
       failedLeagueIds: [],
       stalledRounds: [
-        { leagueId: 'league-a', round: 2, status: 'SCHEDULED', missingPlayerIds: ['player-9'] },
+        {
+          leagueId: 'league-a',
+          round: 2,
+          status: 'SCHEDULED',
+          reason: 'unavailable-stats',
+          missingPlayerIds: ['player-9'],
+        },
       ],
       leagues: [
         { leagueId: 'league-a', rounds: [{ round: 2, status: 'SCHEDULED', recalculated: 0 }] },
