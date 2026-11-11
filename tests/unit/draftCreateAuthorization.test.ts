@@ -179,14 +179,13 @@ describe('draft create authorization architecture', () => {
     expect(createDraftReminders).not.toHaveBeenCalled();
   });
 
-  it('returns 400 in production before draft side effects when leagueId is missing', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+  it('returns 400 before draft side effects when leagueId is missing', async () => {
     vi.mocked(getAuthenticatedUserId).mockResolvedValue('user-1');
     const { POST } = await import('@/app/api/drafts/route');
 
     const response = await POST({
       json: vi.fn().mockResolvedValue({
-        name: 'Standalone draft',
+        name: 'Draft without a league',
         leagueSize: 12,
         draftType: 'snake',
         timePerPick: 60,

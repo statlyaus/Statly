@@ -6,6 +6,13 @@ The draft is a server-authoritative command system. Prisma owns draft configurat
 queue/watchlist state, event/outbox records, and canonical roster projection. Socket.IO publishes
 persisted results; it does not decide or store picks independently.
 
+Every draft belongs to a league. A commissioner creates and schedules it from the league's Draft tab
+(`/leagues/<id>?tab=draft`); `POST /api/drafts` refuses a request without a `leagueId` (400), so no
+draft creates its own league. Only the development tool `/api/create-test-draft` does that. The
+`/drafts` hub lists the drafts of the leagues the viewer has an active team in
+(`src/server/draft/readModels/memberLeagueDraftsReadModel.ts`, also behind `GET /api/drafts/list`),
+each linking to its league's Draft tab. `/drafts/create` and `/drafts/settings` redirect to `/drafts`.
+
 Key implementation boundaries:
 
 - Live draft room route: `src/app/(app)/drafts/[id]/page.tsx`.
