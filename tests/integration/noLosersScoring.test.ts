@@ -10,7 +10,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const GAMES = [
+const GAMES: Array<Record<string, unknown> & { match_uid: string }> = [
   { match_uid: '2091-R5-GWS-GEE', home_team: 'GWS', away_team: 'Geelong', status: 'final' },
   {
     match_uid: '2091-R5-HAW-COL',
@@ -84,6 +84,9 @@ const USERS = ['int-nl-owner', 'int-nl-rival'];
 const SEASON = 'int-nl-season';
 const MEMBERS = ['int-nl-m1', 'int-nl-m2'];
 const PLAYERS = STAT_ROWS.map((row) => row.player_uid);
+// The bye/autosub test's extra players: a Sydney starter (Sydney have the bye) and a Geelong sub.
+const BYE_PLAYER = 'int-nl-bye';
+const SUB_PLAYER = 'int-nl-sub';
 const CATEGORIES: FantasyCategoryKey[] = ['goals', 'tackles', 'clangers'];
 const ROUND = 1;
 const AFL_SEASON = 2091;
@@ -91,7 +94,7 @@ const AFL_SEASON = 2091;
 const removeFixture = async () => {
   await deleteLeagueFixtures(prisma, {
     leagueIds: [LEAGUE],
-    playerIds: PLAYERS,
+    playerIds: [...PLAYERS, BYE_PLAYER, SUB_PLAYER],
     settingsIds: [SETTINGS],
     userIds: USERS,
   });
@@ -364,6 +367,74 @@ describe.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
     });
   }
 );
+
+describe('a bye and an autosub in a No Losers round (#1315, BR-18)', () => {
+  it('subs in for the bye player, keeps the losing starter at nothing, and finalizes', async () => {
+    const matchupId = await seedLeague({
+      leagueFormat: 'NO_LOSERS',
+      scoringMode: 'H2H_MOST_CATEGORIES',
+    });
+    const lineup = await prisma.leagueLineup.findFirstOrThrow({
+      where: { leagueId: LEAGUE, memberId: MEMBERS[0] },
+    });
+    await prisma.player.createMany({
+      data: [
+        { id: BYE_PLAYER, name: BYE_PLAYER, club: 'Sydney', position: 'MID' },
+        { id: SUB_PLAYER, name: SUB_PLAYER, club: 'Geelong', position: 'MID' },
+      ],
+    });
+    await prisma.leagueLineupPlayer.createMany({
+      data: [
+        { lineupId: lineup.id, playerId: BYE_PLAYER, slot: 'MID', slotIndex: 2 },
+        { lineupId: lineup.id, playerId: SUB_PLAYER, slot: 'INTERCHANGE', slotIndex: 0 },
+      ],
+    });
+    const subStatRow = {
+      player_uid: SUB_PLAYER,
+      match_uid: GAMES[0].match_uid,
+      team: 'Geelong Cats',
+      team_abbr: 'GEE',
+      stats: { goals: 3, tackles: 1, clangers: 0 },
+    };
+    STAT_ROWS.push(subStatRow);
+    GAMES[0].confirmed_bye_teams = ['Sydney'];
+    try {
+      // GWS lose by 20: p1, a starter who played, counts nothing but is not subbed out.
+      await storeResult(0, 80, 100);
+      await storeResult(1, 70, 73);
+
+      await expect(
+        recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+      ).resolves.toMatchObject({ status: 'FINAL', waitingOnResults: [] });
+
+      const slots = await prisma.leagueLineupPlayer.findMany({
+        where: { lineupId: lineup.id },
+        select: { playerId: true, slot: true },
+        orderBy: { playerId: 'asc' },
+      });
+      expect(slots).toEqual([
+        { playerId: BYE_PLAYER, slot: 'INTERCHANGE' },
+        { playerId: 'int-nl-p1', slot: 'MID' },
+        { playerId: 'int-nl-p2', slot: 'MID' },
+        { playerId: SUB_PLAYER, slot: 'MID' },
+      ]);
+      const rows = await prisma.leagueMatchupPlayerScore.findMany({
+        where: { matchupId, memberId: MEMBERS[0] },
+        select: { playerId: true, outcome: true, clubResult: true, multiplier: true },
+        orderBy: { playerId: 'asc' },
+      });
+      // The bye player is on the interchange now, so he has no counted row.
+      expect(rows).toEqual([
+        { playerId: 'int-nl-p1', outcome: 'RESULT', clubResult: 'LOSS', multiplier: 0 },
+        { playerId: 'int-nl-p2', outcome: 'RESULT', clubResult: 'LOSS', multiplier: 0.5 },
+        { playerId: SUB_PLAYER, outcome: 'RESULT', clubResult: 'WIN', multiplier: 1 },
+      ]);
+    } finally {
+      STAT_ROWS.pop();
+      delete GAMES[0].confirmed_bye_teams;
+    }
+  });
+});
 
 describe.each(['STANDARD', 'BLOODSUCKER'] as const)('a %s league (golden)', (leagueFormat) => {
   it.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(

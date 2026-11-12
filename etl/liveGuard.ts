@@ -3,7 +3,11 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { runFetchPipeline, runFixturePipeline, runResultPipeline } from './fetchPipeline';
 import { FINAL_STATS_WINDOW_MS, statsWindowOpen, type FixtureMatch } from './fixtureIngest';
-import { dueResultRefresh, RESULTS_LAST_MATCHES } from './resultRefresh';
+import {
+  dueResultRefresh,
+  RESULTS_FULL_SWEEP_TIMEOUT_MS,
+  RESULTS_LAST_MATCHES,
+} from './resultRefresh';
 
 // Initialize Firebase Admin using same pattern as main project
 if (getApps().length === 0) {
@@ -79,8 +83,8 @@ async function runFetchCycle(): Promise<void> {
 }
 
 // Results are posted once a game ends; NFR-3 (#1290) wants them within 2 hours. In a live window the
-// latest two rounds are re-read every 10 minutes; the whole season is swept every 6 hours, live or
-// not, so a Footywire correction to an older game is ingested too (#1315). See ./resultRefresh.ts.
+// latest two rounds are re-read every 10 minutes; outside one the whole season is swept every 6
+// hours, so a Footywire correction to an older game is ingested too (#1315). See ./resultRefresh.ts.
 let lastResultsRefreshAt = 0;
 let lastResultsFullSweepAt = 0;
 
@@ -110,7 +114,9 @@ async function refreshResultsIfDue({
   }
   await runResultPipeline({
     season: process.env.SEASON || new Date().getFullYear(),
-    ...(due === 'recent' ? { lastMatches: RESULTS_LAST_MATCHES } : {}),
+    ...(due === 'recent'
+      ? { lastMatches: RESULTS_LAST_MATCHES }
+      : { timeoutMs: RESULTS_FULL_SWEEP_TIMEOUT_MS }),
   });
 }
 

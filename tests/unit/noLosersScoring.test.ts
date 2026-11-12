@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { buildMatchupCard } from '@/server/leagues/matchupReadModel';
 import {
+  aggregateLineupCategoryTotals,
+  scoreHeadToHeadCategories,
+} from '@/server/leagues/matchupScoringEngine';
+import {
   buildNoLosersRoundContext,
   matchUidClubAbbreviations,
   noLosersPlayerScoreRows,
@@ -136,6 +140,94 @@ describe('No Losers join tolerates a home/away swap between sources (#1315)', ()
     );
     expect(score.rule.unavailablePlayerIds).toEqual(['gee']);
   });
+});
+
+describe('No Losers edge cases (#1315)', () => {
+  it('a player whose club has the bye has no stat row: nothing counted, nothing waited on', () => {
+    const ctx = context([
+      GEE_HAW,
+      {
+        ...GEE_HAW,
+        id: 'r2',
+        matchUid: '2025-R18-SYD-CAR',
+        homeClub: 'Sydney',
+        awayClub: 'Carlton',
+      },
+    ]);
+    const score = scoreNoLosersLineup(
+      [
+        { playerId: 'gee', slot: 'MID', totals: { goals: 2 } },
+        { playerId: 'bye', slot: 'MID', totals: {} },
+      ],
+      ctx
+    );
+
+    expect(score.rule.players[1].outcome).toEqual({ kind: 'NO_STAT_ROW' });
+    expect(score.rule.unavailablePlayerIds).toEqual([]);
+    expect(noLosersWaitingOn(ctx, score.rule.players)).toEqual([]);
+    expect(
+      noLosersPlayerScoreRows(score, ctx, {
+        leagueId: 'l',
+        seasonId: 's',
+        matchupId: 'm',
+        memberId: 'mem',
+        round: 1,
+      }).map((row) => [row.playerId, row.outcome, row.multiplier])
+    ).toEqual([
+      ['gee', 'RESULT', 1],
+      ['bye', 'NO_STAT_ROW', null],
+    ]);
+  });
+
+  it.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
+    'a fractional category tie is a drawn category, and a level count a drawn matchup (%s)',
+    (scoringMode) => {
+      // Hawthorn lose by 3 (halved); Sydney and Carlton draw (halved).
+      const ctx = context([
+        { ...GEE_HAW, homePoints: 90, awayPoints: 87 },
+        {
+          ...GEE_HAW,
+          id: 'r2',
+          matchUid: '2025-R18-SYD-CAR',
+          homeClub: 'Sydney',
+          awayClub: 'Carlton',
+          homePoints: 80,
+          awayPoints: 80,
+        },
+      ]);
+      const categories: FantasyCategoryKey[] = ['goals', 'tackles', 'marks'];
+      const counted = (playerId: string, totals: Record<string, number>) =>
+        aggregateLineupCategoryTotals({
+          categories,
+          players: scoreNoLosersLineup([{ playerId, slot: 'MID', totals }], ctx).players,
+        });
+      const home = counted('haw', { goals: 5, tackles: 4, marks: 8 });
+      const away = counted('syd', { goals: 5, tackles: 6, marks: 2 });
+      expect([home.goals, away.goals]).toEqual([2.5, 2.5]);
+
+      const result = scoreHeadToHeadCategories({
+        categories,
+        categoryDirections: normalizeCategoryDirections(categories),
+        homeTotals: home,
+        awayTotals: away,
+        scoringMode,
+      });
+
+      expect(result.categories.map((row) => [row.category, row.winner])).toEqual([
+        ['goals', 'draw'],
+        ['tackles', 'away'],
+        ['marks', 'home'],
+      ]);
+      expect(result).toMatchObject({
+        homeCategoryWins: 1,
+        awayCategoryWins: 1,
+        drawnCategories: 1,
+        matchupDraw: true,
+        homeMatchupWin: false,
+        awayMatchupWin: false,
+      });
+    }
+  );
 });
 
 describe('No Losers waiting and provisional totals (BR-08, BR-20)', () => {
