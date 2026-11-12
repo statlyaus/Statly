@@ -470,17 +470,11 @@ export function buildMatchupCard({
   /** No Losers leagues only: the round's stored results (BR-20: nothing is guessed). */
   noLosers?: NoLosersRoundContext;
 }): LeagueMatchupCard {
-  const noLosersCard = noLosers
-    ? applyNoLosersToCard({
-        context: noLosers,
-        lineups: [matchup.homeMemberId, matchup.awayMemberId].flatMap((memberId) => {
-          const lineup = memberId ? lineupsByMemberId.get(memberId) : undefined;
-          return lineup ? [lineup] : [];
-        }),
-        totalsByPlayerId: rawTotalsByPlayerId,
-      })
-    : null;
-  const totalsByPlayerId = noLosersCard?.totalsByPlayerId ?? rawTotalsByPlayerId;
+  const { totalsByPlayerId, noLosersViews, waitingOnResults } = applyNoLosersToCard({
+    context: noLosers,
+    lineups: cardLineups([matchup.homeMemberId, matchup.awayMemberId], lineupsByMemberId),
+    totalsByPlayerId: rawTotalsByPlayerId,
+  });
   const provisionalResult =
     matchup.status !== 'FINAL' &&
     matchup.homeMemberId &&
@@ -504,22 +498,16 @@ export function buildMatchupCard({
       : null;
   const homeScore = matchup.scores.find((score) => score.memberId === matchup.homeMemberId);
   const awayScore = matchup.scores.find((score) => score.memberId === matchup.awayMemberId);
-  const homePlayers = matchup.homeMemberId
-    ? buildPlayerContributions({
-        lineup: lineupsByMemberId.get(matchup.homeMemberId),
-        categories,
-        totalsByPlayerId,
-        noLosersViews: noLosersCard?.views,
-      })
-    : [];
-  const awayPlayers = matchup.awayMemberId
-    ? buildPlayerContributions({
-        lineup: lineupsByMemberId.get(matchup.awayMemberId),
-        categories,
-        totalsByPlayerId,
-        noLosersViews: noLosersCard?.views,
-      })
-    : [];
+  const sidePlayers = (memberId: string | null) =>
+    buildSidePlayers({
+      memberId,
+      lineupsByMemberId,
+      categories,
+      totalsByPlayerId,
+      noLosersViews,
+    });
+  const homePlayers = sidePlayers(matchup.homeMemberId);
+  const awayPlayers = sidePlayers(matchup.awayMemberId);
 
   return {
     id: matchup.id,
@@ -555,10 +543,42 @@ export function buildMatchupCard({
       categoryDirections,
       categoriesJson: provisionalResult?.categories ?? homeScore?.categoriesJson,
     }),
-    ...(noLosersCard && matchup.status !== 'FINAL'
-      ? { waitingOnResults: noLosersCard.waitingOnResults }
-      : {}),
+    ...noLosersWaitingFields(waitingOnResults, matchup.status),
   };
+}
+
+function cardLineups(
+  memberIds: ReadonlyArray<string | null>,
+  lineupsByMemberId: Map<string, MatchupCardLineup>
+): MatchupCardLineup[] {
+  return memberIds.flatMap((memberId) => {
+    const lineup = memberId ? lineupsByMemberId.get(memberId) : undefined;
+    return lineup ? [lineup] : [];
+  });
+}
+
+function buildSidePlayers({
+  memberId,
+  lineupsByMemberId,
+  ...input
+}: {
+  memberId: string | null;
+  lineupsByMemberId: Map<string, MatchupCardLineup>;
+  categories: FantasyCategoryKey[];
+  totalsByPlayerId: Map<string, CategoryTotals>;
+  noLosersViews?: Map<string, NoLosersPlayerView>;
+}): LeagueMatchupPlayerContribution[] {
+  return memberId
+    ? buildPlayerContributions({ lineup: lineupsByMemberId.get(memberId), ...input })
+    : [];
+}
+
+/** A No Losers card that is not final says which results it is waiting on. */
+function noLosersWaitingFields(
+  waitingOnResults: string[] | undefined,
+  status: string
+): { waitingOnResults?: string[] } {
+  return waitingOnResults && status !== 'FINAL' ? { waitingOnResults } : {};
 }
 
 /**
@@ -571,10 +591,16 @@ function applyNoLosersToCard({
   lineups,
   totalsByPlayerId,
 }: {
-  context: NoLosersRoundContext;
+  /** Absent outside No Losers leagues: the card's raw totals pass through unchanged. */
+  context: NoLosersRoundContext | undefined;
   lineups: readonly MatchupCardLineup[];
   totalsByPlayerId: Map<string, CategoryTotals>;
-}) {
+}): {
+  totalsByPlayerId: Map<string, CategoryTotals>;
+  noLosersViews?: Map<string, NoLosersPlayerView>;
+  waitingOnResults?: string[];
+} {
+  if (!context) return { totalsByPlayerId };
   const counted = new Map(totalsByPlayerId);
   const views = new Map<string, NoLosersPlayerView>();
   const scored = lineups.flatMap((lineup) => {
@@ -597,7 +623,7 @@ function applyNoLosersToCard({
   });
   return {
     totalsByPlayerId: counted,
-    views,
+    noLosersViews: views,
     waitingOnResults: noLosersWaitingOn(context, scored),
   };
 }
