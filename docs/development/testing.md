@@ -337,10 +337,50 @@ The CI workflow has five explicit ownership boundaries:
   repository behavior against a disposable PostgreSQL service.
 
 `CI Gate` depends on every root and nested validation job. It runs even when an upstream job fails or
-is cancelled, and succeeds only when every dependency reports `success`. Repository protection should
-require this stable aggregate check (plus separately governed security checks) so adding a validation
-job to the gate does not require renaming the protected check. Individual jobs remain visible for
-diagnosis and keep stable names, but the gate is the merge decision.
+is cancelled, and succeeds only when every dependency reports `success` or was skipped because the
+pull request's changes did not need it (see below). Repository protection should require this stable
+aggregate check (plus separately governed security checks) so adding a validation job to the gate does
+not require renaming the protected check. Individual jobs remain visible for diagnosis and keep stable
+names, but the gate is the merge decision.
+
+### Path-filtered jobs
+
+A pull request runs only the jobs its changed files can affect. The first job, `Changed suites`,
+diffs the pull request's merge commit against its first parent (the base branch tip) and pipes the
+paths through `Scripts/ci/changed-suites.mjs`, which sets one output per suite. Pushes to `main` and
+manual runs set every output, so `main` always runs the whole workflow.
+
+| Output        | Jobs                                                     | Turned on by                                                                                                                                                                                                                                      |
+| ------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| always        | `Documentation`                                          | every run                                                                                                                                                                                                                                         |
+| `root`        | `Lint`, `Typecheck`, `Unit tests`, `Build`               | any change that is not documentation-only, including `etl/` and `functions/` (root unit tests import ETL modules and read both manifests)                                                                                                         |
+| `fantasy_app` | `Integration tests`, `Browser tests`, `Draft worker E2E` | a root change outside the outcomes boundary and outside unit-test-only files (`tests/unit/`, colocated `*.test.*` and `__tests__/`)                                                                                                               |
+| `outcomes`    | `AFL outcomes PostgreSQL` (four shards)                  | the outcomes boundary (`src/server/aflTradeIntelligence/`, the public draft pages, routes and components, `prisma/afl-trade-outcomes/`, outcomes test utilities, `Scripts/`), the shared files the outcomes tests import, and root install config |
+| `etl`         | `ETL`                                                    | `etl/`                                                                                                                                                                                                                                            |
+| `functions`   | `Functions`                                              | `functions/`                                                                                                                                                                                                                                      |
+| `docs_only`   | none (informational)                                     | every changed path is Markdown or under `docs/` and no unit test reads it                                                                                                                                                                         |
+
+A change to `.github/workflows/ci.yml` or the classifier turns every output on. A root `package.json`
+or `package-lock.json` change turns on `root`, `fantasy_app` and `outcomes`, so a root Dependabot bump
+runs everything except `ETL` and `Functions`. An `/etl` or `/functions` bump runs that package's job
+and the `root` jobs.
+
+`CI Gate` treats a skipped job as passing only when the `Changed suites` output for that job's suite is
+`false`. A needed job that was skipped, any failed or cancelled job, and a failed `Changed suites` job
+all fail the gate. The gate's job-to-suite map must match the jobs' `if:` conditions; a job missing from
+the map must always succeed.
+
+`tests/unit/ciChangedSuites.test.ts` keeps the path lists honest. It checks the example changes above
+and fails, naming the file, when:
+
+- a file in the import graph of `tests/outcomes-integration`, or a repository path one of those files
+  names in a string literal, would not turn `outcomes` on;
+- the same holds for the fantasy app (pages and routes outside the outcomes boundary, the servers and
+  workers, `tests/integration`, `tests/e2e`) and `fantasy_app`; or
+- a path a unit test names, such as `read('docs/development/setup.md')`, would not turn `root` on.
+
+When it fails, add the path to the matching list in `Scripts/ci/changed-suites.mjs`. Paths built at
+runtime with `path.join` are invisible to the literal scan, so name read paths as whole strings.
 
 The three root test tiers are separate jobs, not steps in one job, so that a failure is re-run without
 repeating the tiers that passed. Only the browser job installs Playwright browsers. Re-run a failed CI

@@ -15,6 +15,44 @@ permissions:
   contents: read
 
 jobs:
+  # Pull requests run only the suites their changed files can affect; pushes to main and manual runs
+  # run everything. Scripts/ci/changed-suites.mjs owns the rules and CI Gate below checks every skip
+  # against them. See docs/development/testing.md, "Path-filtered jobs".
+  changes:
+    name: Changed suites
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      root: ${{ steps.classify.outputs.root }}
+      fantasy_app: ${{ steps.classify.outputs.fantasy_app }}
+      outcomes: ${{ steps.classify.outputs.outcomes }}
+      etl: ${{ steps.classify.outputs.etl }}
+      functions: ${{ steps.classify.outputs.functions }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      # The script has no dependencies, so the runner's own Node.js is enough and no install runs.
+      - name: Classify changed files
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != pull_request ]]; then
+            node Scripts/ci/changed-suites.mjs --all | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A pull_request run checks out the merge commit. Its first parent is the base branch tip,
+          # so this is the pull request's diff against the base it would merge into.
+          if ! git rev-parse --verify --quiet 'HEAD^2' >/dev/null; then
+            echo "Expected the pull request merge commit to have two parents." >&2
+            exit 1
+          fi
+          git diff --name-only -z 'HEAD^1' HEAD | node Scripts/ci/changed-suites.mjs | tee -a "$GITHUB_OUTPUT"
+
   documentation:
     name: Documentation
     runs-on: ubuntu-latest
@@ -32,6 +70,8 @@ jobs:
 
   lint:
     name: Lint
+    needs: changes
+    if: ${{ needs.changes.outputs.root == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,6 +86,8 @@ jobs:
 
   typecheck:
     name: Typecheck
+    needs: changes
+    if: ${{ needs.changes.outputs.root == 'true' }}
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test
@@ -65,6 +107,8 @@ jobs:
 
   functions:
     name: Functions
+    needs: changes
+    if: ${{ needs.changes.outputs.functions == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,6 +135,8 @@ jobs:
 
   etl:
     name: ETL
+    needs: changes
+    if: ${{ needs.changes.outputs.etl == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -127,6 +173,8 @@ jobs:
 
   outcomes-postgres:
     name: AFL outcomes PostgreSQL (shard ${{ matrix.shard }}/4)
+    needs: changes
+    if: ${{ needs.changes.outputs.outcomes == 'true' }}
     runs-on: ubuntu-latest
     # tests/testUtils/outcomesShardSequencer.ts splits the files by measured duration. See
     # docs/development/testing.md before changing the count.
@@ -197,6 +245,8 @@ jobs:
   # the tier that failed. See docs/development/delivery.md, "Re-running CI".
   unit-tests:
     name: Unit tests (shard ${{ matrix.shard }}/2)
+    needs: changes
+    if: ${{ needs.changes.outputs.root == 'true' }}
     runs-on: ubuntu-latest
     # Vitest assigns files to shards by a hash of their path, not by duration. Three shards put all
     # three native-PAV files in one shard and were no faster than two. See docs/development/testing.md.
@@ -256,6 +306,8 @@ jobs:
 
   integration-tests:
     name: Integration tests
+    needs: changes
+    if: ${{ needs.changes.outputs.fantasy_app == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -309,6 +361,8 @@ jobs:
 
   browser-tests:
     name: Browser tests
+    needs: changes
+    if: ${{ needs.changes.outputs.fantasy_app == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -372,6 +426,8 @@ jobs:
 
   draft-worker-e2e:
     name: Draft worker E2E
+    needs: changes
+    if: ${{ needs.changes.outputs.fantasy_app == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -438,6 +494,8 @@ jobs:
 
   build:
     name: Build
+    needs: changes
+    if: ${{ needs.changes.outputs.root == 'true' }}
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://statly_test:statly_test@localhost:5432/statly_fantasy_test
@@ -465,6 +523,7 @@ jobs:
     name: CI Gate
     if: ${{ always() }}
     needs:
+      - changes
       - documentation
       - lint
       - typecheck
@@ -479,7 +538,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: Require every validation job to succeed
+      # A job passes on success, or on a skip that the changes job's output for its suite allowed. A
+      # failed or cancelled job, a needed job that was skipped, or a failed classification fails the
+      # gate. Keep this job-to-suite map in step with the jobs' `if:` conditions; a job missing from
+      # it must always succeed.
+      - name: Require every needed validation job to succeed
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: jq --exit-status 'all(.[]; .result == "success")' <<<"$NEEDS_JSON"
+        run: |
+          failures=$(jq --raw-output '
+            {
+              "lint": "root", "typecheck": "root", "unit-tests": "root", "build": "root",
+              "integration-tests": "fantasy_app", "browser-tests": "fantasy_app",
+              "draft-worker-e2e": "fantasy_app",
+              "outcomes-postgres": "outcomes", "etl": "etl", "functions": "functions"
+            } as $suite
+            | .changes.outputs as $needed
+            | to_entries[]
+            | select(
+                (.value.result == "success"
+                  or (.key != "changes" and .value.result == "skipped"
+                    and $suite[.key] != null and $needed[$suite[.key]] == "false"))
+                | not)
+            | "\(.key): \(.value.result)"
+          ' <<<"$NEEDS_JSON")
+          if [[ -n "$failures" ]]; then
+            printf 'Needed jobs that did not succeed:\n%s\n' "$failures" >&2
+            exit 1
+          fi

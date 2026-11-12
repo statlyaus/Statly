@@ -136,9 +136,11 @@ successes. To repeat one job that passed, use `gh run rerun --job <job-id>`.
 
 A re-run uses the same commit, so it only answers a flaky or infrastructure failure. Do not push an
 empty commit or dispatch a new run to retry a flake: both start every job again. When the failure is
-real, fix it and push; the new commit needs a full run anyway. When `main` has moved and the ruleset
-needs the branch updated, `gh pr update-branch` starts a full run as well, so do that instead of a
-re-run, not as well as one. A flake that needs a re-run more than once is a defect: record it as an
+real, fix it and push; the new commit needs a new run anyway. When `main` has moved and the ruleset
+needs the branch updated, `gh pr update-branch` starts a new run as well, so do that instead of a
+re-run, not as well as one. A pull request run starts only the jobs its changed files need, and the
+skipped ones stay skipped on a re-run; see
+[Path-filtered jobs](testing.md#path-filtered-jobs). A flake that needs a re-run more than once is a defect: record it as an
 issue instead of retrying until it passes.
 
 ## Repository settings
