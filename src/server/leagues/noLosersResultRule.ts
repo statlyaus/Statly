@@ -17,7 +17,7 @@ export const NO_LOSERS_RESULT_RULE_VERSION = 'no-losers-result-rule/v1';
 /** A loss by this many points or fewer (under a goal) counts half (BR-14). */
 const CLOSE_LOSS_MAX_MARGIN = 5;
 
-/** An official AFL match result, keyed by its Footywire match id (BR-06). */
+/** An official AFL match result, keyed by its Statly match id (`matchUid`, BR-07). */
 export interface NoLosersMatchResult {
   homeClub: string;
   awayClub: string;
@@ -27,12 +27,13 @@ export interface NoLosersMatchResult {
 }
 
 export interface NoLosersLineupPlayer extends LineupScoringPlayer {
-  /** The Footywire match id of the player's stat row; null when he has no stat row. */
+  /** The Statly match id (`matchUid`) of the player's stat row; null when he has no stat row. */
   matchId: string | null;
   /**
    * The club of the player's stat row (his club in that match, not his current club), spelled
-   * exactly as the fixture's `homeClub`/`awayClub` store it. Any other spelling resolves to
-   * CLUB_NOT_IN_MATCH: the rule never guesses which side he played for.
+   * exactly as the result's `homeClub`/`awayClub` store it. Any other spelling resolves to
+   * CLUB_NOT_IN_MATCH: the rule never guesses which side he played for. Callers resolve it by club
+   * abbreviation (`noLosersScoring.ts`), never from the provider's spelling (BR-07).
    */
   club: string;
 }
@@ -75,7 +76,7 @@ export interface NoLosersResultRuleOutput {
 
 export interface ApplyNoLosersResultRuleInput {
   players: readonly NoLosersLineupPlayer[];
-  /** Official results by Footywire match id. */
+  /** Official results by Statly match id (`matchUid`). */
   results: ReadonlyMap<string, NoLosersMatchResult>;
 }
 

@@ -37,26 +37,27 @@ model Session {
 }
 
 model League {
-  id                      String                   @id @default(cuid())
+  id                      String                     @id @default(cuid())
   name                    String
-  inviteCode              String                   @unique
+  inviteCode              String                     @unique
   ownerId                 String
-  settingsId              String                   @unique
-  activeSeasonId          String?                  @unique
+  settingsId              String                     @unique
+  activeSeasonId          String?                    @unique
   categoriesJson          Json?
-  visibility              LeagueVisibility         @default(PRIVATE)
+  visibility              LeagueVisibility           @default(PRIVATE)
   description             String?
-  owner                   User                     @relation("LeagueOwner", fields: [ownerId], references: [id])
+  owner                   User                       @relation("LeagueOwner", fields: [ownerId], references: [id])
   members                 LeagueMember[]
-  settings                LeagueSettings           @relation(fields: [settingsId], references: [id])
-  seasons                 LeagueSeason[]           @relation("LeagueSeasons")
-  activeSeason            LeagueSeason?            @relation("ActiveLeagueSeason", fields: [activeSeasonId], references: [id], onDelete: SetNull)
+  settings                LeagueSettings             @relation(fields: [settingsId], references: [id])
+  seasons                 LeagueSeason[]             @relation("LeagueSeasons")
+  activeSeason            LeagueSeason?              @relation("ActiveLeagueSeason", fields: [activeSeasonId], references: [id], onDelete: SetNull)
   drafts                  Draft[]
   draftEvents             DraftEvent[]
   rosterPlayers           LeagueRosterPlayer[]
   matchups                LeagueMatchup[]
   lineups                 LeagueLineup[]
   matchupScores           LeagueMatchupScore[]
+  matchupPlayerScores     LeagueMatchupPlayerScore[]
   standings               LeagueStanding[]
   competitionRounds       LeagueCompetitionRound[]
   competitionAudits       LeagueCompetitionAudit[]
@@ -75,7 +76,7 @@ model League {
   tradeOutboxEvents       LeagueTradeOutboxEvent[]
   /// Lease held by the one waiver processing run allowed per league; null when none is running.
   waiverRunStartedAt      DateTime?
-  createdAt               DateTime                 @default(now())
+  createdAt               DateTime                   @default(now())
 
   @@index([ownerId])
   @@index([createdAt])
@@ -153,16 +154,16 @@ model LeagueMember {
 }
 
 model LeagueSeason {
-  id                      String                   @id @default(cuid())
+  id                      String                     @id @default(cuid())
   leagueId                String
   label                   String
   year                    Int?
   startsAt                DateTime?
   endsAt                  DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  league                  League                   @relation("LeagueSeasons", fields: [leagueId], references: [id], onDelete: Cascade)
-  activeForLeague         League?                  @relation("ActiveLeagueSeason")
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  league                  League                     @relation("LeagueSeasons", fields: [leagueId], references: [id], onDelete: Cascade)
+  activeForLeague         League?                    @relation("ActiveLeagueSeason")
   competitionRounds       LeagueCompetitionRound[]
   socialMessages          SocialMessage[]
   socialBoardCategories   SocialBoardCategory[]
@@ -179,6 +180,7 @@ model LeagueSeason {
   tradeOutboxEvents       LeagueTradeOutboxEvent[]
   lineups                 LeagueLineup[]
   matchupScores           LeagueMatchupScore[]
+  matchupPlayerScores     LeagueMatchupPlayerScore[]
   standings               LeagueStanding[]
   waiverPriorities        WaiverPriority[]
   teamActions             TeamAction[]
@@ -581,8 +583,49 @@ model InjuryListEntry {
 /// through supersededById with the reason, so the current result of a match is the one row with
 /// supersededById null (enforced by a partial unique index in the migration). homePoints, awayPoints
 /// and margin are null only for ABANDONED (CHECK constraint).
+/// No Losers (epic #1290, BR-21): one row per counted lineup player per scored matchup side, written
+/// with the team totals in LeagueMatchupScore (whose categoriesJson holds team totals only). Summing
+/// the counted totals of a side's rows re-derives its stored categories. Written for NO_LOSERS
+/// leagues only; replaced on every recalculation of the matchup.
+model LeagueMatchupPlayerScore {
+  id                String           @id @default(cuid())
+  leagueId          String
+  seasonId          String
+  matchupId         String
+  memberId          String
+  round             Int
+  playerId          String
+  slot              LeagueLineupSlot
+  /// RESULT (club result known), NO_STAT_ROW, RESULT_PENDING (finished game, no stored result yet:
+  /// raw stats count provisionally) or UNRESOLVED (stat row cannot be joined to its result).
+  outcome           String
+  /// WIN, DRAW, LOSS or ABANDONED when outcome is RESULT.
+  clubResult        String?
+  /// The player's club points minus the opponent's; null when abandoned or unknown.
+  margin            Int?
+  /// 1, 0.5 or 0 when outcome is RESULT.
+  multiplier        Float?
+  /// The Statly match id (matchUid) of the player's stat row.
+  aflMatchUid       String?
+  /// The AflMatchResult row the multiplier came from.
+  aflMatchResultId  String?
+  rawTotalsJson     Json
+  countedTotalsJson Json
+  ruleVersion       String
+  calculatedAt      DateTime         @default(now())
+
+  league         League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season         LeagueSeason    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  matchup        LeagueMatchup   @relation(fields: [matchupId], references: [id], onDelete: Cascade)
+  aflMatchResult AflMatchResult? @relation(fields: [aflMatchResultId], references: [id], onDelete: Restrict)
+
+  @@unique([matchupId, memberId, playerId])
+  @@index([leagueId, seasonId, round])
+  @@index([aflMatchResultId])
+}
+
 model AflMatchResult {
-  id              String               @id @default(cuid())
+  id              String                     @id @default(cuid())
   season          Int
   round           Int // finals numbered on from the last home-and-away round, as the fixture does
   matchId         String // Footywire match id (ft_match_statistics?mid=)
@@ -595,11 +638,12 @@ model AflMatchResult {
   status          AflMatchResultStatus
   fetchedAt       DateTime
   contentHash     String // sha256 of the stored result fields, see etl/resultIngest.ts
-  supersededById  String?              @unique
+  supersededById  String?                    @unique
   supersedeReason String?
-  createdAt       DateTime             @default(now())
-  supersededBy    AflMatchResult?      @relation("AflMatchResultSupersede", fields: [supersededById], references: [id], onDelete: Restrict)
-  supersedes      AflMatchResult?      @relation("AflMatchResultSupersede")
+  createdAt       DateTime                   @default(now())
+  supersededBy    AflMatchResult?            @relation("AflMatchResultSupersede", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes      AflMatchResult?            @relation("AflMatchResultSupersede")
+  playerScores    LeagueMatchupPlayerScore[]
 
   @@unique([season, matchId, contentHash])
   @@index([season, round])
@@ -698,13 +742,14 @@ model LeagueMatchup {
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
-  league           League                  @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  competitionRound LeagueCompetitionRound? @relation(fields: [competitionRoundId], references: [id], onDelete: SetNull)
-  homeMember       LeagueMember?           @relation("HomeMemberMatchups", fields: [homeMemberId], references: [id], onDelete: SetNull)
-  awayMember       LeagueMember?           @relation("AwayMemberMatchups", fields: [awayMemberId], references: [id], onDelete: SetNull)
-  byeMember        LeagueMember?           @relation("ByeMemberMatchups", fields: [byeMemberId], references: [id], onDelete: SetNull)
-  winnerMember     LeagueMember?           @relation("WinnerMemberMatchups", fields: [winnerMemberId], references: [id], onDelete: SetNull)
+  league           League                     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  competitionRound LeagueCompetitionRound?    @relation(fields: [competitionRoundId], references: [id], onDelete: SetNull)
+  homeMember       LeagueMember?              @relation("HomeMemberMatchups", fields: [homeMemberId], references: [id], onDelete: SetNull)
+  awayMember       LeagueMember?              @relation("AwayMemberMatchups", fields: [awayMemberId], references: [id], onDelete: SetNull)
+  byeMember        LeagueMember?              @relation("ByeMemberMatchups", fields: [byeMemberId], references: [id], onDelete: SetNull)
+  winnerMember     LeagueMember?              @relation("WinnerMemberMatchups", fields: [winnerMemberId], references: [id], onDelete: SetNull)
   scores           LeagueMatchupScore[]
+  playerScores     LeagueMatchupPlayerScore[]
 
   @@unique([leagueId, fixtureVersion, round, homeMemberId, awayMemberId])
   @@index([leagueId, round])

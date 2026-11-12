@@ -40,6 +40,8 @@ interface MatchupModel {
   awayCategoryWins?: number;
   drawnCategories?: number;
   categoryRows?: MatchupCategoryRow[];
+  /** No Losers: why the round cannot be final yet ("Waiting on the result of ..."). */
+  waitingOnResults?: string[];
 }
 
 interface MatchupTeamSummary {
@@ -76,11 +78,28 @@ interface MatchupPlayerContribution {
   slotIndex: number;
   total: number;
   hasStats?: boolean;
+  /** No Losers: the club result's multiplier, or a result not stored yet. */
+  noLosers?:
+    | { status: 'COUNTED'; clubResult: string; margin: number | null; multiplier: number }
+    | { status: 'RESULT_PENDING' }
+    | { status: 'UNRESOLVED' };
   categories: Array<{
     category: string;
     shortLabel: string;
     value: number;
   }>;
+}
+
+/** No Losers: a short note after the player's position; full badges are #1296. */
+function noLosersNote(player: MatchupPlayerContribution): string | null {
+  const result = player.noLosers;
+  if (!result) return null;
+  if (result.status === 'RESULT_PENDING') return 'Result pending';
+  if (result.status === 'UNRESOLVED') return 'Result unavailable';
+  if (result.multiplier === 0) return 'Zeroed: club lost';
+  if (result.multiplier === 0.5)
+    return result.clubResult === 'DRAW' ? 'Half: draw' : 'Half: close loss';
+  return null;
 }
 
 interface MatchupReadModel {
@@ -314,6 +333,11 @@ function MatchupHeadToHeadCard({
           {matchupStatusLabel(matchup, timeZone)}
         </span>
       </p>
+      {matchup.waitingOnResults?.map((line) => (
+        <p key={line} className="mb-2 text-xs text-[color:var(--league-text-muted)]">
+          {line}
+        </p>
+      ))}
       <MatchupScoreLine
         you={{
           teamName: matchup.homeMember?.teamName ?? 'Home',
@@ -521,6 +545,11 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
                     <span className="ml-2 text-xs text-[color:var(--league-text-muted)]">
                       {player.position}
                     </span>
+                    {noLosersNote(player) ? (
+                      <span className="ml-2 text-xs text-[color:var(--league-text-muted)]">
+                        {noLosersNote(player)}
+                      </span>
+                    ) : null}
                   </th>
                   {categoryHeaders.map((category) => (
                     <PlayerCategoryCell
