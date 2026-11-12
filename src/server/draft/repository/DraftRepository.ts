@@ -15,6 +15,10 @@ import type {
   DraftSettingsSnapshot,
 } from '../domain/draftTypes';
 import { parseSelectedCategories } from '../readModels/draftPlayerReadModel';
+import {
+  LEAGUE_MANAGER_MEMBER_SELECT,
+  leagueManagerUserIds,
+} from '@/server/leagues/activeMembership';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 
 type TxClient = PrismaNS.TransactionClient;
@@ -152,27 +156,21 @@ function toSettingsSnapshot(settings: {
   };
 }
 
-function toParticipantSnapshot(
-  order: {
-    slot: number;
-    memberId: string;
-    member: {
-      role: string;
-      userId: string;
-      isCoCommissioner: boolean;
-      user: { displayName: string | null; email: string | null };
-    };
-  },
-  leagueOwnerId: string
-): DraftParticipantSnapshot {
+function toParticipantSnapshot(order: {
+  slot: number;
+  memberId: string;
+  member: {
+    role: string;
+    userId: string;
+    user: { displayName: string | null; email: string | null };
+  };
+}): DraftParticipantSnapshot {
   return {
     memberId: order.memberId,
     userId: order.member.userId,
     slot: order.slot,
     displayName: order.member.user.displayName || order.member.user.email || 'Unknown',
     role: order.member.role,
-    // Same rule as getLeagueMembershipAccess: the league owner or a co-commissioner.
-    canManageDraft: order.member.userId === leagueOwnerId || order.member.isCoCommissioner,
   };
 }
 
@@ -348,7 +346,9 @@ export class DraftRepository {
     const draft = await tx.draft.findUnique({
       where: { id: draftId },
       include: {
-        league: { include: { settings: true } },
+        league: {
+          include: { settings: true, members: { select: LEAGUE_MANAGER_MEMBER_SELECT } },
+        },
         orders: {
           orderBy: { slot: 'asc' },
           include: {
@@ -389,7 +389,8 @@ export class DraftRepository {
         ...draft.league.settings,
         selectedCategories: draft.league.categoriesJson,
       }),
-      participants: draft.orders.map((order) => toParticipantSnapshot(order, draft.league.ownerId)),
+      participants: draft.orders.map(toParticipantSnapshot),
+      managerUserIds: leagueManagerUserIds(draft.league),
       picks: draft.picks.map(toPickSnapshot),
     };
   }

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
 
-const room = vi.hoisted(() => ({ viewerCanManage: false }));
+const room = vi.hoisted(() => ({ viewerCanManage: false, viewerInOrder: true }));
 const startDraftSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('next/link', () => ({
@@ -48,6 +48,7 @@ vi.mock('@/contexts/DraftContext', () => ({
       currentPick: 1,
       totalPicks: 88,
       round: 1,
+      managerUserIds: room.viewerCanManage ? ['viewer'] : [],
       settings: {
         timePerPick: 60,
         totalRounds: 22,
@@ -64,13 +65,9 @@ vi.mock('@/contexts/DraftContext', () => ({
     liveState: { isYourTurn: false },
     makePick: vi.fn(),
     participants: [
-      {
-        id: 'member-1',
-        userId: 'viewer',
-        draftOrder: 1,
-        canManageDraft: room.viewerCanManage,
-        queue: [],
-      },
+      ...(room.viewerInOrder
+        ? [{ id: 'member-1', userId: 'viewer', draftOrder: 1, queue: [] }]
+        : []),
       { id: 'member-2', userId: 'user-2', draftOrder: 2, queue: [] },
     ],
     picks: [],
@@ -85,6 +82,7 @@ vi.mock('@/contexts/DraftContext', () => ({
 describe('UnifiedDraftRoom start control', () => {
   beforeEach(() => {
     room.viewerCanManage = false;
+    room.viewerInOrder = true;
     startDraftSpy.mockReset();
   });
 
@@ -102,5 +100,13 @@ describe('UnifiedDraftRoom start control', () => {
     expect(
       screen.getByText(/The commissioner can start early, or it starts at the scheduled time\./)
     ).toBeInTheDocument();
+  });
+
+  it('offers the start to a commissioner who is not in the draft order (the Bloodsucker)', () => {
+    room.viewerCanManage = true;
+    room.viewerInOrder = false;
+    render(<UnifiedDraftRoom draftId="draft-1" userId="viewer" />);
+
+    expect(screen.getByRole('button', { name: 'Start draft now' })).toBeInTheDocument();
   });
 });

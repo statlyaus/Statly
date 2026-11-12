@@ -26,6 +26,7 @@ function cappedDraft(currentPick: number): DraftAggregate {
       { memberId: 'm1', userId: 'u1', slot: 1, displayName: 'One', role: 'MANAGER' },
       { memberId: 'm2', userId: 'u2', slot: 2, displayName: 'Two', role: 'MANAGER' },
     ],
+    managerUserIds: [],
     settings: {
       rosterSize: 13,
       benchSize: 4,

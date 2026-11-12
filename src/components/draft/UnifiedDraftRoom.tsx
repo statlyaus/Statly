@@ -241,10 +241,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     draft.draftReadiness?.blockers.find((blocker) => blocker.code === 'player_pool_empty')
       ?.message ?? undefined;
 
-  // Derive "me", ownership, and your slot once
+  // Derive "me", manager rights, and your slot once. Rights come from the league, not the order: a
+  // commissioner who never picks (the Bloodsucker) still starts, pauses and resumes.
   const me = useMemo(() => participants.find((p) => p.userId === userId), [participants, userId]);
   const yourSlot = me?.draftOrder;
-  const isOwner = me?.canManageDraft === true;
+  const isOwner = draft.draft?.managerUserIds?.includes(userId) === true;
 
   // While the room may be showing an out-of-date board, the server may already have moved on: picks
   // pause and the clock shows as syncing until a persisted baseline is applied.

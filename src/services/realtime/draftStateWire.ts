@@ -52,7 +52,6 @@ const DraftRoomSnapshotParticipantSchema = z.object({
   displayName: z.string(),
   teamName: z.string().optional(),
   draftOrder: z.number().int().positive(),
-  canManageDraft: z.boolean().optional(),
 });
 
 const DraftRoomSnapshotPickSchema = z.object({
@@ -102,6 +101,12 @@ export const DraftRoomSnapshotPayloadSchema = z
       clock: DraftClockPayloadSchema,
       onClockMemberId: z.string().nullable(),
       participants: z.array(DraftRoomSnapshotParticipantSchema),
+      /**
+       * League owner and co-commissioners: may start, pause and resume, whether in the order or not.
+       * Optional so a snapshot from a worker on older code still parses; the client then keeps the
+       * list it had.
+       */
+      managerUserIds: z.array(z.string()).optional(),
       picks: z.array(DraftRoomSnapshotPickSchema),
     }),
   })

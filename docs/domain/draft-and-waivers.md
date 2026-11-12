@@ -94,6 +94,16 @@ guard. Cron may wake reconciliation, but is not a second source of truth for tur
 Pause, resume, commissioner intervention, and completion must cancel or replace stale timers. A late
 timer job validates the current draft version and turn before doing anything.
 
+### Who manages the draft
+
+Start, pause, resume and forced auto-pick belong to the league's managers: the owner and
+co-commissioners, while each is an active member (`leagueManagerUserIds` in
+`src/server/leagues/activeMembership.ts`, the same rule as `getLeagueMembershipAccess().canManage`).
+The draft order does not grant or remove these rights, so a commissioner who is not in the order, such
+as the Bloodsucker (#1279), keeps the controls and still never picks. The draft aggregate carries
+`managerUserIds` for the server check, and the room snapshot and `GET /api/drafts/[id]` carry it so
+the room shows the controls to the same users.
+
 ### Live clock contract
 
 Prisma `pickStartedAt`, `pickDeadlineAt`, `pausedRemainingSeconds`, and `schedulingVersion` are the

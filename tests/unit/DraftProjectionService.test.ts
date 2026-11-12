@@ -45,6 +45,11 @@ describe('DraftProjectionService', () => {
       clockDurationSeconds: 120,
       league: {
         name: 'Test AFL Champions League',
+        ownerId: 'user-1',
+        members: [
+          { userId: 'user-1', isCoCommissioner: false, isActive: true, status: 'ACTIVE' },
+          { userId: 'user-2', isCoCommissioner: false, isActive: true, status: 'ACTIVE' },
+        ],
         settings: {
           pickSeconds: 120,
           draftType: DraftType.LINEAR,
@@ -114,6 +119,7 @@ describe('DraftProjectionService', () => {
           deadlineAt: '2026-06-14T12:02:00.000Z',
         },
         participants: [{ id: 'member-1' }, { id: 'member-2' }],
+        managerUserIds: ['user-1'],
       },
     });
     expect(prismaMock.draft.findFirst.mock.calls[0]?.[0]?.include).not.toHaveProperty(

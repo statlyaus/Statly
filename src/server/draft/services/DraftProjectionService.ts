@@ -2,6 +2,10 @@ import { DraftStatus, DraftType } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import {
+  LEAGUE_MANAGER_MEMBER_SELECT,
+  leagueManagerUserIds,
+} from '@/server/leagues/activeMembership';
+import {
   DraftRoomSnapshotPayloadSchema,
   type CanonicalLiveDraftState,
   type DraftClockPayload,
@@ -113,6 +117,7 @@ export class DraftProjectionService {
           league: {
             include: {
               settings: true,
+              members: { select: LEAGUE_MANAGER_MEMBER_SELECT },
             },
           },
           orders: {
@@ -221,9 +226,8 @@ export class DraftProjectionService {
           displayName: order.member.user.displayName || order.member.user.email || 'Unknown',
           teamName: order.member.teamName,
           draftOrder: order.slot,
-          canManageDraft:
-            order.member.userId === draft.league.ownerId || order.member.isCoCommissioner,
         })),
+        managerUserIds: leagueManagerUserIds(draft.league),
         picks: draft.picks.map((pick) => ({
           id: pick.id,
           overall: pick.overall,

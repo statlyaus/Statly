@@ -14,6 +14,10 @@ import {
 } from '@/server/draft/services/DraftAuthorizedReadService';
 import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
+import {
+  LEAGUE_MANAGER_MEMBER_SELECT,
+  leagueManagerUserIds,
+} from '@/server/leagues/activeMembership';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
@@ -70,6 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 ownerId: true,
                 categoriesJson: true,
                 settings: { select: { draftType: true, pickSeconds: true } },
+                members: { select: LEAGUE_MANAGER_MEMBER_SELECT },
               },
             },
             orders: {
@@ -79,7 +84,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                   select: {
                     id: true,
                     userId: true,
-                    isCoCommissioner: true,
                     user: { select: { displayName: true } },
                   },
                 },
@@ -116,6 +120,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (draftTimes.pickDeadlineAt) timestamps.push(draftTimes.pickDeadlineAt.getTime());
     if (latestPick?.madeAt) timestamps.push(latestPick.madeAt.getTime());
     const lastUpdated = new Date(Math.max(...timestamps));
+    const managerUserIds = draftTimes.league ? leagueManagerUserIds(draftTimes.league) : [];
 
     // Include every durable clock discriminator so timer-only transitions cannot return 304.
     const etagBase = [
@@ -132,6 +137,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       draftTimes.pausedRemainingSeconds ?? '',
       draftReadiness.playerPool.availableCount,
       draftReadiness.status,
+      managerUserIds.join(','),
     ].join('|');
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
@@ -226,10 +232,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           id: order.member.id,
           userId: order.member.userId,
           displayName: order.member.user.displayName,
-          canManageDraft:
-            order.member.userId === draft.league?.ownerId || order.member.isCoCommissioner,
         },
       })),
+      managerUserIds,
       // Summaries instead of heavy arrays
       picksSummary: {
         count: picksCount,
