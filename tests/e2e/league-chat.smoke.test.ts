@@ -76,23 +76,23 @@ test('league chat sends a message and shows another member’s message without a
 
   // The member edits, then deletes, their own message; nothing is offered on the other member's.
   const editedText = `${ownText} (edited)`;
-  const ownMessage = messages.getByRole('article').filter({ hasText: ownText });
+  // Actions sit behind one options button per message.
+  const ownMessage = messages.getByRole('listitem').filter({ hasText: ownText });
+  await ownMessage.getByRole('button', { name: 'Message options for your message' }).click();
   await ownMessage.getByRole('button', { name: 'Edit' }).click();
   const editor = chat.getByRole('textbox', { name: 'Edit your message' });
   await editor.fill(editedText);
   await editor.press('Enter');
   await expect(messages).toContainText(editedText);
-  await expect(
-    messages.getByRole('article').filter({ hasText: otherText }).getByRole('button', {
-      name: 'Edit',
-    })
-  ).toHaveCount(0);
 
-  await messages
-    .getByRole('article')
-    .filter({ hasText: editedText })
-    .getByRole('button', { name: 'Delete' })
-    .click();
+  const otherMessage = messages.getByRole('listitem').filter({ hasText: otherText });
+  await otherMessage.getByRole('button', { name: /^Message options for/ }).click();
+  await expect(otherMessage.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+  await expect(otherMessage.getByRole('button', { name: /report/i })).toBeVisible();
+
+  const editedMessage = messages.getByRole('listitem').filter({ hasText: editedText });
+  await editedMessage.getByRole('button', { name: 'Message options for your message' }).click();
+  await editedMessage.getByRole('button', { name: 'Delete' }).click();
   await chat
     .getByRole('group', { name: 'Delete your message' })
     .getByRole('button', { name: 'Delete' })

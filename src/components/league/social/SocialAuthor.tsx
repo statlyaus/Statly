@@ -32,6 +32,37 @@ function formatTimestamp(value: string, style: 'date-and-time' | 'time'): string
   }).format(parsed);
 }
 
+/** The member's avatar, or their initials when they have none. Decorative: the name sits beside it. */
+export function SocialAvatar({
+  author,
+  compact = false,
+}: {
+  author: SocialAuthorIdentity | null;
+  compact?: boolean;
+}): React.JSX.Element {
+  return (
+    <span
+      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-social-border bg-social-surface-subtle text-xs font-semibold text-social-text-muted`}
+      aria-hidden="true"
+    >
+      {author?.avatarUrl ? (
+        <img
+          src={author.avatarUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        getInitials(author?.displayName || 'Former member')
+      )}
+    </span>
+  );
+}
+
+export function formatSocialTime(value: string): string {
+  return formatTimestamp(value, 'time');
+}
+
 export default function SocialAuthor({
   author,
   timestamp,
@@ -45,21 +76,7 @@ export default function SocialAuthor({
 
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <span
-        className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-social-border bg-social-surface-subtle text-xs font-semibold text-social-text-muted`}
-        aria-hidden="true"
-      >
-        {author?.avatarUrl ? (
-          <img
-            src={author.avatarUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          getInitials(displayName)
-        )}
-      </span>
+      <SocialAvatar author={author} compact={compact} />
       <span className="min-w-0">
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="truncate text-sm font-semibold text-social-text">{displayName}</span>

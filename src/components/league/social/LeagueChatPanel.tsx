@@ -1,6 +1,6 @@
 'use client';
 
-import { AtSign, Pencil, Trash2, X } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type {
@@ -10,15 +10,11 @@ import type {
   SocialReportReason,
 } from '@/types/social';
 
-import GiphyMessageMedia from './GiphyMessageMedia';
+import ChatMessageRow from './ChatMessageRow';
+import DiscussionContextCard from './DiscussionContextCard';
 import GiphyPicker from './GiphyPicker';
-import { MessageDeleteConfirm, MessageEditForm } from './OwnMessageControls';
-import SafeSocialText from './SafeSocialText';
-import SocialAuthor from './SocialAuthor';
 import SocialComposer from './SocialComposer';
 import type { SocialComposerDraftScope } from './socialComposerDraft';
-import SocialReportButton from './SocialReportButton';
-import SocialRemoveButton from './SocialRemoveButton';
 
 interface LeagueChatPanelProps {
   messages: SocialMessage[];
@@ -49,9 +45,6 @@ interface LeagueChatPanelProps {
   /** Deletes the member's own message. Omit to hide the control. */
   onDelete?: (messageId: string) => Promise<void>;
 }
-
-const ownActionButton =
-  'inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus';
 
 const BOTTOM_THRESHOLD_PX = 72;
 const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -86,10 +79,6 @@ function isMessageContinuation(message: SocialMessage, previous?: SocialMessage)
   );
 }
 
-export function containsSocialMention(value: string): boolean {
-  return /(^|\s)@[a-z0-9][a-z0-9._-]*/i.test(value);
-}
-
 export default function LeagueChatPanel({
   messages,
   hasEarlierMessages,
@@ -122,7 +111,6 @@ export default function LeagueChatPanel({
   const previousScrollHeightRef = useRef<number | null>(null);
   const hasInitializedRef = useRef(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
-  const [ownAction, setOwnAction] = useState<{ id: string; kind: 'edit' | 'delete' } | null>(null);
   const visibleMessages = messages.filter((message) => message.type !== 'system');
   const latestMessage = visibleMessages.at(-1);
   const muted = Boolean(mutedUntil && new Date(mutedUntil).getTime() > Date.now());
@@ -239,159 +227,34 @@ export default function LeagueChatPanel({
               </button>
             </div>
           ) : visibleMessages.length === 0 ? (
-            <div className="py-10 text-center">
-              <p className="text-sm font-semibold text-social-text">No messages yet</p>
+            <div className="flex h-full min-h-48 flex-col items-center justify-center px-6 text-center">
+              <span className="flex size-12 items-center justify-center rounded-full border border-social-border bg-social-surface text-social-text-muted">
+                <MessageCircle className="size-6" aria-hidden="true" />
+              </span>
+              <p className="mt-3 text-sm font-semibold text-social-text">No messages yet</p>
               <p className="mt-1 text-sm text-social-text-muted">
                 Start the conversation with your league.
               </p>
             </div>
           ) : (
-            <ol className="space-y-1" aria-label="League chat messages">
+            <ol aria-label="League chat messages">
               {visibleMessages.map((message, index) => {
                 const day = messageDay(message.createdAt);
                 const previousDay =
                   index > 0 ? messageDay(visibleMessages[index - 1].createdAt) : null;
-                const continuation = isMessageContinuation(message, visibleMessages[index - 1]);
-                const containsMention = containsSocialMention(message.content);
-                const editing = ownAction?.id === message.id && ownAction.kind === 'edit';
-                const deleting = ownAction?.id === message.id && ownAction.kind === 'delete';
-                const canEditOwn = Boolean(
-                  message.isOwn && onEdit && canPublish && !muted && message.content
-                );
-                const canDeleteOwn = Boolean(message.isOwn && onDelete);
                 return (
-                  <li key={message.id}>
-                    {day !== previousDay ? (
-                      <div className="my-3 flex items-center gap-3" aria-label={day}>
-                        <span className="h-px flex-1 bg-social-border" />
-                        <time className="text-xs font-medium text-social-text-muted">{day}</time>
-                        <span className="h-px flex-1 bg-social-border" />
-                      </div>
-                    ) : null}
-                    <article
-                      aria-label={`${containsMention ? 'Message containing a mention' : 'Message'} from ${message.author?.displayName ?? 'former member'}`}
-                      className={`rounded-lg border px-2 py-1.5 ${continuation ? 'pl-12' : ''} ${
-                        containsMention
-                          ? 'border-social-warning bg-social-mention-bg text-social-mention-text'
-                          : message.isOwn
-                            ? 'border-social-action bg-social-brand-soft'
-                            : 'border-transparent bg-social-surface'
-                      }`}
-                    >
-                      {!continuation ? (
-                        <SocialAuthor
-                          author={message.author}
-                          timestamp={message.createdAt}
-                          editedAt={message.editedAt}
-                          compact
-                          timestampStyle="time"
-                        />
-                      ) : (
-                        <time dateTime={message.createdAt} className="sr-only">
-                          {new Date(message.createdAt).toLocaleTimeString()}
-                        </time>
-                      )}
-                      {message.moderationStatus === 'removed' || message.deletedAt ? (
-                        <p
-                          className={`text-sm italic text-social-text-muted ${
-                            continuation ? '' : 'mt-1.5 pl-11'
-                          }`}
-                        >
-                          Message removed
-                        </p>
-                      ) : (
-                        <>
-                          {containsMention ? (
-                            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-social-warning bg-social-warning-soft px-2 py-0.5 text-xs font-semibold text-social-mention-text">
-                              <AtSign className="size-3" aria-hidden="true" />
-                              Mention
-                            </span>
-                          ) : null}
-                          {message.context ? (
-                            <DiscussionContextCard context={message.context} />
-                          ) : null}
-                          {editing && onEdit ? (
-                            <div className={continuation ? '' : 'pl-11'}>
-                              <MessageEditForm
-                                initialContent={message.content}
-                                maxLength={1000}
-                                onCancel={() => setOwnAction(null)}
-                                onSave={async (content) => {
-                                  await onEdit(message.id, content);
-                                  setOwnAction(null);
-                                }}
-                              />
-                            </div>
-                          ) : message.content ? (
-                            <SafeSocialText
-                              value={message.content}
-                              className={continuation ? '' : 'mt-1.5 pl-11'}
-                            />
-                          ) : null}
-                          {message.gif ? (
-                            <div className={continuation ? '' : 'pl-11'}>
-                              <GiphyMessageMedia gif={message.gif} />
-                            </div>
-                          ) : null}
-                          {deleting && onDelete ? (
-                            <MessageDeleteConfirm
-                              onCancel={() => setOwnAction(null)}
-                              onDelete={async () => {
-                                await onDelete(message.id);
-                                setOwnAction(null);
-                              }}
-                            />
-                          ) : null}
-                          {(!message.isOwn || canManage || canEditOwn || canDeleteOwn) &&
-                          !editing &&
-                          !deleting ? (
-                            <div className="mt-1 flex justify-end gap-1">
-                              {canEditOwn ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setOwnAction({ id: message.id, kind: 'edit' })}
-                                  className={ownActionButton}
-                                >
-                                  <Pencil className="size-3.5" aria-hidden="true" />
-                                  Edit
-                                </button>
-                              ) : null}
-                              {canDeleteOwn ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setOwnAction({ id: message.id, kind: 'delete' })}
-                                  className={ownActionButton}
-                                >
-                                  <Trash2 className="size-3.5" aria-hidden="true" />
-                                  Delete
-                                </button>
-                              ) : null}
-                              {!message.isOwn ? (
-                                <SocialReportButton
-                                  label="message"
-                                  onReport={(reason, details) =>
-                                    onReport(message.id, reason, details)
-                                  }
-                                />
-                              ) : null}
-                              {canManage && !message.isOwn ? (
-                                <SocialRemoveButton
-                                  label="message"
-                                  onRemove={(reason) => onRemove(message.id, reason)}
-                                />
-                              ) : null}
-                              {canManage && message.isOwn && !canDeleteOwn ? (
-                                <SocialRemoveButton
-                                  label="message"
-                                  onRemove={(reason) => onRemove(message.id, reason)}
-                                />
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </>
-                      )}
-                    </article>
-                  </li>
+                  <ChatMessageRow
+                    key={message.id}
+                    message={message}
+                    day={day !== previousDay ? day : null}
+                    continuation={isMessageContinuation(message, visibleMessages[index - 1])}
+                    canManage={canManage}
+                    canEdit={Boolean(onEdit && canPublish && !muted)}
+                    onReport={onReport}
+                    onRemove={onRemove}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                  />
                 );
               })}
             </ol>
@@ -458,46 +321,5 @@ export default function LeagueChatPanel({
         ) : null}
       </footer>
     </section>
-  );
-}
-
-function DiscussionContextCard({
-  context,
-  label = 'Context',
-  onRemove,
-}: {
-  context: SocialDiscussionContext;
-  label?: string;
-  onRemove?: () => void;
-}): React.JSX.Element {
-  const metadata = Object.values(context.metadata ?? {}).filter(Boolean);
-
-  return (
-    <div className="mt-2 rounded-xl border border-social-border bg-social-surface-subtle p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-social-text-muted">
-            {label}
-          </p>
-          <p className="mt-1 truncate text-sm font-semibold text-social-text">{context.title}</p>
-          {context.subtitle ? (
-            <p className="mt-1 text-xs text-social-text-muted">{context.subtitle}</p>
-          ) : null}
-          {metadata.length > 0 ? (
-            <p className="mt-1 truncate text-xs text-social-text-muted">{metadata.join(' · ')}</p>
-          ) : null}
-        </div>
-        {onRemove ? (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
-            aria-label="Remove discussion context"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    </div>
   );
 }
