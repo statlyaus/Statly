@@ -188,6 +188,48 @@ function resolveStatus(input: {
   return 'scheduled';
 }
 
+function buildLifecycle(input: {
+  draft: LeagueWithReadinessData['drafts'][number] | null;
+  blockers: DraftReadinessBlocker[];
+  shouldBeOpen: boolean;
+}): DraftOperationalReadiness['lifecycle'] {
+  const { draft, blockers, shouldBeOpen } = input;
+  const isRunning = draft?.status === DraftStatus.LIVE || draft?.status === DraftStatus.PAUSED;
+  const isComplete = draft?.status === DraftStatus.COMPLETED;
+  const roomIsOpen = Boolean(
+    draft && (isRunning || shouldBeOpen || OPEN_LOBBY_STATUSES.has(draft.lobbyStatus ?? ''))
+  );
+  const hasHardStartBlocker = blockers.some((blocker) =>
+    [
+      'settings_missing',
+      'draft_time_missing',
+      'insufficient_members',
+      'draft_order_missing',
+      'player_pool_empty',
+      'player_pool_shortage',
+      'position_pool_shortage',
+      'bloodsucker_missing',
+      'bloodsucker_insufficient_teams',
+      'bloodsucker_pool_shortage',
+      'draft_completed',
+    ].includes(blocker.code)
+  );
+  // Setup blockers gate entry only before the draft runs; a running draft stays enterable.
+  const canEnterRoom = Boolean(
+    draft && !isComplete && (isRunning || (roomIsOpen && !hasHardStartBlocker))
+  );
+
+  return {
+    shouldBeOpen,
+    canEnterRoom,
+    canStartClock: Boolean(
+      draft && shouldBeOpen && draft.status === DraftStatus.SCHEDULED && !hasHardStartBlocker
+    ),
+    isRunning,
+    isComplete,
+  };
+}
+
 export async function getLeagueDraftOperationalReadiness(
   client: ReadinessClient = defaultPrisma,
   input: DraftReadinessInput
@@ -232,30 +274,7 @@ export async function getLeagueDraftOperationalReadiness(
   const startAt = league.settings?.startAt ?? null;
   const shouldBeOpen = Boolean(startAt && startAt.getTime() <= now.getTime());
   const blockers = buildBlockers({ league, capacity, drafterCount: drafters.length });
-  const isRunning = draft?.status === DraftStatus.LIVE || draft?.status === DraftStatus.PAUSED;
-  const isComplete = draft?.status === DraftStatus.COMPLETED;
-  const roomIsOpen = Boolean(
-    draft && (isRunning || shouldBeOpen || OPEN_LOBBY_STATUSES.has(draft.lobbyStatus ?? ''))
-  );
-  const hasHardStartBlocker = blockers.some((blocker) =>
-    [
-      'settings_missing',
-      'draft_time_missing',
-      'insufficient_members',
-      'draft_order_missing',
-      'player_pool_empty',
-      'player_pool_shortage',
-      'position_pool_shortage',
-      'bloodsucker_missing',
-      'bloodsucker_insufficient_teams',
-      'bloodsucker_pool_shortage',
-      'draft_completed',
-    ].includes(blocker.code)
-  );
-  // Setup blockers gate entry only before the draft runs; a running draft stays enterable.
-  const canEnterRoom = Boolean(
-    draft && !isComplete && (isRunning || (roomIsOpen && !hasHardStartBlocker))
-  );
+  const lifecycle = buildLifecycle({ draft, blockers, shouldBeOpen });
 
   return {
     leagueId: league.id,
@@ -270,15 +289,7 @@ export async function getLeagueDraftOperationalReadiness(
       availableCount: availablePlayers,
       hasPlayers: availablePlayers > 0,
     },
-    lifecycle: {
-      shouldBeOpen,
-      canEnterRoom,
-      canStartClock: Boolean(
-        draft && shouldBeOpen && draft.status === DraftStatus.SCHEDULED && !hasHardStartBlocker
-      ),
-      isRunning,
-      isComplete,
-    },
+    lifecycle,
     blockers,
   };
 }
