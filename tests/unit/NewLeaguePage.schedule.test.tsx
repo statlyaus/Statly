@@ -34,6 +34,7 @@ describe('NewLeaguePage draft schedule', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
   });
 
@@ -164,7 +165,15 @@ describe('NewLeaguePage draft schedule', () => {
     ).toBeInTheDocument();
   });
 
+  it('offers no Bloodsucker format while it is held back (flag off)', () => {
+    render(<NewLeaguePage />);
+
+    expect(screen.queryByRole('option', { name: 'Bloodsucker' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'No Losers' })).toBeInTheDocument();
+  });
+
   it('creates a Bloodsucker league with rolling waivers and no weekly option (BR-03)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER', 'true');
     render(<NewLeaguePage />);
 
     fireEvent.change(screen.getByLabelText(/League name/), {

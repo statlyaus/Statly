@@ -1,4 +1,4 @@
-import { DraftStatus, LeagueRole, type Prisma, type PrismaClient } from '@prisma/client';
+import { LeagueRole, type Prisma, type PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { buildExternalUserEmail } from '@/lib/prismaLeagueBridge';
@@ -6,6 +6,7 @@ import { generateDeterministicMemberId } from '@/utils/firestore';
 
 import { isActivePrismaMembership } from './activeMembership';
 import { isLeagueAtCapacity } from './leagueCapacity';
+import { hasDraftStarted } from './draftStarted';
 import { clearBloodsuckerOnDeparture } from './leagueFormat';
 
 /**
@@ -68,30 +69,9 @@ async function loadLeagueForCommand(tx: Prisma.TransactionClient, leagueId: stri
   });
 }
 
-/**
- * Removal closes once the league's latest draft has left SCHEDULED, started, taken a pick, or opened
- * a live room. A COUNTDOWN lobby is still forming (draft setup opens every lobby that way).
- */
-export function hasDraftStarted(
-  draft:
-    | {
-        status: DraftStatus;
-        startedAt: Date | null;
-        lobbyStatus: string | null;
-        _count: { picks: number };
-      }
-    | undefined
-): boolean {
-  if (!draft) return false;
-  return (
-    draft.status !== DraftStatus.SCHEDULED ||
-    draft.startedAt !== null ||
-    draft.lobbyStatus === 'LIVE' ||
-    draft._count.picks > 0
-  );
-}
-
 type DraftForRemoval = Parameters<typeof hasDraftStarted>[0];
+
+export { hasDraftStarted };
 
 /**
  * Why a member can no longer be removed or leave, or null while the league is still forming.

@@ -47,6 +47,12 @@ import {
   getScoringSettingsLockedAt,
   type LeagueSettingsLocks,
 } from '@/server/leagues/settingsLocks';
+import { readDraftStarted } from '@/server/leagues/draftStarted';
+import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
+import {
+  BLOODSUCKER_UNAVAILABLE_MESSAGE,
+  isBloodsuckerSelectable,
+} from '@/lib/leagueFormatOptions';
 
 type DraftTypeValue = 'SNAKE' | 'LINEAR';
 type WaiverRuleValue = 'WEEKLY' | 'ROLLING';
@@ -220,14 +226,6 @@ function parseTradeSettingsUpdate(tradeInput: Record<string, unknown>): TradeSet
   };
 }
 
-async function readDraftStatus(leagueId: string): Promise<string | null> {
-  const draft = await prisma.draft.findUnique({
-    where: { leagueId },
-    select: { status: true },
-  });
-  return draft?.status ?? null;
-}
-
 function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -277,12 +275,12 @@ function toSettingsResponse(
       tradeVetoThreshold: number;
     };
   },
-  draftStatus: string | null
+  draftStarted: boolean
 ) {
   const scoringSettingsLockedAt = getScoringSettingsLockedAt(league.settings);
   const locks: LeagueSettingsLocks = getLeagueSettingsLocks({
     scoringSettingsLockedAt,
-    draftStatus,
+    draftStarted,
   });
   const positionLimits = normalizeDraftPositionLimits(league.settings.positionLimitsJson);
   const autoPickRules = normalizeDraftAutoPickRules(league.settings.autoPickRulesJson);
@@ -364,7 +362,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (prismaLeague?.settings) {
       return NextResponse.json({
         success: true,
-        data: toSettingsResponse(prismaLeague, await readDraftStatus(id)),
+        data: toSettingsResponse(prismaLeague, await readDraftStarted(prisma, id)),
       });
     }
 
@@ -565,10 +563,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               categories,
               categoryDirectionsInput as Partial<Record<FantasyCategoryKey, CategoryDirection>>
             );
-      const draftStatus = await readDraftStatus(id);
+      const draftStarted = await readDraftStarted(prisma, id);
       const locks = getLeagueSettingsLocks({
         scoringSettingsLockedAt: getScoringSettingsLockedAt(prismaLeague.settings),
-        draftStatus,
+        draftStarted,
       });
       // The settings form sends every field on each save, so a lock refuses changed values only.
       const currentCategories = normalizeLeagueCategories(prismaLeague.categoriesJson);
@@ -668,6 +666,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           : bloodsuckerInput === undefined
             ? currentFormat.bloodsuckerMemberId
             : (bloodsuckerInput as string | null);
+      // Choosing Bloodsucker is held back behind its flag; a league already stored as one keeps it.
+      if (
+        leagueFormat === 'BLOODSUCKER' &&
+        currentFormat.leagueFormat !== 'BLOODSUCKER' &&
+        !isBloodsuckerSelectable()
+      ) {
+        return NextResponse.json(
+          { error: BLOODSUCKER_UNAVAILABLE_MESSAGE, code: 'BLOODSUCKER_UNAVAILABLE' },
+          { status: 400 }
+        );
+      }
       const formatChanged =
         leagueFormat !== currentFormat.leagueFormat ||
         bloodsuckerMemberId !== currentFormat.bloodsuckerMemberId;
@@ -721,15 +730,42 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const nextTradeReview =
         tradeReview ?? normalizeTradeReview(prismaLeague.settings.tradeReviewMode);
 
-      await prisma.$transaction([
-        prisma.league.update({
+      // The locks above were read outside any transaction, so a draft start or publication can land
+      // between that read and this write. Re-read them under the League row lock (taken by draft
+      // start too) and the settings row lock (taken by publication's write), then write.
+      const saved = await prisma.$transaction(async (tx) => {
+        await lockLeagueRow(tx, id);
+        const [lockedSettings] = await tx.$queryRaw<
+          { scoringSettingsLockedAt: Date | null; competitionPublishedAt: Date | null }[]
+        >`SELECT "scoringSettingsLockedAt", "competitionPublishedAt" FROM "LeagueSettings"
+          WHERE id = ${prismaLeague.settings.id} FOR UPDATE`;
+        const lockedDraftStarted = await readDraftStarted(tx, id);
+        const currentLocks = getLeagueSettingsLocks({
+          scoringSettingsLockedAt: lockedSettings
+            ? getScoringSettingsLockedAt(lockedSettings)
+            : null,
+          draftStarted: lockedDraftStarted,
+        });
+        if (scoringSettingsChanged && currentLocks.scoring) {
+          return {
+            refused: { error: currentLocks.scoring, code: 'SCORING_SETTINGS_LOCKED' },
+            draftStarted: lockedDraftStarted,
+          };
+        }
+        if (draftStructureChanged && currentLocks.draftStructure) {
+          return {
+            refused: { error: currentLocks.draftStructure, code: 'DRAFT_STRUCTURE_LOCKED' },
+            draftStarted: lockedDraftStarted,
+          };
+        }
+        await tx.league.update({
           where: { id },
           data: {
             ...(nextName ? { name: nextName } : {}),
             categoriesJson: categories,
           },
-        }),
-        prisma.leagueSettings.update({
+        });
+        await tx.leagueSettings.update({
           where: { id: prismaLeague.settings.id },
           data: {
             maxTeams: maxTeams ?? prismaLeague.settings.maxTeams,
@@ -758,21 +794,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             tradeReviewHours: reviewHours ?? prismaLeague.settings.tradeReviewHours,
             tradeVetoThreshold: vetoThreshold ?? prismaLeague.settings.tradeVetoThreshold,
           },
-        }),
-        ...(formatChanged
-          ? [
-              prisma.leagueCompetitionAudit.create({
-                data: buildLeagueFormatAudit({
-                  leagueId: id,
-                  actorMemberId: writeAccess.actorMemberId,
-                  before: currentFormat,
-                  after: { leagueFormat, bloodsuckerMemberId },
-                  reason: 'SETTINGS_UPDATED',
-                }),
-              }),
-            ]
-          : []),
-      ]);
+        });
+        if (formatChanged) {
+          await tx.leagueCompetitionAudit.create({
+            data: buildLeagueFormatAudit({
+              leagueId: id,
+              actorMemberId: writeAccess.actorMemberId,
+              before: currentFormat,
+              after: { leagueFormat, bloodsuckerMemberId },
+              reason: 'SETTINGS_UPDATED',
+            }),
+          });
+        }
+        return { refused: null, draftStarted: lockedDraftStarted };
+      });
+      if (saved.refused) {
+        return NextResponse.json(saved.refused, { status: 409 });
+      }
 
       await ensureLeagueDraftSetupConverged({
         prismaClient: prisma,
@@ -790,7 +828,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       return NextResponse.json({
         success: true,
-        data: toSettingsResponse(updatedLeague, draftStatus),
+        data: toSettingsResponse(updatedLeague, saved.draftStarted),
       });
     }
 

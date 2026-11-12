@@ -3,6 +3,7 @@ import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 import { draftRepository } from '../repository/DraftRepository';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
 import { findLeagueFormatStartBlocker } from '@/server/leagues/leagueFormat';
+import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import {
   buildAvailableDraftPlayer,
   calculateStatlyZScores,
@@ -243,6 +244,9 @@ export class DraftApplicationService {
       }
 
       // BR-02, BR-06: the format and Bloodsucker lock once the draft starts, so check them here.
+      // The League row lock serialises this with a settings save, which takes the same lock and
+      // re-reads the draft before writing: whichever commits second sees the other.
+      await lockLeagueRow(tx, draft.leagueId);
       const formatBlocker = await findLeagueFormatStartBlocker(tx, draft.leagueId);
       if (formatBlocker) {
         throw new Error(`bad_request:${formatBlocker.message}`);

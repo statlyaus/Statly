@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   countActions: vi.fn(),
   findDraft: vi.fn(),
+  queryRaw: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({ getAuthenticatedUserId: mocks.authenticate }));
@@ -39,6 +40,18 @@ vi.mock('@/lib/prisma', () => ({
 }));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/leagueMembership', () => ({ listActiveLeagueMembers: vi.fn() }));
+
+// The draft row as the settings locks read it (hasDraftStarted).
+function draftRow(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'SCHEDULED',
+    startedAt: null,
+    lobbyStatus: 'COUNTDOWN',
+    _count: { picks: 0 },
+    ...overrides,
+  };
+}
+const liveDraft = draftRow({ status: 'LIVE', startedAt: new Date(), lobbyStatus: 'LIVE' });
 
 import { PUT } from '@/app/api/leagues/[id]/settings/route';
 
@@ -109,18 +122,32 @@ beforeEach(() => {
   mocks.authenticate.mockResolvedValue('owner-user');
   mocks.getAccess.mockResolvedValue({ isMember: true, canManage: true, memberId: 'member-1' });
   mocks.findLeague.mockImplementation(async () => storedLeague());
-  // The route builds the writes, then runs them in one transaction; apply settings writes then.
-  mocks.updateSettings.mockImplementation(({ data }) => ({
-    apply: () => Object.assign(stored, data),
-  }));
-  mocks.transaction.mockImplementation(async (writes: Array<{ apply?: () => void }>) => {
-    writes.forEach((write) => write?.apply?.());
-    return writes;
-  });
+  mocks.updateSettings.mockImplementation(async ({ data }) => Object.assign(stored, data));
+  // The write transaction locks the League row and re-reads the locks before writing.
+  mocks.queryRaw.mockImplementation(async () => [
+    {
+      scoringSettingsLockedAt: stored.scoringSettingsLockedAt,
+      competitionPublishedAt: null,
+    },
+  ]);
+  mocks.transaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) =>
+    run({
+      $queryRaw: mocks.queryRaw,
+      league: { update: mocks.updateLeague },
+      leagueSettings: { update: mocks.updateSettings },
+      leagueCompetitionAudit: { create: mocks.createAudit },
+      draft: { findUnique: mocks.findDraft },
+    })
+  );
   mocks.createAudit.mockImplementation((args) => args);
   mocks.findMember.mockResolvedValue({ isActive: true, status: 'ACTIVE' });
   mocks.countActions.mockResolvedValue(0);
-  mocks.findDraft.mockResolvedValue({ status: 'SCHEDULED' });
+  mocks.findDraft.mockResolvedValue(draftRow());
+  vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER', 'true');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('league format settings', () => {
@@ -268,7 +295,7 @@ describe('league format settings', () => {
   describe('a No Losers league after the draft leaves SCHEDULED (No Losers BR-02)', () => {
     beforeEach(() => {
       stored.leagueFormat = 'NO_LOSERS';
-      mocks.findDraft.mockResolvedValue({ status: 'LIVE' });
+      mocks.findDraft.mockResolvedValue(liveDraft);
     });
 
     it.each(['STANDARD', 'BLOODSUCKER'])(
@@ -302,7 +329,7 @@ describe('league format settings', () => {
   describe('after the draft leaves SCHEDULED (BR-05)', () => {
     beforeEach(() => {
       Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });
-      mocks.findDraft.mockResolvedValue({ status: 'LIVE' });
+      mocks.findDraft.mockResolvedValue(liveDraft);
     });
 
     it.each([
@@ -323,6 +350,81 @@ describe('league format settings', () => {
 
       expect(status).toBe(200);
       expect(mocks.createAudit).not.toHaveBeenCalled();
+    });
+  });
+  describe('a LIVE draft rescheduled back to SCHEDULED with its picks kept', () => {
+    beforeEach(() => {
+      Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });
+      mocks.findDraft.mockResolvedValue(draftRow({ _count: { picks: 3 } }));
+    });
+
+    it.each([
+      ['the format', { leagueFormat: 'STANDARD' }],
+      ['the Bloodsucker', { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-1' }],
+    ])('still refuses a change to %s with 409 DRAFT_STRUCTURE_LOCKED', async (_label, format) => {
+      const { status, json } = await put({ format });
+
+      expect(status).toBe(409);
+      expect(json.code).toBe('DRAFT_STRUCTURE_LOCKED');
+      expect(mocks.transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a draft that starts between the lock check and the write', () => {
+    beforeEach(() => {
+      // First read (before the transaction): not started. Re-read under the row lock: started.
+      mocks.findDraft.mockResolvedValueOnce(draftRow()).mockResolvedValue(liveDraft);
+    });
+
+    it('re-checks under the League row lock and refuses the format change', async () => {
+      const { status, json } = await put({
+        format: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
+      });
+
+      expect(status).toBe(409);
+      expect(json.code).toBe('DRAFT_STRUCTURE_LOCKED');
+      expect(mocks.queryRaw).toHaveBeenCalled();
+      expect(mocks.updateSettings).not.toHaveBeenCalled();
+      expect(mocks.createAudit).not.toHaveBeenCalled();
+      expect(stored.leagueFormat).toBe('STANDARD');
+    });
+
+    it('still saves a change that the draft lock does not cover', async () => {
+      const { status, json } = await put({ league: { name: 'Renamed League' } });
+
+      expect(status).toBe(200);
+      expect(mocks.updateSettings).toHaveBeenCalled();
+      expect(json.data.locks.draftStructure).toMatch(/draft has started/);
+    });
+  });
+
+  describe('while Bloodsucker is held back (flag off)', () => {
+    beforeEach(() => {
+      vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER', '');
+    });
+
+    it('refuses switching a league to Bloodsucker with 400 BLOODSUCKER_UNAVAILABLE', async () => {
+      const { status, json } = await put({
+        format: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
+      });
+
+      expect(status).toBe(400);
+      expect(json.code).toBe('BLOODSUCKER_UNAVAILABLE');
+      expect(mocks.transaction).not.toHaveBeenCalled();
+    });
+
+    it('lets a league already stored as Bloodsucker keep and edit it', async () => {
+      Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });
+
+      const { status, json } = await put({
+        format: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-1' },
+      });
+
+      expect(status).toBe(200);
+      expect(json.data.format).toMatchObject({
+        leagueFormat: 'BLOODSUCKER',
+        bloodsuckerMemberId: 'member-1',
+      });
     });
   });
 });

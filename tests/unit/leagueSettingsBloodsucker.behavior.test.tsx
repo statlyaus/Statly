@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LeagueSettingsPanel } from '@/components/league/LeagueSettingsPanels';
 import type { League } from '@/types/leagues';
@@ -50,7 +50,11 @@ const settingsPayload = {
 };
 
 describe('choosing Bloodsucker in league settings (BR-03)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
   beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER', 'true');
     authenticatedFetchMock.mockReset();
     authenticatedFetchMock.mockResolvedValue({ ok: true, json: async () => settingsPayload });
   });
@@ -92,6 +96,33 @@ describe('choosing Bloodsucker in league settings (BR-03)', () => {
       bloodsuckerMemberId: 'member-2',
     });
     expect(body.waiver).toMatchObject({ waiverRule: 'rolling', faabBudget: null });
+  });
+});
+
+describe('the league format picker while Bloodsucker is held back (flag off)', () => {
+  beforeEach(() => {
+    authenticatedFetchMock.mockReset();
+    authenticatedFetchMock.mockResolvedValue({ ok: true, json: async () => settingsPayload });
+  });
+
+  it('does not offer Bloodsucker to a standard league', async () => {
+    render(
+      <LeagueSettingsPanel
+        league={{ id: 'league-1', name: 'Premier', code: 'CODE', maxTeams: 8 } as League}
+        memberCount={8}
+        isAdmin
+        canAccessCompetitionRules
+        isActive
+        currentUserId="owner"
+      />
+    );
+
+    const formatSelect = (await screen.findByLabelText('League format')) as HTMLSelectElement;
+    await waitFor(() => expect(formatSelect.disabled).toBe(false));
+    expect([...formatSelect.options].map((option) => option.value)).toEqual([
+      'STANDARD',
+      'NO_LOSERS',
+    ]);
   });
 });
 
