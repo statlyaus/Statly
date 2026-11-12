@@ -108,8 +108,13 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
 - Every format or Bloodsucker change writes a `LEAGUE_FORMAT_CHANGED` competition audit row with the
   actor, the before and after values, and the reason.
 
-Draft exclusion, the exclusive free-agency window, pinned waiver priority and bites are later epic
-tickets and are not live yet.
+- The Bloodsucker is left out of the draft order on every path that builds it and drafts nothing;
+  the draft is sized for the other teams, and readiness blocks a player pool too small to fill the
+  Bloodsucker's roster afterwards (#1279; see
+  [Drafts and waivers](../domain/draft-and-waivers.md#snake-order-and-availability)).
+
+The exclusive free-agency window, pinned waiver priority and bites are later epic tickets and are not
+live yet.
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):

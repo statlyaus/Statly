@@ -14,8 +14,9 @@ describe('draft create route architecture', () => {
     expect(source).toContain('calculateDraftCapacity');
     expect(source).toContain('activePlayerCount');
     expect(source).toContain('orderMembersForDraft(league.members, body.participants, pickOrder)');
-    expect(source).toContain('data: { draftSlot: i + 1 }');
-    expect(source).toContain('memberId: orderedMembers[i].id');
+    // BR-09: the order is written by the shared writer, which leaves a Bloodsucker out.
+    expect(source).toContain('splitDraftingMembers(orderedMembers, league.settings)');
+    expect(source).toContain('writeDraftOrder(tx, {');
     expect(source).toContain('positionLimitsJson: positionLimits');
     expect(source).toContain('autoPickRulesJson: autoPickRules');
   });

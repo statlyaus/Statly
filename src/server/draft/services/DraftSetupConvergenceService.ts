@@ -4,14 +4,16 @@ import { normalizeDraftPositionLimits } from '@/lib/draftSettings';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
+import { writeDraftOrder } from '@/server/draft/draftOrderWriter';
+import { splitDraftingMembers } from '@/server/leagues/leagueFormat';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 
 import { getLeagueDraftOperationalReadiness } from './DraftReadinessService';
 
 type ConvergenceClient = PrismaClient;
 
-// Explicit draft slots are kept, unless an earlier member already holds one. Members without a slot
-// take the lowest slot nobody holds, so the result is always unique (DraftOrder @@unique([draftId, slot])).
+// Explicit draft slots set the order, unless an earlier member already holds one. Members without a
+// slot take the lowest slot nobody holds. writeDraftOrder then numbers the order 1..n.
 function assignDraftSlots(draftSlots: Array<number | null>): number[] {
   const used = new Set<number>();
   const explicit = draftSlots.map((slot) => {
@@ -58,12 +60,19 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
     }
 
     // A member is in the draft only if its membership is active, not just its isActive flag.
-    const members = league.members.filter(isActivePrismaMembership);
-    const slots = assignDraftSlots(members.map((member) => member.draftSlot));
+    const active = league.members.filter(isActivePrismaMembership);
+    const slots = assignDraftSlots(active.map((member) => member.draftSlot));
+    const members = active
+      .map((member, index) => ({ member, slot: slots[index] }))
+      .sort((left, right) => left.slot - right.slot)
+      .map(({ member }) => member);
+    // BR-09, BR-10: the Bloodsucker never drafts, but its roster is filled from the pool afterwards.
+    const { drafters, bloodsucker } = splitDraftingMembers(members, league.settings);
     const existingDraft = league.drafts[0] ?? null;
     const activePlayerCount = await tx.player.count({ where: { active: true } });
     const capacity = calculateDraftCapacity({
-      teamCount: members.length,
+      teamCount: drafters.length,
+      reservedTeamCount: bloodsucker ? 1 : 0,
       positionLimits: normalizeDraftPositionLimits(league.settings.positionLimitsJson),
       activePlayerCount,
       existingPickCount: existingDraft?.picks.length ?? 0,
@@ -75,8 +84,8 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
     if (existingDraft) {
       const orderMemberIds = new Set(existingDraft.orders.map((order) => order.memberId));
       const orderIsCurrent =
-        existingDraft.orders.length === members.length &&
-        members.every((member) => orderMemberIds.has(member.id));
+        existingDraft.orders.length === drafters.length &&
+        drafters.every((member) => orderMemberIds.has(member.id));
       if (orderIsCurrent) {
         if (existingDraft.totalPicks !== totalPicks) {
           await tx.draft.update({
@@ -93,18 +102,7 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
         return existingDraft.id;
       }
 
-      await tx.draftOrder.deleteMany({ where: { draftId: existingDraft.id } });
-      await Promise.all(
-        members.map((member, index) =>
-          tx.draftOrder.create({
-            data: {
-              draftId: existingDraft.id,
-              memberId: member.id,
-              slot: slots[index],
-            },
-          })
-        )
-      );
+      await writeDraftOrder(tx, { draftId: existingDraft.id, members, settings: league.settings });
 
       await tx.draft.update({
         where: { id: existingDraft.id },
@@ -114,7 +112,7 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
       return existingDraft.id;
     }
 
-    if (members.length < 2 || rosterSpots <= 0) {
+    if (drafters.length < 2 || rosterSpots <= 0) {
       return null;
     }
 
@@ -131,17 +129,7 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
       },
     });
 
-    await Promise.all(
-      members.map((member, index) =>
-        tx.draftOrder.create({
-          data: {
-            draftId: draft.id,
-            memberId: member.id,
-            slot: slots[index],
-          },
-        })
-      )
-    );
+    await writeDraftOrder(tx, { draftId: draft.id, members, settings: league.settings });
 
     return draft.id;
   });

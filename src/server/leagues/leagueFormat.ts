@@ -45,6 +45,27 @@ export function resolveBloodsuckerMemberId(
     : null;
 }
 
+/**
+ * BR-09: the members who draft, in the order given, and the Bloodsucker, who never does. Every path
+ * that builds or rebuilds a draft order, and every draft size, goes through this.
+ */
+export function splitDraftingMembers<T extends { id: string }>(
+  members: readonly T[],
+  settings:
+    { leagueFormat: LeagueFormat | string; bloodsuckerMemberId: string | null } | null | undefined
+): { drafters: T[]; bloodsucker: T | null } {
+  const bloodsuckerId = settings
+    ? resolveBloodsuckerMemberId(
+        settings,
+        members.map((member) => member.id)
+      )
+    : null;
+  return {
+    drafters: members.filter((member) => member.id !== bloodsuckerId),
+    bloodsucker: members.find((member) => member.id === bloodsuckerId) ?? null,
+  };
+}
+
 export interface LeagueFormatBlocker {
   code: 'bloodsucker_missing' | 'bloodsucker_insufficient_teams';
   message: string;

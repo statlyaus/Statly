@@ -8,7 +8,7 @@ import {
   type DraftCapacity,
 } from '@/server/draft/domain/draftCapacity';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
-import { getLeagueFormatDraftBlockers } from '@/server/leagues/leagueFormat';
+import { getLeagueFormatDraftBlockers, splitDraftingMembers } from '@/server/leagues/leagueFormat';
 import type { DraftOperationalReadiness, DraftReadinessBlocker } from '@/types/draftReadiness';
 
 type ReadinessClient = Pick<PrismaClient, 'league' | 'player'> | Prisma.TransactionClient;
@@ -58,8 +58,9 @@ function buildMissingLeagueReadiness(leagueId: string): DraftOperationalReadines
 function buildBlockers(input: {
   league: LeagueWithReadinessData;
   capacity: DraftCapacity;
+  drafterCount: number;
 }): DraftReadinessBlocker[] {
-  const { league, capacity } = input;
+  const { league, capacity, drafterCount } = input;
   const draft = league.drafts[0] ?? null;
   const blockers: DraftReadinessBlocker[] = [];
 
@@ -94,7 +95,8 @@ function buildBlockers(input: {
       code: 'draft_room_missing',
       message: 'The draft room has not been created yet.',
     });
-  } else if (draft.orders.length !== league.members.length) {
+  } else if (draft.orders.length !== drafterCount) {
+    // BR-09: the order holds the drafting members; a Bloodsucker is never in it.
     blockers.push({
       id: 'draft_order_missing',
       code: 'draft_order_missing',
@@ -123,6 +125,14 @@ function buildBlockers(input: {
       id: 'player_pool_shortage',
       code: 'player_pool_shortage',
       message: `Only ${capacity.activePlayerCount} active players are available for ${capacity.requestedTotalPicks} requested draft picks.`,
+    });
+  }
+
+  if (capacity.reservedPoolShortage > 0) {
+    blockers.push({
+      id: 'bloodsucker_pool_shortage',
+      code: 'bloodsucker_pool_shortage',
+      message: `The player pool is ${capacity.reservedPoolShortage} players short of filling the Bloodsucker's roster after the draft.`,
     });
   }
 
@@ -208,8 +218,13 @@ export async function getLeagueDraftOperationalReadiness(
   const activePlayersByPosition = await countActiveDraftPlayersByPosition(client);
   const draft = league.drafts[0] ?? null;
   const positionLimits = normalizeDraftPositionLimits(league.settings?.positionLimitsJson);
+  const { drafters, bloodsucker } = splitDraftingMembers(
+    league.members.filter(isActivePrismaMembership),
+    league.settings
+  );
   const capacity = calculateDraftCapacity({
-    teamCount: league.members.length,
+    teamCount: drafters.length,
+    reservedTeamCount: bloodsucker ? 1 : 0,
     positionLimits,
     activePlayerCount: availablePlayers,
     activePlayersByPosition,
@@ -220,7 +235,7 @@ export async function getLeagueDraftOperationalReadiness(
   const totalPicks = capacity.totalPicks;
   const startAt = league.settings?.startAt ?? null;
   const shouldBeOpen = Boolean(startAt && startAt.getTime() <= now.getTime());
-  const blockers = buildBlockers({ league, capacity });
+  const blockers = buildBlockers({ league, capacity, drafterCount: drafters.length });
   const isRunning = draft?.status === DraftStatus.LIVE || draft?.status === DraftStatus.PAUSED;
   const isComplete = draft?.status === DraftStatus.COMPLETED;
   const roomIsOpen = Boolean(
@@ -242,6 +257,7 @@ export async function getLeagueDraftOperationalReadiness(
       'position_pool_shortage',
       'bloodsucker_missing',
       'bloodsucker_insufficient_teams',
+      'bloodsucker_pool_shortage',
       'draft_completed',
     ].includes(blocker.code)
   );
