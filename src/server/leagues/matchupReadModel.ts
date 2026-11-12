@@ -24,6 +24,7 @@ import {
   loadFinalMatchupSnapshots,
   recordFinalRoundRescores,
   type MatchupResultSnapshot,
+  type ResultCorrection,
 } from './finalRoundRescoreAudit';
 import type { FinalsTeamCount } from './finalsProgression';
 import { resolveAndPersistLineupAutosubs } from './lineupAutosubService';
@@ -1073,12 +1074,15 @@ export async function recalculateLeagueRoundMatchups({
   round,
   finalize,
   actorMemberId,
+  resultCorrections,
 }: {
   leagueId: string;
   round: number;
   finalize?: boolean;
   /** The commissioner who asked for it; none means the scheduled job. Recorded on FINAL rescores. */
   actorMemberId?: string;
+  /** The corrected AFL results that caused this re-score (No Losers, #1295). Recorded on FINAL rescores. */
+  resultCorrections?: readonly ResultCorrection[];
 }) {
   const settings = await loadLeagueCompetitionSettings(leagueId);
   if (!settings) return null;
@@ -1498,6 +1502,7 @@ export async function recalculateLeagueRoundMatchups({
         seasonId,
         round,
         actorMemberId: actorMemberId ?? null,
+        resultCorrections,
         before: finalBefore,
         after: resultAfter,
       });

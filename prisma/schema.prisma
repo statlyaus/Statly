@@ -645,7 +645,9 @@ model AflMatchResult {
   supersedes      AflMatchResult?            @relation("AflMatchResultSupersede")
   playerScores    LeagueMatchupPlayerScore[]
 
-  @@unique([season, matchId, contentHash])
+  // One current row per match is a partial unique index in the migration (Prisma cannot express it).
+  // A content hash may repeat in a match's history: A, then B, then A is three rows (#1295).
+  @@index([season, matchId])
   @@index([season, round])
   @@index([season, matchUid])
 }

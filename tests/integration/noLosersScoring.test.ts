@@ -2,8 +2,10 @@
  * No Losers scoring on PostgreSQL (#1294, epic #1290 BR-07, BR-08, BR-21): a counted player's stats
  * are multiplied by his club's stored result, joined by matchUid and club abbreviation; the round
  * cannot be FINAL while a result is missing; the stored per-player rows re-derive the team totals.
- * Standard and Bloodsucker leagues score exactly as before (golden).
+ * Standard and Bloodsucker leagues score exactly as before (golden). A corrected result re-scores
+ * the FINAL round it was used in, with audit (#1295, BR-23); an unchanged re-ingest triggers nothing.
  */
+import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -67,7 +69,11 @@ vi.mock('@/server/etl/etlRoundData', () => ({
 import { prisma } from '@/lib/prisma';
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
 import { aggregateLineupCategoryTotals } from '@/server/leagues/matchupScoringEngine';
+import { rescoreCorrectedResultRounds } from '@/server/leagues/noLosersResultCorrections';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+
+import { ingestResultRows, type ResultSourceRow } from '../../etl/resultIngest';
+import { pgResultStore } from '../../etl/resultStore';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -219,7 +225,12 @@ const homeScore = (matchupId: string) =>
     where: { matchupId_memberId: { matchupId, memberId: MEMBERS[0] } },
   });
 
-afterAll(removeFixture);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL_TEST, max: 2 });
+
+afterAll(async () => {
+  await removeFixture();
+  await pool.end();
+});
 
 describe.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
   'a No Losers league scored %s',
@@ -355,4 +366,139 @@ describe.each(['STANDARD', 'BLOODSUCKER'] as const)('a %s league (golden)', (lea
       );
     }
   );
+});
+
+// Footywire rows for the round, ingested through the ETL's own store (etl/resultStore.ts).
+function footywireRows(gwsGee: [number, number], hawCol: [number, number]): ResultSourceRow[] {
+  return [
+    ['GWS', 'Geelong', gwsGee],
+    ['Hawthorn', 'Collingwood', hawCol],
+  ].map(([home, away, [homePoints, awayPoints]], index) => ({
+    season: AFL_SEASON,
+    match_id: String(95001 + index),
+    round_label: 'Round 5',
+    home_team: home as string,
+    away_team: away as string,
+    home_points: homePoints,
+    away_points: awayPoints,
+    date: '2091-04-20',
+    last_home_and_away_round: 24,
+  }));
+}
+
+describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
+  const ingest = (rows: ResultSourceRow[]) =>
+    ingestResultRows(rows, { store: pgResultStore(pool), fetchedAt: new Date() });
+  const rescoreAudits = () =>
+    prisma.leagueCompetitionAudit.findMany({
+      where: { leagueId: LEAGUE, eventType: 'FINAL_ROUND_RESCORED' },
+    });
+  let matchupId: string;
+
+  beforeEach(async () => {
+    // Most categories: a standings win is a matchup win.
+    matchupId = await seedLeague({ leagueFormat: 'NO_LOSERS', scoringMode: 'H2H_MOST_CATEGORIES' });
+    // GWS lose by 20 (p1 zeroed), Hawthorn lose by 3 (p2 half): the away side wins (as above).
+    await ingest(footywireRows([80, 100], [70, 73]));
+    await expect(
+      recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+    ).resolves.toMatchObject({ status: 'FINAL' });
+  });
+
+  it('a flipped result re-scores the round: winner, standings, audit and change rows follow', async () => {
+    await expect(
+      prisma.leagueStanding.findFirstOrThrow({
+        where: { leagueId: LEAGUE, memberId: MEMBERS[1] },
+      })
+    ).resolves.toMatchObject({ wins: 1, losses: 0 });
+
+    // Footywire corrects GWS v Geelong: GWS won by 20, so p1 counts in full.
+    await expect(ingest(footywireRows([100, 80], [70, 73]))).resolves.toMatchObject({
+      superseded: 1,
+      unchanged: 1,
+    });
+    const [superseded, current] = await Promise.all([
+      prisma.aflMatchResult.findFirstOrThrow({
+        where: { season: AFL_SEASON, matchId: '95001', supersededById: { not: null } },
+      }),
+      prisma.aflMatchResult.findFirstOrThrow({
+        where: { season: AFL_SEASON, matchId: '95001', supersededById: null },
+      }),
+    ]);
+
+    const run = await rescoreCorrectedResultRounds();
+
+    expect(run).toEqual({
+      rounds: [
+        {
+          leagueId: LEAGUE,
+          round: ROUND,
+          status: 'FINAL',
+          recalculated: 1,
+          correctedResultIds: [superseded.id],
+        },
+      ],
+      failedLeagueIds: [],
+    });
+    const matchup = await prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } });
+    expect(matchup).toMatchObject({ status: 'FINAL', winnerMemberId: MEMBERS[0] });
+    await expect(
+      prisma.leagueStanding.findFirstOrThrow({
+        where: { leagueId: LEAGUE, memberId: MEMBERS[0] },
+      })
+    ).resolves.toMatchObject({ wins: 1, losses: 0 });
+    await expect(
+      prisma.leagueStanding.findFirstOrThrow({
+        where: { leagueId: LEAGUE, memberId: MEMBERS[1] },
+      })
+    ).resolves.toMatchObject({ wins: 0, losses: 1 });
+
+    const p1 = await prisma.leagueMatchupPlayerScore.findFirstOrThrow({
+      where: { matchupId, playerId: 'int-nl-p1' },
+    });
+    expect(p1).toMatchObject({ clubResult: 'WIN', margin: 20, multiplier: 1 });
+    expect(p1.aflMatchResultId).toBe(current.id);
+
+    const audits = await rescoreAudits();
+    expect(audits).toHaveLength(1);
+    expect(audits[0].actorMemberId).toBeNull();
+    expect(audits[0].payloadJson).toMatchObject({
+      round: ROUND,
+      matchupId,
+      trigger: 'result-correction',
+      resultCorrections: [
+        {
+          supersededResultId: superseded.id,
+          currentResultId: current.id,
+          reason: superseded.supersedeReason,
+        },
+      ],
+      before: { winnerMemberId: MEMBERS[1] },
+      after: { winnerMemberId: MEMBERS[0] },
+    });
+
+    // Done once: the round's scores now use the current result.
+    await expect(rescoreCorrectedResultRounds()).resolves.toEqual({
+      rounds: [],
+      failedLeagueIds: [],
+    });
+    await expect(rescoreAudits()).resolves.toHaveLength(1);
+  });
+
+  it('an unchanged re-ingest triggers nothing', async () => {
+    await expect(ingest(footywireRows([80, 100], [70, 73]))).resolves.toMatchObject({
+      superseded: 0,
+      unchanged: 2,
+    });
+    const before = await prisma.leagueMatchupScore.findMany({ where: { matchupId } });
+
+    await expect(rescoreCorrectedResultRounds()).resolves.toEqual({
+      rounds: [],
+      failedLeagueIds: [],
+    });
+    await expect(prisma.leagueMatchupScore.findMany({ where: { matchupId } })).resolves.toEqual(
+      before
+    );
+    await expect(rescoreAudits()).resolves.toHaveLength(0);
+  });
 });

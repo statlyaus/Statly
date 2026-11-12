@@ -209,10 +209,19 @@ scored. A commissioner's finalize request on a round with an AFL match not yet f
 correction, but every change to a `FINAL` matchup's stored result (status, winner, category
 wins/draws, each side's category rows and points for) writes one `FINAL_ROUND_RESCORED` competition
 audit entry per changed matchup, in the same transaction as the new scores. Its payload holds the
-season, round, matchup, trigger (`manual` with the commissioner as actor, or `cron`), and the result
-before and after. A recalculation that reproduces the stored result writes none. Standings are
-recomputed from the corrected round as usual (owner decision 2026-11-11, process-map finding
-roster-scoring-11).
+season, round, matchup, trigger (`manual` with the commissioner as actor, `cron`, or
+`result-correction`), and the result before and after. A recalculation that reproduces the stored
+result writes none. Standings are recomputed from the corrected round as usual (owner decision
+2026-11-11, process-map finding roster-scoring-11).
+
+In a No Losers league an AFL result can be corrected after the round is `FINAL` (epic #1290 BR-23,
+#1295). The ingest supersedes the stored result row with its reason. The hourly scoring job then
+finds every round whose per-player scores (`LeagueMatchupPlayerScore`) still name a superseded result
+and recalculates it the same way, with no actor (system). Each changed matchup's audit entry has
+trigger `result-correction` and lists `resultCorrections` (superseded result id, the id that replaced
+it, the reason). A matchup winner may change; standings follow. After the re-score the round names
+only current results, so it is not picked again, and an unchanged re-ingest triggers nothing. Only
+the league's active season and current fixture version are re-scored.
 
 Supported finals sizes are 4, 6, and 8 teams. Seeding comes from finalized regular-season standings.
 Finals progression is persisted and recalculated only through the competition service. A drawn final is
