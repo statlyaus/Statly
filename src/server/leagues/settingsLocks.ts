@@ -3,7 +3,8 @@
 // Scoring (categories, their directions, the scoring mode and lineup slots) locks when the
 // competition is published: fixtures and every later result are computed from it.
 // Draft structure (roster and bench sizes, draft type, pick order, the league format and the
-// Bloodsucker member) locks once the draft leaves SCHEDULED: picks already made were made against it.
+// Bloodsucker member) locks once the draft has started (`hasDraftStarted`): picks already made were
+// made against it, including a LIVE draft rescheduled back to SCHEDULED with its picks kept.
 
 export type LeagueSettingsLockCode = 'SCORING_SETTINGS_LOCKED' | 'DRAFT_STRUCTURE_LOCKED';
 
@@ -22,10 +23,10 @@ export function getScoringSettingsLockedAt(settings: {
 
 export function getLeagueSettingsLocks({
   scoringSettingsLockedAt,
-  draftStatus,
+  draftStarted,
 }: {
   scoringSettingsLockedAt: Date | null;
-  draftStatus: string | null | undefined;
+  draftStarted: boolean;
 }): LeagueSettingsLocks {
   return {
     scoring: scoringSettingsLockedAt
@@ -33,9 +34,8 @@ export function getLeagueSettingsLocks({
           .toISOString()
           .slice(0, 10)}.`
       : null,
-    draftStructure:
-      draftStatus && draftStatus !== 'SCHEDULED'
-        ? 'Draft structure is locked because the draft has started.'
-        : null,
+    draftStructure: draftStarted
+      ? 'Draft structure is locked because the draft has started.'
+      : null,
   };
 }

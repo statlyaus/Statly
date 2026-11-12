@@ -24,6 +24,7 @@ const activeIds = Array.from({ length: 8 }, (_, index) => `member-${index + 1}`)
 
 function txFor(settings: { leagueFormat: string; bloodsuckerMemberId: string | null }) {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     league: {
       findUnique: vi.fn().mockResolvedValue({
         settings,
@@ -56,6 +57,11 @@ describe('starting a Bloodsucker draft', () => {
       'bad_request:Choose a Bloodsucker.'
     );
     expect(draftRepository.updateDraftLobbyState).not.toHaveBeenCalled();
+    // The League row is locked before the format is read, so a settings save cannot interleave.
+    expect(tx.$queryRaw).toHaveBeenCalled();
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.league.findUnique.mock.invocationCallOrder[0]
+    );
     expect(tx.league.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'league-1' } })
     );

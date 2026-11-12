@@ -9,6 +9,28 @@ export const LEAGUE_FORMAT_OPTIONS: ReadonlyArray<{ value: LeagueFormat; label: 
   { value: 'NO_LOSERS', label: 'No Losers' },
 ];
 
+/**
+ * Bloodsucker is held back until epic #1275 ships its bites, deadlines and protections
+ * (#1279-#1281, #1283-#1286); until then a Bloodsucker league would play as a standard one. This
+ * one flag gates choosing it on the create page, in settings and on the server. Leagues that
+ * already store BLOODSUCKER keep it. Read literally so Next.js inlines it into the client bundle.
+ */
+export function isBloodsuckerSelectable(): boolean {
+  return process.env.NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER === 'true';
+}
+
+export const BLOODSUCKER_UNAVAILABLE_MESSAGE = 'Bloodsucker leagues are not available yet.';
+
+/** The formats offered in a picker; a league already set to Bloodsucker keeps that option. */
+export function selectableLeagueFormatOptions(
+  current?: LeagueFormat
+): ReadonlyArray<{ value: LeagueFormat; label: string }> {
+  return LEAGUE_FORMAT_OPTIONS.filter(
+    (option) =>
+      option.value !== 'BLOODSUCKER' || isBloodsuckerSelectable() || current === 'BLOODSUCKER'
+  );
+}
+
 export function parseLeagueFormat(
   value: unknown,
   fallback: LeagueFormat = 'STANDARD'

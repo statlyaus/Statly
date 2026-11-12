@@ -41,6 +41,37 @@ vi.mock('@/lib/leagueMembership', () => ({ listActiveLeagueMembers: vi.fn() }));
 
 import { PUT } from '@/app/api/leagues/[id]/settings/route';
 
+// The write transaction locks the League row, re-reads the locks from the league the route loaded,
+// then writes through the same mocks.
+function runWriteTransaction() {
+  mocks.transaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) => {
+    const loaded = await mocks.findLeague.mock.results.at(-1)?.value;
+    return run({
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          scoringSettingsLockedAt: loaded?.settings.scoringSettingsLockedAt ?? null,
+          competitionPublishedAt: loaded?.settings.competitionPublishedAt ?? null,
+        },
+      ]),
+      league: { update: mocks.updateLeague },
+      leagueSettings: { update: mocks.updateSettings },
+      leagueCompetitionAudit: { create: vi.fn() },
+      draft: { findUnique: mocks.findDraft },
+    });
+  });
+}
+
+// The draft row as hasDraftStarted reads it.
+function draftRow(status: string) {
+  const started = status !== 'SCHEDULED';
+  return {
+    status,
+    startedAt: started ? new Date('2026-08-15T09:00:00.000Z') : null,
+    lobbyStatus: started ? 'LIVE' : 'COUNTDOWN',
+    _count: { picks: 0 },
+  };
+}
+
 const league = {
   id: 'league-1',
   name: 'Statly Premier League',
@@ -86,7 +117,7 @@ describe('league settings route draft scheduling', () => {
     mocks.findLeague.mockResolvedValue(league);
     mocks.updateLeague.mockResolvedValue(league);
     mocks.updateSettings.mockResolvedValue(league.settings);
-    mocks.transaction.mockResolvedValue([]);
+    runWriteTransaction();
     mocks.convergeDraftSetup.mockResolvedValue(undefined);
     mocks.countActions.mockResolvedValue(0);
     mocks.findDraft.mockResolvedValue(null);
@@ -258,7 +289,7 @@ describe('league settings route locks', () => {
     mocks.authenticate.mockResolvedValue('owner-user');
     mocks.getAccess.mockResolvedValue({ isMember: true, canManage: true });
     mocks.findLeague.mockResolvedValue(league);
-    mocks.transaction.mockResolvedValue([]);
+    runWriteTransaction();
     mocks.convergeDraftSetup.mockResolvedValue(undefined);
     mocks.countActions.mockResolvedValue(0);
     mocks.findDraft.mockResolvedValue(null);
@@ -322,7 +353,7 @@ describe('league settings route locks', () => {
   it.each(['LIVE', 'PAUSED', 'COMPLETED'])(
     'refuses to change draft structure once the draft is %s',
     async (status) => {
-      mocks.findDraft.mockResolvedValue({ status });
+      mocks.findDraft.mockResolvedValue(draftRow(status));
 
       for (const body of [
         { draft: { draftType: 'linear' } },
@@ -344,7 +375,7 @@ describe('league settings route locks', () => {
   );
 
   it('lets the commissioner change draft structure while the draft is scheduled', async () => {
-    mocks.findDraft.mockResolvedValue({ status: 'SCHEDULED' });
+    mocks.findDraft.mockResolvedValue(draftRow('SCHEDULED'));
 
     const response = await PUT(settingsRequest({ draft: { draftType: 'linear' } }), {
       params: Promise.resolve({ id: 'league-1' }),
@@ -358,7 +389,7 @@ describe('league settings route locks', () => {
   });
 
   it('saves other settings after the draft starts when draft structure is unchanged', async () => {
-    mocks.findDraft.mockResolvedValue({ status: 'LIVE' });
+    mocks.findDraft.mockResolvedValue(draftRow('LIVE'));
 
     const response = await PUT(
       settingsRequest({
@@ -373,7 +404,7 @@ describe('league settings route locks', () => {
 
   it('reports both locks and their reasons in the settings response', async () => {
     mocks.findLeague.mockResolvedValue(publishedLeague);
-    mocks.findDraft.mockResolvedValue({ status: 'COMPLETED' });
+    mocks.findDraft.mockResolvedValue(draftRow('COMPLETED'));
 
     const response = await PUT(settingsRequest({ trade: { tradeLimit: 4 } }), {
       params: Promise.resolve({ id: 'league-1' }),

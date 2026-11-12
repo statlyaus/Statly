@@ -21,7 +21,7 @@ import {
   type DraftScheduleValue,
 } from '@/lib/draftSchedule';
 import {
-  LEAGUE_FORMAT_OPTIONS,
+  selectableLeagueFormatOptions,
   NO_LOSERS_EXPLANATION,
   parseLeagueFormat,
 } from '@/lib/leagueFormatOptions';
@@ -293,7 +293,7 @@ export default function NewLeaguePage() {
                   }}
                   className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                 >
-                  {LEAGUE_FORMAT_OPTIONS.map((option) => (
+                  {selectableLeagueFormatOptions().map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

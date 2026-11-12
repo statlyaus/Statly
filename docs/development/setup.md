@@ -126,6 +126,10 @@ The legacy development-auth fallback is not enabled by that harness. It remains 
 `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true` and `STATLY_ENABLE_DEV_AUTH=true` are both set explicitly and
 `NODE_ENV` is not `production`.
 
+Bloodsucker leagues are held back until epic #1275 ships. Set
+`NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` to offer the format locally; see
+[League formats](../product/league-competition-rules.md#league-formats).
+
 ## Ordinary development
 
 ```sh
