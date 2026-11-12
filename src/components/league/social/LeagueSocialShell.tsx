@@ -338,6 +338,8 @@ export default function LeagueSocialShell({
             controller.reportContent('message', messageId, reason, details)
           }
           onRemove={(messageId, reason) => controller.moderateContent('message', messageId, reason)}
+          onEdit={controller.editMessage}
+          onDelete={controller.deleteMessage}
         />
       </div>
 

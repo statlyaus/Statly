@@ -68,6 +68,11 @@ bidirectional-override characters removed before it is validated, so a message c
 read differently from what was typed. A mute or unmute commits with a `social:moderation` event that
 names nobody, which is how the muted member's open screens learn they can no longer send.
 
+A member can edit and delete their own chat message (`PATCH` and `DELETE` on
+`/social/messages/<id>`; the author check is in `socialCommands`). Both publish `social:moderation`
+carrying the whole message, which other browsers apply in place, recomputing whose message it is;
+any other moderation event (posts, replies, restores, mutes) reloads the snapshot.
+
 Chat GIFs persist only the GIPHY id (`SocialMessage.giphyId`); the browser resolves renditions with
 the public `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`, and the GIF picker is hidden while that key is unset.
 GIPHY's API terms forbid caching or proxying media URLs, so the server stores none. A beta key is

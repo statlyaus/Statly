@@ -632,4 +632,64 @@ describe('useLeagueSocial', () => {
     );
     expect(result.current.messagesCursor).toBe('older-than-60');
   });
+
+  it('edits and deletes the member’s own message through the message route', async () => {
+    const { result } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(8));
+
+    mocks.authenticatedFetch.mockResolvedValueOnce(
+      response({ ...memberMessage, content: 'Edited', editedAt: '2026-07-19T10:05:00.000Z' })
+    );
+    await act(async () => {
+      await result.current.editMessage('message-1', 'Edited');
+    });
+    expect(mocks.authenticatedFetch).toHaveBeenLastCalledWith(
+      '/api/leagues/league-1/social/messages/message-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ content: 'Edited' }) }),
+      'user-1'
+    );
+    expect(result.current.messages[0].content).toBe('Edited');
+
+    mocks.authenticatedFetch.mockResolvedValueOnce(
+      response({ ...memberMessage, moderationStatus: 'removed' })
+    );
+    await act(async () => {
+      await result.current.deleteMessage('message-1');
+    });
+    expect(mocks.authenticatedFetch).toHaveBeenLastCalledWith(
+      '/api/leagues/league-1/social/messages/message-1',
+      expect.objectContaining({ method: 'DELETE' }),
+      'user-1'
+    );
+    expect(result.current.messages[0].moderationStatus).toBe('removed');
+  });
+
+  it('applies another member’s edit in place without reloading the snapshot', async () => {
+    const { result } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(8));
+
+    act(() => {
+      mocks.handlers.get('social:moderation')?.(
+        envelope('social:moderation', 'chat', 12, {
+          ...memberMessage,
+          content: 'Edited elsewhere',
+          isOwn: true,
+        })
+      );
+    });
+
+    expect(result.current.messages[0]).toMatchObject({ content: 'Edited elsewhere', isOwn: false });
+    expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(8);
+
+    act(() => {
+      mocks.handlers.get('social:moderation')?.(
+        envelope('social:moderation', 'chat', 13, {
+          action: 'mute',
+        } as unknown as SocialRealtimeEnvelope['payload'])
+      );
+    });
+    await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(12));
+  });
 });
