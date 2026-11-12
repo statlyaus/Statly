@@ -370,15 +370,16 @@ describe.each(['STANDARD', 'BLOODSUCKER'] as const)('a %s league (golden)', (lea
 
 // Footywire rows for the round, ingested through the ETL's own store (etl/resultStore.ts).
 function footywireRows(gwsGee: [number, number], hawCol: [number, number]): ResultSourceRow[] {
-  return [
+  const games: Array<[string, string, [number, number]]> = [
     ['GWS', 'Geelong', gwsGee],
     ['Hawthorn', 'Collingwood', hawCol],
-  ].map(([home, away, [homePoints, awayPoints]], index) => ({
+  ];
+  return games.map(([home, away, [homePoints, awayPoints]], index) => ({
     season: AFL_SEASON,
     match_id: String(95001 + index),
     round_label: 'Round 5',
-    home_team: home as string,
-    away_team: away as string,
+    home_team: home,
+    away_team: away,
     home_points: homePoints,
     away_points: awayPoints,
     date: '2091-04-20',
