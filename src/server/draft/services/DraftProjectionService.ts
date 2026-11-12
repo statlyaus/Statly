@@ -324,9 +324,9 @@ export class DraftProjectionService {
     }));
 
     const totalTeams = participants.length;
-    const totalRounds = draft.league.settings.rosterSize + draft.league.settings.benchSize;
-    const totalPicks = totalTeams * totalRounds;
-    const safePickNumber = Math.min(draft.currentPick, Math.max(totalPicks, 1));
+    // The stored total is capped by the player pool at setup; completion stops there too.
+    const totalRounds = totalTeams > 0 ? Math.ceil(draft.totalPicks / totalTeams) : 0;
+    const safePickNumber = Math.min(draft.currentPick, Math.max(draft.totalPicks, 1));
     const draftType = draft.league.settings.draftType ?? DraftType.SNAKE;
     const turn = calculateDraftTurn(draftType, safePickNumber, participants);
     const timerAnchor = draft.pickStartedAt ?? draft.startedAt ?? draft.createdAt;
