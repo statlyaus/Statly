@@ -66,6 +66,7 @@ vi.mock('@/server/etl/etlRoundData', () => ({
   ),
 }));
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
 import { aggregateLineupCategoryTotals } from '@/server/leagues/matchupScoringEngine';
@@ -297,6 +298,35 @@ describe.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
       expect(score.pointsFor).toBe(4);
     });
 
+    it("joins a result whose home/away order differs from the stats feed's (#1315)", async () => {
+      // Footywire's match page lists Geelong at home; the fixture and stat rows list GWS.
+      await ingestResultRows(
+        footywireRows([80, 100], [70, 73]).map((row, index) =>
+          index === 0
+            ? {
+                ...row,
+                home_team: row.away_team,
+                away_team: row.home_team,
+                home_points: row.away_points,
+                away_points: row.home_points,
+              }
+            : row
+        ),
+        { store: pgResultStore(pool), fetchedAt: new Date() }
+      );
+      await expect(
+        prisma.aflMatchResult.findFirstOrThrow({ where: { season: AFL_SEASON, matchId: '95001' } })
+      ).resolves.toMatchObject({ matchUid: '2091-R5-GEE-GWS', homeClub: 'Geelong' });
+
+      await expect(
+        recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+      ).resolves.toMatchObject({ status: 'FINAL', recalculated: 1, waitingOnResults: [] });
+      const p1 = await prisma.leagueMatchupPlayerScore.findFirstOrThrow({
+        where: { matchupId, playerId: 'int-nl-p1' },
+      });
+      expect(p1).toMatchObject({ outcome: 'RESULT', clubResult: 'LOSS', margin: -20 });
+    });
+
     it('stays LIVE and names the game while a result is missing, and refuses a finalize', async () => {
       await storeResult(0, 80, 100);
 
@@ -439,6 +469,7 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
           correctedResultIds: [superseded.id],
         },
       ],
+      pending: [],
       failedLeagueIds: [],
     });
     const matchup = await prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } });
@@ -481,6 +512,7 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
     // Done once: the round's scores now use the current result.
     await expect(rescoreCorrectedResultRounds()).resolves.toEqual({
       rounds: [],
+      pending: [],
       failedLeagueIds: [],
     });
     await expect(rescoreAudits()).resolves.toHaveLength(1);
@@ -495,11 +527,90 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
 
     await expect(rescoreCorrectedResultRounds()).resolves.toEqual({
       rounds: [],
+      pending: [],
       failedLeagueIds: [],
     });
     await expect(prisma.leagueMatchupScore.findMany({ where: { matchupId } })).resolves.toEqual(
       before
     );
+    await expect(rescoreAudits()).resolves.toHaveLength(0);
+  });
+
+  it('a round the recalculation cannot re-score yet is pending, not "Re-scored", and stays pending (#1315)', async () => {
+    await ingest(footywireRows([100, 80], [70, 73]));
+    const superseded = await prisma.aflMatchResult.findFirstOrThrow({
+      where: { season: AFL_SEASON, matchId: '95001', supersededById: { not: null } },
+    });
+    // What the recalculation answers when the round's stats are unavailable.
+    const statsUnavailable = vi.fn().mockResolvedValue({
+      round: ROUND,
+      status: 'SCHEDULED',
+      recalculated: 0,
+      scores: [],
+    });
+    const info = vi.spyOn(logger, 'info');
+
+    for (let run = 0; run < 2; run += 1) {
+      await expect(rescoreCorrectedResultRounds(statsUnavailable)).resolves.toEqual({
+        rounds: [],
+        pending: [{ leagueId: LEAGUE, round: ROUND, correctedResultIds: [superseded.id] }],
+        failedLeagueIds: [],
+      });
+    }
+    expect(info).not.toHaveBeenCalledWith(
+      'Re-scored a No Losers round after an AFL result correction',
+      expect.anything()
+    );
+    info.mockRestore();
+    await expect(rescoreAudits()).resolves.toHaveLength(0);
+  });
+
+  it('a correction that can no longer be joined never demotes the FINAL round (#1315)', async () => {
+    // The corrected row names another round, so no stat row joins it.
+    const previous = await prisma.aflMatchResult.findFirstOrThrow({
+      where: { season: AFL_SEASON, matchId: '95001', supersededById: null },
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.aflMatchResult.update({
+        where: { id: previous.id },
+        data: { supersededById: 'int-nl-relabelled', supersedeReason: 'round relabelled' },
+      });
+      await tx.aflMatchResult.create({
+        data: {
+          id: 'int-nl-relabelled',
+          season: AFL_SEASON,
+          round: 6,
+          matchId: '95001',
+          matchUid: '2091-R6-GWS-GEE',
+          homeClub: previous.homeClub,
+          awayClub: previous.awayClub,
+          homePoints: 80,
+          awayPoints: 100,
+          margin: -20,
+          status: 'FINAL',
+          fetchedAt: new Date(),
+          contentHash: 'relabelled',
+        },
+      });
+    });
+    const before = await prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } });
+
+    const run = await rescoreCorrectedResultRounds();
+
+    expect(run).toEqual({ rounds: [], pending: [], failedLeagueIds: [LEAGUE] });
+    await expect(
+      recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+    ).resolves.toMatchObject({
+      status: 'FINAL',
+      blocked: 'FINAL_ROUND_RESULTS_UNJOINED',
+      waitingOnResults: ['Waiting on the result of GWS v Geelong'],
+    });
+    await expect(
+      prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } })
+    ).resolves.toEqual(before);
+    await expect(
+      prisma.leagueCompetitionRound.findFirstOrThrow({ where: { leagueId: LEAGUE } })
+    ).resolves.toMatchObject({ status: 'FINAL' });
     await expect(rescoreAudits()).resolves.toHaveLength(0);
   });
 });

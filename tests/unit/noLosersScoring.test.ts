@@ -86,6 +86,58 @@ describe('No Losers join (BR-07)', () => {
   });
 });
 
+describe('No Losers join tolerates a home/away swap between sources (#1315)', () => {
+  // Footywire's match page lists Hawthorn at home; the stats feed and fixture list Geelong.
+  const SWAPPED: StoredAflMatchResult = {
+    id: 'result-haw-gee',
+    matchUid: '2025-R18-HAW-GEE',
+    homeClub: 'Hawthorn',
+    awayClub: 'Geelong',
+    homePoints: 60,
+    awayPoints: 90,
+    status: 'FINAL',
+  };
+
+  it('joins by season, round and both clubs in either order, and counts each side correctly', () => {
+    const ctx = context([SWAPPED]);
+    const score = scoreNoLosersLineup(
+      [
+        { playerId: 'gee', slot: 'MID', totals: { goals: 2 } },
+        { playerId: 'haw', slot: 'MID', totals: { goals: 3 } },
+      ],
+      ctx
+    );
+
+    expect(score.rule.unavailablePlayerIds).toEqual([]);
+    expect(score.players.map((player) => player.totals.goals)).toEqual([2, 0]);
+    // Geelong v Hawthorn has its result; only Sydney v Carlton waits.
+    expect(noLosersWaitingOn(ctx, score.rule.players)).toEqual([
+      'Waiting on the result of Sydney v Carlton',
+    ]);
+    expect(
+      noLosersPlayerScoreRows(score, ctx, {
+        leagueId: 'l',
+        seasonId: 's',
+        matchupId: 'm',
+        memberId: 'mem',
+        round: 1,
+      }).map((row) => [row.playerId, row.clubResult, row.aflMatchUid, row.aflMatchResultId])
+    ).toEqual([
+      ['gee', 'WIN', '2025-R18-GEE-HAW', 'result-haw-gee'],
+      ['haw', 'LOSS', '2025-R18-GEE-HAW', 'result-haw-gee'],
+    ]);
+  });
+
+  it('does not join a result from another round', () => {
+    const ctx = context([{ ...SWAPPED, matchUid: '2025-R19-HAW-GEE' }]);
+    const score = scoreNoLosersLineup(
+      [{ playerId: 'gee', slot: 'MID', totals: { goals: 2 } }],
+      ctx
+    );
+    expect(score.rule.unavailablePlayerIds).toEqual(['gee']);
+  });
+});
+
 describe('No Losers waiting and provisional totals (BR-08, BR-20)', () => {
   it('counts a pending player raw, provisionally, and names every finished game without a result', () => {
     const ctx = context();

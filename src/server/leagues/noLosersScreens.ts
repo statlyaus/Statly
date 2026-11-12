@@ -4,6 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
+import { aflMatchJoinKey } from '@/server/etl/aflMatchJoinKey';
 
 import { normalizeRoundMatchStatus, type RawRoundMatch } from './liveStatsAdapter';
 import { isCountedSlot, type LineupScoringPlayer } from './matchupScoringEngine';
@@ -57,7 +58,9 @@ export function buildNoLosersClubStrip({
   /** Games known to be finished from their stat rows (Footywire posts stats only after the siren). */
   finishedMatchUids?: ReadonlySet<string>;
 }): NoLosersStripGame[] {
-  const resultByMatchUid = new Map(results.map((result) => [result.matchUid, result]));
+  // Joined by season, round and the two clubs in either order, as scoring joins them (#1315).
+  const joinKey = (matchUid: string) => aflMatchJoinKey(matchUid) ?? matchUid;
+  const resultByKey = new Map(results.map((result) => [joinKey(result.matchUid), result]));
   const statusByMatchUid = new Map(
     normalizeRoundMatchStatus(matches).matches.flatMap((match) =>
       match.matchId ? [[match.matchId, match] as const] : []
@@ -67,9 +70,9 @@ export function buildNoLosersClubStrip({
   const games: NoLosersStripGame[] = [];
   for (const match of matches) {
     const matchUid = typeof match.match_uid === 'string' ? match.match_uid : null;
-    if (!matchUid || seen.has(matchUid)) continue;
-    seen.add(matchUid);
-    const result = resultByMatchUid.get(matchUid);
+    if (!matchUid || seen.has(joinKey(matchUid))) continue;
+    seen.add(joinKey(matchUid));
+    const result = resultByKey.get(joinKey(matchUid));
     const fixture = statusByMatchUid.get(matchUid);
     const club = (value: unknown) => (typeof value === 'string' ? getTeamName(value) : '?');
     games.push(
@@ -92,7 +95,7 @@ export function buildNoLosersClubStrip({
     );
   }
   for (const result of results) {
-    if (!seen.has(result.matchUid)) games.push(stripGameFromResult(result, null));
+    if (!seen.has(joinKey(result.matchUid))) games.push(stripGameFromResult(result, null));
   }
   return games;
 }

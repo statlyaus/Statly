@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
+import { aflMatchJoinKey } from '@/server/etl/aflMatchJoinKey';
 
 import type { NormalizedLiveStatRow, RawRoundMatch } from './liveStatsAdapter';
 import type { LineupScoringPlayer } from './matchupScoringEngine';
@@ -17,10 +18,12 @@ import {
 
 /**
  * Wires the No Losers result rule (`noLosersResultRule.ts`) into live and final scoring (#1294,
- * epic #1290 BR-07, BR-08, BR-20, BR-21). The join is by the Statly match id (`matchUid`, e.g.
- * `2025-R18-GEE-HAW`), which stat rows and `AflMatchResult` both carry; the player's side is found
- * by his stat row's club abbreviation against the two in `matchUid`, and the rule is then given the
- * result's own club name. The provider's club spelling is never used.
+ * epic #1290 BR-07, BR-08, BR-20, BR-21). The join is by season, round and the two club
+ * abbreviations in either order (`aflMatchJoinKey`, #1315), read from the Statly match id
+ * (`matchUid`, e.g. `2025-R18-GEE-HAW`) that stat rows and `AflMatchResult` both carry: the two
+ * sources build it on their own and may disagree on home and away. The player's side is found by his
+ * stat row's club abbreviation against the two in the result's `matchUid`, and the rule is then
+ * given the result's own club name. The provider's club spelling is never used.
  */
 
 /** A stored, current (`supersededById IS NULL`) official result. */
@@ -42,7 +45,7 @@ export interface NoLosersRoundGame {
 }
 
 export interface NoLosersRoundContext {
-  /** Current results by matchUid. */
+  /** Current results by join key (`aflMatchJoinKey`); read them with `noLosersResultFor`. */
   results: ReadonlyMap<string, StoredAflMatchResult>;
   /** The match and club abbreviation of each player's stat row, by Statly player id. */
   statRowByPlayerId: ReadonlyMap<string, { matchUid: string | null; teamAbbr: string | null }>;
@@ -73,6 +76,15 @@ export function resolveResultClub(
   if (abbr === abbreviations.home) return result.homeClub;
   if (abbr === abbreviations.away) return result.awayClub;
   return '';
+}
+
+/** The current result a game or stat row's `matchUid` joins to, in either home/away order. */
+export function noLosersResultFor(
+  context: Pick<NoLosersRoundContext, 'results'>,
+  matchUid: string | null | undefined
+): StoredAflMatchResult | undefined {
+  const key = aflMatchJoinKey(matchUid);
+  return key ? context.results.get(key) : undefined;
 }
 
 function toRuleResult(result: StoredAflMatchResult): NoLosersMatchResult {
@@ -115,13 +127,22 @@ export function buildNoLosersRoundContext({
     ];
   });
   return {
-    results: new Map(results.map((result) => [result.matchUid, result])),
+    results: new Map(
+      results.flatMap((result) => {
+        const key = aflMatchJoinKey(result.matchUid);
+        return key ? [[key, result] as const] : [];
+      })
+    ),
     statRowByPlayerId,
     games,
   };
 }
 
-/** Current results for the round's games and every match a stat row names, one query. */
+/**
+ * Current results for the round's games and every match a stat row names, one query. Read by season
+ * and round (from each `matchUid`), not by `matchUid`, so a result whose home/away order differs from
+ * the stat rows' is still found.
+ */
 export async function loadNoLosersRoundContext(
   input: {
     season: number;
@@ -130,18 +151,21 @@ export async function loadNoLosersRoundContext(
   },
   client: Pick<PrismaClient, 'aflMatchResult'> = prisma
 ): Promise<NoLosersRoundContext> {
-  const matchUids = [
-    ...new Set([
-      ...input.matches.flatMap((match) =>
-        typeof match.match_uid === 'string' ? [match.match_uid] : []
-      ),
-      ...input.statRows.flatMap((row) => (row.matchId ? [row.matchId] : [])),
-    ]),
+  const rounds = [
+    ...new Set(
+      [
+        ...input.matches.map((match) => match.match_uid),
+        ...input.statRows.map((row) => row.matchId),
+      ].flatMap((matchUid) => {
+        const key = aflMatchJoinKey(typeof matchUid === 'string' ? matchUid : null);
+        return key?.startsWith(`${input.season}|`) ? [Number(key.split('|')[1])] : [];
+      })
+    ),
   ];
   const results =
-    matchUids.length > 0
+    rounds.length > 0
       ? await client.aflMatchResult.findMany({
-          where: { season: input.season, supersededById: null, matchUid: { in: matchUids } },
+          where: { season: input.season, supersededById: null, round: { in: rounds } },
           select: {
             id: true,
             matchUid: true,
@@ -169,22 +193,20 @@ export function scoreNoLosersLineup(
   players: readonly LineupScoringPlayer[],
   context: NoLosersRoundContext
 ): NoLosersLineupScore {
-  const ruleResults = new Map(
-    [...context.results].map(([matchUid, result]) => [matchUid, toRuleResult(result)])
-  );
-  const rule = applyNoLosersResultRule({
-    results: ruleResults,
-    players: players.map((player) => {
-      const statRow = context.statRowByPlayerId.get(player.playerId);
-      const matchUid = statRow?.matchUid ?? null;
-      const result = matchUid ? context.results.get(matchUid) : undefined;
-      return {
-        ...player,
-        matchId: matchUid,
-        club: result ? resolveResultClub(statRow?.teamAbbr ?? null, result) : '',
-      };
-    }),
+  // The rule reads results by the stat row's own matchUid; each is joined here by its key.
+  const ruleResults = new Map<string, NoLosersMatchResult>();
+  const rulePlayers = players.map((player) => {
+    const statRow = context.statRowByPlayerId.get(player.playerId);
+    const matchUid = statRow?.matchUid ?? null;
+    const result = noLosersResultFor(context, matchUid);
+    if (matchUid && result) ruleResults.set(matchUid, toRuleResult(result));
+    return {
+      ...player,
+      matchId: matchUid,
+      club: result ? resolveResultClub(statRow?.teamAbbr ?? null, result) : '',
+    };
   });
+  const rule = applyNoLosersResultRule({ results: ruleResults, players: rulePlayers });
   return {
     rule,
     players:
@@ -237,7 +259,7 @@ export function noLosersWaitingOn(
     context.games.find((game) => game.matchUid === matchUid)?.label ?? matchUid;
   const waiting = new Set<string>();
   for (const game of context.games) {
-    if (game.finished && !context.results.has(game.matchUid)) waiting.add(game.matchUid);
+    if (game.finished && !noLosersResultFor(context, game.matchUid)) waiting.add(game.matchUid);
   }
   const unresolved = new Set<string>();
   for (const player of scoredPlayers) {
@@ -281,7 +303,7 @@ export function noLosersPlayerScoreRows(
         margin: isResult ? outcome.margin : null,
         multiplier: isResult ? outcome.multiplier : null,
         aflMatchUid: matchUid,
-        aflMatchResultId: isResult && matchUid ? (context.results.get(matchUid)?.id ?? null) : null,
+        aflMatchResultId: isResult ? (noLosersResultFor(context, matchUid)?.id ?? null) : null,
         rawTotalsJson: player.rawTotals,
         countedTotalsJson: player.countedTotals ?? player.rawTotals,
         ruleVersion: score.rule.ruleVersion,
