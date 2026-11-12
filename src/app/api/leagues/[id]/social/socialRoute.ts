@@ -4,6 +4,11 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { SocialError, toSocialErrorResponse } from '@/server/leagues/social/socialErrors';
+import { enforceSocialRateLimit } from '@/server/leagues/social/socialRateLimit';
+
+// Ceiling for every social write by one member in one league (edits, deletes, read receipts,
+// preferences), so no write route is unlimited. Routes that create content add a stricter limit.
+export const SOCIAL_WRITE_LIMIT = { maxRequests: 120, windowSeconds: 60 } as const;
 
 export interface LeagueSocialRouteContext {
   leagueId: string;
@@ -26,6 +31,10 @@ export async function withLeagueSocialRoute<T>(
     const userId = await getAuthenticatedUserId(request);
     if (!userId) throw new SocialError('UNAUTHORIZED', 'Sign in to use league social features');
     context = { leagueId, userId, params };
+
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      await enforceSocialRateLimit({ leagueId, userId, action: 'write', ...SOCIAL_WRITE_LIMIT });
+    }
 
     const data = await handler(context);
     return NextResponse.json(

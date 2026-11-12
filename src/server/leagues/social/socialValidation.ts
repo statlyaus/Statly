@@ -16,11 +16,24 @@ const idempotencyKeySchema = z
   .max(128)
   .regex(/^[A-Za-z0-9._:-]+$/);
 
+// Characters that render as nothing or reorder the text around them: control characters other than
+// tab and line breaks, zero-width space, word joiner, byte-order mark, and the bidirectional
+// embedding, override and isolate controls. They allow blank-looking messages and text that reads
+// differently from what was typed. Zero-width joiner and non-joiner stay: emoji sequences and
+// several scripts need them.
+const INVISIBLE_CHARACTERS = /(?![\t\n\r])[\p{Cc}\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/gu;
+
+export function stripInvisibleCharacters(value: string): string {
+  return value.replace(INVISIBLE_CHARACTERS, '');
+}
+
+const visibleText = () => z.string().overwrite(stripInvisibleCharacters);
+
 // Trim before the length check so padding does not count against the limit.
 const nonEmptyText = (maxLength: number) =>
-  z.string().trim().min(1, 'Content cannot be empty').max(maxLength);
+  visibleText().trim().min(1, 'Content cannot be empty').max(maxLength);
 
-const socialMessageText = z.string().trim().max(SOCIAL_MESSAGE_MAX_LENGTH);
+const socialMessageText = visibleText().trim().max(SOCIAL_MESSAGE_MAX_LENGTH);
 
 export const socialGifSchema = z
   .object({

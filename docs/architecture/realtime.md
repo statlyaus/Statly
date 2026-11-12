@@ -61,6 +61,13 @@ removals and read receipts are in the same outbox but are never unread. A `socia
 event is delivered only to the sockets of the member it belongs to, and each event costs one
 membership lookup per member, not per socket.
 
+Every social write (anything but GET) counts against one per-member, per-league ceiling of 120 a
+minute in `withLeagueSocialRoute`, so edits, deletes, read receipts and preferences are never
+unlimited; routes that create content keep their own stricter limits. Social text has invisible and
+bidirectional-override characters removed before it is validated, so a message cannot be blank or
+read differently from what was typed. A mute or unmute commits with a `social:moderation` event that
+names nobody, which is how the muted member's open screens learn they can no longer send.
+
 A member can edit and delete their own chat message (`PATCH` and `DELETE` on
 `/social/messages/<id>`; the author check is in `socialCommands`). Both publish `social:moderation`
 carrying the whole message, which other browsers apply in place, recomputing whose message it is;

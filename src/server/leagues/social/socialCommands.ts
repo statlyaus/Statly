@@ -754,55 +754,67 @@ async function moderateSocialMute(
   if (action.userId === access.userId) {
     throw new SocialError('VALIDATION', 'Commissioners cannot mute themselves');
   }
-  const target = await prisma.leagueMember.findFirst({
-    where: {
-      leagueId: access.leagueId,
-      userId: action.userId,
-      isActive: true,
-      status: 'ACTIVE',
-    },
-    select: { id: true },
-  });
-  if (!target) throw new SocialError('NOT_FOUND', 'Active league member not found');
+  // The mute and its event commit together: the event is how the muted member's open screens learn
+  // they can no longer send, without a refresh. It names nobody; the league only reloads.
+  return prisma.$transaction(async (tx) => {
+    const target = await tx.leagueMember.findFirst({
+      where: {
+        leagueId: access.leagueId,
+        userId: action.userId,
+        isActive: true,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    if (!target) throw new SocialError('NOT_FOUND', 'Active league member not found');
 
-  if (action.action === 'mute') {
-    const until = new Date(action.until);
-    if (until <= new Date())
-      throw new SocialError('VALIDATION', 'Mute expiry must be in the future');
-    const mute = await prisma.socialMute.create({
-      data: {
+    const now = new Date();
+    if (action.action === 'mute') {
+      const until = new Date(action.until);
+      if (until <= now) throw new SocialError('VALIDATION', 'Mute expiry must be in the future');
+      const mute = await tx.socialMute.create({
+        data: {
+          leagueId: access.leagueId,
+          seasonId: access.seasonId,
+          mutedUserId: action.userId,
+          mutedMemberId: target.id,
+          createdByUserId: access.userId,
+          createdByMemberId: access.memberId,
+          reason: action.reason,
+          expiresAt: until,
+        },
+        select: { id: true, expiresAt: true },
+      });
+      await enqueueSocialEvent(tx, access, 'CHAT', 'social:moderation', 'mute', mute.id, {
+        action: 'mute',
+        occurredAt: now.toISOString(),
+      });
+      return {
+        action: 'mute',
+        userId: action.userId,
+        muteId: mute.id,
+        expiresAt: mute.expiresAt?.toISOString() ?? null,
+      };
+    }
+
+    await tx.socialMute.updateMany({
+      where: {
         leagueId: access.leagueId,
         seasonId: access.seasonId,
         mutedUserId: action.userId,
-        mutedMemberId: target.id,
-        createdByUserId: access.userId,
-        createdByMemberId: access.memberId,
-        reason: action.reason,
-        expiresAt: until,
+        revokedAt: null,
       },
-      select: { id: true, expiresAt: true },
+      data: {
+        revokedAt: now,
+        revokedByUserId: access.userId,
+      },
     });
-    return {
-      action: 'mute',
-      userId: action.userId,
-      muteId: mute.id,
-      expiresAt: mute.expiresAt?.toISOString() ?? null,
-    };
-  }
-
-  await prisma.socialMute.updateMany({
-    where: {
-      leagueId: access.leagueId,
-      seasonId: access.seasonId,
-      mutedUserId: action.userId,
-      revokedAt: null,
-    },
-    data: {
-      revokedAt: new Date(),
-      revokedByUserId: access.userId,
-    },
+    await enqueueSocialEvent(tx, access, 'CHAT', 'social:moderation', 'mute', target.id, {
+      action: 'unmute',
+      occurredAt: now.toISOString(),
+    });
+    return { action: 'unmute', userId: action.userId };
   });
-  return { action: 'unmute', userId: action.userId };
 }
 
 async function executeIdempotentCommand<T extends Prisma.InputJsonValue>(
