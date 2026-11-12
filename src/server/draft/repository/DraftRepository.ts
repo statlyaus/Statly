@@ -829,7 +829,9 @@ export class DraftRepository {
         lockedAt: null,
         ...(blockedDraftIds.length > 0 ? { draftId: { notIn: blockedDraftIds } } : {}),
       },
-      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      // Fewest failed attempts first: events that keep failing go to the back of the queue instead
+      // of filling every batch ahead of drafts that can publish. Nothing is dropped.
+      orderBy: [{ attempts: 'asc' }, { sequence: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
 

@@ -149,7 +149,8 @@ message values must never be labels.
 - `draft_clock_convergence_total{outcome}` records exactly one terminal result per convergence call:
   `not_live`, `valid`, `repaired`, `concurrent`, or `failed`.
 - `draft_outbox_flushes_total{source,outcome}` records command, per-draft repair, and batch-repair
-  drains as `empty`, `success`, or `failed`.
+  drains as `empty`, `success`, or `failed`. The batch repair takes pending events with the fewest
+  failed attempts first, so events that keep failing wait at the back and are never dropped.
 - `draft_outbox_events_total{outcome}` counts events in successful or failed delivery attempts. It is
   attempt volume, not a unique-event count: a retry may first be `failed` and later `published`.
 - `draft_realtime_state_preparation_retries_total{reason="concurrent_clock_transition"}` records a
