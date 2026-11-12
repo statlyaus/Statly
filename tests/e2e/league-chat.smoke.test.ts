@@ -73,6 +73,31 @@ test('league chat sends a message and shows another member’s message without a
 
   // One 10-second catch-up tick, plus request time.
   await expect(messages).toContainText(otherText, { timeout: 20_000 });
+
+  // The member edits, then deletes, their own message; nothing is offered on the other member's.
+  const editedText = `${ownText} (edited)`;
+  const ownMessage = messages.getByRole('article').filter({ hasText: ownText });
+  await ownMessage.getByRole('button', { name: 'Edit' }).click();
+  const editor = chat.getByRole('textbox', { name: 'Edit your message' });
+  await editor.fill(editedText);
+  await editor.press('Enter');
+  await expect(messages).toContainText(editedText);
+  await expect(
+    messages.getByRole('article').filter({ hasText: otherText }).getByRole('button', {
+      name: 'Edit',
+    })
+  ).toHaveCount(0);
+
+  await messages
+    .getByRole('article')
+    .filter({ hasText: editedText })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await chat
+    .getByRole('group', { name: 'Delete your message' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(messages).not.toContainText(editedText);
   // Scoped to chat: Next.js renders an empty route announcer with role="alert" on every page.
   await expect(chat.getByRole('alert')).toHaveCount(0);
   await expectNoAppErrorBoundary(page);

@@ -261,4 +261,107 @@ describe('LeagueChatPanel', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Message league chat' })).toHaveFocus();
   });
+
+  describe('own message actions', () => {
+    const ownMessage: SocialMessage = { ...memberMessage, id: 'own-1', isOwn: true };
+
+    function renderOwn(
+      overrides: Partial<React.ComponentProps<typeof LeagueChatPanel>> = {},
+      messages: SocialMessage[] = [ownMessage]
+    ) {
+      const onEdit = vi.fn().mockResolvedValue(undefined);
+      const onDelete = vi.fn().mockResolvedValue(undefined);
+      render(
+        <LeagueChatPanel
+          messages={messages}
+          hasEarlierMessages={false}
+          loading={false}
+          loadingEarlier={false}
+          sending={false}
+          canPublish
+          canManage={false}
+          onRetry={vi.fn()}
+          onLoadEarlier={vi.fn()}
+          onSend={vi.fn()}
+          onReport={vi.fn()}
+          onRemove={vi.fn()}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          {...overrides}
+        />
+      );
+      return { onEdit, onDelete };
+    }
+
+    it('offers edit and delete only on the member’s own messages', () => {
+      renderOwn({}, [ownMessage, { ...memberMessage, id: 'other-1' }]);
+
+      expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    });
+
+    it('saves an edit with Enter and closes the editor', async () => {
+      const user = userEvent.setup();
+      const { onEdit } = renderOwn();
+
+      await user.click(screen.getByRole('button', { name: 'Edit' }));
+      const editor = screen.getByRole('textbox', { name: 'Edit your message' });
+      expect(editor).toHaveFocus();
+      await user.clear(editor);
+      await user.type(editor, 'Corrected take{Enter}');
+
+      expect(onEdit).toHaveBeenCalledWith('own-1', 'Corrected take');
+      expect(screen.queryByRole('textbox', { name: 'Edit your message' })).not.toBeInTheDocument();
+    });
+
+    it('cancels an edit with Escape and keeps the editor open with the reason when saving fails', async () => {
+      const user = userEvent.setup();
+      const { onEdit } = renderOwn();
+
+      await user.click(screen.getByRole('button', { name: 'Edit' }));
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('textbox', { name: 'Edit your message' })).not.toBeInTheDocument();
+      expect(onEdit).not.toHaveBeenCalled();
+
+      onEdit.mockRejectedValueOnce(new Error('You are posting too quickly'));
+      await user.click(screen.getByRole('button', { name: 'Edit' }));
+      await user.type(screen.getByRole('textbox', { name: 'Edit your message' }), ' again{Enter}');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('You are posting too quickly');
+      expect(screen.getByRole('textbox', { name: 'Edit your message' })).toBeEnabled();
+    });
+
+    it('deletes only after confirmation', async () => {
+      const user = userEvent.setup();
+      const { onDelete } = renderOwn();
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }));
+      expect(onDelete).not.toHaveBeenCalled();
+      const confirm = screen.getByRole('group', { name: 'Delete your message' });
+      expect(confirm).toHaveTextContent('The league will see “Message removed”.');
+
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(onDelete).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }));
+      await user.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+      expect(onDelete).toHaveBeenCalledWith('own-1');
+    });
+
+    it('offers delete but not edit on a GIF-only message', () => {
+      renderOwn({}, [{ ...gifMessage, id: 'own-gif', isOwn: true }]);
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    });
+
+    it('offers a muted member delete but not edit, and nothing on a removed message', () => {
+      renderOwn({ mutedUntil: '2099-01-01T00:00:00.000Z' }, [
+        ownMessage,
+        { ...ownMessage, id: 'own-removed', moderationStatus: 'removed' },
+      ]);
+
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    });
+  });
 });
