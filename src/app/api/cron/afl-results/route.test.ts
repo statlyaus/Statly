@@ -32,7 +32,7 @@ function authorized() {
 
 describe('/api/cron/afl-results', () => {
   beforeEach(() => {
-    readMissingAflResultsMock.mockResolvedValue({ checked: 9, missing: [] });
+    readMissingAflResultsMock.mockResolvedValue({ checked: 9, missing: [], unjoined: [] });
   });
 
   afterEach(() => {
@@ -51,20 +51,39 @@ describe('/api/cron/afl-results', () => {
   it('answers 200 when every due game has a result', async () => {
     const response = await GET(authorized());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, checked: 9, missing: [] });
+    expect(await response.json()).toEqual({ ok: true, checked: 9, missing: [], unjoined: [] });
     expect(loggerMock.error).not.toHaveBeenCalled();
   });
 
   it('logs each missing result as an error (forwarded to Sentry) and answers 500', async () => {
-    readMissingAflResultsMock.mockResolvedValue({ checked: 9, missing: [MISSING] });
+    readMissingAflResultsMock.mockResolvedValue({ checked: 9, missing: [MISSING], unjoined: [] });
 
     const response = await POST(authorized());
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ ok: false, checked: 9, missing: [MISSING.match_uid] });
+    expect(await response.json()).toEqual({
+      ok: false,
+      checked: 9,
+      missing: [MISSING.match_uid],
+      unjoined: [],
+    });
     expect(loggerMock.error).toHaveBeenCalledWith(
       'Missing AFL result: Geelong v Brisbane Lions (2025-R28-GEE-BRL) has no result 6 hours after its scheduled end',
       { matchUid: MISSING.match_uid, startTimeUtc: MISSING.start_time_utc }
+    );
+  });
+
+  it('logs a stored result no fixture game joins as an error and answers 500 (#1315)', async () => {
+    const unjoined = { season: 2025, round: 29, matchUid: '2025-R29-GEE-BRL' };
+    readMissingAflResultsMock.mockResolvedValue({ checked: 9, missing: [], unjoined: [unjoined] });
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ ok: false, unjoined: [unjoined.matchUid] });
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      'Unjoined AFL result: 2025-R29-GEE-BRL matches no fixture game, so No Losers scoring cannot use it',
+      unjoined
     );
   });
 

@@ -9,7 +9,11 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
 
-import { ingestResultRows, type ResultSourceRow } from '../../etl/resultIngest';
+import {
+  ingestResultRows,
+  recordAbandonedResult,
+  type ResultSourceRow,
+} from '../../etl/resultIngest';
 import { pgResultStore } from '../../etl/resultStore';
 
 // A season no real data uses, so cleanup never touches another file's rows.
@@ -218,5 +222,41 @@ describe('AflMatchResult ingest on PostgreSQL', () => {
         },
       })
     ).resolves.toMatchObject({ status: 'ABANDONED' });
+  });
+
+  it('the operator command records an ABANDONED game once, and supersedes a stored result of it (#1315)', async () => {
+    const abandoned = { season: SEASON, round: 5, homeTeam: 'Geelong', awayTeam: 'Gold Coast' };
+    await expect(
+      recordAbandonedResult(abandoned, { store, fetchedAt: FETCHED_AT })
+    ).resolves.toMatchObject({ inserted: 1, superseded: 0 });
+    // The table's CHECK constraint accepted it: no scores, no margin.
+    await expect(
+      prisma.aflMatchResult.findFirstOrThrow({
+        where: { season: SEASON, matchId: `abandoned-${SEASON}-R5-GEE-GCS` },
+      })
+    ).resolves.toMatchObject({
+      matchUid: `${SEASON}-R5-GEE-GCS`,
+      status: 'ABANDONED',
+      homePoints: null,
+      awayPoints: null,
+      margin: null,
+      supersededById: null,
+    });
+    await expect(
+      recordAbandonedResult(abandoned, { store, fetchedAt: FETCHED_AT })
+    ).resolves.toMatchObject({ inserted: 0, superseded: 0, unchanged: 1 });
+
+    // A game Footywire did post (match id 90004) that the operator then records as abandoned.
+    await cleanup();
+    await ingestResultRows(roundRows(), { store, fetchedAt: FETCHED_AT });
+    await expect(
+      recordAbandonedResult({ ...abandoned, matchId: '90004' }, { store, fetchedAt: FETCHED_AT })
+    ).resolves.toMatchObject({ superseded: 1 });
+    const old = await prisma.aflMatchResult.findFirstOrThrow({
+      where: { season: SEASON, matchId: '90004', supersededById: { not: null } },
+    });
+    expect(old.supersedeReason).toBe(
+      'Operator recorded the game as abandoned: Geelong 83 v Gold Coast 77 is now Geelong v Gold Coast abandoned'
+    );
   });
 });

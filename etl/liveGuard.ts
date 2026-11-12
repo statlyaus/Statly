@@ -3,6 +3,11 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { runFetchPipeline, runFixturePipeline, runResultPipeline } from './fetchPipeline';
 import { FINAL_STATS_WINDOW_MS, statsWindowOpen, type FixtureMatch } from './fixtureIngest';
+import {
+  dueResultRefresh,
+  RESULTS_FULL_SWEEP_TIMEOUT_MS,
+  RESULTS_LAST_MATCHES,
+} from './resultRefresh';
 
 // Initialize Firebase Admin using same pattern as main project
 if (getApps().length === 0) {
@@ -77,27 +82,41 @@ async function runFetchCycle(): Promise<void> {
   console.log('✅ Fetch cycle completed successfully');
 }
 
-// Results are posted once a game ends; NFR-3 (#1290) wants them within 2 hours, so every 10 minutes
-// in a live window is plenty. The last 18 Footywire matches cover the latest two rounds, finals
-// included, which is where a result appears or is corrected.
-const RESULTS_REFRESH_MS = Number(process.env.RESULTS_REFRESH_MS) || 10 * 60 * 1000;
-const RESULTS_LAST_MATCHES = Number(process.env.RESULTS_LAST_MATCHES) || 18;
+// Results are posted once a game ends; NFR-3 (#1290) wants them within 2 hours. In a live window the
+// latest two rounds are re-read every 10 minutes; outside one the whole season is swept every 6
+// hours, so a Footywire correction to an older game is ingested too (#1315). See ./resultRefresh.ts.
 let lastResultsRefreshAt = 0;
+let lastResultsFullSweepAt = 0;
 
 /**
- * Store recent AFL match results in PostgreSQL when the last attempt is older than
- * RESULTS_REFRESH_MS. A failure writes nothing and waits for the next attempt like a success does,
- * so a broken run never re-reads Footywire every live cycle; it never blocks stats.
+ * Store AFL match results in PostgreSQL when a refresh is due (./resultRefresh.ts). A failure writes
+ * nothing and waits for the next attempt like a success does, so a broken run never re-reads
+ * Footywire every cycle; it never blocks stats.
  */
-async function refreshResultsIfDue(now = Date.now()): Promise<void> {
-  if (now - lastResultsRefreshAt < RESULTS_REFRESH_MS) return;
+async function refreshResultsIfDue({
+  now = Date.now(),
+  live,
+}: {
+  now?: number;
+  live: boolean;
+}): Promise<void> {
+  const due = dueResultRefresh({
+    now,
+    live,
+    lastRecentAt: lastResultsRefreshAt,
+    lastFullSweepAt: lastResultsFullSweepAt,
+  });
+  if (!due) return;
   lastResultsRefreshAt = now;
+  if (due === 'full') lastResultsFullSweepAt = now;
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set; AFL match results are not stored');
   }
   await runResultPipeline({
     season: process.env.SEASON || new Date().getFullYear(),
-    lastMatches: RESULTS_LAST_MATCHES,
+    ...(due === 'recent'
+      ? { lastMatches: RESULTS_LAST_MATCHES }
+      : { timeoutMs: RESULTS_FULL_SWEEP_TIMEOUT_MS }),
   });
 }
 
@@ -143,6 +162,11 @@ async function runGuardLoop(): Promise<void> {
       const isLive = await isLiveWindow();
 
       if (!isLive) {
+        try {
+          await refreshResultsIfDue({ live: false });
+        } catch (error) {
+          console.error('AFL results sweep failed; nothing was written:', error);
+        }
         // No live matches - longer sleep
         await sleep(60000, 30000); // 60-90s
         continue;
@@ -156,7 +180,7 @@ async function runGuardLoop(): Promise<void> {
       }
 
       try {
-        await refreshResultsIfDue();
+        await refreshResultsIfDue({ live: true });
       } catch (error) {
         console.error('AFL results ingest failed; nothing was written:', error);
       }

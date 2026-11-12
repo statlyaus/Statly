@@ -192,8 +192,48 @@ function describe(
     : `${result.homeClub} ${result.homePoints} v ${result.awayClub} ${result.awayPoints}`;
 }
 
-export function supersedeReason(previous: StoredMatchResult, next: MatchResult): string {
-  return `Footywire result changed: ${describe(previous)} is now ${describe(next)}`;
+export function supersedeReason(
+  previous: StoredMatchResult,
+  next: MatchResult,
+  source = 'Footywire result changed'
+): string {
+  return `${source}: ${describe(previous)} is now ${describe(next)}`;
+}
+
+/**
+ * An operator-recorded ABANDONED result (#1315): a game abandoned without a result has no Footywire
+ * match page, so the ingest never sees it (BR-15 counts it in full). Clubs are read like Footywire's
+ * own labels and the match id is `abandoned-{matchUid}` unless Footywire has one. Run through
+ * `npm run record-abandoned` (etl/recordAbandonedResult.ts), never hand SQL.
+ */
+export function buildAbandonedResult(input: {
+  season: number;
+  round: number;
+  homeTeam: string;
+  awayTeam: string;
+  matchId?: string;
+}): MatchResult {
+  const { season, round } = input;
+  if (!Number.isInteger(season) || season < 1897) throw new Error(`Unreadable season "${season}"`);
+  if (!Number.isInteger(round) || round < 1) throw new Error(`Unreadable round "${round}"`);
+  const home = resultClub(input.homeTeam);
+  const away = resultClub(input.awayTeam);
+  if (home.abbr === away.abbr) throw new Error('An abandoned game needs two different clubs');
+  const matchUid = `${season}-R${round}-${home.abbr}-${away.abbr}`;
+  const matchId = input.matchId?.trim() || `abandoned-${matchUid}`;
+  const fields = {
+    season,
+    round,
+    matchId,
+    matchUid,
+    homeClub: home.name,
+    awayClub: away.name,
+    homePoints: null,
+    awayPoints: null,
+    margin: null,
+    status: 'ABANDONED' as const,
+  };
+  return { ...fields, contentHash: resultContentHash(fields) };
 }
 
 /**
@@ -232,11 +272,41 @@ export function planResultWrites(
   return plan;
 }
 
+export type ResultWriteSummary = {
+  results: number;
+  inserted: number;
+  superseded: number;
+  unchanged: number;
+};
+
 export async function ingestResultRows(
   rows: readonly ResultSourceRow[],
   deps: { store: ResultStore; fetchedAt: Date; newId?: () => string }
-): Promise<{ results: number; inserted: number; superseded: number; unchanged: number }> {
-  const results = buildMatchResults(rows);
+): Promise<ResultWriteSummary> {
+  return storeMatchResults(buildMatchResults(rows), deps);
+}
+
+/** Records an abandoned game (see `buildAbandonedResult`); a stored result of it is superseded. */
+export async function recordAbandonedResult(
+  input: Parameters<typeof buildAbandonedResult>[0],
+  deps: { store: ResultStore; fetchedAt: Date; newId?: () => string }
+): Promise<ResultWriteSummary> {
+  return storeMatchResults([buildAbandonedResult(input)], {
+    ...deps,
+    supersedeSource: 'Operator recorded the game as abandoned',
+  });
+}
+
+/** One season's results, written in one locked transaction (inserts, supersedes, or nothing). */
+async function storeMatchResults(
+  results: readonly MatchResult[],
+  deps: {
+    store: ResultStore;
+    fetchedAt: Date;
+    newId?: () => string;
+    supersedeSource?: string;
+  }
+): Promise<ResultWriteSummary> {
   const season = results[0].season;
   const newId = deps.newId ?? randomUUID;
 
@@ -246,6 +316,15 @@ export async function ingestResultRows(
       results.map((result) => result.matchId)
     );
     const planned = planResultWrites(results, stored);
+    if (deps.supersedeSource) {
+      for (const supersede of planned.supersedes) {
+        supersede.reason = supersedeReason(
+          supersede.previous,
+          supersede.next,
+          deps.supersedeSource
+        );
+      }
+    }
     for (const result of planned.inserts) await tx.insert(newId(), result, deps.fetchedAt);
     for (const { previous, next, reason } of planned.supersedes) {
       // The old row stops being current first: one current row per match is a unique index.
