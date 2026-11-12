@@ -150,10 +150,9 @@ describe('addFreeAgentToRoster', () => {
     expect(error.message).toBe(
       'Adds, waiver claims and trades open once the league draft is complete.'
     );
-    expect(tx.draft.findUnique).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1' },
-      select: { status: true },
-    });
+    expect(tx.draft.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { leagueId: 'league-1' } })
+    );
     expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 

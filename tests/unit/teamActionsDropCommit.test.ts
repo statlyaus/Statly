@@ -11,6 +11,8 @@ const moveLock = vi.hoisted(() => ({
     `${players[0]?.name}'s game has started; he can be moved after the round ends.`,
 }));
 
+const transactionWindow = vi.hoisted(() => ({ getTransactionWindow: vi.fn() }));
+
 const tx = vi.hoisted(() => ({
   league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
   leagueRosterPlayer: { deleteMany: vi.fn() },
@@ -35,6 +37,10 @@ vi.mock('@/server/players/playerIdentityService', () => ({
   resolveCanonicalPlayerIds: vi.fn(async () => new Map()),
 }));
 vi.mock('@/server/leagues/playerMoveLock', () => moveLock);
+vi.mock('@/server/leagues/transactionWindow', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/leagues/transactionWindow')>()),
+  getTransactionWindow: transactionWindow.getTransactionWindow,
+}));
 vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
   WaiverAvailabilityProjectionService: vi.fn(() => ({ projectLeague })),
 }));
@@ -67,6 +73,39 @@ describe('team action drop commit', () => {
     projectLeague.mockResolvedValue({ owned: 0, available: 1 });
     moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
     moveLock.removePlayersFromOpenLineups.mockResolvedValue(1);
+    transactionWindow.getTransactionWindow.mockResolvedValue({ open: true });
+  });
+
+  it("refuses with 409 during the Bloodsucker's exclusive window, and drops nothing", async () => {
+    transactionWindow.getTransactionWindow.mockResolvedValue({
+      open: false,
+      code: 'BLOODSUCKER_WINDOW_OPEN',
+      reason: 'The Bloodsucker has first pick of free agents until Mon 2 Mar, 1:00 pm AEDT.',
+      closesAt: '2026-03-02T02:00:00.000Z',
+    });
+
+    const response = await drop();
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'The Bloodsucker has first pick of free agents until Mon 2 Mar, 1:00 pm AEDT.',
+      code: 'BLOODSUCKER_WINDOW_OPEN',
+      closesAt: '2026-03-02T02:00:00.000Z',
+    });
+    expect(transactionWindow.getTransactionWindow).toHaveBeenCalledWith('league-1', prismaMocks, {
+      memberId: 'member-1',
+    });
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('still drops while the draft is not complete, as it always has', async () => {
+    transactionWindow.getTransactionWindow.mockResolvedValue({
+      open: false,
+      code: 'DRAFT_NOT_COMPLETE',
+      reason: 'Adds, waiver claims and trades open once the league draft is complete.',
+    });
+
+    expect((await drop()).status).toBe(200);
   });
 
   it("removes the dropped player's open lineup rows in the drop transaction", async () => {

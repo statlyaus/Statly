@@ -14,6 +14,7 @@ import {
 import { NextRequest } from 'next/server';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/serverAuth', () => ({ getAuthenticatedUserId: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }));

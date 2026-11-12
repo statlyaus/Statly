@@ -34,7 +34,8 @@ has to create monitors by hand. Schedules are UTC, the same as the Netlify sched
 
 An issue resolves after one good run. The waivers route runs hourly and processes waivers only in the
 6 am Melbourne hour; every hourly run still checks in, so the monitor also proves the scheduler is alive.
-The other crons (daily, injuries, trades, the other NBA jobs) are not monitored: each monitor past
+The other crons (daily, injuries, trades, the other NBA jobs, and `cron-bloodsucker` until #1284
+gives it a monitor) are not monitored: each monitor past
 the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` and wrap its route in
 `monitorCronRun`; a unit test keeps each monitor's schedule equal to its Netlify function's.
 

@@ -97,7 +97,7 @@ export async function createLeagueTrade(
   if (!selection.ok) throw new TradeServiceError('INVALID_INPUT', selection.error);
 
   const access = await requireTradeAccess(leagueId, userId);
-  await enforceTransactionWindow(leagueId);
+  await enforceTransactionWindow(leagueId, access.memberId, now);
   enforceTradeDeadline(access, now);
   await enforcePlayersMovable(
     leagueId,
@@ -137,7 +137,7 @@ export async function executeLeagueTradeAction(
   }
   const access = await requireTradeAccess(leagueId, userId);
   if (canonicalInput.action === 'accept' || canonicalInput.action === 'counter') {
-    await enforceTransactionWindow(leagueId);
+    await enforceTransactionWindow(leagueId, access.memberId, now);
   }
   if (canonicalInput.action === 'counter') {
     await enforcePlayersMovable(
@@ -936,8 +936,12 @@ async function requireTradeAccessByMember(
   };
 }
 
-async function enforceTransactionWindow(leagueId: string): Promise<void> {
-  const window = await getTransactionWindow(leagueId);
+async function enforceTransactionWindow(
+  leagueId: string,
+  memberId: string,
+  now: Date
+): Promise<void> {
+  const window = await getTransactionWindow(leagueId, prisma, { memberId, now });
   if (!window.open) throw new TradeServiceError(window.code, window.reason, 409);
 }
 
