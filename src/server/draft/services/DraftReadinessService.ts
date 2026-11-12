@@ -164,6 +164,9 @@ function buildBlockers(input: {
   return blockers;
 }
 
+// Lobby states in which the draft room is open.
+const OPEN_LOBBY_STATUSES = new Set(['OPEN', 'COUNTDOWN', 'LIVE']);
+
 function resolveStatus(input: {
   draft: LeagueWithReadinessData['drafts'][number] | null;
   blockers: DraftReadinessBlocker[];
@@ -180,14 +183,7 @@ function resolveStatus(input: {
   if (draft.status === DraftStatus.COMPLETED) return 'completed';
   if (draft.status === DraftStatus.LIVE || draft.status === DraftStatus.PAUSED) return 'live';
   if (blockers.length > 0) return 'blocked';
-  if (
-    shouldBeOpen ||
-    draft.lobbyStatus === 'OPEN' ||
-    draft.lobbyStatus === 'COUNTDOWN' ||
-    draft.lobbyStatus === 'LIVE'
-  ) {
-    return 'room_open';
-  }
+  if (shouldBeOpen || OPEN_LOBBY_STATUSES.has(draft.lobbyStatus ?? '')) return 'room_open';
 
   return 'scheduled';
 }
@@ -239,12 +235,7 @@ export async function getLeagueDraftOperationalReadiness(
   const isRunning = draft?.status === DraftStatus.LIVE || draft?.status === DraftStatus.PAUSED;
   const isComplete = draft?.status === DraftStatus.COMPLETED;
   const roomIsOpen = Boolean(
-    draft &&
-    (isRunning ||
-      shouldBeOpen ||
-      draft.lobbyStatus === 'OPEN' ||
-      draft.lobbyStatus === 'COUNTDOWN' ||
-      draft.lobbyStatus === 'LIVE')
+    draft && (isRunning || shouldBeOpen || OPEN_LOBBY_STATUSES.has(draft.lobbyStatus ?? ''))
   );
   const hasHardStartBlocker = blockers.some((blocker) =>
     [
