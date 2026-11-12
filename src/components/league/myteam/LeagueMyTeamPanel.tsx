@@ -1243,10 +1243,11 @@ function PlayerCell({
         </span>
         <span className="truncate text-xs text-muted-foreground">
           {[player.position, club].filter(Boolean).join(' · ')}
-          <span className="sm:hidden">
-            {' · '}
-            <OpponentText player={player} locked={locked} />
-          </span>
+        </span>
+        {/* Phones have no opponent column: the fixture (and a No Losers club record) gets its own
+            line so it wraps instead of being cut off at 375 px (#1296, NFR-8). */}
+        <span className="text-xs text-muted-foreground sm:hidden">
+          <OpponentText player={player} locked={locked} />
         </span>
       </span>
     </span>
