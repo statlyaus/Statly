@@ -85,6 +85,24 @@ describe('creating a league with a format', () => {
     });
   });
 
+  it.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
+    'stores a No Losers league with %s and the standard weekly waivers (No Losers BR-01, BR-03)',
+    async (scoringMode) => {
+      const { result, tx } = create({ leagueFormat: 'NO_LOSERS', scoringMode });
+
+      await expect(result).resolves.toMatchObject({
+        league: { leagueFormat: 'NO_LOSERS', scoringMode, waiverRule: 'weekly' },
+      });
+      expect(tx.leagueSettings.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          leagueFormat: 'NO_LOSERS',
+          scoringMode,
+          waiverRule: 'WEEKLY',
+        }),
+      });
+    }
+  );
+
   it('refuses a Bloodsucker league with weekly waivers', async () => {
     const { result, tx } = create({ leagueFormat: 'BLOODSUCKER', waiverRule: 'weekly' });
 

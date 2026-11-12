@@ -22,6 +22,7 @@ import {
   type PositionLimitKey,
 } from '@/lib/draftSettings';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { parseLeagueFormat } from '@/lib/leagueFormatOptions';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import {
   DEFAULT_TEAM_SYMBOL_ZOOM,
@@ -203,7 +204,7 @@ function normalizeLeagueFormatSettings(
 ): LeagueFormatSettingsValue {
   const source = isRecord(value) ? value : {};
   return {
-    leagueFormat: source.leagueFormat === 'BLOODSUCKER' ? 'BLOODSUCKER' : fallback.leagueFormat,
+    leagueFormat: parseLeagueFormat(source.leagueFormat, fallback.leagueFormat),
     bloodsuckerMemberId:
       typeof source.bloodsuckerMemberId === 'string' ? source.bloodsuckerMemberId : null,
     candidates: Array.isArray(source.candidates)

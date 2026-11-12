@@ -1,9 +1,12 @@
-// League format (epic #1275, BR-01 to BR-08). The format is its own column, independent of scoring
-// mode and categories, and it locks with the draft structure. A BLOODSUCKER league names one member
-// who skips the draft; that member must be active, and the league needs ROLLING waivers with no FAAB.
+// League format (Bloodsucker epic #1275, BR-01 to BR-08; No Losers epic #1290, BR-01 to BR-03). The
+// format is its own column, independent of scoring mode and categories, and it locks with the draft
+// structure. A BLOODSUCKER league names one member who skips the draft; that member must be active,
+// and the league needs ROLLING waivers with no FAAB. A NO_LOSERS league has no setup rules of its own:
+// its result rule only changes scoring (#1294).
 
 import type { Prisma } from '@prisma/client';
 
+import { parseLeagueFormat } from '@/lib/leagueFormatOptions';
 import type { LeagueFormat } from '@/types/leagues';
 
 import { isActivePrismaMembership } from './activeMembership';
@@ -15,10 +18,7 @@ export const BLOODSUCKER_RECOMMENDED_TEAMS = 12;
 export const BLOODSUCKER_REQUIRES_ROLLING_MESSAGE =
   'A Bloodsucker league must use rolling waivers with no FAAB budget.';
 
-export function normalizeLeagueFormat(value: unknown, fallback: LeagueFormat = 'STANDARD') {
-  if (value === 'BLOODSUCKER' || value === 'STANDARD') return value;
-  return fallback;
-}
+export const normalizeLeagueFormat = parseLeagueFormat;
 
 /** BR-03: Bloodsucker waivers are ROLLING, so "priority 1" is a real priority, not a FAAB tie-break. */
 export function getLeagueFormatWaiverError(input: {

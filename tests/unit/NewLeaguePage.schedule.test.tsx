@@ -186,6 +186,29 @@ describe('NewLeaguePage draft schedule', () => {
     });
   });
 
+  it('explains No Losers and creates it with the standard weekly waivers (No Losers BR-04)', async () => {
+    render(<NewLeaguePage />);
+
+    fireEvent.change(screen.getByLabelText(/League name/), {
+      target: { value: 'No Losers League' },
+    });
+    fireEvent.change(screen.getByLabelText(/League format/), {
+      target: { value: 'NO_LOSERS' },
+    });
+
+    expect(screen.getByText(/a draw or a loss by 1 to 5 points counts half/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /weekly/i })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create league' }));
+    await waitFor(() => expect(mocks.fetchApi).toHaveBeenCalledTimes(1));
+
+    const [, request] = mocks.fetchApi.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(request.body)).toMatchObject({
+      leagueFormat: 'NO_LOSERS',
+      waiverRule: 'weekly',
+    });
+  });
+
   it('holds the league name to the API maximum of 50 characters', () => {
     render(<NewLeaguePage />);
 

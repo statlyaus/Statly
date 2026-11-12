@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
-// League format and Bloodsucker settings (#1278, BR-01, BR-03, BR-04a, BR-05).
+// League format and Bloodsucker settings (#1278, BR-01, BR-03, BR-04a, BR-05); No Losers (#1291).
 
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
@@ -129,6 +129,8 @@ describe('league format settings', () => {
     ['STANDARD', 'H2H_MOST_CATEGORIES'],
     ['BLOODSUCKER', 'H2H_EACH_CATEGORY'],
     ['BLOODSUCKER', 'H2H_MOST_CATEGORIES'],
+    ['NO_LOSERS', 'H2H_EACH_CATEGORY'],
+    ['NO_LOSERS', 'H2H_MOST_CATEGORIES'],
   ])('saves and reads back %s with %s unchanged (BR-01)', async (leagueFormat, scoringMode) => {
     const bloodsuckerMemberId = leagueFormat === 'BLOODSUCKER' ? 'member-2' : null;
     const { status, json } = await put({
@@ -227,6 +229,74 @@ describe('league format settings', () => {
     const { json } = await put({ format: { leagueFormat: 'STANDARD' } });
 
     expect(json.data.format).toMatchObject({ leagueFormat: 'STANDARD', bloodsuckerMemberId: null });
+  });
+
+  it('keeps weekly waivers and FAAB for a No Losers league (No Losers BR-03)', async () => {
+    const { status, json } = await put({
+      waiver: { waiverRule: 'weekly', faabBudget: 100 },
+      format: { leagueFormat: 'NO_LOSERS' },
+    });
+
+    expect(status).toBe(200);
+    expect(json.data.format.leagueFormat).toBe('NO_LOSERS');
+    expect(stored).toMatchObject({ waiverRule: 'WEEKLY', faabBudget: 100 });
+  });
+
+  it('clears the Bloodsucker and audits the change when the league becomes No Losers', async () => {
+    Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });
+
+    const { json } = await put({
+      format: { leagueFormat: 'NO_LOSERS', bloodsuckerMemberId: 'member-2' },
+    });
+
+    expect(json.data.format).toMatchObject({
+      leagueFormat: 'NO_LOSERS',
+      bloodsuckerMemberId: null,
+    });
+    expect(mocks.createAudit).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: 'LEAGUE_FORMAT_CHANGED',
+        payloadJson: {
+          reason: 'SETTINGS_UPDATED',
+          before: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
+          after: { leagueFormat: 'NO_LOSERS', bloodsuckerMemberId: null },
+        },
+      }),
+    });
+  });
+
+  describe('a No Losers league after the draft leaves SCHEDULED (No Losers BR-02)', () => {
+    beforeEach(() => {
+      stored.leagueFormat = 'NO_LOSERS';
+      mocks.findDraft.mockResolvedValue({ status: 'LIVE' });
+    });
+
+    it.each(['STANDARD', 'BLOODSUCKER'])(
+      'refuses a change to %s with 409 DRAFT_STRUCTURE_LOCKED',
+      async (leagueFormat) => {
+        const { status, json } = await put({ format: { leagueFormat } });
+
+        expect(status).toBe(409);
+        expect(json.code).toBe('DRAFT_STRUCTURE_LOCKED');
+        expect(mocks.transaction).not.toHaveBeenCalled();
+      }
+    );
+
+    it('accepts NO_LOSERS resent', async () => {
+      const { status } = await put({ format: { leagueFormat: 'NO_LOSERS' } });
+
+      expect(status).toBe(200);
+      expect(mocks.createAudit).not.toHaveBeenCalled();
+    });
+
+    it('refuses a change from STANDARD to NO_LOSERS', async () => {
+      stored.leagueFormat = 'STANDARD';
+
+      const { status, json } = await put({ format: { leagueFormat: 'NO_LOSERS' } });
+
+      expect(status).toBe(409);
+      expect(json.code).toBe('DRAFT_STRUCTURE_LOCKED');
+    });
   });
 
   describe('after the draft leaves SCHEDULED (BR-05)', () => {

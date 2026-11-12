@@ -91,7 +91,8 @@ client omits optional values:
 - `H2H_EACH_CATEGORY` scoring
 - the `STANDARD` league format; a `BLOODSUCKER` league is independent of scoring mode, needs rolling
   waivers with no FAAB (it defaults to rolling), and has its Bloodsucker member chosen later in
-  settings (see [league formats](../product/league-competition-rules.md#league-formats))
+  settings; a `NO_LOSERS` league is independent of scoring mode and has no setup rules of its own
+  (see [league formats](../product/league-competition-rules.md#league-formats))
 - the real-data nine-category preset
 - normalized active lineup slots and category directions
 - the AFL season of the draft date, or of the creation date when there is none: next season once
