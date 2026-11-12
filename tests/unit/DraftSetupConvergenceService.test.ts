@@ -115,8 +115,10 @@ describe('ensureLeagueDraftSetupConverged', () => {
       },
       draftOrder: {
         create: vi.fn().mockResolvedValue({}),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
+      leagueMember: { update: vi.fn().mockResolvedValue({}) },
       player: {
         count: vi.fn().mockResolvedValue(100),
         groupBy: vi.fn().mockResolvedValue([
@@ -158,7 +160,7 @@ describe('ensureLeagueDraftSetupConverged', () => {
         }),
       })
     );
-    expect(tx.draftOrder.create).toHaveBeenCalledTimes(2);
+    expect(tx.draftOrder.createMany.mock.calls[0][0].data).toHaveLength(2);
     expect(readiness.recommendedAction).toBe('AWAIT_EXPLICIT_START');
     expect(readiness.lifecycle.canEnterRoom).toBe(true);
   });
@@ -283,7 +285,7 @@ describe('ensureLeagueDraftSetupConverged', () => {
     });
 
     expect(tx.draftOrder.deleteMany).toHaveBeenCalledWith({ where: { draftId: 'draft-1' } });
-    const memberIds = tx.draftOrder.create.mock.calls.map((call) => call[0].data.memberId);
+    const memberIds = writtenOrder(tx).map((row) => row.memberId);
     expect(memberIds).toEqual(['member-1', 'member-3']);
   });
 
@@ -308,7 +310,7 @@ describe('ensureLeagueDraftSetupConverged', () => {
       now: new Date('2026-05-02T00:05:00.000Z'),
     });
 
-    const memberIds = tx.draftOrder.create.mock.calls.map((call) => call[0].data.memberId);
+    const memberIds = writtenOrder(tx).map((row) => row.memberId);
     expect(memberIds).toEqual(['member-1', 'member-2']);
   });
 
@@ -329,10 +331,22 @@ describe('ensureLeagueDraftSetupConverged', () => {
       now: new Date('2026-05-02T00:05:00.000Z'),
     });
 
-    const slots = tx.draftOrder.create.mock.calls.map((call) => call[0].data.slot);
-    expect(slots).toEqual([2, 3, 1]);
+    // The order follows the slots, numbered 1..n: the owner takes the free slot 1.
+    expect(writtenOrder(tx)).toEqual([
+      { memberId: 'member-owner', slot: 1 },
+      { memberId: 'member-joiner-2', slot: 2 },
+      { memberId: 'member-joiner-3', slot: 3 },
+    ]);
   });
 });
+
+function writtenOrder(tx: {
+  draftOrder: { createMany: ReturnType<typeof vi.fn> };
+}): Array<{ memberId: string; slot: number }> {
+  return (tx.draftOrder.createMany.mock.calls.at(-1)?.[0].data ?? []).map(
+    (row: { memberId: string; slot: number }) => ({ memberId: row.memberId, slot: row.slot })
+  );
+}
 
 function buildConvergenceMocks(league: Record<string, unknown>) {
   const positionCounts = [
@@ -351,8 +365,10 @@ function buildConvergenceMocks(league: Record<string, unknown>) {
     },
     draftOrder: {
       create: vi.fn().mockResolvedValue({}),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    leagueMember: { update: vi.fn().mockResolvedValue({}) },
     player: {
       count: vi.fn().mockResolvedValue(100),
       groupBy: vi.fn().mockResolvedValue(positionCounts),

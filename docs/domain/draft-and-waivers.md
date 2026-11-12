@@ -55,6 +55,16 @@ not synthesized into the v2 stream.
 Snake order reverses the league member order on alternating rounds. Persisted overall pick, round,
 slot, and member identifiers must agree; do not derive an alternative order only in the browser.
 
+The order holds the drafting members only, in slots 1..n with no gaps, because a turn is found by
+its slot. Every path that builds or rebuilds it (join, leave, draft creation, setup convergence)
+writes it through `writeDraftOrder` (`src/server/draft/draftOrderWriter.ts`). In a Bloodsucker
+league (BR-09) the Bloodsucker is never in the order: it takes membership `draftSlot` n+1, after the
+drafters, which orders fixtures, tie-breaks and the dashboard but never picks. Picks, rounds and
+readiness count the drafters only, so a 12-team Bloodsucker league snakes over 11 slots. Capacity
+also reserves one roster for the Bloodsucker (BR-10): if the pool left after the draft cannot fill
+it, readiness blocks the start with `bloodsucker_pool_shortage`. The Bloodsucker watches the draft
+room without a turn.
+
 A player is available only when the canonical league-scoped ownership and draft state allow the pick.
 Roster projection after a pick must make that player unavailable to the next manager and to league
 waiver/free-agent surfaces. Player identity aliases may be accepted for compatibility, but persisted

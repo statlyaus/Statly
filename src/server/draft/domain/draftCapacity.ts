@@ -12,7 +12,12 @@ type PlayerCountClient = Pick<PrismaClient, 'player'> | Prisma.TransactionClient
 export type DraftPositionKey = Exclude<keyof DraftPositionLimits, 'BENCH'>;
 
 export interface DraftCapacityInput {
+  /** Teams that draft. */
   teamCount: number;
+  /**
+   * Teams that do not draft but fill a roster from the pool left after it: the Bloodsucker (BR-10).
+   */
+  reservedTeamCount?: number;
   positionLimits: DraftPositionLimits;
   activePlayerCount: number;
   activePlayersByPosition?: Partial<Record<DraftPositionKey, number>>;
@@ -35,18 +40,25 @@ export interface DraftCapacity {
   activePlayerCount: number;
   hardMinimumPicks: number;
   cappedByPlayerPool: boolean;
+  /** Players the pool is short of to fill the reserved teams' rosters after the draft. */
+  reservedPoolShortage: number;
   positionShortages: DraftPositionShortage[];
 }
 
 const POSITION_KEYS = POSITION_LIMIT_KEYS.filter((key): key is DraftPositionKey => key !== 'BENCH');
 
 function normalizePosition(value: string | null | undefined): DraftPositionKey | null {
-  const normalized = String(value ?? '').trim().toUpperCase();
-  return POSITION_KEYS.includes(normalized as DraftPositionKey) ? (normalized as DraftPositionKey) : null;
+  const normalized = String(value ?? '')
+    .trim()
+    .toUpperCase();
+  return POSITION_KEYS.includes(normalized as DraftPositionKey)
+    ? (normalized as DraftPositionKey)
+    : null;
 }
 
 export function calculateDraftCapacity(input: DraftCapacityInput): DraftCapacity {
   const teamCount = Math.max(0, Math.floor(input.teamCount));
+  const reservedTeamCount = Math.max(0, Math.floor(input.reservedTeamCount ?? 0));
   const activePlayerCount = Math.max(0, Math.floor(input.activePlayerCount));
   const rosterSpotsPerTeam =
     getRosterSizeFromPositionLimits(input.positionLimits) +
@@ -59,8 +71,13 @@ export function calculateDraftCapacity(input: DraftCapacityInput): DraftCapacity
   const cappedTotalPicks = Math.min(requestedTotalPicks, playerPoolCap);
   const totalPicks = Math.max(hardMinimumPicks, cappedTotalPicks);
 
+  const reservedPoolShortage =
+    reservedTeamCount > 0
+      ? Math.max(0, (teamCount + reservedTeamCount) * rosterSpotsPerTeam - activePlayerCount)
+      : 0;
+
   const positionShortages = POSITION_KEYS.flatMap((position) => {
-    const required = teamCount * input.positionLimits[position];
+    const required = (teamCount + reservedTeamCount) * input.positionLimits[position];
     const available = Math.max(0, Math.floor(input.activePlayersByPosition?.[position] ?? 0));
     const shortage = Math.max(0, required - available);
     return shortage > 0 ? [{ position, required, available, shortage }] : [];
@@ -74,6 +91,7 @@ export function calculateDraftCapacity(input: DraftCapacityInput): DraftCapacity
     activePlayerCount,
     hardMinimumPicks,
     cappedByPlayerPool: totalPicks < requestedTotalPicks,
+    reservedPoolShortage,
     positionShortages,
   };
 }
