@@ -64,7 +64,10 @@ function aggregate(overrides: Record<string, unknown> = {}) {
 }
 
 // startDraft reads the league format inside the transaction; a standard league has no blocker.
-const tx = { league: { findUnique: vi.fn().mockResolvedValue(null) } };
+const tx = {
+  $queryRaw: vi.fn().mockResolvedValue([]),
+  league: { findUnique: vi.fn().mockResolvedValue(null) },
+};
 
 describe('DraftApplicationService lifecycle clock outbox', () => {
   beforeEach(() => {

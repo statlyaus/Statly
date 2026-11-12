@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCanonicalLeague } from '../../src/server/leagues/createLeagueService';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategories';
@@ -52,6 +52,21 @@ function create(input: Partial<CreateLeagueRequest>) {
 }
 
 describe('creating a league with a format', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER', 'true');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('refuses a Bloodsucker league while the format is held back (flag off)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER', '');
+    const { result, tx } = create({ leagueFormat: 'BLOODSUCKER' });
+
+    await expect(result).rejects.toMatchObject({ status: 400, code: 'BLOODSUCKER_UNAVAILABLE' });
+    expect(tx.leagueSettings.create).not.toHaveBeenCalled();
+  });
+
   it('defaults to a standard league with weekly waivers', async () => {
     const { result, tx } = create({});
 

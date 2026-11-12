@@ -30,6 +30,10 @@ import {
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import { startLeagueSeason } from '@/server/leagues/activeSeason';
 import { getLeagueFormatWaiverError } from '@/server/leagues/leagueFormat';
+import {
+  BLOODSUCKER_UNAVAILABLE_MESSAGE,
+  isBloodsuckerSelectable,
+} from '@/lib/leagueFormatOptions';
 
 type LeagueCreationClient = Pick<PrismaClient, '$transaction' | 'league'>;
 const COMPATIBILITY_PROJECTION_ATTEMPTS = 3;
@@ -64,7 +68,12 @@ export class LeagueCreationError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code: 'VALIDATION' | 'CONFLICT' | 'PROJECTION' | 'BLOODSUCKER_REQUIRES_ROLLING'
+    readonly code:
+      | 'VALIDATION'
+      | 'CONFLICT'
+      | 'PROJECTION'
+      | 'BLOODSUCKER_REQUIRES_ROLLING'
+      | 'BLOODSUCKER_UNAVAILABLE'
   ) {
     super(message);
     this.name = 'LeagueCreationError';
@@ -240,6 +249,9 @@ function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreate
       400,
       'VALIDATION'
     );
+  }
+  if (normalized.leagueFormat === 'BLOODSUCKER' && !isBloodsuckerSelectable()) {
+    throw new LeagueCreationError(BLOODSUCKER_UNAVAILABLE_MESSAGE, 400, 'BLOODSUCKER_UNAVAILABLE');
   }
   // BR-03: a Bloodsucker league defaults to rolling waivers and refuses weekly ones.
   const waiverError = getLeagueFormatWaiverError({

@@ -128,7 +128,7 @@ describe('swapRosterPlayers', () => {
     expect(tx.leagueTradeThread.findMany).not.toHaveBeenCalled();
   });
 
-  it('invalidates pending trades for the swapped players with the caller reason', async () => {
+  it("invalidates pending trades for the swapped players in the swap's season (NFR-4) with the caller reason", async () => {
     const tx = makeTx({ from: 1, to: 1 }, [
       { id: 'thread-b', currentOfferId: 'offer-b', status: 'OPEN' },
     ]);
@@ -138,6 +138,7 @@ describe('swapRosterPlayers', () => {
     expect(tx.leagueTradeThread.findMany).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
+        seasonId: 'season-1',
         status: { in: ['OPEN', 'PENDING_ADMIN_REVIEW', 'PENDING_VETO_REVIEW'] },
         currentOffer: {
           players: { some: { playerId: { in: ['player-taken', 'player-given'] } } },

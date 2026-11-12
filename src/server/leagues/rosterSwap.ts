@@ -112,7 +112,10 @@ export async function swapRosterPlayers(tx: Transaction, input: RosterSwapInput)
   });
 }
 
-/** Invalidates every pending trade in the league whose current offer includes one of the players. */
+/**
+ * Invalidates every pending trade in the league's season whose current offer includes one of the
+ * players. Scoped to the season (NFR-4) so an old season's thread is never touched.
+ */
 export async function invalidatePendingTradesForPlayers(
   tx: Transaction,
   input: {
@@ -129,6 +132,7 @@ export async function invalidatePendingTradesForPlayers(
     where: {
       ...(input.excludeThreadId ? { id: { not: input.excludeThreadId } } : {}),
       leagueId,
+      seasonId: input.seasonId,
       status: { in: [...activeTradeStatuses] },
       currentOffer: { players: { some: { playerId: { in: [...input.playerIds] } } } },
     },

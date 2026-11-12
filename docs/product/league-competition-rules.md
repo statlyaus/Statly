@@ -59,8 +59,15 @@ current value is accepted, so the commissioner can still save the rest of the fo
   published before that write is locked from `competitionPublishedAt`. Code
   `SCORING_SETTINGS_LOCKED`.
 - **Draft structure** (position limits and bench, so roster and bench size, draft type, pick order,
-  the league format and the Bloodsucker member) locks once the league's draft leaves `SCHEDULED`.
+  the league format and the Bloodsucker member) locks once the league's draft has started: it has
+  left `SCHEDULED`, has a start time, has opened a live room, or has any pick. Picks count on their
+  own because rescheduling a LIVE draft puts it back to `SCHEDULED` with its picks kept. The same
+  test (`hasDraftStarted`, `src/server/leagues/draftStarted.ts`) closes member removal and joining.
   Code `DRAFT_STRUCTURE_LOCKED`.
+
+A save re-checks both locks inside its write transaction, under the League row lock and the
+settings row lock. The draft start takes the same League row lock, so a save racing a draft start
+either commits first (the start then reads the new values) or sees the started draft and is refused.
 
 The settings response carries `locks.scoring` and `locks.draftStructure` (the reason, or `null`),
 and the commissioner settings page shows locked fields read-only with that reason. Owned by
@@ -74,7 +81,18 @@ A league has exactly one format. It is stored in
 category selection: every combination is valid.
 
 In a **Bloodsucker** league one member, the Bloodsucker, skips the draft and takes a player from each
-team it beats. The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat.ts`):
+team it beats.
+
+**Held back until the epic ships.** Only the setup (#1278) and the shared roster swap (#1282) are
+built; bites, deadlines, protections, the exclusive window and waiver priority (#1279-#1281,
+#1283-#1286) are not, so a Bloodsucker league would play as a standard one. Choosing Bloodsucker is
+therefore off unless `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` (`isBloodsuckerSelectable`,
+`src/lib/leagueFormatOptions.ts`). With the flag off the create page and settings do not offer it,
+and create and settings refuse it with code `BLOODSUCKER_UNAVAILABLE`. A league already stored as
+`BLOODSUCKER` keeps its format, sees the option, and can still change its Bloodsucker. Turn the flag
+on (and remove it) when the epic ships.
+
+The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat.ts`):
 
 - The commissioner chooses the Bloodsucker (`LeagueSettings.bloodsuckerMemberId`) from the active
   members in league settings. A league is created with the format only; the member is chosen once

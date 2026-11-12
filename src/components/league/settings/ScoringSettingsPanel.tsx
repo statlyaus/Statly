@@ -1,5 +1,5 @@
 import {
-  LEAGUE_FORMAT_OPTIONS,
+  selectableLeagueFormatOptions,
   NO_LOSERS_EXPLANATION,
   parseLeagueFormat,
 } from '@/lib/leagueFormatOptions';
@@ -118,7 +118,7 @@ export function ScoringSettingsPanel({
             }
             className={SELECT_CLASS}
           >
-            {LEAGUE_FORMAT_OPTIONS.map((option) => (
+            {selectableLeagueFormatOptions(format.leagueFormat).map((option) => (
               <option
                 key={option.value}
                 value={option.value}
