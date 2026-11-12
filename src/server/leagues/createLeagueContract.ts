@@ -1,3 +1,4 @@
+import { parseLeagueFormat } from '@/lib/leagueFormatOptions';
 import {
   FANTASY_CATEGORIES,
   isFantasyCategoryKey,
@@ -113,7 +114,7 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
   const scoringMode =
     input.scoringMode === 'H2H_MOST_CATEGORIES' ? 'H2H_MOST_CATEGORIES' : 'H2H_EACH_CATEGORY';
   const fixtureGenerationMode = input.fixtureGenerationMode === 'MANUAL' ? 'MANUAL' : 'AUTOMATIC';
-  const leagueFormat = input.leagueFormat === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD';
+  const leagueFormat = parseLeagueFormat(input.leagueFormat);
   const visibility =
     (input.visibility ?? input.privacy ?? input.type ?? 'private').toLowerCase() === 'public'
       ? 'PUBLIC'

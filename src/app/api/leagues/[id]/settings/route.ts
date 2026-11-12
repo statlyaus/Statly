@@ -652,8 +652,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const pickOrder = normalizeDraftPickOrderMode(
         draftInput.pickOrder ?? body.pickOrder ?? prismaLeague.settings.pickOrder
       );
-      // The format and the Bloodsucker belong to the draft structure (BR-05). A STANDARD league has
-      // no Bloodsucker.
+      // The format and the Bloodsucker belong to the draft structure (BR-05). Only a BLOODSUCKER
+      // league has a Bloodsucker; STANDARD and NO_LOSERS clear it.
       const currentFormat = {
         leagueFormat: normalizeLeagueFormat(prismaLeague.settings.leagueFormat),
         bloodsuckerMemberId: prismaLeague.settings.bloodsuckerMemberId ?? null,
@@ -663,7 +663,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         currentFormat.leagueFormat
       );
       const bloodsuckerMemberId =
-        leagueFormat === 'STANDARD'
+        leagueFormat !== 'BLOODSUCKER'
           ? null
           : bloodsuckerInput === undefined
             ? currentFormat.bloodsuckerMemberId

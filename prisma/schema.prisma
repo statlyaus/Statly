@@ -266,6 +266,7 @@ enum LeagueScoringMode {
 enum LeagueFormat {
   STANDARD
   BLOODSUCKER
+  NO_LOSERS
 }
 
 enum LeagueFixtureGenerationMode {

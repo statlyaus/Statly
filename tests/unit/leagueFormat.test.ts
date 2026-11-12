@@ -14,8 +14,9 @@ import { removeLeagueMember } from '@/server/leagues/memberCommands';
 const eightMembers = Array.from({ length: 8 }, (_, index) => `member-${index + 1}`);
 
 describe('league format rules (epic #1275)', () => {
-  it('reads only the two known formats and keeps the fallback otherwise', () => {
+  it('reads only the three known formats and keeps the fallback otherwise', () => {
     expect(normalizeLeagueFormat('BLOODSUCKER')).toBe('BLOODSUCKER');
+    expect(normalizeLeagueFormat('NO_LOSERS')).toBe('NO_LOSERS');
     expect(normalizeLeagueFormat('STANDARD', 'BLOODSUCKER')).toBe('STANDARD');
     expect(normalizeLeagueFormat('VAMPIRE', 'BLOODSUCKER')).toBe('BLOODSUCKER');
     expect(normalizeLeagueFormat(undefined)).toBe('STANDARD');
@@ -41,6 +42,13 @@ describe('league format rules (epic #1275)', () => {
     ).toBeNull();
     expect(
       getLeagueFormatWaiverError({ leagueFormat: 'STANDARD', waiverRule: 'WEEKLY', faabBudget: 50 })
+    ).toBeNull();
+    expect(
+      getLeagueFormatWaiverError({
+        leagueFormat: 'NO_LOSERS',
+        waiverRule: 'WEEKLY',
+        faabBudget: 50,
+      })
     ).toBeNull();
   });
 
@@ -82,6 +90,22 @@ describe('league format rules (epic #1275)', () => {
     expect(
       getLeagueFormatDraftBlockers({
         leagueFormat: 'STANDARD',
+        bloodsuckerMemberId: null,
+        activeMemberIds: ['member-1', 'member-2'],
+      })
+    ).toEqual([]);
+  });
+
+  it('gives a No Losers league no Bloodsucker and no blockers of its own (No Losers BR-03)', () => {
+    expect(
+      resolveBloodsuckerMemberId(
+        { leagueFormat: 'NO_LOSERS', bloodsuckerMemberId: 'member-2' },
+        eightMembers
+      )
+    ).toBeNull();
+    expect(
+      getLeagueFormatDraftBlockers({
+        leagueFormat: 'NO_LOSERS',
         bloodsuckerMemberId: null,
         activeMemberIds: ['member-1', 'member-2'],
       })

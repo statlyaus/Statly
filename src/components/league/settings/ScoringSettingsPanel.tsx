@@ -1,3 +1,8 @@
+import {
+  LEAGUE_FORMAT_OPTIONS,
+  NO_LOSERS_EXPLANATION,
+  parseLeagueFormat,
+} from '@/lib/leagueFormatOptions';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type {
@@ -106,15 +111,23 @@ export function ScoringSettingsPanel({
             onChange={(event) =>
               onFormatChange({
                 ...format,
-                leagueFormat: event.target.value === 'BLOODSUCKER' ? 'BLOODSUCKER' : 'STANDARD',
+                leagueFormat: parseLeagueFormat(event.target.value),
               })
             }
             className={SELECT_CLASS}
           >
-            <option value="STANDARD">Standard</option>
-            <option value="BLOODSUCKER">Bloodsucker</option>
+            {LEAGUE_FORMAT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
+        {format.leagueFormat === 'NO_LOSERS' && (
+          <p className="text-xs font-normal leading-5 text-[color:var(--league-text-muted)] sm:col-span-2">
+            {NO_LOSERS_EXPLANATION}
+          </p>
+        )}
         {format.leagueFormat === 'BLOODSUCKER' && (
           <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)] sm:col-span-2">
             Bloodsucker
