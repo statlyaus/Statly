@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -293,17 +293,55 @@ describe('LeagueChatPanel', () => {
       return { onEdit, onDelete };
     }
 
-    it('offers edit and delete only on the member’s own messages', () => {
+    async function openOptions(user: ReturnType<typeof userEvent.setup>, index = 0) {
+      await user.click(screen.getAllByRole('button', { name: /^Message options for/ })[index]);
+    }
+
+    it('keeps actions behind one options button per message', async () => {
+      const user = userEvent.setup();
       renderOwn({}, [ownMessage, { ...memberMessage, id: 'other-1' }]);
 
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /report/i })).not.toBeInTheDocument();
+
+      const own = screen.getByRole('button', { name: 'Message options for your message' });
+      expect(own).toHaveAttribute('aria-expanded', 'false');
+      await user.click(own);
+      expect(own).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /report/i })).not.toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Message options for Alex Smith’s message' })
+      );
+      expect(screen.getByRole('button', { name: /report/i })).toBeInTheDocument();
       expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
-      expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    });
+
+    it('puts the member’s own messages on the right and labels them "You"', () => {
+      renderOwn({}, [
+        { ...memberMessage, id: 'other-1' },
+        {
+          ...ownMessage,
+          author: { userId: 'user-me', memberId: 'member-me', displayName: 'Me', teamName: 'Mine' },
+          createdAt: '2026-07-19T10:03:00.000Z',
+        },
+      ]);
+
+      const [other, own] = screen.getAllByRole('listitem');
+      expect(other).toHaveTextContent('Alex Smith');
+      expect(own).toHaveTextContent('You');
+      expect(own).not.toHaveTextContent('Alex Smith');
+      expect(own.querySelector('.flex-row-reverse')).not.toBeNull();
+      expect(other.querySelector('.flex-row-reverse')).toBeNull();
     });
 
     it('saves an edit with Enter and closes the editor', async () => {
       const user = userEvent.setup();
       const { onEdit } = renderOwn();
 
+      await openOptions(user);
       await user.click(screen.getByRole('button', { name: 'Edit' }));
       const editor = screen.getByRole('textbox', { name: 'Edit your message' });
       expect(editor).toHaveFocus();
@@ -318,12 +356,14 @@ describe('LeagueChatPanel', () => {
       const user = userEvent.setup();
       const { onEdit } = renderOwn();
 
+      await openOptions(user);
       await user.click(screen.getByRole('button', { name: 'Edit' }));
       await user.keyboard('{Escape}');
       expect(screen.queryByRole('textbox', { name: 'Edit your message' })).not.toBeInTheDocument();
       expect(onEdit).not.toHaveBeenCalled();
 
       onEdit.mockRejectedValueOnce(new Error('You are posting too quickly'));
+      await openOptions(user);
       await user.click(screen.getByRole('button', { name: 'Edit' }));
       await user.type(screen.getByRole('textbox', { name: 'Edit your message' }), ' again{Enter}');
 
@@ -335,6 +375,7 @@ describe('LeagueChatPanel', () => {
       const user = userEvent.setup();
       const { onDelete } = renderOwn();
 
+      await openOptions(user);
       await user.click(screen.getByRole('button', { name: 'Delete' }));
       expect(onDelete).not.toHaveBeenCalled();
       const confirm = screen.getByRole('group', { name: 'Delete your message' });
@@ -344,24 +385,50 @@ describe('LeagueChatPanel', () => {
       expect(onDelete).not.toHaveBeenCalled();
 
       await user.click(screen.getByRole('button', { name: 'Delete' }));
-      await user.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+      await user.click(
+        within(screen.getByRole('group', { name: 'Delete your message' })).getByRole('button', {
+          name: 'Delete',
+        })
+      );
       expect(onDelete).toHaveBeenCalledWith('own-1');
     });
 
-    it('offers delete but not edit on a GIF-only message', () => {
+    it('offers delete but not edit on a GIF-only message', async () => {
+      const user = userEvent.setup();
       renderOwn({}, [{ ...gifMessage, id: 'own-gif', isOwn: true }]);
+
+      await openOptions(user);
       expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
     });
 
-    it('offers a muted member delete but not edit, and nothing on a removed message', () => {
+    it('offers a muted member delete but not edit, and no options on a removed message', async () => {
+      const user = userEvent.setup();
       renderOwn({ mutedUntil: '2099-01-01T00:00:00.000Z' }, [
         ownMessage,
         { ...ownMessage, id: 'own-removed', moderationStatus: 'removed' },
       ]);
 
+      expect(screen.getAllByRole('button', { name: /^Message options for/ })).toHaveLength(1);
+      await openOptions(user);
       expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    });
+
+    it('marks an edited continuation message, not only the first of a run', () => {
+      renderOwn({}, [
+        ownMessage,
+        {
+          ...ownMessage,
+          id: 'own-2',
+          content: 'Second thought.',
+          createdAt: '2026-07-19T10:01:00.000Z',
+          editedAt: '2026-07-19T10:02:00.000Z',
+        },
+      ]);
+
+      expect(screen.getAllByText('Edited')).toHaveLength(1);
+      expect(screen.getAllByRole('article')[1]).toHaveTextContent('Edited');
     });
   });
 });
