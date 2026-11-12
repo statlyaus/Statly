@@ -95,6 +95,9 @@ export async function rescoreCorrectedResultRounds(
       const result = await recalculate({ leagueId, round, finalize: false, resultCorrections });
       if (!result) continue; // The league was deleted after the rounds were read.
       if ('blocked' in result) throw new Error(result.blocked);
+      // Nothing written (e.g. the stats feed is down): the round still names the corrected result and
+      // is retried next run, but this run did not apply the correction, so it must not report success.
+      if (result.recalculated === 0) throw new Error('Re-score wrote no matchup scores');
       run.rounds.push({
         leagueId,
         round,

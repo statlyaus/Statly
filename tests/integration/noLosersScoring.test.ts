@@ -486,6 +486,25 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
     await expect(rescoreAudits()).resolves.toHaveLength(1);
   });
 
+  it('a re-score that writes nothing (stats feed down) is a failure, not a success', async () => {
+    await ingest(footywireRows([100, 80], [70, 73]));
+    // The recalculation's no-stats return: nothing scored, nothing written, no `blocked`.
+    const statsDown = (async ({ round }: { round: number }) => ({
+      round,
+      status: 'SCHEDULED' as const,
+      recalculated: 0,
+      scores: [],
+    })) as unknown as Parameters<typeof rescoreCorrectedResultRounds>[0];
+
+    await expect(rescoreCorrectedResultRounds(statsDown)).resolves.toEqual({
+      rounds: [],
+      failedLeagueIds: [LEAGUE],
+    });
+    // Still pending: the next run picks the round up again.
+    const run = await rescoreCorrectedResultRounds();
+    expect(run.rounds).toHaveLength(1);
+  });
+
   it('an unchanged re-ingest triggers nothing', async () => {
     await expect(ingest(footywireRows([80, 100], [70, 73]))).resolves.toMatchObject({
       superseded: 0,

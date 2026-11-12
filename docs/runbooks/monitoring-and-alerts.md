@@ -57,8 +57,9 @@ What to do:
    Leave the count off to re-read the whole season (about 10 minutes, one page per match). Unchanged
    results are a no-op; a changed one (including a change back to an earlier score) supersedes the
    stored row, and the next hourly `/api/cron/scoring` run re-scores any No Losers round that used it.
-   A failed re-score is logged as `Failed to re-score a No Losers round after an AFL result
-correction` and the run answers 500.
+   A failed re-score, including one that writes nothing because player stats are unavailable, is
+   logged as `Failed to re-score a No Losers round after an AFL result correction` and the run answers
+   500 until a later run applies the correction.
 3. A game that was abandoned has no Footywire match page, so the ingest never records it. Insert its
    `ABANDONED` row by hand (no scores, no margin; the table's CHECK constraint enforces this) with
    the Footywire match id if there is one, or `abandoned-{match_uid}` if not.
