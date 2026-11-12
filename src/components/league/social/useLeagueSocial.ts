@@ -244,6 +244,10 @@ export interface LeagueSocialController extends LeagueSocialState {
     preferences: SocialNotificationPreferences
   ) => Promise<SocialNotificationPreferences>;
   acceptStandards: () => Promise<void>;
+  /** Edits the member's own chat message. */
+  editMessage: (messageId: string, content: string) => Promise<void>;
+  /** Deletes the member's own chat message; the league sees "Message removed". */
+  deleteMessage: (messageId: string) => Promise<void>;
   reportContent: (
     contentType: 'message' | 'post' | 'reply',
     contentId: string,
@@ -514,7 +518,22 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
         };
       });
     };
-    const handleModeration = () => {
+    const handleModeration = (value?: SocialMessage | SocialRealtimeEnvelope) => {
+      // An edited or removed chat message arrives whole: apply it in place. Anything else (posts,
+      // replies, restores, mutes) reloads the snapshot.
+      const payload = value ? getRealtimePayload<SocialMessage>(value, leagueId) : null;
+      if (payload?.id && payload.createdAt && payload.type === 'member') {
+        const isOwn = Boolean(currentUserId && payload.author?.userId === currentUserId);
+        setState((current) =>
+          current.messages.some((message) => message.id === payload.id)
+            ? {
+                ...current,
+                messages: sortMessages(upsertById(current.messages, { ...payload, isOwn })),
+              }
+            : current
+        );
+        return;
+      }
       void loadInitial();
     };
     const handleReadState = (value: SocialRealtimeEnvelope) => {
@@ -770,6 +789,38 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     }));
   }, [apiRequest]);
 
+  const editMessage = useCallback(
+    async (messageId: string, content: string): Promise<void> => {
+      const message = await apiRequest<SocialMessage>(
+        `/messages/${encodeURIComponent(messageId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        }
+      );
+      setState((current) => ({
+        ...current,
+        messages: sortMessages(upsertById(current.messages, message)),
+      }));
+    },
+    [apiRequest]
+  );
+
+  const deleteMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      const message = await apiRequest<SocialMessage>(
+        `/messages/${encodeURIComponent(messageId)}`,
+        { method: 'DELETE' }
+      );
+      setState((current) => ({
+        ...current,
+        messages: sortMessages(upsertById(current.messages, message)),
+      }));
+    },
+    [apiRequest]
+  );
+
   const reportContent = useCallback(
     async (
       contentType: 'message' | 'post' | 'reply',
@@ -999,6 +1050,8 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     deletePost,
     updatePreferences,
     acceptStandards,
+    editMessage,
+    deleteMessage,
     reportContent,
     moderateContent,
     loadReplies,

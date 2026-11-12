@@ -1,6 +1,6 @@
 'use client';
 
-import { AtSign, X } from 'lucide-react';
+import { AtSign, Pencil, Trash2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type {
@@ -12,6 +12,7 @@ import type {
 
 import GiphyMessageMedia from './GiphyMessageMedia';
 import GiphyPicker from './GiphyPicker';
+import { MessageDeleteConfirm, MessageEditForm } from './OwnMessageControls';
 import SafeSocialText from './SafeSocialText';
 import SocialAuthor from './SocialAuthor';
 import SocialComposer from './SocialComposer';
@@ -43,7 +44,14 @@ interface LeagueChatPanelProps {
   onSend: (input: CreateSocialMessageInput) => Promise<void>;
   onReport: (messageId: string, reason: SocialReportReason, details?: string) => Promise<void>;
   onRemove: (messageId: string, reason: string) => Promise<void>;
+  /** Saves an edit to the member's own message. Omit to hide the control. */
+  onEdit?: (messageId: string, content: string) => Promise<void>;
+  /** Deletes the member's own message. Omit to hide the control. */
+  onDelete?: (messageId: string) => Promise<void>;
 }
+
+const ownActionButton =
+  'inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus';
 
 const BOTTOM_THRESHOLD_PX = 72;
 const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -106,12 +114,15 @@ export default function LeagueChatPanel({
   onSend,
   onReport,
   onRemove,
+  onEdit,
+  onDelete,
 }: LeagueChatPanelProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
   const previousLastIdRef = useRef<string | null>(null);
   const previousScrollHeightRef = useRef<number | null>(null);
   const hasInitializedRef = useRef(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [ownAction, setOwnAction] = useState<{ id: string; kind: 'edit' | 'delete' } | null>(null);
   const visibleMessages = messages.filter((message) => message.type !== 'system');
   const latestMessage = visibleMessages.at(-1);
   const muted = Boolean(mutedUntil && new Date(mutedUntil).getTime() > Date.now());
@@ -242,6 +253,12 @@ export default function LeagueChatPanel({
                   index > 0 ? messageDay(visibleMessages[index - 1].createdAt) : null;
                 const continuation = isMessageContinuation(message, visibleMessages[index - 1]);
                 const containsMention = containsSocialMention(message.content);
+                const editing = ownAction?.id === message.id && ownAction.kind === 'edit';
+                const deleting = ownAction?.id === message.id && ownAction.kind === 'delete';
+                const canEditOwn = Boolean(
+                  message.isOwn && onEdit && canPublish && !muted && message.content
+                );
+                const canDeleteOwn = Boolean(message.isOwn && onDelete);
                 return (
                   <li key={message.id}>
                     {day !== previousDay ? (
@@ -293,7 +310,19 @@ export default function LeagueChatPanel({
                           {message.context ? (
                             <DiscussionContextCard context={message.context} />
                           ) : null}
-                          {message.content ? (
+                          {editing && onEdit ? (
+                            <div className={continuation ? '' : 'pl-11'}>
+                              <MessageEditForm
+                                initialContent={message.content}
+                                maxLength={1000}
+                                onCancel={() => setOwnAction(null)}
+                                onSave={async (content) => {
+                                  await onEdit(message.id, content);
+                                  setOwnAction(null);
+                                }}
+                              />
+                            </div>
+                          ) : message.content ? (
                             <SafeSocialText
                               value={message.content}
                               className={continuation ? '' : 'mt-1.5 pl-11'}
@@ -304,8 +333,39 @@ export default function LeagueChatPanel({
                               <GiphyMessageMedia gif={message.gif} />
                             </div>
                           ) : null}
-                          {!message.isOwn || canManage ? (
+                          {deleting && onDelete ? (
+                            <MessageDeleteConfirm
+                              onCancel={() => setOwnAction(null)}
+                              onDelete={async () => {
+                                await onDelete(message.id);
+                                setOwnAction(null);
+                              }}
+                            />
+                          ) : null}
+                          {(!message.isOwn || canManage || canEditOwn || canDeleteOwn) &&
+                          !editing &&
+                          !deleting ? (
                             <div className="mt-1 flex justify-end gap-1">
+                              {canEditOwn ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setOwnAction({ id: message.id, kind: 'edit' })}
+                                  className={ownActionButton}
+                                >
+                                  <Pencil className="size-3.5" aria-hidden="true" />
+                                  Edit
+                                </button>
+                              ) : null}
+                              {canDeleteOwn ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setOwnAction({ id: message.id, kind: 'delete' })}
+                                  className={ownActionButton}
+                                >
+                                  <Trash2 className="size-3.5" aria-hidden="true" />
+                                  Delete
+                                </button>
+                              ) : null}
                               {!message.isOwn ? (
                                 <SocialReportButton
                                   label="message"
@@ -314,7 +374,13 @@ export default function LeagueChatPanel({
                                   }
                                 />
                               ) : null}
-                              {canManage ? (
+                              {canManage && !message.isOwn ? (
+                                <SocialRemoveButton
+                                  label="message"
+                                  onRemove={(reason) => onRemove(message.id, reason)}
+                                />
+                              ) : null}
+                              {canManage && message.isOwn && !canDeleteOwn ? (
                                 <SocialRemoveButton
                                   label="message"
                                   onRemove={(reason) => onRemove(message.id, reason)}
