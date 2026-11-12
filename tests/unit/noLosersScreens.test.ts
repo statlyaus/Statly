@@ -29,9 +29,7 @@ const result = (
 describe('No Losers club-result strip (BR-41)', () => {
   it('shows a result whose home/away order differs from the fixture on its game, once (#1315)', () => {
     const games = buildNoLosersClubStrip({
-      matches: [
-        { match_uid: '2025-R18-GEE-HAW', home_team: 'Geelong', away_team: 'Hawthorn' },
-      ],
+      matches: [{ match_uid: '2025-R18-GEE-HAW', home_team: 'Geelong', away_team: 'Hawthorn' }],
       results: [result('2025-R18-HAW-GEE', 'Hawthorn', 'Geelong', 60, 90)],
     });
     expect(games.map((game) => [game.homeClub, game.state, game.homePoints])).toEqual([

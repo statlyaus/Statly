@@ -98,7 +98,11 @@ describe('/api/cron/scoring', () => {
 
   it('reports a correction round that could not be re-scored yet as pending, not re-scored (#1315)', async () => {
     const pending = { leagueId: 'league-nl', round: 3, correctedResultIds: ['result-old'] };
-    rescoreCorrectionsMock.mockResolvedValue({ rounds: [], pending: [pending], failedLeagueIds: [] });
+    rescoreCorrectionsMock.mockResolvedValue({
+      rounds: [],
+      pending: [pending],
+      failedLeagueIds: [],
+    });
 
     const response = await GET(authorized());
 
