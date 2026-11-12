@@ -8,6 +8,7 @@ import {
   getLeagueFormatWaiverError,
   normalizeLeagueFormat,
   resolveBloodsuckerMemberId,
+  splitDraftingMembers,
 } from '@/server/leagues/leagueFormat';
 import { removeLeagueMember } from '@/server/leagues/memberCommands';
 
@@ -204,6 +205,28 @@ describe('clearing the Bloodsucker when they leave (BR-07)', () => {
     });
     expect(tx.leagueCompetitionAudit.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ actorMemberId: 'member-1' }),
+    });
+  });
+});
+
+describe('splitDraftingMembers (BR-09)', () => {
+  const members = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+  it('leaves the Bloodsucker out of the drafters, keeping their order', () => {
+    expect(
+      splitDraftingMembers(members, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'b' })
+    ).toEqual({ drafters: [{ id: 'a' }, { id: 'c' }], bloodsucker: { id: 'b' } });
+  });
+
+  it.each([
+    ['a standard league', { leagueFormat: 'STANDARD', bloodsuckerMemberId: 'b' }],
+    ['no Bloodsucker set', { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: null }],
+    ['a Bloodsucker who left', { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'gone' }],
+    ['no settings', null],
+  ])('drafts everyone for %s', (_label, settings) => {
+    expect(splitDraftingMembers(members, settings)).toEqual({
+      drafters: members,
+      bloodsucker: null,
     });
   });
 });

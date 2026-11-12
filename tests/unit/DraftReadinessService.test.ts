@@ -291,6 +291,66 @@ describe('Bloodsucker draft readiness (BR-02, BR-06)', () => {
   });
 });
 
+describe('a Bloodsucker league draft (BR-09, BR-10)', () => {
+  // 12 active members; member-12 is the Bloodsucker, so the order holds the 11 drafters.
+  function bloodsuckerClient(availablePlayers: number) {
+    const client = buildClient({ startAt: new Date('2026-05-02T00:00:00.000Z'), availablePlayers });
+    const members = Array.from({ length: 12 }, (_, index) =>
+      buildMember(`member-${index + 1}`, index + 1)
+    );
+    client.player.groupBy.mockResolvedValue(
+      ['DEF', 'MID', 'RUC', 'FWD'].map((position) => ({ position, _count: { _all: 200 } }))
+    );
+    client.league.findUnique.mockImplementation(async () => ({
+      id: 'league-1',
+      ownerId: 'user-1',
+      settings: {
+        ...buildSettings(new Date('2026-05-02T00:00:00.000Z')),
+        leagueFormat: 'BLOODSUCKER',
+        bloodsuckerMemberId: 'member-12',
+      },
+      members,
+      drafts: [
+        {
+          id: 'draft-1',
+          status: DraftStatus.SCHEDULED,
+          currentPick: 1,
+          lobbyStatus: 'COUNTDOWN',
+          lobbyOpenAt: new Date('2026-05-01T00:00:00.000Z'),
+          orders: members
+            .slice(0, 11)
+            .map((member) => ({ slot: member.draftSlot, memberId: member.id })),
+        },
+      ],
+    }));
+    return client;
+  }
+  const now = new Date('2026-05-02T00:05:00.000Z');
+
+  it('accepts an order of the 11 drafters and sizes the draft for them', async () => {
+    const readiness = await getLeagueDraftOperationalReadiness(bloodsuckerClient(641) as any, {
+      leagueId: 'league-1',
+      now,
+    });
+
+    expect(readiness.blockers).toEqual([]);
+    expect(readiness.memberCount).toBe(12);
+    expect(readiness.totalPicks).toBe(11 * 22);
+  });
+
+  it('blocks the start when the pool cannot fill the Bloodsucker roster after the draft', async () => {
+    const readiness = await getLeagueDraftOperationalReadiness(
+      bloodsuckerClient(11 * 22 + 3) as any,
+      { leagueId: 'league-1', now }
+    );
+
+    expect(readiness.blockers).toEqual([
+      expect.objectContaining({ code: 'bloodsucker_pool_shortage' }),
+    ]);
+    expect(readiness.lifecycle.canStartClock).toBe(false);
+  });
+});
+
 describe('draft room entry once the draft is running', () => {
   it.each([DraftStatus.LIVE, DraftStatus.PAUSED])(
     'keeps a %s draft enterable when the player pool falls short mid-draft',

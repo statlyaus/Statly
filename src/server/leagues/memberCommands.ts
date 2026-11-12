@@ -7,6 +7,8 @@ import { generateDeterministicMemberId } from '@/utils/firestore';
 import { isActivePrismaMembership } from './activeMembership';
 import { isLeagueAtCapacity } from './leagueCapacity';
 import { hasDraftStarted } from './draftStarted';
+import { writeDraftOrder } from '@/server/draft/draftOrderWriter';
+
 import { clearBloodsuckerOnDeparture } from './leagueFormat';
 
 /**
@@ -49,7 +51,9 @@ async function loadLeagueForCommand(tx: Prisma.TransactionClient, leagueId: stri
     select: {
       id: true,
       ownerId: true,
-      settings: { select: { competitionPublishedAt: true } },
+      settings: {
+        select: { competitionPublishedAt: true, leagueFormat: true, bloodsuckerMemberId: true },
+      },
       members: {
         orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
         select: { id: true, userId: true, isActive: true, status: true, draftSlot: true },
@@ -143,22 +147,15 @@ export async function removeLeagueMember(
     });
 
     const remaining = activeMembers.filter((member) => member.id !== target.id);
-    await Promise.all(
-      remaining.map((member, index) =>
-        tx.leagueMember.update({ where: { id: member.id }, data: { draftSlot: index + 1 } })
-      )
-    );
-
-    if (draft) {
-      await tx.draftOrder.deleteMany({ where: { draftId: draft.id } });
-      await tx.draftOrder.createMany({
-        data: remaining.map((member, index) => ({
-          draftId: draft.id,
-          memberId: member.id,
-          slot: index + 1,
-        })),
-      });
-    }
+    // BR-09: the Bloodsucker stays out of the order. A departing Bloodsucker was cleared above.
+    await writeDraftOrder(tx, {
+      draftId: draft?.id ?? null,
+      members: remaining,
+      settings:
+        league.settings?.bloodsuckerMemberId === target.id
+          ? { ...league.settings, bloodsuckerMemberId: null }
+          : league.settings,
+    });
 
     return {
       ok: true,
@@ -355,10 +352,25 @@ export async function joinLeague(
         id: true,
         name: true,
         inviteCode: true,
-        settings: { select: { maxTeams: true, timeZone: true, startAt: true } },
+        settings: {
+          select: {
+            maxTeams: true,
+            timeZone: true,
+            startAt: true,
+            leagueFormat: true,
+            bloodsuckerMemberId: true,
+          },
+        },
         members: {
           orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
-          select: { id: true, userId: true, teamName: true, isActive: true, status: true },
+          select: {
+            id: true,
+            userId: true,
+            teamName: true,
+            isActive: true,
+            status: true,
+            draftSlot: true,
+          },
         },
         drafts: {
           orderBy: { createdAt: 'desc' },
@@ -438,16 +450,12 @@ export async function joinLeague(
           },
         });
 
-    if (draft) {
-      await tx.draftOrder.deleteMany({ where: { draftId: draft.id } });
-      await tx.draftOrder.createMany({
-        data: [...activeMembers, member].map((row, index) => ({
-          draftId: draft.id,
-          memberId: row.id,
-          slot: index + 1,
-        })),
-      });
-    }
+    // BR-09: the new member drafts last; a Bloodsucker stays out of the order, after the drafters.
+    const order = await writeDraftOrder(tx, {
+      draftId: draft?.id ?? null,
+      members: [...activeMembers, member],
+      settings: league.settings,
+    });
 
     return {
       ok: true,
@@ -462,7 +470,7 @@ export async function joinLeague(
           isActive: true,
         },
         memberCount: draftSlot,
-        draftSlot,
+        draftSlot: order.drafterCount,
         league: {
           id: league.id,
           name: league.name,

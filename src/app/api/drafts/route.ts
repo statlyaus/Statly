@@ -16,6 +16,8 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
+import { writeDraftOrder } from '@/server/draft/draftOrderWriter';
+import { splitDraftingMembers } from '@/server/leagues/leagueFormat';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -254,8 +256,11 @@ export async function POST(request: NextRequest) {
       }
 
       const orderedMembers = orderMembersForDraft(league.members, body.participants, pickOrder);
+      // BR-09, BR-10: the Bloodsucker never drafts; its roster is filled from the pool afterwards.
+      const { drafters, bloodsucker } = splitDraftingMembers(orderedMembers, league.settings);
       const capacity = calculateDraftCapacity({
-        teamCount: orderedMembers.length,
+        teamCount: drafters.length,
+        reservedTeamCount: bloodsucker ? 1 : 0,
         positionLimits,
         activePlayerCount,
       });
@@ -282,15 +287,6 @@ export async function POST(request: NextRequest) {
         throw new Error('Participant count does not match league member count');
       }
 
-      for (let i = 0; i < orderedMembers.length; i++) {
-        if (orderedMembers[i].draftSlot !== i + 1) {
-          await tx.leagueMember.update({
-            where: { id: orderedMembers[i].id },
-            data: { draftSlot: i + 1 },
-          });
-        }
-      }
-
       // Create draft with existing league
       const draft = await tx.draft.create({
         data: {
@@ -306,18 +302,14 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Create draft orders from existing league members
-      for (let i = 0; i < orderedMembers.length; i++) {
-        await tx.draftOrder.create({
-          data: {
-            draftId: draft.id,
-            memberId: orderedMembers[i].id,
-            slot: i + 1,
-          },
-        });
-      }
+      // Drafters take slots 1..n in this order; a Bloodsucker takes the next slot, outside the order.
+      await writeDraftOrder(tx, {
+        draftId: draft.id,
+        members: orderedMembers,
+        settings: league.settings,
+      });
 
-      return { draft, league, members: orderedMembers, settings };
+      return { draft, league, members: drafters, settings };
     });
 
     // Schedule draft start
