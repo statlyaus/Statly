@@ -68,7 +68,8 @@ and the commissioner settings page shows locked fields read-only with that reaso
 
 ## League formats
 
-A league's format is `STANDARD` (the default) or `BLOODSUCKER` (epic #1275). It is stored in
+A league's format is `STANDARD` (the default), `BLOODSUCKER` (epic #1275) or `NO_LOSERS` (epic #1290).
+A league has exactly one format. It is stored in
 `LeagueSettings.leagueFormat`, not in the competition rules, and is independent of scoring mode and
 category selection: every combination is valid.
 
@@ -91,6 +92,22 @@ team it beats. The setup rules (implemented in #1278, owned by `src/server/leagu
 
 Draft exclusion, the exclusive free-agency window, pinned waiver priority and bites are later epic
 tickets and are not live yet.
+
+In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
+setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):
+
+- No Losers works with either scoring mode and any category selection and directions. It has no
+  settings of its own, no Bloodsucker (choosing it clears one), and no setup rules beyond a standard
+  league's: any waiver rule and FAAB, the standard team counts, and no extra readiness blockers.
+- The format locks with the draft structure (see [Settings locks](#settings-locks)), and every change
+  is audited as `LEAGUE_FORMAT_CHANGED`, as above.
+- League creation and settings explain the rule wherever the format is chosen (text in
+  `src/lib/leagueFormatOptions.ts`): a win counts in full; a draw or a loss by 1 to 5 points counts
+  half; a loss by 6 or more counts nothing. It applies to every category, low-wins included, so a
+  losing player's clangers, frees against and turnovers are zeroed too.
+
+The result rule itself (`src/server/leagues/noLosersResultRule.ts`) is not yet applied to round
+scoring; #1294 wires it in. Until then a No Losers league scores like a standard one.
 
 ## Calendar and fixtures
 
