@@ -25,6 +25,13 @@ const mocks = vi.hoisted(() => {
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
+    leagueMember: {
+      findFirst: vi.fn(),
+    },
+    socialMute: {
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
   };
   return {
     requireLeagueSocialAccess: vi.fn(),
@@ -68,7 +75,12 @@ vi.mock('./socialDto', () => ({
   toSocialReply: vi.fn((record) => record),
 }));
 
-import { createSocialMessage, deleteSocialPost, markSocialChannelRead } from './socialCommands';
+import {
+  createSocialMessage,
+  deleteSocialPost,
+  markSocialChannelRead,
+  moderateSocialContent,
+} from './socialCommands';
 
 describe('league social Activity commands', () => {
   beforeEach(() => {
@@ -210,5 +222,62 @@ describe('league social Activity commands', () => {
         payloadJson: expect.objectContaining({ channel: 'activity' }),
       }),
     });
+  });
+
+  it('commits a mute with a league event that names nobody, so open screens reload', async () => {
+    mocks.tx.leagueMember.findFirst.mockResolvedValue({ id: 'member-2' });
+    mocks.tx.socialMute.create.mockResolvedValue({
+      id: 'mute-1',
+      expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+    });
+
+    await expect(
+      moderateSocialContent('league-1', 'user-1', {
+        action: 'mute',
+        userId: 'user-2',
+        until: '2099-01-01T00:00:00.000Z',
+        reason: 'Abuse',
+      })
+    ).resolves.toMatchObject({ action: 'mute', userId: 'user-2', muteId: 'mute-1' });
+
+    const event = mocks.tx.socialOutboxEvent.create.mock.calls[0][0].data;
+    expect(event).toMatchObject({
+      leagueId: 'league-1',
+      seasonId: 'season-1',
+      channel: 'CHAT',
+      eventType: 'social:moderation',
+      aggregateType: 'mute',
+      aggregateId: 'mute-1',
+    });
+    expect(JSON.stringify(event.payloadJson)).not.toContain('user-2');
+  });
+
+  it('publishes an unmute and refuses to mute someone who is not an active member', async () => {
+    mocks.tx.leagueMember.findFirst.mockResolvedValue({ id: 'member-2' });
+    mocks.tx.socialMute.updateMany.mockResolvedValue({ count: 1 });
+
+    await moderateSocialContent('league-1', 'user-1', {
+      action: 'unmute',
+      userId: 'user-2',
+      reason: 'Served',
+    });
+    expect(mocks.tx.socialOutboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: 'social:moderation',
+        payloadJson: expect.objectContaining({ action: 'unmute' }),
+      }),
+    });
+
+    mocks.tx.socialOutboxEvent.create.mockClear();
+    mocks.tx.leagueMember.findFirst.mockResolvedValue(null);
+    await expect(
+      moderateSocialContent('league-1', 'user-1', {
+        action: 'mute',
+        userId: 'user-9',
+        until: '2099-01-01T00:00:00.000Z',
+        reason: 'Abuse',
+      })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.tx.socialOutboxEvent.create).not.toHaveBeenCalled();
   });
 });

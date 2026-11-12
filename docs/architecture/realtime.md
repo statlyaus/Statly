@@ -42,6 +42,13 @@ the snapshot only when a channel's latest sequence advanced. An unanswered join 
 unavailable", not an authorization failure; only a refused join shows one. Until the Socket.IO
 process runs in production, this poll is the only delivery path on the Netlify deployment.
 
+Every social write (anything but GET) counts against one per-member, per-league ceiling of 120 a
+minute in `withLeagueSocialRoute`, so edits, deletes, read receipts and preferences are never
+unlimited; routes that create content keep their own stricter limits. Social text has invisible and
+bidirectional-override characters removed before it is validated, so a message cannot be blank or
+read differently from what was typed. A mute or unmute commits with a `social:moderation` event that
+names nobody, which is how the muted member's open screens learn they can no longer send.
+
 Chat GIFs persist only the GIPHY id (`SocialMessage.giphyId`); the browser resolves renditions with
 the public `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`, and the GIF picker is hidden while that key is unset.
 GIPHY's API terms forbid caching or proxying media URLs, so the server stores none. A beta key is
