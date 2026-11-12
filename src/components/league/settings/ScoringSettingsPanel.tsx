@@ -63,7 +63,9 @@ export function ScoringSettingsPanel({
   onFormatChange,
 }: ScoringSettingsPanelProps) {
   const isLocked = Boolean(lockReason ?? value.scoringSettingsLockedAt);
-  const isFormatLocked = Boolean(formatLockReason);
+  // No Losers changes scoring, so publication also locks moving into or out of it.
+  const isFormatLocked =
+    Boolean(formatLockReason) || (isLocked && format.leagueFormat === 'NO_LOSERS');
 
   return (
     <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
@@ -117,7 +119,13 @@ export function ScoringSettingsPanel({
             className={SELECT_CLASS}
           >
             {selectableLeagueFormatOptions(format.leagueFormat).map((option) => (
-              <option key={option.value} value={option.value}>
+              <option
+                key={option.value}
+                value={option.value}
+                disabled={
+                  isLocked && option.value === 'NO_LOSERS' && format.leagueFormat !== 'NO_LOSERS'
+                }
+              >
                 {option.label}
               </option>
             ))}

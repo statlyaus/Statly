@@ -326,6 +326,39 @@ describe('league format settings', () => {
     });
   });
 
+  describe('after the competition is published, before the draft starts', () => {
+    beforeEach(() => {
+      stored.scoringSettingsLockedAt = new Date('2026-08-01T00:00:00.000Z') as never;
+    });
+
+    it.each([
+      ['STANDARD', 'NO_LOSERS'],
+      ['NO_LOSERS', 'STANDARD'],
+      ['NO_LOSERS', 'BLOODSUCKER'],
+    ])(
+      'refuses %s to %s with 409 SCORING_SETTINGS_LOCKED: No Losers changes scoring',
+      async (from, to) => {
+        stored.leagueFormat = from;
+        const bloodsuckerMemberId = to === 'BLOODSUCKER' ? 'member-2' : null;
+
+        const { status, json } = await put({ format: { leagueFormat: to, bloodsuckerMemberId } });
+
+        expect(status).toBe(409);
+        expect(json.code).toBe('SCORING_SETTINGS_LOCKED');
+        expect(mocks.transaction).not.toHaveBeenCalled();
+      }
+    );
+
+    it('still accepts STANDARD to BLOODSUCKER, which is draft structure only', async () => {
+      const { status } = await put({
+        format: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
+      });
+
+      expect(status).toBe(200);
+      expect(stored.leagueFormat).toBe('BLOODSUCKER');
+    });
+  });
+
   describe('after the draft leaves SCHEDULED (BR-05)', () => {
     beforeEach(() => {
       Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });

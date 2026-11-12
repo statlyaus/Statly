@@ -688,6 +688,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         draftType !== prismaLeague.settings.draftType ||
         pickOrder !== normalizeDraftPickOrderMode(prismaLeague.settings.pickOrder) ||
         formatChanged;
+      // No Losers changes how every round scores, so moving into or out of it is also a scoring change.
+      const noLosersChanged =
+        leagueFormat !== currentFormat.leagueFormat &&
+        (leagueFormat === 'NO_LOSERS' || currentFormat.leagueFormat === 'NO_LOSERS');
+      if (noLosersChanged && locks.scoring) {
+        return NextResponse.json(
+          { error: locks.scoring, code: 'SCORING_SETTINGS_LOCKED' },
+          { status: 409 }
+        );
+      }
       if (draftStructureChanged && locks.draftStructure) {
         return NextResponse.json(
           { error: locks.draftStructure, code: 'DRAFT_STRUCTURE_LOCKED' },

@@ -117,8 +117,10 @@ setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`
 - No Losers works with either scoring mode and any category selection and directions. It has no
   settings of its own, no Bloodsucker (choosing it clears one), and no setup rules beyond a standard
   league's: any waiver rule and FAAB, the standard team counts, and no extra readiness blockers.
-- The format locks with the draft structure (see [Settings locks](#settings-locks)), and every change
-  is audited as `LEAGUE_FORMAT_CHANGED`, as above.
+- The format locks with the draft structure (see [Settings locks](#settings-locks)). Because No Losers
+  changes scoring, moving into or out of it also locks with scoring when the competition is published
+  (409 `SCORING_SETTINGS_LOCKED`), even before the draft starts. Every change is audited as
+  `LEAGUE_FORMAT_CHANGED`, as above.
 - League creation and settings explain the rule wherever the format is chosen (text in
   `src/lib/leagueFormatOptions.ts`): a win counts in full; a draw or a loss by 1 to 5 points counts
   half; a loss by 6 or more counts nothing. It applies to every category, low-wins included, so a
