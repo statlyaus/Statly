@@ -65,7 +65,7 @@ What to do:
    results are a no-op; a changed one (including a change back to an earlier score) supersedes the
    stored row, and the next hourly `/api/cron/scoring` run re-scores any No Losers round that used it.
    A failed re-score is logged as `Failed to re-score a No Losers round after an AFL result
-   correction` and the run answers 500. `FINAL_ROUND_RESULTS_UNJOINED` there means the corrected
+correction` and the run answers 500. `FINAL_ROUND_RESULTS_UNJOINED` there means the corrected
    result no longer joins its game; the round keeps its FINAL scores until it does (see step 4). A
    round whose stats are unavailable is listed under `resultCorrections.pending` and retried each run.
 3. A game abandoned without a result has no Footywire match page, so the ingest never records it.
