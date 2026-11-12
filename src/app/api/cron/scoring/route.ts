@@ -38,6 +38,8 @@ async function runScheduledScoring(): Promise<NextResponse> {
         leagues: run.leagues.length,
         rounds: run.leagues.reduce((sum, league) => sum + league.rounds.length, 0),
         resultCorrectionRounds: resultCorrections.rounds.length,
+        // Rounds a correction could not re-score yet (stats unavailable); retried next run.
+        resultCorrectionPendingRounds: resultCorrections.pending.length,
       });
     } else {
       logger.error('Scheduled round scoring failed', {

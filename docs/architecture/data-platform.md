@@ -182,11 +182,13 @@ round, as the fixture and stats are. `etl/resultIngest.ts` validates the batch, 
 `etl/resultStore.ts` writes it in one transaction under a per-season advisory lock. The ETL image has
 no Prisma client, so the store writes SQL through `pg`; the schema is Prisma's, and an integration
 test runs the store against the migrated database. The live guard (`etl/liveGuard.ts`) runs the
-ingest for Footywire's last 18 matches every 10 minutes while a stats window is open; it needs
-`DATABASE_URL`.
+ingest for Footywire's last 18 matches every 10 minutes while a stats window is open, and for the
+whole season every 6 hours outside one, so a correction to an older game is ingested too
+(`etl/resultRefresh.ts`, #1315); it needs `DATABASE_URL`.
 
 Each row records season, round, Footywire match id (`matchId`), the fixture's `matchUid` (the id
-player stat rows carry, so a stat row resolves to its own game's result), home and away club,
+player stat rows carry, so a stat row resolves to its own game's result; the join is by season,
+round and the two clubs in either order, `src/server/etl/aflMatchJoinKey.ts`), home and away club,
 points, margin (home minus away), status (`FINAL`, or `ABANDONED` with no scores) and `fetchedAt`,
 plus a sha256 `contentHash` of the stored fields. A hash may repeat within a match's history.
 
@@ -202,8 +204,8 @@ Ingestion fails closed. A fitzRoy failure, a missing column, an unknown club or 
 is not a whole number, a duplicate match, or output that ends before the script's end-of-results line
 rejects the whole batch and writes nothing. There is no mock or fallback source. Footywire posts a
 match page only for a played match, so every ingested row is `FINAL`; an abandoned game is recorded
-by hand. A result still missing 6 hours after a game's scheduled end raises a Sentry error from the
-hourly `/api/cron/afl-results` check (see the
+by an operator with `npm run record-abandoned` in `etl/`. A result still missing 6 hours after a game's scheduled end raises a Sentry error from the
+hourly `/api/cron/afl-results` check, as does a stored result that no fixture game joins (see the
 [monitoring runbook](../runbooks/monitoring-and-alerts.md#missing-afl-match-result), which also says
 how to re-run the ingest).
 
