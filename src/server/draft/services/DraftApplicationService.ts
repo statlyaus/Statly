@@ -2,6 +2,7 @@ import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 
 import { draftRepository } from '../repository/DraftRepository';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
+import { closeBloodsuckerWindowAfterDraft } from '@/server/leagues/bloodsuckerAutoFill';
 import { findLeagueFormatStartBlocker } from '@/server/leagues/leagueFormat';
 import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import {
@@ -570,6 +571,7 @@ export class DraftApplicationService {
         leagueId: result.leagueId,
         draftId: result.draftId,
       });
+      await closeBloodsuckerWindowAfterDraft(result.leagueId);
     }
 
     return result;
@@ -770,6 +772,7 @@ export class DraftApplicationService {
         leagueId: result.leagueId,
         draftId: result.draftId,
       });
+      await closeBloodsuckerWindowAfterDraft(result.leagueId);
     }
 
     return result;

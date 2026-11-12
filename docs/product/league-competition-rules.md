@@ -83,9 +83,9 @@ category selection: every combination is valid.
 In a **Bloodsucker** league one member, the Bloodsucker, skips the draft and takes a player from each
 team it beats.
 
-**Held back until the epic ships.** Only the setup (#1278) and the shared roster swap (#1282) are
-built; bites, deadlines, protections, the exclusive window and waiver priority (#1279-#1281,
-#1283-#1286) are not, so a Bloodsucker league would play as a standard one. Choosing Bloodsucker is
+**Held back until the epic ships.** The setup (#1278), draft exclusion (#1279), exclusive window
+(#1280) and shared roster swap (#1282) are built; bites, deadlines, protections and waiver priority
+(#1281, #1283-#1286) are not, so a Bloodsucker league would still play much as a standard one. Choosing Bloodsucker is
 therefore off unless `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` (`isBloodsuckerSelectable`,
 `src/lib/leagueFormatOptions.ts`). With the flag off the create page and settings do not offer it,
 and create and settings refuse it with code `BLOODSUCKER_UNAVAILABLE`. A league already stored as
@@ -113,8 +113,28 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
   Bloodsucker's roster afterwards (#1279; see
   [Drafts and waivers](../domain/draft-and-waivers.md#snake-order-and-availability)).
 
-The exclusive free-agency window, pinned waiver priority and bites are later epic tickets and are not
-live yet.
+- After the draft the Bloodsucker has an **exclusive free-agency window** (#1280). It opens when the
+  draft completes and closes at the earlier of 24 hours later or 2 hours before round 1's first
+  game (`computeBloodsuckerWindow`, `src/server/leagues/bloodsuckerWindow.ts`). An unpublished
+  competition has no round 1 yet, so the window runs 24 hours.
+  - Inside it the Bloodsucker adds and drops freely, and waiver-only holds do not apply to it.
+  - Every other member's adds, drops, waiver claims and trade proposals, accepts and counters are
+    refused with HTTP 409, code `BLOODSUCKER_WINDOW_OPEN`, the close time in the reason (Melbourne
+    time) and `closesAt` in the response. Pending trades stay pending until it closes.
+  - If under an hour would be left (the draft finishes within 3 hours of round 1), there is no
+    window: nobody is refused and the auto-fill runs as the draft completes.
+- When the window closes, each empty Bloodsucker roster spot is filled with the highest-Statly-Z
+  unowned active player for the league's categories, ties to the lower player id
+  (`closeBloodsuckerWindow`, `src/server/leagues/bloodsuckerAutoFill.ts`). The Bloodsucker also gets
+  the default lineup for the first open round if it saved none, and one activity message is posted.
+  The close writes one `BLOODSUCKER_WINDOW_CLOSED` competition audit row per completed draft, with
+  the window, the rule version and the players added; a second run finds that row and adds nothing.
+  Auto-filled roster rows carry `acquiredBy = BLOODSUCKER_AUTO_FILL`. The close runs from
+  `/api/cron/bloodsucker` every 5 minutes (see
+  [Drafts and waivers](../domain/draft-and-waivers.md#concurrent-writers)), so other members can add
+  for up to 5 minutes after the close time before the fill has run; the fill takes whoever is left.
+
+Pinned waiver priority and bites are later epic tickets and are not live yet.
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):

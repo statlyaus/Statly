@@ -63,7 +63,7 @@ describe('transactions open only after the draft', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAuthenticatedUserId.mockResolvedValue('user-1');
-    mocks.getLeagueMembershipAccess.mockResolvedValue({ isMember: true });
+    mocks.getLeagueMembershipAccess.mockResolvedValue({ isMember: true, memberId: 'member-1' });
     mocks.getTransactionWindow.mockResolvedValue(DRAFT_NOT_COMPLETE);
   });
 
@@ -83,7 +83,10 @@ describe('transactions open only after the draft', () => {
       error: DRAFT_NOT_COMPLETE.reason,
       code: 'DRAFT_NOT_COMPLETE',
     });
-    expect(mocks.getTransactionWindow).toHaveBeenCalledWith('league-1');
+    // The acting member goes to the guard, so a Bloodsucker window can tell who is asking.
+    expect(mocks.getTransactionWindow).toHaveBeenCalledWith('league-1', mocks.prisma, {
+      memberId: 'member-1',
+    });
     expect(mocks.submitClaim).not.toHaveBeenCalled();
   });
 

@@ -9,6 +9,10 @@ import {
   removePlayersFromOpenLineups,
 } from '@/server/leagues/playerMoveLock';
 import { prisma } from '@/lib/prisma';
+import {
+  getTransactionWindow,
+  transactionsClosedResponse,
+} from '@/server/leagues/transactionWindow';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
@@ -116,6 +120,13 @@ export async function POST(
 
     if (!member) {
       return errorResponse('User is not a member of this league', 404);
+    }
+
+    // E10: during the Bloodsucker's exclusive window nobody else drops, so a dropped player cannot
+    // become a free agent only the Bloodsucker can take.
+    const transactionWindow = await getTransactionWindow(leagueId, prisma, { memberId: member.id });
+    if (!transactionWindow.open && transactionWindow.code === 'BLOODSUCKER_WINDOW_OPEN') {
+      return transactionsClosedResponse(transactionWindow);
     }
 
     // The player must be on this member's roster in this league.

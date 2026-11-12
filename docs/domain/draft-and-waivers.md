@@ -234,7 +234,11 @@ number, because priority is not unique. That is accepted. Waivers run automatica
 `/api/cron/waivers` hourly, and only the run in the 6 am Melbourne hour processes leagues with due
 claims, so the time holds through daylight saving. Leagues are processed one at a time; a league
 whose run throws keeps its claims pending and the others still run, but the route then answers
-HTTP 500 with the failed league ids and logs an error, so the scheduler records a failed run. Only one waiver processing run per league proceeds at a
+HTTP 500 with the failed league ids and logs an error, so the scheduler records a failed run. A second
+scheduled function calls `/api/cron/bloodsucker` every 5 minutes; for now it only closes Bloodsucker
+exclusive windows that are due and auto-fills the Bloodsucker's roster (#1280), under the League row
+lock, and it too answers HTTP 500 with the failed league ids. A draft that completes with no window
+left closes it at once instead of waiting for that run. Only one waiver processing run per league proceeds at a
 time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refused as already running
 (HTTP 409) rather than debiting and awarding the same claims again. A run that dies releases the
 lease implicitly after 15 minutes. Each claim settles in one transaction: it is taken only while still

@@ -12,6 +12,7 @@ import { loadWaiverOnlyHolds } from '@/server/waivers/waiverOnlyPlayers';
 export type FreeAgentAddErrorCode =
   | 'NOT_ACTIVE_MEMBER'
   | 'DRAFT_NOT_COMPLETE'
+  | 'BLOODSUCKER_WINDOW_OPEN'
   | 'PLAYER_NOT_FOUND'
   | 'PLAYER_OWNED'
   | 'PLAYER_ON_WAIVERS'
@@ -50,7 +51,8 @@ type FreeAgentAddDb = Pick<PrismaClient, '$transaction'>;
 /**
  * Adds an unowned player to the caller's roster in one transaction. The caller must be an active
  * member of a league whose draft is complete, the player must be unowned (under any alias) and not
- * waiver-only (a pending claim, or a drop since the last waiver run or still in its waiver period),
+ * waiver-only (a pending claim, or a drop since the last waiver run or still in its waiver period;
+ * the Bloodsucker ignores those holds inside its exclusive window, which is closed to everyone else),
  * his AFL game must not have started in the round in progress (he can be picked up after the round
  * ends), and the roster must have room under the same rosterSize + benchSize capacity the draft, trades and waivers use.
  */
@@ -96,7 +98,10 @@ export async function addFreeAgentToRoster(
         );
       }
 
-      const transactionWindow = await getTransactionWindow(leagueId, tx);
+      const transactionWindow = await getTransactionWindow(leagueId, tx, {
+        memberId: member.id,
+        now: input.now,
+      });
       if (!transactionWindow.open) {
         throw new FreeAgentAddError(transactionWindow.code, transactionWindow.reason, 409);
       }
@@ -112,11 +117,14 @@ export async function addFreeAgentToRoster(
         throw new FreeAgentAddError('PLAYER_OWNED', 'Player already owned in this league', 409);
       }
 
-      const [waiverHold] = await loadWaiverOnlyHolds(tx, {
-        leagueIds: [leagueId],
-        playerIds: playerAliasIds,
-        now: input.now,
-      });
+      // BR-12: inside its exclusive window the Bloodsucker can take anyone unowned, held or not.
+      const [waiverHold] = transactionWindow.bloodsuckerExclusive
+        ? []
+        : await loadWaiverOnlyHolds(tx, {
+            leagueIds: [leagueId],
+            playerIds: playerAliasIds,
+            now: input.now,
+          });
       if (waiverHold) {
         throw new FreeAgentAddError(
           'PLAYER_ON_WAIVERS',

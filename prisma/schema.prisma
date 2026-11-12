@@ -331,6 +331,9 @@ enum LeagueCompetitionAuditEventType {
   FINAL_ROUND_RESCORED
   /// The league format or the Bloodsucker member changed; the payload holds before, after and reason.
   LEAGUE_FORMAT_CHANGED
+  /// The Bloodsucker's exclusive window closed and its empty roster spots were auto-filled; the
+  /// payload holds the draft, the window and the players added. One row per completed draft.
+  BLOODSUCKER_WINDOW_CLOSED
 }
 
 enum LeagueAutosubReason {

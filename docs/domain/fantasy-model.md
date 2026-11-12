@@ -190,6 +190,12 @@ HTTP 409, code `DRAFT_NOT_COMPLETE`, and the reason "Adds, waiver claims and tra
 league draft is complete." A league with no draft is treated the same way. Withdrawing, declining,
 cancelling, and commissioner review are not transactions and stay available.
 
+In a Bloodsucker league the same guard then keeps adds, drops, waiver claims, and trade proposals,
+counters, and acceptances closed to every member but the Bloodsucker until its exclusive window ends:
+HTTP 409, code `BLOODSUCKER_WINDOW_OPEN`, with the close time (see
+[league formats](../product/league-competition-rules.md#league-formats)). Callers pass the acting
+member, so the guard can tell the Bloodsucker from everyone else.
+
 A player is waiver-only, winnable only by a claim at the next 6 am Melbourne waiver run, while he has
 a `PENDING` waiver claim in the league's active season (until a run settles it, even once it is due),
 or was dropped since the last waiver run or is still inside a drop's waiver period.

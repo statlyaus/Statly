@@ -44,7 +44,9 @@ export const POST = withMetrics(
       if (!access.isMember) {
         return NextResponse.json({ error: 'League membership required' }, { status: 403 });
       }
-      const transactionWindow = await getTransactionWindow(leagueId);
+      const transactionWindow = await getTransactionWindow(leagueId, prisma, {
+        memberId: access.memberId,
+      });
       if (!transactionWindow.open) return transactionsClosedResponse(transactionWindow);
 
       const requestedPlayerId = String(playerId);
