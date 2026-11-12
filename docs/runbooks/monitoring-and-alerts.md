@@ -42,26 +42,42 @@ the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` a
 
 `netlify/functions/cron-afl-results.mts` calls `/api/cron/afl-results` hourly at :35 UTC. For every
 AFL game in the Firestore fixture that started in the last 14 days and whose scheduled end (start + 3
-hours) was more than 6 hours ago, it looks for a current `AflMatchResult` row (same season, round and
-two clubs). Each game without one is logged as `Missing AFL result: {home} v {away} ({match_uid}) …`,
-which reaches Sentry, and the run answers 500. The check writes nothing. It is not a Crons monitor
+hours) was more than 6 hours ago, it looks for a current `AflMatchResult` row exactly as No Losers
+scoring joins one: same season, round and two clubs in either order, read from each side's
+`matchUid` (`src/server/etl/aflMatchJoinKey.ts`). Each game without one is logged as
+`Missing AFL result: {home} v {away} ({match_uid}) …`, which reaches Sentry, and the run answers 500.
+A stored current result in one of those rounds that no fixture game joins (so no player's stat row
+either) is logged as `Unjoined AFL result: {matchUid} matches no fixture game …` and also answers 500:
+its round waits on a result that is in fact stored, usually because Footywire's round label differs
+from the fixture's. The check writes nothing. It is not a Crons monitor
 (billing), so a scheduler outage is silent; the waivers and scoring monitors cover the scheduler.
 
 What to do:
 
 1. Look at the ETL logs (Cloud Run `statly-etl`) for `AFL results ingest failed`. The usual causes are
    a Footywire or fitzRoy failure, `DATABASE_URL` unset, or a database outage. Every failure writes
-   nothing; the ETL retries every 10 minutes while a stats window is open (6 hours after each start).
+   nothing; the ETL retries every 10 minutes while a stats window is open (6 hours after each start)
+   and re-reads the whole season every 6 hours outside one, which also picks up a correction to an
+   older game.
 2. Re-run the ingest by hand from `etl/` with `DATABASE_URL` naming the fantasy database. For the
    season's last 18 matches: `npm run build && Rscript fetch_fw_results.R 2026 18 | node dist/processResultData.js`.
    Leave the count off to re-read the whole season (about 10 minutes, one page per match). Unchanged
    results are a no-op; a changed one (including a change back to an earlier score) supersedes the
    stored row, and the next hourly `/api/cron/scoring` run re-scores any No Losers round that used it.
    A failed re-score is logged as `Failed to re-score a No Losers round after an AFL result
-correction` and the run answers 500.
-3. A game that was abandoned has no Footywire match page, so the ingest never records it. Insert its
-   `ABANDONED` row by hand (no scores, no margin; the table's CHECK constraint enforces this) with
-   the Footywire match id if there is one, or `abandoned-{match_uid}` if not.
+correction` and the run answers 500. `FINAL_ROUND_RESULTS_UNJOINED` there means the corrected
+   result no longer joins its game; the round keeps its FINAL scores until it does (see step 4). A
+   round whose stats are unavailable is listed under `resultCorrections.pending` and retried each run.
+3. A game abandoned without a result has no Footywire match page, so the ingest never records it.
+   Record it from `etl/` with `DATABASE_URL` naming the fantasy database, clubs as the fixture names
+   them, home first (no hand SQL):
+   `npm run record-abandoned -- --season 2026 --round 5 --home Geelong --away Hawthorn`.
+   Add `--match-id {id}` if Footywire has a match id for it; otherwise the row's id is
+   `abandoned-{matchUid}`. It writes one `ABANDONED` row (no scores, no margin), supersedes a stored
+   result of the same match id, and re-running it changes nothing.
+4. For `Unjoined AFL result`, compare the result's `matchUid` with the fixture game's `match_uid` in
+   Firestore `matches`. A different round number means Footywire and the fixture disagree on the
+   round; fix the source that is wrong and re-run the ingest.
 
 ## Settings only the owner can make
 

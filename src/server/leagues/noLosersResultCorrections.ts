@@ -25,8 +25,19 @@ export type CorrectedResultRound = {
   correctedResultIds: string[];
 };
 
+/**
+ * A round the recalculation could not re-score yet, with no error: its stats are unavailable, or it
+ * has no scorable matchup. Nothing was written, so it is selected again on the next run (#1315).
+ */
+export type PendingCorrectedResultRound = {
+  leagueId: string;
+  round: number;
+  correctedResultIds: string[];
+};
+
 export type CorrectedResultRun = {
   rounds: CorrectedResultRound[];
+  pending: PendingCorrectedResultRound[];
   failedLeagueIds: string[];
 };
 
@@ -82,12 +93,14 @@ export async function findRoundsScoredOnCorrectedResults(): Promise<PendingRound
 
 /**
  * Re-scores every round scored on a corrected result. One league's failure (or refusal) is logged
- * and reported, and that league's later rounds wait for the next run; other leagues still run.
+ * and reported, and that league's later rounds wait for the next run; other leagues still run. A
+ * round the recalculation could not re-score (nothing recalculated) is reported as pending, not as
+ * re-scored, and is not logged per run: the scoring job's summary carries the count.
  */
 export async function rescoreCorrectedResultRounds(
   recalculate: typeof recalculateLeagueRoundMatchups = recalculateLeagueRoundMatchups
 ): Promise<CorrectedResultRun> {
-  const run: CorrectedResultRun = { rounds: [], failedLeagueIds: [] };
+  const run: CorrectedResultRun = { rounds: [], pending: [], failedLeagueIds: [] };
   for (const { leagueId, round, corrections } of await findRoundsScoredOnCorrectedResults()) {
     if (run.failedLeagueIds.includes(leagueId)) continue;
     const resultCorrections = [...corrections.values()];
@@ -95,18 +108,25 @@ export async function rescoreCorrectedResultRounds(
       const result = await recalculate({ leagueId, round, finalize: false, resultCorrections });
       if (!result) continue; // The league was deleted after the rounds were read.
       if ('blocked' in result) throw new Error(result.blocked);
+      const correctedResultIds = resultCorrections.map(
+        (correction) => correction.supersededResultId
+      );
+      if (result.recalculated === 0) {
+        run.pending.push({ leagueId, round, correctedResultIds });
+        continue;
+      }
       run.rounds.push({
         leagueId,
         round,
         status: result.status,
         recalculated: result.recalculated,
-        correctedResultIds: resultCorrections.map((correction) => correction.supersededResultId),
+        correctedResultIds,
       });
       logger.info('Re-scored a No Losers round after an AFL result correction', {
         leagueId,
         round,
         status: result.status,
-        correctedResultIds: resultCorrections.map((correction) => correction.supersededResultId),
+        correctedResultIds,
       });
     } catch (error) {
       run.failedLeagueIds.push(leagueId);

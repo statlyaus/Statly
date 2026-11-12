@@ -132,8 +132,10 @@ Scoring (#1294; the rule is `src/server/leagues/noLosersResultRule.ts`, its wiri
   interchange stay uncounted, a player with no stat row is unavailable as in any league, and
   autosubs never replace a starter because his club lost.
 - The join uses the Statly match id (`matchUid`, e.g. `2025-R18-GEE-HAW`) that stat rows and
-  `AflMatchResult` both carry, and the stat row's club abbreviation against the two in `matchUid`;
-  the provider's club spelling is never compared with the result's club names.
+  `AflMatchResult` both carry, compared by season, round and the two club abbreviations in either
+  order, since the stats feed and Footywire's match page may disagree on home and away (#1315); the
+  stat row's club abbreviation then picks its side. The provider's club spelling is never compared
+  with the result's club names.
 - Footywire posts stats and results only for finished games, so there is no in-game scoreline. While
   a round is live, a player whose game has a stored result shows his multiplier and counted stats;
   one whose finished game has no stored result yet shows "Result pending" with raw stats, and the
@@ -257,7 +259,12 @@ and recalculates it the same way, with no actor (system). Each changed matchup's
 trigger `result-correction` and lists `resultCorrections` (superseded result id, the id that replaced
 it, the reason). A matchup winner may change; standings follow. After the re-score the round names
 only current results, so it is not picked again, and an unchanged re-ingest triggers nothing. Only
-the league's active season and current fixture version are re-scored.
+the league's active season and current fixture version are re-scored. A round the recalculation
+cannot re-score yet (its stats are unavailable) is reported as pending in the scoring job's response
+and summary, not as re-scored, and is tried again on the next run. A FINAL round is never demoted:
+if a corrected result can no longer be joined to its game, the recalculation is refused
+(`FINAL_ROUND_RESULTS_UNJOINED`), the stored FINAL scores stay, and the scoring job logs the failure
+(#1315).
 
 Supported finals sizes are 4, 6, and 8 teams. Seeding comes from finalized regular-season standings.
 Finals progression is persisted and recalculated only through the competition service. A drawn final is

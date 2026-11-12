@@ -21,6 +21,7 @@
     "validate": "node dist/validateMatchData.js",
     "test-r": "Rscript fetch_fw_round.R 2025 18",
     "results": "npm run build && Rscript fetch_fw_results.R | node dist/processResultData.js",
+    "record-abandoned": "npm run build && node dist/recordAbandonedResult.js",
     "fixture": "npm run build && Rscript fetch_fw_fixture.R | node dist/processFixtureData.js",
     "test-pipeline": "npm run build && Rscript fetch_fw_round.R 2025 18 | node dist/processFootywireData.js",
     "docker-build": "docker build -t statly-etl .",

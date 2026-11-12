@@ -2,12 +2,14 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  buildAbandonedResult,
   buildMatchResults,
   completeResultRows,
   ingestResultRows,
   planResultWrites,
   resultContentHash,
 } = require('../dist/resultIngest');
+const { parseAbandonedArgs } = require('../dist/recordAbandonedResult');
 
 // Rows as etl/fetch_fw_results.R emitted them for the last three Footywire matches of 2025
 // (2025-11-11): Footywire's match pages call the Lions "Brisbane".
@@ -244,4 +246,101 @@ test('planResultWrites refuses a match with two current rows', () => {
     () => planResultWrites([result], [stored, { ...stored, id: 'b' }]),
     /more than one current result/
   );
+});
+
+test('builds an operator-recorded ABANDONED result with no scores (#1315)', () => {
+  const result = buildAbandonedResult({
+    season: 2026,
+    round: 5,
+    homeTeam: 'Geelong',
+    awayTeam: 'Greater Western Sydney',
+  });
+  assert.deepEqual(
+    { ...result, contentHash: typeof result.contentHash },
+    {
+      season: 2026,
+      round: 5,
+      matchId: 'abandoned-2026-R5-GEE-GWS',
+      matchUid: '2026-R5-GEE-GWS',
+      homeClub: 'Geelong',
+      awayClub: 'GWS',
+      homePoints: null,
+      awayPoints: null,
+      margin: null,
+      status: 'ABANDONED',
+      contentHash: 'string',
+    }
+  );
+  assert.equal(
+    buildAbandonedResult({
+      season: 2026,
+      round: 5,
+      homeTeam: 'Geelong',
+      awayTeam: 'GWS',
+      matchId: '11234',
+    }).matchId,
+    '11234'
+  );
+  assert.throws(
+    () => buildAbandonedResult({ season: 2026, round: 0, homeTeam: 'Geelong', awayTeam: 'GWS' }),
+    /Unreadable round/
+  );
+  assert.throws(
+    () =>
+      buildAbandonedResult({ season: 2026, round: 5, homeTeam: 'Geelong', awayTeam: 'Geelong' }),
+    /two different clubs/
+  );
+  assert.throws(
+    () => buildAbandonedResult({ season: 2026, round: 5, homeTeam: 'Geelong', awayTeam: 'Hobart' }),
+    /Hobart/
+  );
+});
+
+test('the record-abandoned command reads its flags and refuses anything else', () => {
+  assert.deepEqual(
+    parseAbandonedArgs([
+      '--season',
+      '2026',
+      '--round',
+      '5',
+      '--home',
+      'Geelong',
+      '--away',
+      'Hawthorn',
+    ]),
+    { season: 2026, round: 5, homeTeam: 'Geelong', awayTeam: 'Hawthorn' }
+  );
+  assert.deepEqual(
+    parseAbandonedArgs([
+      '--season',
+      '2026',
+      '--round',
+      '5',
+      '--home',
+      'St Kilda',
+      '--away',
+      'Sydney',
+      '--match-id',
+      '11234',
+    ]).matchId,
+    '11234'
+  );
+  assert.throws(() => parseAbandonedArgs(['--season', '2026']), /--round is required/);
+  assert.throws(
+    () =>
+      parseAbandonedArgs([
+        '--season',
+        '2026',
+        '--round',
+        '5',
+        '--home',
+        'A',
+        '--away',
+        'B',
+        '--force',
+        'y',
+      ]),
+    /Unknown flag --force/
+  );
+  assert.throws(() => parseAbandonedArgs(['--season']), /flag value/);
 });

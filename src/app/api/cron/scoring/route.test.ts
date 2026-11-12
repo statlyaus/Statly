@@ -6,9 +6,14 @@ const findManyMock = vi.fn();
 const recalculateMock = vi.fn();
 const rescoreCorrectionsMock = vi.fn();
 const loggerErrorMock = vi.fn();
+const loggerInfoMock = vi.fn();
 
 vi.mock('@/lib/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: (...args: unknown[]) => loggerErrorMock(...args) },
+  logger: {
+    info: (...args: unknown[]) => loggerInfoMock(...args),
+    warn: vi.fn(),
+    error: (...args: unknown[]) => loggerErrorMock(...args),
+  },
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -55,7 +60,7 @@ describe('/api/cron/scoring', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', 'cron-secret');
     findManyMock.mockResolvedValue([]);
-    rescoreCorrectionsMock.mockResolvedValue({ rounds: [], failedLeagueIds: [] });
+    rescoreCorrectionsMock.mockResolvedValue({ rounds: [], pending: [], failedLeagueIds: [] });
     recalculateMock.mockImplementation(async ({ round }: { round: number }) => recalculated(round));
   });
 
@@ -75,7 +80,11 @@ describe('/api/cron/scoring', () => {
       recalculated: 1,
       correctedResultIds: ['result-old'],
     };
-    rescoreCorrectionsMock.mockResolvedValue({ rounds: [corrected], failedLeagueIds: [] });
+    rescoreCorrectionsMock.mockResolvedValue({
+      rounds: [corrected],
+      pending: [],
+      failedLeagueIds: [],
+    });
 
     const response = await GET(authorized());
 
@@ -83,12 +92,37 @@ describe('/api/cron/scoring', () => {
     expect(rescoreCorrectionsMock).toHaveBeenCalledTimes(1);
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
-      resultCorrections: { rounds: [corrected], failedLeagueIds: [] },
+      resultCorrections: { rounds: [corrected], pending: [], failedLeagueIds: [] },
     });
   });
 
+  it('reports a correction round that could not be re-scored yet as pending, not re-scored (#1315)', async () => {
+    const pending = { leagueId: 'league-nl', round: 3, correctedResultIds: ['result-old'] };
+    rescoreCorrectionsMock.mockResolvedValue({
+      rounds: [],
+      pending: [pending],
+      failedLeagueIds: [],
+    });
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      resultCorrections: { rounds: [], pending: [pending] },
+    });
+    expect(loggerInfoMock).toHaveBeenCalledWith(
+      'Scheduled round scoring ran',
+      expect.objectContaining({ resultCorrectionRounds: 0, resultCorrectionPendingRounds: 1 })
+    );
+  });
+
   it('fails the run when a result-correction re-score fails', async () => {
-    rescoreCorrectionsMock.mockResolvedValue({ rounds: [], failedLeagueIds: ['league-nl'] });
+    rescoreCorrectionsMock.mockResolvedValue({
+      rounds: [],
+      pending: [],
+      failedLeagueIds: ['league-nl'],
+    });
 
     const response = await GET(authorized());
 

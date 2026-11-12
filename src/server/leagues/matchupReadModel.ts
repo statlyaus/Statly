@@ -1262,8 +1262,8 @@ async function loadNoLosersScreenData({
         })
       : Promise.resolve([]),
   ]);
-  const results = new Map(roundResults.map((result) => [result.matchUid, result]));
-  for (const [matchUid, result] of context?.results ?? []) results.set(matchUid, result);
+  const results = new Map(roundResults.map((result) => [result.id, result]));
+  for (const result of context?.results.values() ?? []) results.set(result.id, result);
   const storedRowsByMatchupId = new Map<string, StoredNoLosersPlayerScore[]>();
   for (const row of storedRows) {
     const rows = storedRowsByMatchupId.get(row.matchupId) ?? [];
@@ -1527,6 +1527,20 @@ export async function recalculateLeagueRoundMatchups({
       recalculated: 0,
       scores: [],
       blocked: 'AFL_RESULTS_MISSING' as const,
+      waitingOnResults,
+      roundStatus,
+    };
+  }
+  // A FINAL round is never silently demoted to LIVE (#1315): if a corrected result can no longer be
+  // joined (say its round label changed), the stored FINAL scores stay and the run is refused, so
+  // the scoring job logs it as an error. The missing-result alert names the game.
+  if (waitingOnResults.length > 0 && matchups.some((matchup) => matchup.status === 'FINAL')) {
+    return {
+      round,
+      status: 'FINAL' as const,
+      recalculated: 0,
+      scores: [],
+      blocked: 'FINAL_ROUND_RESULTS_UNJOINED' as const,
       waitingOnResults,
       roundStatus,
     };

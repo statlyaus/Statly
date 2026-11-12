@@ -10,7 +10,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const GAMES = [
+const GAMES: Array<Record<string, unknown> & { match_uid: string }> = [
   { match_uid: '2091-R5-GWS-GEE', home_team: 'GWS', away_team: 'Geelong', status: 'final' },
   {
     match_uid: '2091-R5-HAW-COL',
@@ -66,6 +66,7 @@ vi.mock('@/server/etl/etlRoundData', () => ({
   ),
 }));
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
 import { aggregateLineupCategoryTotals } from '@/server/leagues/matchupScoringEngine';
@@ -83,6 +84,9 @@ const USERS = ['int-nl-owner', 'int-nl-rival'];
 const SEASON = 'int-nl-season';
 const MEMBERS = ['int-nl-m1', 'int-nl-m2'];
 const PLAYERS = STAT_ROWS.map((row) => row.player_uid);
+// The bye/autosub test's extra players: a Sydney starter (Sydney have the bye) and a Geelong sub.
+const BYE_PLAYER = 'int-nl-bye';
+const SUB_PLAYER = 'int-nl-sub';
 const CATEGORIES: FantasyCategoryKey[] = ['goals', 'tackles', 'clangers'];
 const ROUND = 1;
 const AFL_SEASON = 2091;
@@ -90,7 +94,7 @@ const AFL_SEASON = 2091;
 const removeFixture = async () => {
   await deleteLeagueFixtures(prisma, {
     leagueIds: [LEAGUE],
-    playerIds: PLAYERS,
+    playerIds: [...PLAYERS, BYE_PLAYER, SUB_PLAYER],
     settingsIds: [SETTINGS],
     userIds: USERS,
   });
@@ -297,6 +301,35 @@ describe.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
       expect(score.pointsFor).toBe(4);
     });
 
+    it("joins a result whose home/away order differs from the stats feed's (#1315)", async () => {
+      // Footywire's match page lists Geelong at home; the fixture and stat rows list GWS.
+      await ingestResultRows(
+        footywireRows([80, 100], [70, 73]).map((row, index) =>
+          index === 0
+            ? {
+                ...row,
+                home_team: row.away_team,
+                away_team: row.home_team,
+                home_points: row.away_points,
+                away_points: row.home_points,
+              }
+            : row
+        ),
+        { store: pgResultStore(pool), fetchedAt: new Date() }
+      );
+      await expect(
+        prisma.aflMatchResult.findFirstOrThrow({ where: { season: AFL_SEASON, matchId: '95001' } })
+      ).resolves.toMatchObject({ matchUid: '2091-R5-GEE-GWS', homeClub: 'Geelong' });
+
+      await expect(
+        recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+      ).resolves.toMatchObject({ status: 'FINAL', recalculated: 1, waitingOnResults: [] });
+      const p1 = await prisma.leagueMatchupPlayerScore.findFirstOrThrow({
+        where: { matchupId, playerId: 'int-nl-p1' },
+      });
+      expect(p1).toMatchObject({ outcome: 'RESULT', clubResult: 'LOSS', margin: -20 });
+    });
+
     it('stays LIVE and names the game while a result is missing, and refuses a finalize', async () => {
       await storeResult(0, 80, 100);
 
@@ -334,6 +367,74 @@ describe.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
     });
   }
 );
+
+describe('a bye and an autosub in a No Losers round (#1315, BR-18)', () => {
+  it('subs in for the bye player, keeps the losing starter at nothing, and finalizes', async () => {
+    const matchupId = await seedLeague({
+      leagueFormat: 'NO_LOSERS',
+      scoringMode: 'H2H_MOST_CATEGORIES',
+    });
+    const lineup = await prisma.leagueLineup.findFirstOrThrow({
+      where: { leagueId: LEAGUE, memberId: MEMBERS[0] },
+    });
+    await prisma.player.createMany({
+      data: [
+        { id: BYE_PLAYER, name: BYE_PLAYER, club: 'Sydney', position: 'MID' },
+        { id: SUB_PLAYER, name: SUB_PLAYER, club: 'Geelong', position: 'MID' },
+      ],
+    });
+    await prisma.leagueLineupPlayer.createMany({
+      data: [
+        { lineupId: lineup.id, playerId: BYE_PLAYER, slot: 'MID', slotIndex: 2 },
+        { lineupId: lineup.id, playerId: SUB_PLAYER, slot: 'INTERCHANGE', slotIndex: 0 },
+      ],
+    });
+    const subStatRow = {
+      player_uid: SUB_PLAYER,
+      match_uid: GAMES[0].match_uid,
+      team: 'Geelong Cats',
+      team_abbr: 'GEE',
+      stats: { goals: 3, tackles: 1, clangers: 0 },
+    };
+    STAT_ROWS.push(subStatRow);
+    GAMES[0].confirmed_bye_teams = ['Sydney'];
+    try {
+      // GWS lose by 20: p1, a starter who played, counts nothing but is not subbed out.
+      await storeResult(0, 80, 100);
+      await storeResult(1, 70, 73);
+
+      await expect(
+        recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+      ).resolves.toMatchObject({ status: 'FINAL', waitingOnResults: [] });
+
+      const slots = await prisma.leagueLineupPlayer.findMany({
+        where: { lineupId: lineup.id },
+        select: { playerId: true, slot: true },
+        orderBy: { playerId: 'asc' },
+      });
+      expect(slots).toEqual([
+        { playerId: BYE_PLAYER, slot: 'INTERCHANGE' },
+        { playerId: 'int-nl-p1', slot: 'MID' },
+        { playerId: 'int-nl-p2', slot: 'MID' },
+        { playerId: SUB_PLAYER, slot: 'MID' },
+      ]);
+      const rows = await prisma.leagueMatchupPlayerScore.findMany({
+        where: { matchupId, memberId: MEMBERS[0] },
+        select: { playerId: true, outcome: true, clubResult: true, multiplier: true },
+        orderBy: { playerId: 'asc' },
+      });
+      // The bye player is on the interchange now, so he has no counted row.
+      expect(rows).toEqual([
+        { playerId: 'int-nl-p1', outcome: 'RESULT', clubResult: 'LOSS', multiplier: 0 },
+        { playerId: 'int-nl-p2', outcome: 'RESULT', clubResult: 'LOSS', multiplier: 0.5 },
+        { playerId: SUB_PLAYER, outcome: 'RESULT', clubResult: 'WIN', multiplier: 1 },
+      ]);
+    } finally {
+      STAT_ROWS.pop();
+      delete GAMES[0].confirmed_bye_teams;
+    }
+  });
+});
 
 describe.each(['STANDARD', 'BLOODSUCKER'] as const)('a %s league (golden)', (leagueFormat) => {
   it.each(['H2H_EACH_CATEGORY', 'H2H_MOST_CATEGORIES'] as const)(
@@ -439,6 +540,7 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
           correctedResultIds: [superseded.id],
         },
       ],
+      pending: [],
       failedLeagueIds: [],
     });
     const matchup = await prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } });
@@ -481,6 +583,7 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
     // Done once: the round's scores now use the current result.
     await expect(rescoreCorrectedResultRounds()).resolves.toEqual({
       rounds: [],
+      pending: [],
       failedLeagueIds: [],
     });
     await expect(rescoreAudits()).resolves.toHaveLength(1);
@@ -495,11 +598,90 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
 
     await expect(rescoreCorrectedResultRounds()).resolves.toEqual({
       rounds: [],
+      pending: [],
       failedLeagueIds: [],
     });
     await expect(prisma.leagueMatchupScore.findMany({ where: { matchupId } })).resolves.toEqual(
       before
     );
+    await expect(rescoreAudits()).resolves.toHaveLength(0);
+  });
+
+  it('a round the recalculation cannot re-score yet is pending, not "Re-scored", and stays pending (#1315)', async () => {
+    await ingest(footywireRows([100, 80], [70, 73]));
+    const superseded = await prisma.aflMatchResult.findFirstOrThrow({
+      where: { season: AFL_SEASON, matchId: '95001', supersededById: { not: null } },
+    });
+    // What the recalculation answers when the round's stats are unavailable.
+    const statsUnavailable = vi.fn().mockResolvedValue({
+      round: ROUND,
+      status: 'SCHEDULED',
+      recalculated: 0,
+      scores: [],
+    });
+    const info = vi.spyOn(logger, 'info');
+
+    for (let run = 0; run < 2; run += 1) {
+      await expect(rescoreCorrectedResultRounds(statsUnavailable)).resolves.toEqual({
+        rounds: [],
+        pending: [{ leagueId: LEAGUE, round: ROUND, correctedResultIds: [superseded.id] }],
+        failedLeagueIds: [],
+      });
+    }
+    expect(info).not.toHaveBeenCalledWith(
+      'Re-scored a No Losers round after an AFL result correction',
+      expect.anything()
+    );
+    info.mockRestore();
+    await expect(rescoreAudits()).resolves.toHaveLength(0);
+  });
+
+  it('a correction that can no longer be joined never demotes the FINAL round (#1315)', async () => {
+    // The corrected row names another round, so no stat row joins it.
+    const previous = await prisma.aflMatchResult.findFirstOrThrow({
+      where: { season: AFL_SEASON, matchId: '95001', supersededById: null },
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.aflMatchResult.update({
+        where: { id: previous.id },
+        data: { supersededById: 'int-nl-relabelled', supersedeReason: 'round relabelled' },
+      });
+      await tx.aflMatchResult.create({
+        data: {
+          id: 'int-nl-relabelled',
+          season: AFL_SEASON,
+          round: 6,
+          matchId: '95001',
+          matchUid: '2091-R6-GWS-GEE',
+          homeClub: previous.homeClub,
+          awayClub: previous.awayClub,
+          homePoints: 80,
+          awayPoints: 100,
+          margin: -20,
+          status: 'FINAL',
+          fetchedAt: new Date(),
+          contentHash: 'relabelled',
+        },
+      });
+    });
+    const before = await prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } });
+
+    const run = await rescoreCorrectedResultRounds();
+
+    expect(run).toEqual({ rounds: [], pending: [], failedLeagueIds: [LEAGUE] });
+    await expect(
+      recalculateLeagueRoundMatchups({ leagueId: LEAGUE, round: ROUND })
+    ).resolves.toMatchObject({
+      status: 'FINAL',
+      blocked: 'FINAL_ROUND_RESULTS_UNJOINED',
+      waitingOnResults: ['Waiting on the result of GWS v Geelong'],
+    });
+    await expect(
+      prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } })
+    ).resolves.toEqual(before);
+    await expect(
+      prisma.leagueCompetitionRound.findFirstOrThrow({ where: { leagueId: LEAGUE } })
+    ).resolves.toMatchObject({ status: 'FINAL' });
     await expect(rescoreAudits()).resolves.toHaveLength(0);
   });
 });
