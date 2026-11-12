@@ -18,6 +18,7 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
+import { loadNoLosersClubFacts, type NoLosersClubFact } from '@/server/leagues/noLosersClubFacts';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
@@ -54,6 +55,8 @@ interface PlayerLite {
   statlyZScore?: number;
   statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
   statlyZMissingCategories?: FantasyCategoryKey[];
+  /** No Losers leagues only: club season record and this round's opponent (BR-42). */
+  noLosersClub?: NoLosersClubFact;
 }
 
 interface RosterLite {
@@ -205,10 +208,14 @@ async function loadAvailablePlayers(input: {
 async function loadLeagueCategories(leagueId: string): Promise<{
   selectedCategories: FantasyCategoryKey[];
   categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
+  noLosers: boolean;
 }> {
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
-    select: { categoriesJson: true, settings: { select: { categoryDirectionsJson: true } } },
+    select: {
+      categoriesJson: true,
+      settings: { select: { categoryDirectionsJson: true, leagueFormat: true } },
+    },
   });
   const parsedCategories = parseSelectedCategories(league?.categoriesJson);
   const selectedCategories =
@@ -220,6 +227,7 @@ async function loadLeagueCategories(leagueId: string): Promise<{
       selectedCategories,
       league?.settings?.categoryDirectionsJson
     ),
+    noLosers: league?.settings?.leagueFormat === 'NO_LOSERS',
   };
 }
 
@@ -263,7 +271,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const playersCursor = url.searchParams.get('playersCursor') || undefined;
     const activityCursor = url.searchParams.get('activityCursor') || undefined;
     const activityBefore = activityCursor ? parseWaiverActivityCursor(activityCursor) : null;
-    const [{ selectedCategories, categoryDirections }, statsLookup] = await Promise.all([
+    const [{ selectedCategories, categoryDirections, noLosers }, statsLookup] = await Promise.all([
       loadLeagueCategories(leagueId),
       loadStatsLookup(leagueId),
     ]);
@@ -294,6 +302,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           statsLookup,
         }),
       ]);
+
+    // BR-42: in a No Losers league each free agent shows his club's record and next game.
+    if (noLosers && availablePlayersResult.items.length > 0) {
+      const facts = await loadNoLosersClubFacts({
+        leagueId,
+        players: availablePlayersResult.items,
+      }).catch((error: unknown) => {
+        logger.warn('No Losers club facts unavailable', { leagueId, error });
+        return null;
+      });
+      if (facts) {
+        availablePlayersResult.items = availablePlayersResult.items.map((player) =>
+          facts[player.id] ? { ...player, noLosersClub: facts[player.id] } : player
+        );
+      }
+    }
 
     const remainingFAAB = member
       ? await waiverStore.loadRemainingFaab(leagueId, member.id, waiverSettings)

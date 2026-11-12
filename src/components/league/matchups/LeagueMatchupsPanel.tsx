@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { ArrowDown } from 'lucide-react';
 
+import {
+  ClubResultStrip,
+  type ClubStripCount,
+  type ClubStripGame,
+} from '@/components/league/noLosers/ClubResultStrip';
+import { NoLosersResultBadge } from '@/components/league/noLosers/NoLosersResultBadge';
+import type { NoLosersPlayerResult } from '@/components/league/noLosers/noLosersDisplay';
 import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
 import {
   MatchupScoreLine,
@@ -42,6 +49,8 @@ interface MatchupModel {
   categoryRows?: MatchupCategoryRow[];
   /** No Losers: why the round cannot be final yet ("Waiting on the result of ..."). */
   waitingOnResults?: string[];
+  /** No Losers: each side's counted players per club, for the club-result strip. */
+  noLosersClubCounts?: ClubStripCount[];
 }
 
 interface MatchupTeamSummary {
@@ -79,27 +88,14 @@ interface MatchupPlayerContribution {
   total: number;
   hasStats?: boolean;
   /** No Losers: the club result's multiplier, or a result not stored yet. */
-  noLosers?:
-    | { status: 'COUNTED'; clubResult: string; margin: number | null; multiplier: number }
-    | { status: 'RESULT_PENDING' }
-    | { status: 'UNRESOLVED' };
+  noLosers?: NoLosersPlayerResult;
   categories: Array<{
     category: string;
     shortLabel: string;
     value: number;
+    /** No Losers: the raw value, sent only when the club result halved or zeroed it. */
+    rawValue?: number;
   }>;
-}
-
-/** No Losers: a short note after the player's position; full badges are #1296. */
-function noLosersNote(player: MatchupPlayerContribution): string | null {
-  const result = player.noLosers;
-  if (!result) return null;
-  if (result.status === 'RESULT_PENDING') return 'Result pending';
-  if (result.status === 'UNRESOLVED') return 'Result unavailable';
-  if (result.multiplier === 0) return 'Zeroed: club lost';
-  if (result.multiplier === 0.5)
-    return result.clubResult === 'DRAW' ? 'Half: draw' : 'Half: close loss';
-  return null;
 }
 
 interface MatchupReadModel {
@@ -108,6 +104,8 @@ interface MatchupReadModel {
   fixtureGenerationMode?: 'AUTOMATIC' | 'MANUAL';
   availableRounds?: number[];
   matchups: MatchupModel[];
+  /** No Losers leagues: the round's AFL games and stored results. */
+  noLosersRound?: { games: ClubStripGame[] };
   permissions?: { canManage?: boolean };
 }
 
@@ -258,6 +256,15 @@ export function LeagueMatchupsPanel({
               ) : (
                 <div className="space-y-4">
                   <MatchupHeadToHeadCard matchup={matchup} timeZone={timeZone} />
+                  {data.noLosersRound && matchup.noLosersClubCounts ? (
+                    <ClubResultStrip
+                      games={data.noLosersRound.games}
+                      counts={matchup.noLosersClubCounts}
+                      homeTeamName={matchup.homeMember?.teamName ?? 'Home'}
+                      awayTeamName={matchup.awayMember?.teamName ?? 'Away'}
+                      timeZone={timeZone}
+                    />
+                  ) : null}
                   <CategoryTotalsGrid matchup={matchup} />
                   <TeamBoxScores matchup={matchup} />
                 </div>
@@ -545,9 +552,9 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
                     <span className="ml-2 text-xs text-[color:var(--league-text-muted)]">
                       {player.position}
                     </span>
-                    {noLosersNote(player) ? (
-                      <span className="ml-2 text-xs text-[color:var(--league-text-muted)]">
-                        {noLosersNote(player)}
+                    {player.noLosers ? (
+                      <span className="mt-0.5 block sm:ml-2 sm:mt-0 sm:inline">
+                        <NoLosersResultBadge result={player.noLosers} />
                       </span>
                     ) : null}
                   </th>
@@ -625,14 +632,35 @@ function PlayerCategoryCell({
   player?: MatchupPlayerContribution;
   category: MatchupCategoryRow;
 }) {
-  const value = player?.categories.find((row) => row.category === category.category)?.value;
+  const entry = player?.categories.find((row) => row.category === category.category);
+  const value = entry?.value;
   const hasValue = value !== undefined && player?.hasStats !== false;
+  const rawValue = hasValue ? entry?.rawValue : undefined;
+  const zeroed = player?.noLosers?.status === 'COUNTED' && player.noLosers.multiplier === 0;
 
   return (
     <td
       className={`px-2 py-2 text-right tabular-nums ${hasValue ? 'font-medium text-[color:var(--league-text)]' : 'text-[color:var(--league-text-muted)]'}`}
     >
       {hasValue ? formatCategoryValue(value, category.category) : '–'}
+      {rawValue !== undefined ? (
+        // BR-40: the raw line stays visible; a zeroed value is struck through, a halved one is
+        // shown as "of" its raw value.
+        <span className="block text-[11px] font-normal text-[color:var(--league-text-muted)]">
+          <span aria-hidden="true">
+            {zeroed ? (
+              <s>{formatCategoryValue(rawValue, category.category)}</s>
+            ) : (
+              `of ${formatCategoryValue(rawValue, category.category)}`
+            )}
+          </span>
+          <span className="sr-only">
+            {zeroed
+              ? `, raw ${formatCategoryValue(rawValue, category.category)} not counted`
+              : ` counted of raw ${formatCategoryValue(rawValue, category.category)}`}
+          </span>
+        </span>
+      ) : null}
     </td>
   );
 }

@@ -128,6 +128,24 @@ Scoring (#1294; the rule is `src/server/leagues/noLosersResultRule.ts`, its wiri
   remain on player pages.
 - Standard and Bloodsucker leagues score exactly as before.
 
+Screens (#1296; read-model helpers in `src/server/leagues/noLosersScreens.ts`, components in
+`src/components/league/noLosers/`). Every state has words as well as colour, and works at 375 px:
+
+- Each matchup box-score row shows a letter badge and text for the player's club result: "Won by
+  12", "Half: drew", "Half: lost by 4", "Zeroed: lost by 20", "Abandoned: counted", "Result
+  pending" or "Result unavailable". A halved or zeroed row keeps the raw line: the counted value with
+  "of {raw}" under it, or the raw value struck through when zeroed. Screen readers hear the full
+  sentence ("Zeroed: club lost by 20, not counted").
+- A FINAL matchup is shown from its stored `LeagueMatchupPlayerScore` rows, so it always shows what
+  was scored even if a result is later corrected; a live one from the stored results so far.
+- The matchup page has an AFL results strip: every game of the round with its stored score and
+  winner in words ("GEE won by 20"), "Result pending", "Playing · result at full time" (no in-game
+  score exists) or the start time, and how many of each manager's counted (on-field) players are on
+  each club.
+- My Team squad rows and the free-agent list show the club's season win-loss-draw record from
+  stored results (abandoned games left out), and free agents also show the league's current or next
+  round's opponent. Facts only, no win probability.
+
 ## Calendar and fixtures
 
 - Fantasy rounds are distinct from AFL rounds and retain stable fantasy-round identities.

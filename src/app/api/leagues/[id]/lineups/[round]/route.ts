@@ -1,3 +1,4 @@
+import { clubRecordFor, loadClubSeasonRecords } from '@/server/leagues/noLosersScreens';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -197,6 +198,16 @@ export async function GET(
     players: [...timingPlayers.values()],
   }).catch(() => ({ ok: false as const }));
   const fixturesByPlayerId = fixtureResult.ok ? fixtureResult.fixturesByPlayerId : new Map();
+  // BR-42: a No Losers squad row also shows its club's season W-L-D, from stored results.
+  const clubRecords =
+    league.settings.leagueFormat === 'NO_LOSERS'
+      ? await loadClubSeasonRecords(effectiveContext?.seasonYear ?? now.getFullYear()).catch(
+          (error: unknown) => {
+            logger.warn('No Losers club records unavailable', { leagueId: id, error });
+            return null;
+          }
+        )
+      : null;
 
   // Record and ladder position for this team and this round's opponent.
   const [standingRows, activeMembers] = await Promise.all([
@@ -320,6 +331,7 @@ export async function GET(
       opponent: fixturesByPlayerId.get(row.playerId)?.opponent ?? null,
       isHome: fixturesByPlayerId.get(row.playerId)?.isHome ?? null,
       bye: fixturesByPlayerId.get(row.playerId)?.bye ?? false,
+      ...(clubRecords ? { clubRecord: clubRecordFor(clubRecords, row.player.club) } : {}),
       // Shown for every listed player, including a `TEST` listing that does not bench him.
       injury: injuryFor(row),
     })),

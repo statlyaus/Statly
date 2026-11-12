@@ -262,3 +262,153 @@ describe('LeagueMatchupsPanel live refresh', () => {
     expect(authenticatedFetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('LeagueMatchupsPanel in a No Losers league (#1296)', () => {
+  const player = (
+    playerId: string,
+    name: string,
+    noLosers: unknown,
+    goals: number,
+    rawGoals?: number
+  ) => ({
+    playerId,
+    name,
+    position: 'MID',
+    slot: 'MID',
+    slotIndex: 0,
+    total: goals,
+    hasStats: true,
+    noLosers,
+    categories: [
+      {
+        category: 'goals',
+        shortLabel: 'G',
+        value: goals,
+        ...(rawGoals === undefined ? {} : { rawValue: rawGoals }),
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    authenticatedFetchMock.mockReset();
+    authenticatedFetchMock.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            round: 3,
+            availableRounds: [3],
+            noLosersRound: {
+              games: [
+                {
+                  matchUid: '2025-R3-GEE-HAW',
+                  homeClub: 'Geelong',
+                  awayClub: 'Hawthorn',
+                  homePoints: 90,
+                  awayPoints: 70,
+                  state: 'FINAL',
+                  startsAt: null,
+                },
+                {
+                  matchUid: '2025-R3-SYD-CAR',
+                  homeClub: 'Sydney',
+                  awayClub: 'Carlton',
+                  homePoints: null,
+                  awayPoints: null,
+                  state: 'RESULT_PENDING',
+                  startsAt: null,
+                },
+              ],
+            },
+            matchups: [
+              {
+                id: 'm1',
+                round: 3,
+                status: 'LIVE',
+                provisional: true,
+                waitingOnResults: ['Waiting on the result of Sydney v Carlton'],
+                noLosersClubCounts: [
+                  { club: 'Geelong', home: 1, away: 0 },
+                  { club: 'Hawthorn', home: 1, away: 2 },
+                ],
+                homeMember: {
+                  id: 'h',
+                  teamName: 'Ball Magnets',
+                  players: [
+                    player(
+                      'p1',
+                      'Zeroed Zac',
+                      { status: 'COUNTED', clubResult: 'LOSS', margin: -20, multiplier: 0 },
+                      0,
+                      3
+                    ),
+                    player(
+                      'p2',
+                      'Half Hal',
+                      { status: 'COUNTED', clubResult: 'LOSS', margin: -4, multiplier: 0.5 },
+                      1.5,
+                      3
+                    ),
+                    player('p3', 'Pending Pat', { status: 'RESULT_PENDING' }, 2),
+                    player(
+                      'p4',
+                      'Winner Will',
+                      { status: 'COUNTED', clubResult: 'WIN', margin: 20, multiplier: 1 },
+                      1
+                    ),
+                  ],
+                },
+                awayMember: { id: 'a', teamName: 'Hard Ball Gets', players: [] },
+                homeCategoryWins: 1,
+                awayCategoryWins: 0,
+                drawnCategories: 0,
+                categoryRows: [row('goals', 'Goals', 'G', 4.5, 2, 'home')],
+              },
+            ],
+          },
+        }),
+      })
+    );
+  });
+
+  it('marks each player row with its club result in words, with the raw line kept', async () => {
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+    const box = within(await screen.findByRole('table', { name: 'Ball Magnets box score' }));
+
+    const zeroed = within(box.getByRole('row', { name: /Zeroed Zac/ }));
+    expect(zeroed.getByText('Zeroed: lost by 20')).toBeInTheDocument();
+    expect(zeroed.getByText('Zeroed: club lost by 20, not counted')).toBeInTheDocument();
+    expect(zeroed.getByText('3').tagName).toBe('S');
+    expect(zeroed.getByText(', raw 3 not counted')).toBeInTheDocument();
+
+    const half = within(box.getByRole('row', { name: /Half Hal/ }));
+    expect(half.getByText('Half: lost by 4')).toBeInTheDocument();
+    expect(half.getByText('1.5')).toBeInTheDocument();
+    expect(half.getByText('of 3')).toBeInTheDocument();
+
+    const pending = within(box.getByRole('row', { name: /Pending Pat/ }));
+    expect(pending.getByText('Result pending')).toBeInTheDocument();
+
+    const winner = within(box.getByRole('row', { name: /Winner Will/ }));
+    expect(winner.getByText('Won by 20')).toBeInTheDocument();
+    expect(winner.queryByText(/^of /)).toBeNull();
+
+    expect(screen.getByText('Live · provisional')).toBeInTheDocument();
+    expect(screen.getByText('Waiting on the result of Sydney v Carlton')).toBeInTheDocument();
+  });
+
+  it("shows the round's AFL games with each side's counted players per club", async () => {
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+    const strip = within(await screen.findByRole('region', { name: 'AFL results this round' }));
+
+    expect(strip.getAllByRole('listitem')).toHaveLength(2);
+    expect(
+      strip.getByText(
+        'Geelong 90 v Hawthorn 70. GEE won by 20. Counted players on Geelong: Ball Magnets 1, Hard Ball Gets 0. On Hawthorn: Ball Magnets 1, Hard Ball Gets 2.'
+      )
+    ).toBeInTheDocument();
+    expect(strip.getByText('Result pending')).toBeInTheDocument();
+    expect(strip.getByText('Counted players: Ball Magnets · Hard Ball Gets')).toBeInTheDocument();
+  });
+});

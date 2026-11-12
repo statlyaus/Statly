@@ -160,6 +160,30 @@ describe('LeagueMyTeamPanel', () => {
     expect(within(injured).getByTitle('Hamstring (2-3 weeks)')).toBeInTheDocument();
   });
 
+  it("shows a No Losers player's club season record beside his fixture (BR-42)", async () => {
+    const base = payload();
+    authenticatedFetchMock.mockImplementation(() =>
+      respond(
+        payload({
+          rosterPlayers: base.data.rosterPlayers.map((player, index) =>
+            index === 0 ? { ...player, clubRecord: { wins: 8, losses: 3, draws: 1 } } : player
+          ),
+        })
+      )
+    );
+
+    render(<LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" />);
+
+    const firstDef = await screen.findByRole('row', { name: 'DEF 1: Dee Fender' });
+    expect(within(firstDef).getAllByText('8-3-1').length).toBeGreaterThan(0);
+    expect(
+      within(firstDef).getAllByText('Club record 8 wins, 3 losses, 1 draw').length
+    ).toBeGreaterThan(0);
+    // Other formats send no record and show none.
+    const otherDef = screen.getByRole('row', { name: 'Bench: Back Pocket' });
+    expect(within(otherDef).queryByText(/Club record/)).toBeNull();
+  });
+
   it('shows the lineup lock time in the league timezone, labelled', async () => {
     const lockAt = '2099-10-03T09:30:00.000Z';
     authenticatedFetchMock.mockImplementation(() =>
