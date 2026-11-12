@@ -122,6 +122,7 @@ function envelope(
 describe('useLeagueSocial', () => {
   beforeEach(() => {
     mocks.handlers.clear();
+    mocks.socket.connected = true;
     mocks.socket.emit.mockReset();
     mocks.socket.emit.mockImplementation(
       (event: string, _payload: unknown, acknowledge?: (result: { ok: boolean }) => void) => {
@@ -327,6 +328,8 @@ describe('useLeagueSocial', () => {
       configurable: true,
       value: 'visible',
     });
+    // The tab returns while the socket is still reconnecting: only the reconnect resyncs.
+    mocks.socket.connected = false;
     act(() => {
       document.dispatchEvent(new Event('visibilitychange'));
       mocks.handlers.get('connect')?.();
@@ -593,5 +596,40 @@ describe('useLeagueSocial', () => {
       activity: 1,
       board: 1,
     });
+  });
+  it('replaces the list when a resync page no longer overlaps it, rather than hiding a gap', async () => {
+    const { result } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(mocks.authenticatedFetch).toHaveBeenCalledTimes(8));
+    expect(result.current.messages.map((message) => message.id)).toEqual(['message-1']);
+
+    const later = (id: string, minute: string): SocialMessage => ({
+      ...memberMessage,
+      id,
+      createdAt: `2026-07-19T11:${minute}:00.000Z`,
+    });
+    mocks.authenticatedFetch.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('/messages?')
+          ? response({
+              items: [later('message-60', '10'), later('message-61', '11')],
+              nextCursor: 'older-than-60',
+            })
+          : initialResponse(url)
+      )
+    );
+
+    await act(async () => {
+      mocks.handlers.get('disconnect')?.();
+      mocks.handlers.get('connect')?.();
+    });
+
+    await waitFor(() =>
+      expect(result.current.messages.map((message) => message.id)).toEqual([
+        'message-60',
+        'message-61',
+      ])
+    );
+    expect(result.current.messagesCursor).toBe('older-than-60');
   });
 });

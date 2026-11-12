@@ -9,6 +9,7 @@ import { useSocket } from '@/contexts/SocketContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import type { LeagueSocialSummary, SocialMessage, SocialRealtimeEnvelope } from '@/types/social';
 
+import { subscribeLeagueSocialRoom } from './leagueSocialRoom';
 import { useLeagueSocialWidget } from './LeagueSocialWidgetProvider';
 
 type ConnectionNotice = 'hidden' | 'offline' | 'reconnecting';
@@ -16,6 +17,8 @@ type UnreadCounts = { chat: number; board: number; activity: number };
 
 const leagueNameCache = new Map<string, string>();
 const EMPTY_UNREAD: UnreadCounts = { chat: 0, board: 0, activity: 0 };
+/** Badge refresh cadence while no live room is delivering events. */
+export const UNREAD_POLL_INTERVAL_MS = 30_000;
 
 function LeagueSocialShellLoading(): React.JSX.Element {
   return (
@@ -81,6 +84,7 @@ export default function LeagueSocialWidget({
   }>({ leagueId: null, counts: EMPTY_UNREAD });
   const [resolvedLeagueName, setResolvedLeagueName] = useState<string | undefined>(leagueName);
   const [connectionNotice, setConnectionNotice] = useState<ConnectionNotice>('hidden');
+  const [badgeLive, setBadgeLive] = useState(false);
   const unreadRequestRef = useRef<AbortController | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -221,10 +225,27 @@ export default function LeagueSocialWidget({
       'social:read-state',
     ] as const;
     events.forEach((event) => socket.on(event, refreshForLeague));
+    // The badge joins the league room itself (shared with chat and the Trade Centre), so it is
+    // live before chat has ever been opened. Each `live` follows a join or a reconnect.
+    const leaveRoom = subscribeLeagueSocialRoom(socket, leagueId, (status) => {
+      setBadgeLive(status === 'live');
+      if (status === 'live') void refreshUnread();
+    });
     return () => {
       events.forEach((event) => socket.off(event, refreshForLeague));
+      leaveRoom();
+      setBadgeLive(false);
     };
   }, [leagueId, refreshUnread, socket]);
+
+  useEffect(() => {
+    // Without a live room (no Socket.IO process, or a dropped connection) the badge polls.
+    if (!leagueId || badgeLive) return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshUnread();
+    }, UNREAD_POLL_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [badgeLive, leagueId, refreshUnread]);
 
   useEffect(() => {
     const updateForNetwork = () => {

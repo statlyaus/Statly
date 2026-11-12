@@ -20,6 +20,8 @@ import type {
   SocialReply,
 } from '@/types/social';
 
+import { subscribeLeagueSocialRoom, type LeagueSocialRoomStatus } from './leagueSocialRoom';
+
 type ThreadState = SocialCursorPage<SocialReply> & {
   loading: boolean;
   error: string | null;
@@ -33,7 +35,6 @@ export type SocialPostSort = 'latestActivity' | 'createdAt';
 const SOCIAL_CATCH_UP_INTERVAL_MS = 10_000;
 
 // An unanswered join means the socket is not delivering; only a refusal is an authorization failure.
-type SocialJoinOutcome = 'authorized' | 'refused' | 'unavailable';
 
 interface LeagueSocialState {
   summary: LeagueSocialSummary | null;
@@ -135,6 +136,30 @@ function reconcileById<T extends { id: string }>(
   first.forEach((item) => reconciled.set(item.id, item));
   second.forEach((item) => reconciled.set(item.id, item));
   return [...reconciled.values()];
+}
+
+/**
+ * Reconciles a resync page of messages with what is on screen. When the page has older messages
+ * behind it and shares none with the list, more arrived while disconnected than one page holds.
+ * Merging would hide that gap in the middle of the conversation, so the page replaces the list
+ * (keeping anything newer that realtime already delivered) and "Load earlier" pages back from it.
+ */
+function reconcileMessagePage(
+  current: SocialMessage[],
+  snapshot: SocialMessage[],
+  hasEarlier: boolean,
+  preferCurrent: boolean
+): SocialMessage[] {
+  const snapshotIds = new Set(snapshot.map((message) => message.id));
+  const disjoint =
+    hasEarlier && current.length > 0 && !current.some((message) => snapshotIds.has(message.id));
+  if (!disjoint) return reconcileById(current, snapshot, preferCurrent);
+
+  const newestSnapshotAt = snapshot.reduce(
+    (newest, message) => (message.createdAt > newest ? message.createdAt : newest),
+    ''
+  );
+  return [...snapshot, ...current.filter((message) => message.createdAt > newestSnapshotAt)];
 }
 
 function reconcileSummary(
@@ -297,16 +322,18 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
           ...current,
           summary: reconciledSummary,
           messages: sortMessages(
-            reconcileById(
+            reconcileMessagePage(
               sameScope ? current.messages : [],
               memberMessagesOnly(messagePage.items),
+              messagePage.nextCursor !== null,
               chatAdvanced
             )
           ),
           activity: sortMessages(
-            reconcileById(
+            reconcileMessagePage(
               sameScope ? current.activity : [],
               activityMessagesOnly(activityPage.items),
+              activityPage.nextCursor !== null,
               activityAdvanced
             )
           ),
@@ -393,40 +420,11 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     if (!socket || !leagueId) return;
 
     let cancelled = false;
-    let joinPromise: Promise<SocialJoinOutcome> | null = null;
-    let joinTimeoutId: number | null = null;
-
-    const joinLeagueSocial = (): Promise<SocialJoinOutcome> => {
-      if (joinPromise) return joinPromise;
-
-      const request = new Promise<SocialJoinOutcome>((resolve) => {
-        joinTimeoutId = window.setTimeout(() => {
-          joinTimeoutId = null;
-          resolve('unavailable');
-        }, 5_000);
-        socket.emit(
-          'social:join',
-          { leagueId },
-          (acknowledgement: { ok?: boolean } | undefined) => {
-            if (joinTimeoutId !== null) {
-              window.clearTimeout(joinTimeoutId);
-              joinTimeoutId = null;
-            }
-            resolve(acknowledgement?.ok === true ? 'authorized' : 'refused');
-          }
-        );
-      }).finally(() => {
-        if (joinPromise === request) joinPromise = null;
-      });
-      joinPromise = request;
-      return request;
-    };
-    const rejoinAndResync = async () => {
-      const outcome = await joinLeagueSocial();
+    const handleRoomStatus = (status: LeagueSocialRoomStatus) => {
       if (cancelled) return;
-      if (outcome !== 'authorized') {
+      if (status !== 'live') {
         setRealtimeLive(false);
-        if (outcome === 'refused') {
+        if (status === 'refused') {
           setState((current) => ({
             ...current,
             loading: false,
@@ -436,13 +434,15 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
         return;
       }
       setRealtimeLive(true);
-
-      const preAuthorizationResync = resyncPromiseRef.current;
-      if (preAuthorizationResync) {
-        await preAuthorizationResync;
-      }
-      if (cancelled) return;
-      await resync();
+      // Reported on the first join and after every reconnect: events may have been missed.
+      void (async () => {
+        const preAuthorizationResync = resyncPromiseRef.current;
+        if (preAuthorizationResync) {
+          await preAuthorizationResync;
+        }
+        if (cancelled) return;
+        await resync();
+      })();
     };
 
     const handleMessage = (value: SocialMessage | SocialRealtimeEnvelope) => {
@@ -541,34 +541,26 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
       }));
     };
 
-    const handleDisconnect = () => setRealtimeLive(false);
-
-    socket.on('disconnect', handleDisconnect);
     socket.on('social:message', handleMessage);
     socket.on('social:activity', handleActivity);
     socket.on('social:post', handlePost);
     socket.on('social:reply', handleReply);
     socket.on('social:moderation', handleModeration);
     socket.on('social:read-state', handleReadState);
-    socket.on('connect', rejoinAndResync);
-    void rejoinAndResync();
+    // The room is shared with the unread badge and the Trade Centre, so it is left only when the
+    // last of them unsubscribes.
+    const leaveRoom = subscribeLeagueSocialRoom(socket, leagueId, handleRoomStatus);
 
     return () => {
       cancelled = true;
-      if (joinTimeoutId !== null) {
-        window.clearTimeout(joinTimeoutId);
-        joinTimeoutId = null;
-      }
       setRealtimeLive(false);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect', rejoinAndResync);
       socket.off('social:message', handleMessage);
       socket.off('social:activity', handleActivity);
       socket.off('social:post', handlePost);
       socket.off('social:reply', handleReply);
       socket.off('social:moderation', handleModeration);
       socket.off('social:read-state', handleReadState);
-      socket.emit('social:leave', { leagueId });
+      leaveRoom();
     };
   }, [currentUserId, leagueId, loadInitial, resync, socket]);
 

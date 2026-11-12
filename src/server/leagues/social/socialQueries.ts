@@ -153,6 +153,17 @@ function parseSocialPreferences(value: unknown) {
   ) as typeof DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES;
 }
 
+/**
+ * Only new content is unread. Edits, removals, mutes (`social:moderation`) and read receipts sit in
+ * the same outbox but are not something a member has yet to read.
+ */
+export const SOCIAL_UNREAD_EVENT_TYPES = [
+  'social:message',
+  'social:activity',
+  'social:post',
+  'social:reply',
+] as const;
+
 async function countUnreadEvents({
   leagueId,
   seasonId,
@@ -172,7 +183,7 @@ async function countUnreadEvents({
       seasonId,
       channel,
       sequence: { gt: lastReadSequence },
-      eventType: { not: 'social:read-state' },
+      eventType: { in: [...SOCIAL_UNREAD_EVENT_TYPES] },
       OR: [{ actorUserId: null }, { actorUserId: { not: userId } }],
     },
   });
