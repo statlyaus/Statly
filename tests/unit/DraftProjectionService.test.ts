@@ -256,4 +256,50 @@ describe('DraftProjectionService', () => {
     });
     expect(state?.currentPick.expiresAt.toISOString()).toBe('2026-06-14T11:45:00.000Z');
   });
+
+  it('projects the stored, pool-capped total picks and rounds the draft will actually run', async () => {
+    const member = (n: number) => ({
+      slot: n,
+      memberId: `member-${n}`,
+      member: {
+        userId: `user-${n}`,
+        role: LeagueRole.MANAGER,
+        user: { id: `user-${n}`, displayName: `Team ${n}`, email: `t${n}@example.com` },
+      },
+    });
+    prismaMock.draft.findFirst.mockResolvedValue({
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: DraftStatus.SCHEDULED,
+      currentPick: 1,
+      // 2 teams x 22 roster spots would be 44 picks; the player pool capped it at 20.
+      totalPicks: 20,
+      round: 1,
+      direction: DraftDirection.FORWARD,
+      createdAt: new Date('2026-06-14T11:30:00.000Z'),
+      startedAt: null,
+      pickStartedAt: null,
+      pickDeadlineAt: null,
+      pausedRemainingSeconds: null,
+      clockDurationSeconds: null,
+      schedulingVersion: 1,
+      eventSequence: 0,
+      lobbyStatus: null,
+      league: {
+        settings: {
+          rosterSize: 18,
+          benchSize: 4,
+          pickSeconds: 60,
+          allowAutoPick: true,
+          draftType: DraftType.SNAKE,
+        },
+      },
+      orders: [member(1), member(2)],
+      picks: [],
+    });
+
+    const state = await new DraftProjectionService().buildAuthoritativeDraftState('draft-1');
+
+    expect(state?.draftSettings).toMatchObject({ totalTeams: 2, totalRounds: 10 });
+  });
 });
