@@ -1103,26 +1103,13 @@ export async function loadLeagueMatchupReadModel({
         })
       : [];
   const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
-  const noLosers =
-    settings.leagueFormat === 'NO_LOSERS' && liveTotals.available && activeCompetitionRound
-      ? await loadNoLosersRoundContext({
-          season: activeCompetitionRound.season?.year ?? new Date().getFullYear(),
-          statRows: liveTotals.statRows,
-          matches: liveTotals.rawMatches,
-        })
-      : undefined;
-  const noLosersScreens =
-    settings.leagueFormat === 'NO_LOSERS'
-      ? await loadNoLosersScreenData({
-          season: activeCompetitionRound?.season?.year ?? new Date().getFullYear(),
-          aflRound: activeCompetitionRound?.aflRound ?? null,
-          finalMatchupIds: matchups
-            .filter((matchup) => matchup.status === 'FINAL')
-            .map((matchup) => matchup.id),
-          rawMatches: liveTotals.rawMatches,
-          context: noLosers,
-        })
-      : null;
+  const noLosersReadModel = await loadNoLosersReadModel({
+    leagueFormat: settings.leagueFormat,
+    season: activeCompetitionRound?.season?.year ?? new Date().getFullYear(),
+    aflRound: activeCompetitionRound?.aflRound ?? null,
+    liveTotals,
+    matchups,
+  });
   const tieBreakCategoryTotalByMemberId = aggregateFinalizedCategoryTotals(
     finalizedScores,
     settings.competitionRules.standingsTieBreakCategory
@@ -1163,16 +1150,10 @@ export async function loadLeagueMatchupReadModel({
             (match) => match.status === 'live' || match.status === 'final'
           ),
         },
-        noLosers,
-        ...(noLosersScreens
-          ? {
-              noLosersFormat: true,
-              noLosersStored: noLosersScreens.storedRowsByMatchupId.get(matchup.id),
-            }
-          : {}),
+        ...noLosersReadModel.cardFields(matchup.id),
       })
     ),
-    ...(noLosersScreens ? { noLosersRound: { games: noLosersScreens.games } } : {}),
+    ...noLosersReadModel.roundFields,
     standings: buildLeagueStandings({
       members,
       standings: persistedStandings,
@@ -1181,6 +1162,62 @@ export async function loadLeagueMatchupReadModel({
         settings.categoryDirections[settings.competitionRules.standingsTieBreakCategory],
     }),
     permissions: { canManage },
+  };
+}
+
+/**
+ * Everything a No Losers league adds to the matchup read model (#1294, #1296): the live results
+ * context, each FINAL card's stored rows, and the round's club strip. Other formats get nothing.
+ */
+async function loadNoLosersReadModel({
+  leagueFormat,
+  season,
+  aflRound,
+  liveTotals,
+  matchups,
+}: {
+  leagueFormat: string;
+  season: number;
+  aflRound: number | null;
+  liveTotals: {
+    available: boolean;
+    statRows: Parameters<typeof loadNoLosersRoundContext>[0]['statRows'];
+    rawMatches: Parameters<typeof buildNoLosersClubStrip>[0]['matches'];
+  };
+  matchups: ReadonlyArray<{ id: string; status: string }>;
+}): Promise<{
+  cardFields: (matchupId: string) => {
+    noLosers?: NoLosersRoundContext;
+    noLosersFormat?: boolean;
+    noLosersStored?: StoredNoLosersPlayerScore[];
+  };
+  roundFields: { noLosersRound?: { games: NoLosersStripGame[] } };
+}> {
+  if (leagueFormat !== 'NO_LOSERS') return { cardFields: () => ({}), roundFields: {} };
+  const context =
+    liveTotals.available && aflRound
+      ? await loadNoLosersRoundContext({
+          season,
+          statRows: liveTotals.statRows,
+          matches: liveTotals.rawMatches,
+        })
+      : undefined;
+  const screens = await loadNoLosersScreenData({
+    season,
+    aflRound,
+    finalMatchupIds: matchups
+      .filter((matchup) => matchup.status === 'FINAL')
+      .map((matchup) => matchup.id),
+    rawMatches: liveTotals.rawMatches,
+    context,
+  });
+  return {
+    cardFields: (matchupId) => ({
+      noLosers: context,
+      noLosersFormat: true,
+      noLosersStored: screens.storedRowsByMatchupId.get(matchupId),
+    }),
+    roundFields: { noLosersRound: { games: screens.games } },
   };
 }
 
