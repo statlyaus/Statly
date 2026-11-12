@@ -106,8 +106,27 @@ setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`
   half; a loss by 6 or more counts nothing. It applies to every category, low-wins included, so a
   losing player's clangers, frees against and turnovers are zeroed too.
 
-The result rule itself (`src/server/leagues/noLosersResultRule.ts`) is not yet applied to round
-scoring; #1294 wires it in. Until then a No Losers league scores like a standard one.
+Scoring (#1294; the rule is `src/server/leagues/noLosersResultRule.ts`, its wiring
+`src/server/leagues/noLosersScoring.ts`):
+
+- Each counted player's stats are multiplied by his club's stored result in the game his stat row
+  belongs to: win 1, draw or loss by 1 to 5 points 0.5, loss by 6 or more 0, abandoned 1. Bench and
+  interchange stay uncounted, a player with no stat row is unavailable as in any league, and
+  autosubs never replace a starter because his club lost.
+- The join uses the Statly match id (`matchUid`, e.g. `2025-R18-GEE-HAW`) that stat rows and
+  `AflMatchResult` both carry, and the stat row's club abbreviation against the two in `matchUid`;
+  the provider's club spelling is never compared with the result's club names.
+- Footywire posts stats and results only for finished games, so there is no in-game scoreline. While
+  a round is live, a player whose game has a stored result shows his multiplier and counted stats;
+  one whose finished game has no stored result yet shows "Result pending" with raw stats, and the
+  team total stays provisional.
+- A round cannot become FINAL while a finished game has no stored result or a counted player cannot
+  be joined to his game's result. It stays LIVE, the matchup shows "Waiting on the result of {home}
+  v {away}", a commissioner finalize is refused (`AFL_RESULTS_MISSING`), and the scheduled job
+  reports the stalled round as `afl-results-missing` with the same lines.
+- Season figures (`pointsFor`, category season totals, season DE%) use counted totals; raw totals
+  remain on player pages.
+- Standard and Bloodsucker leagues score exactly as before.
 
 ## Calendar and fixtures
 

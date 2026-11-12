@@ -41,6 +41,16 @@ import {
   sumCategoryTotals,
   type CategoryTotals,
 } from './matchupScoringEngine';
+import {
+  loadNoLosersRoundContext,
+  noLosersPlayerScoreRows,
+  noLosersPlayerView,
+  noLosersWaitingOn,
+  scoreNoLosersLineup,
+  type NoLosersLineupScore,
+  type NoLosersPlayerView,
+  type NoLosersRoundContext,
+} from './noLosersScoring';
 import { calculateStandingsRows } from './standingsService';
 import { inferUnselectedDidNotPlay, loadTeamSheetStatlyPlayerIds } from './unselectedPlayers';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
@@ -89,6 +99,8 @@ export interface LeagueMatchupPlayerContribution {
   total: number;
   /** False when the provider has no stat line for the player yet; values are then not real zeros. */
   hasStats: boolean;
+  /** No Losers leagues only: the player's club result and multiplier, or why it is not known yet. */
+  noLosers?: NoLosersPlayerView;
   categories: Array<{
     category: FantasyCategoryKey;
     shortLabel: string;
@@ -117,6 +129,8 @@ export interface LeagueMatchupCard {
   awayCategoryWins: number;
   drawnCategories: number;
   categoryRows: LeagueMatchupCategoryRow[];
+  /** No Losers leagues only: why the round cannot be final yet ("Waiting on the result of ..."). */
+  waitingOnResults?: string[];
 }
 
 export interface LeagueMatchupReadModel {
@@ -337,6 +351,7 @@ function buildPlayerContributions({
   lineup,
   categories,
   totalsByPlayerId,
+  noLosersViews,
 }: {
   lineup:
     | {
@@ -350,12 +365,14 @@ function buildPlayerContributions({
     | undefined;
   categories: FantasyCategoryKey[];
   totalsByPlayerId: Map<string, CategoryTotals>;
+  noLosersViews?: Map<string, NoLosersPlayerView>;
 }): LeagueMatchupPlayerContribution[] {
   return (
     lineup?.players
       .filter((lineupPlayer) => lineupPlayer.slot !== 'BENCH')
       .map((lineupPlayer) => {
         const totals = totalsByPlayerId.get(lineupPlayer.playerId) ?? {};
+        const noLosers = noLosersViews?.get(lineupPlayer.playerId);
         const categoryValues = categories.map((category) => ({
           category,
           shortLabel:
@@ -373,6 +390,7 @@ function buildPlayerContributions({
           slotIndex: lineupPlayer.slotIndex,
           total: sumCategoryTotals(totals, categories),
           hasStats: totalsByPlayerId.has(lineupPlayer.playerId),
+          ...(noLosers ? { noLosers } : {}),
           categories: categoryValues,
         };
       })
@@ -421,8 +439,9 @@ export function buildMatchupCard({
   categoryDirections,
   scoringMode,
   lineupsByMemberId,
-  totalsByPlayerId,
+  totalsByPlayerId: rawTotalsByPlayerId,
   liveRound,
+  noLosers,
 }: {
   matchup: Awaited<ReturnType<typeof prisma.leagueMatchup.findMany>>[number] & {
     homeMember: { id: string; teamName: string; teamLogoUrl: string | null } | null;
@@ -448,7 +467,14 @@ export function buildMatchupCard({
   totalsByPlayerId: Map<string, CategoryTotals>;
   /** Whether the round's live stats loaded, and whether any AFL game in it has started. */
   liveRound: { available: boolean; started: boolean };
+  /** No Losers leagues only: the round's stored results (BR-20: nothing is guessed). */
+  noLosers?: NoLosersRoundContext;
 }): LeagueMatchupCard {
+  const { totalsByPlayerId, noLosersViews, waitingOnResults } = applyNoLosersToCard({
+    context: noLosers,
+    lineups: cardLineups([matchup.homeMemberId, matchup.awayMemberId], lineupsByMemberId),
+    totalsByPlayerId: rawTotalsByPlayerId,
+  });
   const provisionalResult =
     matchup.status !== 'FINAL' &&
     matchup.homeMemberId &&
@@ -472,20 +498,16 @@ export function buildMatchupCard({
       : null;
   const homeScore = matchup.scores.find((score) => score.memberId === matchup.homeMemberId);
   const awayScore = matchup.scores.find((score) => score.memberId === matchup.awayMemberId);
-  const homePlayers = matchup.homeMemberId
-    ? buildPlayerContributions({
-        lineup: lineupsByMemberId.get(matchup.homeMemberId),
-        categories,
-        totalsByPlayerId,
-      })
-    : [];
-  const awayPlayers = matchup.awayMemberId
-    ? buildPlayerContributions({
-        lineup: lineupsByMemberId.get(matchup.awayMemberId),
-        categories,
-        totalsByPlayerId,
-      })
-    : [];
+  const sidePlayers = (memberId: string | null) =>
+    buildSidePlayers({
+      memberId,
+      lineupsByMemberId,
+      categories,
+      totalsByPlayerId,
+      noLosersViews,
+    });
+  const homePlayers = sidePlayers(matchup.homeMemberId);
+  const awayPlayers = sidePlayers(matchup.awayMemberId);
 
   return {
     id: matchup.id,
@@ -521,6 +543,88 @@ export function buildMatchupCard({
       categoryDirections,
       categoriesJson: provisionalResult?.categories ?? homeScore?.categoriesJson,
     }),
+    ...noLosersWaitingFields(waitingOnResults, matchup.status),
+  };
+}
+
+function cardLineups(
+  memberIds: ReadonlyArray<string | null>,
+  lineupsByMemberId: Map<string, MatchupCardLineup>
+): MatchupCardLineup[] {
+  return memberIds.flatMap((memberId) => {
+    const lineup = memberId ? lineupsByMemberId.get(memberId) : undefined;
+    return lineup ? [lineup] : [];
+  });
+}
+
+function buildSidePlayers({
+  memberId,
+  lineupsByMemberId,
+  ...input
+}: {
+  memberId: string | null;
+  lineupsByMemberId: Map<string, MatchupCardLineup>;
+  categories: FantasyCategoryKey[];
+  totalsByPlayerId: Map<string, CategoryTotals>;
+  noLosersViews?: Map<string, NoLosersPlayerView>;
+}): LeagueMatchupPlayerContribution[] {
+  return memberId
+    ? buildPlayerContributions({ lineup: lineupsByMemberId.get(memberId), ...input })
+    : [];
+}
+
+/** A No Losers card that is not final says which results it is waiting on. */
+function noLosersWaitingFields(
+  waitingOnResults: string[] | undefined,
+  status: string
+): { waitingOnResults?: string[] } {
+  return waitingOnResults && status !== 'FINAL' ? { waitingOnResults } : {};
+}
+
+/**
+ * BR-20: a No Losers card's player rows and provisional totals. A player whose game has a stored
+ * result shows counted totals and his multiplier; one whose result is not stored yet shows raw
+ * stats marked pending. Players without a stat row stay absent, as in every league (#1270).
+ */
+function applyNoLosersToCard({
+  context,
+  lineups,
+  totalsByPlayerId,
+}: {
+  /** Absent outside No Losers leagues: the card's raw totals pass through unchanged. */
+  context: NoLosersRoundContext | undefined;
+  lineups: readonly MatchupCardLineup[];
+  totalsByPlayerId: Map<string, CategoryTotals>;
+}): {
+  totalsByPlayerId: Map<string, CategoryTotals>;
+  noLosersViews?: Map<string, NoLosersPlayerView>;
+  waitingOnResults?: string[];
+} {
+  if (!context) return { totalsByPlayerId };
+  const counted = new Map(totalsByPlayerId);
+  const views = new Map<string, NoLosersPlayerView>();
+  const scored = lineups.flatMap((lineup) => {
+    const score = scoreNoLosersLineup(
+      lineup.players.map((player) => ({
+        playerId: player.playerId,
+        slot: player.slot as LeagueLineupSlot,
+        totals: totalsByPlayerId.get(player.playerId) ?? {},
+      })),
+      context
+    );
+    for (const player of score.players) {
+      if (totalsByPlayerId.has(player.playerId)) counted.set(player.playerId, player.totals);
+    }
+    for (const player of score.rule.players) {
+      const view = noLosersPlayerView(player);
+      if (view) views.set(player.playerId, view);
+    }
+    return score.rule.players;
+  });
+  return {
+    totalsByPlayerId: counted,
+    noLosersViews: views,
+    waitingOnResults: noLosersWaitingOn(context, scored),
   };
 }
 
@@ -703,6 +807,8 @@ export async function loadLivePlayerTotalsForRound(
     totalsByPlayerId,
     nonPlayingReasonByPlayerId,
     roundStatus: normalizeRoundMatchStatus(rawMatches),
+    statRows: normalizedStats,
+    rawMatches,
   };
 }
 
@@ -721,6 +827,7 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
     league,
     categories,
     scoringMode: league.settings.scoringMode as LeagueScoringMode,
+    leagueFormat: league.settings.leagueFormat,
     fixtureGenerationMode,
     lineupSlots: normalizeLineupSlots(league.settings.lineupSlotsJson),
     categoryDirections: normalizeCategoryDirections(
@@ -858,6 +965,8 @@ export async function loadLeagueMatchupReadModel({
     : {
         available: false,
         totalsByPlayerId: new Map<string, CategoryTotals>(),
+        statRows: [],
+        rawMatches: [],
         roundStatus: {
           earliestStartAt: null,
           latestEndAt: null,
@@ -894,6 +1003,14 @@ export async function loadLeagueMatchupReadModel({
         })
       : [];
   const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
+  const noLosers =
+    settings.leagueFormat === 'NO_LOSERS' && liveTotals.available && activeCompetitionRound
+      ? await loadNoLosersRoundContext({
+          season: activeCompetitionRound.season?.year ?? new Date().getFullYear(),
+          statRows: liveTotals.statRows,
+          matches: liveTotals.rawMatches,
+        })
+      : undefined;
   const tieBreakCategoryTotalByMemberId = aggregateFinalizedCategoryTotals(
     finalizedScores,
     settings.competitionRules.standingsTieBreakCategory
@@ -934,6 +1051,7 @@ export async function loadLeagueMatchupReadModel({
             (match) => match.status === 'live' || match.status === 'final'
           ),
         },
+        noLosers,
       })
     ),
     standings: buildLeagueStandings({
@@ -1084,18 +1202,26 @@ export async function recalculateLeagueRoundMatchups({
       },
     };
   }
-  const { available, missingPlayerIds, totalsByPlayerId, nonPlayingReasonByPlayerId, roundStatus } =
-    await loadLivePlayerTotalsForRound(
-      competitionRound?.season?.year ?? new Date().getFullYear(),
-      aflRound,
-      scorableLineups.flatMap((lineup) =>
-        lineup.players.map((assignment) => ({
-          playerId: assignment.playerId,
-          club: assignment.player.club,
-        }))
-      ),
-      settings.categories
-    );
+  const season = competitionRound?.season?.year ?? new Date().getFullYear();
+  const {
+    available,
+    missingPlayerIds,
+    totalsByPlayerId,
+    nonPlayingReasonByPlayerId,
+    roundStatus,
+    statRows,
+    rawMatches,
+  } = await loadLivePlayerTotalsForRound(
+    season,
+    aflRound,
+    scorableLineups.flatMap((lineup) =>
+      lineup.players.map((assignment) => ({
+        playerId: assignment.playerId,
+        club: assignment.player.club,
+      }))
+    ),
+    settings.categories
+  );
   if (!available) {
     return {
       round,
@@ -1124,7 +1250,7 @@ export async function recalculateLeagueRoundMatchups({
         matchup.homeMemberId && matchup.awayMemberId && !scorableMatchups.includes(matchup)
     )
     .map((matchup) => matchup.id);
-  const status = resolveRecalculatedMatchupStatus({
+  const recalculatedStatus = resolveRecalculatedMatchupStatus({
     finalize: Boolean(finalize),
     unresolvedMatchups: unresolvedMatchupIds.length,
     roundStatus,
@@ -1146,29 +1272,60 @@ export async function recalculateLeagueRoundMatchups({
   const resolvedLineupsByMemberId = new Map(
     resolvedLineups.map((lineup) => [lineup.memberId, lineup])
   );
+  // No Losers (#1294): each side is scored on counted totals (autosubs above are unchanged, BR-18).
+  const noLosers =
+    settings.leagueFormat === 'NO_LOSERS'
+      ? await loadNoLosersRoundContext({ season, statRows, matches: rawMatches })
+      : null;
+  const lineupScoringPlayers = (memberId: string) =>
+    resolvedLineupsByMemberId.get(memberId)?.players.map((player) => ({
+      playerId: player.playerId,
+      slot: player.slot,
+      totals: totalsByPlayerId.get(player.playerId) ?? {},
+    })) ?? [];
+  const noLosersScores = new Map<string, NoLosersLineupScore>(
+    noLosers
+      ? [...scorableMemberIds].flatMap((memberId) =>
+          memberId
+            ? [[memberId, scoreNoLosersLineup(lineupScoringPlayers(memberId), noLosers)] as const]
+            : []
+        )
+      : []
+  );
+  // BR-08: a No Losers round cannot be FINAL while a game's result is missing or a counted player
+  // cannot be joined to his; it stays LIVE and names the game.
+  const waitingOnResults = noLosers
+    ? noLosersWaitingOn(
+        noLosers,
+        [...noLosersScores.values()].flatMap((score) => score.rule.players)
+      )
+    : [];
+  if (finalize && waitingOnResults.length > 0) {
+    return {
+      round,
+      status: 'LIVE' as const,
+      recalculated: 0,
+      scores: [],
+      blocked: 'AFL_RESULTS_MISSING' as const,
+      waitingOnResults,
+      roundStatus,
+    };
+  }
+  const status =
+    recalculatedStatus === 'FINAL' && waitingOnResults.length > 0 ? 'LIVE' : recalculatedStatus;
+  const scoringPlayers = (memberId: string) =>
+    noLosersScores.get(memberId)?.players ?? lineupScoringPlayers(memberId);
   const finalizedAt = status === 'FINAL' ? new Date() : null;
   const calculatedScores = scorableMatchups.flatMap((matchup) => {
     if (!matchup.homeMemberId || !matchup.awayMemberId) return [];
 
-    const homeLineup = resolvedLineupsByMemberId.get(matchup.homeMemberId);
-    const awayLineup = resolvedLineupsByMemberId.get(matchup.awayMemberId);
     const homeTotals = aggregateLineupCategoryTotals({
       categories: settings.categories,
-      players:
-        homeLineup?.players.map((player) => ({
-          playerId: player.playerId,
-          slot: player.slot,
-          totals: totalsByPlayerId.get(player.playerId) ?? {},
-        })) ?? [],
+      players: scoringPlayers(matchup.homeMemberId),
     });
     const awayTotals = aggregateLineupCategoryTotals({
       categories: settings.categories,
-      players:
-        awayLineup?.players.map((player) => ({
-          playerId: player.playerId,
-          slot: player.slot,
-          totals: totalsByPlayerId.get(player.playerId) ?? {},
-        })) ?? [],
+      players: scoringPlayers(matchup.awayMemberId),
     });
     const result = scoreHeadToHeadCategories({
       categories: settings.categories,
@@ -1314,6 +1471,28 @@ export async function recalculateLeagueRoundMatchups({
           },
         });
       }
+      if (noLosers) {
+        // BR-21: the per-player breakdown is replaced with the team totals it re-derives.
+        await tx.leagueMatchupPlayerScore.deleteMany({
+          where: { matchupId: { in: calculatedScores.map((scored) => scored.matchupId) } },
+        });
+        await tx.leagueMatchupPlayerScore.createMany({
+          data: calculatedScores.flatMap((scored) =>
+            [scored.homeMemberId, scored.awayMemberId].flatMap((memberId) => {
+              const score = noLosersScores.get(memberId);
+              return score
+                ? noLosersPlayerScoreRows(score, noLosers, {
+                    leagueId,
+                    seasonId,
+                    matchupId: scored.matchupId,
+                    memberId,
+                    round,
+                  })
+                : [];
+            })
+          ),
+        });
+      }
       await recordFinalRoundRescores(tx, {
         leagueId,
         seasonId,
@@ -1414,6 +1593,7 @@ export async function recalculateLeagueRoundMatchups({
     scores: calculatedScores.map(({ matchupId, result }) => ({ matchupId, result })),
     // Matchups with two teams left unscored (a team with no lineup); they keep the round from FINAL.
     unresolvedMatchupIds,
+    ...(noLosers ? { waitingOnResults } : {}),
     roundStatus,
   };
 }

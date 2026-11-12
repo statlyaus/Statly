@@ -222,6 +222,25 @@ describe('scoreStartedLeagueRounds stalled rounds', () => {
     expect(run.failedLeagueIds).toEqual([]);
   });
 
+  it('names the game a No Losers round is waiting on for its result', async () => {
+    findManyMock.mockResolvedValue([startedRound('league-a', 3)]);
+    const recalculate = vi.fn(async () => ({
+      ...scored(3, 'LIVE', [{ matchId: 'm1', startsAt: lastMatchStart, status: 'final' }]),
+      unresolvedMatchupIds: [],
+      waitingOnResults: ['Waiting on the result of Geelong v Hawthorn'],
+    }));
+    const now = new Date(lastMatchStart.getTime() + (STALLED_ROUND_GRACE_HOURS + 1) * HOUR);
+
+    const run = await scoreStartedLeagueRounds(now, recalculate as never);
+
+    expect(run.stalledRounds).toEqual([
+      expect.objectContaining({
+        reason: 'afl-results-missing',
+        waitingOnResults: ['Waiting on the result of Geelong v Hawthorn'],
+      }),
+    ]);
+  });
+
   it('does not report an unfinished round inside the grace period', async () => {
     findManyMock.mockResolvedValue([startedRound('league-a', 3)]);
     const recalculate = vi.fn(async () => ({

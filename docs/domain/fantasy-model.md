@@ -127,6 +127,19 @@ no season DE%: it ranks below every team with a value, in the tie-break and the 
 direction. A round stored before the parts were kept adds nothing to the season ratio until it is
 recalculated.
 
+In a No Losers league each counted player's totals are multiplied by his club result before
+aggregation (see [league formats](../product/league-competition-rules.md#league-formats)); ratio
+inputs are multiplied too, so a halved player's disposals count at half weight in DE%.
+`LeagueMatchupScore.categoriesJson` stays team totals only. The per-player breakdown is its own
+table, `LeagueMatchupPlayerScore` (league- and season-scoped, cascading with the matchup): one row per
+counted lineup player per scored side, with the outcome (`RESULT`, `NO_STAT_ROW`, `RESULT_PENDING`
+or `UNRESOLVED`), club result, signed margin, multiplier, the `AflMatchResult` row id used, raw and
+counted totals, and the result rule version. A row was chosen over a versioned block inside the
+score so each result row id is a real foreign key (a result row cannot be deleted while a score
+uses it) and a later result correction (#1295) can find the scores it touches. Rows are replaced on
+every recalculation of the matchup, and aggregating a side's counted totals re-derives its stored
+categories. Standard and Bloodsucker leagues write no rows.
+
 `pointsFor` (and each player's `total` on the matchup card) adds up the count categories only. A
 ratio category is a rate, so DE% is left out. Neither value orders the standings or is shown on a
 screen; they are kept on score and standing rows and in the matchup API.

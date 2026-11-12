@@ -29,7 +29,7 @@ export const STALLED_ROUND_GRACE_HOURS = 12;
  *   with no lineup), so standings and finals seeding wait on it.
  */
 export type StalledRoundReason =
-  'unavailable-stats' | 'afl-matches-not-final' | 'unresolved-matchups';
+  'unavailable-stats' | 'afl-matches-not-final' | 'unresolved-matchups' | 'afl-results-missing';
 
 /**
  * A started round that is still not FINAL past the grace period. Every run reports it again until it
@@ -50,6 +50,8 @@ export interface StalledLeagueRound {
   aflMatchIdsNotFinal?: string[];
   /** For `unresolved-matchups`: the matchups with two teams left unscored. */
   unresolvedMatchupIds?: string[];
+  /** For `afl-results-missing` (No Losers, BR-08): "Waiting on the result of {home} v {away}". */
+  waitingOnResults?: string[];
 }
 
 export interface ScheduledRoundScoringRun {
@@ -250,9 +252,14 @@ function stalledRoundCause(result: {
   };
   missingPlayerIds?: string[];
   unresolvedMatchupIds?: string[];
+  waitingOnResults?: string[];
 }): Pick<
   StalledLeagueRound,
-  'reason' | 'missingPlayerIds' | 'aflMatchIdsNotFinal' | 'unresolvedMatchupIds'
+  | 'reason'
+  | 'missingPlayerIds'
+  | 'aflMatchIdsNotFinal'
+  | 'unresolvedMatchupIds'
+  | 'waitingOnResults'
 > {
   if (result.roundStatus.hasUnavailableStatus) {
     return { reason: 'unavailable-stats', missingPlayerIds: result.missingPlayerIds ?? [] };
@@ -264,6 +271,13 @@ function stalledRoundCause(result: {
       aflMatchIdsNotFinal: result.roundStatus.matches.flatMap((match) =>
         match.status !== 'final' && match.matchId ? [match.matchId] : []
       ),
+    };
+  }
+  if (result.waitingOnResults?.length) {
+    return {
+      reason: 'afl-results-missing',
+      missingPlayerIds: [],
+      waitingOnResults: result.waitingOnResults,
     };
   }
   return {

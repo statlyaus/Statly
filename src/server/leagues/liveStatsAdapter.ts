@@ -17,6 +17,8 @@ export interface NormalizedLiveStatRow {
   matchId: string | null;
   /** The club the row was recorded for, as the provider names it. */
   team: string | null;
+  /** The club's abbreviation (`team_abbr`), as the Statly match id (`matchUid`) spells it. */
+  teamAbbr: string | null;
   round: number | null;
   season: number | null;
   gameStartsAt: Date | null;
@@ -208,6 +210,7 @@ export function normalizeLiveStatRows(
       playerId,
       matchId,
       team: readString(row, ['team', 'club']),
+      teamAbbr: readString(row, ['team_abbr', 'teamAbbr']),
       round: readNumber(row, ['round_number', 'round']) || null,
       season: readNumber(row, ['season']) || null,
       gameStartsAt,
