@@ -188,13 +188,15 @@ ingest for Footywire's last 18 matches every 10 minutes while a stats window is 
 Each row records season, round, Footywire match id (`matchId`), the fixture's `matchUid` (the id
 player stat rows carry, so a stat row resolves to its own game's result), home and away club,
 points, margin (home minus away), status (`FINAL`, or `ABANDONED` with no scores) and `fetchedAt`,
-plus a sha256 `contentHash` of the stored fields. `(season, matchId, contentHash)` is unique.
+plus a sha256 `contentHash` of the stored fields. A hash may repeat within a match's history.
 
 A result never changes in place. When Footywire's score for a match changes, the current row is
 marked `supersededById` the new row with a `supersedeReason` naming both scores, then the new row is
 inserted; the current result of a match is the one row nothing supersedes (a partial unique index).
-Re-ingesting an unchanged result writes nothing. A change back to an earlier, superseded version is
-refused for an operator to review.
+Re-ingesting an unchanged result writes nothing. Only the current row is compared, so a change back to
+an earlier version (A, then B, then A) supersedes B with a third row; the old row is never revived
+(#1295). A No Losers round scored on a result that is later superseded is re-scored by the hourly
+scoring job ([league competition rules](../product/league-competition-rules.md#standings-and-finals)).
 
 Ingestion fails closed. A fitzRoy failure, a missing column, an unknown club or round, a score that
 is not a whole number, a duplicate match, or output that ends before the script's end-of-results line

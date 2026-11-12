@@ -78,7 +78,7 @@ export type ResultWritePlan = {
 };
 
 export type ResultStoreTransaction = {
-  /** Every stored row (current and superseded) of these matches. */
+  /** The current (not superseded) stored rows of these matches. */
   read(season: number, matchIds: readonly string[]): Promise<StoredMatchResult[]>;
   insert(id: string, result: MatchResult, fetchedAt: Date): Promise<void>;
   markSuperseded(previousId: string, nextId: string, reason: string): Promise<void>;
@@ -199,18 +199,16 @@ export function supersedeReason(previous: StoredMatchResult, next: MatchResult):
 /**
  * What to write for these results given the stored rows of the same matches. A match with no
  * current row is inserted; one whose current row has the same content hash is unchanged; one whose
- * content changed supersedes its current row. A change back to an earlier, superseded version is
- * refused: the (season, matchId, contentHash) key forbids a second copy, and reviving the old row
- * would rewrite history, so an operator must review it.
+ * content changed supersedes its current row. Only the current row counts: a change back to an
+ * earlier version (A, then B, then A) supersedes B with a new row, never revives the old one, so
+ * history keeps all three (BR-24, #1295).
  */
 export function planResultWrites(
   results: readonly MatchResult[],
   stored: readonly StoredMatchResult[]
 ): ResultWritePlan {
   const current = new Map<string, StoredMatchResult>();
-  const history = new Set<string>();
   for (const row of stored) {
-    history.add(`${row.matchId}:${row.contentHash}`);
     if (row.supersededById !== null) continue;
     if (current.has(row.matchId)) {
       throw new Error(`Footywire match ${row.matchId} has more than one current result`);
@@ -224,11 +222,6 @@ export function planResultWrites(
     if (previous?.contentHash === result.contentHash) {
       plan.unchanged += 1;
       continue;
-    }
-    if (history.has(`${result.matchId}:${result.contentHash}`)) {
-      throw new Error(
-        `Footywire match ${result.matchId} reverted to a superseded result; review it by hand`
-      );
     }
     if (previous) {
       plan.supersedes.push({ previous, next: result, reason: supersedeReason(previous, result) });

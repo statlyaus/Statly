@@ -41,8 +41,8 @@ const ROUND_ONE = {
   away_points: 80,
 };
 
-// An in-memory AflMatchResult table with the migration's rules: one current row per match, the
-// (season, matchId, contentHash) key, and a transaction that rolls back on any throw.
+// An in-memory AflMatchResult table with the migration's rules: one current row per match and a
+// transaction that rolls back on any throw. A content hash may repeat across a match's history.
 function memoryStore() {
   let rows = [];
   const store = {
@@ -53,7 +53,12 @@ function memoryStore() {
       const draft = rows.map((row) => ({ ...row }));
       const tx = {
         async read(readSeason, matchIds) {
-          return draft.filter((row) => row.season === readSeason && matchIds.includes(row.matchId));
+          return draft.filter(
+            (row) =>
+              row.season === readSeason &&
+              matchIds.includes(row.matchId) &&
+              row.supersededById === null
+          );
         },
         async insert(id, result, fetchedAt) {
           if (
@@ -65,16 +70,6 @@ function memoryStore() {
             )
           ) {
             throw new Error('one current result per match');
-          }
-          if (
-            draft.some(
-              (row) =>
-                row.season === result.season &&
-                row.matchId === result.matchId &&
-                row.contentHash === result.contentHash
-            )
-          ) {
-            throw new Error('duplicate content hash');
           }
           draft.push({ ...result, id, fetchedAt, supersededById: null, supersedeReason: null });
         },
@@ -204,15 +199,42 @@ test('a changed score supersedes the stored row with a reason; history keeps bot
   assert.equal(current.supersededById, null);
 });
 
-test('a result reverted to a superseded version is refused and nothing is written', async () => {
+test('a result that goes A, B, A ends with three rows and A current (BR-24)', async () => {
   const store = memoryStore();
   const deps = { store, fetchedAt: FETCHED_AT, newId: sequentialIds() };
   await ingestResultRows([PRELIM], deps);
   await ingestResultRows([{ ...PRELIM, away_points: 86 }], deps);
-  const before = JSON.stringify(store.rows);
 
-  await assert.rejects(ingestResultRows([PRELIM, GRAND_FINAL], deps), /reverted to a superseded/);
-  assert.equal(JSON.stringify(store.rows), before);
+  const summary = await ingestResultRows([PRELIM], deps);
+
+  assert.deepEqual(summary, { results: 1, inserted: 0, superseded: 1, unchanged: 0 });
+  const [first, second, third] = store.rows;
+  assert.equal(store.rows.length, 3);
+  assert.equal(first.supersededById, second.id);
+  assert.equal(second.supersededById, third.id);
+  assert.equal(third.supersededById, null);
+  assert.equal(third.contentHash, first.contentHash);
+  assert.equal(third.awayPoints, 85);
+  assert.equal(
+    second.supersedeReason,
+    'Footywire result changed: Geelong 115 v Hawthorn 86 is now Geelong 115 v Hawthorn 85'
+  );
+});
+
+test('planResultWrites supersedes the current row when a result returns to an earlier hash', () => {
+  const [a] = buildMatchResults([PRELIM]);
+  const [b] = buildMatchResults([{ ...PRELIM, away_points: 86 }]);
+  const stored = [
+    { ...a, id: 'a', supersededById: 'b' },
+    { ...b, id: 'b', supersededById: null },
+  ];
+
+  const plan = planResultWrites([a], stored);
+
+  assert.equal(plan.inserts.length, 0);
+  assert.equal(plan.supersedes.length, 1);
+  assert.equal(plan.supersedes[0].previous.id, 'b');
+  assert.equal(plan.supersedes[0].next.contentHash, a.contentHash);
 });
 
 test('planResultWrites refuses a match with two current rows', () => {

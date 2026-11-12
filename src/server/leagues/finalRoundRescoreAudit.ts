@@ -13,6 +13,16 @@ export type MatchupResultSnapshot = {
   scores: Array<{ memberId: string; categoriesJson: unknown; pointsFor: number }>;
 };
 
+/**
+ * A No Losers re-score caused by a corrected AFL result (#1295, BR-23): the superseded
+ * `AflMatchResult` the round had been scored on, the row that replaced it, and the ingest's reason.
+ */
+export type ResultCorrection = {
+  supersededResultId: string;
+  currentResultId: string;
+  reason: string;
+};
+
 type AuditClient = Pick<Prisma.TransactionClient, 'leagueMatchup' | 'leagueCompetitionAudit'>;
 
 /** The stored results of the matchups that are FINAL now. Read inside the scoring transaction. */
@@ -93,6 +103,7 @@ export async function recordFinalRoundRescores(
     seasonId,
     round,
     actorMemberId,
+    resultCorrections,
     before,
     after,
   }: {
@@ -100,6 +111,8 @@ export async function recordFinalRoundRescores(
     seasonId: string;
     round: number;
     actorMemberId: string | null;
+    /** Set when corrected AFL results caused the re-score; the trigger is then the system's. */
+    resultCorrections?: readonly ResultCorrection[];
     before: ReadonlyMap<string, MatchupResultSnapshot>;
     after: ReadonlyMap<string, MatchupResultSnapshot>;
   }
@@ -115,7 +128,9 @@ export async function recordFinalRoundRescores(
             seasonId,
             round,
             matchupId: change.matchupId,
-            trigger: actorMemberId ? 'manual' : 'cron',
+            ...(resultCorrections?.length
+              ? { trigger: 'result-correction', resultCorrections }
+              : { trigger: actorMemberId ? 'manual' : 'cron' }),
             before: change.before,
             after: change.after,
           })

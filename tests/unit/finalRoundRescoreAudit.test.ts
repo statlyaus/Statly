@@ -224,6 +224,28 @@ describe('rescoring a FINAL round', () => {
     expect(data.payloadJson.trigger).toBe('cron');
   });
 
+  it('marks a re-score caused by a corrected AFL result as the system, with the corrections (#1295)', async () => {
+    givenRound({
+      homeGoals: 2,
+      awayGoals: 3,
+      stored: storedFinalResult({ homeGoals: 2, awayGoals: 1 }),
+    });
+    const resultCorrections = [
+      { supersededResultId: 'result-a', currentResultId: 'result-b', reason: 'score changed' },
+    ];
+
+    await recalculateLeagueRoundMatchups({
+      leagueId: 'league-1',
+      round: 4,
+      finalize: false,
+      resultCorrections,
+    });
+
+    const { data } = prismaMocks.leagueCompetitionAudit.create.mock.calls[0][0];
+    expect(data.actorMemberId).toBeNull();
+    expect(data.payloadJson).toMatchObject({ trigger: 'result-correction', resultCorrections });
+  });
+
   it('writes no audit row when the recalculation reproduces the stored result', async () => {
     givenRound({
       homeGoals: 2,

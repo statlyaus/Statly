@@ -23,7 +23,7 @@ function transactionOn(client: PoolClient): ResultStoreTransaction {
         `SELECT "id", "matchId", "contentHash", "homeClub", "awayClub", "homePoints", "awayPoints",
                 "status", "supersededById"
            FROM "AflMatchResult"
-          WHERE "season" = $1 AND "matchId" = ANY($2::text[])`,
+          WHERE "season" = $1 AND "matchId" = ANY($2::text[]) AND "supersededById" IS NULL`,
         [season, matchIds]
       );
       return rows;

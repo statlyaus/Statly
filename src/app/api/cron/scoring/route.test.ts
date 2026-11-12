@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findManyMock = vi.fn();
 const recalculateMock = vi.fn();
+const rescoreCorrectionsMock = vi.fn();
 const loggerErrorMock = vi.fn();
 
 vi.mock('@/lib/logger', () => ({
@@ -16,6 +17,10 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/server/leagues/matchupReadModel', () => ({
   recalculateLeagueRoundMatchups: (...args: unknown[]) => recalculateMock(...args),
+}));
+
+vi.mock('@/server/leagues/noLosersResultCorrections', () => ({
+  rescoreCorrectedResultRounds: (...args: unknown[]) => rescoreCorrectionsMock(...args),
 }));
 
 const { GET, POST } = await import('./route');
@@ -50,6 +55,7 @@ describe('/api/cron/scoring', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', 'cron-secret');
     findManyMock.mockResolvedValue([]);
+    rescoreCorrectionsMock.mockResolvedValue({ rounds: [], failedLeagueIds: [] });
     recalculateMock.mockImplementation(async ({ round }: { round: number }) => recalculated(round));
   });
 
@@ -57,7 +63,40 @@ describe('/api/cron/scoring', () => {
     vi.unstubAllEnvs();
     findManyMock.mockReset();
     recalculateMock.mockReset();
+    rescoreCorrectionsMock.mockReset();
     loggerErrorMock.mockReset();
+  });
+
+  it('re-scores rounds scored on a corrected AFL result and reports them (#1295)', async () => {
+    const corrected = {
+      leagueId: 'league-nl',
+      round: 3,
+      status: 'FINAL',
+      recalculated: 1,
+      correctedResultIds: ['result-old'],
+    };
+    rescoreCorrectionsMock.mockResolvedValue({ rounds: [corrected], failedLeagueIds: [] });
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(200);
+    expect(rescoreCorrectionsMock).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      resultCorrections: { rounds: [corrected], failedLeagueIds: [] },
+    });
+  });
+
+  it('fails the run when a result-correction re-score fails', async () => {
+    rescoreCorrectionsMock.mockResolvedValue({ rounds: [], failedLeagueIds: ['league-nl'] });
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      resultCorrections: { failedLeagueIds: ['league-nl'] },
+    });
   });
 
   it('rejects every request when CRON_SECRET is unset outside development', async () => {

@@ -1,8 +1,8 @@
 /**
  * The ETL's AFL match result ingest (etl/resultIngest.ts through etl/resultStore.ts) against the
  * migrated PostgreSQL schema: a round's nine results store and read back through Prisma by match id,
- * an unchanged re-ingest writes nothing, a changed score supersedes the stored row, a rejected
- * batch writes nothing, and the migration's own constraints hold. Footywire is never contacted.
+ * an unchanged re-ingest writes nothing, a changed score supersedes the stored row, a result that
+ * changes back (A, B, A) supersedes again, a rejected batch writes nothing, and the migration's own constraints hold. Footywire is never contacted.
  */
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
@@ -109,6 +109,31 @@ describe('AflMatchResult ingest on PostgreSQL', () => {
       'Footywire result changed: Essendon 82 v Fremantle 78 is now Essendon 82 v Fremantle 83'
     );
     expect(current).toMatchObject({ homePoints: 82, awayPoints: 83, margin: -1 });
+  });
+
+  it('a result that goes A, B, A ends with three rows and A current (BR-24)', async () => {
+    await ingestResultRows(roundRows(), { store, fetchedAt: FETCHED_AT });
+    const changed = roundRows();
+    changed[2] = { ...changed[2], away_points: 83 };
+    await ingestResultRows(changed, { store, fetchedAt: new Date() });
+
+    const summary = await ingestResultRows(roundRows(), { store, fetchedAt: new Date() });
+
+    expect(summary).toEqual({ results: 9, inserted: 0, superseded: 1, unchanged: 8 });
+    const history = await prisma.aflMatchResult.findMany({
+      where: { season: SEASON, matchId: '90003' },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(history).toHaveLength(3);
+    const current = history.filter((row) => row.supersededById === null);
+    expect(current).toHaveLength(1);
+    expect(current[0]).toMatchObject({ homePoints: 82, awayPoints: 78, margin: 4 });
+    expect(current[0].contentHash).toBe(
+      history.find((row) => row.awayPoints === 78 && row.supersededById)!.contentHash
+    );
+    expect(history.find((row) => row.awayPoints === 83)!.supersedeReason).toBe(
+      'Footywire result changed: Essendon 82 v Fremantle 83 is now Essendon 82 v Fremantle 78'
+    );
   });
 
   it('a rejected batch writes nothing, including rows before the bad one', async () => {

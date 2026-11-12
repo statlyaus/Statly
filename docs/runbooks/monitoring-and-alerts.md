@@ -55,11 +55,11 @@ What to do:
 2. Re-run the ingest by hand from `etl/` with `DATABASE_URL` naming the fantasy database. For the
    season's last 18 matches: `npm run build && Rscript fetch_fw_results.R 2026 18 | node dist/processResultData.js`.
    Leave the count off to re-read the whole season (about 10 minutes, one page per match). Unchanged
-   results are a no-op; a changed one supersedes the stored row.
-3. `reverted to a superseded result` means Footywire changed a score back to an earlier version. The
-   ingest refuses it; read the match's rows (`WHERE "matchId" = …` ordered by `createdAt`), confirm
-   the official score, then decide by hand.
-4. A game that was abandoned has no Footywire match page, so the ingest never records it. Insert its
+   results are a no-op; a changed one (including a change back to an earlier score) supersedes the
+   stored row, and the next hourly `/api/cron/scoring` run re-scores any No Losers round that used it.
+   A failed re-score is logged as `Failed to re-score a No Losers round after an AFL result
+correction` and the run answers 500.
+3. A game that was abandoned has no Footywire match page, so the ingest never records it. Insert its
    `ABANDONED` row by hand (no scores, no margin; the table's CHECK constraint enforces this) with
    the Footywire match id if there is one, or `abandoned-{match_uid}` if not.
 

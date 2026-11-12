@@ -136,7 +136,8 @@ counted lineup player per scored side, with the outcome (`RESULT`, `NO_STAT_ROW`
 or `UNRESOLVED`), club result, signed margin, multiplier, the `AflMatchResult` row id used, raw and
 counted totals, and the result rule version. A row was chosen over a versioned block inside the
 score so each result row id is a real foreign key (a result row cannot be deleted while a score
-uses it) and a later result correction (#1295) can find the scores it touches. Rows are replaced on
+uses it) and a result correction can find the scores it touches: the hourly scoring job re-scores
+any round whose rows name a superseded result (#1295). Rows are replaced on
 every recalculation of the matchup, and aggregating a side's counted totals re-derives its stored
 categories. Standard and Bloodsucker leagues write no rows. The matchup read model shows a FINAL
 No Losers matchup's player rows from these stored rows (counted values, raw values where halved or
