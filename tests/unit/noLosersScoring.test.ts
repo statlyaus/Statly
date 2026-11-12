@@ -224,10 +224,86 @@ describe('buildMatchupCard in a No Losers league', () => {
     expect(card.waitingOnResults).toEqual(['Waiting on the result of Sydney v Carlton']);
   });
 
+  it('sends the raw value beside a zeroed counted value (BR-40)', () => {
+    const card = buildMatchupCard({ ...input, noLosers: context() });
+
+    expect(card.homeMember?.players[0].categories).toEqual([
+      { category: 'goals', shortLabel: expect.any(String), value: 0, rawValue: 3 },
+    ]);
+    // A full-count row carries no raw value.
+    expect(card.awayMember?.players[0].categories[0]).not.toHaveProperty('rawValue');
+  });
+
+  it('shows a FINAL card from its stored per-player rows, not the live results (#1296)', () => {
+    const stored = (playerId: string, memberId: string, raw: number, counted: number) => ({
+      memberId,
+      playerId,
+      outcome: 'RESULT',
+      clubResult: counted === raw ? 'WIN' : 'LOSS',
+      margin: counted === raw ? 10 : -4,
+      multiplier: counted === raw ? 1 : 0.5,
+      rawTotalsJson: { goals: raw },
+      countedTotalsJson: { goals: counted },
+    });
+    const card = buildMatchupCard({
+      ...input,
+      matchup: { ...input.matchup, status: 'FINAL' } as typeof input.matchup,
+      // The live results now say Hawthorn lost by 30; the stored score said a 4-point loss.
+      noLosers: context(),
+      noLosersStored: [stored('haw', 'home', 3, 1.5), stored('syd', 'home', 1, 1)],
+    });
+
+    expect(
+      card.homeMember?.players.map((player) => [
+        player.playerId,
+        player.categories[0].value,
+        player.categories[0].rawValue,
+        player.noLosers,
+      ])
+    ).toEqual([
+      ['haw', 1.5, 3, { status: 'COUNTED', clubResult: 'LOSS', margin: -4, multiplier: 0.5 }],
+      ['syd', 1, undefined, { status: 'COUNTED', clubResult: 'WIN', margin: 10, multiplier: 1 }],
+    ]);
+    expect(card).not.toHaveProperty('waitingOnResults');
+  });
+
+  it("carries each side's counted players per club for the strip (BR-41)", () => {
+    const withClubs = (playerIds: Array<[string, string]>) => ({
+      players: playerIds.map(([playerId, club], slotIndex) => ({
+        playerId,
+        slot: 'MID',
+        slotIndex,
+        player: { name: playerId, position: 'MID', club },
+      })),
+    });
+    const card = buildMatchupCard({
+      ...input,
+      lineupsByMemberId: new Map([
+        [
+          'home',
+          withClubs([
+            ['haw', 'Hawthorn'],
+            ['syd', 'Sydney'],
+          ]),
+        ],
+        ['away', withClubs([['gee', 'Geelong']])],
+      ]),
+      noLosers: context(),
+      noLosersFormat: true,
+    });
+
+    expect(card.noLosersClubCounts).toEqual([
+      { club: 'Geelong', home: 0, away: 1 },
+      { club: 'Hawthorn', home: 1, away: 0 },
+      { club: 'Sydney', home: 1, away: 0 },
+    ]);
+  });
+
   it('leaves a standard card exactly as before', () => {
     const card = buildMatchupCard(input);
 
     expect(card).not.toHaveProperty('waitingOnResults');
+    expect(card).not.toHaveProperty('noLosersClubCounts');
     expect(card.categoryRows[0]).toMatchObject({ homeValue: 4, awayValue: 2, winner: 'home' });
     expect(card.homeMember?.players.every((player) => !('noLosers' in player))).toBe(true);
   });

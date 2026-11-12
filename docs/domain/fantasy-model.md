@@ -139,7 +139,9 @@ score so each result row id is a real foreign key (a result row cannot be delete
 uses it) and a result correction can find the scores it touches: the hourly scoring job re-scores
 any round whose rows name a superseded result (#1295). Rows are replaced on
 every recalculation of the matchup, and aggregating a side's counted totals re-derives its stored
-categories. Standard and Bloodsucker leagues write no rows.
+categories. Standard and Bloodsucker leagues write no rows. The matchup read model shows a FINAL
+No Losers matchup's player rows from these stored rows (counted values, raw values where halved or
+zeroed, and the club result), never from a recomputation (#1296).
 
 `pointsFor` (and each player's `total` on the matchup card) adds up the count categories only. A
 ratio category is a rate, so DE% is left out. Neither value orders the standings or is shown on a

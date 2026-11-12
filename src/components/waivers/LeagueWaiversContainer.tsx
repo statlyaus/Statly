@@ -5,6 +5,7 @@ import { useAuth } from '@/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import WaiverFAABSystem, {
+  type WaiverNoLosersClub,
   type WaiverClaimSubmitResult,
 } from '@/components/waivers/WaiverFAABSystem';
 import type { LeagueWaiverClaim, LeagueRoster, LeagueActivityItem } from '@/types/waivers';
@@ -45,6 +46,7 @@ interface Props {
     statlyZScore?: number;
     statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
     statlyZMissingCategories?: FantasyCategoryKey[];
+    noLosersClub?: WaiverNoLosersClub;
   }>;
   playersIndex?: Record<string, { id: string; name: string; team?: string; position?: string }>;
   membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;

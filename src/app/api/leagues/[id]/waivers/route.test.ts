@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   leagueRosterPlayerFindMany: vi.fn(),
   playerFindMany: vi.fn(),
   teamActionFindMany: vi.fn(),
+  loadNoLosersClubFacts: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({ getAuthenticatedUserId: mocks.getAuthenticatedUserId }));
@@ -45,6 +46,10 @@ vi.mock('@/server/waivers/WaiverProcessingService', () => ({
 vi.mock('@/server/waivers/waiverActivity', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/waivers/waiverActivity')>()),
   loadWaiverOutcomes: vi.fn(async () => []),
+}));
+
+vi.mock('@/server/leagues/noLosersClubFacts', () => ({
+  loadNoLosersClubFacts: mocks.loadNoLosersClubFacts,
 }));
 
 import { GET } from './route';
@@ -89,5 +94,38 @@ describe('GET /api/leagues/[id]/waivers available players', () => {
     expect(mocks.leagueRosterPlayerFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { leagueId: 'league-1' } })
     );
+  });
+
+  it('adds club facts to each free agent in a No Losers league, and only there (BR-42)', async () => {
+    const fact = {
+      record: { wins: 8, losses: 3, draws: 0 },
+      next: { aflRound: 5, opponent: 'Hawthorn', isHome: true, bye: false },
+    };
+    mocks.loadNoLosersClubFacts.mockResolvedValue({ 'free-player': fact });
+    const get = () =>
+      GET(new NextRequest('http://localhost/api/leagues/league-1/waivers'), {
+        params: Promise.resolve({ id: 'league-1' }),
+      }).then((response) => response.json());
+
+    const standard = await get();
+    expect(mocks.loadNoLosersClubFacts).not.toHaveBeenCalled();
+    expect(standard.availablePlayers.some((player: object) => 'noLosersClub' in player)).toBe(
+      false
+    );
+
+    mocks.leagueFindUnique.mockResolvedValue({
+      categoriesJson: null,
+      settings: { categoryDirectionsJson: null, leagueFormat: 'NO_LOSERS' },
+    });
+    const noLosers = await get();
+    expect(
+      noLosers.availablePlayers.map((player: { id: string; noLosersClub?: unknown }) => [
+        player.id,
+        player.noLosersClub,
+      ])
+    ).toEqual([
+      ['dropped-player', undefined],
+      ['free-player', fact],
+    ]);
   });
 });
