@@ -104,8 +104,9 @@ function stripGameFromResult(
   const final = result.status === 'FINAL';
   return {
     matchUid: result.matchUid,
-    homeClub: result.homeClub,
-    awayClub: result.awayClub,
+    // Results keep the ETL's club names ("Brisbane Lions"); the strip matches player counts by ours.
+    homeClub: getTeamName(result.homeClub),
+    awayClub: getTeamName(result.awayClub),
     homePoints: final ? result.homePoints : null,
     awayPoints: final ? result.awayPoints : null,
     state: final ? 'FINAL' : 'ABANDONED',

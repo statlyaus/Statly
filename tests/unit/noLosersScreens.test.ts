@@ -66,6 +66,20 @@ describe('No Losers club-result strip (BR-41)', () => {
     expect(games[3].startsAt).toBe('2025-07-13T05:20:00.000Z');
   });
 
+  it("names a stored result's clubs as the player counts do, so the strip can match them", () => {
+    // The result writer stores ETL names ("Brisbane Lions"); player counts use the app's name.
+    const [game] = buildNoLosersClubStrip({
+      matches: [],
+      results: [result('2025-R18-BRL-GCS', 'Brisbane Lions', 'Gold Coast Suns', 80, 70)],
+    });
+    const counts = countCountedPlayersByClub(
+      [{ slot: 'MID', club: 'Brisbane' }],
+      [{ slot: 'MID', club: 'Gold Coast' }]
+    );
+
+    expect([game.homeClub, game.awayClub].sort()).toEqual(counts.map((count) => count.club).sort());
+  });
+
   it("counts each manager's counted (on-field) players per club, not interchange or bench", () => {
     expect(
       countCountedPlayersByClub(
