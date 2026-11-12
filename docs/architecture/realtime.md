@@ -26,6 +26,12 @@ views (thread count, plus the count and latest time of their events), so another
 never changes it. Each snapshot carries the revision it was read at, read before the rest of the
 snapshot, so a change that lands mid-read costs one extra refresh rather than being missed.
 
+League chat, the unread badge and the Trade Centre share that one room, and `social:leave` removes
+the socket from it for all of them. The browser therefore joins through one counted subscription
+per socket and league (`components/league/social/leagueSocialRoom.ts`): the first screen joins, the
+last one to go leaves, and each reports `live` again after a reconnect, which is its cue to resync.
+Closing chat cannot silence trade updates.
+
 ### League social catch-up
 
 `socialCommands` writes a `SocialOutboxEvent` row in the transaction of each social write (chat
@@ -41,6 +47,19 @@ never answers), the hook requests `/summary` every 10 seconds while the tab is v
 the snapshot only when a channel's latest sequence advanced. An unanswered join is "realtime
 unavailable", not an authorization failure; only a refused join shows one. Until the Socket.IO
 process runs in production, this poll is the only delivery path on the Netlify deployment.
+
+A resync reads the latest page (50 messages). When that page has older messages behind it and
+shares none with the list on screen, more arrived than one page holds: the page replaces the list
+(keeping anything newer that realtime already delivered) and "Load earlier" pages back from it,
+rather than merging and hiding a gap in the middle of the conversation. The outbox sequence is
+shared by every league, so the browser cannot detect a gap from sequence numbers alone.
+
+The unread badge (`LeagueSocialWidget`) joins the room itself, so it is live before chat is first
+opened, and requests `/summary` every 30 seconds while no live room is delivering. Unread counts
+are new content only (`social:message`, `social:activity`, `social:post`, `social:reply`); edits,
+removals and read receipts are in the same outbox but are never unread. A `social:read-state`
+event is delivered only to the sockets of the member it belongs to, and each event costs one
+membership lookup per member, not per socket.
 
 Chat GIFs persist only the GIPHY id (`SocialMessage.giphyId`); the browser resolves renditions with
 the public `NEXT_PUBLIC_GIPHY_WEB_SDK_KEY`, and the GIF picker is hidden while that key is unset.

@@ -1,8 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import LeagueSocialWidget, { getDraftIdFromPathname } from './LeagueSocialWidget';
+import LeagueSocialWidget, {
+  getDraftIdFromPathname,
+  UNREAD_POLL_INTERVAL_MS,
+} from './LeagueSocialWidget';
 import { LeagueSocialWidgetProvider } from './LeagueSocialWidgetProvider';
 
 const mocks = vi.hoisted(() => ({
@@ -254,5 +257,36 @@ describe('LeagueSocialWidget', () => {
     expect(getDraftIdFromPathname('/drafts/history')).toBeNull();
     expect(getDraftIdFromPathname('/drafts/settings')).toBeNull();
     expect(getDraftIdFromPathname('/drafts/draft-42/settings')).toBeNull();
+  });
+  it('polls the unread badge while no live room is delivering events', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    try {
+      render(
+        <LeagueSocialWidgetProvider>
+          <LeagueSocialWidget currentUserId="user-1" />
+        </LeagueSocialWidgetProvider>
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /5 unread/i })).toBeInTheDocument()
+      );
+
+      mocks.authenticatedFetch.mockImplementation(async () => ({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { unread: { chat: 6, board: 3, activity: 0 } },
+        }),
+      }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(UNREAD_POLL_INTERVAL_MS);
+      });
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /9 unread/i })).toBeInTheDocument()
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

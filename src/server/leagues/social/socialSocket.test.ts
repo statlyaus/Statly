@@ -343,6 +343,40 @@ describe('league social socket sidecar', () => {
     expect(socketState.emit).toHaveBeenCalledWith('social:message', envelope);
   });
 
+  it('delivers a read receipt only to its own member and checks membership once per member', async () => {
+    const ownTab = createSocket();
+    const ownOtherTab = createSocket();
+    const otherMember = createSocket('user-2');
+    const sockets = [ownTab.socket, ownOtherTab.socket, otherMember.socket];
+    const base = {
+      id: 'event-1',
+      sequence: 7,
+      leagueId: 'league-1',
+      seasonId: 'season-2026',
+      channel: 'chat',
+      occurredAt: '2026-07-19T10:00:00.000Z',
+    } as const;
+    await broadcastLeagueSocialEvent(localIo(sockets), {
+      ...base,
+      event: 'social:read-state',
+      payload: { userId: 'user-1', channel: 'chat', sequence: 7 },
+    } as unknown as SocialRealtimeEnvelope);
+
+    expect(ownTab.emit).toHaveBeenCalledTimes(1);
+    expect(ownOtherTab.emit).toHaveBeenCalledTimes(1);
+    expect(otherMember.emit).not.toHaveBeenCalled();
+    expect(mocks.getLeagueMembershipAccess).toHaveBeenCalledTimes(1);
+
+    await broadcastLeagueSocialEvent(localIo(sockets), {
+      ...base,
+      event: 'social:read-state',
+      payload: { channel: 'chat', sequence: 7 },
+    } as unknown as SocialRealtimeEnvelope);
+
+    expect(ownTab.emit).toHaveBeenCalledTimes(1);
+    expect(otherMember.emit).not.toHaveBeenCalled();
+  });
+
   it('removes former members from the room before delivering future events', async () => {
     const socketState = createSocket();
     const ioState = attachSocket(socketState.socket);
