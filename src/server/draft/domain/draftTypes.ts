@@ -17,11 +17,6 @@ export interface DraftParticipantSnapshot {
   slot: number;
   displayName: string;
   role: string;
-  /**
-   * League owner or co-commissioner: may start, pause, resume and force auto-picks.
-   * Absent means no; only the draft aggregate read sets it.
-   */
-  canManageDraft?: boolean;
 }
 
 export interface DraftSettingsSnapshot {
@@ -64,6 +59,11 @@ export interface DraftAggregate {
   schedulingVersion: number;
   eventSequence: number;
   participants: DraftParticipantSnapshot[];
+  /**
+   * League owner and co-commissioners (active members): may start, pause, resume and force
+   * auto-picks. Independent of the order, so a commissioner who never picks keeps the controls.
+   */
+  managerUserIds: string[];
   settings: DraftSettingsSnapshot;
   picks: DraftPickSnapshot[];
 }

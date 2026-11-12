@@ -55,9 +55,9 @@ function aggregate(overrides: Record<string, unknown> = {}) {
         slot: 1,
         displayName: 'Owner',
         role: 'OWNER',
-        canManageDraft: true,
       },
     ],
+    managerUserIds: ['owner-1'],
     picks: [],
     ...overrides,
   };
@@ -256,5 +256,32 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
       service.resumeDraft({ draftId: 'draft-1', actorUserId: 'manager-2' })
     ).rejects.toThrow('forbidden:');
     expect(draftRepository.transitionDraftClock).not.toHaveBeenCalled();
+  });
+
+  it('lets a commissioner outside the draft order pause and resume, but never pick', async () => {
+    // The Bloodsucker is left out of the order (#1279) yet may be the commissioner.
+    const outsideOrder = { managerUserIds: ['bloodsucker-commish'] };
+    const service = new DraftApplicationService();
+
+    draftRepository.getDraftAggregate.mockResolvedValue(aggregate(outsideOrder));
+    await expect(
+      service.pauseDraft({ draftId: 'draft-1', actorUserId: 'bloodsucker-commish' })
+    ).resolves.toMatchObject({ data: { status: DraftStatus.PAUSED } });
+
+    draftRepository.getDraftAggregate.mockResolvedValue(
+      aggregate({ ...outsideOrder, status: DraftStatus.PAUSED, pausedRemainingSeconds: 37 })
+    );
+    await expect(
+      service.resumeDraft({ draftId: 'draft-1', actorUserId: 'bloodsucker-commish' })
+    ).resolves.toMatchObject({ data: { status: DraftStatus.LIVE } });
+
+    draftRepository.getDraftAggregate.mockResolvedValue(aggregate(outsideOrder));
+    await expect(
+      service.makePick({
+        draftId: 'draft-1',
+        playerId: 'player-1',
+        actorUserId: 'bloodsucker-commish',
+      })
+    ).rejects.toThrow('forbidden:Not a member of this league');
   });
 });

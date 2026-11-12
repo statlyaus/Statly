@@ -146,6 +146,7 @@ describe('DraftApplicationService completion projection', () => {
         autoPickRules: {},
         draftType: 'SNAKE',
       },
+      managerUserIds: ['user-1'],
       participants: [
         {
           memberId: 'member-1',
@@ -153,7 +154,6 @@ describe('DraftApplicationService completion projection', () => {
           slot: 1,
           displayName: 'Manager One',
           role: 'OWNER',
-          canManageDraft: true,
         },
       ],
       picks: [],
@@ -221,6 +221,7 @@ describe('DraftApplicationService completion projection', () => {
         autoPickRules: {},
         draftType: 'SNAKE',
       },
+      managerUserIds: ['statly-dev-tester'],
       participants: [
         {
           memberId: 'member-1',
@@ -228,7 +229,6 @@ describe('DraftApplicationService completion projection', () => {
           slot: 1,
           displayName: 'Statly Dev Tester',
           role: 'OWNER',
-          canManageDraft: true,
         },
         {
           memberId: 'member-2',
@@ -323,6 +323,7 @@ describe('DraftApplicationService completion projection', () => {
         autoPickRules: {},
         draftType: 'SNAKE',
       },
+      managerUserIds: ['statly-dev-tester'],
       participants: [
         {
           memberId: 'member-1',
@@ -330,7 +331,6 @@ describe('DraftApplicationService completion projection', () => {
           slot: 1,
           displayName: 'Statly Dev Tester',
           role: 'OWNER',
-          canManageDraft: true,
         },
         {
           memberId: 'member-2',
@@ -429,6 +429,7 @@ describe('DraftApplicationService completion projection', () => {
         autoPickRules: {},
         draftType: 'SNAKE',
       },
+      managerUserIds: ['statly-dev-tester'],
       participants: [
         {
           memberId: 'member-1',
@@ -436,7 +437,6 @@ describe('DraftApplicationService completion projection', () => {
           slot: 1,
           displayName: 'Statly Dev Tester',
           role: 'OWNER',
-          canManageDraft: true,
         },
       ],
       picks: [],
@@ -524,6 +524,7 @@ describe('DraftApplicationService completion projection', () => {
         autoPickRules: {},
         draftType: 'SNAKE',
       },
+      managerUserIds: ['statly-dev-tester'],
       participants: [
         {
           memberId: 'member-1',
@@ -531,7 +532,6 @@ describe('DraftApplicationService completion projection', () => {
           slot: 1,
           displayName: 'Statly Dev Tester',
           role: 'OWNER',
-          canManageDraft: true,
         },
       ],
       picks: [],
@@ -577,6 +577,7 @@ describe('DraftApplicationService completion projection', () => {
         autoPickRules: {},
         draftType: 'SNAKE',
       },
+      managerUserIds: ['statly-dev-tester'],
       participants: [
         {
           memberId: 'member-1',
@@ -584,7 +585,6 @@ describe('DraftApplicationService completion projection', () => {
           slot: 1,
           displayName: 'Statly Dev Tester',
           role: 'OWNER',
-          canManageDraft: true,
         },
       ],
       picks: [

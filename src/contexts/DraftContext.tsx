@@ -229,7 +229,6 @@ function normalizeParticipant(participant: any, index: number): DraftParticipant
     ),
     teamName: firstPresent(member.teamName, participantRecord.teamName),
     draftOrder,
-    canManageDraft: firstPresent(member.canManageDraft, participantRecord.canManageDraft) === true,
     isOnline: Boolean(firstPresent(participantRecord.isOnline, member.isOnline, false)),
     lastSeen: new Date(firstPresent(participantRecord.lastSeen, member.lastSeen, 0)),
     isCurrentTurn: Boolean(
@@ -459,6 +458,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       pickDeadlineAt: clock.status === 'LIVE' ? clock.deadlineAt : null,
       pausedRemainingSeconds: clock.status === 'PAUSED' ? clock.remainingSeconds : null,
       participants: snapshot.state.participants,
+      ...(snapshot.state.managerUserIds ? { managerUserIds: snapshot.state.managerUserIds } : {}),
       timePerPick: clock.durationSeconds,
     });
 

@@ -140,8 +140,8 @@ function assertCanManageDraftCommand(
     return;
   }
 
-  const actor = draft.participants.find((participant) => participant.userId === actorUserId);
-  if (!actor || !actor.canManageDraft) {
+  // Rights come from the league, not the order: a commissioner who never picks still manages.
+  if (!draft.managerUserIds.includes(actorUserId)) {
     throw new Error(`forbidden:Commissioner access required to ${action}`);
   }
 }

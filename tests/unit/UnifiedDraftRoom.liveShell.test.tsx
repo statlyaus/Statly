@@ -232,6 +232,7 @@ vi.mock('@/contexts/DraftContext', () => ({
       totalPicks: 264,
       pickDeadlineAt: new Date(Date.now() + 60_000),
       round: 1,
+      managerUserIds: draftContext.firstSlotCanManage ? ['statly-dev-tester'] : [],
       settings: {
         timePerPick: 60,
         totalRounds: 22,
@@ -253,7 +254,6 @@ vi.mock('@/contexts/DraftContext', () => ({
         userId: 'statly-dev-tester',
         draftOrder: 1,
         role: 'OWNER',
-        canManageDraft: draftContext.firstSlotCanManage,
         queue: [],
       },
       {

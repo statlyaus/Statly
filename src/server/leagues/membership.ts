@@ -54,6 +54,7 @@ export async function getLeagueMembershipAccess(
     memberId: member.id,
     role: member.role,
     isMember: true,
+    // Same rule as leagueManagerUserIds, which the draft room uses.
     canManage: prismaLeague.ownerId === userId || member.isCoCommissioner,
   };
 }

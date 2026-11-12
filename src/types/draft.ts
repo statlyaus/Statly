@@ -3,13 +3,7 @@ import type { DraftOperationalReadiness } from './draftReadiness';
 import type { FantasyCategoryKey } from './fantasyCategories';
 
 export type DraftStatus =
-  | 'SCHEDULED'
-  | 'LOBBY'
-  | 'COUNTDOWN'
-  | 'LIVE'
-  | 'PAUSED'
-  | 'COMPLETED'
-  | 'CANCELLED';
+  'SCHEDULED' | 'LOBBY' | 'COUNTDOWN' | 'LIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
 export type DraftDirection = 'FORWARD' | 'REVERSE';
 export type DraftType = 'SNAKE' | 'LINEAR';
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
@@ -45,8 +39,6 @@ export interface DraftParticipant {
   displayName: string;
   teamName?: string;
   draftOrder: number;
-  /** League owner or co-commissioner: sees start, pause and resume. The server enforces it. */
-  canManageDraft?: boolean;
   isOnline: boolean;
   lastSeen: Date;
   isCurrentTurn: boolean;
@@ -152,6 +144,11 @@ export interface DraftState {
   direction: DraftDirection;
   pickDeadlineAt?: Date | null;
   participants: DraftParticipant[];
+  /**
+   * League owner and co-commissioners: see start, pause and resume, whether in the draft order or
+   * not. The server enforces it.
+   */
+  managerUserIds?: string[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
   draftReadiness?: DraftOperationalReadiness | null;
