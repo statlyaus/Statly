@@ -112,7 +112,10 @@ describe('league social activity queries', () => {
         where: expect.objectContaining({
           channel: 'ACTIVITY',
           sequence: { gt: 0 },
-          eventType: { not: 'social:read-state' },
+          // Edits, removals and read receipts are not unread content.
+          eventType: {
+            in: ['social:message', 'social:activity', 'social:post', 'social:reply'],
+          },
         }),
       })
     );

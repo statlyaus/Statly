@@ -255,6 +255,12 @@ export function attachLeagueSocialSocketHandlers(io: SocketIOServer): void {
   io.on('connection', attachSocketHandlers);
 }
 
+/** The member a read receipt belongs to; null when the payload does not name one. */
+function readStateUserId(envelope: SocialRealtimeEnvelope): string | null {
+  const payload = envelope.payload as { userId?: unknown } | null | undefined;
+  return typeof payload?.userId === 'string' && payload.userId ? payload.userId : null;
+}
+
 export async function broadcastLeagueSocialEvent(
   io: SocketIOServer,
   envelope: SocialRealtimeEnvelope
@@ -262,6 +268,22 @@ export async function broadcastLeagueSocialEvent(
   // Season-scoped: a socket in another season's room of the same league never sees this event.
   const room = leagueSeasonSocialRoom(envelope.leagueId, envelope.seasonId);
   const sockets = await io.local.in(room).fetchSockets();
+  // A read receipt belongs to one member: it goes to that member's own sockets (their other tabs
+  // and devices), never to the rest of the league.
+  const onlyUserId = envelope.event === 'social:read-state' ? readStateUserId(envelope) : undefined;
+  if (onlyUserId === null) return;
+  // One membership lookup per member per event, however many tabs they have open.
+  const membership = new Map<string, Promise<boolean>>();
+  const isCurrentMember = (userId: string): Promise<boolean> => {
+    let lookup = membership.get(userId);
+    if (!lookup) {
+      lookup = getLeagueMembershipAccess(envelope.leagueId, userId).then(
+        (access) => access.isMember
+      );
+      membership.set(userId, lookup);
+    }
+    return lookup;
+  };
   // One socket's failed membership lookup must not stop delivery to the others.
   const results = await Promise.allSettled(
     sockets.map(async (socket) => {
@@ -273,9 +295,9 @@ export async function broadcastLeagueSocialEvent(
         await socket.leave(room);
         return;
       }
+      if (onlyUserId !== undefined && userId !== onlyUserId) return;
 
-      const access = await getLeagueMembershipAccess(envelope.leagueId, userId);
-      if (!access.isMember) {
+      if (!(await isCurrentMember(userId))) {
         await socket.leave(room);
         return;
       }
