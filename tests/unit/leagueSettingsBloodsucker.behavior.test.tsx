@@ -139,3 +139,60 @@ describe('choosing No Losers in league settings (No Losers BR-01, BR-03, BR-04)'
     expect(body.waiver).toMatchObject({ waiverRule: 'weekly', faabBudget: 100 });
   });
 });
+
+describe('league format once scoring is locked by publication', () => {
+  const publishedPayload = (leagueFormat: string) => ({
+    ...settingsPayload,
+    data: {
+      ...settingsPayload.data,
+      scoring: {
+        ...settingsPayload.data.scoring,
+        scoringSettingsLockedAt: '2026-08-01T00:00:00.000Z',
+      },
+      locks: { scoring: 'Scoring settings are locked.', draftStructure: null },
+      format: { ...settingsPayload.data.format, leagueFormat },
+    },
+  });
+  const renderPanel = () =>
+    render(
+      <LeagueSettingsPanel
+        league={{ id: 'league-1', name: 'Premier', code: 'CODE', maxTeams: 8 } as League}
+        memberCount={8}
+        isAdmin
+        canAccessCompetitionRules
+        isActive
+        currentUserId="owner"
+      />
+    );
+
+  beforeEach(() => authenticatedFetchMock.mockReset());
+
+  it('offers no switch into No Losers, but still offers Bloodsucker', async () => {
+    authenticatedFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => publishedPayload('STANDARD'),
+    });
+    renderPanel();
+
+    const formatSelect = (await screen.findByLabelText('League format')) as HTMLSelectElement;
+    await waitFor(() => expect(formatSelect.disabled).toBe(false));
+    expect((screen.getByRole('option', { name: /no losers/i }) as HTMLOptionElement).disabled).toBe(
+      true
+    );
+    expect(
+      (screen.getByRole('option', { name: /bloodsucker/i }) as HTMLOptionElement).disabled
+    ).toBe(false);
+  });
+
+  it('locks the format of a No Losers league', async () => {
+    authenticatedFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => publishedPayload('NO_LOSERS'),
+    });
+    renderPanel();
+
+    const formatSelect = (await screen.findByLabelText('League format')) as HTMLSelectElement;
+    await waitFor(() => expect(formatSelect.value).toBe('NO_LOSERS'));
+    expect(formatSelect.disabled).toBe(true);
+  });
+});
