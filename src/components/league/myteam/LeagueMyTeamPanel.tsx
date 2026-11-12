@@ -12,6 +12,11 @@ import {
   type ReactNode,
 } from 'react';
 
+import {
+  clubRecordSrText,
+  formatClubRecord,
+  type ClubRecord,
+} from '@/components/league/noLosers/noLosersDisplay';
 import { TeamMark } from '@/components/scores/MatchupScore';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
@@ -56,6 +61,8 @@ interface SquadPlayer extends MyTeamSquadPlayer {
   opponent?: string | null;
   isHome?: boolean | null;
   bye?: boolean;
+  /** No Losers leagues only: the player's club's season W-L-D from stored results (BR-42). */
+  clubRecord?: ClubRecord | null;
   /** The injury list's entry, shown even when the player can still be picked (a Test listing). */
   injury: { label: string; blocksSelection: boolean } | null;
 }
@@ -1262,16 +1269,32 @@ function Tag({ tone, label, title }: { tone: 'warn' | 'bad'; label: string; titl
   );
 }
 
+function ClubRecordText({ record }: { record: ClubRecord }) {
+  return (
+    <>
+      <span aria-hidden="true">{formatClubRecord(record)}</span>
+      <span className="sr-only">{clubRecordSrText(record)}</span>
+    </>
+  );
+}
+
 function OpponentText({ player, locked }: { player: SquadPlayer; locked: boolean }) {
-  if (player.bye) return <>Bye</>;
+  const record = player.clubRecord ? (
+    <>
+      {' · '}
+      <ClubRecordText record={player.clubRecord} />
+    </>
+  ) : null;
+  if (player.bye) return <>Bye{record}</>;
   const opponent = player.opponent ? getTeamAbbreviation(player.opponent) : null;
   const when = locked ? 'Locked' : formatGameTime(player.gameStartsAt);
-  if (!opponent && !when) return <>Fixture TBC</>;
+  if (!opponent && !when) return <>Fixture TBC{record}</>;
   return (
     <>
       {opponent ? `${player.isHome === false ? '@' : 'v'} ${opponent}` : ''}
       {opponent && when ? ' · ' : ''}
       {when ?? ''}
+      {record}
     </>
   );
 }
@@ -1289,6 +1312,11 @@ function OpponentCell({ player, locked }: { player: SquadPlayer; locked: boolean
         {opponent ? `${player.isHome === false ? '@' : 'v'} ${opponent}` : '—'}
       </span>
       <span className="text-muted-foreground">{locked ? 'Locked' : (when ?? 'Time TBC')}</span>
+      {player.clubRecord ? (
+        <span className="text-muted-foreground">
+          <ClubRecordText record={player.clubRecord} />
+        </span>
+      ) : null}
     </span>
   );
 }

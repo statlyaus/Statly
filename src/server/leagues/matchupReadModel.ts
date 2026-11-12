@@ -51,6 +51,15 @@ import {
   type NoLosersPlayerView,
   type NoLosersRoundContext,
 } from './noLosersScoring';
+import {
+  buildNoLosersClubStrip,
+  countCountedPlayersByClub,
+  loadRoundAflResults,
+  storedNoLosersPlayerView,
+  type NoLosersClubCount,
+  type NoLosersStripGame,
+  type StoredNoLosersPlayerScore,
+} from './noLosersScreens';
 import { calculateStandingsRows } from './standingsService';
 import { inferUnselectedDidNotPlay, loadTeamSheetStatlyPlayerIds } from './unselectedPlayers';
 import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
@@ -105,6 +114,8 @@ export interface LeagueMatchupPlayerContribution {
     category: FantasyCategoryKey;
     shortLabel: string;
     value: number;
+    /** No Losers: the player's raw value, present only when his club result halved or zeroed it. */
+    rawValue?: number;
   }>;
 }
 
@@ -131,6 +142,8 @@ export interface LeagueMatchupCard {
   categoryRows: LeagueMatchupCategoryRow[];
   /** No Losers leagues only: why the round cannot be final yet ("Waiting on the result of ..."). */
   waitingOnResults?: string[];
+  /** No Losers leagues only: each side's counted players per club, for the club-result strip. */
+  noLosersClubCounts?: NoLosersClubCount[];
 }
 
 export interface LeagueMatchupReadModel {
@@ -153,6 +166,8 @@ export interface LeagueMatchupReadModel {
     fallbackLockAt: string | null;
   } | null;
   matchups: LeagueMatchupCard[];
+  /** No Losers leagues only: the round's games and stored results (BR-41). */
+  noLosersRound?: { games: NoLosersStripGame[] };
   standings: LeagueStandingReadRow[];
   permissions: {
     canManage: boolean;
@@ -351,6 +366,7 @@ function buildPlayerContributions({
   lineup,
   categories,
   totalsByPlayerId,
+  rawTotalsByPlayerId,
   noLosersViews,
 }: {
   lineup:
@@ -365,6 +381,7 @@ function buildPlayerContributions({
     | undefined;
   categories: FantasyCategoryKey[];
   totalsByPlayerId: Map<string, CategoryTotals>;
+  rawTotalsByPlayerId?: Map<string, CategoryTotals>;
   noLosersViews?: Map<string, NoLosersPlayerView>;
 }): LeagueMatchupPlayerContribution[] {
   return (
@@ -373,14 +390,24 @@ function buildPlayerContributions({
       .map((lineupPlayer) => {
         const totals = totalsByPlayerId.get(lineupPlayer.playerId) ?? {};
         const noLosers = noLosersViews?.get(lineupPlayer.playerId);
-        const categoryValues = categories.map((category) => ({
-          category,
-          shortLabel:
-            FANTASY_CATEGORIES[category]?.shortLabel ??
-            FANTASY_CATEGORIES[category]?.abbrev ??
+        // BR-40: a halved or zeroed row also carries the raw line it was counted from.
+        const rawTotals =
+          noLosers?.status === 'COUNTED' && noLosers.multiplier !== 1
+            ? rawTotalsByPlayerId?.get(lineupPlayer.playerId)
+            : undefined;
+        const categoryValues = categories.map((category) => {
+          const value = totals[category] ?? 0;
+          const rawValue = rawTotals ? (rawTotals[category] ?? 0) : value;
+          return {
             category,
-          value: totals[category] ?? 0,
-        }));
+            shortLabel:
+              FANTASY_CATEGORIES[category]?.shortLabel ??
+              FANTASY_CATEGORIES[category]?.abbrev ??
+              category,
+            value,
+            ...(rawValue !== value ? { rawValue } : {}),
+          };
+        });
 
         return {
           playerId: lineupPlayer.playerId,
@@ -407,7 +434,7 @@ type MatchupCardLineup = {
     playerId: string;
     slot: string;
     slotIndex: number;
-    player: { name: string; position: string };
+    player: { name: string; position: string; club?: string | null };
   }>;
 };
 
@@ -442,6 +469,8 @@ export function buildMatchupCard({
   totalsByPlayerId: rawTotalsByPlayerId,
   liveRound,
   noLosers,
+  noLosersStored,
+  noLosersFormat = false,
 }: {
   matchup: Awaited<ReturnType<typeof prisma.leagueMatchup.findMany>>[number] & {
     homeMember: { id: string; teamName: string; teamLogoUrl: string | null } | null;
@@ -469,12 +498,24 @@ export function buildMatchupCard({
   liveRound: { available: boolean; started: boolean };
   /** No Losers leagues only: the round's stored results (BR-20: nothing is guessed). */
   noLosers?: NoLosersRoundContext;
+  /** No Losers leagues only: this matchup's stored per-player rows (BR-21), shown once FINAL. */
+  noLosersStored?: readonly StoredNoLosersPlayerScore[];
+  /** True in a No Losers league: the card carries club counts for the strip (BR-41). */
+  noLosersFormat?: boolean;
 }): LeagueMatchupCard {
-  const { totalsByPlayerId, noLosersViews, waitingOnResults } = applyNoLosersToCard({
-    context: noLosers,
-    lineups: cardLineups([matchup.homeMemberId, matchup.awayMemberId], lineupsByMemberId),
-    totalsByPlayerId: rawTotalsByPlayerId,
-  });
+  // A FINAL card shows the breakdown it was scored with, not a recomputation (#1296, NFR-5).
+  const { totalsByPlayerId, noLosersViews, waitingOnResults } =
+    matchup.status === 'FINAL' && noLosersStored?.length
+      ? applyStoredNoLosersToCard(noLosersStored, rawTotalsByPlayerId)
+      : applyNoLosersToCard({
+          context: noLosers,
+          lineups: cardLineups([matchup.homeMemberId, matchup.awayMemberId], lineupsByMemberId),
+          totalsByPlayerId: rawTotalsByPlayerId,
+        });
+  const storedRawTotals =
+    matchup.status === 'FINAL' && noLosersStored?.length
+      ? storedRawTotalsByPlayerId(noLosersStored, rawTotalsByPlayerId)
+      : rawTotalsByPlayerId;
   const provisionalResult =
     matchup.status !== 'FINAL' &&
     matchup.homeMemberId &&
@@ -504,6 +545,7 @@ export function buildMatchupCard({
       lineupsByMemberId,
       categories,
       totalsByPlayerId,
+      rawTotalsByPlayerId: storedRawTotals,
       noLosersViews,
     });
   const homePlayers = sidePlayers(matchup.homeMemberId);
@@ -544,7 +586,64 @@ export function buildMatchupCard({
       categoriesJson: provisionalResult?.categories ?? homeScore?.categoriesJson,
     }),
     ...noLosersWaitingFields(waitingOnResults, matchup.status),
+    ...(noLosersFormat
+      ? {
+          noLosersClubCounts: countCountedPlayersByClub(
+            lineupPlayersOf(matchup.homeMemberId, lineupsByMemberId),
+            lineupPlayersOf(matchup.awayMemberId, lineupsByMemberId)
+          ),
+        }
+      : {}),
   };
+}
+
+function lineupPlayersOf(
+  memberId: string | null,
+  lineupsByMemberId: Map<string, MatchupCardLineup>
+): Array<{ slot: string; club?: string | null }> {
+  const lineup = memberId ? lineupsByMemberId.get(memberId) : undefined;
+  return lineup?.players.map((player) => ({ slot: player.slot, club: player.player.club })) ?? [];
+}
+
+/** BR-21: a FINAL card's counted totals and result views, read from its stored per-player rows. */
+function applyStoredNoLosersToCard(
+  rows: readonly StoredNoLosersPlayerScore[],
+  totalsByPlayerId: Map<string, CategoryTotals>
+): {
+  totalsByPlayerId: Map<string, CategoryTotals>;
+  noLosersViews: Map<string, NoLosersPlayerView>;
+  waitingOnResults?: string[];
+} {
+  const counted = new Map(totalsByPlayerId);
+  const views = new Map<string, NoLosersPlayerView>();
+  for (const row of rows) {
+    if (row.outcome === 'NO_STAT_ROW') continue;
+    counted.set(row.playerId, readStoredTotals(row.countedTotalsJson));
+    const view = storedNoLosersPlayerView(row);
+    if (view) views.set(row.playerId, view);
+  }
+  return { totalsByPlayerId: counted, noLosersViews: views };
+}
+
+function storedRawTotalsByPlayerId(
+  rows: readonly StoredNoLosersPlayerScore[],
+  totalsByPlayerId: Map<string, CategoryTotals>
+): Map<string, CategoryTotals> {
+  const raw = new Map(totalsByPlayerId);
+  for (const row of rows) {
+    if (row.outcome !== 'NO_STAT_ROW') raw.set(row.playerId, readStoredTotals(row.rawTotalsJson));
+  }
+  return raw;
+}
+
+function readStoredTotals(value: unknown): CategoryTotals {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === 'number' && Number.isFinite(entry[1])
+    )
+  ) as CategoryTotals;
 }
 
 function cardLineups(
@@ -566,6 +665,7 @@ function buildSidePlayers({
   lineupsByMemberId: Map<string, MatchupCardLineup>;
   categories: FantasyCategoryKey[];
   totalsByPlayerId: Map<string, CategoryTotals>;
+  rawTotalsByPlayerId?: Map<string, CategoryTotals>;
   noLosersViews?: Map<string, NoLosersPlayerView>;
 }): LeagueMatchupPlayerContribution[] {
   return memberId
@@ -1011,6 +1111,18 @@ export async function loadLeagueMatchupReadModel({
           matches: liveTotals.rawMatches,
         })
       : undefined;
+  const noLosersScreens =
+    settings.leagueFormat === 'NO_LOSERS'
+      ? await loadNoLosersScreenData({
+          season: activeCompetitionRound?.season?.year ?? new Date().getFullYear(),
+          aflRound: activeCompetitionRound?.aflRound ?? null,
+          finalMatchupIds: matchups
+            .filter((matchup) => matchup.status === 'FINAL')
+            .map((matchup) => matchup.id),
+          rawMatches: liveTotals.rawMatches,
+          context: noLosers,
+        })
+      : null;
   const tieBreakCategoryTotalByMemberId = aggregateFinalizedCategoryTotals(
     finalizedScores,
     settings.competitionRules.standingsTieBreakCategory
@@ -1052,8 +1164,15 @@ export async function loadLeagueMatchupReadModel({
           ),
         },
         noLosers,
+        ...(noLosersScreens
+          ? {
+              noLosersFormat: true,
+              noLosersStored: noLosersScreens.storedRowsByMatchupId.get(matchup.id),
+            }
+          : {}),
       })
     ),
+    ...(noLosersScreens ? { noLosersRound: { games: noLosersScreens.games } } : {}),
     standings: buildLeagueStandings({
       members,
       standings: persistedStandings,
@@ -1062,6 +1181,66 @@ export async function loadLeagueMatchupReadModel({
         settings.categoryDirections[settings.competitionRules.standingsTieBreakCategory],
     }),
     permissions: { canManage },
+  };
+}
+
+/**
+ * No Losers screens (#1296): the round's club-result strip and each FINAL matchup's stored
+ * per-player breakdown. Results come from `AflMatchResult` for the AFL round, joined with the
+ * live context's results so a game named by a stat row is never left out.
+ */
+async function loadNoLosersScreenData({
+  season,
+  aflRound,
+  finalMatchupIds,
+  rawMatches,
+  context,
+}: {
+  season: number;
+  aflRound: number | null;
+  finalMatchupIds: string[];
+  rawMatches: Parameters<typeof buildNoLosersClubStrip>[0]['matches'];
+  context: NoLosersRoundContext | undefined;
+}): Promise<{
+  games: NoLosersStripGame[];
+  storedRowsByMatchupId: Map<string, StoredNoLosersPlayerScore[]>;
+}> {
+  const [roundResults, storedRows] = await Promise.all([
+    aflRound ? loadRoundAflResults(season, aflRound) : Promise.resolve([]),
+    finalMatchupIds.length
+      ? prisma.leagueMatchupPlayerScore.findMany({
+          where: { matchupId: { in: finalMatchupIds } },
+          select: {
+            matchupId: true,
+            memberId: true,
+            playerId: true,
+            outcome: true,
+            clubResult: true,
+            margin: true,
+            multiplier: true,
+            rawTotalsJson: true,
+            countedTotalsJson: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const results = new Map(roundResults.map((result) => [result.matchUid, result]));
+  for (const [matchUid, result] of context?.results ?? []) results.set(matchUid, result);
+  const storedRowsByMatchupId = new Map<string, StoredNoLosersPlayerScore[]>();
+  for (const row of storedRows) {
+    const rows = storedRowsByMatchupId.get(row.matchupId) ?? [];
+    rows.push(row);
+    storedRowsByMatchupId.set(row.matchupId, rows);
+  }
+  return {
+    games: buildNoLosersClubStrip({
+      matches: rawMatches,
+      results: [...results.values()],
+      finishedMatchUids: new Set(
+        context?.games.filter((game) => game.finished).map((game) => game.matchUid) ?? []
+      ),
+    }),
+    storedRowsByMatchupId,
   };
 }
 

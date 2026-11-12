@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  clubRecordSrText,
+  formatClubRecord,
+  type ClubRecord,
+} from '@/components/league/noLosers/noLosersDisplay';
 import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
@@ -56,6 +61,45 @@ interface PlayerOption {
   statlyZScore?: number;
   statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
   statlyZMissingCategories?: FantasyCategoryKey[];
+  /** No Losers leagues only: club season record and this round's game (BR-42). */
+  noLosersClub?: WaiverNoLosersClub;
+}
+
+export interface WaiverNoLosersClub {
+  record: ClubRecord;
+  next: { aflRound: number; opponent: string | null; isHome: boolean | null; bye: boolean } | null;
+}
+
+/** BR-42: "Rd 5 v HAW · 8-3-0", facts only. */
+function NoLosersClubLine({ club }: { club: WaiverNoLosersClub }) {
+  const next = club.next;
+  const away = next?.isHome === false;
+  const game = !next
+    ? null
+    : next.bye
+      ? `Rd ${next.aflRound} bye`
+      : next.opponent
+        ? `Rd ${next.aflRound} ${away ? '@' : 'v'} ${getTeamAbbreviation(next.opponent)}`
+        : null;
+  const gameSr = !next
+    ? ''
+    : next.bye
+      ? `Round ${next.aflRound}: bye. `
+      : next.opponent
+        ? `Round ${next.aflRound}: ${away ? 'away to' : 'home to'} ${next.opponent}. `
+        : '';
+  return (
+    <span className="basis-full text-xs text-muted-foreground">
+      <span aria-hidden="true">
+        {game ? `${game} · ` : ''}
+        {formatClubRecord(club.record)}
+      </span>
+      <span className="sr-only">
+        {gameSr}
+        {clubRecordSrText(club.record)}
+      </span>
+    </span>
+  );
 }
 
 // What the server reports after a claim submit: the stored claim, or why nothing was stored.
@@ -440,6 +484,9 @@ function WaiverPlayerTable({
                             {teamAbbreviation || '-'}
                           </span>
                           <span>{team || 'Club pending'}</span>
+                          {player.noLosersClub ? (
+                            <NoLosersClubLine club={player.noLosersClub} />
+                          ) : null}
                         </div>
                       </div>
                     </div>
