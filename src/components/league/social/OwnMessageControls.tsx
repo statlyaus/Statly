@@ -111,6 +111,11 @@ export function MessageDeleteConfirm({
 
   useEffect(() => cancelRef.current?.focus(), []);
 
+  // Focus starts on Cancel and stays on these two buttons, so Escape is handled on them.
+  const cancelOnEscape = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') onCancel();
+  };
+
   async function confirm(): Promise<void> {
     setDeleting(true);
     setError(null);
@@ -129,9 +134,6 @@ export function MessageDeleteConfirm({
       role="group"
       aria-label="Delete your message"
       className="mt-2 rounded-lg border border-social-border bg-social-surface p-2"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onCancel();
-      }}
     >
       <p className="text-xs text-social-text">
         Delete this message? The league will see “Message removed”.
@@ -147,6 +149,7 @@ export function MessageDeleteConfirm({
           type="button"
           disabled={deleting}
           onClick={onCancel}
+          onKeyDown={cancelOnEscape}
           className={secondaryButton}
         >
           Cancel
@@ -155,6 +158,7 @@ export function MessageDeleteConfirm({
           type="button"
           disabled={deleting}
           onClick={() => void confirm()}
+          onKeyDown={cancelOnEscape}
           className={dangerButton}
         >
           {deleting ? 'Deleting…' : 'Delete'}
