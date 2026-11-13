@@ -15,6 +15,7 @@ import {
 import type { League, LeagueMember } from '@/types/leagues';
 
 import { normalizeCategoryDirections } from './categoryDirections';
+import { normalizeLeagueFormat } from './leagueFormat';
 import { normalizeLineupSlots } from './lineupSettings';
 
 export type LeagueDetailSuccess = {
@@ -125,6 +126,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           waiverRule,
           scoringMode,
           fixtureGenerationMode,
+          leagueFormat: normalizeLeagueFormat(prismaLeague.settings?.leagueFormat),
           lineupSlots,
           categoryDirections,
           scoringSettingsLockedAt: prismaLeague.settings?.scoringSettingsLockedAt?.toISOString(),

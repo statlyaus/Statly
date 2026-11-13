@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { BloodsuckerReadError, loadBloodsuckerSummary } from '@/server/leagues/bloodsuckerReadModel';
+import {
+  BloodsuckerReadError,
+  loadBloodsuckerSummary,
+} from '@/server/leagues/bloodsuckerReadModel';
 
 import { privateHeaders } from '../bites/biteErrorResponse';
 

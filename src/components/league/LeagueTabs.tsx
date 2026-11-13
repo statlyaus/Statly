@@ -2,6 +2,8 @@
 
 import { LeagueHeader } from '@/components/league/LeagueHeader';
 import { LeagueOverviewPanel } from '@/components/league/overview/LeagueOverviewPanel';
+import { BloodsuckerBanner } from '@/components/league/bloodsucker/BloodsuckerBanner';
+import { useBloodsuckerSummary } from '@/components/league/bloodsucker/useBloodsuckerSummary';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
@@ -311,6 +313,12 @@ export default function LeagueTabs({
   const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
   const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const isBloodsuckerLeague = league.leagueFormat === 'BLOODSUCKER';
+  const { summary: bloodsuckerSummary, failed: bloodsuckerFailed } = useBloodsuckerSummary(
+    league.id,
+    isBloodsuckerLeague,
+    currentUserId
+  );
   const [overviewWaiverClaims, setOverviewWaiverClaims] = useState<OverviewWaiverClaim[]>([]);
   const [overviewWaiversStatus, setOverviewWaiversStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
@@ -664,6 +672,15 @@ export default function LeagueTabs({
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15 }}
             >
+              {activeTab === 'overview' && isBloodsuckerLeague ? (
+                <div className="mb-4">
+                  <BloodsuckerBanner
+                    leagueId={league.id}
+                    summary={bloodsuckerSummary}
+                    failed={bloodsuckerFailed}
+                  />
+                </div>
+              ) : null}
               {activeTab === 'overview' && (
                 <LeagueOverviewPanel
                   league={league}
@@ -870,6 +887,8 @@ export default function LeagueTabs({
                   categories={league.categories}
                   onOpenSettings={() => handleTabChange('league-settings')}
                   timeZone={league.timeZone}
+                  bloodsucker={bloodsuckerSummary?.bloodsucker ?? null}
+                  viewerMemberId={bloodsuckerSummary?.viewer.memberId ?? null}
                 />
               )}
 

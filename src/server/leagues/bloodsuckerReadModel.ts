@@ -172,7 +172,10 @@ export async function loadBloodsuckerSummary(input: {
 
   return {
     ...base,
-    bloodsucker: { memberId: bloodsuckerId, teamName: teamName.get(bloodsuckerId) ?? 'Bloodsucker' },
+    bloodsucker: {
+      memberId: bloodsuckerId,
+      teamName: teamName.get(bloodsuckerId) ?? 'Bloodsucker',
+    },
     record,
     bites: bites.map((bite) => ({
       biteId: bite.id,

@@ -17,6 +17,10 @@ import {
   ResultChip,
   type CategoryResult,
 } from '@/components/scores/MatchupScore';
+import {
+  BloodsuckerMatchupWarning,
+  shouldWarnOfBloodsucker,
+} from '@/components/league/bloodsucker/BloodsuckerMatchupWarning';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { formatCategoryValue } from '@/types/fantasyCategories';
@@ -30,6 +34,9 @@ interface LeagueMatchupsPanelProps {
   onOpenSettings?: () => void;
   /** The league's IANA timezone; start times are shown in it. */
   timeZone?: string;
+  /** Bloodsucker leagues: who the Bloodsucker is and which team is the viewer's (US-8 AC2). */
+  bloodsucker?: { memberId: string; teamName: string } | null;
+  viewerMemberId?: string | null;
 }
 
 interface MatchupModel {
@@ -106,6 +113,7 @@ interface MatchupReadModel {
   matchups: MatchupModel[];
   /** No Losers leagues: the round's AFL games and stored results. */
   noLosersRound?: { games: ClubStripGame[] };
+  roundContext?: { phase?: 'REGULAR' | 'FINALS' } | null;
   permissions?: { canManage?: boolean };
 }
 
@@ -127,6 +135,8 @@ export function LeagueMatchupsPanel({
   categories = [],
   onOpenSettings,
   timeZone,
+  bloodsucker,
+  viewerMemberId,
 }: LeagueMatchupsPanelProps) {
   const [data, setData] = useState<MatchupReadModel | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -255,6 +265,17 @@ export function LeagueMatchupsPanel({
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {bloodsucker &&
+                  shouldWarnOfBloodsucker({
+                    matchupStatus: matchup.status,
+                    phase: data.roundContext?.phase,
+                    homeMemberId: matchup.homeMember?.id,
+                    awayMemberId: matchup.awayMember?.id,
+                    bloodsuckerMemberId: bloodsucker.memberId,
+                    viewerMemberId,
+                  }) ? (
+                    <BloodsuckerMatchupWarning bloodsuckerTeamName={bloodsucker.teamName} />
+                  ) : null}
                   <MatchupHeadToHeadCard matchup={matchup} timeZone={timeZone} />
                   {data.noLosersRound && matchup.noLosersClubCounts ? (
                     <ClubResultStrip

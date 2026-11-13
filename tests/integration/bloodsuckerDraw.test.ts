@@ -35,7 +35,12 @@ const removeFixture = () =>
 async function seed(options: { draftStatus?: 'SCHEDULED' | 'LIVE' } = {}) {
   await removeFixture();
   await prisma.user.createMany({
-    data: USERS.map((id) => ({ id, email: `${id}@statly.local`, passwordHash: 'x', displayName: id })),
+    data: USERS.map((id) => ({
+      id,
+      email: `${id}@statly.local`,
+      passwordHash: 'x',
+      displayName: id,
+    })),
   });
   await prisma.leagueSettings.create({
     data: {
@@ -92,7 +97,11 @@ afterAll(async () => {
 
 describe('drawBloodsucker (BR-04b)', () => {
   it('commits the winner and the audit with the method and every candidate', async () => {
-    const state = await drawBloodsucker({ leagueId: LEAGUE, userId: OWNER_USER, pickIndex: () => 0 });
+    const state = await drawBloodsucker({
+      leagueId: LEAGUE,
+      userId: OWNER_USER,
+      pickIndex: () => 0,
+    });
 
     const settings = await prisma.leagueSettings.findUniqueOrThrow({ where: { id: SETTINGS } });
     expect(settings.bloodsuckerMemberId).toBe(A);
@@ -117,7 +126,11 @@ describe('drawBloodsucker (BR-04b)', () => {
   });
 
   it('gives every member the same committed draw, and a re-read never draws again', async () => {
-    const drawn = await drawBloodsucker({ leagueId: LEAGUE, userId: OWNER_USER, pickIndex: () => 2 });
+    const drawn = await drawBloodsucker({
+      leagueId: LEAGUE,
+      userId: OWNER_USER,
+      pickIndex: () => 2,
+    });
     const [forA, forB, again] = await Promise.all([
       loadBloodsuckerLobbyState({ leagueId: LEAGUE, userId: A_USER }),
       loadBloodsuckerLobbyState({ leagueId: LEAGUE, userId: B_USER }),
@@ -166,7 +179,11 @@ describe('drawBloodsucker (BR-04b)', () => {
       data: { bloodsuckerMemberId: null },
     });
 
-    const state = await drawBloodsucker({ leagueId: LEAGUE, userId: OWNER_USER, pickIndex: () => 0 });
+    const state = await drawBloodsucker({
+      leagueId: LEAGUE,
+      userId: OWNER_USER,
+      pickIndex: () => 0,
+    });
     expect(state.bloodsucker?.memberId).toBe(B);
     expect(state.draw?.candidates.map((candidate) => candidate.memberId)).toEqual([B, OWNER]);
   });
@@ -193,7 +210,12 @@ describe('drawBloodsucker (BR-04b)', () => {
 
   it('tells a manager who the Bloodsucker is but offers no draw button', async () => {
     const state = await loadBloodsuckerLobbyState({ leagueId: LEAGUE, userId: A_USER });
-    expect(state).toMatchObject({ canManage: false, canDraw: false, draw: null, bloodsucker: null });
+    expect(state).toMatchObject({
+      canManage: false,
+      canDraw: false,
+      draw: null,
+      bloodsucker: null,
+    });
 
     const owner = await loadBloodsuckerLobbyState({ leagueId: LEAGUE, userId: OWNER_USER });
     expect(owner).toMatchObject({ canManage: true, canDraw: true, drawBlockedReason: null });

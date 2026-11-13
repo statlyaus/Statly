@@ -20,6 +20,8 @@ import {
 } from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer, DraftParticipant, DraftPick, DraftSettings } from '@/types/draft';
 
+import { BloodsuckerDrawPanel } from '@/components/league/bloodsucker/BloodsuckerDrawPanel';
+
 import ConnectionStatus from './ConnectionStatus';
 import DraftControls from './DraftControls';
 import DraftLeftRail, { type DraftLeftRailRosterSlot } from './DraftLeftRail';
@@ -214,6 +216,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
   const { open: openLeagueSocial, setLeagueContext } = useLeagueSocialWidget();
+  const { forceRefresh } = draft;
+  // A finished Bloodsucker draw clears the "Choose a Bloodsucker" readiness blocker.
+  const refreshAfterDraw = useCallback(() => void forceRefresh(), [forceRefresh]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
@@ -626,6 +631,15 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               isLoading={draft.isSaving}
             />
           )}
+
+          {/* Bloodsucker leagues: the lobby draw (BR-04b); it renders nothing in other formats. */}
+          {activeDraft.status === 'SCHEDULED' && activeDraft.leagueId ? (
+            <BloodsuckerDrawPanel
+              leagueId={String(activeDraft.leagueId)}
+              userId={userId}
+              onSettled={refreshAfterDraw}
+            />
+          ) : null}
 
           {/* Draft Pick Header */}
           <LivePickHeader

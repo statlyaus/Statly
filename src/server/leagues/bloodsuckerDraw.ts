@@ -8,7 +8,11 @@ import { prisma } from '@/lib/prisma';
 
 import { isActivePrismaMembership, leagueManagerUserIds } from './activeMembership';
 import { readDraftStarted } from './draftStarted';
-import { buildLeagueFormatAudit, normalizeLeagueFormat, resolveBloodsuckerMemberId } from './leagueFormat';
+import {
+  buildLeagueFormatAudit,
+  normalizeLeagueFormat,
+  resolveBloodsuckerMemberId,
+} from './leagueFormat';
 import { lockLeagueRow } from './leagueRowLock';
 
 // The live Bloodsucker draw in the draft lobby (Bloodsucker 9/9, #1286; BR-04b, US-2 AC1b).
