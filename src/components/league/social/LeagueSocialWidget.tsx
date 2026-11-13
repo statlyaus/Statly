@@ -56,6 +56,16 @@ function isLeagueEvent(value: unknown, leagueId: string): boolean {
   return (value as Pick<SocialRealtimeEnvelope, 'leagueId'>).leagueId === leagueId;
 }
 
+/** Up to two initials for the league crest in the pop-up header. */
+function leagueInitials(name: string | undefined): string {
+  return (name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join('');
+}
+
 function formatUnread(unread: number): string {
   return unread > 99 ? '99+' : String(unread);
 }
@@ -342,19 +352,25 @@ export default function LeagueSocialWidget({
           aria-label="League social panel"
           aria-hidden={!isOpen}
           inert={!isOpen}
-          className={`league-social fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-social-canvas text-social-text shadow-2xl transition-[transform,opacity] duration-200 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl sm:border sm:border-social-border ${
+          className={`league-social fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-social-canvas text-social-text shadow-2xl transition-[translate,scale,opacity] duration-200 motion-reduce:transition-none sm:inset-auto sm:bottom-6 sm:right-6 sm:origin-bottom-right sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-3xl sm:border sm:border-social-border ${
             isOpen
-              ? 'translate-y-0 opacity-100 sm:translate-x-0'
-              : 'pointer-events-none translate-y-full opacity-0 sm:translate-x-[calc(100%+2rem)] sm:translate-y-0'
+              ? 'translate-y-0 opacity-100 sm:scale-100'
+              : 'pointer-events-none translate-y-full opacity-0 sm:translate-y-4 sm:scale-95'
           }`}
         >
-          <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-social-brand-strong bg-social-brand-strong px-4 pt-[env(safe-area-inset-top)] text-social-brand-foreground">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-social-brand-foreground">
-                League Social
+          <div className="flex min-h-16 shrink-0 items-center gap-3 border-b border-social-brand-strong bg-social-brand-strong px-4 pt-[env(safe-area-inset-top)] text-social-brand-foreground">
+            <span
+              aria-hidden="true"
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-social-action font-display text-xl font-bold text-social-action-foreground"
+            >
+              {leagueInitials(displayLeagueName) || <MessageCircle className="size-5" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-display text-2xl font-bold uppercase leading-none tracking-wide text-social-brand-foreground">
+                {displayLeagueName ?? 'Current league'}
               </p>
-              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-social-header-muted">
-                <span className="truncate">{displayLeagueName ?? 'Current league'}</span>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-social-header-muted">
+                <span className="truncate">League Social</span>
                 {connectionNotice !== 'hidden' ? (
                   <span
                     role="status"

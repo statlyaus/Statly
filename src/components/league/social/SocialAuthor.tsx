@@ -32,6 +32,27 @@ function formatTimestamp(value: string, style: 'date-and-time' | 'time'): string
   }).format(parsed);
 }
 
+/** Dark enough for white initials at 4.5:1; a member keeps one colour everywhere they appear. */
+const AVATAR_COLOURS = [
+  '#1f4fa8',
+  '#b3202f',
+  '#0b6b53',
+  '#7a3fb0',
+  '#9a5200',
+  '#22262b',
+  '#0b3a6b',
+  '#a3266f',
+];
+
+function avatarColour(author: SocialAuthorIdentity | null): string {
+  const key = author?.userId || author?.displayName || '';
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  }
+  return AVATAR_COLOURS[hash % AVATAR_COLOURS.length];
+}
+
 /** The member's avatar, or their initials when they have none. Decorative: the name sits beside it. */
 export function SocialAvatar({
   author,
@@ -42,7 +63,8 @@ export function SocialAvatar({
 }): React.JSX.Element {
   return (
     <span
-      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-social-border bg-social-surface-subtle text-xs font-semibold text-social-text-muted`}
+      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold tracking-wide text-white`}
+      style={author?.avatarUrl ? undefined : { backgroundColor: avatarColour(author) }}
       aria-hidden="true"
     >
       {author?.avatarUrl ? (

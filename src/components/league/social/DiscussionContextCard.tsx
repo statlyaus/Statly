@@ -16,10 +16,10 @@ export default function DiscussionContextCard({
   const metadata = Object.values(context.metadata ?? {}).filter(Boolean);
 
   return (
-    <div className="mt-2 rounded-xl border border-social-border bg-social-surface-subtle p-3">
+    <div className="my-1 rounded-xl bg-social-surface p-3 text-social-text shadow-sm ring-1 ring-social-border">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-social-text-muted">
+          <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-social-action">
             {label}
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-social-text">{context.title}</p>
