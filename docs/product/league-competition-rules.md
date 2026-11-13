@@ -139,7 +139,78 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
   run; any other winner goes last among positions 2 and up (`pinnedWaiverPriority.ts`,
   `src/server/waivers/`).
 
-Pinned waiver priority and bites are later epic tickets and are not live yet.
+### Bloodsucker bites
+
+A **bite** is a one-for-one roster swap the Bloodsucker earns by beating a team (#1283). Each right is
+one `LeagueBite` row, unique per `(roundId, matchupId)`.
+
+- **Grant (BR-17 to BR-19).** A right is granted inside the scoring transaction that writes a
+  matchup's FINAL result, on the cron and the commissioner path alike
+  (`syncBloodsuckerBites`, `src/server/leagues/bloodsuckerBiteGrant.ts`), only when the matchup is
+  FINAL, in a `REGULAR` round, has the Bloodsucker in it, and `winnerMemberId` is the Bloodsucker.
+  This is the same in both scoring modes. A draw, a fantasy bye, a `NO_MATCHUP` round or any
+  `FINALS` matchup grants nothing. Re-running FINAL grants nothing new. The row records the winner
+  and its score version (`grantedScoreVersion`, 1 on the first grant).
+- **Deadline (BR-27, E4, E9).** The earlier of 48 hours after the grant or 2 hours before the next
+  regular round's first lock, but never sooner than 24 hours after the grant. No next regular round
+  (a grant in the last regular round, whose bite executes during finals) or an unknown start gives
+  48 hours. A right never expires unused (BR-20); the deadline only starts the auto-bite (#1284).
+- **Result changes (BR-33, E4, E5).** Bites follow the matchup's own status, not the round's.
+  - A re-score that takes the win away cancels an open or waiting right
+    (`cancelledBy = RESULT_CHANGED`).
+  - An executed bite always stands; a re-score that changes its winner is recorded and grants
+    nothing new (BR-36).
+  - A re-score that turns a loss or draw into a Bloodsucker win grants a right, or reactivates the
+    same row a re-score cancelled (new `grantedScoreVersion`, new deadline), so win-loss-win gives
+    one bite. A right a commissioner cancelled is never reactivated.
+  - A matchup that drops back from FINAL leaves its right as it is until it is FINAL again.
+- **Audit (BR-38).** Every grant, cancellation and result change writes a `LeagueCompetitionAudit`
+  row (`BITE_GRANTED` with reason `FINAL` or `GRANTED_ON_RESCORE`, `BITE_CANCELLED`,
+  `BITE_RESULT_CHANGED`) with the actor (the commissioner who re-scored, or the system), the time,
+  the matchup, the victim and the winner before and after.
+
+- **Execution (BR-21, BR-24 to BR-26, E2, E5, E7, E8).** `POST /api/leagues/[id]/bites/[biteId]`
+  with `{ takenPlayerId, returnedPlayerId }`, Bloodsucker only (`executeBite`,
+  `src/server/leagues/bloodsuckerBites.ts`). The Bloodsucker takes any one player from the victim
+  and returns any one of its own, whatever their slots or positions (E2 replaced the slot-group
+  rule). Refusals, each HTTP 409 with its code unless noted:
+  - `FORBIDDEN` (403): the caller is not the Bloodsucker.
+  - `INVALID_INPUT` (400): the pair is missing.
+  - `BITE_NOT_OPEN`: the bite is done, or changed since it was read.
+  - `EARLIER_BITE_PENDING`: an older open bite comes first (E7, oldest grant first).
+  - `BITE_SUSPENDED`: its matchup is not FINAL (E5).
+  - `ROUND_IN_PROGRESS`: any round is between its first lock and its end (E8, no bites during lock
+    periods; this replaces the per-player lock check for bites).
+  - `ROSTER_CHANGED`: a player is no longer where the bite expects him.
+
+  The swap runs through the shared roster-swap primitive under the League row lock, so it is atomic
+  and a concurrent trade, waiver run or second execution gives no lost or double move. Moved roster
+  rows carry `acquiredBy = BLOODSUCKER_BITE`. In each side's unlocked future lineups the incoming
+  player takes the outgoing player's slot; scored and locked lineups never change. Pending trades
+  with either player are invalidated and pending waiver claims that would drop either player are
+  rejected, both with reason `PLAYER_BITTEN`. The bite records the taken player's slot in the
+  victim's lineup for that round, a `BLOODSUCKER_BITE` team action is written, and after commit the
+  ownership projection is refreshed and one activity message is posted: "The Bloodsucker beat
+  {team} {score} and took {player}, sending back {player}." (BR-39, idempotent per bite version).
+
+- **Victim freeze (BR-30, E7).** While any bite on a member is `OPEN` or `WAITING_LOCK`, that member's
+  drops and trade proposals, acceptances and counters are refused with HTTP 409, code
+  `BITE_PENDING`. The drop check runs under the League row lock. Waiver claims that drop a player
+  stay pending, and settle at the first waiver run after the last bite is done.
+- **Commissioner (BR-34, BR-35, E1).** `POST /api/leagues/[id]/bites/[biteId]/commissioner` with
+  `{ action: 'cancel' | 'redo', reason, takenPlayerId?, returnedPlayerId? }`. The reason is required.
+  A commissioner who is the Bloodsucker or the victim gets 403; another commissioner or the owner
+  can act. `cancel` ends an open bite unused (`cancelledBy = COMMISSIONER`, never reactivated), or
+  swaps an executed bite's players back as a new move. `redo` swaps an executed bite's players back
+  and makes the new pair's swap, in one transaction. Nothing in history is rolled back (BR-36), and
+  each writes `BITE_CANCELLED` or `BITE_REDONE` and posts an activity message. A commissioner who
+  is the Bloodsucker or plays it in a round cannot recalculate or force-finalize that round: HTTP
+  403, code `BLOODSUCKER_SELF_OVERRIDE`.
+- Every execution audit row (`BITE_EXECUTED`) holds the actor, time, reason, matchup, both players
+  and both rosters before and after.
+
+The auto-bite sweep (#1284), the Bloodsucker trade rules (#1285) and the screens (#1286) are later
+epic tickets and are not live yet.
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):

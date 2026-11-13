@@ -1,8 +1,10 @@
 import type { Prisma } from '@prisma/client';
-import type { NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
+import { BITE_PENDING_MESSAGE, hasPendingBite } from '@/server/leagues/bitePending';
+import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import {
   describeLockedPlayers,
   findPlayersLockedForMove,
@@ -149,6 +151,10 @@ export async function POST(
 
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const dropped = await prisma.$transaction(async (tx) => {
+      // BR-30: a member with a Bloodsucker bite waiting cannot drop. Checked under the League row
+      // lock the grant and the bite take, so a drop never races a bite on the same roster.
+      await lockLeagueRow(tx, leagueId);
+      if (await hasPendingBite(tx, leagueId, member.id)) return 'BITE_PENDING' as const;
       const removed = await tx.leagueRosterPlayer.deleteMany({
         where: { leagueId, memberId: member.id, playerId },
       });
@@ -172,6 +178,13 @@ export async function POST(
       });
       return true;
     });
+    if (dropped === 'BITE_PENDING') {
+      // Same flat shape as the window refusal, so clients read one `code` field.
+      return NextResponse.json(
+        { error: BITE_PENDING_MESSAGE, code: 'BITE_PENDING' },
+        { status: 409 }
+      );
+    }
     if (!dropped) {
       return errorResponse('Player is no longer in your roster', 409);
     }

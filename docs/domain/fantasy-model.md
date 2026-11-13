@@ -167,6 +167,11 @@ Standings retain both matchup and category records. `H2H_EACH_CATEGORY` ranks by
 category result; `H2H_MOST_CATEGORIES` ranks by matchup wins/losses/draws while retaining category
 totals for deterministic secondary ordering and display.
 
+In a Bloodsucker league the same scoring transaction also grants, cancels or reactivates the
+Bloodsucker's bite rights (`LeagueBite`, one row per won matchup) from each matchup's own FINAL
+status and winner, so a right never exists without the result that earned it (see
+[Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
+
 ## Fixtures, lineups, and finals
 
 League settings own the fantasy schedule, selected AFL window, lock policy, lineup slots, fixture
@@ -195,6 +200,13 @@ counters, and acceptances closed to every member but the Bloodsucker until its e
 HTTP 409, code `BLOODSUCKER_WINDOW_OPEN`, with the close time (see
 [league formats](../product/league-competition-rules.md#league-formats)). Callers pass the acting
 member, so the guard can tell the Bloodsucker from everyone else.
+
+A member with a Bloodsucker bite waiting on them (`LeagueBite` `OPEN` or `WAITING_LOCK`) is frozen
+until every such bite is done: drops and trade proposals, counters and acceptances are refused with
+HTTP 409, code `BITE_PENDING` (`src/server/leagues/bitePending.ts`), and their waiver claims that drop
+a player stay pending. A bite itself is a roster swap through `src/server/leagues/rosterSwap.ts`
+under the League row lock (see
+[Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
 
 A player is waiver-only, winnable only by a claim at the next 6 am Melbourne waiver run, while he has
 a `PENDING` waiver claim in the league's active season (until a run settles it, even once it is due),
