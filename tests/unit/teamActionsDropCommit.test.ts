@@ -14,7 +14,9 @@ const moveLock = vi.hoisted(() => ({
 const transactionWindow = vi.hoisted(() => ({ getTransactionWindow: vi.fn() }));
 
 const tx = vi.hoisted(() => ({
+  $queryRaw: vi.fn().mockResolvedValue([]),
   league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
+  leagueBite: { findFirst: vi.fn() },
   leagueRosterPlayer: { deleteMany: vi.fn() },
   teamAction: { create: vi.fn() },
 }));
@@ -69,6 +71,7 @@ describe('team action drop commit', () => {
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue({ playerId: 'player-1' });
     prismaMocks.$transaction.mockImplementation((work: (client: typeof tx) => unknown) => work(tx));
     tx.leagueRosterPlayer.deleteMany.mockResolvedValue({ count: 1 });
+    tx.leagueBite.findFirst.mockResolvedValue(null);
     tx.teamAction.create.mockResolvedValue({ id: 'action-1' });
     projectLeague.mockResolvedValue({ owned: 0, available: 1 });
     moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
@@ -96,6 +99,25 @@ describe('team action drop commit', () => {
       memberId: 'member-1',
     });
     expect(prismaMocks.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 409 BITE_PENDING while a Bloodsucker bite on the member is open, under the League lock', async () => {
+    tx.leagueBite.findFirst.mockResolvedValue({ id: 'bite-1' });
+
+    const response = await drop();
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: 'BITE_PENDING' });
+    expect(tx.$queryRaw).toHaveBeenCalled();
+    expect(tx.leagueBite.findFirst).toHaveBeenCalledWith({
+      where: {
+        leagueId: 'league-1',
+        victimMemberId: 'member-1',
+        status: { in: ['OPEN', 'WAITING_LOCK'] },
+      },
+      select: { id: true },
+    });
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
   });
 
   it('still drops while the draft is not complete, as it always has', async () => {

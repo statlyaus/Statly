@@ -12,6 +12,7 @@ import {
   RosterSwapError,
   swapRosterPlayers,
 } from '@/server/leagues/rosterSwap';
+import { BITE_PENDING_MESSAGE, hasPendingBite } from '@/server/leagues/bitePending';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -943,6 +944,10 @@ async function enforceTransactionWindow(
 ): Promise<void> {
   const window = await getTransactionWindow(leagueId, prisma, { memberId, now });
   if (!window.open) throw new TradeServiceError(window.code, window.reason, 409);
+  // BR-30: a member with a Bloodsucker bite waiting cannot propose, accept or counter a trade.
+  if (await hasPendingBite(prisma, leagueId, memberId)) {
+    throw new TradeServiceError('BITE_PENDING', BITE_PENDING_MESSAGE, 409);
+  }
 }
 
 function enforceTradeDeadline(access: TradeAccess, now: Date): void {

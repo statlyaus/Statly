@@ -143,6 +143,66 @@ export async function removePlayersFromOpenLineups(
   const { leagueId, memberId } = input;
   if (input.playerIds.length === 0) return 0;
 
+  const open = await findOpenLineupRounds(tx, leagueId, input.now ?? new Date());
+  if (!open) return 0;
+
+  const removed = await tx.leagueLineupPlayer.deleteMany({
+    where: {
+      lockedAt: null,
+      playerId: { in: [...input.playerIds] },
+      lineup: {
+        leagueId,
+        seasonId: open.seasonId,
+        memberId,
+        round: { gte: open.fromRound },
+        lockedAt: null,
+      },
+    },
+  });
+  return removed.count;
+}
+
+/**
+ * Puts `incomingPlayerId` in the slot `outgoingPlayerId` held in a member's unlocked lineup rows,
+ * from the round in progress onward (a Bloodsucker bite, BR-25). Scored rounds and locked rows stay
+ * as they are. Run it before the roster swap, which then finds nothing of the outgoing player to remove.
+ */
+export async function replacePlayerInOpenLineups(
+  tx: LineupCleanupDb,
+  input: {
+    leagueId: string;
+    memberId: string;
+    outgoingPlayerId: string;
+    incomingPlayerId: string;
+    now?: Date;
+  }
+): Promise<number> {
+  const open = await findOpenLineupRounds(tx, input.leagueId, input.now ?? new Date());
+  if (!open) return 0;
+
+  const replaced = await tx.leagueLineupPlayer.updateMany({
+    where: {
+      lockedAt: null,
+      playerId: input.outgoingPlayerId,
+      lineup: {
+        leagueId: input.leagueId,
+        seasonId: open.seasonId,
+        memberId: input.memberId,
+        round: { gte: open.fromRound },
+        lockedAt: null,
+      },
+    },
+    data: { playerId: input.incomingPlayerId },
+  });
+  return replaced.count;
+}
+
+/** The active season and the first round whose lineups can still change; null when none can. */
+async function findOpenLineupRounds(
+  tx: LineupCleanupDb,
+  leagueId: string,
+  now: Date
+): Promise<{ seasonId: string; fromRound: number } | null> {
   const [seasonId, settings] = await Promise.all([
     requireActiveSeasonId(tx, leagueId),
     tx.leagueSettings.findFirst({
@@ -150,23 +210,11 @@ export async function removePlayersFromOpenLineups(
       select: { competitionRulesVersion: true },
     }),
   ]);
-  let fromRound = 1;
-  if (settings && settings.competitionRulesVersion > 0) {
-    const rounds = await tx.leagueCompetitionRound.findMany({
-      where: { leagueId, fixtureVersion: settings.competitionRulesVersion },
-      select: { round: true, status: true, startsAt: true, endsAt: true },
-    });
-    const openRound = findFirstOpenRound(rounds, input.now ?? new Date());
-    if (openRound === null) return 0;
-    fromRound = openRound;
-  }
-
-  const removed = await tx.leagueLineupPlayer.deleteMany({
-    where: {
-      lockedAt: null,
-      playerId: { in: [...input.playerIds] },
-      lineup: { leagueId, seasonId, memberId, round: { gte: fromRound }, lockedAt: null },
-    },
+  if (!settings || settings.competitionRulesVersion < 1) return { seasonId, fromRound: 1 };
+  const rounds = await tx.leagueCompetitionRound.findMany({
+    where: { leagueId, fixtureVersion: settings.competitionRulesVersion },
+    select: { round: true, status: true, startsAt: true, endsAt: true },
   });
-  return removed.count;
+  const fromRound = findFirstOpenRound(rounds, now);
+  return fromRound === null ? null : { seasonId, fromRound };
 }

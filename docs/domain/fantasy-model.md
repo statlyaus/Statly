@@ -201,6 +201,13 @@ HTTP 409, code `BLOODSUCKER_WINDOW_OPEN`, with the close time (see
 [league formats](../product/league-competition-rules.md#league-formats)). Callers pass the acting
 member, so the guard can tell the Bloodsucker from everyone else.
 
+A member with a Bloodsucker bite waiting on them (`LeagueBite` `OPEN` or `WAITING_LOCK`) is frozen
+until every such bite is done: drops and trade proposals, counters and acceptances are refused with
+HTTP 409, code `BITE_PENDING` (`src/server/leagues/bitePending.ts`), and their waiver claims that drop
+a player stay pending. A bite itself is a roster swap through `src/server/leagues/rosterSwap.ts`
+under the League row lock (see
+[Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
+
 A player is waiver-only, winnable only by a claim at the next 6 am Melbourne waiver run, while he has
 a `PENDING` waiver claim in the league's active season (until a run settles it, even once it is due),
 or was dropped since the last waiver run or is still inside a drop's waiver period.

@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import {
+  BLOODSUCKER_SELF_OVERRIDE_MESSAGE,
+  isBloodsuckerRoundSelfOverride,
+} from '@/server/leagues/bloodsuckerBites';
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
 
 export async function POST(
@@ -21,6 +25,19 @@ export async function POST(
   const roundNumber = Number.parseInt(round, 10);
   if (!Number.isFinite(roundNumber) || roundNumber < 1) {
     return NextResponse.json({ error: 'Invalid round' }, { status: 400 });
+  }
+
+  if (
+    await isBloodsuckerRoundSelfOverride({
+      leagueId: id,
+      round: roundNumber,
+      memberId: access.memberId ?? null,
+    })
+  ) {
+    return NextResponse.json(
+      { error: BLOODSUCKER_SELF_OVERRIDE_MESSAGE, code: 'BLOODSUCKER_SELF_OVERRIDE' },
+      { status: 403 }
+    );
   }
 
   const body = (await request.json().catch(() => ({}))) as { finalize?: boolean };
