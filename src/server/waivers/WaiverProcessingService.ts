@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { hasPendingBite } from '@/server/leagues/bitePending';
 import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import {
@@ -108,6 +109,8 @@ interface ClaimStore {
 
 type ClaimSettlement =
   | { status: 'SKIPPED' }
+  /** BR-30: the claimant has a Bloodsucker bite waiting, so a claim that drops stays PENDING. */
+  | { status: 'HELD' }
   | { status: 'SUCCESSFUL'; processedAt: Date }
   | { status: 'FAILED'; processedAt: Date; reason: string };
 
@@ -380,6 +383,13 @@ export class WaiverProcessingService {
         isFAAB,
         dropLockedReason
       );
+      if (settlement.status === 'HELD') {
+        logger.info('Held a waiver claim that drops a player while a Bloodsucker bite is pending', {
+          leagueId: input.leagueId,
+          claimId: claim.id,
+        });
+        continue;
+      }
       if (settlement.status === 'SKIPPED') {
         logger.info('Skipped a waiver claim another run already settled', {
           leagueId: input.leagueId,
@@ -444,6 +454,9 @@ export class WaiverProcessingService {
       // Serialises the settlement with every other League-row writer (a bite, the Bloodsucker
       // window close), so the ownership read below is still true when the roster change commits.
       await lockLeagueRow(tx, leagueId);
+      if (claim.dropPlayerId && (await hasPendingBite(tx, leagueId, claim.teamId))) {
+        return { status: 'HELD' };
+      }
       const processedAt = await this.claimStore.claimPending(tx, claim);
       if (!processedAt) return { status: 'SKIPPED' };
 

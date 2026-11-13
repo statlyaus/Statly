@@ -53,6 +53,8 @@ function createDbMock() {
   const tx = {
     // The League row lock settlement takes first.
     $queryRaw: vi.fn().mockResolvedValue([]),
+    // No Bloodsucker bite is waiting on the claimant unless a test says so (BR-30).
+    leagueBite: { findFirst: vi.fn().mockResolvedValue(null) },
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
@@ -407,6 +409,33 @@ describe('WaiverProcessingService', () => {
     });
 
     expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+  });
+
+  it('holds a claim that drops a player, unsettled, while a Bloodsucker bite on the claimant is open', async () => {
+    const { db, tx } = createDbMock();
+    tx.leagueBite.findFirst.mockResolvedValue({ id: 'bite-1' });
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ dropPlayerId: 'old-player' })],
+    });
+
+    expect(result.results).toEqual([]);
+    expect(tx.leagueBite.findFirst).toHaveBeenCalledWith({
+      where: {
+        leagueId: 'league-1',
+        victimMemberId: 'member-1',
+        status: { in: ['OPEN', 'WAITING_LOCK'] },
+      },
+      select: { id: true },
+    });
+    expect(claimStore.claimPending).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
   });
 
   it('refuses an add with no drop when the roster and bench are full', async () => {

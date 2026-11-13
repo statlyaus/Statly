@@ -23,6 +23,10 @@ import {
 } from '@/server/leagues/bloodsuckerBites';
 import { swapRosterPlayers } from '@/server/leagues/rosterSwap';
 import { createLeagueTrade } from '@/server/leagues/trades/tradeService';
+import {
+  PrismaWaiverClaimStore,
+  WaiverProcessingService,
+} from '@/server/waivers/WaiverProcessingService';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -35,10 +39,41 @@ const OWNER = `${P}-owner`;
 const BS = `${P}-bs`;
 const VICTIM = `${P}-victim`;
 // Players: v1, v2 on the victim; b1, b2 on the Bloodsucker; o1 on the owner.
-const PLAYERS = ['v1', 'v2', 'b1', 'b2', 'o1'].map((key) => `${P}-${key}`);
-const [V1, V2, B1, B2, O1] = PLAYERS as [string, string, string, string, string];
+const PLAYERS = ['v1', 'v2', 'b1', 'b2', 'o1', 'f1'].map((key) => `${P}-${key}`);
+const [V1, V2, B1, B2, O1, F1] = PLAYERS as [string, string, string, string, string, string];
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date();
+
+const firestoreDoc = {
+  get: async () => ({ exists: false, data: () => undefined }),
+  set: async () => undefined,
+  update: async () => undefined,
+};
+const firestore = { doc: () => firestoreDoc, collection: () => ({ doc: () => firestoreDoc }) };
+const waiverStore = new PrismaWaiverClaimStore(prisma, firestore as never);
+const waivers = new WaiverProcessingService(prisma, waiverStore, {
+  projectLeague: async () => ({ owned: 0, available: 0 }),
+} as never);
+
+async function claimDropping(userId: string, teamId: string, dropPlayerId: string) {
+  await waiverStore.submitClaim({
+    leagueId: LEAGUE,
+    userId,
+    teamId,
+    playerId: F1,
+    dropPlayerId,
+    priority: 1,
+    waiverSettings: { system: 'PRIORITY' },
+  });
+}
+
+async function runWaivers() {
+  await prisma.teamAction.updateMany({
+    where: { leagueId: LEAGUE, actionType: 'WAIVER_CLAIM', status: 'PENDING' },
+    data: { processingAt: new Date(Date.now() - 60_000) },
+  });
+  return waivers.processLeague({ leagueId: LEAGUE });
+}
 
 const removeFixture = () =>
   deleteLeagueFixtures(prisma, {
@@ -451,6 +486,43 @@ describe.sequential('Bloodsucker bite execution', () => {
     expect(rows).toHaveLength(1);
     const stored = await prisma.leagueBite.findUniqueOrThrow({ where: { id: granted.id } });
     expect(stored.status === 'EXECUTED').toBe(rows[0]!.memberId === BS);
+  });
+
+  it("holds the victim's claim that drops a player until the bite is done (BR-30)", async () => {
+    await claimDropping(USERS.victim, VICTIM, V2);
+
+    await runWaivers();
+    expect(await ownerOf(V2)).toBe(VICTIM);
+    expect(await ownerOf(F1)).toBeUndefined();
+
+    await bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id);
+    await runWaivers();
+    expect(await ownerOf(V2)).toBeUndefined();
+    expect(await ownerOf(F1)).toBe(VICTIM);
+  });
+
+  it('gives no lost or double move when a bite and a waiver run race for the same player', async () => {
+    // The Bloodsucker's claim would drop the player its bite sends back.
+    await claimDropping(USERS.bs, BS, B2);
+
+    const [biteResult] = await Promise.allSettled([
+      bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id),
+      runWaivers(),
+    ]);
+
+    const b2Rows = await prisma.leagueRosterPlayer.findMany({
+      where: { leagueId: LEAGUE, playerId: B2 },
+    });
+    expect(b2Rows.length).toBeLessThanOrEqual(1);
+    if (biteResult.status === 'fulfilled') {
+      expect(b2Rows[0]?.memberId).toBe(VICTIM);
+      expect(await ownerOf(F1)).toBeUndefined();
+    } else {
+      expect(biteResult.reason).toMatchObject({ code: 'ROSTER_CHANGED' });
+      expect(b2Rows).toEqual([]);
+      expect(await ownerOf(F1)).toBe(BS);
+      expect(await ownerOf(V1)).toBe(VICTIM);
+    }
   });
 
   it('runs one of two concurrent executions of the same bite', async () => {

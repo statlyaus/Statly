@@ -192,6 +192,7 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   victim's lineup for that round, a `BLOODSUCKER_BITE` team action is written, and after commit the
   ownership projection is refreshed and one activity message is posted: "The Bloodsucker beat
   {team} {score} and took {player}, sending back {player}." (BR-39, idempotent per bite version).
+
 - **Victim freeze (BR-30, E7).** While any bite on a member is `OPEN` or `WAITING_LOCK`, that member's
   drops and trade proposals, acceptances and counters are refused with HTTP 409, code
   `BITE_PENDING`. The drop check runs under the League row lock. Waiver claims that drop a player
