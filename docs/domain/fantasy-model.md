@@ -167,6 +167,11 @@ Standings retain both matchup and category records. `H2H_EACH_CATEGORY` ranks by
 category result; `H2H_MOST_CATEGORIES` ranks by matchup wins/losses/draws while retaining category
 totals for deterministic secondary ordering and display.
 
+In a Bloodsucker league the same scoring transaction also grants, cancels or reactivates the
+Bloodsucker's bite rights (`LeagueBite`, one row per won matchup) from each matchup's own FINAL
+status and winner, so a right never exists without the result that earned it (see
+[Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
+
 ## Fixtures, lineups, and finals
 
 League settings own the fantasy schedule, selected AFL window, lock policy, lineup slots, fixture

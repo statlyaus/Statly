@@ -61,6 +61,7 @@ model League {
   standings               LeagueStanding[]
   competitionRounds       LeagueCompetitionRound[]
   competitionAudits       LeagueCompetitionAudit[]
+  bites                   LeagueBite[]
   socialMessages          SocialMessage[]
   socialBoardCategories   SocialBoardCategory[]
   socialPosts             SocialPost[]
@@ -184,6 +185,7 @@ model LeagueSeason {
   standings               LeagueStanding[]
   waiverPriorities        WaiverPriority[]
   teamActions             TeamAction[]
+  bites                   LeagueBite[]
 
   @@unique([leagueId, year])
   @@index([leagueId, createdAt])
@@ -334,6 +336,29 @@ enum LeagueCompetitionAuditEventType {
   /// The Bloodsucker's exclusive window closed and its empty roster spots were auto-filled; the
   /// payload holds the draft, the window and the players added. One row per completed draft.
   BLOODSUCKER_WINDOW_CLOSED
+  /// Bloodsucker bites (#1283, BR-38): a bite right was granted (or reactivated by a re-score).
+  BITE_GRANTED
+  /// The Bloodsucker executed a bite; the payload holds both players and both rosters before and after.
+  BITE_EXECUTED
+  /// The system executed a bite at its deadline (auto-bite, #1284).
+  BITE_AUTO
+  /// A bite's deadline fell inside a lock period, so it waits for the round to end (#1284).
+  BITE_WAITING_LOCK
+  /// A bite right was cancelled: by a re-score that lost the win, or by a commissioner with a reason.
+  BITE_CANCELLED
+  /// A commissioner redid an executed bite as a new swap, with a reason.
+  BITE_REDONE
+  /// A re-score changed the winner of a matchup whose bite was already executed; the bite stands.
+  BITE_RESULT_CHANGED
+}
+
+/// Bloodsucker bites (#1283). OPEN until done; WAITING_LOCK when its deadline fell inside a lock period.
+enum LeagueBiteStatus {
+  OPEN
+  EXECUTED
+  AUTO_EXECUTED
+  WAITING_LOCK
+  CANCELLED
 }
 
 enum LeagueAutosubReason {
@@ -849,6 +874,50 @@ model LeagueLineupAutosub {
 
   @@unique([lineupId, outgoingSlot, outgoingSlotIndex])
   @@index([lineupId, resolvedAt])
+}
+
+/// A Bloodsucker bite right and its execution (#1283, BR-17 to BR-26, BR-33). One row per matchup:
+/// a re-score that wins a cancelled grant back reactivates the same row with a new score version.
+/// Member, round and matchup ids are plain columns so a fixture rebuild never erases a bite.
+model LeagueBite {
+  id                    String           @id @default(cuid())
+  leagueId              String
+  seasonId              String
+  /// The LeagueCompetitionRound the bite was won in.
+  roundId               String
+  round                 Int
+  matchupId             String
+  bloodsuckerMemberId   String
+  victimMemberId        String
+  grantedWinnerMemberId String
+  /// 1 on the first grant; incremented each time a re-score reactivates a cancelled grant.
+  grantedScoreVersion   Int              @default(1)
+  status                LeagueBiteStatus @default(OPEN)
+  opensAt               DateTime
+  deadlineAt            DateTime
+  takenPlayerId         String?
+  returnedPlayerId      String?
+  /// The slot the taken player held in the victim's lineup for the bite's round, when he had one.
+  takenSlot             String?
+  executedAt            DateTime?
+  executedByUserId      String?
+  /// RESULT_CHANGED (a re-score lost the win) or COMMISSIONER.
+  cancelledBy           String?
+  cancelledReason       String?
+  /// The auto-bite rule and the Statly-Z inputs it used, so the pick is reproducible (#1284, BR-28).
+  autoBiteRuleVersion   Int?
+  autoBiteSnapshotJson  Json?
+  version               Int              @default(1)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season LeagueSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, matchupId])
+  @@index([leagueId, seasonId, status])
+  @@index([leagueId, victimMemberId, status])
+  @@index([status, deadlineAt])
 }
 
 model LeagueCompetitionAudit {
@@ -1455,6 +1524,8 @@ enum TeamActionType {
   TRADE_PROPOSAL
   WAIVER_CLAIM
   DROP_PLAYER
+  /// An executed Bloodsucker bite, recorded on the Bloodsucker's transaction history (#1283).
+  BLOODSUCKER_BITE
 }
 
 enum ActionStatus {

@@ -17,6 +17,7 @@ import {
 } from '@/types/fantasyCategories';
 
 import { activeSeasonIdOf } from './activeSeason';
+import { syncBloodsuckerBites } from './bloodsuckerBiteGrant';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { normalizeCompetitionRules } from './competitionRules';
 import { synchronizeFinalsFixtures } from './finalsService';
@@ -27,6 +28,7 @@ import {
   type ResultCorrection,
 } from './finalRoundRescoreAudit';
 import type { FinalsTeamCount } from './finalsProgression';
+import { resolveBloodsuckerMemberId } from './leagueFormat';
 import { resolveAndPersistLineupAutosubs } from './lineupAutosubService';
 import {
   normalizeLiveStatRows,
@@ -1736,6 +1738,41 @@ export async function recalculateLeagueRoundMatchups({
         before: finalBefore,
         after: resultAfter,
       });
+      // BR-17 to BR-19, BR-33: bite rights follow the result in the same transaction.
+      const bloodsuckerMemberId = resolveBloodsuckerMemberId(
+        settings.league.settings,
+        members.map((member) => member.id)
+      );
+      if (bloodsuckerMemberId) {
+        await syncBloodsuckerBites(tx, {
+          leagueId,
+          seasonId,
+          round,
+          fixtureVersion,
+          bloodsuckerMemberId,
+          actorMemberId: actorMemberId ?? null,
+          matchups: calculatedScores.flatMap((scored) => {
+            const matchup = matchups.find((row) => row.id === scored.matchupId);
+            return matchup
+              ? [
+                  {
+                    id: matchup.id,
+                    competitionRoundId: matchup.competitionRoundId,
+                    phase: matchup.phase,
+                    homeMemberId: matchup.homeMemberId,
+                    awayMemberId: matchup.awayMemberId,
+                    status,
+                    winnerMemberId: resultAfter.get(matchup.id)?.winnerMemberId ?? null,
+                  },
+                ]
+              : [];
+          }),
+          previousWinners: new Map(
+            [...finalBefore].map(([matchupId, snapshot]) => [matchupId, snapshot.winnerMemberId])
+          ),
+          now: new Date(),
+        });
+      }
 
       if (status !== 'FINAL') return null;
 

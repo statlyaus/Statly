@@ -134,7 +134,38 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
   [Drafts and waivers](../domain/draft-and-waivers.md#concurrent-writers)), so other members can add
   for up to 5 minutes after the close time before the fill has run; the fill takes whoever is left.
 
-Pinned waiver priority and bites are later epic tickets and are not live yet.
+### Bloodsucker bites
+
+A **bite** is a one-for-one roster swap the Bloodsucker earns by beating a team (#1283). Each right is
+one `LeagueBite` row, unique per `(roundId, matchupId)`.
+
+- **Grant (BR-17 to BR-19).** A right is granted inside the scoring transaction that writes a
+  matchup's FINAL result, on the cron and the commissioner path alike
+  (`syncBloodsuckerBites`, `src/server/leagues/bloodsuckerBiteGrant.ts`), only when the matchup is
+  FINAL, in a `REGULAR` round, has the Bloodsucker in it, and `winnerMemberId` is the Bloodsucker.
+  This is the same in both scoring modes. A draw, a fantasy bye, a `NO_MATCHUP` round or any
+  `FINALS` matchup grants nothing. Re-running FINAL grants nothing new. The row records the winner
+  and its score version (`grantedScoreVersion`, 1 on the first grant).
+- **Deadline (BR-27, E4, E9).** The earlier of 48 hours after the grant or 2 hours before the next
+  regular round's first lock, but never sooner than 24 hours after the grant. No next regular round
+  (a grant in the last regular round, whose bite executes during finals) or an unknown start gives
+  48 hours. A right never expires unused (BR-20); the deadline only starts the auto-bite (#1284).
+- **Result changes (BR-33, E4, E5).** Bites follow the matchup's own status, not the round's.
+  - A re-score that takes the win away cancels an open or waiting right
+    (`cancelledBy = RESULT_CHANGED`).
+  - An executed bite always stands; a re-score that changes its winner is recorded and grants
+    nothing new (BR-36).
+  - A re-score that turns a loss or draw into a Bloodsucker win grants a right, or reactivates the
+    same row a re-score cancelled (new `grantedScoreVersion`, new deadline), so win-loss-win gives
+    one bite. A right a commissioner cancelled is never reactivated.
+  - A matchup that drops back from FINAL leaves its right as it is until it is FINAL again.
+- **Audit (BR-38).** Every grant, cancellation and result change writes a `LeagueCompetitionAudit`
+  row (`BITE_GRANTED` with reason `FINAL` or `GRANTED_ON_RESCORE`, `BITE_CANCELLED`,
+  `BITE_RESULT_CHANGED`) with the actor (the commissioner who re-scored, or the system), the time,
+  the matchup, the victim and the winner before and after.
+
+Executing a bite, the victim freeze, commissioner cancel and redo, the auto-bite sweep and pinned
+waiver priority are later epic tickets and are not live yet.
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):

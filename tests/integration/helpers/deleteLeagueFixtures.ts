@@ -10,6 +10,7 @@ export async function deleteLeagueFixtures(
   const league = { leagueId: { in: fixtures.leagueIds } };
   await client.$transaction([
     client.leagueTradeThread.deleteMany({ where: league }),
+    client.leagueBite.deleteMany({ where: league }),
     client.pick.deleteMany({ where: { draft: league } }),
     client.draftOrder.deleteMany({ where: { draft: league } }),
     client.draft.deleteMany({ where: league }),
