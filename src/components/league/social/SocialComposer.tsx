@@ -251,7 +251,7 @@ export default function SocialComposer({
             ? `flex min-h-14 items-end gap-0.5 rounded-2xl border bg-social-bubble p-1.5 transition-colors focus-within:ring-2 focus-within:ring-social-focus/30 ${
                 visibleError
                   ? 'border-social-error focus-within:border-social-error'
-                  : 'border-transparent focus-within:border-social-action'
+                  : 'border-social-bubble-edge focus-within:border-social-action'
               }`
             : undefined
         }
