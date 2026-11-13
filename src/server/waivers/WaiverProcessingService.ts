@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import {
   describeLockedPlayers,
@@ -21,6 +22,7 @@ import {
   groupWaiverPlayersByIdentity,
   type WaiverIdentityPlayer,
 } from '@/server/waivers/waiverPlayerIdentity';
+import { loadPinnedPriorityMemberId } from '@/server/waivers/pinnedWaiverPriority';
 import { publishWaiverOutcome } from '@/server/waivers/waiverActivity';
 
 export interface WaiverSettings {
@@ -28,6 +30,8 @@ export interface WaiverSettings {
   faabBudget?: number;
   minimumBid?: number;
   waiverPeriodHours?: number;
+  /** The Bloodsucker's user id: pinned at waiver priority 1, never moved by a win (BR-15). */
+  pinnedUserId?: string;
 }
 
 export interface WaiverClaim {
@@ -168,7 +172,7 @@ type PrismaWaiverStoreDb = Pick<
 
 type WaiverSettlementTransaction = Pick<
   PrismaTransactionClient,
-  'leagueMember' | 'teamAction' | 'waiverPriority'
+  'league' | 'leagueMember' | 'teamAction' | 'waiverPriority'
 >;
 
 type FirestoreLike = Pick<typeof adminDb, 'collection' | 'doc'>;
@@ -267,13 +271,19 @@ export function sortWaiverClaims(
   });
 }
 
+/**
+ * The rolling order after `winningUserId` wins a claim: the winner goes last and everyone below it
+ * moves up one. A pinned member (the Bloodsucker, BR-15) sits at 1, so it never moves up, and its
+ * own win leaves the order as it is.
+ */
 export function buildAdvancedWaiverPriorityUpdates(
   entries: PriorityEntry[],
-  winningUserId: string
+  winningUserId: string,
+  pinnedUserId?: string | null
 ): PriorityEntry[] {
   const sorted = [...entries].sort((a, b) => a.priority - b.priority);
   const winner = sorted.find((entry) => entry.userId === winningUserId);
-  if (!winner) return sorted;
+  if (!winner || winningUserId === pinnedUserId) return sorted;
 
   const lastPriority = Math.max(...sorted.map((entry) => entry.priority));
 
@@ -396,7 +406,11 @@ export class WaiverProcessingService {
         claim,
         type: 'waiver-successful',
       });
-      priorityEntries = buildAdvancedWaiverPriorityUpdates(priorityEntries, claim.userId);
+      priorityEntries = buildAdvancedWaiverPriorityUpdates(
+        priorityEntries,
+        claim.userId,
+        input.waiverSettings.pinnedUserId
+      );
       try {
         await this.projectionService.projectLeague({ leagueId: input.leagueId });
       } catch (error) {
@@ -427,6 +441,9 @@ export class WaiverProcessingService {
     dropLockedReason?: string
   ): Promise<ClaimSettlement> {
     return this.db.$transaction(async (tx: PrismaTransactionClient): Promise<ClaimSettlement> => {
+      // Serialises the settlement with every other League-row writer (a bite, the Bloodsucker
+      // window close), so the ownership read below is still true when the roster change commits.
+      await lockLeagueRow(tx, leagueId);
       const processedAt = await this.claimStore.claimPending(tx, claim);
       if (!processedAt) return { status: 'SKIPPED' };
 
@@ -461,9 +478,14 @@ export class WaiverProcessingService {
     waiverSettings: WaiverSettings
   ): Promise<void> {
     if (plan.dropPlayerId) {
-      await tx.leagueRosterPlayer.deleteMany({
+      const dropped = await tx.leagueRosterPlayer.deleteMany({
         where: { leagueId, memberId: plan.memberId, playerId: plan.dropPlayerId },
       });
+      // The plan read this row in this transaction; a miss means a writer outside the League lock
+      // moved it. Throwing rolls the claim back to PENDING for the next run to judge again.
+      if (dropped.count !== 1) {
+        throw new Error(`Waiver drop player ${plan.dropPlayerId} left the roster mid-settlement`);
+      }
       await removePlayersFromOpenLineups(tx, {
         leagueId,
         memberId: plan.memberId,
@@ -487,16 +509,10 @@ export class WaiverProcessingService {
       });
     }
 
-    await tx.leagueRosterPlayer.upsert({
-      where: { leagueId_playerId: { leagueId, playerId: plan.playerId } },
-      update: {
-        memberId: plan.memberId,
-        draftId: null,
-        pickId: null,
-        acquiredBy: 'WAIVER',
-        acquiredAt: new Date(),
-      },
-      create: {
+    // A create, never an upsert: a player another member owns is refused by the unique key, not
+    // taken from them.
+    await tx.leagueRosterPlayer.create({
+      data: {
         leagueId,
         memberId: plan.memberId,
         playerId: plan.playerId,
@@ -740,8 +756,18 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       select: { settings: { select: { waiverRule: true, faabBudget: true } } },
     });
     const faabBudget = league?.settings.faabBudget ?? undefined;
+    const pinnedMemberId = await loadPinnedPriorityMemberId(this.db, leagueId);
+    const pinnedUserId = pinnedMemberId
+      ? (
+          await this.db.leagueMember.findFirst({
+            where: { leagueId, id: pinnedMemberId },
+            select: { userId: true },
+          })
+        )?.userId
+      : undefined;
 
     return {
+      ...(pinnedUserId ? { pinnedUserId } : {}),
       system:
         faabBudget !== undefined
           ? 'FAAB'
@@ -1189,14 +1215,17 @@ export class PrismaWaiverClaimStore implements ClaimStore {
   }
 
   private async advancePriorityRows(
-    db: Pick<PrismaWaiverStoreDb, 'leagueMember' | 'waiverPriority'>,
+    db: Pick<PrismaWaiverStoreDb, 'league' | 'leagueMember' | 'waiverPriority'>,
     leagueId: string,
     userId: string
   ): Promise<void> {
-    const members = await db.leagueMember.findMany({
-      where: { leagueId },
-      select: { id: true, userId: true },
-    });
+    const [members, pinnedMemberId] = await Promise.all([
+      db.leagueMember.findMany({
+        where: { leagueId },
+        select: { id: true, userId: true },
+      }),
+      loadPinnedPriorityMemberId(db, leagueId),
+    ]);
     const userIdByMemberId = new Map(members.map((member) => [member.id, member.userId]));
     const memberIdByUserId = new Map(members.map((member) => [member.userId, member.id]));
     const entries: WaiverPriorityEntry[] = (await this.loadPriorityRows(db, leagueId))
@@ -1207,7 +1236,11 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       })
       .filter((row): row is WaiverPriorityEntry => row !== null);
 
-    const updates = buildAdvancedWaiverPriorityUpdates(entries, userId);
+    const updates = buildAdvancedWaiverPriorityUpdates(
+      entries,
+      userId,
+      pinnedMemberId ? userIdByMemberId.get(pinnedMemberId) : null
+    );
     for (const update of updates) {
       const memberId = memberIdByUserId.get(update.userId);
       const original = entries.find((entry) => entry.userId === update.userId);
@@ -1314,6 +1347,31 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       })),
       skipDuplicates: true,
     });
+
+    // New rows go after the existing ones, which would put a Bloodsucker without a row last.
+    const pinnedMemberId = await loadPinnedPriorityMemberId(tx, leagueId);
+    if (pinnedMemberId) await this.pinPriorityRows(tx, leagueId, pinnedMemberId);
+  }
+
+  /** Renumbers the order as the pinned member at 1 and everyone else, in their order, from 2. */
+  private async pinPriorityRows(
+    tx: PrismaWaiverStoreTransaction,
+    leagueId: string,
+    pinnedMemberId: string
+  ): Promise<void> {
+    const rows = await this.loadPriorityRows(tx, leagueId);
+    if (!rows.some((row) => row.memberId === pinnedMemberId)) return;
+    const ordered = [
+      ...rows.filter((row) => row.memberId === pinnedMemberId),
+      ...rows.filter((row) => row.memberId !== pinnedMemberId),
+    ];
+    for (const [index, row] of ordered.entries()) {
+      if (row.priority === index + 1) continue;
+      await tx.waiverPriority.updateMany({
+        where: { leagueId, ...inActiveSeason(leagueId), memberId: row.memberId },
+        data: { priority: index + 1 },
+      });
+    }
   }
 
   private async reservePendingBid(

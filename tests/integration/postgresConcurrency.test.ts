@@ -367,9 +367,9 @@ describe('waiver processing under two runs', () => {
   });
 });
 
-// The real client, except that inside a transaction the first roster upsert throws: a run that dies
+// The real client, except that inside a transaction the first roster create throws: a run that dies
 // after the FAAB debit and before the commit.
-function crashOnFirstRosterUpsert(): typeof prisma {
+function crashOnFirstRosterCreate(): typeof prisma {
   let armed = true;
   const bound = (target: object, key: string | symbol) => {
     const value = Reflect.get(target, key);
@@ -382,7 +382,7 @@ function crashOnFirstRosterUpsert(): typeof prisma {
         const delegate = Reflect.get(target, key) as object;
         return new Proxy(delegate, {
           get(inner, method) {
-            if (method === 'upsert' && armed) {
+            if (method === 'create' && armed) {
               return async () => {
                 armed = false;
                 throw new Error('simulated crash after the debit');
@@ -455,7 +455,7 @@ describe('waiver processing after a crash', () => {
     });
 
     await expect(
-      new WaiverProcessingService(crashOnFirstRosterUpsert(), claimStore, projection).processLeague(
+      new WaiverProcessingService(crashOnFirstRosterCreate(), claimStore, projection).processLeague(
         { leagueId: LEAGUE }
       )
     ).rejects.toThrow('simulated crash after the debit');
