@@ -101,7 +101,7 @@ interface LeagueScores {
  * Statly Z for every active player under the league's categories and directions, the same scale
  * as the draft room and the window auto-fill. A player with no stat in any category is unscored.
  */
-async function loadLeagueScores(
+export async function loadLeagueScores(
   leagueId: string,
   statsLookup: DraftPlayerStatsLookup
 ): Promise<LeagueScores> {
