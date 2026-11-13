@@ -55,8 +55,10 @@ rather than merging and hiding a gap in the middle of the conversation. The outb
 shared by every league, so the browser cannot detect a gap from sequence numbers alone.
 
 The unread badge (`LeagueSocialWidget`) joins the room itself, so it is live before chat is first
-opened, and requests `/summary` every 30 seconds while no live room is delivering. Unread counts
-are new content only (`social:message`, `social:activity`, `social:post`, `social:reply`); edits,
+opened, and requests `/summary` every 30 seconds while no live room is delivering. The chat
+button counts league chat only; Posts (the message board) and Activity have their own items and
+badges in the league menu, and each opens the league social page on its one view
+(`/leagues/<id>/social`, `?view=board`, `?view=activity`). Unread counts are new content only (`social:message`, `social:activity`, `social:post`, `social:reply`); edits,
 removals and read receipts are in the same outbox but are never unread. A `social:read-state`
 event is delivered only to the sockets of the member it belongs to, and each event costs one
 membership lookup per member, not per socket.

@@ -114,7 +114,7 @@ describe('LeagueChatPanel', () => {
       'text-social-mention-text'
     );
     expect(screen.getByText('Mention')).toBeInTheDocument();
-    expect(ownMessage).toHaveClass('border-social-action', 'bg-social-brand-soft');
+    expect(ownMessage).toHaveClass('bg-social-bubble-own', 'text-social-bubble-own-text');
   });
 
   it('renders a durable GIPHY fallback when the Web SDK key is not configured', async () => {

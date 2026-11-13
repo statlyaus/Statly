@@ -1,7 +1,7 @@
 'use client';
 
-import { Activity, MessageCircle, MessagesSquare, Settings } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { Settings } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
   SocialChannel,
@@ -23,7 +23,8 @@ export type LeagueSocialView = SocialChannel;
 export interface LeagueSocialShellProps {
   leagueId: string;
   currentUserId?: string;
-  initialView?: LeagueSocialView;
+  /** The one view this screen shows: league chat, the message board (Posts) or Activity. */
+  view?: LeagueSocialView;
   initialPostId?: string;
   className?: string;
   title?: string;
@@ -37,16 +38,16 @@ export interface LeagueSocialShellProps {
   onDiscussActivity?: (activity: SocialMessage) => void;
 }
 
-const tabs: Array<{ id: LeagueSocialView; label: string; icon: typeof MessageCircle }> = [
-  { id: 'chat', label: 'Chat', icon: MessageCircle },
-  { id: 'board', label: 'Board', icon: MessagesSquare },
-  { id: 'activity', label: 'Activity', icon: Activity },
-];
+const VIEW_DESCRIPTIONS: Record<LeagueSocialView, string> = {
+  chat: 'Talk with every coach in the league.',
+  board: 'Longer discussions and commissioner announcements.',
+  activity: 'Waivers, trades and other league moves.',
+};
 
 export default function LeagueSocialShell({
   leagueId,
   currentUserId,
-  initialView = 'chat',
+  view = 'chat',
   initialPostId,
   className = '',
   title = 'League social',
@@ -60,14 +61,8 @@ export default function LeagueSocialShell({
   onDiscussActivity,
 }: LeagueSocialShellProps): React.JSX.Element {
   const controller = useLeagueSocial(leagueId, currentUserId);
-  const tabSetId = useId();
-  const tabRefs = useRef<Record<LeagueSocialView, HTMLButtonElement | null>>({
-    chat: null,
-    board: null,
-    activity: null,
-  });
   const loadedInitialPostRef = useRef<string | null>(null);
-  const [activeView, setActiveView] = useState<LeagueSocialView>(initialView);
+  const activeView = view;
   const [selectedPostId, setSelectedPostId] = useState<string | null>(initialPostId ?? null);
   const [showPreferences, setShowPreferences] = useState(false);
   const [acceptingStandards, setAcceptingStandards] = useState(false);
@@ -84,13 +79,8 @@ export default function LeagueSocialShell({
   const selectedThread = selectedPostId ? controller.threads[selectedPostId] : undefined;
 
   useEffect(() => {
-    setActiveView(initialView);
-  }, [initialView]);
-
-  useEffect(() => {
     if (!initialPostId || loadedInitialPostRef.current === initialPostId) return;
     loadedInitialPostRef.current = initialPostId;
-    setActiveView('board');
     setSelectedPostId(initialPostId);
     void controller.loadReplies(initialPostId);
   }, [controller.loadReplies, initialPostId]);
@@ -113,25 +103,6 @@ export default function LeagueSocialShell({
       current[channel] === isVisible ? current : { ...current, [channel]: isVisible }
     );
   }, []);
-
-  function selectView(view: LeagueSocialView): void {
-    setActiveView(view);
-  }
-
-  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
-    const currentIndex = tabs.findIndex((tab) => tab.id === activeView);
-    let nextIndex = currentIndex;
-    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
-    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    else if (event.key === 'Home') nextIndex = 0;
-    else if (event.key === 'End') nextIndex = tabs.length - 1;
-    else return;
-
-    event.preventDefault();
-    const nextView = tabs[nextIndex].id;
-    selectView(nextView);
-    window.requestAnimationFrame(() => tabRefs.current[nextView]?.focus());
-  }
 
   function handleSelectPost(post: SocialPost): void {
     handleLatestVisibleChange('board', false);
@@ -160,18 +131,16 @@ export default function LeagueSocialShell({
     >
       <div
         className={
-          compact
-            ? 'border-b border-social-border bg-social-surface'
-            : 'border-b border-social-border bg-social-surface px-3 pt-3'
+          compact ? 'bg-social-canvas' : 'border-b border-social-border bg-social-surface px-3 pt-3'
         }
       >
         {showHeader ? (
           <div className="flex items-start justify-between gap-3 px-1 pb-3">
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-social-text">{title}</h1>
-              <p className="mt-1 text-sm text-social-text-muted">
-                Chat live or revisit persistent league discussions.
-              </p>
+              <h1 className="font-display text-3xl font-bold leading-none text-social-text">
+                {title}
+              </h1>
+              <p className="mt-1 text-sm text-social-text-muted">{VIEW_DESCRIPTIONS[activeView]}</p>
             </div>
             {settingsButton}
           </div>
@@ -225,70 +194,10 @@ export default function LeagueSocialShell({
             ) : null}
           </div>
         ) : null}
-        <div className={compact ? 'flex h-12 items-center px-2' : 'flex items-center gap-2 pb-3'}>
-          <div
-            role="tablist"
-            aria-label="League social views"
-            className={
-              compact
-                ? 'flex h-full min-w-0 flex-1 items-stretch'
-                : 'grid min-w-0 max-w-xl flex-1 grid-cols-3 gap-1 rounded-xl bg-social-surface-subtle p-1'
-            }
-          >
-            {tabs.map((tab) => {
-              const active = activeView === tab.id;
-              const unread = controller.summary?.unread[tab.id] ?? 0;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  ref={(element) => {
-                    tabRefs.current[tab.id] = element;
-                  }}
-                  id={`${tabSetId}-${tab.id}-tab`}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  aria-controls={`${tabSetId}-${tab.id}-panel`}
-                  tabIndex={active ? 0 : -1}
-                  onClick={() => selectView(tab.id)}
-                  onKeyDown={handleTabKeyDown}
-                  className={`relative inline-flex min-h-10 items-center justify-center gap-1.5 px-2 text-sm transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-social-focus ${
-                    compact
-                      ? `flex-1 border-b-2 ${
-                          active
-                            ? 'border-social-action font-semibold text-social-text'
-                            : 'border-transparent font-medium text-social-text-muted hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle'
-                        }`
-                      : `rounded-lg font-semibold ${
-                          active
-                            ? 'bg-social-surface text-social-text shadow-sm ring-1 ring-social-border'
-                            : 'text-social-text-muted hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface'
-                        }`
-                  }`}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  <span>{tab.label}</span>
-                  {unread > 0 ? (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-social-action px-1.5 py-0.5 text-xs font-semibold text-social-action-foreground">
-                      <span className="sr-only">{unread} unread</span>
-                      <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          {!showHeader ? settingsButton : null}
-        </div>
       </div>
 
       <div
-        id={`${tabSetId}-chat-panel`}
-        role="tabpanel"
-        aria-labelledby={`${tabSetId}-chat-tab`}
         hidden={activeView !== 'chat'}
-        aria-hidden={activeView !== 'chat'}
         className={`${activeView === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-social-canvas ${
           compact ? 'p-0' : 'p-3'
         }`}
@@ -344,11 +253,7 @@ export default function LeagueSocialShell({
       </div>
 
       <div
-        id={`${tabSetId}-board-panel`}
-        role="tabpanel"
-        aria-labelledby={`${tabSetId}-board-tab`}
         hidden={activeView !== 'board'}
-        aria-hidden={activeView !== 'board'}
         className={`${activeView === 'board' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-social-canvas ${
           compact ? 'p-0' : 'p-3'
         }`}
@@ -416,11 +321,7 @@ export default function LeagueSocialShell({
       </div>
 
       <div
-        id={`${tabSetId}-activity-panel`}
-        role="tabpanel"
-        aria-labelledby={`${tabSetId}-activity-tab`}
         hidden={activeView !== 'activity'}
-        aria-hidden={activeView !== 'activity'}
         className={`${activeView === 'activity' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-social-canvas ${
           compact ? 'p-0' : 'p-3'
         }`}
@@ -438,15 +339,7 @@ export default function LeagueSocialShell({
           onLatestVisibleChange={(isLatestVisible) =>
             handleLatestVisibleChange('activity', isLatestVisible)
           }
-          onDiscuss={
-            onDiscussActivity
-              ? (activity) => {
-                  onDiscussActivity(activity);
-                  selectView('chat');
-                  window.requestAnimationFrame(() => tabRefs.current.chat?.focus());
-                }
-              : undefined
-          }
+          onDiscuss={onDiscussActivity}
         />
       </div>
     </section>

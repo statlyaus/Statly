@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 
 import { useAuth } from '@/AuthContext';
 import { SocketProvider } from '@/providers/SocketProvider';
@@ -20,7 +20,10 @@ export default function LeagueSocialAppProvider({
       {user ? (
         <SocketProvider uid={user.uid}>
           {children}
-          <LeagueSocialWidget currentUserId={user.uid} />
+          {/* The pop-up reads the query string, which needs a Suspense boundary in Next.js. */}
+          <Suspense fallback={null}>
+            <LeagueSocialWidget currentUserId={user.uid} />
+          </Suspense>
         </SocketProvider>
       ) : (
         children

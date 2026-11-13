@@ -19,7 +19,7 @@ test('league chat sends a message and shows another member’s message without a
   await authenticateAsDevelopmentUser(page);
   await page.goto(`/leagues/${E2E_LEAGUE_ID}/social`);
 
-  const chat = page.getByRole('region', { name: 'League chat' });
+  const chat = page.getByRole('region', { name: 'League chat', exact: true });
   await expect(chat).toBeVisible();
   const composer = chat.getByPlaceholder('Message your league…');
   const acceptStandards = page.getByRole('button', { name: 'I accept the community standards' });

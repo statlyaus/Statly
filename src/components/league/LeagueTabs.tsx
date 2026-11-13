@@ -47,6 +47,8 @@ type TabType =
   | 'waivers'
   | 'draft'
   | 'social'
+  | 'posts'
+  | 'activity'
   | 'team-settings'
   | 'league-settings';
 
@@ -232,7 +234,7 @@ const LEAGUE_TAB_GROUPS = [
     tabIds: ['overview', 'roster', 'lineup', 'matchups', 'trades', 'waivers', 'draft'],
   },
   { id: 'league', name: 'League', tabIds: ['teams', 'standings'] },
-  { id: 'social', name: 'Social', tabIds: ['social'] },
+  { id: 'social', name: 'Social', tabIds: ['social', 'posts', 'activity'] },
   { id: 'settings', name: 'Settings', tabIds: ['team-settings', 'league-settings'] },
 ] as const satisfies ReadonlyArray<{
   id: TabGroup['id'];
@@ -262,6 +264,9 @@ function groupLeagueTabs(tabs: readonly Tab[]): TabGroup[] {
 function getTabOptionLabel(tab: Tab): string {
   return tab.badge ? `${tab.name} (${tab.badge} unread)` : tab.name;
 }
+
+/** League menu items that open the league social page, and the view each opens ('' = chat). */
+const SOCIAL_PAGE_VIEWS = { social: '', posts: 'board', activity: 'activity' } as const;
 
 function isLeagueTab(value: unknown): value is TabType {
   return typeof value === 'string' && TAB_IDS.includes(value as TabType);
@@ -388,8 +393,10 @@ export default function LeagueTabs({
 
   const handleTabChange = (tabId: TabType) => {
     void preloadLeagueTab(tabId);
-    if (tabId === 'social') {
-      router.push(`/leagues/${league.id}/social`);
+    // Chat, Posts and Activity live on the league social page, one view each.
+    const socialView = SOCIAL_PAGE_VIEWS[tabId as keyof typeof SOCIAL_PAGE_VIEWS];
+    if (socialView !== undefined) {
+      router.push(`/leagues/${league.id}/social${socialView ? `?view=${socialView}` : ''}`);
       return;
     }
     setActiveTab(tabId);
@@ -413,11 +420,9 @@ export default function LeagueTabs({
     },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
-    {
-      id: 'social',
-      name: 'Social',
-      badge: socialUnread.chat + socialUnread.board + socialUnread.activity || undefined,
-    },
+    { id: 'social', name: 'Chat', badge: socialUnread.chat || undefined },
+    { id: 'posts', name: 'Posts', badge: socialUnread.board || undefined },
+    { id: 'activity', name: 'Activity', badge: socialUnread.activity || undefined },
     { id: 'team-settings', name: 'Team Settings' },
   ];
   const tabs: Tab[] = canAccessCompetitionRules
