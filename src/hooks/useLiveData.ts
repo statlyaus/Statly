@@ -3,6 +3,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { type ETLPlayerStats, type ETLMatch, type LegacyPlayerStat } from '@/lib/etlIntegration';
+import type { LiveMatchData } from '@/app/api/matches/live/route';
+import { isAbortError } from '@/lib/utils';
 
 interface LiveDataState {
   playerStats: LegacyPlayerStat[]; // Legacy format for compatibility
@@ -51,24 +53,29 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
 
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      const [
-        {
-          getLivePlayerStats,
-          getLiveMatches,
-          getDataFreshness,
-          getPlayerProfilesMap,
-          transformToLegacyPlayerStats,
-        },
-      ] = await Promise.all([import('@/lib/etlIntegration')]);
-
-      const [rawStats, matches, freshness, profiles] = await Promise.all([
-        getLivePlayerStats(),
-        getLiveMatches(),
-        getDataFreshness(),
-        getPlayerProfilesMap(),
+      // One authenticated server read. The browser Firestore SDK may not read
+      // `player_match_stats`, so reading it here failed for every user.
+      const [{ fetchApi }, { transformToLegacyPlayerStats }] = await Promise.all([
+        import('@/lib/api'),
+        import('@/lib/etlIntegration'),
       ]);
+      const response: unknown = await fetchApi('matches/live', { signal: controller.signal });
+      const data = (response as { data?: Partial<LiveMatchData> } | null)?.data;
+      if (!data || !Array.isArray(data.matches) || !Array.isArray(data.stats)) {
+        throw new Error('Live match data response was not understood');
+      }
+      const rawStats = data.stats;
+      const matches = data.matches;
+      const lastUpdate = data.lastUpdate ?? null;
+      const freshness = {
+        isLive: matches.length > 0,
+        lastUpdate,
+        minutesSinceUpdate: lastUpdate
+          ? Math.floor((Date.now() - new Date(lastUpdate).getTime()) / 60000)
+          : null,
+      };
 
-      const playerStats = transformToLegacy ? transformToLegacyPlayerStats(rawStats, profiles) : [];
+      const playerStats = transformToLegacy ? transformToLegacyPlayerStats(rawStats) : [];
 
       if (!mountedRef.current || controller.signal.aborted) return;
 
@@ -83,7 +90,7 @@ export function useLiveData(options: UseLiveDataOptions = {}) {
         error: null,
       });
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || isAbortError(error)) return;
       setState((prev) => ({
         ...prev,
         isLoading: false,

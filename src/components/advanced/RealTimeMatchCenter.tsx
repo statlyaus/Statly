@@ -132,9 +132,11 @@ export default function RealTimeMatchCenter({
             <div className="font-semibold text-gray-900">{p.name}</div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <span>{p.team}</span>
-              <Badge variant="outline" size="sm">
-                {p.position}
-              </Badge>
+              {p.position && (
+                <Badge variant="outline" size="sm">
+                  {p.position}
+                </Badge>
+              )}
             </div>
           </div>
           <div className="text-right">
