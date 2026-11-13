@@ -12,7 +12,7 @@ import {
 import { usePathname } from 'next/navigation';
 
 import { LAST_LEAGUE_ID_COOKIE, readCookieValue } from '@/lib/uiPreferences';
-import type { SocialDiscussionContext } from '@/types/social';
+import type { SocialDiscussionContext, SocialMessage } from '@/types/social';
 
 import type { LeagueSocialView } from './LeagueSocialShell';
 
@@ -52,6 +52,17 @@ const LeagueSocialWidgetContext = createContext<LeagueSocialWidgetController | n
 LeagueSocialWidgetContext.displayName = 'LeagueSocialWidgetContext';
 
 const RESERVED_LEAGUE_ROUTES = new Set(['join', 'new']);
+
+/** The discussion card a "Discuss" on a league activity item carries into chat. */
+export function activityDiscussionContext(activity: SocialMessage): SocialDiscussionContext {
+  return (
+    activity.context ?? {
+      type: 'activity',
+      id: activity.relatedEntityId ?? activity.id,
+      title: activity.content,
+    }
+  );
+}
 
 export function getLeagueIdFromPathname(pathname: string | null | undefined): string | null {
   const match = (pathname ?? '').match(/^\/leagues\/([^/]+)(?:\/|$)/);

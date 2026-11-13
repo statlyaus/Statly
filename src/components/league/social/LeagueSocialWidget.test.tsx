@@ -11,10 +11,11 @@ import { LeagueSocialWidgetProvider } from './LeagueSocialWidgetProvider';
 const mocks = vi.hoisted(() => ({
   authenticatedFetch: vi.fn(),
 }));
-const navigation = vi.hoisted(() => ({ pathname: '/players' }));
+const navigation = vi.hoisted(() => ({ pathname: '/players', search: '' }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => navigation.pathname,
+  useSearchParams: () => new URLSearchParams(navigation.search ?? ''),
 }));
 
 vi.mock('@/contexts/SocketContext', () => ({
@@ -95,8 +96,8 @@ describe('LeagueSocialWidget', () => {
       </LeagueSocialWidgetProvider>
     );
 
-    const launcher = await screen.findByRole('button', { name: /open league social/i });
-    expect(launcher).toHaveAttribute('title', 'League Social');
+    const launcher = await screen.findByRole('button', { name: /open league chat/i });
+    expect(launcher).toHaveAttribute('title', 'League chat');
     expect(launcher).toHaveClass(
       'league-social',
       'size-14',
@@ -107,14 +108,14 @@ describe('LeagueSocialWidget', () => {
     );
     expect(launcher.querySelector('svg')).toHaveClass('size-7');
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /5 unread/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /2 unread/i })).toBeInTheDocument()
     );
 
     await user.click(launcher);
-    const panel = screen.getByLabelText('League social panel');
+    const panel = screen.getByLabelText('League chat panel');
     const shellControl = screen.getByTestId('social-shell-control');
-    expect(await screen.findByText('League Social')).toBeInTheDocument();
-    expect(screen.getByText('League Social').closest('.bg-social-canvas')).toHaveClass(
+    expect(await screen.findByText('League chat')).toBeInTheDocument();
+    expect(screen.getByText('League chat').closest('.bg-social-canvas')).toHaveClass(
       'text-social-text'
     );
     expect(screen.getByText('Premier League')).toBeInTheDocument();
@@ -146,11 +147,11 @@ describe('LeagueSocialWidget', () => {
     shellControl.focus();
     await user.keyboard('{Escape}');
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /open league social/i })).toHaveFocus()
+      expect(screen.getByRole('button', { name: /open league chat/i })).toHaveFocus()
     );
     expect(screen.getByTestId('social-shell-control')).toHaveAttribute('data-visible', 'false');
 
-    await user.click(screen.getByRole('button', { name: /open league social/i }));
+    await user.click(screen.getByRole('button', { name: /open league chat/i }));
     await waitFor(() => expect(screen.getByTestId('social-shell-control')).toHaveFocus());
     expect(screen.getByTestId('social-shell-control')).toHaveAttribute('data-visible', 'true');
   });
@@ -242,7 +243,7 @@ describe('LeagueSocialWidget', () => {
       </LeagueSocialWidgetProvider>
     );
 
-    await user.click(await screen.findByRole('button', { name: /open league social/i }));
+    await user.click(await screen.findByRole('button', { name: /open league chat/i }));
     const shellControl = screen.getByTestId('social-shell-control');
 
     expect(shellControl).toHaveAttribute('data-composer-surface', 'draft-chat');
@@ -267,7 +268,7 @@ describe('LeagueSocialWidget', () => {
         </LeagueSocialWidgetProvider>
       );
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: /5 unread/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /2 unread/i })).toBeInTheDocument()
       );
 
       mocks.authenticatedFetch.mockImplementation(async () => ({
@@ -282,7 +283,7 @@ describe('LeagueSocialWidget', () => {
       });
 
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: /9 unread/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /6 unread/i })).toBeInTheDocument()
       );
     } finally {
       vi.useRealTimers();

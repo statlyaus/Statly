@@ -3,14 +3,14 @@
 import { MessageCircle, Minus, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { useSocket } from '@/contexts/SocketContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import type { LeagueSocialSummary, SocialMessage, SocialRealtimeEnvelope } from '@/types/social';
 
 import { subscribeLeagueSocialRoom } from './leagueSocialRoom';
-import { useLeagueSocialWidget } from './LeagueSocialWidgetProvider';
+import { activityDiscussionContext, useLeagueSocialWidget } from './LeagueSocialWidgetProvider';
 
 type ConnectionNotice = 'hidden' | 'offline' | 'reconnecting';
 type UnreadCounts = { chat: number; board: number; activity: number };
@@ -31,7 +31,7 @@ function LeagueSocialShellLoading(): React.JSX.Element {
         className="size-5 animate-pulse motion-reduce:animate-none"
         aria-hidden="true"
       />
-      <span>Loading league social…</span>
+      <span>Loading league chat…</span>
     </div>
   );
 }
@@ -82,7 +82,6 @@ export default function LeagueSocialWidget({
     leagueName,
     mode,
     hasOpened,
-    view,
     composerContext,
     open,
     minimize,
@@ -102,21 +101,21 @@ export default function LeagueSocialWidget({
   const lastPanelFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
   const unread = unreadState.leagueId === leagueId ? unreadState.counts : EMPTY_UNREAD;
-  const totalUnread = unread.chat + unread.board + unread.activity;
+  // Posts and Activity have their own league menu items and badges; the chat button counts chat.
+  const totalUnread = unread.chat;
   const displayLeagueName = leagueName ?? resolvedLeagueName;
   const isOpen = mode === 'open';
-  const isDedicatedSocialPage = /^\/leagues\/[^/]+\/social(?:\/|$)/.test(pathname ?? '');
+  const searchParams = useSearchParams();
+  const socialPageView = searchParams?.get('view');
+  // The full chat page replaces the pop-up; the Posts and Activity pages keep it.
+  const isDedicatedSocialPage =
+    /^\/leagues\/[^/]+\/social(?:\/|$)/.test(pathname ?? '') &&
+    socialPageView !== 'board' &&
+    socialPageView !== 'activity';
   const draftId = getDraftIdFromPathname(pathname);
   const discussActivity = useCallback(
     (activity: SocialMessage) => {
-      open({
-        view: 'chat',
-        context: activity.context ?? {
-          type: 'activity',
-          id: activity.relatedEntityId ?? activity.id,
-          title: activity.content,
-        },
-      });
+      open({ view: 'chat', context: activityDiscussionContext(activity) });
     },
     [open]
   );
@@ -330,10 +329,10 @@ export default function LeagueSocialWidget({
           type="button"
           onClick={() => open()}
           aria-label={
-            totalUnread > 0 ? `Open league social, ${totalUnread} unread` : 'Open league social'
+            totalUnread > 0 ? `Open league chat, ${totalUnread} unread` : 'Open league chat'
           }
           aria-expanded="false"
-          title="League Social"
+          title="League chat"
           className="league-social fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-full border border-social-brand-strong bg-social-brand-strong text-social-brand-foreground shadow-lg transition-colors hover:bg-social-action-hover active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface"
         >
           <MessageCircle className="size-7" aria-hidden="true" />
@@ -349,7 +348,7 @@ export default function LeagueSocialWidget({
       {hasOpened ? (
         <aside
           ref={panelRef}
-          aria-label="League social panel"
+          aria-label="League chat panel"
           aria-hidden={!isOpen}
           inert={!isOpen}
           className={`league-social fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-social-canvas text-social-text shadow-2xl transition-[translate,scale,opacity] duration-200 motion-reduce:transition-none sm:inset-auto sm:bottom-6 sm:right-6 sm:origin-bottom-right sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-3xl sm:border sm:border-social-border ${
@@ -370,7 +369,7 @@ export default function LeagueSocialWidget({
                 {displayLeagueName ?? 'Current league'}
               </p>
               <div className="flex min-w-0 items-center gap-1.5 text-sm text-social-text-muted">
-                <span className="truncate">League Social</span>
+                <span className="truncate">League chat</span>
                 {connectionNotice !== 'hidden' ? (
                   <span
                     role="status"
@@ -389,7 +388,7 @@ export default function LeagueSocialWidget({
                 type="button"
                 onClick={handleMinimize}
                 className="inline-flex size-10 items-center justify-center rounded-full text-social-text-muted transition-colors hover:bg-social-bubble hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
-                aria-label="Minimize league social"
+                aria-label="Minimize league chat"
                 title="Minimize"
               >
                 <Minus className="size-5" aria-hidden="true" />
@@ -401,7 +400,7 @@ export default function LeagueSocialWidget({
             key={leagueId}
             leagueId={leagueId}
             currentUserId={currentUserId}
-            initialView={composerContext ? 'chat' : view}
+            view="chat"
             showHeader={false}
             compact
             visible={isOpen}
@@ -410,7 +409,7 @@ export default function LeagueSocialWidget({
             composerContext={composerContext}
             onClearComposerContext={clearComposerContext}
             onDiscussActivity={discussActivity}
-            title={displayLeagueName ? `${displayLeagueName} social` : 'League social'}
+            title={displayLeagueName ? `${displayLeagueName} chat` : 'League chat'}
             className="h-full !min-h-0 flex-1 rounded-none border-0 shadow-none"
           />
         </aside>

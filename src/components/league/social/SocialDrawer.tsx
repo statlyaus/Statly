@@ -53,7 +53,7 @@ export default function SocialDrawer({
       <LeagueSocialShell
         leagueId={leagueId}
         currentUserId={currentUserId}
-        initialView={initialView}
+        view={initialView}
         className="h-full min-h-0 rounded-none border-0 shadow-none"
       />
     </aside>
