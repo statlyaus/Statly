@@ -10,6 +10,7 @@ import { revealFrame, type RevealDraw } from './bloodsuckerDisplay';
 
 /** How often every lobby client re-reads the committed draw (NFR-7: no socket needed). */
 export const DRAW_POLL_MS = 3000;
+const SETTLED_POLL_MS = 15000;
 
 interface LobbyState {
   leagueFormat: string;
@@ -62,19 +63,28 @@ export function BloodsuckerDrawPanel({
 
   useEffect(() => {
     let active = true;
+    let timer: number | undefined;
     const read = async () => {
+      let delay = DRAW_POLL_MS;
       try {
         const response = await authenticatedFetch(endpoint, { cache: 'no-store' }, userId);
-        if (response.ok && active) accept((await response.json()) as LobbyState);
+        if (response.ok) {
+          const next = (await response.json()) as LobbyState;
+          if (active) accept(next);
+          // Other formats never draw: stop. Once a Bloodsucker is set, only a settings switch can
+          // change it, so a slower poll is enough.
+          if (next.leagueFormat !== 'BLOODSUCKER') return;
+          if (next.bloodsucker) delay = SETTLED_POLL_MS;
+        }
       } catch {
         // The next poll retries; the last committed state stays on screen.
       }
+      if (active) timer = window.setTimeout(() => void read(), delay);
     };
     void read();
-    const interval = window.setInterval(() => void read(), DRAW_POLL_MS);
     return () => {
       active = false;
-      window.clearInterval(interval);
+      window.clearTimeout(timer);
     };
   }, [accept, endpoint, userId]);
 

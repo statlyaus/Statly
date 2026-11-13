@@ -4,6 +4,8 @@
  */
 export function shouldWarnOfBloodsucker(input: {
   matchupStatus?: string;
+  /** The round's own status: it locks at the first game, before scoring moves the matchup. */
+  roundStatus?: string | null;
   phase?: string | null;
   homeMemberId?: string | null;
   awayMemberId?: string | null;
@@ -13,6 +15,7 @@ export function shouldWarnOfBloodsucker(input: {
   const { bloodsuckerMemberId: bloodsucker, viewerMemberId: viewer } = input;
   if (!bloodsucker || !viewer || viewer === bloodsucker) return false;
   if (input.matchupStatus !== 'SCHEDULED' || input.phase === 'FINALS') return false;
+  if (input.roundStatus === 'LOCKED' || input.roundStatus === 'FINAL') return false;
   const sides = [input.homeMemberId, input.awayMemberId];
   return sides.includes(bloodsucker) && sides.includes(viewer);
 }

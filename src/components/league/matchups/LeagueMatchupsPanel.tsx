@@ -113,7 +113,7 @@ interface MatchupReadModel {
   matchups: MatchupModel[];
   /** No Losers leagues: the round's AFL games and stored results. */
   noLosersRound?: { games: ClubStripGame[] };
-  roundContext?: { phase?: 'REGULAR' | 'FINALS' } | null;
+  roundContext?: { phase?: 'REGULAR' | 'FINALS'; status?: string } | null;
   permissions?: { canManage?: boolean };
 }
 
@@ -269,6 +269,7 @@ export function LeagueMatchupsPanel({
                   shouldWarnOfBloodsucker({
                     matchupStatus: matchup.status,
                     phase: data.roundContext?.phase,
+                    roundStatus: data.roundContext?.status,
                     homeMemberId: matchup.homeMember?.id,
                     awayMemberId: matchup.awayMember?.id,
                     bloodsuckerMemberId: bloodsucker.memberId,

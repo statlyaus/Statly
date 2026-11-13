@@ -109,6 +109,13 @@ describe('drawBloodsucker (BR-04b)', () => {
     expect(state.method).toBe('DRAW');
     expect(state.canDraw).toBe(false);
 
+    // BR-09: the drawn Bloodsucker leaves the draft order at once.
+    const draft = await prisma.draft.findUniqueOrThrow({
+      where: { leagueId: LEAGUE },
+      select: { orders: { select: { memberId: true } } },
+    });
+    expect(draft.orders.map((order) => order.memberId).sort()).toEqual([B, OWNER]);
+
     const [audit] = await drawAudits();
     expect(audit?.actorMemberId).toBe(OWNER);
     expect(audit?.payloadJson).toMatchObject({

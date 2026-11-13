@@ -5,6 +5,7 @@ import { randomInt } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
 
 import { isActivePrismaMembership, leagueManagerUserIds } from './activeMembership';
 import { readDraftStarted } from './draftStarted';
@@ -113,7 +114,6 @@ async function loadLatestMethod(client: Client, leagueId: string, memberId: stri
   const rows = await client.leagueCompetitionAudit.findMany({
     where: { leagueId, eventType: 'LEAGUE_FORMAT_CHANGED' },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: 20,
     select: { payloadJson: true },
   });
   for (const row of rows) {
@@ -314,6 +314,10 @@ export async function drawBloodsucker(input: {
       },
     });
   });
+
+  // BR-09, as the settings route does: the new Bloodsucker leaves the draft order before anyone
+  // reads it, and the draft is resized for the drafters.
+  await ensureLeagueDraftSetupConverged({ prismaClient: prisma, leagueId: input.leagueId, now });
 
   return loadBloodsuckerLobbyState({ leagueId: input.leagueId, userId: input.userId, now });
 }
