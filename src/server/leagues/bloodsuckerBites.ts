@@ -16,6 +16,7 @@ import { publishLeagueSystemMessage } from './social/socialSystemEvents';
 // Executing a Bloodsucker bite (Bloodsucker 6/9, #1283; BR-21, BR-24 to BR-26, BR-35, BR-36, BR-38,
 // BR-39; owner decisions E1, E2, E5, E7, E8). Every swap goes through the shared roster-swap
 // primitive under the League row lock, so a concurrent waiver run, trade or second bite sees it.
+// The checks and the swap are exported for the deadline auto-bite (`bloodsuckerAutoBite.ts`, #1284).
 
 type Transaction = Prisma.TransactionClient;
 
@@ -70,7 +71,7 @@ async function loadBite(leagueId: string, biteId: string): Promise<LeagueBite> {
 }
 
 /** E8: no bite moves a player while a round is in progress, from its first lock until it ends. */
-async function assertNoRoundInProgress(tx: Transaction, leagueId: string, now: Date) {
+export async function assertNoRoundInProgress(tx: Transaction, leagueId: string, now: Date) {
   const settings = await tx.leagueSettings.findFirst({
     where: { league: { id: leagueId } },
     select: { competitionRulesVersion: true },
@@ -91,7 +92,7 @@ async function assertNoRoundInProgress(tx: Transaction, leagueId: string, now: D
 }
 
 /** E5: a bite waits while its matchup is not FINAL (a re-score sent it back to LIVE). */
-async function assertMatchupFinal(tx: Transaction, bite: LeagueBite) {
+export async function assertMatchupFinal(tx: Transaction, bite: LeagueBite) {
   const matchup = await tx.leagueMatchup.findUnique({
     where: { id: bite.matchupId },
     select: { status: true },
@@ -106,7 +107,7 @@ async function assertMatchupFinal(tx: Transaction, bite: LeagueBite) {
 }
 
 /** E7: bites execute oldest grant first. */
-async function assertOldestOpenBite(tx: Transaction, bite: LeagueBite) {
+export async function assertOldestOpenBite(tx: Transaction, bite: LeagueBite) {
   const earlier = await tx.leagueBite.findFirst({
     where: {
       leagueId: bite.leagueId,
@@ -147,7 +148,7 @@ interface SwapResult {
  * lineups (BR-25); pending trades with either player are invalidated and pending waiver claims that
  * drop either player fail, both with `PLAYER_BITTEN` (BR-26).
  */
-async function swapBitePlayers(
+export async function swapBitePlayers(
   tx: Transaction,
   bite: LeagueBite,
   input: { takenPlayerId: string; returnedPlayerId: string; now: Date }
@@ -236,7 +237,7 @@ async function failWaiverClaimsDropping(
 }
 
 /** The victim's slot for the taken player in the bite's round lineup, when he was in it. */
-async function takenSlotOf(tx: Transaction, bite: LeagueBite, playerId: string) {
+export async function takenSlotOf(tx: Transaction, bite: LeagueBite, playerId: string) {
   const row = await tx.leagueLineupPlayer.findFirst({
     where: {
       playerId,
@@ -252,7 +253,10 @@ async function takenSlotOf(tx: Transaction, bite: LeagueBite, playerId: string) 
   return row?.slot ?? null;
 }
 
-function auditPayload(bite: LeagueBite, extra: Record<string, unknown>): Prisma.InputJsonValue {
+export function auditPayload(
+  bite: LeagueBite,
+  extra: Record<string, unknown>
+): Prisma.InputJsonValue {
   return JSON.parse(
     JSON.stringify({
       biteId: bite.id,
@@ -267,7 +271,7 @@ function auditPayload(bite: LeagueBite, extra: Record<string, unknown>): Prisma.
 }
 
 /** Re-reads the bite under the League lock; a concurrent change since it was read is refused. */
-async function lockBite(tx: Transaction, bite: LeagueBite): Promise<LeagueBite> {
+export async function lockBite(tx: Transaction, bite: LeagueBite): Promise<LeagueBite> {
   await lockLeagueRow(tx, bite.leagueId);
   const current = await tx.leagueBite.findUnique({ where: { id: bite.id } });
   if (!current || current.version !== bite.version) {
@@ -512,14 +516,17 @@ function reverseRosterError(error: unknown): never {
  * After commit: the ownership projection, then one activity message per bite change (BR-39). Both are
  * best effort; the swap already stands.
  */
-async function afterBiteCommitted(
+export async function afterBiteCommitted(
   bite: LeagueBite,
   change: 'executed' | 'cancelled' | 'redone',
-  detail: { moved?: boolean; reason?: string } = {}
+  detail: { moved?: boolean; reason?: string; auto?: boolean } = {}
 ) {
   if (change === 'executed' || detail.moved) await refreshOwnershipProjection(bite.leagueId);
   try {
-    const content = await describeBite(bite, change, detail.reason);
+    const described = await describeBite(bite, change, detail.reason);
+    const content = detail.auto
+      ? `${described} The deadline passed, so the system made the pick.`
+      : described;
     await publishLeagueSystemMessage({
       leagueId: bite.leagueId,
       eventType:

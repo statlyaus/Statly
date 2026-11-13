@@ -111,6 +111,10 @@ initialization with IndexedDB persistence; it must not import the browser bounda
 
 `src/lib/etlIntegration.ts` is a documented transitional exception: browser live-data consumers and
 server competition/read-model consumers currently share its Firestore client implementation. The
+Match Centre (`/matches`) is no longer one of them: it reads `GET /api/matches/live`, an
+authenticated route that reads in-progress `matches` and their `player_match_stats` through the
+Admin SDK (`src/server/etl/etlRoundData.ts`), because the Firestore rules give the browser no read
+of `player_match_stats`. The
 client boundary split must preserve this behavior, not disguise it with a `client-only` marker. Moving
 server ETL reads to an Admin, Prisma, or repository-owned boundary requires a separate data-ownership
 migration with parity evidence.

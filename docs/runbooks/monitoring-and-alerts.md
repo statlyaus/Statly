@@ -31,13 +31,29 @@ has to create monitors by hand. Schedules are UTC, the same as the Netlify sched
 | `cron-waivers`       | `cron-waivers.mts` → `/api/cron/waivers`                 | `0 * * * *`    | 10 min | 10 min      | 1 failure   |
 | `cron-scoring`       | `cron-scoring.mts` → `/api/cron/scoring`                 | `0 * * * *`    | 10 min | 10 min      | 1 failure   |
 | `cron-nba-boxscores` | `cron-nba-boxscores.mts` → `/api/cron/nba?job=boxscores` | `7,37 * * * *` | 10 min | 10 min      | 2 failures  |
+| `cron-bloodsucker`   | `cron-bloodsucker.mts` → `/api/cron/bloodsucker`         | `*/5 * * * *`  | 5 min  | 10 min      | 2 failures  |
 
 An issue resolves after one good run. The waivers route runs hourly and processes waivers only in the
 6 am Melbourne hour; every hourly run still checks in, so the monitor also proves the scheduler is alive.
-The other crons (daily, injuries, trades, the other NBA jobs, and `cron-bloodsucker` until #1284
-gives it a monitor) are not monitored: each monitor past
+The other crons (daily, injuries, trades, the other NBA jobs) are not monitored: each monitor past
 the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` and wrap its route in
 `monitorCronRun`; a unit test keeps each monitor's schedule equal to its Netlify function's.
+
+## Bloodsucker sweep
+
+`cron-bloodsucker` closes due exclusive windows and runs due bites (see
+[Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)). Its JSON answer lists
+`closedLeagueIds`, `autoExecutedBiteIds`, `waitingLockBiteIds` and `failedLeagueIds`; any failed league
+answers 500 and checks in as error. Two failed or missed runs in a row open a Sentry issue.
+
+- **Failed league.** Search the logs for `Bloodsucker auto-bite failed` or `Bloodsucker window close
+failed`; each names the league and bite. Later bites in that league wait for the failed one (oldest
+  grant first). A fix needs no manual step: the next run retries.
+- **Waiting bites.** A `WAITING_LOCK` bite is normal while a round is in progress and runs at the first
+  run after the round ends. Overdue or waiting bites:
+  `SELECT id, "leagueId", status, "deadlineAt" FROM "LeagueBite" WHERE status IN ('OPEN','WAITING_LOCK') AND "deadlineAt" < now() - interval '15 minutes';`
+  A row there with no round in progress means the sweep is failing or not running; an `OPEN` row may
+  also be waiting on its matchup going FINAL again or on an older bite.
 
 ## Missing AFL match result
 
