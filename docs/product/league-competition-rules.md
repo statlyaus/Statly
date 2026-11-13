@@ -84,8 +84,8 @@ In a **Bloodsucker** league one member, the Bloodsucker, skips the draft and tak
 team it beats.
 
 **Held back until the epic ships.** The setup (#1278), draft exclusion (#1279), exclusive window
-(#1280), shared roster swap (#1282) and pinned waiver priority (#1281) are built; bites, deadlines
-and protections (#1283-#1286) are not, so a Bloodsucker league would still play much as a standard one. Choosing Bloodsucker is
+(#1280), shared roster swap (#1282), pinned waiver priority (#1281), bites (#1283) and the auto-bite
+sweep (#1284) are built; trade rules and screens (#1285, #1286) are not, so a Bloodsucker league would still play much as a standard one. Choosing Bloodsucker is
 therefore off unless `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` (`isBloodsuckerSelectable`,
 `src/lib/leagueFormatOptions.ts`). With the flag off the create page and settings do not offer it,
 and create and settings refuse it with code `BLOODSUCKER_UNAVAILABLE`. A league already stored as
@@ -154,7 +154,7 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
 - **Deadline (BR-27, E4, E9).** The earlier of 48 hours after the grant or 2 hours before the next
   regular round's first lock, but never sooner than 24 hours after the grant. No next regular round
   (a grant in the last regular round, whose bite executes during finals) or an unknown start gives
-  48 hours. A right never expires unused (BR-20); the deadline only starts the auto-bite (#1284).
+  48 hours. A right never expires unused (BR-20); the deadline only starts the auto-bite.
 - **Result changes (BR-33, E4, E5).** Bites follow the matchup's own status, not the round's.
   - A re-score that takes the win away cancels an open or waiting right
     (`cancelledBy = RESULT_CHANGED`).
@@ -209,8 +209,29 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
 - Every execution audit row (`BITE_EXECUTED`) holds the actor, time, reason, matchup, both players
   and both rosters before and after.
 
-The auto-bite sweep (#1284), the Bloodsucker trade rules (#1285) and the screens (#1286) are later
-epic tickets and are not live yet.
+- **Auto-bite (BR-27 to BR-29, E7, E8).** The `cron-bloodsucker` sweep runs every 5 minutes
+  (`sweepDueBloodsuckerBites`, `src/server/leagues/bloodsuckerAutoBite.ts`). It picks up every `OPEN`
+  bite past its deadline and every `WAITING_LOCK` bite, oldest grant first, each in its own
+  transaction under the League row lock with a `version` re-check, so two sweeps at once execute a
+  bite once.
+  - The system takes the victim's highest-Statly-Z player and returns the Bloodsucker's lowest,
+    ties to the lower player id (BR-28). Any rostered player is eligible (E2, E8). Statly Z is the
+    draft room's score over all active players under the league's categories and directions; a
+    player with no stat in any category ranks below every scored one.
+  - The bite becomes `AUTO_EXECUTED` with no executing user, and stores `autoBiteRuleVersion` and
+    `autoBiteSnapshotJson` (the time, the categories and both rosters with each player's Z, in rank
+    order), so the pick can be replayed from stored data (NFR-2). The swap, lineups, invalidations
+    and team action are the same as a manual bite. The audit row is `BITE_AUTO`, actor `system`,
+    reason `DEADLINE` or `LOCK_RELEASED`; the activity message adds that the system made the pick.
+  - A deadline that falls while a round is in progress (E8) turns the bite `WAITING_LOCK` once
+    (audit `BITE_WAITING_LOCK`); it runs at the first sweep after the round ends. The Bloodsucker
+    can still bite it manually once the round is over.
+  - A bite whose matchup is not FINAL (E5), or behind an older unexecuted bite (E7), waits for a
+    later sweep. Lock periods come from the stored round windows, so no live match timing is read;
+    any other failure stops that league's sweep, the run answers 500, and the next run retries.
+
+The Bloodsucker trade rules (#1285) and the screens (#1286) are later epic tickets and are not live
+yet.
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):
