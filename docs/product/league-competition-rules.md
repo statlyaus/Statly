@@ -209,8 +209,22 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
 - Every execution audit row (`BITE_EXECUTED`) holds the actor, time, reason, matchup, both players
   and both rosters before and after.
 
-The auto-bite sweep (#1284), the Bloodsucker trade rules (#1285) and the screens (#1286) are later
-epic tickets and are not live yet.
+### Bloodsucker trade rules
+
+Both rules are checked on the server at every trade step: proposal, counter, acceptance and
+commissioner approval (#1285, `src/server/leagues/trades/tradeService.ts`). A refused step gets
+HTTP 409 and nothing is written. A trade the veto-review cron would complete is invalidated instead,
+with the code as its reason. Standard and No Losers leagues skip both checks.
+
+- **The Bloodsucker cannot trade (BR-31).** Any trade with the Bloodsucker on either side is
+  refused with code `BLOODSUCKER_CANNOT_TRADE`. A commissioner who is the Bloodsucker can still
+  review other members' trades.
+- **No trade-back (BR-32).** A player taken in an executed bite (`EXECUTED` or `AUTO_EXECUTED`)
+  this season cannot be traded to the member he was taken from, from either side of the offer:
+  code `BITTEN_PLAYER_TRADE_BACK`. He can go to any other team. Cancelled and open bites, and bites
+  from an earlier season, do not count.
+
+The auto-bite sweep (#1284) and the screens (#1286) are later epic tickets and are not live yet.
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):
