@@ -51,6 +51,8 @@ const ACTIVE_SEASON = { season: { activeForLeague: { is: { id: 'league-1' } } } 
 
 function createDbMock() {
   const tx = {
+    // The League row lock settlement takes first.
+    $queryRaw: vi.fn().mockResolvedValue([]),
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',
@@ -80,7 +82,7 @@ function createDbMock() {
         }
         return null;
       }),
-      upsert: vi.fn().mockResolvedValue({ id: 'roster-player-1' }),
+      create: vi.fn().mockResolvedValue({ id: 'roster-player-1' }),
     },
     player: {
       findMany: vi
@@ -216,19 +218,16 @@ describe('WaiverProcessingService', () => {
       }),
       select: { id: true },
     });
-    expect(tx.leagueRosterPlayer.upsert).toHaveBeenCalledWith({
-      where: { leagueId_playerId: { leagueId: 'league-1', playerId: 'free-player' } },
-      update: expect.objectContaining({
-        memberId: 'member-1',
-        acquiredBy: 'WAIVER',
-      }),
-      create: expect.objectContaining({
+    // A create, never an upsert: an owned player is refused, not taken (#1281 E3).
+    expect(tx.leagueRosterPlayer.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
         leagueId: 'league-1',
         memberId: 'member-1',
         playerId: 'free-player',
         acquiredBy: 'WAIVER',
       }),
     });
+    expect(tx.$queryRaw).toHaveBeenCalled();
     expect(claimStore.claimPending).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({ id: 'claim-1' })
@@ -348,7 +347,7 @@ describe('WaiverProcessingService', () => {
     expect(result.results).toEqual([
       { id: 'claim-1', status: 'FAILED', reason: 'Roster limit reached' },
     ]);
-    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
     expect(claimStore.rejectClaim).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({ id: 'claim-1' }),
@@ -381,9 +380,9 @@ describe('WaiverProcessingService', () => {
     });
 
     expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
-    expect(tx.leagueRosterPlayer.upsert).toHaveBeenCalledWith(
+    expect(tx.leagueRosterPlayer.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ memberId: 'member-1', playerId: 'free-player' }),
+        data: expect.objectContaining({ memberId: 'member-1', playerId: 'free-player' }),
       })
     );
     expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
@@ -455,7 +454,7 @@ describe('WaiverProcessingService', () => {
     expect(result.results).toEqual([
       { id: 'claim-1', status: 'FAILED', reason: 'Team no longer active' },
     ]);
-    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
     expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
     expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
     expect(claimStore.rejectClaim).toHaveBeenCalledWith(
@@ -510,7 +509,7 @@ describe('WaiverProcessingService', () => {
       expect.objectContaining({ id: 'claim-1' }),
       true
     );
-    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
     expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
   });
 
@@ -529,14 +528,14 @@ describe('WaiverProcessingService', () => {
 
     expect(result).toEqual({ processed: 0, results: [] });
     expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
-    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
     expect(claimStore.publishSettlement).not.toHaveBeenCalled();
     expect(claimStore.recordActivity).not.toHaveBeenCalled();
   });
 
   it('leaves the run to fail, unsettled, when a claim transaction throws', async () => {
     const { db, tx } = createDbMock();
-    tx.leagueRosterPlayer.upsert.mockRejectedValueOnce(new Error('connection lost'));
+    tx.leagueRosterPlayer.create.mockRejectedValueOnce(new Error('connection lost'));
     const claimStore = createClaimStoreMock();
     const projection = { projectLeague: vi.fn() };
     const service = new WaiverProcessingService(db as never, claimStore, projection);
@@ -550,6 +549,25 @@ describe('WaiverProcessingService', () => {
     ).rejects.toThrow('connection lost');
     expect(claimStore.publishSettlement).not.toHaveBeenCalled();
     expect(claimStore.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('rolls the claim back, unsettled, when the drop player left the roster mid-settlement', async () => {
+    const { db, tx } = createDbMock();
+    tx.leagueRosterPlayer.deleteMany.mockResolvedValueOnce({ count: 0 });
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    await expect(
+      service.processClaims({
+        leagueId: 'league-1',
+        waiverSettings: { system: 'PRIORITY' },
+        claims: [claim({ dropPlayerId: 'old-player' })],
+      })
+    ).rejects.toThrow('left the roster mid-settlement');
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
+    expect(claimStore.publishSettlement).not.toHaveBeenCalled();
   });
 
   it("removes the dropped player's open lineup rows when the claim settles", async () => {
@@ -606,7 +624,7 @@ describe('WaiverProcessingService', () => {
     );
     expect(claimStore.debitFaabInTransaction).not.toHaveBeenCalled();
     expect(tx.leagueRosterPlayer.deleteMany).not.toHaveBeenCalled();
-    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 
   it('leaves a claim pending and ends the run when match timing for its drop cannot be read', async () => {
@@ -670,7 +688,7 @@ describe('WaiverProcessingService', () => {
       },
       select: { playerId: true, memberId: true },
     });
-    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
     expect(projection.projectLeague).not.toHaveBeenCalled();
   });
 
@@ -806,6 +824,81 @@ describe('WaiverProcessingService', () => {
       { userId: 'user-3', priority: 2 },
       { userId: 'user-2', priority: 3 },
     ]);
+  });
+
+  describe('a pinned Bloodsucker (BR-15)', () => {
+    const order = [
+      { userId: 'sucker', priority: 1 },
+      { userId: 'user-2', priority: 2 },
+      { userId: 'user-3', priority: 3 },
+      { userId: 'user-4', priority: 4 },
+    ];
+
+    it('stays at 1 when it wins a claim, and nobody else moves', () => {
+      expect(buildAdvancedWaiverPriorityUpdates(order, 'sucker', 'sucker')).toEqual(order);
+    });
+
+    it('stays at 1 when another member wins, and the winner goes last among 2 and up', () => {
+      expect(buildAdvancedWaiverPriorityUpdates(order, 'user-2', 'sucker')).toEqual([
+        { userId: 'sucker', priority: 1 },
+        { userId: 'user-3', priority: 2 },
+        { userId: 'user-4', priority: 3 },
+        { userId: 'user-2', priority: 4 },
+      ]);
+    });
+
+    it('wins a second claim in the same run after winning its first', async () => {
+      const { db, tx } = createDbMock();
+      tx.league.findUnique.mockResolvedValue({
+        id: 'league-1',
+        activeSeasonId: 'season-1',
+        settings: { rosterSize: 10, benchSize: 0 },
+      });
+      tx.leagueRosterPlayer.count.mockResolvedValue(0);
+      tx.player.findMany.mockResolvedValue([
+        { id: 'player-1', name: 'Player One', club: 'Test Club', position: 'MID' },
+        { id: 'player-2', name: 'Player Two', club: 'Test Club', position: 'FWD' },
+      ]);
+      const service = new WaiverProcessingService(db as never, createClaimStoreMock(), {
+        projectLeague: vi.fn(),
+      });
+      const suckerFirst = claim({
+        id: 'sucker-first',
+        userId: 'sucker',
+        teamId: 'member-1',
+        playerId: 'player-1',
+        priority: 1,
+        waiverPriority: 1,
+      });
+      const suckerSecond = claim({
+        id: 'sucker-second',
+        userId: 'sucker',
+        teamId: 'member-1',
+        playerId: 'player-2',
+        priority: 2,
+        waiverPriority: 1,
+      });
+      const rival = claim({
+        id: 'rival',
+        userId: 'user-2',
+        teamId: 'member-2',
+        playerId: 'player-2',
+        priority: 1,
+        waiverPriority: 2,
+      });
+
+      const result = await service.processClaims({
+        leagueId: 'league-1',
+        waiverSettings: { system: 'PRIORITY', pinnedUserId: 'sucker' },
+        claims: [suckerFirst, suckerSecond, rival],
+      });
+
+      expect(result.results.map((item) => item.id)).toEqual([
+        'sucker-first',
+        'sucker-second',
+        'rival',
+      ]);
+    });
   });
 });
 

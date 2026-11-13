@@ -101,6 +101,36 @@ describe('RosterProjectionService', () => {
     });
   });
 
+  it('seeds the Bloodsucker, who has no picks, at priority 1 and the drafters from 2 (BR-15, BR-16)', async () => {
+    const tx = makeTx([
+      { id: 'pick-1', playerId: 'player-1', memberId: 'member-1', overall: 1 },
+      { id: 'pick-2', playerId: 'player-2', memberId: 'member-2', overall: 2 },
+    ]);
+    tx.league.findUnique.mockResolvedValue({
+      activeSeasonId: 'season-1',
+      settings: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'sucker' },
+      members: [
+        { id: 'member-1', isActive: true, status: 'ACTIVE' },
+        { id: 'member-2', isActive: true, status: 'ACTIVE' },
+        { id: 'sucker', isActive: true, status: 'ACTIVE' },
+      ],
+    });
+    const service = new RosterProjectionService({} as never, { projectLeague: vi.fn() });
+
+    await service.projectDraftInTx(tx as never, { leagueId: 'league-1', draftId: 'draft-1' });
+
+    const seeded = tx.waiverPriority.upsert.mock.calls.map(([call]) => [
+      call.create.memberId,
+      call.create.priority,
+      call.update.priority,
+    ]);
+    expect(seeded).toEqual([
+      ['sucker', 1, 1],
+      ['member-2', 2, 2],
+      ['member-1', 3, 3],
+    ]);
+  });
+
   it('seeds waiver priority from reverse final draft pick order', async () => {
     const tx = makeTx([
       { id: 'pick-1', playerId: 'player-1', memberId: 'member-1', overall: 1 },

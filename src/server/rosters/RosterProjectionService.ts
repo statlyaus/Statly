@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
+import { loadPinnedPriorityMemberId, withPinnedFirst } from '@/server/waivers/pinnedWaiverPriority';
 
 type PrismaLike = Pick<typeof prisma, '$transaction'>;
 type ProjectionClient = Pick<
@@ -84,9 +85,13 @@ export class RosterProjectionService {
       finalPickByMemberId.set(pick.memberId, pick.overall);
     }
 
-    const waiverPriorityEntries = [...finalPickByMemberId.entries()]
-      .map(([memberId, finalPick]) => ({ memberId, finalPick }))
-      .sort((a, b) => b.finalPick - a.finalPick);
+    // Reverse final pick order. A Bloodsucker, who has no picks, is pinned at 1 ahead of it (BR-16).
+    const waiverPriorityEntries = withPinnedFirst(
+      [...finalPickByMemberId.entries()]
+        .sort(([, left], [, right]) => right - left)
+        .map(([memberId]) => memberId),
+      await loadPinnedPriorityMemberId(tx, input.leagueId)
+    ).map((memberId) => ({ memberId }));
 
     const seasonId =
       waiverPriorityEntries.length > 0 ? await requireActiveSeasonId(tx, input.leagueId) : '';
