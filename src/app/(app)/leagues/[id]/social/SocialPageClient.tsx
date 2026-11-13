@@ -4,6 +4,16 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 import { LeagueSocialShell, type LeagueSocialView } from '@/components/league/social';
+import {
+  activityDiscussionContext,
+  useLeagueSocialWidget,
+} from '@/components/league/social/LeagueSocialWidgetProvider';
+
+const VIEW_TITLES: Record<LeagueSocialView, string> = {
+  chat: 'chat',
+  board: 'posts',
+  activity: 'activity',
+};
 
 export default function SocialPageClient({
   leagueId,
@@ -18,24 +28,28 @@ export default function SocialPageClient({
   initialView: LeagueSocialView;
   initialPostId?: string;
 }): React.JSX.Element {
+  const social = useLeagueSocialWidget();
   return (
-      <div className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href={`/leagues/${encodeURIComponent(leagueId)}`}
-            className="mb-4 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to {leagueName}
-          </Link>
-          <LeagueSocialShell
-            leagueId={leagueId}
-            currentUserId={userId}
-            initialView={initialView}
-            initialPostId={initialPostId}
-            title={`${leagueName} social`}
-          />
-        </div>
+    <div className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <Link
+          href={`/leagues/${encodeURIComponent(leagueId)}`}
+          className="mb-4 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to {leagueName}
+        </Link>
+        <LeagueSocialShell
+          leagueId={leagueId}
+          currentUserId={userId}
+          view={initialView}
+          initialPostId={initialPostId}
+          onDiscussActivity={(activity) =>
+            social.open({ view: 'chat', context: activityDiscussionContext(activity) })
+          }
+          title={`${leagueName} ${VIEW_TITLES[initialView]}`}
+        />
       </div>
+    </div>
   );
 }

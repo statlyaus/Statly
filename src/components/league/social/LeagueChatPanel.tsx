@@ -186,7 +186,7 @@ export default function LeagueChatPanel({
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
-          className={`h-full overflow-y-auto px-3 py-2 ${compact ? 'min-h-0' : 'min-h-64'}`}
+          className={`h-full overflow-y-auto px-3 py-3 ${compact ? 'min-h-0' : 'min-h-64'}`}
           aria-busy={loading || loadingEarlier}
           onScroll={(event) => {
             const latestIsVisible = isNearBottom(event.currentTarget);
@@ -248,6 +248,10 @@ export default function LeagueChatPanel({
                     message={message}
                     day={day !== previousDay ? day : null}
                     continuation={isMessageContinuation(message, visibleMessages[index - 1])}
+                    runEnd={
+                      index === visibleMessages.length - 1 ||
+                      !isMessageContinuation(visibleMessages[index + 1], message)
+                    }
                     canManage={canManage}
                     canEdit={Boolean(onEdit && canPublish && !muted)}
                     onReport={onReport}
@@ -272,7 +276,7 @@ export default function LeagueChatPanel({
         ) : null}
       </div>
 
-      <footer className="border-t border-social-border bg-social-surface p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <footer className="bg-social-canvas px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
         {!canPublish && !muted ? (
           <p role="status" className="py-2 text-center text-sm text-social-text-muted">
             Accept the community standards above before sending messages.

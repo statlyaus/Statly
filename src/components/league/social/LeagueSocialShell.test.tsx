@@ -52,65 +52,54 @@ vi.mock('./useLeagueSocial', () => ({
 }));
 
 describe('LeagueSocialShell', () => {
-  it('keeps three panels mounted and exposes keyboard tabs with separate unread labels', async () => {
-    const user = userEvent.setup();
-    render(<LeagueSocialShell leagueId="league-1" currentUserId="user-1" />);
+  it('shows only the view it is given, with no tab bar', () => {
+    const { rerender } = render(<LeagueSocialShell leagueId="league-1" currentUserId="user-1" />);
 
-    const chatTab = screen.getByRole('tab', { name: /chat 2 unread/i });
-    const boardTab = screen.getByRole('tab', { name: /board 3 unread/i });
-    const activityTab = screen.getByRole('tab', { name: /activity 4 unread/i });
-    expect(chatTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getAllByRole('tabpanel', { hidden: true })).toHaveLength(3);
-    const chatComposer = screen.getByRole('textbox', { name: 'Message league chat' });
-    await user.type(chatComposer, 'Preserve this draft');
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Message league chat' })).toBeInTheDocument();
+    expect(screen.getByText('No discussions yet')).not.toBeVisible();
 
-    chatTab.focus();
-    await user.keyboard('{ArrowRight}');
-
-    await waitFor(() => expect(boardTab).toHaveFocus());
-    expect(boardTab).toHaveAttribute('aria-selected', 'true');
+    rerender(<LeagueSocialShell leagueId="league-1" currentUserId="user-1" view="board" />);
     expect(screen.getByText('No discussions yet')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Message league chat' })).toBeNull();
 
-    await user.keyboard('{End}');
-    await waitFor(() => expect(activityTab).toHaveFocus());
-    expect(activityTab).toHaveAttribute('aria-selected', 'true');
+    rerender(<LeagueSocialShell leagueId="league-1" currentUserId="user-1" view="activity" />);
     expect(screen.getByText('No league activity yet')).toBeInTheDocument();
-
-    await user.keyboard('{Home}');
-    await waitFor(() => expect(chatTab).toHaveFocus());
-    expect(screen.getByRole('textbox', { name: 'Message league chat' })).toHaveValue(
-      'Preserve this draft'
-    );
   });
 
-  it('supports the compact header contract without removing preferences', () => {
-    render(
-      <LeagueSocialShell
-        leagueId="league-1"
-        currentUserId="user-1"
-        title="Hidden title"
-        showHeader={false}
-      />
+  it('shows the title and preferences on a page, and neither in the pop-up', () => {
+    const { rerender } = render(
+      <LeagueSocialShell leagueId="league-1" currentUserId="user-1" title="Footy chat" />
     );
-
-    expect(screen.queryByRole('heading', { name: 'Hidden title' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Footy chat' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Social notification preferences' })
     ).toBeInTheDocument();
+
+    rerender(
+      <LeagueSocialShell
+        leagueId="league-1"
+        currentUserId="user-1"
+        title="Footy chat"
+        showHeader={false}
+      />
+    );
+    expect(screen.queryByRole('heading', { name: 'Footy chat' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Social notification preferences' })
+    ).not.toBeInTheDocument();
   });
 
   it('marks only latest visible content read and waits while the shell is minimized', async () => {
-    const user = userEvent.setup();
     controller.markRead.mockClear();
     const { rerender } = render(
-      <LeagueSocialShell leagueId="league-1" currentUserId="user-1" visible={false} />
+      <LeagueSocialShell leagueId="league-1" currentUserId="user-1" view="board" visible={false} />
     );
 
-    await user.click(screen.getByRole('tab', { name: /board 3 unread/i }));
     await waitFor(() => expect(screen.getByText('No discussions yet')).toBeInTheDocument());
     expect(controller.markRead).not.toHaveBeenCalled();
 
-    rerender(<LeagueSocialShell leagueId="league-1" currentUserId="user-1" visible />);
+    rerender(<LeagueSocialShell leagueId="league-1" currentUserId="user-1" view="board" visible />);
     await waitFor(() => expect(controller.markRead).toHaveBeenCalledWith('board'));
     expect(controller.markRead).not.toHaveBeenCalledWith('chat');
     expect(controller.markRead).not.toHaveBeenCalledWith('activity');
@@ -149,7 +138,7 @@ describe('LeagueSocialShell', () => {
       <LeagueSocialShell
         leagueId="league-1"
         currentUserId="user-1"
-        initialView="board"
+        view="board"
         initialPostId="post-1"
       />
     );
@@ -162,7 +151,7 @@ describe('LeagueSocialShell', () => {
     controller.threads = {};
   });
 
-  it('moves focus to Chat after starting a discussion from Activity', async () => {
+  it('hands an Activity item to the Discuss handler', async () => {
     const user = userEvent.setup();
     const activity: SocialMessage = {
       id: 'activity-1',
@@ -182,14 +171,13 @@ describe('LeagueSocialShell', () => {
       <LeagueSocialShell
         leagueId="league-1"
         currentUserId="user-1"
-        initialView="activity"
+        view="activity"
         onDiscussActivity={onDiscussActivity}
       />
     );
     await user.click(screen.getByRole('button', { name: 'Discuss' }));
 
     expect(onDiscussActivity).toHaveBeenCalledWith(activity);
-    await waitFor(() => expect(screen.getByRole('tab', { name: /chat/i })).toHaveFocus());
 
     controller.activity = [];
   });
@@ -202,16 +190,6 @@ describe('LeagueSocialShell', () => {
     const shell = screen.getByLabelText('League social');
     expect(shell).toHaveClass('min-h-0');
     expect(shell).not.toHaveClass('min-h-[36rem]');
-    const chatTab = screen.getByRole('tab', { name: /chat 2 unread/i });
-    const boardTab = screen.getByRole('tab', { name: /board 3 unread/i });
-    expect(chatTab).toHaveClass('border-social-action', 'text-social-text');
-    expect(boardTab).toHaveClass('border-transparent');
-    expect(boardTab).toHaveClass('text-social-text-muted');
-    expect(screen.getByRole('button', { name: 'Social notification preferences' })).toHaveClass(
-      'rounded-full'
-    );
-    const chatPanel = screen.getByRole('tabpanel', { name: /chat/i });
-    expect(chatPanel).toHaveClass('p-0');
     const chatScroller = screen
       .getByRole('textbox', { name: 'Message league chat' })
       .closest('section')
