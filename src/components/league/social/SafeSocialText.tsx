@@ -33,7 +33,7 @@ export default function SafeSocialText({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-social-action underline decoration-social-action underline-offset-2 transition-colors hover:text-social-action-hover active:text-social-action-pressed focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+            className="font-medium text-social-link underline decoration-social-link underline-offset-2 transition-colors hover:text-social-action-hover active:text-social-action-pressed focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
           >
             {part}
           </a>

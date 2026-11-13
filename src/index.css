@@ -92,6 +92,9 @@
   --color-social-bubble: var(--social-bubble);
   --color-social-bubble-own: var(--social-bubble-own);
   --color-social-bubble-own-text: var(--social-bubble-own-text);
+  --color-social-bubble-own-muted: var(--social-bubble-own-muted);
+  --color-social-bubble-edge: var(--social-bubble-edge);
+  --color-social-link: var(--social-link);
 }
 
 :root {
@@ -259,13 +262,14 @@
   --social-action-foreground: var(--league-primary-foreground);
   --social-focus: var(--statly-blue);
   --social-brand-soft: var(--secondary);
-  --social-canvas: #fbfcfe;
+  --social-canvas: #eef2f6;
   --social-surface: var(--background);
   --social-surface-subtle: var(--league-primary-soft);
   --social-border: var(--border);
   --social-border-strong: #aeb7c7;
   --social-text: var(--foreground);
-  --social-text-muted: var(--muted-foreground);
+  /* 6.9:1 on white and 6.1:1 on the canvas: small grey text (times, team names) stays readable. */
+  --social-text-muted: #545b64;
   --social-disabled-bg: var(--muted);
   --social-disabled-text: var(--muted-foreground);
   --social-success: var(--league-success);
@@ -278,10 +282,13 @@
   --social-error-soft: var(--league-danger-soft);
   --social-mention-bg: #fff3c4;
   --social-mention-text: #684100;
-  --social-bubble: #e8eefb;
-  /* White on --statly-blue is 4.6:1, so the member's own bubble keeps one value in both themes. */
-  --social-bubble-own: var(--statly-blue);
+  /* Navy and white (owner pick, 2026-11-14): every chat text pair measures at least 6.7:1. */
+  --social-bubble: #fff;
+  --social-bubble-edge: #c3ccd8;
+  --social-bubble-own: var(--statly-navy);
   --social-bubble-own-text: #fff;
+  --social-bubble-own-muted: #c5d4e5;
+  --social-link: #1d4ed8;
 }
 
 .dark {
@@ -333,13 +340,13 @@
 
 .dark .league-social {
   --social-brand-soft: var(--secondary);
-  --social-canvas: var(--background);
+  --social-canvas: #0b1622;
   --social-surface: var(--card);
   --social-surface-subtle: var(--muted);
   --social-border: var(--border);
   --social-border-strong: oklch(0.556 0 0);
   --social-text: var(--foreground);
-  --social-text-muted: var(--muted-foreground);
+  --social-text-muted: #b4c0cd;
   --social-disabled-bg: var(--muted);
   --social-disabled-text: var(--muted-foreground);
   --social-success: #7dd3b0;
@@ -351,7 +358,11 @@
   --social-error-soft: rgb(168 79 68 / 24%);
   --social-mention-bg: #3f3212;
   --social-mention-text: #ffe39a;
-  --social-bubble: var(--secondary);
+  --social-bubble: #182636;
+  --social-bubble-edge: #2c3f54;
+  --social-bubble-own: #1d4ed8;
+  --social-bubble-own-muted: #dbe4fb;
+  --social-link: #9cc0ff;
 }
 
 @layer base {

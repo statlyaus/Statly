@@ -19,7 +19,7 @@ export default function DiscussionContextCard({
     <div className="my-1 rounded-xl bg-social-surface p-3 text-social-text shadow-sm ring-1 ring-social-border">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-social-action">
+          <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-social-link">
             {label}
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-social-text">{context.title}</p>

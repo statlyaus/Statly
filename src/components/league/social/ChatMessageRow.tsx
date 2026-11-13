@@ -82,7 +82,7 @@ export default function ChatMessageRow({
         ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
         : editing
           ? 'border-social-border bg-social-surface'
-          : 'border-transparent bg-social-bubble';
+          : 'border-social-bubble-edge bg-social-bubble shadow-sm';
 
   function closeOptions(): void {
     setOptionsOpen(false);
@@ -159,7 +159,7 @@ export default function ChatMessageRow({
               {editing ? null : (
                 <p
                   className={`mt-0.5 flex justify-end gap-1.5 text-[0.6875rem] tabular-nums ${
-                    filled ? 'text-social-bubble-own-text/80' : 'text-social-text-muted'
+                    filled ? 'text-social-bubble-own-muted' : 'text-social-text-muted'
                   }`}
                 >
                   {message.editedAt ? <span>Edited</span> : null}
