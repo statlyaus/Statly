@@ -64,30 +64,55 @@ export function planBiteGrantChange(input: {
   matchup: BiteGrantMatchup;
   /** The winner stored before this run, when the matchup was already FINAL. */
   previousWinnerMemberId?: string | null;
-  existing: { status: LeagueBiteStatus; cancelledBy: string | null } | null;
+  existing: ExistingBite | null;
 }): BiteGrantChange | null {
   const { bloodsuckerMemberId: bs, matchup, existing } = input;
-  if (matchup.status !== 'FINAL' || matchup.phase !== 'REGULAR') return null;
-  if (!matchup.homeMemberId || !matchup.awayMemberId) return null;
-  if (matchup.homeMemberId !== bs && matchup.awayMemberId !== bs) return null;
-  const victimMemberId = matchup.homeMemberId === bs ? matchup.awayMemberId : matchup.homeMemberId;
-  const wasFinal = input.previousWinnerMemberId !== undefined;
-  const flipped = wasFinal && input.previousWinnerMemberId !== matchup.winnerMemberId;
+  const victimMemberId = bloodsuckerOpponent(matchup, bs);
+  if (!victimMemberId) return null;
+  const flipped =
+    input.previousWinnerMemberId !== undefined &&
+    input.previousWinnerMemberId !== matchup.winnerMemberId;
+  return matchup.winnerMemberId === bs
+    ? planForWin(victimMemberId, flipped, existing)
+    : planForNoWin(victimMemberId, flipped, existing);
+}
 
-  if (matchup.winnerMemberId === bs) {
-    const trigger = flipped ? 'GRANTED_ON_RESCORE' : 'FINAL';
-    if (!existing) return { kind: 'GRANT', victimMemberId, trigger };
-    if (existing.status === 'CANCELLED' && existing.cancelledBy === 'RESULT_CHANGED') {
-      return { kind: 'REACTIVATE', victimMemberId, trigger: 'GRANTED_ON_RESCORE' };
-    }
-    return null;
+type ExistingBite = { status: LeagueBiteStatus; cancelledBy: string | null };
+
+/** The Bloodsucker's opponent in a FINAL, REGULAR, two-team matchup it plays in; else null. */
+function bloodsuckerOpponent(matchup: BiteGrantMatchup, bs: string): string | null {
+  if (matchup.status !== 'FINAL' || matchup.phase !== 'REGULAR') return null;
+  const { homeMemberId: home, awayMemberId: away } = matchup;
+  if (!home || !away) return null;
+  if (home === bs) return away;
+  return away === bs ? home : null;
+}
+
+function planForWin(
+  victimMemberId: string,
+  flipped: boolean,
+  existing: ExistingBite | null
+): BiteGrantChange | null {
+  if (!existing) {
+    return { kind: 'GRANT', victimMemberId, trigger: flipped ? 'GRANTED_ON_RESCORE' : 'FINAL' };
   }
+  const cancelledByResult =
+    existing.status === 'CANCELLED' && existing.cancelledBy === 'RESULT_CHANGED';
+  return cancelledByResult
+    ? { kind: 'REACTIVATE', victimMemberId, trigger: 'GRANTED_ON_RESCORE' }
+    : null;
+}
+
+function planForNoWin(
+  victimMemberId: string,
+  flipped: boolean,
+  existing: ExistingBite | null
+): BiteGrantChange | null {
   if (!existing) return null;
   if (UNEXECUTED.includes(existing.status)) return { kind: 'CANCEL', victimMemberId };
-  if (EXECUTED.includes(existing.status) && flipped) {
-    return { kind: 'RESULT_CHANGED', victimMemberId };
-  }
-  return null;
+  return EXECUTED.includes(existing.status) && flipped
+    ? { kind: 'RESULT_CHANGED', victimMemberId }
+    : null;
 }
 
 type GrantClient = Pick<
