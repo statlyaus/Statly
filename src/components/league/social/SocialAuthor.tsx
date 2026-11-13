@@ -57,13 +57,15 @@ function avatarColour(author: SocialAuthorIdentity | null): string {
 export function SocialAvatar({
   author,
   compact = false,
+  shape = 'circle',
 }: {
   author: SocialAuthorIdentity | null;
   compact?: boolean;
+  shape?: 'circle' | 'square';
 }): React.JSX.Element {
   return (
     <span
-      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold tracking-wide text-white`}
+      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden ${shape === 'square' ? 'rounded-xl' : 'rounded-full'} text-xs font-bold tracking-wide text-white`}
       style={author?.avatarUrl ? undefined : { backgroundColor: avatarColour(author) }}
       aria-hidden="true"
     >
