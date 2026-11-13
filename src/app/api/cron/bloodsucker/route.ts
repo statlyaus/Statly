@@ -3,15 +3,17 @@ import { NextResponse } from 'next/server';
 
 import { isCronRequestAuthorized } from '@/lib/cronAuth';
 import { logger } from '@/lib/logger';
+import { monitorCronRun } from '@/server/cron/cronMonitors';
 import { sweepBloodsuckerWindows } from '@/server/leagues/bloodsuckerAutoFill';
+import { sweepDueBloodsuckerBites } from '@/server/leagues/bloodsuckerAutoBite';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-// Called every 5 minutes by netlify/functions/cron-bloodsucker.mts. For now it only closes exclusive
-// windows that are due (#1280); the full sweep and its Sentry monitor are ticket 7 (#1284).
+// Called every 5 minutes by netlify/functions/cron-bloodsucker.mts (NFR-3, NFR-7): closes due
+// exclusive windows (#1280), then auto-executes due bites and runs bites waiting on a lock (#1284).
 export async function GET(request: NextRequest) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json(
@@ -20,20 +22,42 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  return await monitorCronRun('cron-bloodsucker', runSweep);
+}
+
+async function runSweep(): Promise<NextResponse> {
   try {
-    const run = await sweepBloodsuckerWindows();
-    // A failed league makes the run fail, so the scheduler records it instead of a silent success.
-    const ok = run.failedLeagueIds.length === 0;
+    const now = new Date();
+    const windows = await sweepBloodsuckerWindows(now);
+    const bites = await sweepDueBloodsuckerBites(now);
+    const failedLeagueIds = [...new Set([...windows.failedLeagueIds, ...bites.failedLeagueIds])];
+    if (bites.autoExecutedBiteIds.length > 0 || bites.waitingLockBiteIds.length > 0) {
+      logger.info('Bloodsucker sweep moved bites', {
+        autoExecuted: bites.autoExecutedBiteIds.length,
+        waitingLock: bites.waitingLockBiteIds.length,
+      });
+    }
+    // A failed league makes the run fail, so the scheduler and Sentry record it (NFR-6).
+    const ok = failedLeagueIds.length === 0;
+    if (!ok) logger.error('Bloodsucker sweep failed for some leagues', { failedLeagueIds });
     return NextResponse.json(
-      { ok, ...run, checkedAt: new Date().toISOString() },
+      {
+        ok,
+        checkedLeagueIds: windows.checkedLeagueIds,
+        closedLeagueIds: windows.closedLeagueIds,
+        autoExecutedBiteIds: bites.autoExecutedBiteIds,
+        waitingLockBiteIds: bites.waitingLockBiteIds,
+        failedLeagueIds,
+        checkedAt: now.toISOString(),
+      },
       { status: ok ? 200 : 500, headers: NO_STORE }
     );
   } catch (error) {
-    logger.error('Failed to sweep Bloodsucker windows', {
+    logger.error('Failed to run the Bloodsucker sweep', {
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { ok: false, error: 'Failed to sweep Bloodsucker windows' },
+      { ok: false, error: 'Failed to run the Bloodsucker sweep' },
       { status: 500, headers: NO_STORE }
     );
   }
