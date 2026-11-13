@@ -114,8 +114,8 @@ describe('LeagueSocialWidget', () => {
     const panel = screen.getByLabelText('League social panel');
     const shellControl = screen.getByTestId('social-shell-control');
     expect(await screen.findByText('League Social')).toBeInTheDocument();
-    expect(screen.getByText('League Social').closest('.bg-social-brand-strong')).toHaveClass(
-      'text-social-brand-foreground'
+    expect(screen.getByText('League Social').closest('.bg-social-canvas')).toHaveClass(
+      'text-social-text'
     );
     expect(screen.getByText('Premier League')).toBeInTheDocument();
     expect(panel).toHaveClass(

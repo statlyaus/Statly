@@ -248,10 +248,10 @@ export default function SocialComposer({
       <div
         className={
           compact
-            ? `flex min-h-14 items-end gap-0.5 rounded-[1.75rem] border bg-social-surface p-1.5 shadow-sm transition-colors focus-within:ring-2 focus-within:ring-social-focus/30 ${
+            ? `flex min-h-14 items-end gap-0.5 rounded-2xl border bg-social-bubble p-1.5 transition-colors focus-within:ring-2 focus-within:ring-social-focus/30 ${
                 visibleError
                   ? 'border-social-error focus-within:border-social-error'
-                  : 'border-social-border focus-within:border-social-action'
+                  : 'border-transparent focus-within:border-social-action'
               }`
             : undefined
         }

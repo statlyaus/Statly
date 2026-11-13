@@ -24,8 +24,10 @@ interface ChatMessageRowProps {
   message: SocialMessage;
   /** The day heading to print above this message; null when it shares the previous one's day. */
   day: string | null;
-  /** True when this message continues the previous author's run, so the identity is not repeated. */
+  /** True when this message continues the previous author's run, so it sits closer to it. */
   continuation: boolean;
+  /** True when this is the last message of its author's run: the avatar sits beside it. */
+  runEnd: boolean;
   canManage: boolean;
   /** The viewer may publish right now (standards accepted, not muted). */
   canEdit: boolean;
@@ -36,8 +38,9 @@ interface ChatMessageRowProps {
 }
 
 /**
- * One chat message as a bubble. The member's own messages sit on the right, filled with the
- * action colour and without an avatar; everyone else's sit on the left beside theirs. Direction is
+ * One chat message as a bubble, after the Ronas IT "Web Chat UI" reference: the name and time sit
+ * inside the bubble, a rounded-square avatar sits beside the last bubble of a run, and the
+ * member's own messages sit on the right, filled with the action colour. Direction is
  * carried by position and by the accessible name, never by colour alone. Actions stay behind one
  * options button that appears on hover or focus (always on touch screens), so a quiet
  * conversation is not a column of buttons.
@@ -46,6 +49,7 @@ export default function ChatMessageRow({
   message,
   day,
   continuation,
+  runEnd,
   canManage,
   canEdit,
   onReport,
@@ -78,7 +82,7 @@ export default function ChatMessageRow({
         ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
         : editing
           ? 'border-social-border bg-social-surface'
-          : 'border-transparent bg-social-bubble shadow-sm';
+          : 'border-transparent bg-social-bubble';
 
   function closeOptions(): void {
     setOptionsOpen(false);
@@ -86,7 +90,7 @@ export default function ChatMessageRow({
   }
 
   return (
-    <li className={day || !continuation ? 'mt-4 first:mt-0' : 'mt-0.5'}>
+    <li className={day || !continuation ? 'mt-3 first:mt-0' : 'mt-1'}>
       {day ? (
         <div className="mb-3 flex justify-center" aria-label={day}>
           <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-social-text-muted">
@@ -96,90 +100,75 @@ export default function ChatMessageRow({
       ) : null}
 
       <div className={`group flex items-end gap-2 ${own ? 'flex-row-reverse' : ''}`}>
-        {own ? null : continuation ? (
-          <span className="w-8 shrink-0" aria-hidden="true" />
+        {runEnd ? (
+          <SocialAvatar author={message.author} shape="square" />
         ) : (
-          <span className="self-start pt-6">
-            <SocialAvatar author={message.author} compact />
-          </span>
+          <span className="w-10 shrink-0" aria-hidden="true" />
         )}
 
-        <div
-          className={`flex min-w-0 flex-col ${own ? 'items-end' : 'items-start'} ${
-            editing ? 'flex-1' : 'max-w-[80%]'
-          }`}
+        <article
+          aria-label={`${containsMention ? 'Message containing a mention' : 'Message'} from ${authorName}`}
+          className={`min-w-0 rounded-2xl border px-3.5 py-2 ${
+            editing ? 'flex-1' : 'max-w-[75%]'
+          } ${tone}`}
         >
-          {!continuation ? (
-            <p className="mb-1 flex max-w-full flex-wrap items-baseline gap-x-1.5 px-1 text-xs text-social-text-muted">
-              {own ? (
+          {removed ? (
+            <p className="text-sm italic text-social-text-muted">Message removed</p>
+          ) : (
+            <>
+              {continuation ? null : own ? (
                 <span className="sr-only">You</span>
               ) : (
-                <>
+                <p className="flex min-w-0 items-baseline gap-x-1.5 text-xs">
                   <span className="truncate font-semibold text-social-text">
                     {message.author?.displayName || 'Former member'}
                   </span>
-                  <span className="truncate">{message.author?.teamName || 'Team unavailable'}</span>
-                </>
-              )}
-              <time dateTime={message.createdAt}>{formatSocialTime(message.createdAt)}</time>
-            </p>
-          ) : (
-            <time dateTime={message.createdAt} className="sr-only">
-              {new Date(message.createdAt).toLocaleTimeString()}
-            </time>
-          )}
-
-          <article
-            aria-label={`${containsMention ? 'Message containing a mention' : 'Message'} from ${authorName}`}
-            className={`min-w-0 max-w-full rounded-[1.125rem] border px-3 py-1.5 ${
-              editing ? 'w-full' : ''
-            } ${own ? 'rounded-br-md' : 'rounded-bl-md'} ${tone}`}
-          >
-            {removed ? (
-              <p className="text-sm italic text-social-text-muted">Message removed</p>
-            ) : (
-              <>
-                {containsMention ? (
-                  <span className="mb-1 inline-flex items-center gap-1 rounded-full border border-social-warning bg-social-warning-soft px-2 py-0.5 text-xs font-semibold text-social-mention-text">
-                    <AtSign className="size-3" aria-hidden="true" />
-                    Mention
+                  <span className="truncate text-social-text-muted">
+                    {message.author?.teamName || 'Team unavailable'}
                   </span>
-                ) : null}
-                {message.context ? <DiscussionContextCard context={message.context} /> : null}
-                {editing && onEdit ? (
-                  <MessageEditForm
-                    initialContent={message.content}
-                    maxLength={1000}
-                    onCancel={closeOptions}
-                    onSave={async (content) => {
-                      await onEdit(message.id, content);
-                      closeOptions();
-                    }}
-                  />
-                ) : message.content ? (
-                  <SafeSocialText
-                    value={message.content}
-                    className={
-                      filled
-                        ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text'
-                        : ''
-                    }
-                  />
-                ) : null}
-                {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
-                {message.editedAt && !editing ? (
-                  <p
-                    className={`mt-0.5 text-right text-xs ${
-                      filled ? 'text-social-bubble-own-text/80' : 'text-social-text-muted'
-                    }`}
-                  >
-                    Edited
-                  </p>
-                ) : null}
-              </>
-            )}
-          </article>
-        </div>
+                </p>
+              )}
+              {containsMention ? (
+                <span className="my-1 inline-flex items-center gap-1 rounded-full border border-social-warning bg-social-warning-soft px-2 py-0.5 text-xs font-semibold text-social-mention-text">
+                  <AtSign className="size-3" aria-hidden="true" />
+                  Mention
+                </span>
+              ) : null}
+              {message.context ? <DiscussionContextCard context={message.context} /> : null}
+              {editing && onEdit ? (
+                <MessageEditForm
+                  initialContent={message.content}
+                  maxLength={1000}
+                  onCancel={closeOptions}
+                  onSave={async (content) => {
+                    await onEdit(message.id, content);
+                    closeOptions();
+                  }}
+                />
+              ) : message.content ? (
+                <SafeSocialText
+                  value={message.content}
+                  className={
+                    filled
+                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text'
+                      : ''
+                  }
+                />
+              ) : null}
+              {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
+              {editing ? null : (
+                <p
+                  className={`mt-0.5 flex justify-end gap-1.5 text-[0.6875rem] tabular-nums ${
+                    filled ? 'text-social-bubble-own-text/80' : 'text-social-text-muted'
+                  }`}
+                >
+                  {message.editedAt ? <span>Edited</span> : null}
+                  <time dateTime={message.createdAt}>{formatSocialTime(message.createdAt)}</time>
+                </p>
+              )}
+            </>
+          )}
+        </article>
 
         {hasOptions && !editing ? (
           <button

@@ -248,6 +248,10 @@ export default function LeagueChatPanel({
                     message={message}
                     day={day !== previousDay ? day : null}
                     continuation={isMessageContinuation(message, visibleMessages[index - 1])}
+                    runEnd={
+                      index === visibleMessages.length - 1 ||
+                      !isMessageContinuation(visibleMessages[index + 1], message)
+                    }
                     canManage={canManage}
                     canEdit={Boolean(onEdit && canPublish && !muted)}
                     onReport={onReport}

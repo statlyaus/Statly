@@ -358,18 +358,18 @@ export default function LeagueSocialWidget({
               : 'pointer-events-none translate-y-full opacity-0 sm:translate-y-4 sm:scale-95'
           }`}
         >
-          <div className="flex min-h-16 shrink-0 items-center gap-3 border-b border-social-brand-strong bg-social-brand-strong px-4 pt-[env(safe-area-inset-top)] text-social-brand-foreground">
+          <div className="flex min-h-[4.5rem] shrink-0 items-center gap-3 bg-social-canvas px-4 pt-[env(safe-area-inset-top)] text-social-text">
             <span
               aria-hidden="true"
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-social-action font-display text-xl font-bold text-social-action-foreground"
+              className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-social-brand-strong text-sm font-bold tracking-wide text-social-brand-foreground"
             >
               {leagueInitials(displayLeagueName) || <MessageCircle className="size-5" />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-display text-2xl font-bold uppercase leading-none tracking-wide text-social-brand-foreground">
+              <p className="truncate text-xl font-semibold leading-tight text-social-text">
                 {displayLeagueName ?? 'Current league'}
               </p>
-              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-social-header-muted">
+              <div className="flex min-w-0 items-center gap-1.5 text-sm text-social-text-muted">
                 <span className="truncate">League Social</span>
                 {connectionNotice !== 'hidden' ? (
                   <span
@@ -388,7 +388,7 @@ export default function LeagueSocialWidget({
                 ref={minimizeButtonRef}
                 type="button"
                 onClick={handleMinimize}
-                className="inline-flex size-10 items-center justify-center rounded-full text-social-brand-foreground transition-colors hover:bg-social-header-control-hover active:bg-social-header-control-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-social-brand-strong"
+                className="inline-flex size-10 items-center justify-center rounded-full text-social-text-muted transition-colors hover:bg-social-bubble hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
                 aria-label="Minimize league social"
                 title="Minimize"
               >
