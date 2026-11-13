@@ -127,14 +127,20 @@ export function buildLeagueFormatAudit(input: {
   actorMemberId: string | null;
   before: LeagueFormatState;
   after: LeagueFormatState;
-  reason: 'SETTINGS_UPDATED' | 'BLOODSUCKER_LEFT';
+  reason: 'SETTINGS_UPDATED' | 'BLOODSUCKER_LEFT' | 'BLOODSUCKER_DRAWN';
 }): Prisma.LeagueCompetitionAuditUncheckedCreateInput {
+  // US-2 AC1: the audit names how a new Bloodsucker was set. A draw adds its own payload.
+  const chosen =
+    input.reason === 'SETTINGS_UPDATED' &&
+    input.after.bloodsuckerMemberId !== null &&
+    input.after.bloodsuckerMemberId !== input.before.bloodsuckerMemberId;
   return {
     leagueId: input.leagueId,
     actorMemberId: input.actorMemberId,
     eventType: 'LEAGUE_FORMAT_CHANGED',
     payloadJson: {
       reason: input.reason,
+      ...(chosen ? { method: 'CHOSEN' } : {}),
       before: { ...input.before },
       after: { ...input.after },
     },
