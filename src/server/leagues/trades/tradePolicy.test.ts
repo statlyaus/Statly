@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   determineAcceptanceTransition,
   getAllowedTradeActions,
+  isBloodsuckerInTrade,
   validateTradePlayerSelection,
 } from './tradePolicy';
 
@@ -81,5 +82,53 @@ describe('league trade policy', () => {
     expect(validateTradePlayerSelection([], ['b'])).toMatchObject({ ok: false });
     expect(validateTradePlayerSelection(['a', 'a'], ['b'])).toMatchObject({ ok: false });
     expect(validateTradePlayerSelection(['a'], ['a'])).toMatchObject({ ok: false });
+  });
+
+  describe('Bloodsucker trade rules (#1285)', () => {
+    it('finds the Bloodsucker on either side of a trade (BR-31)', () => {
+      expect(isBloodsuckerInTrade(['a', 'bs'], 'bs')).toBe(true);
+      expect(isBloodsuckerInTrade(['bs', 'a'], 'bs')).toBe(true);
+      expect(isBloodsuckerInTrade(['a', 'b'], 'bs')).toBe(false);
+      expect(isBloodsuckerInTrade(['a', 'b'], null)).toBe(false);
+    });
+
+    const bittenFrom = [{ playerId: 'bitten', victimMemberId: 'victim' }];
+
+    it('refuses a trade that sends a bitten player back to his old team (BR-32)', () => {
+      // The third team sends the bitten player to the victim.
+      expect(
+        validateTradePlayerSelection(['bitten'], ['v1'], {
+          proposerMemberId: 'third',
+          recipientMemberId: 'victim',
+          bittenFrom,
+        })
+      ).toMatchObject({ ok: false, code: 'BITTEN_PLAYER_TRADE_BACK' });
+      // The victim asks for him back.
+      expect(
+        validateTradePlayerSelection(['v1'], ['bitten'], {
+          proposerMemberId: 'victim',
+          recipientMemberId: 'third',
+          bittenFrom,
+        })
+      ).toMatchObject({ ok: false, code: 'BITTEN_PLAYER_TRADE_BACK' });
+    });
+
+    it('allows the bitten player to go to any other team', () => {
+      expect(
+        validateTradePlayerSelection(['bitten'], ['o1'], {
+          proposerMemberId: 'third',
+          recipientMemberId: 'owner',
+          bittenFrom,
+        })
+      ).toEqual({ ok: true });
+      // The victim's own players still move freely.
+      expect(
+        validateTradePlayerSelection(['v1'], ['t1'], {
+          proposerMemberId: 'victim',
+          recipientMemberId: 'third',
+          bittenFrom,
+        })
+      ).toEqual({ ok: true });
+    });
   });
 });

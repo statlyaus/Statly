@@ -13,6 +13,7 @@ import {
   swapRosterPlayers,
 } from '@/server/leagues/rosterSwap';
 import { BITE_PENDING_MESSAGE, hasPendingBite } from '@/server/leagues/bitePending';
+import { resolveBloodsuckerMemberId } from '@/server/leagues/leagueFormat';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -29,9 +30,12 @@ import {
   type TradeReviewModeDto,
 } from './tradeContracts';
 import {
+  BLOODSUCKER_CANNOT_TRADE_MESSAGE,
   determineAcceptanceTransition,
   getAllowedTradeActions,
+  isBloodsuckerInTrade,
   validateTradePlayerSelection,
+  type BittenPlayer,
 } from './tradePolicy';
 
 type Transaction = Prisma.TransactionClient;
@@ -305,6 +309,12 @@ async function createTradeInTransaction(
     throw new TradeServiceError('INVALID_INPUT', 'Select another active team in this league.');
   }
 
+  await enforceBloodsuckerTradeRules(tx, access, {
+    firstMemberId: access.memberId,
+    secondMemberId: recipient.id,
+    firstPlayerIds: input.sendingPlayerIds,
+    secondPlayerIds: input.receivingPlayerIds,
+  });
   await validateTradeLimits(tx, access, [access.memberId, recipient.id]);
   const playerSnapshots = await validateRosterExchange(tx, access, {
     firstMemberId: access.memberId,
@@ -402,6 +412,9 @@ async function executeActionInTransaction(
   if (!allowed.includes(input.action)) {
     throw new TradeServiceError('FORBIDDEN', 'You cannot perform this trade action.', 403);
   }
+  if (input.action === 'accept' || input.action === 'approve') {
+    await enforceBloodsuckerTradeRules(tx, access, offeredExchange(thread));
+  }
 
   switch (input.action) {
     case 'withdraw':
@@ -472,6 +485,12 @@ async function counterTrade(
 
   const otherMemberId =
     access.memberId === thread.memberOneId ? thread.memberTwoId : thread.memberOneId;
+  await enforceBloodsuckerTradeRules(tx, access, {
+    firstMemberId: access.memberId,
+    secondMemberId: otherMemberId,
+    firstPlayerIds: input.sendingPlayerIds,
+    secondPlayerIds: input.receivingPlayerIds,
+  });
   const playerSnapshots = await validateRosterExchange(tx, access, {
     firstMemberId: access.memberId,
     secondMemberId: otherMemberId,
@@ -593,13 +612,10 @@ async function finalizeTrade(
 
   const access = await requireTradeAccessByMember(tx, thread.leagueId, actorMemberId, thread);
 
-  const firstPlayerIds = thread.currentOffer.players
-    .filter((player) => player.fromMemberId === thread.memberOneId)
-    .map((player) => player.playerId);
-  const secondPlayerIds = thread.currentOffer.players
-    .filter((player) => player.fromMemberId === thread.memberTwoId)
-    .map((player) => player.playerId);
+  const { firstPlayerIds, secondPlayerIds } = offeredExchange(thread);
   try {
+    // A trade the review cron completes (no actor) is invalidated rather than retried forever.
+    await enforceBloodsuckerTradeRules(tx, access, offeredExchange(thread));
     await validateTradeLimits(tx, access, [thread.memberOneId, thread.memberTwoId], thread.id);
     await validateRosterExchange(tx, access, {
       firstMemberId: thread.memberOneId,
@@ -610,7 +626,13 @@ async function finalizeTrade(
   } catch (error) {
     if (
       error instanceof TradeServiceError &&
-      ['ROSTER_CHANGED', 'ROSTER_LIMIT_EXCEEDED', 'TRADE_LIMIT_REACHED'].includes(error.code)
+      [
+        'ROSTER_CHANGED',
+        'ROSTER_LIMIT_EXCEEDED',
+        'TRADE_LIMIT_REACHED',
+        'BLOODSUCKER_CANNOT_TRADE',
+        'BITTEN_PLAYER_TRADE_BACK',
+      ].includes(error.code)
     ) {
       return resolveThread(
         tx,
@@ -715,6 +737,84 @@ async function resolveThread(
     status: threadStatus,
     version: thread.version + 1,
   };
+}
+
+interface TradeExchange {
+  firstMemberId: string;
+  secondMemberId: string;
+  firstPlayerIds: string[];
+  secondPlayerIds: string[];
+}
+
+function offeredExchange(thread: LoadedTrade): TradeExchange {
+  const sentBy = (memberId: string) =>
+    thread.currentOffer.players
+      .filter((player) => player.fromMemberId === memberId)
+      .map((player) => player.playerId);
+  return {
+    firstMemberId: thread.memberOneId,
+    secondMemberId: thread.memberTwoId,
+    firstPlayerIds: sentBy(thread.memberOneId),
+    secondPlayerIds: sentBy(thread.memberTwoId),
+  };
+}
+
+/**
+ * Bloodsucker trade rules (#1285). BR-31: the Bloodsucker cannot propose, counter, accept or be
+ * approved into any trade. BR-32: a player taken in an executed bite this season cannot go back to
+ * the member he was taken from. Other formats skip both checks.
+ */
+async function enforceBloodsuckerTradeRules(
+  db: Pick<Transaction, 'leagueMember' | 'leagueBite' | 'league'>,
+  access: TradeAccess,
+  exchange: TradeExchange
+): Promise<void> {
+  const league = await db.league.findUnique({
+    where: { id: access.leagueId },
+    select: { settings: { select: { leagueFormat: true, bloodsuckerMemberId: true } } },
+  });
+  const settings = league?.settings;
+  if (!settings || settings.leagueFormat !== 'BLOODSUCKER') return;
+
+  const activeMembers = await db.leagueMember.findMany({
+    where: { leagueId: access.leagueId, isActive: true, status: 'ACTIVE' },
+    select: { id: true },
+  });
+  const bloodsuckerMemberId = resolveBloodsuckerMemberId(
+    settings,
+    activeMembers.map((member) => member.id)
+  );
+  if (
+    isBloodsuckerInTrade([exchange.firstMemberId, exchange.secondMemberId], bloodsuckerMemberId)
+  ) {
+    throw new TradeServiceError('BLOODSUCKER_CANNOT_TRADE', BLOODSUCKER_CANNOT_TRADE_MESSAGE, 409);
+  }
+
+  const bites = await db.leagueBite.findMany({
+    where: {
+      leagueId: access.leagueId,
+      seasonId: access.seasonId,
+      status: { in: ['EXECUTED', 'AUTO_EXECUTED'] },
+      takenPlayerId: { in: [...exchange.firstPlayerIds, ...exchange.secondPlayerIds] },
+    },
+    select: { takenPlayerId: true, victimMemberId: true },
+  });
+  if (bites.length === 0) return;
+  const bittenFrom: BittenPlayer[] = bites.flatMap((bite) =>
+    bite.takenPlayerId
+      ? [{ playerId: bite.takenPlayerId, victimMemberId: bite.victimMemberId }]
+      : []
+  );
+  const selection = validateTradePlayerSelection(
+    exchange.firstPlayerIds,
+    exchange.secondPlayerIds,
+    {
+      proposerMemberId: exchange.firstMemberId,
+      recipientMemberId: exchange.secondMemberId,
+      bittenFrom,
+    }
+  );
+  if (!selection.ok) throw new TradeServiceError(selection.code, selection.error, 409);
 }
 
 async function validateRosterExchange(

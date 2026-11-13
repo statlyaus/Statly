@@ -210,6 +210,12 @@ highest-Statly-Z player for the Bloodsucker's lowest, never while a round is in 
 under the League row lock (see
 [Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
 
+In a Bloodsucker league the Bloodsucker is never part of a trade (`BLOODSUCKER_CANNOT_TRADE`), and a
+player taken in an executed bite cannot be traded back to the member he was taken from for the rest
+of the season (`BITTEN_PLAYER_TRADE_BACK`, read from `LeagueBite`). Both are HTTP 409 at proposal,
+counter, acceptance and commissioner approval (see
+[Bloodsucker trade rules](../product/league-competition-rules.md#bloodsucker-trade-rules)).
+
 A player is waiver-only, winnable only by a claim at the next 6 am Melbourne waiver run, while he has
 a `PENDING` waiver claim in the league's active season (until a run settles it, even once it is due),
 or was dropped since the last waiver run or is still inside a drop's waiver period.
