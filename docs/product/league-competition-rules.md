@@ -84,8 +84,8 @@ In a **Bloodsucker** league one member, the Bloodsucker, skips the draft and tak
 team it beats.
 
 **Held back until the epic ships.** The setup (#1278), draft exclusion (#1279), exclusive window
-(#1280) and shared roster swap (#1282) are built; bites, deadlines, protections and waiver priority
-(#1281, #1283-#1286) are not, so a Bloodsucker league would still play much as a standard one. Choosing Bloodsucker is
+(#1280), shared roster swap (#1282) and pinned waiver priority (#1281) are built; bites, deadlines
+and protections (#1283-#1286) are not, so a Bloodsucker league would still play much as a standard one. Choosing Bloodsucker is
 therefore off unless `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` (`isBloodsuckerSelectable`,
 `src/lib/leagueFormatOptions.ts`). With the flag off the create page and settings do not offer it,
 and create and settings refuse it with code `BLOODSUCKER_UNAVAILABLE`. A league already stored as
@@ -133,6 +133,11 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
   `/api/cron/bloodsucker` every 5 minutes (see
   [Drafts and waivers](../domain/draft-and-waivers.md#concurrent-writers)), so other members can add
   for up to 5 minutes after the close time before the fill has run; the fill takes whoever is left.
+- The Bloodsucker is **pinned at waiver priority 1** (#1281, BR-15, BR-16). The order seeded at the
+  end of the draft puts it at 1 and the drafters from 2 in the usual reverse-final-pick order. Its
+  own wins never move it, so it wins every contested claim, including a second claim in the same
+  run; any other winner goes last among positions 2 and up (`pinnedWaiverPriority.ts`,
+  `src/server/waivers/`).
 
 ### Bloodsucker bites
 

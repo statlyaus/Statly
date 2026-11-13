@@ -42,6 +42,12 @@ final pick and the `COMPLETED` status roll back together, the draft stays `LIVE`
 retried. Only the Firestore waiver availability projection runs after the commit, and its failure is
 logged without changing the outcome.
 
+The seed is reverse final-pick order: the member who made the last pick is priority 1. In a
+Bloodsucker league the Bloodsucker, who has no picks, is seeded at 1 and the drafters follow from 2
+(#1281, BR-15, BR-16). It stays pinned there: a win by the Bloodsucker leaves the order alone, a win
+by anyone else sends that member to the end, and the first claim of a league with missing rows
+renumbers the Bloodsucker back to 1 (`src/server/waivers/pinnedWaiverPriority.ts`).
+
 Stale, duplicate, or concurrent commands must be rejected or converge to the same committed result.
 Client success is never inferred from a local timer reaching zero or an optimistic row update.
 
@@ -243,7 +249,11 @@ time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refus
 (HTTP 409) rather than debiting and awarding the same claims again. A run that dies releases the
 lease implicitly after 15 minutes. Each claim settles in one transaction: it is taken only while still
 `PENDING`, then the roster check, the FAAB debit, the roster change, the pending-bid release and the
-priority advance commit together. The roster check comes before the debit, so a claim that cannot be
+priority advance commit together. The settlement first takes the League row lock, so it serialises with
+the other League-row writers (the Bloodsucker window close, and bites once #1283 lands). The drop must
+remove exactly one row and the add is a create, never an upsert: a drop player or an added player
+that another writer moved mid-settlement rolls the claim back to `PENDING` instead of taking a player
+from its new owner (#1281, edge case E3). The roster check comes before the debit, so a claim that cannot be
 awarded is never charged. A run that dies part way leaves the claim untouched for the next run to
 settle once, and an unexpected error ends the run rather than settling later claims ahead of it.
 Firestore projections and activity are written after the commit and cannot change an outcome.
