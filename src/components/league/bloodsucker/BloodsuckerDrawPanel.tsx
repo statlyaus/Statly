@@ -118,40 +118,15 @@ export function BloodsuckerDrawPanel({
 
   const startDraw = async () => {
     setCommand({ status: 'saving' });
-    try {
-      const response = await authenticatedFetch(endpoint, { method: 'POST' }, userId);
-      const body = (await response.json().catch(() => ({}))) as Partial<LobbyState> & {
-        code?: string;
-        error?: string;
-      };
-      if (!response.ok) {
-        setCommand({
-          status: 'failed',
-          code: body.code ?? `HTTP_${response.status}`,
-          message: body.error ?? 'The draw did not run.',
-        });
-        return;
-      }
+    const result = await postDraw(endpoint, userId);
+    if (result.state) {
       setNowMs(Date.now());
-      accept(body as LobbyState);
-      setCommand({ status: 'idle' });
-    } catch {
-      setCommand({
-        status: 'failed',
-        code: 'NETWORK_ERROR',
-        message: 'The draw could not reach the server. Nothing was drawn; try again.',
-      });
+      accept(result.state);
     }
+    setCommand(result.command);
   };
 
   if (!state || state.leagueFormat !== 'BLOODSUCKER') return null;
-
-  const shownTeam = frame
-    ? draw?.candidates.find((candidate) => candidate.memberId === frame.memberId)?.teamName
-    : null;
-  const winnerTeam = draw?.candidates.find(
-    (candidate) => candidate.memberId === draw.winnerMemberId
-  )?.teamName;
 
   return (
     <section
@@ -165,65 +140,143 @@ export function BloodsuckerDrawPanel({
         One team skips the draft, builds from free agents, and takes a player from every team it
         beats.
       </p>
+      <DrawStatus state={state} frame={frame} />
+      <DrawControls
+        leagueId={leagueId}
+        state={state}
+        command={command}
+        revealing={revealing}
+        onDraw={() => void startDraw()}
+      />
+    </section>
+  );
+}
 
-      {draw && frame ? (
-        <div className="mt-4">
-          <p
-            aria-hidden="true"
-            className={`text-2xl font-bold tracking-tight sm:text-3xl ${revealing ? 'opacity-80' : ''}`}
-          >
-            {shownTeam ?? winnerTeam}
-          </p>
-          <p className="sr-only" aria-live="polite">
-            {revealing ? 'Drawing the Bloodsucker.' : `The Bloodsucker is ${winnerTeam}.`}
-          </p>
-          {!revealing ? (
-            <p className="mt-1 text-sm text-[color:var(--draft-broadcast-muted)]">
-              Drawn at random from {draw.candidates.length} teams
-              {state.bloodsucker && state.bloodsucker.memberId !== draw.winnerMemberId
-                ? `. The commissioner has since chosen ${state.bloodsucker.teamName} instead.`
-                : '.'}
-            </p>
-          ) : null}
-        </div>
-      ) : state.bloodsucker ? (
-        <p className="mt-4 text-lg font-semibold">
-          {state.bloodsucker.teamName}
-          <span className="block text-sm font-normal text-[color:var(--draft-broadcast-muted)]">
-            Chosen by the commissioner.
-          </span>
-        </p>
-      ) : (
-        <p className="mt-4 text-sm">
-          {state.canManage
-            ? 'Draw the Bloodsucker at random, or choose a member in league settings.'
-            : 'Waiting for the commissioner to choose or draw the Bloodsucker.'}
-        </p>
-      )}
+async function postDraw(
+  endpoint: string,
+  userId?: string
+): Promise<{ state: LobbyState | null; command: DrawCommand }> {
+  try {
+    const response = await authenticatedFetch(endpoint, { method: 'POST' }, userId);
+    const body = (await response.json().catch(() => ({}))) as Partial<LobbyState> & {
+      code?: string;
+      error?: string;
+    };
+    if (response.ok) return { state: body as LobbyState, command: { status: 'idle' } };
+    return {
+      state: null,
+      command: {
+        status: 'failed',
+        code: body.code ?? `HTTP_${response.status}`,
+        message: body.error ?? 'The draw did not run.',
+      },
+    };
+  } catch {
+    return {
+      state: null,
+      command: {
+        status: 'failed',
+        code: 'NETWORK_ERROR',
+        message: 'The draw could not reach the server. Nothing was drawn; try again.',
+      },
+    };
+  }
+}
 
+const teamOf = (draw: RevealDraw, memberId: string) =>
+  draw.candidates.find((candidate) => candidate.memberId === memberId)?.teamName;
+
+/** The committed draw (spinning or settled), a chosen Bloodsucker, or who is still to set one. */
+function DrawStatus({
+  state,
+  frame,
+}: {
+  state: LobbyState;
+  frame: { memberId: string; done: boolean } | null;
+}) {
+  const draw = state.draw;
+  if (draw && frame) {
+    const winnerTeam = teamOf(draw, draw.winnerMemberId);
+    const switched = state.bloodsucker && state.bloodsucker.memberId !== draw.winnerMemberId;
+    return (
+      <div className="mt-4">
+        <p
+          aria-hidden="true"
+          className={`text-2xl font-bold tracking-tight sm:text-3xl ${frame.done ? '' : 'opacity-80'}`}
+        >
+          {teamOf(draw, frame.memberId) ?? winnerTeam}
+        </p>
+        <p className="sr-only" aria-live="polite">
+          {frame.done ? `The Bloodsucker is ${winnerTeam}.` : 'Drawing the Bloodsucker.'}
+        </p>
+        {frame.done ? (
+          <p className="mt-1 text-sm text-[color:var(--draft-broadcast-muted)]">
+            Drawn at random from {draw.candidates.length} teams
+            {switched
+              ? `. The commissioner has since chosen ${state.bloodsucker?.teamName} instead.`
+              : '.'}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+  if (state.bloodsucker) {
+    return (
+      <p className="mt-4 text-lg font-semibold">
+        {state.bloodsucker.teamName}
+        <span className="block text-sm font-normal text-[color:var(--draft-broadcast-muted)]">
+          Chosen by the commissioner.
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p className="mt-4 text-sm">
+      {state.canManage
+        ? 'Draw the Bloodsucker at random, or choose a member in league settings.'
+        : 'Waiting for the commissioner to choose or draw the Bloodsucker.'}
+    </p>
+  );
+}
+
+/** The draw button, a refusal with its code, and the switch to choosing a member. */
+function DrawControls({
+  leagueId,
+  state,
+  command,
+  revealing,
+  onDraw,
+}: {
+  leagueId: string;
+  state: LobbyState;
+  command: DrawCommand;
+  revealing: boolean;
+  onDraw: () => void;
+}) {
+  const saving = command.status === 'saving';
+  return (
+    <>
       {state.canDraw ? (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
-            onClick={() => void startDraw()}
-            disabled={command.status === 'saving'}
+            onClick={onDraw}
+            disabled={saving}
             className="inline-flex min-h-11 items-center justify-center rounded-md bg-[color:var(--draft-broadcast-text)] px-5 font-semibold text-[color:var(--draft-broadcast-page)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-alert)] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           >
-            {command.status === 'saving' ? 'Drawing…' : 'Draw the Bloodsucker'}
+            {saving ? 'Drawing…' : 'Draw the Bloodsucker'}
           </button>
           <p className="text-xs text-[color:var(--draft-broadcast-muted)]">
             The draw happens once and everyone in the lobby sees it.
           </p>
         </div>
       ) : null}
-
       {command.status === 'failed' ? (
         <p role="alert" className="mt-3 text-sm">
           <span className="font-semibold">The draw did not run ({command.code}).</span>{' '}
           {command.message}
         </p>
       ) : null}
-
       {state.canManage && state.bloodsucker && !revealing ? (
         <p className="mt-3 text-sm">
           <Link
@@ -232,9 +285,9 @@ export function BloodsuckerDrawPanel({
           >
             Choose a different member in league settings
           </Link>
-          {draw ? ' (the draw cannot be repeated).' : '.'}
+          {state.draw ? ' (the draw cannot be repeated).' : '.'}
         </p>
       ) : null}
-    </section>
+    </>
   );
 }

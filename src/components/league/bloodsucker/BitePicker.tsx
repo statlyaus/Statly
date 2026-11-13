@@ -235,43 +235,13 @@ export function BitePicker({
         </p>
       </header>
 
-      {open ? (
-        <section
-          aria-labelledby="bite-deadline-title"
-          className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm"
-        >
-          <h2 id="bite-deadline-title" className="font-semibold">
-            Deadline:{' '}
-            <time dateTime={picker.deadlineAt}>{formatLeagueTime(deadline, timeZone)}</time>
-          </h2>
-          <p className="mt-1">
-            {remaining > 0
-              ? `Time left: ${formatCountdown(remaining)}.`
-              : 'The deadline has passed. The system makes the pick within 5 minutes.'}
-          </p>
-          {picker.autoBitePreview ? (
-            <p className="mt-1 text-[color:var(--league-text-muted)]">
-              If you do not choose by then, the system takes{' '}
-              <strong>{nameOf(picker.autoBitePreview.takenPlayerId)}</strong> (their highest Statly
-              Z) and sends back <strong>{nameOf(picker.autoBitePreview.returnedPlayerId)}</strong>{' '}
-              (your lowest).
-            </p>
-          ) : null}
-        </section>
-      ) : (
-        <section
-          role="status"
-          className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm"
-        >
-          <p className="font-semibold">{biteStatusLabel(picker.status)}.</p>
-          {picker.takenPlayerId && picker.returnedPlayerId ? (
-            <p className="mt-1">
-              You took {nameOf(picker.takenPlayerId)} and sent back{' '}
-              {nameOf(picker.returnedPlayerId)}.
-            </p>
-          ) : null}
-        </section>
-      )}
+      <BiteState
+        picker={picker}
+        open={open}
+        remainingMs={remaining}
+        deadlineText={formatLeagueTime(deadline, timeZone)}
+        nameOf={nameOf}
+      />
 
       {blocked ? (
         <p
@@ -313,24 +283,85 @@ export function BitePicker({
             />
           </div>
 
-          {open ? (
-            <div className="sticky bottom-0 -mx-4 border-t border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
-              <button
-                type="submit"
-                disabled={disabled}
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[color:var(--league-danger)] px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-              >
-                {command.status === 'saving'
-                  ? 'Saving the bite…'
-                  : taken && returned
-                    ? `Take ${nameOf(taken)}, send back ${nameOf(returned)}`
-                    : 'Make the bite'}
-              </button>
-            </div>
-          ) : null}
+          <div className="sticky bottom-0 -mx-4 border-t border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
+            <button
+              type="submit"
+              disabled={disabled}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[color:var(--league-danger)] px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            >
+              {submitLabel(
+                command.status === 'saving',
+                taken && returned ? [nameOf(taken), nameOf(returned)] : null
+              )}
+            </button>
+          </div>
         </form>
       ) : null}
 
+      <BiteFeedback command={command} />
+    </div>
+  );
+}
+
+function submitLabel(saving: boolean, pair: [string, string] | null): string {
+  if (saving) return 'Saving the bite…';
+  return pair ? `Take ${pair[0]}, send back ${pair[1]}` : 'Make the bite';
+}
+
+/** The deadline, time left in words and the auto-bite preview; or the outcome once done. */
+function BiteState({
+  picker,
+  open,
+  remainingMs,
+  deadlineText,
+  nameOf,
+}: {
+  picker: BitePickerView;
+  open: boolean;
+  remainingMs: number;
+  deadlineText: string;
+  nameOf: (id: string | null) => string;
+}) {
+  const card =
+    'rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm';
+  if (!open) {
+    return (
+      <section role="status" className={card}>
+        <p className="font-semibold">{biteStatusLabel(picker.status)}.</p>
+        {picker.takenPlayerId && picker.returnedPlayerId ? (
+          <p className="mt-1">
+            You took {nameOf(picker.takenPlayerId)} and sent back {nameOf(picker.returnedPlayerId)}.
+          </p>
+        ) : null}
+      </section>
+    );
+  }
+  return (
+    <section aria-labelledby="bite-deadline-title" className={card}>
+      <h2 id="bite-deadline-title" className="font-semibold">
+        Deadline: <time dateTime={picker.deadlineAt}>{deadlineText}</time>
+      </h2>
+      <p className="mt-1">
+        {remainingMs > 0
+          ? `Time left: ${formatCountdown(remainingMs)}.`
+          : 'The deadline has passed. The system makes the pick within 5 minutes.'}
+      </p>
+      {picker.autoBitePreview ? (
+        <p className="mt-1 text-[color:var(--league-text-muted)]">
+          If you do not choose by then, the system takes{' '}
+          <strong>{nameOf(picker.autoBitePreview.takenPlayerId)}</strong> (their highest Statly Z)
+          and sends back <strong>{nameOf(picker.autoBitePreview.returnedPlayerId)}</strong> (your
+          lowest).
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** Success only after the commit; a refusal with its code. */
+function BiteFeedback({ command }: { command: Command }) {
+  return (
+    <>
       <div aria-live="polite">
         {command.status === 'saved' ? (
           <p className="rounded-md border border-[color:var(--league-success)] bg-[color:var(--league-success-soft)] p-3 text-sm font-medium">
@@ -347,6 +378,6 @@ export function BitePicker({
           {command.message}
         </p>
       ) : null}
-    </div>
+    </>
   );
 }
