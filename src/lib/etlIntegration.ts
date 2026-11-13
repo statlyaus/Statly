@@ -25,6 +25,8 @@ function getFirestore(): Firestore {
 export interface ETLPlayerStats {
   match_uid: string;
   player_uid: string;
+  /** The name the ETL stored; older callers derive one from `player_uid`. */
+  player_name?: string;
   team: string;
   season: number;
   round_number: number;
@@ -85,32 +87,6 @@ export interface ETLPlayer {
   provider_ids?: Record<string, unknown>;
 }
 
-/**
- * Get live player statistics for the current round
- */
-export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStats[]> {
-  const currentSeason = season || new Date().getFullYear();
-
-  // ETL fails closed: a failed read surfaces as an error. It never falls back to the `players`
-  // collection, whose rows have no match and would score every missing stat as a zero.
-  const statsQuery = query(
-    collection(getFirestore(), 'player_match_stats'),
-    where('season', '==', currentSeason),
-    limit(500)
-  );
-
-  try {
-    const snapshot = await getDocs(statsQuery);
-    const results = snapshot.docs.map((doc) => doc.data() as ETLPlayerStats);
-    return results.sort(
-      (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
-    );
-  } catch (error) {
-    logger.error('Failed to fetch live player stats', error, { season: currentSeason });
-    throw error;
-  }
-}
-
 export async function getRoundPlayerStatsResult(
   season: number,
   round: number
@@ -155,25 +131,6 @@ export async function getMatchPlayerStats(matchUid: string): Promise<ETLPlayerSt
     );
   } catch (error) {
     console.error(`Error fetching stats for match ${matchUid}:`, error);
-    return [];
-  }
-}
-
-/**
- * Get current live matches
- */
-export async function getLiveMatches(): Promise<ETLMatch[]> {
-  try {
-    const firestore = getFirestore();
-    const matchesQuery = query(
-      collection(firestore, 'matches'),
-      where('status', '==', 'in_progress')
-    );
-
-    const snapshot = await getDocs(matchesQuery);
-    return snapshot.docs.map((doc) => doc.data() as ETLMatch);
-  } catch (error) {
-    console.error('Error fetching live matches:', error);
     return [];
   }
 }
@@ -318,10 +275,11 @@ export function transformToLegacyPlayerStats(
 ): LegacyPlayerStat[] {
   return etlStats.map((stat) => {
     const profile = profiles?.[stat.player_uid];
-    const position = profile?.position || 'MID';
+    // No invented position: an unknown one stays empty and the page leaves the badge out.
+    const position = profile?.position ?? '';
     return {
       id: stat.player_uid,
-      name: stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
+      name: stat.player_name || stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
       team: stat.team,
       position,
       // Core stats
@@ -366,67 +324,4 @@ function calculateFantasyScore(stats: ETLPlayerStats['stats']): number {
     (stats.frees_against || 0) * -3 +
     (stats.clangers || 0) * -4
   );
-}
-
-/**
- * Check if live data is available (matches in progress)
- */
-export async function isLiveDataAvailable(): Promise<boolean> {
-  const liveMatches = await getLiveMatches();
-  return liveMatches.length > 0;
-}
-
-/**
- * Get data freshness indicator
- */
-export async function getDataFreshness(): Promise<{
-  isLive: boolean;
-  lastUpdate: string | null;
-  minutesSinceUpdate: number | null;
-}> {
-  const isLive = await isLiveDataAvailable();
-
-  if (!isLive) {
-    return { isLive: false, lastUpdate: null, minutesSinceUpdate: null };
-  }
-
-  const recentStats = await getLivePlayerStats();
-  if (recentStats.length === 0) {
-    return { isLive: true, lastUpdate: null, minutesSinceUpdate: null };
-  }
-
-  const mostRecent = recentStats[0].last_seen_at;
-  const lastUpdate = new Date(mostRecent);
-  const minutesSinceUpdate = Math.floor((Date.now() - lastUpdate.getTime()) / 60000);
-
-  return {
-    isLive: true,
-    lastUpdate: mostRecent,
-    minutesSinceUpdate,
-  };
-}
-
-/**
- * Get player profiles map for enriching positions
- */
-export async function getPlayerProfilesMap(): Promise<Record<string, { position?: string }>> {
-  try {
-    const firestore = getFirestore();
-    const snapshot = await getDocs(collection(firestore, 'players'));
-    const map: Record<string, { position?: string }> = {};
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as {
-        primaryPosition?: string;
-        position?: string;
-        positions?: string[];
-      };
-      map[docSnap.id] = {
-        position: data?.primaryPosition || data?.position || data?.positions?.[0],
-      };
-    });
-    return map;
-  } catch (error) {
-    console.error('Error building player profiles map:', error);
-    return {};
-  }
 }
