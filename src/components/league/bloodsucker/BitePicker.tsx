@@ -113,6 +113,7 @@ function PlayerGroups({
                         <span className="block text-xs text-[color:var(--league-text-muted)]">
                           {[player.position, player.club].filter(Boolean).join(' · ')}
                         </span>
+                        <span className="sr-only">, {SLOT_GROUP_LABELS[group]}</span>
                       </span>
                       <span className="shrink-0 text-xs tabular-nums text-[color:var(--league-text-muted)]">
                         {player.z === null ? 'No stats' : `Z ${player.z.toFixed(2)}`}
@@ -217,7 +218,7 @@ export function BitePicker({
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-[color:var(--league-text)] sm:px-6">
       <Link
         href={`/leagues/${encodeURIComponent(leagueId)}`}
-        className="text-sm font-medium underline underline-offset-2"
+        className="inline-block text-sm font-medium underline underline-offset-2"
       >
         Back to the league
       </Link>
@@ -283,50 +284,52 @@ export function BitePicker({
         </p>
       ) : null}
 
-      <form
-        onSubmit={(event) => void submit(event)}
-        className="space-y-4"
-        aria-busy={command.status === 'saving'}
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          <PlayerGroups
-            legend={`Take from ${picker.victim.teamName}`}
-            hint="Any player on their roster. Grouped by where each sat in their scored lineup."
-            name="taken-player"
-            players={picker.victimPlayers}
-            selected={open ? taken : picker.takenPlayerId}
-            onSelect={setTaken}
-            disabled={disabled}
-            disabledReasonId={blocked ? 'bite-blocked-reason' : undefined}
-          />
-          <PlayerGroups
-            legend="Send back one of yours"
-            hint="Any player on your roster can go back. Grouped by where each sat in your scored lineup."
-            name="returned-player"
-            players={picker.returnPlayers}
-            selected={open ? returned : picker.returnedPlayerId}
-            onSelect={setReturned}
-            disabled={disabled}
-            disabledReasonId={blocked ? 'bite-blocked-reason' : undefined}
-          />
-        </div>
-
-        {open ? (
-          <div className="sticky bottom-0 -mx-4 border-t border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
-            <button
-              type="submit"
+      {open ? (
+        <form
+          onSubmit={(event) => void submit(event)}
+          className="space-y-4"
+          aria-busy={command.status === 'saving'}
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
+            <PlayerGroups
+              legend={`Take from ${picker.victim.teamName}`}
+              hint="Any player on their roster. Grouped by where each sat in their scored lineup."
+              name="taken-player"
+              players={picker.victimPlayers}
+              selected={taken}
+              onSelect={setTaken}
               disabled={disabled}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[color:var(--league-danger)] px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            >
-              {command.status === 'saving'
-                ? 'Saving the bite…'
-                : taken && returned
-                  ? `Take ${nameOf(taken)}, send back ${nameOf(returned)}`
-                  : 'Make the bite'}
-            </button>
+              disabledReasonId={blocked ? 'bite-blocked-reason' : undefined}
+            />
+            <PlayerGroups
+              legend="Send back one of yours"
+              hint="Any player on your roster can go back. Grouped by where each sat in your scored lineup."
+              name="returned-player"
+              players={picker.returnPlayers}
+              selected={returned}
+              onSelect={setReturned}
+              disabled={disabled}
+              disabledReasonId={blocked ? 'bite-blocked-reason' : undefined}
+            />
           </div>
-        ) : null}
-      </form>
+
+          {open ? (
+            <div className="sticky bottom-0 -mx-4 border-t border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
+              <button
+                type="submit"
+                disabled={disabled}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[color:var(--league-danger)] px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              >
+                {command.status === 'saving'
+                  ? 'Saving the bite…'
+                  : taken && returned
+                    ? `Take ${nameOf(taken)}, send back ${nameOf(returned)}`
+                    : 'Make the bite'}
+              </button>
+            </div>
+          ) : null}
+        </form>
+      ) : null}
 
       <div aria-live="polite">
         {command.status === 'saved' ? (

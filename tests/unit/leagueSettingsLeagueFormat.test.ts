@@ -234,6 +234,8 @@ describe('league format settings', () => {
         eventType: 'LEAGUE_FORMAT_CHANGED',
         payloadJson: {
           reason: 'SETTINGS_UPDATED',
+          // US-2 AC1: a Bloodsucker set in settings is audited as chosen, not drawn.
+          method: 'CHOSEN',
           before: { leagueFormat: 'STANDARD', bloodsuckerMemberId: null },
           after: { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' },
         },

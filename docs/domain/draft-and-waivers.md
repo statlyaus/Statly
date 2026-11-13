@@ -68,7 +68,9 @@ league (BR-09) the Bloodsucker is never in the order: it takes membership `draft
 drafters, which orders fixtures, tie-breaks and the dashboard but never picks. Picks, rounds and
 readiness count the drafters only, so a 12-team Bloodsucker league snakes over 11 slots. Capacity
 also reserves one roster for the Bloodsucker (BR-10): if the pool left after the draft cannot fill
-it, readiness blocks the start with `bloodsucker_pool_shortage`. The Bloodsucker watches the draft
+it, readiness blocks the start with `bloodsucker_pool_shortage`. Before the draft starts, the commissioner can draw the Bloodsucker in the room; every client
+replays the committed draw from the revision poll (#1286, see
+[Bloodsucker screens](../product/league-competition-rules.md#bloodsucker-screens)). The Bloodsucker watches the draft
 room without a turn.
 
 A player is available only when the canonical league-scoped ownership and draft state allow the pick.

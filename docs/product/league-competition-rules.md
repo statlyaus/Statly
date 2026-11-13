@@ -83,20 +83,22 @@ category selection: every combination is valid.
 In a **Bloodsucker** league one member, the Bloodsucker, skips the draft and takes a player from each
 team it beats.
 
-**Held back until the epic ships.** The setup (#1278), draft exclusion (#1279), exclusive window
-(#1280), shared roster swap (#1282), pinned waiver priority (#1281), bites (#1283), the auto-bite
-sweep (#1284) and the trade rules (#1285) are built; the screens (#1286) are not, so a Bloodsucker league would still play much as a standard one. Choosing Bloodsucker is
-therefore off unless `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` (`isBloodsuckerSelectable`,
+**Held back until the owner turns it on.** Every epic ticket is built: setup (#1278), draft
+exclusion (#1279), exclusive window (#1280), shared roster swap (#1282), pinned waiver priority
+(#1281), bites (#1283), the auto-bite sweep (#1284), the trade rules (#1285) and the screens
+(#1286). Choosing Bloodsucker is still off unless `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` (`isBloodsuckerSelectable`,
 `src/lib/leagueFormatOptions.ts`). With the flag off the create page and settings do not offer it,
 and create and settings refuse it with code `BLOODSUCKER_UNAVAILABLE`. A league already stored as
 `BLOODSUCKER` keeps its format, sees the option, and can still change its Bloodsucker. Turn the flag
-on (and remove it) when the epic ships.
+on (and remove it) when the owner decides the format goes live.
 
 The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat.ts`):
 
 - The commissioner chooses the Bloodsucker (`LeagueSettings.bloodsuckerMemberId`) from the active
-  members in league settings. A league is created with the format only; the member is chosen once
-  managers have joined.
+  members in league settings, or draws it in the draft lobby (see
+  [Bloodsucker screens](#bloodsucker-screens)). A league is created with the format only; the member
+  is set once managers have joined. A settings change that sets a new Bloodsucker is audited with
+  `method: CHOSEN`.
 - Waivers must be `ROLLING` with no FAAB budget. Create and settings refuse anything else with code
   `BLOODSUCKER_REQUIRES_ROLLING`; a Bloodsucker league created without a waiver rule gets rolling.
 - The format and the Bloodsucker lock with the draft structure (see [Settings locks](#settings-locks)).
@@ -245,7 +247,42 @@ with the code as its reason. Standard and No Losers leagues skip both checks.
   code `BITTEN_PLAYER_TRADE_BACK`. He can go to any other team. Cancelled and open bites, and bites
   from an earlier season, do not count.
 
-The screens (#1286) are a later epic ticket and are not live yet.
+### Bloodsucker screens
+
+Built in #1286. The UI never uses the word "Vampire".
+
+- **Lobby draw (BR-04b).** While the draft is `SCHEDULED`, the commissioner sees "Draw the
+  Bloodsucker" in the draft room. `POST /api/leagues/[id]/bloodsucker/draw` draws one active member
+  with `crypto.randomInt` and, in one transaction under the League row lock, sets the Bloodsucker
+  and writes a `LEAGUE_FORMAT_CHANGED` audit row with reason `BLOODSUCKER_DRAWN`, `method: DRAW`,
+  the winner, every candidate and `drawnAt` (`src/server/leagues/bloodsuckerDraw.ts`). Only then
+  does any client see it. Every lobby client polls `GET .../bloodsucker/draw` every 3 seconds (no
+  Socket.IO needed) and plays the same 6-second reveal, timed from the committed `drawnAt` and
+  derived from the draw id, so a client joining or refreshing mid-reveal sees the same frame and one
+  arriving later sees the winner. A draw is refused (409) outside a Bloodsucker league
+  (`NOT_BLOODSUCKER_LEAGUE`), after the draft starts (`DRAFT_STRUCTURE_LOCKED`), while a Bloodsucker
+  is set (`BLOODSUCKER_ALREADY_SET`), and while any earlier drawn winner is still in the league
+  (`BLOODSUCKER_ALREADY_DRAWN`), so clearing the setting cannot re-roll. After a draw the only change
+  is choosing a member in settings. A drawn Bloodsucker who leaves (BR-07) may be replaced by a new
+  draw.
+- **League home banner (BR-40).** `GET /api/leagues/[id]/bloodsucker` gives every member the
+  Bloodsucker, its won-lost-drawn record from the current fixture's FINAL matchups, and every bite
+  this season with both players (`src/server/leagues/bloodsuckerReadModel.ts`). The Bloodsucker also
+  gets a link to each open bite.
+- **Matchup warning (US-8 AC2).** In the Match Centre, the Bloodsucker's opponent sees, while their
+  regular-round matchup is still `SCHEDULED`, that losing gives up a player and that the returned
+  player takes the same lineup slot (BR-25). Finals matchups get no warning.
+- **Bite picker (US-6, NFR-5, NFR-8).** `/leagues/[id]/bites/[biteId]`, for the Bloodsucker only
+  (`GET /api/leagues/[id]/bites/[biteId]`). Both rosters are grouped by where each player sat in
+  that round's scored lineup after autosubs (DEF, MID, RUC, FWD, UTIL, interchange and bench); any
+  player may be taken or sent back (E2). It shows the deadline, the time left in words, and the pair
+  the auto-bite would pick now (BR-28). While the server would refuse a bite (`ROUND_IN_PROGRESS`
+  under E8, `EARLIER_BITE_PENDING`, `BITE_SUSPENDED`) every player is disabled and the code and
+  reason are shown. Saving shows "Saving the bite…"; a refusal shows its code; success shows only
+  after the server commits. Players are native radio groups, so the picker works by keyboard and
+  screen reader, and it fits 375 px.
+- **Activity (BR-39).** Unchanged from #1283: one message per executed bite, "The Bloodsucker beat
+  {team} {score} and took {player}, sending back {player}."
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):

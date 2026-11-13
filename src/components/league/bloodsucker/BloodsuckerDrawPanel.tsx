@@ -92,8 +92,15 @@ export function BloodsuckerDrawPanel({
     return () => window.clearInterval(tick);
   }, [revealing]);
 
+  // Only a draw this client saw arrive (or saw mid-reveal) refreshes the room. A draw already
+  // settled on the first read is already reflected in the room's readiness, and refreshing then
+  // would remount this panel and refresh again.
+  const sawUnsettled = useRef(false);
   useEffect(() => {
-    if (draw && frame?.done && settledDrawId.current !== draw.drawId) {
+    if (state && (!draw || revealing)) sawUnsettled.current = true;
+  }, [state, draw, revealing]);
+  useEffect(() => {
+    if (draw && frame?.done && sawUnsettled.current && settledDrawId.current !== draw.drawId) {
       settledDrawId.current = draw.drawId;
       onSettled?.();
     }
