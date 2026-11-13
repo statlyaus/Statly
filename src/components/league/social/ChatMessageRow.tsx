@@ -36,10 +36,11 @@ interface ChatMessageRowProps {
 }
 
 /**
- * One chat message as a bubble. The member's own messages sit on the right without an avatar;
- * everyone else's sit on the left beside theirs. Direction is carried by position and by the
- * accessible name, never by colour alone. Actions stay behind one options button so a quiet
- * conversation is not a column of Report links.
+ * One chat message as a bubble. The member's own messages sit on the right, filled with the
+ * action colour and without an avatar; everyone else's sit on the left beside theirs. Direction is
+ * carried by position and by the accessible name, never by colour alone. Actions stay behind one
+ * options button that appears on hover or focus (always on touch screens), so a quiet
+ * conversation is not a column of buttons.
  */
 export default function ChatMessageRow({
   message,
@@ -66,13 +67,18 @@ export default function ChatMessageRow({
   const editing = ownAction === 'edit' && Boolean(onEdit);
   const deleting = ownAction === 'delete' && Boolean(onDelete);
 
+  // The editor is a form: it sits on a plain surface, not on the filled bubble.
+  const filled = own && !removed && !containsMention && !editing;
+
   const tone = removed
     ? 'border-dashed border-social-border bg-transparent'
     : containsMention
       ? 'border-social-warning bg-social-mention-bg text-social-mention-text'
-      : own
-        ? 'border-social-action bg-social-brand-soft'
-        : 'border-social-border bg-social-surface';
+      : filled
+        ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
+        : editing
+          ? 'border-social-border bg-social-surface'
+          : 'border-transparent bg-social-bubble shadow-sm';
 
   function closeOptions(): void {
     setOptionsOpen(false);
@@ -80,38 +86,36 @@ export default function ChatMessageRow({
   }
 
   return (
-    <li className={day || !continuation ? 'mt-3 first:mt-0' : 'mt-1'}>
+    <li className={day || !continuation ? 'mt-4 first:mt-0' : 'mt-0.5'}>
       {day ? (
-        <div className="mb-3 flex items-center gap-3" aria-label={day}>
-          <span className="h-px flex-1 bg-social-border" />
-          <time className="rounded-full border border-social-border bg-social-surface px-2.5 py-0.5 text-xs font-medium text-social-text-muted">
+        <div className="mb-3 flex justify-center" aria-label={day}>
+          <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-social-text-muted">
             {day}
           </time>
-          <span className="h-px flex-1 bg-social-border" />
         </div>
       ) : null}
 
-      <div className={`flex items-end gap-2 ${own ? 'flex-row-reverse' : ''}`}>
+      <div className={`group flex items-end gap-2 ${own ? 'flex-row-reverse' : ''}`}>
         {own ? null : continuation ? (
           <span className="w-8 shrink-0" aria-hidden="true" />
         ) : (
-          <span className="self-start pt-5">
+          <span className="self-start pt-6">
             <SocialAvatar author={message.author} compact />
           </span>
         )}
 
         <div
           className={`flex min-w-0 flex-col ${own ? 'items-end' : 'items-start'} ${
-            editing ? 'flex-1' : 'max-w-[85%]'
+            editing ? 'flex-1' : 'max-w-[80%]'
           }`}
         >
           {!continuation ? (
-            <p className="mb-0.5 flex max-w-full flex-wrap items-baseline gap-x-2 px-1 text-xs text-social-text-muted">
+            <p className="mb-1 flex max-w-full flex-wrap items-baseline gap-x-1.5 px-1 text-xs text-social-text-muted">
               {own ? (
-                <span className="font-semibold text-social-text">You</span>
+                <span className="sr-only">You</span>
               ) : (
                 <>
-                  <span className="truncate text-sm font-semibold text-social-text">
+                  <span className="truncate font-semibold text-social-text">
                     {message.author?.displayName || 'Former member'}
                   </span>
                   <span className="truncate">{message.author?.teamName || 'Team unavailable'}</span>
@@ -127,7 +131,7 @@ export default function ChatMessageRow({
 
           <article
             aria-label={`${containsMention ? 'Message containing a mention' : 'Message'} from ${authorName}`}
-            className={`min-w-0 max-w-full rounded-2xl border px-3 py-1.5 ${
+            className={`min-w-0 max-w-full rounded-[1.125rem] border px-3 py-1.5 ${
               editing ? 'w-full' : ''
             } ${own ? 'rounded-br-md' : 'rounded-bl-md'} ${tone}`}
           >
@@ -153,11 +157,24 @@ export default function ChatMessageRow({
                     }}
                   />
                 ) : message.content ? (
-                  <SafeSocialText value={message.content} />
+                  <SafeSocialText
+                    value={message.content}
+                    className={
+                      filled
+                        ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text'
+                        : ''
+                    }
+                  />
                 ) : null}
                 {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
                 {message.editedAt && !editing ? (
-                  <p className="mt-0.5 text-right text-xs text-social-text-muted">Edited</p>
+                  <p
+                    className={`mt-0.5 text-right text-xs ${
+                      filled ? 'text-social-bubble-own-text/80' : 'text-social-text-muted'
+                    }`}
+                  >
+                    Edited
+                  </p>
                 ) : null}
               </>
             )}
@@ -171,7 +188,9 @@ export default function ChatMessageRow({
             aria-expanded={optionsOpen}
             aria-controls={optionsId}
             onClick={() => (optionsOpen ? closeOptions() : setOptionsOpen(true))}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+            className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-[opacity,background-color,color] hover:bg-social-brand-soft hover:text-social-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
+              optionsOpen ? 'opacity-100' : 'opacity-0'
+            }`}
           >
             <MoreHorizontal className="size-4" aria-hidden="true" />
           </button>

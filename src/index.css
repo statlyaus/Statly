@@ -89,6 +89,9 @@
   --color-social-error-soft: var(--social-error-soft);
   --color-social-mention-bg: var(--social-mention-bg);
   --color-social-mention-text: var(--social-mention-text);
+  --color-social-bubble: var(--social-bubble);
+  --color-social-bubble-own: var(--social-bubble-own);
+  --color-social-bubble-own-text: var(--social-bubble-own-text);
 }
 
 :root {
@@ -256,7 +259,7 @@
   --social-action-foreground: var(--league-primary-foreground);
   --social-focus: var(--statly-blue);
   --social-brand-soft: var(--secondary);
-  --social-canvas: var(--muted);
+  --social-canvas: #f1f5fb;
   --social-surface: var(--background);
   --social-surface-subtle: var(--league-primary-soft);
   --social-border: var(--border);
@@ -275,6 +278,10 @@
   --social-error-soft: var(--league-danger-soft);
   --social-mention-bg: #fff3c4;
   --social-mention-text: #684100;
+  --social-bubble: var(--background);
+  /* White on --statly-blue is 4.6:1, so the member's own bubble keeps one value in both themes. */
+  --social-bubble-own: var(--statly-blue);
+  --social-bubble-own-text: #fff;
 }
 
 .dark {
@@ -344,6 +351,7 @@
   --social-error-soft: rgb(168 79 68 / 24%);
   --social-mention-bg: #3f3212;
   --social-mention-text: #ffe39a;
+  --social-bubble: var(--secondary);
 }
 
 @layer base {

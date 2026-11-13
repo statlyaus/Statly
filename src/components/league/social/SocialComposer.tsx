@@ -248,7 +248,7 @@ export default function SocialComposer({
       <div
         className={
           compact
-            ? `flex min-h-14 items-end gap-0.5 rounded-xl border bg-social-surface p-1.5 shadow-sm transition-colors focus-within:ring-2 focus-within:ring-social-focus/30 ${
+            ? `flex min-h-14 items-end gap-0.5 rounded-[1.75rem] border bg-social-surface p-1.5 shadow-sm transition-colors focus-within:ring-2 focus-within:ring-social-focus/30 ${
                 visibleError
                   ? 'border-social-error focus-within:border-social-error'
                   : 'border-social-border focus-within:border-social-action'
@@ -282,8 +282,8 @@ export default function SocialComposer({
           type="submit"
           disabled={!canSubmit}
           aria-label={compact ? sendLabel : undefined}
-          className={`inline-flex shrink-0 items-center justify-center rounded-lg border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface disabled:cursor-not-allowed ${
-            compact ? 'size-11' : 'min-h-11 px-4 text-sm'
+          className={`inline-flex shrink-0 items-center justify-center border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface disabled:cursor-not-allowed ${
+            compact ? 'size-11 rounded-full' : 'min-h-11 rounded-lg px-4 text-sm'
           } ${submitButtonTone}`}
         >
           {compact ? (
