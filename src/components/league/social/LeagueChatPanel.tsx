@@ -13,6 +13,7 @@ import type {
 import ChatMessageRow from './ChatMessageRow';
 import DiscussionContextCard from './DiscussionContextCard';
 import GiphyPicker from './GiphyPicker';
+import { assignMemberColours, memberColourIndex } from './SocialAuthor';
 import SocialComposer from './SocialComposer';
 import type { SocialComposerDraftScope } from './socialComposerDraft';
 
@@ -112,6 +113,8 @@ export default function LeagueChatPanel({
   const hasInitializedRef = useRef(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
   const visibleMessages = messages.filter((message) => message.type !== 'system');
+  // Distinct colours for everyone in the loaded conversation, so coaches are told apart at a glance.
+  const memberColours = assignMemberColours(visibleMessages.map((message) => message.author));
   const latestMessage = visibleMessages.at(-1);
   const muted = Boolean(mutedUntil && new Date(mutedUntil).getTime() > Date.now());
 
@@ -248,10 +251,7 @@ export default function LeagueChatPanel({
                     message={message}
                     day={day !== previousDay ? day : null}
                     continuation={isMessageContinuation(message, visibleMessages[index - 1])}
-                    runEnd={
-                      index === visibleMessages.length - 1 ||
-                      !isMessageContinuation(visibleMessages[index + 1], message)
-                    }
+                    colourIndex={memberColourIndex(message.author, memberColours)}
                     canManage={canManage}
                     canEdit={Boolean(onEdit && canPublish && !muted)}
                     onReport={onReport}

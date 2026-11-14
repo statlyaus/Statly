@@ -9,7 +9,7 @@ import DiscussionContextCard from './DiscussionContextCard';
 import GiphyMessageMedia from './GiphyMessageMedia';
 import { MessageDeleteConfirm, MessageEditForm } from './OwnMessageControls';
 import SafeSocialText from './SafeSocialText';
-import { formatSocialTime, SocialAvatar } from './SocialAuthor';
+import { formatSocialTime, memberColourStyle, SocialAvatar } from './SocialAuthor';
 import SocialRemoveButton from './SocialRemoveButton';
 import SocialReportButton from './SocialReportButton';
 
@@ -24,10 +24,10 @@ interface ChatMessageRowProps {
   message: SocialMessage;
   /** The day heading to print above this message; null when it shares the previous one's day. */
   day: string | null;
-  /** True when this message continues the previous author's run, so it sits closer to it. */
+  /** True when this message continues the previous author's run: no avatar or name, sits closer. */
   continuation: boolean;
-  /** True when this is the last message of its author's run: the avatar sits beside it. */
-  runEnd: boolean;
+  /** This author's colour in the conversation (see `assignMemberColours`). */
+  colourIndex: number;
   canManage: boolean;
   /** The viewer may publish right now (standards accepted, not muted). */
   canEdit: boolean;
@@ -49,7 +49,7 @@ export default function ChatMessageRow({
   message,
   day,
   continuation,
-  runEnd,
+  colourIndex,
   canManage,
   canEdit,
   onReport,
@@ -79,12 +79,12 @@ export default function ChatMessageRow({
   const tone = removed
     ? 'border-dashed border-social-border bg-transparent'
     : mentionOutline
-      ? 'border-2 border-social-link bg-social-bubble shadow-sm'
+      ? 'border-2 border-social-link border-l-4 border-l-[color:var(--member)] bg-social-bubble shadow-sm'
       : filled
         ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
         : editing
           ? 'border-social-border bg-social-surface'
-          : 'border-social-bubble-edge bg-social-bubble shadow-sm';
+          : 'border-social-bubble-edge border-l-4 border-l-[color:var(--member)] bg-social-bubble shadow-sm';
 
   function closeOptions(): void {
     setOptionsOpen(false);
@@ -92,7 +92,11 @@ export default function ChatMessageRow({
   }
 
   return (
-    <li className={day || !continuation ? 'mt-3 first:mt-0' : 'mt-1'}>
+    <li
+      data-member-colour
+      style={memberColourStyle(colourIndex)}
+      className={day || !continuation ? 'mt-4 first:mt-0' : 'mt-1'}
+    >
       {day ? (
         <div className="mb-3 flex justify-center">
           <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-social-text-muted">
@@ -101,9 +105,9 @@ export default function ChatMessageRow({
         </div>
       ) : null}
 
-      <div className={`group flex items-end gap-2 ${own ? 'flex-row-reverse' : ''}`}>
-        {runEnd ? (
-          <SocialAvatar author={message.author} shape="square" />
+      <div className={`group flex items-start gap-2 ${own ? 'flex-row-reverse' : ''}`}>
+        {!continuation ? (
+          <SocialAvatar author={message.author} shape="square" colourIndex={colourIndex} />
         ) : (
           <span className="w-10 shrink-0" aria-hidden="true" />
         )}
@@ -122,7 +126,7 @@ export default function ChatMessageRow({
                 <span className="sr-only">You</span>
               ) : (
                 <p className="flex min-w-0 items-baseline gap-x-1.5 text-xs">
-                  <span className="truncate font-semibold text-social-text">
+                  <span className="truncate font-semibold text-[color:var(--member)]">
                     {message.author?.displayName || 'Former member'}
                   </span>
                   <span className="truncate text-social-text-muted">
