@@ -72,7 +72,13 @@ describe('League Social colour system', () => {
     ['warning feedback', '--social-warning-text', '--social-warning-soft', 4.5],
     ['error feedback', '--social-error', '--social-error-soft', 4.5],
     ['error action label', '--social-error-foreground', '--social-error', 4.5],
-    ['mention label', '--social-mention-text', '--social-mention-bg', 4.5],
+    ['mention label and outline', '--social-link', '--social-bubble', 4.5],
+    ['mentioned name', '--social-mention-pill-text', '--social-mention-pill', 4.5],
+    ['chat text on a bubble', '--social-text', '--social-bubble', 4.5],
+    ['time and team on a bubble', '--social-text-muted', '--social-bubble', 4.5],
+    ['day label on the chat background', '--social-text-muted', '--social-canvas', 4.5],
+    ['your message text', '--social-bubble-own-text', '--social-bubble-own', 4.5],
+    ['time on your message', '--social-bubble-own-muted', '--social-bubble-own', 4.5],
     ['focus indicator', '--social-focus', '--social-surface', 3],
   ])('%s meets its WCAG contrast target', (_label, foreground, background, minimum) => {
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(minimum);

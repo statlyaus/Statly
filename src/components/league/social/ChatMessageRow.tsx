@@ -72,12 +72,14 @@ export default function ChatMessageRow({
   const deleting = ownAction === 'delete' && Boolean(onDelete);
 
   // The editor is a form: it sits on a plain surface, not on the filled bubble.
-  const filled = own && !removed && !containsMention && !editing;
+  const filled = own && !removed && !editing;
+  // Another member's message that names someone: blue outline (your own stays filled navy).
+  const mentionOutline = containsMention && !own && !editing;
 
   const tone = removed
     ? 'border-dashed border-social-border bg-transparent'
-    : containsMention
-      ? 'border-social-warning bg-social-mention-bg text-social-mention-text'
+    : mentionOutline
+      ? 'border-2 border-social-link bg-social-bubble shadow-sm'
       : filled
         ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
         : editing
@@ -128,8 +130,8 @@ export default function ChatMessageRow({
                   </span>
                 </p>
               )}
-              {containsMention ? (
-                <span className="my-1 inline-flex items-center gap-1 rounded-full border border-social-warning bg-social-warning-soft px-2 py-0.5 text-xs font-semibold text-social-mention-text">
+              {mentionOutline ? (
+                <span className="mb-0.5 inline-flex items-center gap-1 text-xs font-bold text-social-link">
                   <AtSign className="size-3" aria-hidden="true" />
                   Mention
                 </span>
@@ -148,9 +150,10 @@ export default function ChatMessageRow({
               ) : message.content ? (
                 <SafeSocialText
                   value={message.content}
+                  highlightMentions
                   className={
                     filled
-                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text'
+                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_[data-mention]]:!bg-white/20'
                       : ''
                   }
                 />

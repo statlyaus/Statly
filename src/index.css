@@ -87,8 +87,8 @@
   --color-social-error: var(--social-error);
   --color-social-error-foreground: var(--social-error-foreground);
   --color-social-error-soft: var(--social-error-soft);
-  --color-social-mention-bg: var(--social-mention-bg);
-  --color-social-mention-text: var(--social-mention-text);
+  --color-social-mention-pill: var(--social-mention-pill);
+  --color-social-mention-pill-text: var(--social-mention-pill-text);
   --color-social-bubble: var(--social-bubble);
   --color-social-bubble-own: var(--social-bubble-own);
   --color-social-bubble-own-text: var(--social-bubble-own-text);
@@ -280,8 +280,9 @@
   --social-error: var(--league-danger);
   --social-error-foreground: var(--league-primary-foreground);
   --social-error-soft: var(--league-danger-soft);
-  --social-mention-bg: #fff3c4;
-  --social-mention-text: #684100;
+  /* A mention is a blue outline (--social-link) and the @name in a blue pill (owner pick, 2026-11-14). */
+  --social-mention-pill: #1d4ed8;
+  --social-mention-pill-text: #fff;
   /* Navy and white (owner pick, 2026-11-14): every chat text pair measures at least 6.7:1. */
   --social-bubble: #fff;
   --social-bubble-edge: #c3ccd8;
@@ -356,8 +357,6 @@
   --social-warning-soft: rgb(157 114 52 / 24%);
   --social-error: #f28b82;
   --social-error-soft: rgb(168 79 68 / 24%);
-  --social-mention-bg: #3f3212;
-  --social-mention-text: #ffe39a;
   --social-bubble: #182636;
   --social-bubble-edge: #2c3f54;
   --social-bubble-own: #1d4ed8;
