@@ -180,7 +180,7 @@ export default function ChatMessageRow({
             aria-expanded={optionsOpen}
             aria-controls={optionsId}
             onClick={() => (optionsOpen ? closeOptions() : setOptionsOpen(true))}
-            className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-[opacity,background-color,color] hover:bg-social-brand-soft hover:text-social-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
+            className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-[opacity,background-color,color] hover:bg-social-brand-soft hover:text-social-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
               optionsOpen ? 'opacity-100' : 'opacity-0'
             }`}
           >
