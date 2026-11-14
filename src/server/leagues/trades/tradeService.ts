@@ -12,7 +12,11 @@ import {
   RosterSwapError,
   swapRosterPlayers,
 } from '@/server/leagues/rosterSwap';
-import { BITE_PENDING_MESSAGE, hasPendingBite } from '@/server/leagues/bitePending';
+import {
+  BITE_PENDING_MESSAGE,
+  BITE_PENDING_TRADE_HELD_MESSAGE,
+  hasPendingBite,
+} from '@/server/leagues/bitePending';
 import { resolveBloodsuckerMemberId } from '@/server/leagues/leagueFormat';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
@@ -32,8 +36,10 @@ import {
 import {
   BLOODSUCKER_CANNOT_TRADE_MESSAGE,
   determineAcceptanceTransition,
+  effectiveVetoThreshold,
   getAllowedTradeActions,
   isBloodsuckerInTrade,
+  resolveTradeReviewMode,
   validateTradePlayerSelection,
   type BittenPlayer,
 } from './tradePolicy';
@@ -436,8 +442,13 @@ async function executeActionInTransaction(
       return counterTrade(tx, access, thread, input, now);
     case 'accept': {
       enforceTradeDeadline(access, now);
+      const offeredMode = toReviewModeDto(thread.currentOffer.reviewMode);
+      const reviewMode = resolveTradeReviewMode(
+        offeredMode,
+        (await loadTradeReviewContext(tx, thread)).commissionerIsParty
+      );
       const transition = determineAcceptanceTransition(
-        toReviewModeDto(thread.currentOffer.reviewMode),
+        reviewMode,
         now,
         thread.currentOffer.reviewHours
       );
@@ -449,7 +460,13 @@ async function executeActionInTransaction(
       });
       await tx.leagueTradeOffer.update({
         where: { id: thread.currentOffer.id },
-        data: { status: transition.offerStatus, acceptedAt: now, version: { increment: 1 } },
+        data: {
+          status: transition.offerStatus,
+          acceptedAt: now,
+          version: { increment: 1 },
+          // The offer records the route it actually took, so the trade centre shows a vote.
+          ...(reviewMode !== offeredMode ? { reviewMode: 'VETO' as const } : {}),
+        },
       });
       await recordTradeEvent(tx, access, {
         threadId: thread.id,
@@ -561,7 +578,11 @@ async function castVeto(
   }
 
   const vetoCount = thread.currentOffer.vetoes.length + 1;
-  if (vetoCount >= thread.currentOffer.vetoThreshold) {
+  const threshold = effectiveVetoThreshold(
+    thread.currentOffer.vetoThreshold,
+    (await loadTradeReviewContext(tx, thread)).eligibleVoters
+  );
+  if (vetoCount >= threshold) {
     return resolveThread(
       tx,
       thread,
@@ -591,6 +612,36 @@ async function castVeto(
   };
 }
 
+/**
+ * Read at acceptance and at each veto: whether a commissioner (the owner or a co-commissioner) is
+ * one of the two teams, and how many active teams outside the trade can veto it.
+ */
+async function loadTradeReviewContext(
+  tx: Transaction,
+  thread: Pick<LoadedTrade, 'leagueId' | 'memberOneId' | 'memberTwoId'>
+): Promise<{ commissionerIsParty: boolean; eligibleVoters: number }> {
+  const league = await tx.league.findUnique({
+    where: { id: thread.leagueId },
+    select: {
+      ownerId: true,
+      members: {
+        where: { isActive: true, status: 'ACTIVE' },
+        select: { id: true, userId: true, isCoCommissioner: true },
+      },
+    },
+  });
+  const members = league?.members ?? [];
+  const parties = members.filter(
+    (member) => member.id === thread.memberOneId || member.id === thread.memberTwoId
+  );
+  return {
+    commissionerIsParty: parties.some(
+      (member) => member.isCoCommissioner || member.userId === league?.ownerId
+    ),
+    eligibleVoters: members.length - parties.length,
+  };
+}
+
 async function finalizeTrade(
   tx: Transaction,
   thread: LoadedTrade,
@@ -608,6 +659,15 @@ async function finalizeTrade(
       now,
       invalidationReason
     );
+  }
+
+  // BR-30: a trade with a team whose bite is waiting is held, not invalidated. Accept and approve
+  // answer 409; the review cron skips it and completes it at the first run after the bite is done.
+  if (
+    (await hasPendingBite(tx, thread.leagueId, thread.memberOneId)) ||
+    (await hasPendingBite(tx, thread.leagueId, thread.memberTwoId))
+  ) {
+    throw new TradeServiceError('BITE_PENDING', BITE_PENDING_TRADE_HELD_MESSAGE, 409);
   }
 
   const access = await requireTradeAccessByMember(tx, thread.leagueId, actorMemberId, thread);
