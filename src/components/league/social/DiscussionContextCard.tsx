@@ -22,12 +22,14 @@ export default function DiscussionContextCard({
           <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-social-link">
             {label}
           </p>
-          <p className="mt-1 truncate text-sm font-semibold text-social-text">{context.title}</p>
+          <p className="mt-1 break-words text-sm font-semibold text-social-text">{context.title}</p>
           {context.subtitle ? (
             <p className="mt-1 text-xs text-social-text-muted">{context.subtitle}</p>
           ) : null}
           {metadata.length > 0 ? (
-            <p className="mt-1 truncate text-xs text-social-text-muted">{metadata.join(' · ')}</p>
+            <p className="mt-1 break-words text-xs text-social-text-muted">
+              {metadata.join(' · ')}
+            </p>
           ) : null}
         </div>
         {onRemove ? (

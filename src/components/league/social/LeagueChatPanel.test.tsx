@@ -108,12 +108,9 @@ describe('LeagueChatPanel', () => {
 
     const [mention, ownMessage] = screen.getAllByRole('article');
     expect(mention).toHaveAccessibleName('Message containing a mention from Alex Smith');
-    expect(mention).toHaveClass(
-      'border-social-warning',
-      'bg-social-mention-bg',
-      'text-social-mention-text'
-    );
+    expect(mention).toHaveClass('border-social-link', 'bg-social-bubble');
     expect(screen.getByText('Mention')).toBeInTheDocument();
+    expect(screen.getByText('@Alex')).toHaveClass('bg-social-mention-pill');
     expect(ownMessage).toHaveClass('bg-social-bubble-own', 'text-social-bubble-own-text');
   });
 

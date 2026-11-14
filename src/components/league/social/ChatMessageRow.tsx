@@ -72,12 +72,14 @@ export default function ChatMessageRow({
   const deleting = ownAction === 'delete' && Boolean(onDelete);
 
   // The editor is a form: it sits on a plain surface, not on the filled bubble.
-  const filled = own && !removed && !containsMention && !editing;
+  const filled = own && !removed && !editing;
+  // Another member's message that names someone: blue outline (your own stays filled navy).
+  const mentionOutline = containsMention && !own && !editing;
 
   const tone = removed
     ? 'border-dashed border-social-border bg-transparent'
-    : containsMention
-      ? 'border-social-warning bg-social-mention-bg text-social-mention-text'
+    : mentionOutline
+      ? 'border-2 border-social-link bg-social-bubble shadow-sm'
       : filled
         ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
         : editing
@@ -92,7 +94,7 @@ export default function ChatMessageRow({
   return (
     <li className={day || !continuation ? 'mt-3 first:mt-0' : 'mt-1'}>
       {day ? (
-        <div className="mb-3 flex justify-center" aria-label={day}>
+        <div className="mb-3 flex justify-center">
           <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-social-text-muted">
             {day}
           </time>
@@ -128,8 +130,8 @@ export default function ChatMessageRow({
                   </span>
                 </p>
               )}
-              {containsMention ? (
-                <span className="my-1 inline-flex items-center gap-1 rounded-full border border-social-warning bg-social-warning-soft px-2 py-0.5 text-xs font-semibold text-social-mention-text">
+              {mentionOutline ? (
+                <span className="mb-0.5 inline-flex items-center gap-1 text-xs font-bold text-social-link">
                   <AtSign className="size-3" aria-hidden="true" />
                   Mention
                 </span>
@@ -148,9 +150,10 @@ export default function ChatMessageRow({
               ) : message.content ? (
                 <SafeSocialText
                   value={message.content}
+                  highlightMentions
                   className={
                     filled
-                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text'
+                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_[data-mention]]:!bg-social-bubble-own-text [&_[data-mention]]:!text-social-bubble-own'
                       : ''
                   }
                 />
@@ -177,7 +180,7 @@ export default function ChatMessageRow({
             aria-expanded={optionsOpen}
             aria-controls={optionsId}
             onClick={() => (optionsOpen ? closeOptions() : setOptionsOpen(true))}
-            className={`inline-flex size-8 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-[opacity,background-color,color] hover:bg-social-brand-soft hover:text-social-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
+            className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-[opacity,background-color,color] hover:bg-social-brand-soft hover:text-social-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
               optionsOpen ? 'opacity-100' : 'opacity-0'
             }`}
           >
