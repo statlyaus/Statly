@@ -11,6 +11,7 @@ const SocialEnvelopeSchema = z.object({
   sequence: z.number().int().nonnegative(),
   leagueId: z.string().min(1),
   seasonId: z.string().min(1),
+  conversationId: z.string().min(1).nullable().optional(),
   channel: z.enum(['chat', 'board', 'activity']),
   event: z.enum([
     'social:message',

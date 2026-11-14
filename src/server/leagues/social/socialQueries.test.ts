@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   socialOutboxAggregate: vi.fn(),
   socialOutboxCount: vi.fn(),
   leagueMemberFindFirst: vi.fn(),
+  socialConversationMemberFindMany: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +27,7 @@ vi.mock('@/lib/prisma', () => ({
       count: mocks.socialOutboxCount,
     },
     leagueMember: { findFirst: mocks.leagueMemberFindFirst },
+    socialConversationMember: { findMany: mocks.socialConversationMemberFindMany },
   },
 }));
 
@@ -70,6 +72,7 @@ describe('league social activity queries', () => {
         Promise.resolve(where.channel === 'CHAT' ? 1 : where.channel === 'BOARD' ? 2 : 3)
     );
     mocks.leagueMemberFindFirst.mockResolvedValue({ notificationSettingsJson: null });
+    mocks.socialConversationMemberFindMany.mockResolvedValue([]);
   });
 
   it('keeps member chat and automated activity in separate league-season queries', async () => {

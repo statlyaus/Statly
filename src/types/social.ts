@@ -163,6 +163,8 @@ export interface SocialRealtimeEnvelope {
   leagueId: string;
   seasonId: string;
   channel: SocialChannel;
+  /** The chat conversation; a DM's or group's event reaches only its members. Null is league-wide. */
+  conversationId?: string | null;
   event:
     | 'social:message'
     | 'social:activity'

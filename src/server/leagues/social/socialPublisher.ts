@@ -123,6 +123,7 @@ function buildEnvelope(event: SocialOutboxEvent): SocialRealtimeEnvelope {
     sequence: event.sequence,
     leagueId: event.leagueId,
     seasonId: event.seasonId,
+    conversationId: event.conversationId,
     channel: event.channel === 'CHAT' ? 'chat' : event.channel === 'BOARD' ? 'board' : 'activity',
     event: event.eventType as SocialRealtimeEnvelope['event'],
     payload: parseStoredPayload(event.payloadJson),
