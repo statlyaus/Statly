@@ -27,7 +27,9 @@ export default function DiscussionContextCard({
             <p className="mt-1 text-xs text-social-text-muted">{context.subtitle}</p>
           ) : null}
           {metadata.length > 0 ? (
-            <p className="mt-1 break-words text-xs text-social-text-muted">{metadata.join(' · ')}</p>
+            <p className="mt-1 break-words text-xs text-social-text-muted">
+              {metadata.join(' · ')}
+            </p>
           ) : null}
         </div>
         {onRemove ? (
