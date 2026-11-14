@@ -94,7 +94,7 @@ export default function ChatMessageRow({
   return (
     <li className={day || !continuation ? 'mt-3 first:mt-0' : 'mt-1'}>
       {day ? (
-        <div className="mb-3 flex justify-center" aria-label={day}>
+        <div className="mb-3 flex justify-center">
           <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-social-text-muted">
             {day}
           </time>
@@ -153,7 +153,7 @@ export default function ChatMessageRow({
                   highlightMentions
                   className={
                     filled
-                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_[data-mention]]:!bg-white/20'
+                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_[data-mention]]:!bg-social-bubble-own-text [&_[data-mention]]:!text-social-bubble-own'
                       : ''
                   }
                 />
