@@ -7,6 +7,10 @@ import type { Prisma } from '@prisma/client';
 export const BITE_PENDING_MESSAGE =
   'The Bloodsucker has a bite on your team waiting. You can drop players and trade once it is done.';
 
+/** For whoever completes a trade with a frozen team: the other team, a commissioner, the cron. */
+export const BITE_PENDING_TRADE_HELD_MESSAGE =
+  'The Bloodsucker has a bite waiting on a team in this trade. The trade can complete once it is done.';
+
 export class BitePendingError extends Error {
   readonly code = 'BITE_PENDING' as const;
   readonly status = 409 as const;

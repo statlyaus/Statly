@@ -31,7 +31,11 @@ import {
   type TradeThreadStatusDto,
   type TradeView,
 } from './tradeContracts';
-import { getAllowedTradeActions } from './tradePolicy';
+import {
+  effectiveVetoThreshold,
+  getAllowedTradeActions,
+  resolveTradeReviewMode,
+} from './tradePolicy';
 
 const PAGE_SIZE = 20;
 const terminalStatuses: LeagueTradeThreadStatus[] = [
@@ -168,11 +172,20 @@ export async function loadAuthorizedLeagueTradeCentre({
     leagueId,
     viewerMemberId: access.memberId,
     isCommissioner: access.isCommissioner,
-    rules: access.rules,
+    // The rules a new offer from this viewer would follow: a commissioner's own trade goes to a
+    // veto vote, and the threshold is capped at the teams outside the trade.
+    rules: {
+      ...access.rules,
+      reviewMode: resolveTradeReviewMode(access.rules.reviewMode, access.isCommissioner),
+      vetoThreshold: effectiveVetoThreshold(access.rules.vetoThreshold, members.length - 2),
+    },
     playerStats,
     teams,
     trades: page.flatMap((record) => {
-      const trade = toTradeDto(record, access);
+      const eligibleVoters = members.filter(
+        (member) => member.id !== record.memberOneId && member.id !== record.memberTwoId
+      ).length;
+      const trade = toTradeDto(record, access, eligibleVoters);
       return trade ? [trade] : [];
     }),
     counts,
@@ -369,7 +382,11 @@ async function loadViewCounts(access: ReadAccess): Promise<LeagueTradeCentreSnap
   return { inbox, sent, history, review };
 }
 
-function toTradeDto(record: TradeThreadRecord, access: ReadAccess): LeagueTradeDto | null {
+function toTradeDto(
+  record: TradeThreadRecord,
+  access: ReadAccess,
+  eligibleVoters: number
+): LeagueTradeDto | null {
   if (!record.currentOffer) return null;
   const participantIds = [record.memberOneId, record.memberTwoId];
   const actions = getAllowedTradeActions({
@@ -399,9 +416,13 @@ function toTradeDto(record: TradeThreadRecord, access: ReadAccess): LeagueTradeD
       teamName: record.memberTwo.teamName,
       teamLogoUrl: record.memberTwo.teamLogoUrl,
     },
-    currentOffer: toOfferDto(record.currentOffer, record.reviewEndsAt),
+    currentOffer: toOfferDto(record.currentOffer, record.reviewEndsAt, eligibleVoters),
     offerHistory: record.offers.map((offer) =>
-      toOfferDto(offer, offer.id === record.currentOffer?.id ? record.reviewEndsAt : null)
+      toOfferDto(
+        offer,
+        offer.id === record.currentOffer?.id ? record.reviewEndsAt : null,
+        eligibleVoters
+      )
     ),
     events: record.events.map((event) => ({
       id: event.id,
@@ -423,7 +444,8 @@ function toTradeDto(record: TradeThreadRecord, access: ReadAccess): LeagueTradeD
 
 function toOfferDto(
   offer: TradeThreadRecord['offers'][number],
-  reviewEndsAt: Date | null
+  reviewEndsAt: Date | null,
+  eligibleVoters: number
 ): TradeOfferDto {
   return {
     id: offer.id,
@@ -435,7 +457,7 @@ function toOfferDto(
     expiresAt: offer.expiresAt.toISOString(),
     reviewMode: toReviewModeDto(offer.reviewMode),
     reviewEndsAt: reviewEndsAt?.toISOString() ?? null,
-    vetoThreshold: offer.vetoThreshold,
+    vetoThreshold: effectiveVetoThreshold(offer.vetoThreshold, eligibleVoters),
     vetoCount: offer.vetoes.length,
     players: offer.players.map((player) => ({
       id: player.playerId,
