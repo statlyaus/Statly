@@ -339,6 +339,15 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* A coach's colour (SocialAuthor `memberColourStyle`): the light value, or the dark one in dark mode. */
+.league-social [data-member-colour] {
+  --member: var(--member-light);
+}
+
+.dark .league-social [data-member-colour] {
+  --member: var(--member-dark);
+}
+
 .dark .league-social {
   --social-brand-soft: var(--secondary);
   /* 3:1 needs only Statly blue, but on navy bubbles that is 3.2:1; light blue keeps focus obvious. */
