@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 import type { ResultCorrection } from './finalRoundRescoreAudit';
 import { recalculateLeagueRoundMatchups } from './matchupReadModel';
+import { correctionIsOverdue } from './noLosersResultCorrectionGrace';
 
 /**
  * No Losers result corrections (#1295, epic #1290 BR-23). The results ingest never rewrites a stored
@@ -33,6 +34,10 @@ export type PendingCorrectedResultRound = {
   leagueId: string;
   round: number;
   correctedResultIds: string[];
+  /** When the earliest correcting result arrived (its `fetchedAt`). */
+  correctedAt: string;
+  /** Waiting past RESULT_CORRECTION_GRACE_HOURS: the scoring job reports the run as failed. */
+  overdue: boolean;
 };
 
 export type CorrectedResultRun = {
@@ -41,7 +46,12 @@ export type CorrectedResultRun = {
   failedLeagueIds: string[];
 };
 
-type PendingRound = { leagueId: string; round: number; corrections: Map<string, ResultCorrection> };
+type PendingRound = {
+  leagueId: string;
+  round: number;
+  corrections: Map<string, ResultCorrection>;
+  correctedAt: Date;
+};
 
 /** League rounds whose stored player scores name a superseded result, oldest round first. */
 export async function findRoundsScoredOnCorrectedResults(): Promise<PendingRound[]> {
@@ -58,7 +68,14 @@ export async function findRoundsScoredOnCorrectedResults(): Promise<PendingRound
           settings: { select: { competitionRulesVersion: true } },
         },
       },
-      aflMatchResult: { select: { id: true, supersededById: true, supersedeReason: true } },
+      aflMatchResult: {
+        select: {
+          id: true,
+          supersededById: true,
+          supersedeReason: true,
+          supersededBy: { select: { fetchedAt: true } },
+        },
+      },
     },
   });
 
@@ -73,11 +90,14 @@ export async function findRoundsScoredOnCorrectedResults(): Promise<PendingRound
       continue;
     }
     const key = `${row.leagueId}:${row.round}`;
+    const correctedAt = result.supersededBy?.fetchedAt ?? new Date();
     const pending = rounds.get(key) ?? {
       leagueId: row.leagueId,
       round: row.round,
       corrections: new Map(),
+      correctedAt,
     };
+    if (correctedAt < pending.correctedAt) pending.correctedAt = correctedAt;
     pending.corrections.set(result.id, {
       supersededResultId: result.id,
       // The replacement may itself be superseded since; the audit names the row that replaced it.
@@ -98,10 +118,16 @@ export async function findRoundsScoredOnCorrectedResults(): Promise<PendingRound
  * re-scored, and is not logged per run: the scoring job's summary carries the count.
  */
 export async function rescoreCorrectedResultRounds(
-  recalculate: typeof recalculateLeagueRoundMatchups = recalculateLeagueRoundMatchups
+  recalculate: typeof recalculateLeagueRoundMatchups = recalculateLeagueRoundMatchups,
+  now: Date = new Date()
 ): Promise<CorrectedResultRun> {
   const run: CorrectedResultRun = { rounds: [], pending: [], failedLeagueIds: [] };
-  for (const { leagueId, round, corrections } of await findRoundsScoredOnCorrectedResults()) {
+  for (const {
+    leagueId,
+    round,
+    corrections,
+    correctedAt,
+  } of await findRoundsScoredOnCorrectedResults()) {
     if (run.failedLeagueIds.includes(leagueId)) continue;
     const resultCorrections = [...corrections.values()];
     try {
@@ -112,7 +138,13 @@ export async function rescoreCorrectedResultRounds(
         (correction) => correction.supersededResultId
       );
       if (result.recalculated === 0) {
-        run.pending.push({ leagueId, round, correctedResultIds });
+        run.pending.push({
+          leagueId,
+          round,
+          correctedResultIds,
+          correctedAt: correctedAt.toISOString(),
+          overdue: correctionIsOverdue(correctedAt, now),
+        });
         continue;
       }
       run.rounds.push({

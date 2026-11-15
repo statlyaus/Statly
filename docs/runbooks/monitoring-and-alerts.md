@@ -105,6 +105,10 @@ What to do:
 correction` and the run answers 500. `FINAL_ROUND_RESULTS_UNJOINED` there means the corrected
    result no longer joins its game; the round keeps its FINAL scores until it does (see step 4). A
    round whose stats are unavailable is listed under `resultCorrections.pending` and retried each run.
+   Once one has waited more than 12 hours after its correcting result arrived, it is `overdue`: the
+   run answers 500 and logs it under `overdueResultCorrections` with the league, round and
+   `correctedAt` (owner decision 2026-11-15). Find why the round cannot be recalculated (usually a
+   lineup player whose stat row lost its identity link) and fix the data; the next run re-scores it.
 3. A game abandoned without a result has no Footywire match page, so the ingest never records it.
    Record it from `etl/` with `DATABASE_URL` naming the fantasy database, clubs as the fixture names
    them, home first (no hand SQL):

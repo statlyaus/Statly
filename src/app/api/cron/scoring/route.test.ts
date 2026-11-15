@@ -97,7 +97,13 @@ describe('/api/cron/scoring', () => {
   });
 
   it('reports a correction round that could not be re-scored yet as pending, not re-scored (#1315)', async () => {
-    const pending = { leagueId: 'league-nl', round: 3, correctedResultIds: ['result-old'] };
+    const pending = {
+      leagueId: 'league-nl',
+      round: 3,
+      correctedResultIds: ['result-old'],
+      correctedAt: '2026-07-01T00:00:00.000Z',
+      overdue: false,
+    };
     rescoreCorrectionsMock.mockResolvedValue({
       rounds: [],
       pending: [pending],
@@ -114,6 +120,33 @@ describe('/api/cron/scoring', () => {
     expect(loggerInfoMock).toHaveBeenCalledWith(
       'Scheduled round scoring ran',
       expect.objectContaining({ resultCorrectionRounds: 0, resultCorrectionPendingRounds: 1 })
+    );
+  });
+
+  it('fails the run and names the round once a correction has waited past its grace period', async () => {
+    const overdue = {
+      leagueId: 'league-nl',
+      round: 3,
+      correctedResultIds: ['result-old'],
+      correctedAt: '2026-07-01T00:00:00.000Z',
+      overdue: true,
+    };
+    rescoreCorrectionsMock.mockResolvedValue({
+      rounds: [],
+      pending: [overdue],
+      failedLeagueIds: [],
+    });
+
+    const response = await GET(authorized());
+
+    expect(response.status).toBe(500);
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      'Scheduled round scoring failed',
+      expect.objectContaining({
+        overdueResultCorrections: [
+          { leagueId: 'league-nl', round: 3, correctedAt: overdue.correctedAt },
+        ],
+      })
     );
   });
 

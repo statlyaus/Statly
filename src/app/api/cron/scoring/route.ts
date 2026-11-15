@@ -29,10 +29,16 @@ async function runScheduledScoring(): Promise<NextResponse> {
   try {
     const run = await scoreStartedLeagueRounds();
     const resultCorrections = await rescoreCorrectedResultRounds();
+    // A round still not re-scored 12 hours after its AFL result was corrected keeps a result that is
+    // no longer official, so it fails the run like a stalled round (platform-27).
+    const overdueResultCorrections = resultCorrections.pending
+      .filter((round) => round.overdue)
+      .map(({ leagueId, round, correctedAt }) => ({ leagueId, round, correctedAt }));
     const ok =
       run.failedLeagueIds.length === 0 &&
       run.stalledRounds.length === 0 &&
-      resultCorrections.failedLeagueIds.length === 0;
+      resultCorrections.failedLeagueIds.length === 0 &&
+      overdueResultCorrections.length === 0;
     if (ok) {
       logger.info('Scheduled round scoring ran', {
         leagues: run.leagues.length,
@@ -47,6 +53,7 @@ async function runScheduledScoring(): Promise<NextResponse> {
         failedLeagueIds: run.failedLeagueIds,
         stalledRounds: run.stalledRounds,
         resultCorrectionFailedLeagueIds: resultCorrections.failedLeagueIds,
+        overdueResultCorrections,
       });
     }
     return NextResponse.json(
