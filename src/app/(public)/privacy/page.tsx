@@ -44,9 +44,11 @@ export default function PrivacyPolicyPage() {
 
         <h2>Third-Party Services</h2>
         <p>
-          We use third-party services, including Firebase Authentication, to manage user accounts
-          and authentication. These services may process your information in accordance with their
-          own privacy policies.
+          We use Firebase Authentication (Google) to manage user accounts and sign-in, and Sentry to
+          report errors so we can fix them. An error report includes the page address and your
+          browser and device type; it does not include your name, email address, cookies or anything
+          you typed. We do not use an analytics or advertising service. These services process your
+          information in accordance with their own privacy policies.
         </p>
 
         <h2>Data Retention</h2>

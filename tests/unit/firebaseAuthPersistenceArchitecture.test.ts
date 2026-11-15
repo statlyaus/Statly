@@ -48,16 +48,6 @@ describe('Firebase auth persistence architecture', () => {
     );
   });
 
-  it('keeps analytics browser-only and disabled when Firebase emulators are active', () => {
-    const browserAnalytics = read('src/lib/firebase/clientAnalytics.ts');
-
-    expect(browserAnalytics).toContain("typeof window === 'undefined'");
-    expect(browserAnalytics).toContain('!firebaseClientConfig.measurementId');
-    expect(browserAnalytics).toContain('useFirebaseEmulators');
-    expect(browserAnalytics).toContain("import('firebase/analytics')");
-    expect(browserAnalytics).toContain('await isSupported()');
-  });
-
   it('does not recreate a Firebase app inside feature components or expose a combined client', () => {
     expect(existsSync(join(process.cwd(), 'src/lib/firebaseClient.ts'))).toBe(false);
 
@@ -76,7 +66,9 @@ describe('Firebase auth persistence architecture', () => {
     expect(authWorker).toMatch(/AUTH_TOKEN_TIMEOUT_MS\s*=\s*5_000/);
     expect(authWorker).toMatch(/unsubscribe\?\.\(\)/);
     expect(authWorker).toMatch(/setTimeout\(\(\)\s*=>\s*finish\(null\),\s*AUTH_TOKEN_TIMEOUT_MS\)/);
-    expect(authWorker).toMatch(/return\s+await\s+fetch\(new Request\(request,\s*{\s*headers\s*}\)\)/);
+    expect(authWorker).toMatch(
+      /return\s+await\s+fetch\(new Request\(request,\s*{\s*headers\s*}\)\)/
+    );
   });
 
   it('fails production worker builds with incomplete Firebase configuration', () => {

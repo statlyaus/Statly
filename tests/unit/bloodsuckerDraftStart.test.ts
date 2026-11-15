@@ -41,7 +41,12 @@ describe('starting a Bloodsucker draft', () => {
       id: 'draft-1',
       leagueId: 'league-1',
       status: DraftStatus.SCHEDULED,
-      participants: [{ userId: 'owner-user' }],
+      participants: [
+        { userId: 'owner-user' },
+        { userId: 'user-2' },
+        { userId: 'user-3' },
+        { userId: 'user-4' },
+      ],
       managerUserIds: ['owner-user'],
       settings: { pickSeconds: 60 },
       schedulingVersion: 0,
