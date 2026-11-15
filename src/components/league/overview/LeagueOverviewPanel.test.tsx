@@ -45,7 +45,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof LeagueOvervi
       onNavigate={onNavigate}
       isCommissioner
       draftBlockers={[
-        { code: 'insufficient_members', message: 'Needs at least 2 teams to draft.' },
+        { code: 'insufficient_members', message: 'Needs at least 4 teams to draft.' },
       ]}
       {...overrides}
     />
@@ -143,7 +143,7 @@ describe('LeagueOverviewPanel first-run checklist', () => {
     const draft = within(checklist()).getByText('Draft').parentElement!;
     expect(within(draft).getByText(/6 Mar/)).toBeInTheDocument();
     expect(
-      within(draft).getByText('Needs at least 2 teams to draft (1 joined)')
+      within(draft).getByText('Needs at least 4 teams to draft (1 joined)')
     ).toBeInTheDocument();
     expect(screen.queryByText(/at least two league members/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/draft room has not been created/i)).not.toBeInTheDocument();
@@ -198,7 +198,7 @@ describe('LeagueOverviewPanel first-run checklist', () => {
   });
   it('stops asking for teams once enough have joined', () => {
     renderPanel({ activeMembers: members(2), draftBlockers: [] });
-    expect(within(checklist()).queryByText(/needs at least 2 teams/i)).not.toBeInTheDocument();
+    expect(within(checklist()).queryByText(/needs at least 4 teams/i)).not.toBeInTheDocument();
   });
   it('only asks for fixtures when the league generates them manually', async () => {
     vi.mocked(authenticatedFetch).mockImplementation(

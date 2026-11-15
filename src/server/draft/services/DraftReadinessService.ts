@@ -8,6 +8,7 @@ import {
   type DraftCapacity,
 } from '@/server/draft/domain/draftCapacity';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { getLeagueFormatDraftBlockers, splitDraftingMembers } from '@/server/leagues/leagueFormat';
 import type { DraftOperationalReadiness, DraftReadinessBlocker } from '@/types/draftReadiness';
 
@@ -81,11 +82,12 @@ function buildBlockers(input: {
     });
   }
 
-  if (league.members.length < 2) {
+  // One minimum everywhere: a league is 4 to MAX_LEAGUE_TEAMS teams, and a draft needs a league.
+  if (league.members.length < MIN_LEAGUE_TEAMS) {
     blockers.push({
       id: 'insufficient_members',
       code: 'insufficient_members',
-      message: 'At least two league members are required to run a draft.',
+      message: `At least ${MIN_LEAGUE_TEAMS} teams are required to run a draft.`,
     });
   }
 
