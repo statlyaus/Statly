@@ -4,6 +4,7 @@ import LeaderboardPage from '@/app/(app)/leaderboard/page';
 import PlayerAnalysisPage from '@/app/(app)/player-analysis/page';
 import PlayerRankingsPage from '@/app/(app)/player-rankings/page';
 import RostersPage from '@/app/(app)/rosters/page';
+import StatsPage from '@/app/(app)/stats/page';
 import WaiversPage from '@/app/(app)/waivers/page';
 
 const mocks = vi.hoisted(() => ({
@@ -64,6 +65,10 @@ describe('retired routes redirect on the server', () => {
 
   it('sends /player-analysis to the players board', async () => {
     await expect(redirectTarget(() => PlayerAnalysisPage())).resolves.toBe('/players');
+  });
+
+  it('sends /stats to the players board', async () => {
+    await expect(redirectTarget(() => StatsPage())).resolves.toBe('/players');
   });
 
   it('sends /player-rankings to the nine-category rankings', async () => {

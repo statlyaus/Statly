@@ -38,9 +38,6 @@ export const CRON_MONITORS = {
   // Bloodsucker bite deadlines and window closes (NFR-6). It runs every 5 minutes, so two failed or
   // missed runs in a row (10 minutes) open an issue; one blip is retried by the next run.
   'cron-bloodsucker': monitor('*/5 * * * *', { checkinMargin: 5, failureIssueThreshold: 2 }),
-  // NBA box scores read ESPN, which fails now and then; the next run repairs a single miss. The
-  // other NBA jobs (injuries, players, schedule) are not monitored: each extra monitor is billed.
-  'cron-nba-boxscores': monitor('7,37 * * * *', { checkinMargin: 10, failureIssueThreshold: 2 }),
 } as const satisfies Record<string, CronMonitor>;
 
 export type CronMonitorSlug = keyof typeof CRON_MONITORS;
