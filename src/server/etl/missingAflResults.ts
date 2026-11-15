@@ -14,8 +14,6 @@ import { aflMatchJoinKey } from './aflMatchJoinKey';
 export const SCHEDULED_GAME_LENGTH_MS = 3 * 60 * 60 * 1000;
 /** How long after a game's scheduled end a missing result raises an alert. */
 export const MISSING_RESULT_ALERT_MS = 6 * 60 * 60 * 1000;
-/** Games further back are not checked, so history from before the ingest never alerts. */
-export const MISSING_RESULT_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
 
 export type FixtureGame = Pick<
   ETLMatch,
@@ -30,10 +28,15 @@ const DUE_AFTER_START_MS = SCHEDULED_GAME_LENGTH_MS + MISSING_RESULT_ALERT_MS;
  */
 export const UNJOINED_RESULT_ROUND_SPAN_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** The start-time window of games whose result is due and still inside the look-back. */
+/**
+ * The start-time window of games whose result is due. It reaches back to 1 January (UTC) of the
+ * current year, so a missing result keeps alerting until it is stored, however long that takes
+ * (owner decision 2026-11-15); a game from an earlier season never alerts. The alert repeats hourly,
+ * and Sentry groups the repeats for one game into one issue.
+ */
 export function missingResultWindow(now: Date): { from: Date; to: Date } {
   return {
-    from: new Date(now.getTime() - DUE_AFTER_START_MS - MISSING_RESULT_LOOKBACK_MS),
+    from: new Date(Date.UTC(now.getUTCFullYear(), 0, 1)),
     to: new Date(now.getTime() - DUE_AFTER_START_MS),
   };
 }
