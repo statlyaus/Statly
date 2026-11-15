@@ -4,7 +4,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
-import { hasPendingBite } from '@/server/leagues/bitePending';
+import { findBiteFreeze } from '@/server/leagues/bitePending';
 import { lockLeagueRowOrBusy, SCHEDULED_LEAGUE_LOCK } from '@/server/leagues/leagueRowLock';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import {
@@ -109,7 +109,7 @@ interface ClaimStore {
 
 type ClaimSettlement =
   | { status: 'SKIPPED' }
-  /** BR-30: the claimant has a Bloodsucker bite waiting, so a claim that drops stays PENDING. */
+  /** BR-30, E12: the claimant is frozen by the Bloodsucker, so the claim stays PENDING. */
   | { status: 'HELD' }
   | { status: 'SUCCESSFUL'; processedAt: Date }
   | { status: 'FAILED'; processedAt: Date; reason: string };
@@ -384,7 +384,7 @@ export class WaiverProcessingService {
         dropLockedReason
       );
       if (settlement.status === 'HELD') {
-        logger.info('Held a waiver claim that drops a player while a Bloodsucker bite is pending', {
+        logger.info('Held a waiver claim while the Bloodsucker freeze is on its team', {
           leagueId: input.leagueId,
           claimId: claim.id,
         });
@@ -456,9 +456,8 @@ export class WaiverProcessingService {
       // Round scoring can hold the row for 30 seconds, so the wait is bounded and the transaction
       // outlasts it; a league still busy throws LeagueBusyError and the claim stays PENDING.
       await lockLeagueRowOrBusy(tx, leagueId, SCHEDULED_LEAGUE_LOCK.waitMs);
-      if (claim.dropPlayerId && (await hasPendingBite(tx, leagueId, claim.teamId))) {
-        return { status: 'HELD' };
-      }
+      // BR-30, E12: a frozen team neither adds nor drops, so every claim of its waits.
+      if (await findBiteFreeze(tx, leagueId, claim.teamId)) return { status: 'HELD' };
       const processedAt = await this.claimStore.claimPending(tx, claim);
       if (!processedAt) return { status: 'SKIPPED' };
 

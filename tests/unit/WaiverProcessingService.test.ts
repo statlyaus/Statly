@@ -55,6 +55,8 @@ function createDbMock() {
     $queryRaw: vi.fn().mockResolvedValue([]),
     // No Bloodsucker bite is waiting on the claimant unless a test says so (BR-30).
     leagueBite: { findFirst: vi.fn().mockResolvedValue(null) },
+    // Not a Bloodsucker league: nobody waits on a Bloodsucker result (#1355).
+    leagueSettings: { findFirst: vi.fn().mockResolvedValue(null) },
     league: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'league-1',

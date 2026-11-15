@@ -12,11 +12,7 @@ import {
   RosterSwapError,
   swapRosterPlayers,
 } from '@/server/leagues/rosterSwap';
-import {
-  BITE_PENDING_MESSAGE,
-  BITE_PENDING_TRADE_HELD_MESSAGE,
-  hasPendingBite,
-} from '@/server/leagues/bitePending';
+import { findBiteFreeze } from '@/server/leagues/bitePending';
 import { resolveBloodsuckerMemberId } from '@/server/leagues/leagueFormat';
 import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
@@ -781,12 +777,11 @@ async function finalizeTrade(
 
   // BR-30: a trade with a team whose bite is waiting is held, not invalidated. Accept and approve
   // answer 409; the review cron skips it and completes it at the first run after the bite is done.
-  if (
-    (await hasPendingBite(tx, thread.leagueId, thread.memberOneId)) ||
-    (await hasPendingBite(tx, thread.leagueId, thread.memberTwoId))
-  ) {
-    throw new TradeServiceError('BITE_PENDING', BITE_PENDING_TRADE_HELD_MESSAGE, 409);
-  }
+  // E12: the same hold covers a team whose matchup against the Bloodsucker has ended, not yet final.
+  const held =
+    (await findBiteFreeze(tx, thread.leagueId, thread.memberOneId, now)) ??
+    (await findBiteFreeze(tx, thread.leagueId, thread.memberTwoId, now));
+  if (held) throw new TradeServiceError(held.code, held.tradeHeldMessage, 409);
 
   const access = await requireTradeAccessByMember(tx, thread.leagueId, actorMemberId, thread);
 
@@ -1222,10 +1217,10 @@ async function enforceTransactionWindow(
 ): Promise<void> {
   const window = await getTransactionWindow(leagueId, prisma, { memberId, now });
   if (!window.open) throw new TradeServiceError(window.code, window.reason, 409);
-  // BR-30: a member with a Bloodsucker bite waiting cannot propose, accept or counter a trade.
-  if (await hasPendingBite(prisma, leagueId, memberId)) {
-    throw new TradeServiceError('BITE_PENDING', BITE_PENDING_MESSAGE, 409);
-  }
+  // BR-30, E12: a member with a Bloodsucker bite waiting, or whose matchup against the Bloodsucker
+  // has ended and is not final, cannot propose, accept or counter a trade.
+  const freeze = await findBiteFreeze(prisma, leagueId, memberId, now);
+  if (freeze) throw new TradeServiceError(freeze.code, freeze.message, 409);
 }
 
 function enforceTradeDeadline(access: TradeAccess, now: Date): void {
