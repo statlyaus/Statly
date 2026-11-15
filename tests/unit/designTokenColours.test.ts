@@ -26,8 +26,6 @@ function sourceFilesUnder(folder: string): string[] {
 const tokenisedFiles = [
   'src/app/(app)/leagues/[id]/LeaguePageClient.tsx',
   'src/components/league/NotLeagueMember.tsx',
-  'src/components/stats/PlayerComparison.tsx',
-  'src/components/stats/PlayerStatsTable.tsx',
   'src/components/ui/Alert.tsx',
   ...tokenisedFolders.flatMap(sourceFilesUnder),
 ];
