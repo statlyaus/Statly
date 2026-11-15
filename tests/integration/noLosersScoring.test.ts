@@ -624,7 +624,16 @@ describe('a corrected result in a FINAL No Losers round (#1295, BR-23)', () => {
     for (let run = 0; run < 2; run += 1) {
       await expect(rescoreCorrectedResultRounds(statsUnavailable)).resolves.toEqual({
         rounds: [],
-        pending: [{ leagueId: LEAGUE, round: ROUND, correctedResultIds: [superseded.id] }],
+        pending: [
+          {
+            leagueId: LEAGUE,
+            round: ROUND,
+            correctedResultIds: [superseded.id],
+            correctedAt: expect.any(String),
+            // Just corrected, so still inside the 12-hour grace period.
+            overdue: false,
+          },
+        ],
         failedLeagueIds: [],
       });
     }
