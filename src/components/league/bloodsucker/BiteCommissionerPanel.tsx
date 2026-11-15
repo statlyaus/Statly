@@ -160,20 +160,7 @@ export function BiteCommissionerPanel({
         </h1>
       </header>
 
-      <section aria-label="Where this bite stands" className={CARD}>
-        <p className="font-semibold">{biteStatusLabel(review.status)}.</p>
-        {executed ? (
-          <p className="mt-1">
-            {review.bloodsucker.teamName} took {review.takenPlayer?.name} and sent back{' '}
-            {review.returnedPlayer?.name}.
-          </p>
-        ) : null}
-        {review.cancelledReason ? (
-          <p className="mt-1 text-[color:var(--league-text-muted)]">
-            Reason given: {review.cancelledReason}
-          </p>
-        ) : null}
-      </section>
+      <BiteStanding review={review} executed={executed} />
 
       {review.refusal && review.actions.length === 0 ? (
         <p
@@ -194,40 +181,14 @@ export function BiteCommissionerPanel({
           aria-busy={saving}
           className={`${CARD} space-y-4`}
         >
-          {review.actions.length > 1 ? (
-            <fieldset disabled={saving} className="min-w-0">
-              <legend className="text-base font-semibold">What to do</legend>
-              <div className="mt-2 grid gap-2">
-                {review.actions.map((option) => (
-                  <label
-                    key={option}
-                    className={`grid min-h-11 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 rounded-md border px-3 py-2 ${
-                      chosen === option
-                        ? 'border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)]'
-                        : 'border-[color:var(--league-border)]'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={`${ids}-action`}
-                      value={option}
-                      checked={chosen === option}
-                      onChange={() => setAction(option)}
-                      className="mt-1 h-4 w-4 shrink-0 accent-[color:var(--league-danger)]"
-                    />
-                    <span className="font-medium">
-                      {option === 'cancel' ? 'Cancel the bite' : 'Redo it with different players'}
-                    </span>
-                    <span className="col-start-2 text-[color:var(--league-text-muted)]">
-                      {actionHint(option, executed)}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ) : (
-            <p>{actionHint(chosen, executed)}</p>
-          )}
+          <ActionChoice
+            name={`${ids}-action`}
+            actions={review.actions}
+            chosen={chosen}
+            executed={executed}
+            disabled={saving}
+            onChoose={setAction}
+          />
 
           {chosen === 'redo' ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -286,6 +247,84 @@ export function BiteCommissionerPanel({
         </form>
       ) : null}
 
+      <CommandOutcome command={command} />
+    </div>
+  );
+}
+
+function BiteStanding({ review, executed }: { review: BiteReviewView; executed: boolean }) {
+  return (
+    <section aria-label="Where this bite stands" className={CARD}>
+      <p className="font-semibold">{biteStatusLabel(review.status)}.</p>
+      {executed ? (
+        <p className="mt-1">
+          {review.bloodsucker.teamName} took {review.takenPlayer?.name} and sent back{' '}
+          {review.returnedPlayer?.name}.
+        </p>
+      ) : null}
+      {review.cancelledReason ? (
+        <p className="mt-1 text-[color:var(--league-text-muted)]">
+          Reason given: {review.cancelledReason}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function ActionChoice({
+  name,
+  actions,
+  chosen,
+  executed,
+  disabled,
+  onChoose,
+}: {
+  name: string;
+  actions: BiteCommissionerAction[];
+  chosen: BiteCommissionerAction;
+  executed: boolean;
+  disabled: boolean;
+  onChoose: (action: BiteCommissionerAction) => void;
+}) {
+  if (actions.length <= 1) return <p>{actionHint(chosen, executed)}</p>;
+  return (
+    <fieldset disabled={disabled} className="min-w-0">
+      <legend className="text-base font-semibold">What to do</legend>
+      <div className="mt-2 grid gap-2">
+        {actions.map((option) => (
+          <label
+            key={option}
+            className={`grid min-h-11 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 rounded-md border px-3 py-2 ${
+              chosen === option
+                ? 'border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)]'
+                : 'border-[color:var(--league-border)]'
+            }`}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option}
+              checked={chosen === option}
+              onChange={() => onChoose(option)}
+              className="mt-1 h-4 w-4 shrink-0 accent-[color:var(--league-danger)]"
+            />
+            <span className="font-medium">
+              {option === 'cancel' ? 'Cancel the bite' : 'Redo it with different players'}
+            </span>
+            <span className="col-start-2 text-[color:var(--league-text-muted)]">
+              {actionHint(option, executed)}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** The command's result: success in a polite live region, a refusal as an alert with its code. */
+function CommandOutcome({ command }: { command: Command }) {
+  return (
+    <>
       <div aria-live="polite">
         {command.status === 'saved' ? (
           <p className="rounded-md border border-[color:var(--league-success)] bg-[color:var(--league-success-soft)] p-3 text-sm font-medium">
@@ -307,7 +346,7 @@ export function BiteCommissionerPanel({
           {command.refusal.message}
         </p>
       ) : null}
-    </div>
+    </>
   );
 }
 

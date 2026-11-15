@@ -76,7 +76,7 @@ describe('refusalHeading (NFR-5, #1343)', () => {
       "The Bloodsucker's exclusive window is open"
     );
     expect(refusalHeading('BLOODSUCKER_SELF_OVERRIDE')).toBe('You are part of this matchup');
-    expect(refusalHeading('BITE_UNPAIRABLE')).toBe('This bite ended because a roster was empty');
+    expect(refusalHeading('LEAGUE_BUSY')).toBe('The league is busy. Nothing changed, so try again');
     expect(refusalHeading('LAST_PLAYER_BITE_HELD')).toBe(
       'Your last player stays while you hold a bite'
     );

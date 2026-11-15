@@ -53,7 +53,7 @@ const REFUSAL_HEADINGS = new Map<string, string>([
   ['ROUND_IN_PROGRESS', 'A round is in progress'],
   ['BITE_NOT_OPEN', 'This bite is finished'],
   ['BITE_NOT_EXECUTED', 'This bite has not been made'],
-  ['BITE_UNPAIRABLE', 'This bite ended because a roster was empty'],
+  ['LEAGUE_BUSY', 'The league is busy. Nothing changed, so try again'],
   ['ROSTER_CHANGED', 'A roster has changed'],
   ['BITE_PENDING', 'A bite is waiting on your team'],
   ['LAST_PLAYER_BITE_HELD', 'Your last player stays while you hold a bite'],
