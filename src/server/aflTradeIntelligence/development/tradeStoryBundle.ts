@@ -18,6 +18,7 @@ import {
   AFL_TRADE_VALUE_LINES_SCHEMA_VERSION,
   type AflTradeValueLines,
 } from '../valuation/valueLineContracts';
+import { aflTradeStoryListResults } from './tradeStoryListResults';
 import type { AflTradeStorySampleSource } from './tradeStorySamples';
 
 /**
@@ -258,6 +259,8 @@ export function createAflTradeStoryBundleSource(
         : `Genuine value lines ${valueLines.valueLinesId.slice(0, 24)}…, values to ${throughSeason}; private, not for publication`,
   };
   const trades = new Set(structure.content.trades.map(({ transactionId }) => transactionId));
+  // Computed on the first list and kept: the bundle never changes.
+  let results: ReturnType<typeof aflTradeStoryListResults> | null = null;
   return {
     list: () => ({
       source,
@@ -266,6 +269,9 @@ export function createAflTradeStoryBundleSource(
         year: trade.tradeYear,
         clubNames: trade.clubs.map(({ clubId }) => storyNames.clubs.get(clubId) ?? clubId),
         clubIds: trade.clubs.map(({ clubId }) => clubId),
+        results: (results ??= aflTradeStoryListResults(structure, valueLines, storyNames)).get(
+          trade.transactionId
+        ),
       })),
     }),
     loadClub: (clubId) =>

@@ -4443,7 +4443,10 @@ public importer of the private story modules.
 components: the bundle source marks its models `audience: public`, which swaps the private notice for
 the public one, points every link at `/afl/trades`, and drops the component's own `<main>` (the public
 layout has one). While the reader is unavailable every page says so; an unknown trade or club is not
-found. Until the private storage loader lands, the stored bundle is the file at
+found. The list shows each club's net at the trade's latest checkpoint, a * while that net is
+provisional, and what the club received; `development/tradeStoryListResults.ts` reads these straight from
+the sealed value lines and structure, because building all 286 full stories for one page takes about
+12 seconds. Until the private storage loader lands, the stored bundle is the file at
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path), which is how the pages are run locally.
 
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
