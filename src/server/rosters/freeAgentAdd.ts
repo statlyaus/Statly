@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
+import { findBiteFreeze } from '@/server/leagues/bitePending';
 import { describeLockedPlayers, findPlayersLockedForMove } from '@/server/leagues/playerMoveLock';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import {
@@ -13,6 +14,9 @@ export type FreeAgentAddErrorCode =
   | 'NOT_ACTIVE_MEMBER'
   | 'DRAFT_NOT_COMPLETE'
   | 'BLOODSUCKER_WINDOW_OPEN'
+  | 'BLOODSUCKER_AUTO_FILL_PENDING'
+  | 'BITE_PENDING'
+  | 'BLOODSUCKER_RESULT_PENDING'
   | 'PLAYER_NOT_FOUND'
   | 'PLAYER_OWNED'
   | 'PLAYER_ON_WAIVERS'
@@ -105,6 +109,12 @@ export async function addFreeAgentToRoster(
       if (!transactionWindow.open) {
         throw new FreeAgentAddError(transactionWindow.code, transactionWindow.reason, 409);
       }
+
+      // BR-30, E12: a member with a Bloodsucker bite waiting, or whose matchup against the
+      // Bloodsucker has ended and is not final, cannot add. No League row lock: an add that commits
+      // a moment before the freeze starts takes nothing away from the bite.
+      const freeze = await findBiteFreeze(tx, leagueId, member.id, input.now);
+      if (freeze) throw new FreeAgentAddError(freeze.code, freeze.message, 409);
 
       const player = await tx.player.findUnique({ where: { id: playerId }, select: { id: true } });
       if (!player) throw new FreeAgentAddError('PLAYER_NOT_FOUND', 'Player not found', 404);

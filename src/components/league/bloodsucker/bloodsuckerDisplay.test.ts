@@ -72,6 +72,12 @@ describe('refusalHeading (NFR-5, #1343)', () => {
     expect(refusalHeading('BITE_SUSPENDED')).toBe('This bite is on hold');
     expect(refusalHeading('ROUND_IN_PROGRESS')).toBe('A round is in progress');
     expect(refusalHeading('BITE_PENDING')).toBe('A bite is waiting on your team');
+    expect(refusalHeading('BLOODSUCKER_RESULT_PENDING')).toBe(
+      'Your matchup against the Bloodsucker is being scored'
+    );
+    expect(refusalHeading('BLOODSUCKER_AUTO_FILL_PENDING')).toBe(
+      "The Bloodsucker's roster is being filled"
+    );
     expect(refusalHeading('BLOODSUCKER_WINDOW_OPEN')).toBe(
       "The Bloodsucker's exclusive window is open"
     );

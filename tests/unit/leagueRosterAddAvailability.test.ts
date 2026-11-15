@@ -30,6 +30,10 @@ const prismaMocks = vi.hoisted(() => ({
   draft: {
     findUnique: vi.fn(),
   },
+  // No Bloodsucker freeze on the caller (BR-30, #1355).
+  league: { findUnique: vi.fn() },
+  leagueBite: { findFirst: vi.fn() },
+  leagueSettings: { findFirst: vi.fn() },
 }));
 
 const moveLock = vi.hoisted(() => ({ findPlayersLockedForMove: vi.fn() }));
@@ -88,6 +92,9 @@ describe('league roster free-agent add eligibility', () => {
     moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
     prismaMocks.$executeRaw.mockResolvedValue(1);
     prismaMocks.draft.findUnique.mockResolvedValue({ status: 'COMPLETED' });
+    prismaMocks.league.findUnique.mockResolvedValue({ activeSeasonId: 'season-1' });
+    prismaMocks.leagueBite.findFirst.mockResolvedValue(null);
+    prismaMocks.leagueSettings.findFirst.mockResolvedValue(null);
     prismaMocks.leagueMember.findFirst.mockResolvedValue({
       id: 'member-1',
       isActive: true,

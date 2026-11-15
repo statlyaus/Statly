@@ -17,6 +17,7 @@ const prismaMocks = vi.hoisted(() => {
     leagueMatchup: { findMany: vi.fn(), update: vi.fn() },
     leagueMatchupScore: { upsert: vi.fn(), findMany: vi.fn() },
     leagueStanding: { upsert: vi.fn() },
+    leagueSettings: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     leagueLineup: { findMany: vi.fn(), findFirst: vi.fn() },
     leagueLineupPlayer: { findMany: vi.fn(), updateMany: vi.fn() },
     leagueLineupAutosub: { create: vi.fn() },

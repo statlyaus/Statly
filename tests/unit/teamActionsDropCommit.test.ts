@@ -17,6 +17,8 @@ const tx = vi.hoisted(() => ({
   $queryRaw: vi.fn().mockResolvedValue([]),
   league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
   leagueBite: { findFirst: vi.fn() },
+  // Not a Bloodsucker league: nobody waits on a Bloodsucker result (#1355).
+  leagueSettings: { findFirst: vi.fn().mockResolvedValue(null) },
   leagueRosterPlayer: { deleteMany: vi.fn() },
   teamAction: { create: vi.fn() },
 }));

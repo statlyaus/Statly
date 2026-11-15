@@ -25,6 +25,7 @@ function makeDb(
     count?: number;
     createError?: unknown;
     draft?: unknown;
+    bite?: unknown;
   } = {}
 ) {
   const tx = {
@@ -53,6 +54,10 @@ function makeDb(
         ? vi.fn().mockRejectedValue(overrides.createError)
         : vi.fn().mockResolvedValue({ id: 'roster-row-1' }),
     },
+    // No Bloodsucker freeze on the caller unless a test says so (BR-30, #1355).
+    league: { findUnique: vi.fn().mockResolvedValue({ activeSeasonId: 'season-1' }) },
+    leagueBite: { findFirst: vi.fn().mockResolvedValue(overrides.bite ?? null) },
+    leagueSettings: { findFirst: vi.fn().mockResolvedValue(null) },
     teamAction: { findMany: vi.fn().mockResolvedValue(overrides.hold ? [overrides.hold] : []) },
     draft: {
       findUnique: vi
@@ -246,5 +251,14 @@ describe('addFreeAgentToRoster', () => {
     const error = await refusal(addFreeAgentToRoster(db as never, INPUT));
 
     expect(error.status).toBe(404);
+  });
+
+  it('refuses a member the Bloodsucker has a bite waiting on with 409 BITE_PENDING', async () => {
+    const { db, tx } = makeDb({ bite: { id: 'bite-1' } });
+
+    const error = await refusal(addFreeAgentToRoster(db as never, { ...INPUT, now: NOW }));
+
+    expect(error).toMatchObject({ code: 'BITE_PENDING', status: 409 });
+    expect(tx.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 });
