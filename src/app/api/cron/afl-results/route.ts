@@ -53,9 +53,7 @@ export async function GET(request: NextRequest) {
       { status: ok ? 200 : 500, headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
-    logger.error('Failed to check for missing AFL results', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error('Failed to check for missing AFL results', error);
     return NextResponse.json(
       { ok: false, error: 'Failed to check for missing AFL results' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } }
