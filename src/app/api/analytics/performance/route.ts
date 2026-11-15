@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { countRateLimitHit, getTrustedClientIp } from '@/lib/rateLimit';
+import { isRedisConfigured } from '@/lib/redisConfig';
 import crypto from 'node:crypto';
 import { Queue } from 'bullmq';
 import type { Queue as BullQueue } from 'bullmq';
@@ -337,6 +338,11 @@ export async function POST(request: NextRequest) {
     userAgent: ua,
     timestamp: new Date(metric.timestamp).toISOString(),
   });
+
+  // A deployment with no Redis has no web-vitals queue or worker. The metric is in the log line
+  // above; answering 204 keeps a missing queue from failing every page view.
+  if (!isRedisConfigured())
+    return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
 
   try {
     // BullMQ reserves colons in custom job IDs, so hash the semantic de-duplication key.
