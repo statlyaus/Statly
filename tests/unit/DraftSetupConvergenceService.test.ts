@@ -32,8 +32,8 @@ function buildSettings(startAt: Date) {
   };
 }
 
-function buildMembers() {
-  return [1, 2].map((slot) => ({
+function buildMembers(count = 2) {
+  return Array.from({ length: count }, (_, index) => index + 1).map((slot) => ({
     id: `member-${slot}`,
     leagueId: 'league-1',
     userId: `user-${slot}`,
@@ -46,8 +46,8 @@ function buildMembers() {
   }));
 }
 
-function buildLeagueWithDraft(startAt: Date) {
-  const members = buildMembers();
+function buildLeagueWithDraft(startAt: Date, memberCount = 2) {
+  const members = buildMembers(memberCount);
   const draft = {
     id: 'draft-1',
     leagueId: 'league-1',
@@ -87,11 +87,12 @@ function buildLeagueWithDraft(startAt: Date) {
 describe('ensureLeagueDraftSetupConverged', () => {
   it('creates the missing room and recommends explicit start for an overdue ready draft', async () => {
     const startAt = new Date('2026-05-02T00:00:00.000Z');
-    const members = buildMembers();
+    // Four teams: the fewest a draft can start with.
+    const members = buildMembers(4);
     const tx = {
       league: {
         findUnique: vi.fn().mockResolvedValue({
-          ...buildLeagueWithDraft(startAt),
+          ...buildLeagueWithDraft(startAt, 4),
           members,
           drafts: [],
         }),
@@ -133,7 +134,7 @@ describe('ensureLeagueDraftSetupConverged', () => {
     const client = {
       $transaction: vi.fn((work) => work(tx)),
       league: {
-        findUnique: vi.fn().mockResolvedValue(buildLeagueWithDraft(startAt)),
+        findUnique: vi.fn().mockResolvedValue(buildLeagueWithDraft(startAt, 4)),
       },
       player: {
         count: vi.fn().mockResolvedValue(100),
@@ -160,7 +161,7 @@ describe('ensureLeagueDraftSetupConverged', () => {
         }),
       })
     );
-    expect(tx.draftOrder.createMany.mock.calls[0][0].data).toHaveLength(2);
+    expect(tx.draftOrder.createMany.mock.calls[0][0].data).toHaveLength(4);
     expect(readiness.recommendedAction).toBe('AWAIT_EXPLICIT_START');
     expect(readiness.lifecycle.canEnterRoom).toBe(true);
   });

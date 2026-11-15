@@ -94,6 +94,11 @@ in-memory shadow stores must not restore stale strategy state.
 
 ## Scheduling
 
+A draft needs at least `MIN_LEAGUE_TEAMS` (4) teams to start (owner decision 2026-11-15). The Draft tab,
+the readiness blocker `insufficient_members` and `DraftApplicationService.startDraft` all read that one
+constant; `startDraft` is the one that binds, because the room button and the scheduled worker both
+go through it. A draft that is already running is not affected.
+
 Draft start times are stored as instants with an explicit league timezone for display and scheduling.
 The lobby-open and draft-start BullMQ jobs are keyed by draft id and carry it with the league id; the
 worker acts on that draft only after checking it still belongs to the league and is `SCHEDULED`.

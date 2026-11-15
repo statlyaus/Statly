@@ -57,8 +57,11 @@ function buildClient(input: {
   draftStatus?: DraftStatus;
   lobbyStatus?: string;
   lobbyOpenAt?: Date | null;
+  memberCount?: number;
 }) {
-  const members = [buildMember('member-1', 1), buildMember('member-2', 2)];
+  const members = Array.from({ length: input.memberCount ?? 4 }, (_, index) =>
+    buildMember(`member-${index + 1}`, index + 1)
+  );
   const draft = {
     id: 'draft-1',
     leagueId: 'league-1',
@@ -165,6 +168,29 @@ describe('getLeagueDraftOperationalReadiness', () => {
     expect(readiness.lifecycle.canEnterRoom).toBe(true);
     expect(readiness.lifecycle.canStartClock).toBe(true);
     expect(readiness.blockers).toEqual([]);
+  });
+
+  it('blocks the start of a league with fewer than four teams', async () => {
+    const readiness = await getLeagueDraftOperationalReadiness(
+      buildClient({
+        startAt: new Date('2026-05-02T00:00:00.000Z'),
+        availablePlayers: 200,
+        memberCount: 3,
+      }) as any,
+      {
+        leagueId: 'league-1',
+        now: new Date('2026-05-02T00:05:00.000Z'),
+      }
+    );
+
+    expect(readiness.lifecycle.canStartClock).toBe(false);
+    expect(readiness.blockers).toEqual([
+      {
+        id: 'insufficient_members',
+        code: 'insufficient_members',
+        message: 'At least 4 teams are required to run a draft.',
+      },
+    ]);
   });
 
   it('reports an empty player pool as an operational blocker', async () => {
