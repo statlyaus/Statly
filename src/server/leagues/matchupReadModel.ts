@@ -1778,6 +1778,14 @@ export async function recalculateLeagueRoundMatchups({
         });
       }
 
+      // League-05: a published season is ACTIVE from its first scored round, live or final.
+      if (fixtureVersion > 0) {
+        await tx.leagueSettings.updateMany({
+          where: { league: { id: leagueId }, competitionStatus: { in: ['PUBLISHED', 'PENDING'] } },
+          data: { competitionStatus: 'ACTIVE' },
+        });
+      }
+
       if (status !== 'FINAL') return null;
 
       if (fixtureVersion > 0) {
@@ -1785,6 +1793,17 @@ export async function recalculateLeagueRoundMatchups({
           where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
           data: { status: 'FINAL', lockedAt: new Date() },
         });
+        // COMPLETE once every round is FINAL. Finals rounds exist from publication, so this is
+        // the grand final, or the last regular round in a league with no finals.
+        const roundsLeft = await tx.leagueCompetitionRound.count({
+          where: { leagueId, fixtureVersion, status: { notIn: ['FINAL', 'NO_MATCHUP'] } },
+        });
+        if (roundsLeft === 0) {
+          await tx.leagueSettings.updateMany({
+            where: { league: { id: leagueId }, competitionStatus: 'ACTIVE' },
+            data: { competitionStatus: 'COMPLETE' },
+          });
+        }
       }
 
       const finalizedScores = await tx.leagueMatchupScore.findMany({

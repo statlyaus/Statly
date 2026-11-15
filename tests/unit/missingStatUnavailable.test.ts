@@ -17,6 +17,7 @@ const prismaMocks = vi.hoisted(() => {
     leagueMatchup: { findMany: vi.fn(), update: vi.fn() },
     leagueMatchupScore: { upsert: vi.fn(), findMany: vi.fn() },
     leagueStanding: { upsert: vi.fn() },
+    leagueSettings: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     leagueLineup: { findMany: vi.fn() },
     leagueMember: { findMany: vi.fn() },
     // No reviewed Footywire identity links: stats rows keep their own player ids.
