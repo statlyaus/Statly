@@ -26,12 +26,11 @@ Check-ins come from the API route after its `CRON_SECRET` check, so an unauthori
 in. Each check-in carries the monitor config, which creates or updates the monitor in Sentry; nobody
 has to create monitors by hand. Schedules are UTC, the same as the Netlify scheduled functions.
 
-| Monitor slug         | Netlify function → route                                 | Schedule (UTC) | Margin | Max runtime | Issue after |
-| -------------------- | -------------------------------------------------------- | -------------- | ------ | ----------- | ----------- |
-| `cron-waivers`       | `cron-waivers.mts` → `/api/cron/waivers`                 | `0 * * * *`    | 10 min | 10 min      | 1 failure   |
-| `cron-scoring`       | `cron-scoring.mts` → `/api/cron/scoring`                 | `0 * * * *`    | 10 min | 10 min      | 1 failure   |
-| `cron-nba-boxscores` | `cron-nba-boxscores.mts` → `/api/cron/nba?job=boxscores` | `7,37 * * * *` | 10 min | 10 min      | 2 failures  |
-| `cron-bloodsucker`   | `cron-bloodsucker.mts` → `/api/cron/bloodsucker`         | `*/5 * * * *`  | 5 min  | 10 min      | 2 failures  |
+| Monitor slug       | Netlify function → route                         | Schedule (UTC) | Margin | Max runtime | Issue after |
+| ------------------ | ------------------------------------------------ | -------------- | ------ | ----------- | ----------- |
+| `cron-waivers`     | `cron-waivers.mts` → `/api/cron/waivers`         | `0 * * * *`    | 10 min | 10 min      | 1 failure   |
+| `cron-scoring`     | `cron-scoring.mts` → `/api/cron/scoring`         | `0 * * * *`    | 10 min | 10 min      | 1 failure   |
+| `cron-bloodsucker` | `cron-bloodsucker.mts` → `/api/cron/bloodsucker` | `*/5 * * * *`  | 5 min  | 10 min      | 2 failures  |
 
 An issue resolves after one good run. The waivers route runs hourly and processes waivers only in the
 6 am Melbourne hour; every hourly run still checks in, so the monitor also proves the scheduler is alive.

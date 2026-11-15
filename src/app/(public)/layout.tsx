@@ -45,7 +45,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
             href="/login"
             className="col-start-2 row-start-1 inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-white px-3 py-2 text-sm font-semibold text-brand-bar transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-bar sm:col-start-3 sm:ml-2"
           >
-            Sign in
+            Open Fantasy
           </Link>
         </nav>
       </header>

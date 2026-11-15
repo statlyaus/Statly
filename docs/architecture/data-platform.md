@@ -260,7 +260,10 @@ are dropped by the adapter. That invariant rests on where box scores come from: 
 Box-score candidates come only from the filtered schedule and scoreboard. Do not add a path that
 fetches box scores by event id from anywhere else.
 
-`/api/cron/nba?job=…` runs one bounded job per call, each from its own Netlify scheduled function:
+`/api/cron/nba?job=…` runs one bounded job per call. Nothing schedules it: the four Netlify scheduled
+functions were removed on 2026-11-15 (owner decision) because the only provider is unlicensed and
+every production run was rejected. The schedules they had are kept here for when a licensed feed
+exists:
 
 | Job         | Function                 | Schedule (UTC)   | Writes                                                                     |
 | ----------- | ------------------------ | ---------------- | -------------------------------------------------------------------------- |

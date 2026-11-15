@@ -108,6 +108,21 @@ describe('public AFL draft trade routing', () => {
     );
   });
 
+  it('offers the fantasy app with a label that is true whether or not the visitor is signed in', () => {
+    render(
+      <PublicRouteLayout>
+        <HomePage />
+      </PublicRouteLayout>
+    );
+
+    const primaryNavigation = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(primaryNavigation).getByRole('link', { name: 'Open Fantasy' })).toHaveAttribute(
+      'href',
+      '/login'
+    );
+    expect(within(primaryNavigation).queryByRole('link', { name: 'Sign in' })).toBeNull();
+  });
+
   it('provides one public main landmark, skip navigation, and an active Outcomes destination', () => {
     render(
       <PublicRouteLayout>
