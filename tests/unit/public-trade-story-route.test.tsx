@@ -64,6 +64,17 @@ describe('public trade pages', () => {
       screen.getAllByRole('link').some((a) => a.getAttribute('href')?.startsWith('/afl/trades/clubs/'))
     ).toBe(true);
     expect(document.body.innerHTML).not.toMatch(/\/dev\/afl-trade-stories|Private/u);
+    // Each row shows every club's result so far and what it got.
+    const row = tradeLinks.find((a) => a.getAttribute('href')?.endsWith(encodeURIComponent(first.tradeId)))!;
+    for (const result of first.results!) {
+      expect(row).toHaveTextContent(result.clubName);
+      expect(row).toHaveTextContent(`got ${result.received.join(', ')}`);
+    }
+    expect(screen.getByRole('link', { name: String(first.year) })).toHaveAttribute(
+      'href',
+      `#year-${first.year}`
+    );
+    expect(document.querySelector('main')).toBeNull();
   });
 
   it('shows one trade without private wording or private links', async () => {
