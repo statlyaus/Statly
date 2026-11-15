@@ -10,12 +10,17 @@ const mocks = vi.hoisted(() => ({
   pubSubPublish: vi.fn(),
   pubSubStart: vi.fn(),
   privateConversationAudience: vi.fn(),
+  privateTradeAudience: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 
 vi.mock('./socialConversations', () => ({
   privateConversationAudience: mocks.privateConversationAudience,
+}));
+
+vi.mock('@/server/leagues/trades/tradeAudience', () => ({
+  privateTradeAudience: mocks.privateTradeAudience,
 }));
 
 vi.mock('@/server/leagues/membership', () => ({
@@ -370,6 +375,33 @@ describe('league social socket sidecar', () => {
 
     expect(mocks.privateConversationAudience).toHaveBeenCalledWith(expect.anything(), 'dm-1');
     expect(member.emit).toHaveBeenCalledWith('social:message', envelope);
+    expect(outsider.emit).not.toHaveBeenCalled();
+  });
+
+  it('delivers a private trade update only to the two teams in the trade', async () => {
+    const party = createSocket('user-1');
+    const outsider = createSocket('user-2');
+    mocks.privateTradeAudience.mockResolvedValueOnce(new Set(['user-1']));
+    const envelope: SocialRealtimeEnvelope = {
+      id: 'event-trade',
+      sequence: 10,
+      leagueId: 'league-1',
+      seasonId: 'season-2026',
+      channel: 'activity',
+      event: 'trade:update',
+      payload: {
+        threadId: 'thread-1',
+        offerId: 'offer-1',
+        eventType: 'trade:proposed',
+        status: 'OPEN',
+      },
+      occurredAt: '2026-07-19T10:00:00.000Z',
+    };
+
+    await broadcastLeagueSocialEvent(localIo([party.socket, outsider.socket]), envelope);
+
+    expect(mocks.privateTradeAudience).toHaveBeenCalledWith(expect.anything(), envelope);
+    expect(party.emit).toHaveBeenCalledWith('trade:update', envelope);
     expect(outsider.emit).not.toHaveBeenCalled();
   });
 

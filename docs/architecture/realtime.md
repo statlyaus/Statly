@@ -18,6 +18,11 @@ season's social room, the room `social:join` admits after a membership check. Th
 snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
 reconnect, it refreshes that snapshot rather than patching browser state.
 
+A private trade stage (`trade:proposed`, `trade:countered`, `trade:declined`, `trade:withdrawn`,
+`trade:expired`) reaches only the two teams in the trade, read from the thread in the database
+(`src/server/leagues/trades/tradeAudience.ts`). Acceptance into review, vetoes, rulings and completion
+stay league-wide (owner decision 2026-11-15).
+
 The Trade Centre catches up like league chat (`useTradeCentreLiveRefresh`). While no live room is
 delivering (no Socket.IO process, a disconnected socket, or a join the server never answers), it
 requests `GET /api/leagues/<id>/trades/revision` every 10 seconds while the tab is visible and
