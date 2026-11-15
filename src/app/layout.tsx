@@ -4,7 +4,6 @@ import { Saira, Saira_Extra_Condensed } from 'next/font/google';
 
 import '@/index.css';
 
-import FirebaseAnalyticsInitializer from '@/components/FirebaseAnalyticsInitializer';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 import MotionPreferenceProvider from '@/providers/MotionPreferenceProvider';
 
@@ -34,7 +33,6 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
       className={`${saira.variable} ${sairaExtraCondensed.variable}`}
     >
       <body className="font-sans" suppressHydrationWarning>
-        <FirebaseAnalyticsInitializer />
         <PageErrorBoundary name="RootLayout">
           <MotionPreferenceProvider>{children}</MotionPreferenceProvider>
         </PageErrorBoundary>
