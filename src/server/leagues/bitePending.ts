@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+import { requireActiveSeasonId } from './activeSeason';
+
 // BR-30 with E7: from a bite's grant until it is done, its victim cannot drop players, propose,
 // accept or counter trades, or have a waiver claim that drops a player settle. The freeze lasts until
 // every open bite on that member is done.
@@ -20,15 +22,49 @@ export class BitePendingError extends Error {
   }
 }
 
-/** True while a bite on this member is OPEN or WAITING_LOCK. */
+type BiteReader = Pick<Prisma.TransactionClient, 'leagueBite' | 'league'>;
+
+/** True while a bite on this member is OPEN or WAITING_LOCK in the league's active season. */
 export async function hasPendingBite(
-  db: Pick<Prisma.TransactionClient, 'leagueBite'>,
+  db: BiteReader,
   leagueId: string,
   memberId: string
 ): Promise<boolean> {
+  const seasonId = await requireActiveSeasonId(db, leagueId);
   const pending = await db.leagueBite.findFirst({
-    where: { leagueId, victimMemberId: memberId, status: { in: ['OPEN', 'WAITING_LOCK'] } },
+    where: {
+      leagueId,
+      seasonId,
+      victimMemberId: memberId,
+      status: { in: ['OPEN', 'WAITING_LOCK'] },
+    },
     select: { id: true },
   });
   return pending !== null;
+}
+
+export const LAST_PLAYER_BITE_HELD_MESSAGE =
+  'You have a bite to make and it needs a player to send back, so you cannot drop your last player until the bite is done.';
+
+/**
+ * True while this member is the Bloodsucker of a bite that is OPEN or WAITING_LOCK in the league's
+ * active season. Such a member keeps at least one player: a bite is one for one (BR-22), so an empty
+ * roster would leave it with nothing to return (#1343).
+ */
+export async function holdsUnexecutedBite(
+  db: BiteReader,
+  leagueId: string,
+  memberId: string
+): Promise<boolean> {
+  const seasonId = await requireActiveSeasonId(db, leagueId);
+  const held = await db.leagueBite.findFirst({
+    where: {
+      leagueId,
+      seasonId,
+      bloodsuckerMemberId: memberId,
+      status: { in: ['OPEN', 'WAITING_LOCK'] },
+    },
+    select: { id: true },
+  });
+  return held !== null;
 }

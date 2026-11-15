@@ -24,6 +24,8 @@ import {
 } from './bloodsuckerBites';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { parseLeagueCategories } from './defaultLineups';
+import { LeagueBusyError, SCHEDULED_LEAGUE_LOCK } from './leagueRowLock';
+import { publishLeagueSystemMessage } from './social/socialSystemEvents';
 
 /**
  * The auto-bite (Bloodsucker 7/9, #1284; BR-27 to BR-29, NFR-2, NFR-3; owner decisions E2, E7, E8).
@@ -33,6 +35,12 @@ import { parseLeagueCategories } from './defaultLineups';
  *
  * Each bite is its own transaction under the League row lock, re-checked by `version`, as
  * `processDueLeagueTrades` does, so two sweeps at once execute a bite once.
+ *
+ * A bite that cannot run does not fail every sweep for ever (#1343):
+ * - no pair (a roster is empty at the deadline) ends the bite as CANCELLED / `NO_PAIR`, audited;
+ * - a thrown failure, or a bite still suspended (its matchup not FINAL) two hours past its deadline,
+ *   is recorded on the bite and fails one run, which is the alert; later sweeps keep counting it and
+ *   list it in `knownFailingBiteIds` while the run stays green for every other league.
  */
 
 /** Bump when the ranking, the Z population or the tie-break changes (NFR-2). */
@@ -136,13 +144,21 @@ export async function loadLeagueScores(
   return { categories: [...categories], scoreByPlayerId };
 }
 
-type AutoBiteOutcome =
+export type AutoBiteOutcome =
   | { kind: 'AUTO_EXECUTED'; bite: LeagueBite }
   | { kind: 'WAITING_LOCK' }
+  | { kind: 'NO_PAIR'; bite: LeagueBite }
   | { kind: 'SKIPPED'; reason: string };
 
 /** Codes that mean "not this sweep": the next sweep looks again. Anything else fails the league. */
 const WAIT_CODES = new Set(['BITE_NOT_OPEN', 'EARLIER_BITE_PENDING', 'BITE_SUSPENDED']);
+
+export const BITE_CANCELLED_NO_PAIR = 'NO_PAIR';
+/**
+ * Hours past its deadline a bite may stay suspended before the sweep alerts. The hourly scoring job
+ * re-finalises a matchup a re-score left LIVE, so two hours means that recovery has not worked.
+ */
+export const SUSPENDED_BITE_ALERT_HOURS = 2;
 
 async function rosterIds(tx: Transaction, leagueId: string, memberId: string) {
   const rows = await tx.leagueRosterPlayer.findMany({
@@ -164,7 +180,7 @@ function roundInProgress(tx: Transaction, bite: LeagueBite, now: Date): Promise<
 }
 
 /** One bite, in its own transaction under the League row lock. */
-async function autoBite(
+export async function autoBite(
   candidate: LeagueBite,
   scores: () => Promise<LeagueScores>,
   now: Date
@@ -177,7 +193,7 @@ async function autoBite(
   const leagueScores = await scores();
   try {
     return await prisma.$transaction(async (tx) => {
-      const bite = await lockBite(tx, candidate);
+      const bite = await lockBite(tx, candidate, SCHEDULED_LEAGUE_LOCK.waitMs);
       const due =
         bite.status === 'WAITING_LOCK' || (bite.status === 'OPEN' && bite.deadlineAt <= now);
       if (!due) return { kind: 'SKIPPED', reason: 'NOT_DUE' } as const;
@@ -214,7 +230,37 @@ async function autoBite(
         scoreByPlayerId: leagueScores.scoreByPlayerId,
       });
       if (!pick) {
-        throw new Error(`Bite ${bite.id} has no pair: a roster is empty.`);
+        // One for one needs a player on each side. The right ends here, audited, rather than
+        // throwing on every sweep; BR-20 lets a right end cancelled.
+        const cancelled = await tx.leagueBite.update({
+          where: { id: bite.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledBy: BITE_CANCELLED_NO_PAIR,
+            cancelledReason:
+              'A roster was empty at the deadline, so there was no player to take or send back.',
+            version: { increment: 1 },
+          },
+        });
+        await tx.leagueCompetitionAudit.create({
+          data: {
+            leagueId: bite.leagueId,
+            actorMemberId: null,
+            eventType: 'BITE_CANCELLED',
+            payloadJson: auditPayload(bite, {
+              actor: 'system',
+              at: now.toISOString(),
+              reason: BITE_CANCELLED_NO_PAIR,
+              statusBefore: bite.status,
+              deadlineAt: bite.deadlineAt.toISOString(),
+              rostersBefore: {
+                victim: await rosterIds(tx, bite.leagueId, bite.victimMemberId),
+                bloodsucker: await rosterIds(tx, bite.leagueId, bite.bloodsuckerMemberId),
+              },
+            }),
+          },
+        });
+        return { kind: 'NO_PAIR', bite: cancelled } as const;
       }
       const pair = { takenPlayerId: pick.takenPlayerId, returnedPlayerId: pick.returnedPlayerId };
       const snapshot = {
@@ -270,38 +316,113 @@ async function autoBite(
         },
       });
       return { kind: 'AUTO_EXECUTED', bite: updated } as const;
-    });
+    }, SCHEDULED_LEAGUE_LOCK.transaction);
   } catch (error) {
     if (error instanceof BiteError && WAIT_CODES.has(error.code)) {
       return { kind: 'SKIPPED', reason: error.code };
     }
+    // Round scoring still holds the League row: not a failure, the next sweep runs the bite.
+    if (error instanceof LeagueBusyError) return { kind: 'SKIPPED', reason: error.code };
     throw error;
+  }
+}
+
+/** Best effort, after commit: tells the league a bite ended unused because a roster was empty. */
+async function announceNoPair(bite: LeagueBite) {
+  try {
+    const victim = await prisma.leagueMember.findUnique({
+      where: { id: bite.victimMemberId },
+      select: { teamName: true },
+    });
+    await publishLeagueSystemMessage({
+      leagueId: bite.leagueId,
+      eventType: 'BLOODSUCKER_BITE_CANCELLED',
+      relatedEntityId: `${bite.id}:${bite.version}`,
+      content: `The Bloodsucker's round ${bite.round} bite on ${victim?.teamName ?? 'their opponent'} ended unused: a roster was empty at the deadline, so there was no player to swap.`,
+      context: { biteId: bite.id },
+    });
+  } catch (error) {
+    logger.warn('Bloodsucker no-pair activity message failed', {
+      leagueId: bite.leagueId,
+      biteId: bite.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Counts a failed or stuck sweep on the bite. Returns true the first time, which is the one alert:
+ * the caller logs an error (Sentry) and fails that run. Later calls only count.
+ */
+async function recordBiteFailure(bite: LeagueBite, reason: string, now: Date): Promise<boolean> {
+  try {
+    const first = await prisma.leagueBite.updateMany({
+      where: {
+        id: bite.id,
+        leagueId: bite.leagueId,
+        seasonId: bite.seasonId,
+        failureAlertedAt: null,
+      },
+      data: { failureAlertedAt: now },
+    });
+    await prisma.leagueBite.updateMany({
+      where: { id: bite.id, leagueId: bite.leagueId, seasonId: bite.seasonId },
+      data: {
+        failureCount: { increment: 1 },
+        lastFailureAt: now,
+        lastFailureReason: reason.slice(0, 500),
+      },
+    });
+    return first.count === 1;
+  } catch (error) {
+    // The failure could not be stored, so it cannot be known as alerted: alert again.
+    logger.error('Bloodsucker bite failure could not be recorded', {
+      leagueId: bite.leagueId,
+      biteId: bite.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return true;
   }
 }
 
 export interface BloodsuckerBiteSweepResult {
   autoExecutedBiteIds: string[];
   waitingLockBiteIds: string[];
+  /** Bites ended as CANCELLED / NO_PAIR this run: a roster was empty at the deadline. */
+  unpairableBiteIds: string[];
+  /** Leagues with a bite that failed or got stuck for the first time this run: the run fails once. */
   failedLeagueIds: string[];
+  /** Bites still failing or stuck after their one alert; see `LeagueBite.lastFailureReason`. */
+  knownFailingBiteIds: string[];
 }
 
 /**
- * Runs every due bite, oldest grant first within each league. A league whose bite fails stops at
- * that bite (later bites wait for it, E7) and is reported; other leagues carry on.
+ * Runs every due bite of each league's active season, oldest grant first within the league. A league
+ * whose bite fails stops at that bite (later bites wait for it, E7); other leagues carry on. A
+ * failing bite fails the run once (the alert) and is then only counted, so one stuck bite cannot keep
+ * the monitor red or hide another league's failure.
  */
 export async function sweepDueBloodsuckerBites(
-  now = new Date()
+  now = new Date(),
+  run: typeof autoBite = autoBite
 ): Promise<BloodsuckerBiteSweepResult> {
-  const due = await prisma.leagueBite.findMany({
+  const candidates = await prisma.leagueBite.findMany({
     where: {
       OR: [{ status: 'OPEN', deadlineAt: { lte: now } }, { status: 'WAITING_LOCK' }],
     },
+    include: { league: { select: { activeSeasonId: true } } },
     orderBy: [{ leagueId: 'asc' }, { opensAt: 'asc' }, { id: 'asc' }],
   });
+  // League and season scope: only bites of the league's active season run.
+  const due: LeagueBite[] = candidates.flatMap(({ league, ...bite }) =>
+    league.activeSeasonId === bite.seasonId ? [bite] : []
+  );
   const result: BloodsuckerBiteSweepResult = {
     autoExecutedBiteIds: [],
     waitingLockBiteIds: [],
+    unpairableBiteIds: [],
     failedLeagueIds: [],
+    knownFailingBiteIds: [],
   };
   if (due.length === 0) return result;
 
@@ -315,22 +436,42 @@ export async function sweepDueBloodsuckerBites(
       (leagueScores ??= (statsLookup ??= loadDraftPlayerStatsLookup()).then((lookup) =>
         loadLeagueScores(leagueId, lookup)
       ));
+    const fail = async (bite: LeagueBite, reason: string) => {
+      const context = { leagueId, biteId: bite.id, error: reason, failures: bite.failureCount + 1 };
+      if (await recordBiteFailure(bite, reason, now)) {
+        result.failedLeagueIds.push(leagueId);
+        logger.error('Bloodsucker auto-bite failed', context);
+      } else {
+        result.knownFailingBiteIds.push(bite.id);
+        logger.warn('Bloodsucker auto-bite is still failing', context);
+      }
+    };
     for (const bite of bites) {
       try {
-        const outcome = await autoBite(bite, scores, now);
+        const outcome = await run(bite, scores, now);
         if (outcome.kind === 'AUTO_EXECUTED') {
           result.autoExecutedBiteIds.push(bite.id);
           await afterBiteCommitted(outcome.bite, 'executed', { auto: true });
         } else if (outcome.kind === 'WAITING_LOCK') {
           result.waitingLockBiteIds.push(bite.id);
+        } else if (outcome.kind === 'NO_PAIR') {
+          result.unpairableBiteIds.push(bite.id);
+          logger.warn('Bloodsucker bite ended unused: a roster was empty', {
+            leagueId,
+            biteId: bite.id,
+          });
+          await announceNoPair(outcome.bite);
+        } else if (
+          outcome.reason === 'BITE_SUSPENDED' &&
+          now.getTime() - bite.deadlineAt.getTime() > SUSPENDED_BITE_ALERT_HOURS * 60 * 60 * 1000
+        ) {
+          await fail(
+            bite,
+            `BITE_SUSPENDED: the matchup is still not FINAL ${SUSPENDED_BITE_ALERT_HOURS} hours past the bite's deadline`
+          );
         }
       } catch (error) {
-        result.failedLeagueIds.push(leagueId);
-        logger.error('Bloodsucker auto-bite failed', {
-          leagueId,
-          biteId: bite.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        await fail(bite, error instanceof Error ? error.message : String(error));
         break;
       }
     }

@@ -252,7 +252,9 @@ time: it holds a lease in `League.waiverRunStartedAt`, and a second run is refus
 lease implicitly after 15 minutes. Each claim settles in one transaction: it is taken only while still
 `PENDING`, then the roster check, the FAAB debit, the roster change, the pending-bid release and the
 priority advance commit together. The settlement first takes the League row lock, so it serialises with
-the other League-row writers (the Bloodsucker window close, and bites once #1283 lands). The drop must
+the other League-row writers (the Bloodsucker window close, bites, round scoring). It waits up to 20
+seconds for the row in a transaction that lasts 45, because scoring can hold it for 30; a league still
+busy ends the run with `LeagueBusyError`, the claim stays `PENDING` and the next run settles it. The drop must
 remove exactly one row and the add is a create, never an upsert: a drop player or an added player
 that another writer moved mid-settlement rolls the claim back to `PENDING` instead of taking a player
 from its new owner (#1281, edge case E3). The roster check comes before the debit, so a claim that cannot be

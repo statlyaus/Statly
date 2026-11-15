@@ -30,6 +30,7 @@ import {
   closeBloodsuckerWindow,
   sweepBloodsuckerWindows,
 } from '@/server/leagues/bloodsuckerAutoFill';
+import { executeLeagueTradeAction } from '@/server/leagues/trades/tradeService';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { addFreeAgentToRoster } from '@/server/rosters/freeAgentAdd';
 
@@ -189,6 +190,30 @@ describe.sequential('Bloodsucker exclusive window and auto-fill', () => {
 
     await expect(add(RIVAL_USER, PLAYER_A, AFTER)).resolves.toMatchObject({ memberId: RIVAL });
   });
+
+  it.each([
+    ['accept', {}],
+    ['counter', { sendingPlayerIds: [PLAYER_A], receivingPlayerIds: [PLAYER_B] }],
+  ] as const)(
+    'refuses another member who tries to %s a trade during the window (E10)',
+    async (action, extra) => {
+      const act = (now: Date) =>
+        executeLeagueTradeAction(
+          LEAGUE,
+          RIVAL_USER,
+          'no-such-thread',
+          { action, expectedVersion: 0, idempotencyKey: `int-bs-window-${action}-key`, ...extra },
+          now
+        );
+
+      await expect(act(DURING)).rejects.toMatchObject({
+        code: 'BLOODSUCKER_WINDOW_OPEN',
+        status: 409,
+      });
+      // After the close the window no longer answers; the command fails for its own reasons.
+      await expect(act(AFTER)).rejects.not.toMatchObject({ code: 'BLOODSUCKER_WINDOW_OPEN' });
+    }
+  );
 
   it('lets the Bloodsucker add a player in a waiver hold during the window, and nobody after it', async () => {
     await prisma.teamAction.create({

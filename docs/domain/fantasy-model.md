@@ -208,7 +208,9 @@ a player stay pending. A trade with a frozen member on either side cannot comple
 is done: acceptance and approval answer `BITE_PENDING`, and the veto-review cron holds it. The trade centre
 marks such a trade as on hold and does not offer accept or approve. A bite not made by its deadline is made by the system: the 5-minute
 `cron-bloodsucker` sweep (`src/server/leagues/bloodsuckerAutoBite.ts`) takes the victim's
-highest-Statly-Z player for the Bloodsucker's lowest, never while a round is in progress. A bite itself is a roster swap through `src/server/leagues/rosterSwap.ts`
+highest-Statly-Z player for the Bloodsucker's lowest, never while a round is in progress. A bite with no
+pair (a roster is empty) ends cancelled as `NO_PAIR`, and a Bloodsucker holding a bite cannot drop its
+last player (`LAST_PLAYER_BITE_HELD`). A bite itself is a roster swap through `src/server/leagues/rosterSwap.ts`
 under the League row lock (see
 [Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
 

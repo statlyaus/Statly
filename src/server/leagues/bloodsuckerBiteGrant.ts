@@ -154,7 +154,11 @@ export async function syncBloodsuckerBites(
   if (!candidates.length) return;
 
   const existingRows = await tx.leagueBite.findMany({
-    where: { leagueId: input.leagueId, matchupId: { in: candidates.map((m) => m.id) } },
+    where: {
+      leagueId: input.leagueId,
+      seasonId: input.seasonId,
+      matchupId: { in: candidates.map((m) => m.id) },
+    },
   });
   let deadline: Date | null = null;
   const biteDeadline = async () => {

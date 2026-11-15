@@ -43,12 +43,33 @@ the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` a
 
 `cron-bloodsucker` closes due exclusive windows and runs due bites (see
 [Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)). Its JSON answer lists
-`closedLeagueIds`, `autoExecutedBiteIds`, `waitingLockBiteIds` and `failedLeagueIds`; any failed league
-answers 500 and checks in as error. Two failed or missed runs in a row open a Sentry issue.
+`closedLeagueIds`, `autoExecutedBiteIds`, `waitingLockBiteIds`, `unpairableBiteIds`,
+`knownFailingBiteIds` and `failedLeagueIds`; any failed league answers 500 and checks in as error.
+Two failed or missed runs in a row open a Sentry issue.
 
-- **Failed league.** Search the logs for `Bloodsucker auto-bite failed` or `Bloodsucker window close
-failed`; each names the league and bite. Later bites in that league wait for the failed one (oldest
-  grant first). A fix needs no manual step: the next run retries.
+- **Failed league.** A bite that throws, or is still suspended (its matchup not FINAL) 2 hours past
+  its deadline, fails **one** run: the log line `Bloodsucker auto-bite failed` (an error, so it
+  reaches Sentry) names the league and bite, and the bite row records `failureCount`,
+  `lastFailureAt`, `lastFailureReason` and `failureAlertedAt`. That one failed run is the alert.
+  Later runs still try the bite every 5 minutes and count the failure, but answer 200 and list the
+  bite in `knownFailingBiteIds` (log line `Bloodsucker auto-bite is still failing`, a warning), so
+  one stuck bite cannot keep the monitor red or hide another league's failure. A window close that
+  fails (`Bloodsucker window close failed`) still fails every run until it works.
+- **A bite the alert named does not fix itself by being ignored.** Later bites in that league wait
+  for it (oldest grant first) and its victim stays frozen. Read the reason and fix the cause; the
+  next run then runs the bite with no manual step. Bites that are failing now:
+  `SELECT id, "leagueId", status, "failureCount", "lastFailureAt", "lastFailureReason" FROM "LeagueBite" WHERE status IN ('OPEN','WAITING_LOCK') AND "failureCount" > 0;`
+- **Suspended bite (`BITE_SUSPENDED`).** A commissioner re-score run while an AFL match was not
+  final writes the matchup back to LIVE while its round stays FINAL. The hourly scoring job rescores
+  such a round until the matchup is FINAL again, then the bite runs; while it cannot, `cron-scoring`
+  reports the round as stalled. A round cannot be force-finalized while an AFL match is not final,
+  so if the AFL data stays wrong, fix the data; meanwhile a commissioner who is neither the
+  Bloodsucker nor the victim (or the owner) can cancel the bite to unfreeze the victim.
+- **Unpairable bite.** A bite whose Bloodsucker or victim has an empty roster at the deadline ends
+  as `CANCELLED` with `cancelledBy = NO_PAIR`, audited as `BITE_CANCELLED` by the system, and is
+  listed once in `unpairableBiteIds`. It is not a failure and needs no action.
+- **League busy.** A sweep that cannot get the League row within 20 seconds (round scoring holds it)
+  skips that bite without failing; the next run takes it.
 - **Waiting bites.** A `WAITING_LOCK` bite is normal while a round is in progress and runs at the first
   run after the round ends. Overdue or waiting bites:
   `SELECT id, "leagueId", status, "deadlineAt" FROM "LeagueBite" WHERE status IN ('OPEN','WAITING_LOCK') AND "deadlineAt" < now() - interval '15 minutes';`
