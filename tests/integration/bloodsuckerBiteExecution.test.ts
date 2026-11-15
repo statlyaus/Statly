@@ -12,15 +12,26 @@ vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
   },
 }));
 
+const auth = vi.hoisted(() => ({ userId: '' }));
+vi.mock('@/lib/serverAuth', () => ({ getAuthenticatedUserId: vi.fn(async () => auth.userId) }));
+vi.mock('@/lib/leagueMembership', () => ({
+  verifyLeagueMembership: vi.fn().mockResolvedValue({ isMember: true }),
+}));
+
 import type { LeagueBite } from '@prisma/client';
+import type { NextRequest } from 'next/server';
+
+import { POST as postTeamAction } from '@/app/api/leagues/[id]/actions/[userId]/route';
 
 import { prisma } from '@/lib/prisma';
+import { hasPendingBite } from '@/server/leagues/bitePending';
 import {
   BiteError,
   commissionerBiteAction,
   executeBite,
   isBloodsuckerRoundSelfOverride,
 } from '@/server/leagues/bloodsuckerBites';
+import { lockLeagueRow, lockLeagueRowOrBusy } from '@/server/leagues/leagueRowLock';
 import { swapRosterPlayers } from '@/server/leagues/rosterSwap';
 import { createLeagueTrade } from '@/server/leagues/trades/tradeService';
 import {
@@ -97,7 +108,8 @@ async function seed(options: { roundTwoStartsAt?: Date } = {}) {
     })),
   });
   await prisma.player.createMany({
-    data: PLAYERS.map((id) => ({ id, name: id, club: 'GWS', position: 'MID' })),
+    // Listed RUC/MID, so each suits the RUC slot the fixture lineups put a player in.
+    data: PLAYERS.map((id) => ({ id, name: id, club: 'GWS', position: 'RUC/MID' })),
   });
   await prisma.leagueSettings.create({
     data: {
@@ -251,6 +263,35 @@ const lineupSlots = async (memberId: string, round: number) =>
   )
     .map((row) => `${row.slot}:${row.playerId}`)
     .sort();
+
+/** Holds the League row, as round scoring does, for `ms`. */
+function holdLeagueRow(ms: number) {
+  let locked!: () => void;
+  const ready = new Promise<void>((resolve) => (locked = resolve));
+  const released = prisma.$transaction(
+    async (tx) => {
+      await lockLeagueRow(tx, LEAGUE);
+      locked();
+      await new Promise((resolve) => setTimeout(resolve, ms));
+    },
+    { timeout: ms + 5_000 }
+  );
+  return { ready, released };
+}
+
+async function drop(userId: string, playerId: string) {
+  auth.userId = userId;
+  const response = await postTeamAction(
+    new Request(`https://statly.test/api/leagues/${LEAGUE}/actions/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actionType: 'DROP_PLAYER', details: { playerId } }),
+    }) as unknown as NextRequest,
+    { params: Promise.resolve({ id: LEAGUE, userId }) }
+  );
+  if (!response) throw new Error('POST returned no response');
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
 
 async function expectBiteError(promise: Promise<unknown>, code: string, status: number) {
   const error = await promise.then(
@@ -603,6 +644,166 @@ describe.sequential('Bloodsucker bite execution', () => {
       expect(await ownerOf(V2)).toBe(VICTIM);
       expect(await ownerOf(B1)).toBe(BS);
       expect((await prisma.socialMessage.findMany({ where: { leagueId: LEAGUE } })).length).toBe(3);
+    });
+  });
+
+  describe('review fixes (#1343)', () => {
+    it('leaves an arriving player out of a lineup slot he is not listed for', async () => {
+      // B2 is a defender: he cannot take over V1's RUC slot in the victim's open round 2 lineup.
+      await prisma.player.update({ where: { id: B2 }, data: { position: 'DEF' } });
+
+      await bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id);
+
+      expect(await ownerOf(B2)).toBe(VICTIM);
+      expect(await lineupSlots(VICTIM, 2)).toEqual([`BENCH:${V2}`]);
+      // V1 suits the bench spot B2 left, and scored round 1 is untouched.
+      expect(await lineupSlots(BS, 2)).toEqual([`RUC:${B1}`, `BENCH:${V1}`].sort());
+      expect(await lineupSlots(VICTIM, 1)).toEqual([`RUC:${V1}`, `BENCH:${V2}`].sort());
+    });
+
+    it('turns a redone auto-bite into a commissioner swap: EXECUTED, no stale snapshot, a team action', async () => {
+      await bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id);
+      const snapshot = { ruleVersion: 1, victim: [{ playerId: V1, z: 2 }], bloodsucker: [] };
+      await prisma.leagueBite.update({
+        where: { id: granted.id },
+        data: {
+          status: 'AUTO_EXECUTED',
+          executedByUserId: null,
+          autoBiteRuleVersion: 1,
+          autoBiteSnapshotJson: snapshot,
+        },
+      });
+
+      await expect(
+        commish(
+          { action: 'redo', reason: 'Wrong player', takenPlayerId: V2, returnedPlayerId: B1 },
+          granted.id
+        )
+      ).resolves.toMatchObject({ status: 'EXECUTED', takenPlayerId: V2, returnedPlayerId: B1 });
+
+      expect(
+        await prisma.leagueBite.findUniqueOrThrow({ where: { id: granted.id } })
+      ).toMatchObject({
+        status: 'EXECUTED',
+        executedByUserId: USERS.owner,
+        autoBiteRuleVersion: null,
+        autoBiteSnapshotJson: null,
+      });
+      const actions = await prisma.teamAction.findMany({
+        where: { leagueId: LEAGUE, seasonId: SEASON, actionType: 'BLOODSUCKER_BITE' },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(actions).toHaveLength(2);
+      expect(actions[1]).toMatchObject({
+        memberId: BS,
+        targetMemberId: VICTIM,
+        status: 'PROCESSED',
+        details: { biteId: granted.id, takenPlayerId: V2, returnedPlayerId: B1, redo: true },
+      });
+      const audit = await prisma.leagueCompetitionAudit.findFirstOrThrow({
+        where: { leagueId: LEAGUE, eventType: 'BITE_REDONE' },
+      });
+      expect(audit.payloadJson).toMatchObject({
+        statusBefore: 'AUTO_EXECUTED',
+        previous: { takenPlayerId: V1, autoBiteRuleVersion: 1, autoBiteSnapshot: snapshot },
+      });
+    });
+
+    it('scopes the freeze and the oldest-first rule to the active season', async () => {
+      await prisma.leagueSeason.create({
+        data: { id: `${SEASON}-old`, leagueId: LEAGUE, label: '2025 season', year: 2025 },
+      });
+      await prisma.leagueBite.create({
+        data: {
+          leagueId: LEAGUE,
+          seasonId: `${SEASON}-old`,
+          roundId: `${P}-old-round`,
+          round: 9,
+          matchupId: `${P}-old-matchup`,
+          bloodsuckerMemberId: BS,
+          victimMemberId: VICTIM,
+          grantedWinnerMemberId: BS,
+          opensAt: new Date(NOW.getTime() - 400 * 24 * HOUR),
+          deadlineAt: new Date(NOW.getTime() - 398 * 24 * HOUR),
+        },
+      });
+
+      // Last season's open bite is not "earlier", and does not freeze the victim once this one is done.
+      await expect(
+        bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id)
+      ).resolves.toMatchObject({ status: 'EXECUTED' });
+      await expect(hasPendingBite(prisma, LEAGUE, VICTIM)).resolves.toBe(false);
+    });
+
+    it('waits for a League row held by scoring, and names LEAGUE_BUSY when the wait runs out', async () => {
+      const short = holdLeagueRow(1_500);
+      await short.ready;
+      // A wait shorter than the hold is refused by name; a longer one gets the row.
+      await expect(
+        prisma.$transaction((tx) => lockLeagueRowOrBusy(tx, LEAGUE, 200))
+      ).rejects.toMatchObject({ name: 'LeagueBusyError', code: 'LEAGUE_BUSY', status: 503 });
+      await expect(
+        prisma.$transaction((tx) => lockLeagueRowOrBusy(tx, LEAGUE, 10_000), { timeout: 15_000 })
+      ).resolves.toBeUndefined();
+      await short.released;
+
+      // A manual bite outlasts Prisma's default 5-second transaction: it waits 6 seconds and runs.
+      const long = holdLeagueRow(6_000);
+      await long.ready;
+      await expect(
+        bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id)
+      ).resolves.toMatchObject({ status: 'EXECUTED' });
+      await long.released;
+    });
+
+    it('settles a waiver claim that had to wait more than 5 seconds for the League row', async () => {
+      // The owner (no bite on him) claims the free agent, dropping O1. Scoring takes the League row
+      // after the run has started (past its lease), so the settling transaction is what waits.
+      await claimDropping(USERS.owner, OWNER, O1);
+      await prisma.teamAction.updateMany({
+        where: { leagueId: LEAGUE, actionType: 'WAIVER_CLAIM', status: 'PENDING' },
+        data: { processingAt: new Date(Date.now() - 60_000) },
+      });
+      const [waiverSettings, claims] = await Promise.all([
+        waiverStore.loadWaiverSettings(LEAGUE),
+        waiverStore.loadPendingClaims(LEAGUE),
+      ]);
+      expect(claims).toHaveLength(1);
+      const held = holdLeagueRow(6_000);
+      await held.ready;
+
+      await waivers.processClaims({ leagueId: LEAGUE, waiverSettings, claims });
+
+      await held.released;
+      expect(await ownerOf(F1)).toBe(OWNER);
+      expect(await ownerOf(O1)).toBeUndefined();
+    });
+
+    it('refuses a manual bite with LEAGUE_BUSY, not a bare 500, when the League row stays held', async () => {
+      const held = holdLeagueRow(9_500);
+      await held.ready;
+
+      await expectBiteError(
+        bite({ takenPlayerId: V1, returnedPlayerId: B2 }, granted.id),
+        'LEAGUE_BUSY',
+        503
+      );
+
+      await held.released;
+      expect(await ownerOf(V1)).toBe(VICTIM);
+    });
+
+    it('stops the Bloodsucker dropping its last player while it holds a bite', async () => {
+      await expect(drop(USERS.bs, B1)).resolves.toMatchObject({ status: 200 });
+      await expect(drop(USERS.bs, B2)).resolves.toMatchObject({
+        status: 409,
+        body: { code: 'LAST_PLAYER_BITE_HELD', error: expect.stringContaining('last player') },
+      });
+      expect(await ownerOf(B2)).toBe(BS);
+
+      // With the bite done (here: cancelled) it may drop him.
+      await commish({ action: 'cancel', reason: 'Scoring error' }, granted.id);
+      await expect(drop(USERS.bs, B2)).resolves.toMatchObject({ status: 200 });
     });
   });
 });

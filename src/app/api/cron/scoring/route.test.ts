@@ -157,7 +157,7 @@ describe('/api/cron/scoring', () => {
     expect(recalculateMock).not.toHaveBeenCalled();
   });
 
-  it('looks only at started rounds that are not final in published competitions', async () => {
+  it('looks only at started rounds that are not final, or are final with a demoted matchup, in published competitions', async () => {
     const response = await GET(authorized());
 
     expect(response.status).toBe(200);
@@ -165,9 +165,23 @@ describe('/api/cron/scoring', () => {
     await expect(response.json()).resolves.toMatchObject({ ok: true, leagues: [] });
     // The first read looks for rounds still waiting for a start time; the last one picks the rounds to score.
     const [query] = findManyMock.mock.calls.at(-1) as [
-      { where: { status: unknown; startsAt: { lte: Date }; league: unknown } },
+      { where: { OR: unknown[]; startsAt: { lte: Date }; league: unknown } },
     ];
-    expect(query.where.status).toEqual({ notIn: ['FINAL', 'NO_MATCHUP'] });
+    expect(query.where.OR).toEqual([
+      { status: { notIn: ['FINAL', 'NO_MATCHUP'] } },
+      // A FINAL round holding a scored matchup that a re-score sent back from FINAL (#1343).
+      {
+        status: 'FINAL',
+        matchups: {
+          some: {
+            status: { not: 'FINAL' },
+            homeMemberId: { not: null },
+            awayMemberId: { not: null },
+            scores: { some: {} },
+          },
+        },
+      },
+    ]);
     expect(query.where.startsAt.lte).toBeInstanceOf(Date);
     expect(query.where.league).toEqual({
       settings: { competitionRulesVersion: { gt: 0 }, competitionStatus: { not: 'SETUP' } },

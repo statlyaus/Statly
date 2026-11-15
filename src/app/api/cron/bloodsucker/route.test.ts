@@ -31,6 +31,8 @@ const windows = (failedLeagueIds: string[] = []) => ({
 const bites = (failedLeagueIds: string[] = []) => ({
   autoExecutedBiteIds: ['bite-1'],
   waitingLockBiteIds: ['bite-2'],
+  unpairableBiteIds: ['bite-3'],
+  knownFailingBiteIds: ['bite-4'],
   failedLeagueIds,
 });
 
@@ -67,6 +69,9 @@ describe('/api/cron/bloodsucker', () => {
       closedLeagueIds: ['league-2'],
       autoExecutedBiteIds: ['bite-1'],
       waitingLockBiteIds: ['bite-2'],
+      // A bite ended unused and a bite already alerted for are reported, and the run stays green.
+      unpairableBiteIds: ['bite-3'],
+      knownFailingBiteIds: ['bite-4'],
       failedLeagueIds: [],
     });
     // Both sweeps see the same clock.

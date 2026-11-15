@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { LeagueBite, Prisma } from '@prisma/client';
+import { type LeagueBite, Prisma } from '@prisma/client';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from './activeMembership';
 import { isCommissioner } from './competitionRules';
 import { resolveBloodsuckerMemberId } from './leagueFormat';
-import { lockLeagueRow } from './leagueRowLock';
+import { INTERACTIVE_LEAGUE_LOCK, LeagueBusyError, lockLeagueRowOrBusy } from './leagueRowLock';
 import { findRoundInProgress, replacePlayerInOpenLineups } from './playerMoveLock';
 import { refreshOwnershipProjection, swapRosterPlayers } from './rosterSwap';
 import { publishLeagueSystemMessage } from './social/socialSystemEvents';
@@ -30,13 +30,14 @@ export type BiteErrorCode =
   | 'BITE_SUSPENDED'
   | 'EARLIER_BITE_PENDING'
   | 'ROUND_IN_PROGRESS'
-  | 'ROSTER_CHANGED';
+  | 'ROSTER_CHANGED'
+  | 'LEAGUE_BUSY';
 
 export class BiteError extends Error {
   constructor(
     public readonly code: BiteErrorCode,
     message: string,
-    public readonly status: 400 | 401 | 403 | 404 | 409
+    public readonly status: 400 | 401 | 403 | 404 | 409 | 503
   ) {
     super(message);
     this.name = 'BiteError';
@@ -111,6 +112,7 @@ export async function assertOldestOpenBite(tx: Transaction, bite: LeagueBite) {
   const earlier = await tx.leagueBite.findFirst({
     where: {
       leagueId: bite.leagueId,
+      seasonId: bite.seasonId,
       bloodsuckerMemberId: bite.bloodsuckerMemberId,
       status: { in: [...UNEXECUTED] },
       id: { not: bite.id },
@@ -270,9 +272,16 @@ export function auditPayload(
   ) as Prisma.InputJsonValue;
 }
 
-/** Re-reads the bite under the League lock; a concurrent change since it was read is refused. */
-export async function lockBite(tx: Transaction, bite: LeagueBite): Promise<LeagueBite> {
-  await lockLeagueRow(tx, bite.leagueId);
+/**
+ * Re-reads the bite under the League lock; a concurrent change since it was read is refused. The
+ * wait for the lock is bounded: `LeagueBusyError` when round scoring (or another move) still holds it.
+ */
+export async function lockBite(
+  tx: Transaction,
+  bite: LeagueBite,
+  waitMs: number = INTERACTIVE_LEAGUE_LOCK.waitMs
+): Promise<LeagueBite> {
+  await lockLeagueRowOrBusy(tx, bite.leagueId, waitMs);
   const current = await tx.leagueBite.findUnique({ where: { id: bite.id } });
   if (!current || current.version !== bite.version) {
     throw new BiteError('BITE_NOT_OPEN', 'This bite changed. Refresh and try again.', 409);
@@ -286,6 +295,12 @@ export interface BiteResult {
   takenPlayerId: string | null;
   returnedPlayerId: string | null;
   version: number;
+}
+
+/** A person's bite command that met a busy league gets a named refusal to retry, not a bare 500. */
+function busyAsBiteError(error: unknown): never {
+  if (error instanceof LeagueBusyError) throw new BiteError('LEAGUE_BUSY', error.message, 503);
+  throw error;
 }
 
 const toResult = (bite: LeagueBite): BiteResult => ({
@@ -327,58 +342,60 @@ export async function executeBite(input: {
     throw new BiteError('FORBIDDEN', 'Only the Bloodsucker can bite.', 403);
   }
 
-  const executed = await prisma.$transaction(async (tx) => {
-    const current = await lockBite(tx, bite);
-    if (!(UNEXECUTED as readonly string[]).includes(current.status)) {
-      throw new BiteError('BITE_NOT_OPEN', 'This bite is already done.', 409);
-    }
-    await assertOldestOpenBite(tx, current);
-    await assertMatchupFinal(tx, current);
-    await assertNoRoundInProgress(tx, current.leagueId, now);
+  const executed = await prisma
+    .$transaction(async (tx) => {
+      const current = await lockBite(tx, bite);
+      if (!(UNEXECUTED as readonly string[]).includes(current.status)) {
+        throw new BiteError('BITE_NOT_OPEN', 'This bite is already done.', 409);
+      }
+      await assertOldestOpenBite(tx, current);
+      await assertMatchupFinal(tx, current);
+      await assertNoRoundInProgress(tx, current.leagueId, now);
 
-    const takenSlot = await takenSlotOf(tx, current, pair.takenPlayerId);
-    const swap = await swapBitePlayers(tx, current, { ...pair, now });
-    const updated = await tx.leagueBite.update({
-      where: { id: current.id },
-      data: {
-        status: 'EXECUTED',
-        takenPlayerId: pair.takenPlayerId,
-        returnedPlayerId: pair.returnedPlayerId,
-        takenSlot,
-        executedAt: now,
-        executedByUserId: actor.userId,
-        version: { increment: 1 },
-      },
-    });
-    await tx.teamAction.create({
-      data: {
-        leagueId: current.leagueId,
-        seasonId: current.seasonId,
-        memberId: current.bloodsuckerMemberId,
-        targetMemberId: current.victimMemberId,
-        actionType: 'BLOODSUCKER_BITE',
-        status: 'PROCESSED',
-        processedAt: now,
-        details: { biteId: current.id, ...pair },
-      },
-    });
-    await tx.leagueCompetitionAudit.create({
-      data: {
-        leagueId: current.leagueId,
-        actorMemberId: actor.memberId,
-        eventType: 'BITE_EXECUTED',
-        payloadJson: auditPayload(current, {
-          actor: 'bloodsucker',
-          at: now.toISOString(),
-          reason: 'BLOODSUCKER_CHOICE',
-          ...pair,
+      const takenSlot = await takenSlotOf(tx, current, pair.takenPlayerId);
+      const swap = await swapBitePlayers(tx, current, { ...pair, now });
+      const updated = await tx.leagueBite.update({
+        where: { id: current.id },
+        data: {
+          status: 'EXECUTED',
+          takenPlayerId: pair.takenPlayerId,
+          returnedPlayerId: pair.returnedPlayerId,
           takenSlot,
-          ...swap,
-        }),
-      },
-    });
-    return updated;
-  });
+          executedAt: now,
+          executedByUserId: actor.userId,
+          version: { increment: 1 },
+        },
+      });
+      await tx.teamAction.create({
+        data: {
+          leagueId: current.leagueId,
+          seasonId: current.seasonId,
+          memberId: current.bloodsuckerMemberId,
+          targetMemberId: current.victimMemberId,
+          actionType: 'BLOODSUCKER_BITE',
+          status: 'PROCESSED',
+          processedAt: now,
+          details: { biteId: current.id, ...pair },
+        },
+      });
+      await tx.leagueCompetitionAudit.create({
+        data: {
+          leagueId: current.leagueId,
+          actorMemberId: actor.memberId,
+          eventType: 'BITE_EXECUTED',
+          payloadJson: auditPayload(current, {
+            actor: 'bloodsucker',
+            at: now.toISOString(),
+            reason: 'BLOODSUCKER_CHOICE',
+            ...pair,
+            takenSlot,
+            ...swap,
+          }),
+        },
+      });
+      return updated;
+    }, INTERACTIVE_LEAGUE_LOCK.transaction)
+    .catch(busyAsBiteError);
 
   await afterBiteCommitted(executed, 'executed');
   return toResult(executed);
@@ -427,72 +444,95 @@ export async function commissionerBiteAction(input: {
     );
   }
 
-  const changed = await prisma.$transaction(async (tx) => {
-    const current = await lockBite(tx, bite);
-    const executed = (EXECUTED as readonly string[]).includes(current.status);
-    const open = (UNEXECUTED as readonly string[]).includes(current.status);
-    if (action === 'redo' && !executed) {
-      throw new BiteError('BITE_NOT_EXECUTED', 'Only an executed bite can be redone.', 409);
-    }
-    if (action === 'cancel' && !executed && !open) {
-      throw new BiteError('BITE_NOT_OPEN', 'This bite is already cancelled.', 409);
-    }
+  const changed = await prisma
+    .$transaction(async (tx) => {
+      const current = await lockBite(tx, bite);
+      const executed = (EXECUTED as readonly string[]).includes(current.status);
+      const open = (UNEXECUTED as readonly string[]).includes(current.status);
+      if (action === 'redo' && !executed) {
+        throw new BiteError('BITE_NOT_EXECUTED', 'Only an executed bite can be redone.', 409);
+      }
+      if (action === 'cancel' && !executed && !open) {
+        throw new BiteError('BITE_NOT_OPEN', 'This bite is already cancelled.', 409);
+      }
 
-    const steps: Array<Record<string, unknown>> = [];
-    if (executed && current.takenPlayerId && current.returnedPlayerId) {
-      await assertNoRoundInProgress(tx, current.leagueId, now);
-      // The reversal: the taken player goes back to the victim, the returned one to the Bloodsucker.
-      const reversal = await swapBitePlayers(tx, current, {
-        takenPlayerId: current.returnedPlayerId,
-        returnedPlayerId: current.takenPlayerId,
-        now,
-      }).catch(reverseRosterError);
-      steps.push({ step: 'reversal', ...reversal });
-    }
-    if (pair) {
-      const swap = await swapBitePlayers(tx, current, { ...pair, now });
-      steps.push({ step: 'swap', ...pair, ...swap });
-    }
+      const steps: Array<Record<string, unknown>> = [];
+      if (executed && current.takenPlayerId && current.returnedPlayerId) {
+        await assertNoRoundInProgress(tx, current.leagueId, now);
+        // The reversal: the taken player goes back to the victim, the returned one to the Bloodsucker.
+        const reversal = await swapBitePlayers(tx, current, {
+          takenPlayerId: current.returnedPlayerId,
+          returnedPlayerId: current.takenPlayerId,
+          now,
+        }).catch(reverseRosterError);
+        steps.push({ step: 'reversal', ...reversal });
+      }
+      if (pair) {
+        const swap = await swapBitePlayers(tx, current, { ...pair, now });
+        steps.push({ step: 'swap', ...pair, ...swap });
+      }
 
-    const updated = await tx.leagueBite.update({
-      where: { id: current.id },
-      data:
-        action === 'cancel'
-          ? {
-              status: 'CANCELLED',
-              cancelledBy: 'COMMISSIONER',
-              cancelledReason: reason,
-              version: { increment: 1 },
-            }
-          : {
-              takenPlayerId: pair!.takenPlayerId,
-              returnedPlayerId: pair!.returnedPlayerId,
-              takenSlot: await takenSlotOf(tx, current, pair!.takenPlayerId),
-              executedAt: now,
-              executedByUserId: actor.userId,
-              version: { increment: 1 },
-            },
-    });
-    await tx.leagueCompetitionAudit.create({
-      data: {
-        leagueId: current.leagueId,
-        actorMemberId: actor.memberId,
-        eventType: action === 'cancel' ? 'BITE_CANCELLED' : 'BITE_REDONE',
-        payloadJson: auditPayload(current, {
-          actor: 'commissioner',
-          at: now.toISOString(),
-          reason,
-          statusBefore: current.status,
-          previous: {
-            takenPlayerId: current.takenPlayerId,
-            returnedPlayerId: current.returnedPlayerId,
+      const updated = await tx.leagueBite.update({
+        where: { id: current.id },
+        data:
+          action === 'cancel'
+            ? {
+                status: 'CANCELLED',
+                cancelledBy: 'COMMISSIONER',
+                cancelledReason: reason,
+                version: { increment: 1 },
+              }
+            : {
+                // A redo is a person's swap: an auto-bite's status and Statly-Z snapshot no longer
+                // describe it (the audit row below keeps what they were).
+                status: 'EXECUTED',
+                takenPlayerId: pair!.takenPlayerId,
+                returnedPlayerId: pair!.returnedPlayerId,
+                takenSlot: await takenSlotOf(tx, current, pair!.takenPlayerId),
+                executedAt: now,
+                executedByUserId: actor.userId,
+                autoBiteRuleVersion: null,
+                autoBiteSnapshotJson: Prisma.DbNull,
+                version: { increment: 1 },
+              },
+      });
+      if (pair) {
+        await tx.teamAction.create({
+          data: {
+            leagueId: current.leagueId,
+            seasonId: current.seasonId,
+            memberId: current.bloodsuckerMemberId,
+            targetMemberId: current.victimMemberId,
+            actionType: 'BLOODSUCKER_BITE',
+            status: 'PROCESSED',
+            processedAt: now,
+            details: { biteId: current.id, ...pair, redo: true, redoneByMemberId: actor.memberId },
           },
-          steps,
-        }),
-      },
-    });
-    return { bite: updated, moved: steps.length > 0 };
-  });
+        });
+      }
+      await tx.leagueCompetitionAudit.create({
+        data: {
+          leagueId: current.leagueId,
+          actorMemberId: actor.memberId,
+          eventType: action === 'cancel' ? 'BITE_CANCELLED' : 'BITE_REDONE',
+          payloadJson: auditPayload(current, {
+            actor: 'commissioner',
+            at: now.toISOString(),
+            reason,
+            statusBefore: current.status,
+            previous: {
+              takenPlayerId: current.takenPlayerId,
+              returnedPlayerId: current.returnedPlayerId,
+              autoBiteRuleVersion: current.autoBiteRuleVersion,
+              autoBiteSnapshot: current.autoBiteSnapshotJson,
+            },
+            steps,
+          }),
+        },
+      });
+      return { bite: updated, moved: steps.length > 0 };
+    }, INTERACTIVE_LEAGUE_LOCK.transaction)
+    .catch(busyAsBiteError);
 
   await afterBiteCommitted(changed.bite, action === 'cancel' ? 'cancelled' : 'redone', {
     moved: changed.moved,
