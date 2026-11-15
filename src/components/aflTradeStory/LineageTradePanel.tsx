@@ -5,7 +5,13 @@ import type { AflTradeStoryLineageTrade } from '@/server/aflTradeIntelligence/va
 
 import { ClubBadge } from './ClubBadge';
 import { AssetValue } from './AssetValue';
-import { becameText, netText, tradeName, tradeStoryHref } from './tradePageModel';
+import {
+  becameText,
+  netText,
+  tradeName,
+  tradeStoryHref,
+  type AflTradePageAudience,
+} from './tradePageModel';
 
 export const panelId = (tradeId: string) =>
   `trade-panel-${tradeId.replace(/[^a-zA-Z0-9_-]/gu, '-')}`;
@@ -20,12 +26,14 @@ export function LineageTradePanel({
   clubNames,
   headingRef,
   onClose,
+  audience,
 }: {
   trade: AflTradeStoryLineageTrade;
   isThisTrade: boolean;
   clubNames: ReadonlyMap<string, string>;
   headingRef: RefObject<HTMLHeadingElement | null>;
   onClose: () => void;
+  audience?: AflTradePageAudience;
 }) {
   const id = panelId(trade.tradeId);
   const name = `${tradeName(trade.clubs)}, ${trade.year}`;
@@ -63,7 +71,7 @@ export function LineageTradePanel({
         <div className="flex items-center gap-2">
           {isThisTrade ? null : (
             <Link
-              href={tradeStoryHref(trade.tradeId)}
+              href={tradeStoryHref(trade.tradeId, audience)}
               className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-accent) px-3 ts-body font-semibold text-(--ts-accent) hover:bg-(--ts-bg2)"
             >
               Trade page <span aria-hidden="true">&nbsp;→</span>

@@ -1,5 +1,8 @@
 import 'server-only';
 
+import { readFile } from 'node:fs/promises';
+import { isAbsolute } from 'node:path';
+
 import {
   createAflTradeStoryBundleSource,
   verifyAflTradeStoryBundle,
@@ -86,3 +89,28 @@ export function createPublicTradeStoryReads(
     loadClubChains: (clubId) => read((from) => from.loadClub(clubId)),
   };
 }
+
+/**
+ * The stored bundle: the file at `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path). A missing
+ * path or file is "no bundle"; any other failure is the reader's to treat as unavailable.
+ */
+export async function loadTradeStoryBundleFile(
+  environment: Readonly<Record<string, string | undefined>>
+): Promise<string | null> {
+  const path = environment.AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH?.trim();
+  if (!path || !isAbsolute(path)) return null;
+  try {
+    return await readFile(path, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+export const publicTradeStoryReads = createPublicTradeStoryReads({
+  environment: () => ({
+    AFL_TRADE_STORY_PUBLIC_ENABLED: process.env.AFL_TRADE_STORY_PUBLIC_ENABLED,
+    AFL_TRADE_STORY_PUBLIC_BUNDLE_ID: process.env.AFL_TRADE_STORY_PUBLIC_BUNDLE_ID,
+  }),
+  loadBundleText: () => loadTradeStoryBundleFile(process.env),
+});

@@ -186,6 +186,8 @@ describe('publication boundary', () => {
     // The one public way in (owner, 2026-11-15): it shows only the bundle whose exact id the owner
     // approved, and is unavailable otherwise. See "Public trade pages" in afl-trade-intelligence.md.
     /^server\/aflTradeIntelligence\/publication\/publicTradeStoryReads\.ts$/u,
+    // Its pages: they render only what that reader returns (see public-trade-story-route.test.tsx).
+    /^app\/\(public\)\/afl\/trades\//u,
   ];
 
   it('no public page, API or publication module imports the private trade page', () => {
@@ -196,16 +198,22 @@ describe('publication boundary', () => {
     expect(importers).toEqual([]);
   });
 
-  it('serves the page only under the private /dev reader path', () => {
+  it('serves the page only under the private /dev reader path and the public /afl/trades path', () => {
     const routes = files(join(root, 'app'))
       .map((file) => relative(join(root, 'app'), file))
       .filter((file) =>
         readFileSync(join(root, 'app', file), 'utf8').includes('AflTradeStoryPage')
       );
-    expect(routes).toEqual([join('dev', 'afl-trade-stories', '[tradeId]', 'page.tsx')]);
+    expect(routes.sort()).toEqual([
+      join('(public)', 'afl', 'trades', '[tradeId]', 'page.tsx'),
+      join('dev', 'afl-trade-stories', '[tradeId]', 'page.tsx'),
+    ]);
     const clubRoutes = files(join(root, 'app'))
       .map((file) => relative(join(root, 'app'), file))
       .filter((file) => readFileSync(join(root, 'app', file), 'utf8').includes('ClubChainsPage'));
-    expect(clubRoutes).toEqual([join('dev', 'afl-trade-stories', 'clubs', '[clubId]', 'page.tsx')]);
+    expect(clubRoutes.sort()).toEqual([
+      join('(public)', 'afl', 'trades', 'clubs', '[clubId]', 'page.tsx'),
+      join('dev', 'afl-trade-stories', 'clubs', '[clubId]', 'page.tsx'),
+    ]);
   });
 });

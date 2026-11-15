@@ -4438,6 +4438,14 @@ hold is not found. The verified bundle is kept for the life of the server instan
 retried on the next request. The publication-boundary unit test names this module as the single
 public importer of the private story modules.
 
+**Pages.** `/afl` (hub), `/afl/trades` (every trade by year, and each club), `/afl/trades/<trade>`,
+`/afl/trades/clubs/<club>` and `/afl/trades/method`. The trade and club pages are the private pages'
+components: the bundle source marks its models `audience: public`, which swaps the private notice for
+the public one, points every link at `/afl/trades`, and drops the component's own `<main>` (the public
+layout has one). While the reader is unavailable every page says so; an unknown trade or club is not
+found. Until the private storage loader lands, the stored bundle is the file at
+`AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path), which is how the pages are run locally.
+
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
 Draftguru and Official AFL, draft boards from Footyinfo, and the PAV method and published values from

@@ -17,6 +17,7 @@ import {
   formatSigned,
   netText,
   netTone,
+  type AflTradePageAudience,
   type AflTradePageBidShare,
 } from './tradePageModel';
 
@@ -96,10 +97,12 @@ export function TradeDetails({
   story,
   clubNames,
   shares,
+  audience,
 }: {
   story: AflTradeStory;
   clubNames: ReadonlyMap<string, string>;
   shares: Shares;
+  audience?: AflTradePageAudience;
 }) {
   const twoClubs = story.sides.length === 2;
   const alone = new Map(story.nets.tradeAlone.map((net) => [net.clubId, net]));
@@ -194,7 +197,7 @@ export function TradeDetails({
                       ? 'no later trade'
                       : `${formatSigned(later)} from ${trades} later trade${trades === 1 ? '' : 's'}`
                   }
-                  href={clubChainsHref(net.clubId)}
+                  href={clubChainsHref(net.clubId, audience)}
                 />
               );
             })}
