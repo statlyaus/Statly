@@ -7,6 +7,7 @@ import {
   dueResultRefresh,
   RESULTS_FULL_SWEEP_TIMEOUT_MS,
   RESULTS_LAST_MATCHES,
+  RESULTS_SWEEP_WINDOW_MS,
 } from './resultRefresh';
 
 // Initialize Firebase Admin using same pattern as main project
@@ -105,6 +106,7 @@ async function refreshResultsIfDue({
     live,
     lastRecentAt: lastResultsRefreshAt,
     lastFullSweepAt: lastResultsFullSweepAt,
+    gameStartedWithinWindow: live || (await gameStartedSince(now - RESULTS_SWEEP_WINDOW_MS, now)),
   });
   if (!due) return;
   lastResultsRefreshAt = now;
@@ -118,6 +120,17 @@ async function refreshResultsIfDue({
       ? { lastMatches: RESULTS_LAST_MATCHES }
       : { timeoutMs: RESULTS_FULL_SWEEP_TIMEOUT_MS }),
   });
+}
+
+/** Whether any fixture game started between `sinceMs` and `nowMs`. */
+async function gameStartedSince(sinceMs: number, nowMs: number): Promise<boolean> {
+  const recent = await db
+    .collection('matches')
+    .where('start_time_utc', '>=', new Date(sinceMs).toISOString())
+    .where('start_time_utc', '<=', new Date(nowMs).toISOString())
+    .limit(1)
+    .get();
+  return !recent.empty;
 }
 
 /**
