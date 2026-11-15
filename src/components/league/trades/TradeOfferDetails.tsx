@@ -169,6 +169,12 @@ export function TradeOfferDetails({
           the bite is done.
         </p>
       )}
+      {trade.heldReason === 'BLOODSUCKER_RESULT_PENDING' && (
+        <p className="px-4 pb-4 text-xs font-medium text-[color:var(--trade-text)] sm:px-5">
+          On hold: a team in this trade has just played the Bloodsucker and the result is not final.
+          It can go ahead once it is, or once the bite is done if the Bloodsucker won.
+        </p>
+      )}
 
       <footer className="flex flex-wrap items-center gap-2 border-t border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-2 sm:px-5">
         <LeagueSocialDiscussButton

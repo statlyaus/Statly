@@ -4,13 +4,17 @@ import { NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
 
-import { loadLeagueDraftWindowState } from './bloodsuckerWindow';
+import {
+  BLOODSUCKER_AUTO_FILL_GRACE_MINUTES,
+  hasBloodsuckerAutoFillRun,
+  loadLeagueDraftWindowState,
+} from './bloodsuckerWindow';
 
 /**
  * Free-agent adds, drops, waiver claims and trade proposals, accepts or counters open only after the
  * league's draft is COMPLETED. In a Bloodsucker league they then stay closed to everyone but the
- * Bloodsucker until its exclusive window ends (BR-11, BR-12). Every transaction route asks this one
- * guard before it writes anything.
+ * Bloodsucker until its exclusive window ends (BR-11, BR-12) and the auto-fill of its empty roster
+ * spots has run (E13, #1355). Every transaction route asks this one guard before it writes anything.
  */
 export type TransactionWindow =
   | {
@@ -19,7 +23,11 @@ export type TransactionWindow =
       bloodsuckerExclusive?: true;
     }
   | { open: false; code: 'DRAFT_NOT_COMPLETE'; reason: string }
-  | { open: false; code: 'BLOODSUCKER_WINDOW_OPEN'; reason: string; closesAt: string };
+  | { open: false; code: 'BLOODSUCKER_WINDOW_OPEN'; reason: string; closesAt: string }
+  | { open: false; code: 'BLOODSUCKER_AUTO_FILL_PENDING'; reason: string };
+
+export const BLOODSUCKER_AUTO_FILL_PENDING_MESSAGE =
+  "The Bloodsucker's window has closed and its empty roster spots are being filled. Adds, drops, waiver claims and trades open in a few minutes.";
 
 const DRAFT_NOT_COMPLETE: TransactionWindow = {
   open: false,
@@ -47,11 +55,28 @@ export async function getTransactionWindow(
   if (state?.draftStatus !== 'COMPLETED') return DRAFT_NOT_COMPLETE;
 
   const now = actor.now ?? new Date();
-  if (!state.bloodsucker || now >= state.bloodsucker.window.closesAt) return { open: true };
+  if (!state.bloodsucker) return { open: true };
+  const { closesAt } = state.bloodsucker.window;
+  if (now >= closesAt) {
+    // E13: closed to every other team between the close time and the auto-fill. Bounded, so a
+    // fill that keeps failing cannot lock the league: the sweep reports the failure.
+    const graceEndsAt = closesAt.getTime() + BLOODSUCKER_AUTO_FILL_GRACE_MINUTES * 60 * 1000;
+    if (
+      actor.memberId === state.bloodsucker.memberId ||
+      now.getTime() >= graceEndsAt ||
+      (await hasBloodsuckerAutoFillRun(db, leagueId, state.bloodsucker.window))
+    ) {
+      return { open: true };
+    }
+    return {
+      open: false,
+      code: 'BLOODSUCKER_AUTO_FILL_PENDING',
+      reason: BLOODSUCKER_AUTO_FILL_PENDING_MESSAGE,
+    };
+  }
   if (actor.memberId === state.bloodsucker.memberId) {
     return { open: true, bloodsuckerExclusive: true };
   }
-  const { closesAt } = state.bloodsucker.window;
   return {
     open: false,
     code: 'BLOODSUCKER_WINDOW_OPEN',

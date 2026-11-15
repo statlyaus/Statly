@@ -124,7 +124,7 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
     refused with HTTP 409, code `BLOODSUCKER_WINDOW_OPEN`, the close time in the reason (Melbourne
     time) and `closesAt` in the response. Pending trades stay pending until it closes.
   - If under an hour would be left (the draft finishes within 3 hours of round 1), there is no
-    window: nobody is refused and the auto-fill runs as the draft completes.
+    window and the auto-fill runs as the draft completes; the others wait only for that fill.
 - When the window closes, each empty Bloodsucker roster spot is filled with the highest-Statly-Z
   unowned active player for the league's categories, ties to the lower player id
   (`closeBloodsuckerWindow`, `src/server/leagues/bloodsuckerAutoFill.ts`). The Bloodsucker also gets
@@ -133,8 +133,16 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
   the window, the rule version and the players added; a second run finds that row and adds nothing.
   Auto-filled roster rows carry `acquiredBy = BLOODSUCKER_AUTO_FILL`. The close runs from
   `/api/cron/bloodsucker` every 5 minutes (see
-  [Drafts and waivers](../domain/draft-and-waivers.md#concurrent-writers)), so other members can add
-  for up to 5 minutes after the close time before the fill has run; the fill takes whoever is left.
+  [Drafts and waivers](../domain/draft-and-waivers.md#concurrent-writers)).
+- **No gap after the window (E13, #1355).** Free agency does not open to the other teams at the
+  close time. It opens when the auto-fill has run, which is when the `BLOODSUCKER_WINDOW_CLOSED`
+  audit row for this draft exists (`hasBloodsuckerAutoFillRun`). Between the close time and the fill
+  every other member's adds, drops, waiver claims and trade proposals, accepts and counters are
+  refused with HTTP 409, code `BLOODSUCKER_AUTO_FILL_PENDING`; the Bloodsucker itself is not
+  refused, but waiver holds apply to it again. A fill that fails is retried by every sweep and fails
+  the cron run, so it is reported. To keep a failing fill from locking a league, the refusal stops
+  60 minutes after the close time (`BLOODSUCKER_AUTO_FILL_GRACE_MINUTES`) whether or not the fill
+  has run; the sweep still fills the roster when it next succeeds.
 - The Bloodsucker is **pinned at waiver priority 1** (#1281, BR-15, BR-16). The order seeded at the
   end of the draft puts it at 1 and the drafters from 2 in the usual reverse-final-pick order. Its
   own wins never move it, so it wins every contested claim, including a second claim in the same
@@ -214,10 +222,10 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   {team} {score} and took {player}, sending back {player}." (BR-39, idempotent per bite version).
 
 - **Victim freeze (BR-30, E7).** While any bite on a member is `OPEN` or `WAITING_LOCK`, that member's
-  drops and trade proposals, acceptances and counters are refused with HTTP 409, code
-  `BITE_PENDING`. The drop check runs under the League row lock. The freeze counts bites of the
-  league's active season only. Waiver claims that drop a player
-  stay pending, and settle at the first waiver run after the last bite is done. A trade with a
+  free-agent adds, drops and trade proposals, acceptances and counters are refused with HTTP 409,
+  code `BITE_PENDING`. The drop check runs under the League row lock. The freeze counts bites of the
+  league's active season only. Every waiver claim of that member, with or without a drop,
+  stays pending, and settles at the first waiver run after the last bite is done. A trade with a
   frozen member on either side is held, not invalidated: the other team's acceptance and a
   commissioner's approval answer 409 `BITE_PENDING`, and a due veto-review trade waits and completes
   at the first cron run after the bite is done. An open offer still expires on time while held
@@ -226,6 +234,18 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   accept or approve. Every trade command and the trade cron take the League row lock first, as
   waivers, bite execution and the scoring run that grants bites do, so a bite granted while a trade
   is completing is seen by one or the other, never missed by both.
+- **Frozen from round end (E12, #1355).** The bite is granted in the transaction that makes the
+  round FINAL, so there is no time between FINAL and the grant. The time before it is between the
+  round's end (`LeagueCompetitionRound.endsAt`) and its scoring, when game locks have lifted and
+  the loser is not known yet. For that time the Bloodsucker's opponent in a regular-season matchup
+  is frozen whatever the score: the same adds, drops, trades and waiver claims are refused or held
+  with code `BLOODSUCKER_RESULT_PENDING` (`findBiteFreeze`, `src/server/leagues/bitePending.ts`;
+  the trade centre shows `heldReason: 'BLOODSUCKER_RESULT_PENDING'`). When the matchup is FINAL the
+  opponent is either the victim of a granted bite (`BITE_PENDING` until it has run or been
+  cancelled) or free at once. The check reads the league's current fixture version and active
+  season only. A round with no end time is not covered: its players stay locked by their game
+  starts until it is FINAL. A round that never reaches FINAL keeps the opponent frozen; the stalled
+  round alert reports it and a commissioner's recalculation ends it.
 - **Commissioner (BR-34, BR-35, E1).** `POST /api/leagues/[id]/bites/[biteId]/commissioner` with
   `{ action: 'cancel' | 'redo', reason, takenPlayerId?, returnedPlayerId? }`. The reason is required.
   A commissioner who is the Bloodsucker or the victim gets 403; another commissioner or the owner
@@ -343,8 +363,9 @@ Built in #1286. The UI never uses the word "Vampire".
 - **Refusal wording (NFR-5, #1343).** Bloodsucker screens head each refusal by its code
   (`refusalHeading`, `src/components/league/bloodsucker/bloodsuckerDisplay.ts`) and always show the
   code and the server's message; a code or bite status the build does not know gets a generic
-  heading or its own name. The My Team drop keeps the code too, so `BITE_PENDING` and
-  `BLOODSUCKER_WINDOW_OPEN` are named. No screen calls the recalculate route, so
+  heading or its own name. The My Team drop keeps the code too, so `BITE_PENDING`,
+  `BLOODSUCKER_RESULT_PENDING`, `BLOODSUCKER_WINDOW_OPEN` and `BLOODSUCKER_AUTO_FILL_PENDING` are
+  named. No screen calls the recalculate route, so
   `BLOODSUCKER_SELF_OVERRIDE` has a heading ready but no screen to appear on.
 - **Bite reads are season-scoped.** The picker and the commissioner view read a bite by league and
   active season; a bite of another season is not found.
