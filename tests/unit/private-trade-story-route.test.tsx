@@ -175,7 +175,7 @@ describe('publication boundary', () => {
   const ALLOWED = [
     /^app\/dev\/afl-trade-stories\//u,
     /^components\/aflTradeStory\//u,
-    /^server\/aflTradeIntelligence\/development\/(privateTradeStoryReads|tradeStorySamples|tradeStorySampleChain|tradeStorySampleLines)\.ts$/u,
+    /^server\/aflTradeIntelligence\/development\/(privateTradeStoryReads|tradeStorySamples|tradeStorySampleChain|tradeStorySampleLines|tradeStoryListResults)\.ts$/u,
     // The genuine bundle (#1052): read only by privateTradeStoryReads, exported by its own command.
     /^server\/aflTradeIntelligence\/development\/tradeStoryBundle\.ts$/u,
     /^server\/aflTradeIntelligence\/valuation\/realizedTrade(Story|StoryAssets|StoryContracts|PageContracts)\.ts$/u,

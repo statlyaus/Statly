@@ -53,6 +53,23 @@ function sampleBundle() {
 }
 
 describe('trade story bundle (#1052)', () => {
+  it('lists each club’s result and what it received, matching the trade’s own page', () => {
+    const source = createAflTradeStoryBundleSource(sampleBundle());
+    for (const summary of source.list().stories) {
+      const { story } = source.load(summary.tradeId)!;
+      expect(summary.results?.map(({ clubId, net }) => [clubId, net])).toEqual(
+        story.nets.tradeAlone.map(({ clubId, net }) => [clubId, net])
+      );
+      for (const result of summary.results!) {
+        const side = story.sides.find(({ clubId }) => clubId === result.clubId)!;
+        expect([...result.received].sort()).toEqual(side.received.map(({ label }) => label).sort());
+        expect(result.provisional).toBe(
+          story.nets.tradeAlone.find(({ clubId }) => clubId === result.clubId)!.pendingCount > 0
+        );
+      }
+    }
+  });
+
   it('serves the same stories as the samples it was built from', () => {
     const bundle = verifyAflTradeStoryBundle(JSON.parse(JSON.stringify(sampleBundle())));
     const source = createAflTradeStoryBundleSource(bundle);
@@ -60,7 +77,10 @@ describe('trade story bundle (#1052)', () => {
     const list = source.list();
     expect(list.source.kind).toBe('sealed_batch');
     expect(list.source.label).toContain(cameronChainLines.valueLines.valueLinesId.slice(0, 24));
-    expect(list.stories).toEqual(samples.stories);
+    // The bundle adds each club's list result; the samples leave it out.
+    expect(list.stories.map(({ results: _results, ...summary }) => summary)).toEqual(
+      samples.stories
+    );
     for (const { tradeId } of samples.stories)
       expect(source.load(tradeId)?.story).toEqual(aflTradeStorySamples.load(tradeId)?.story);
     expect(source.load('transaction:not-a-trade')).toBeNull();

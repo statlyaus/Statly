@@ -12,6 +12,7 @@ import {
   cameronChainLines,
   cameronChainNames,
 } from './tradeStorySampleChain';
+import type { AflTradeStoryListResult } from './tradeStoryListResults';
 
 /**
  * The private trade page's sample source: the Jeremy Cameron chain (the #965 fixture) as a trade
@@ -93,6 +94,8 @@ export interface AflTradeStorySampleSummary {
   readonly clubNames: readonly string[];
   /** The trade's clubs, in the same order as `clubNames`. */
   readonly clubIds: readonly string[];
+  /** Each club's net and what it received, for the list. The samples leave it out. */
+  readonly results?: readonly AflTradeStoryListResult[];
 }
 
 export interface AflTradeStorySampleList {
