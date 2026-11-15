@@ -4,7 +4,6 @@ import { adminForbiddenResponse, isAdminRequest } from '@/lib/adminAuth';
 import { logger } from '@/lib/logger';
 
 // Configurable delay (ms) to wait after stopping the pool before starting it again
-const WORKER_RESTART_DELAY_MS = Number(process.env.WORKER_RESTART_DELAY_MS) || 500;
 
 // Lazy import to prevent initialization during build
 async function getWorkerPool() {
@@ -67,102 +66,20 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Workers are separate long-running processes (`npm run worker:start`). A web request cannot start,
+ * stop or resize them: on serverless hosting the process freezes when the response is sent, so the
+ * old actions reported success for workers that never ran.
+ */
+export function POST(request: NextRequest) {
   if (!isAdminRequest(request)) return adminForbiddenResponse(request);
 
-  try {
-    const body = await request.json();
-    const { action, workerId } = body;
-
-    switch (action) {
-      case 'start': {
-        const workerPool = await getWorkerPool();
-        await workerPool.start();
-        return NextResponse.json({
-          success: true,
-          message: 'Worker pool started successfully',
-        });
-      }
-
-      case 'stop': {
-        const workerPool = await getWorkerPool();
-        await workerPool.stop();
-        return NextResponse.json({
-          success: true,
-          message: 'Worker pool stopped successfully',
-        });
-      }
-
-      case 'addWorker': {
-        const workerPool = await getWorkerPool();
-        const newWorkerId = await workerPool.addWorker();
-        return NextResponse.json({
-          success: true,
-          data: { workerId: newWorkerId },
-          message: 'Worker added successfully',
-        });
-      }
-
-      case 'removeWorker': {
-        if (!workerId) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: 'Worker ID is required for removeWorker action',
-            },
-            { status: 400 }
-          );
-        }
-
-        const workerPool = await getWorkerPool();
-        const removed = await workerPool.removeWorker(workerId);
-        if (!removed) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: 'Worker not found',
-            },
-            { status: 404 }
-          );
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: 'Worker removed successfully',
-        });
-      }
-
-      case 'restart': {
-        const workerPool = await getWorkerPool();
-        await workerPool.stop();
-        // Wait a short time to allow resources and graceful shutdown handlers to complete
-        await new Promise<void>((resolve) =>
-          setTimeout(() => void resolve(), WORKER_RESTART_DELAY_MS)
-        );
-        await workerPool.start();
-        return NextResponse.json({
-          success: true,
-          message: 'Worker pool restarted successfully',
-        });
-      }
-
-      default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Invalid action',
-          },
-          { status: 400 }
-        );
-    }
-  } catch (error) {
-    logger.error('Error in worker pool management:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(
+    {
+      success: false,
+      error:
+        'Workers run as separate processes and cannot be started or stopped from this route. Use npm run worker:start on the worker host.',
+    },
+    { status: 501 }
+  );
 }
