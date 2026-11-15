@@ -18,6 +18,7 @@ import {
   hasPendingBite,
 } from '@/server/leagues/bitePending';
 import { resolveBloodsuckerMemberId } from '@/server/leagues/leagueFormat';
+import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -42,6 +43,7 @@ import {
   resolveTradeReviewMode,
   validateTradePlayerSelection,
   type BittenPlayer,
+  type TradeReviewContext,
 } from './tradePolicy';
 
 type Transaction = Prisma.TransactionClient;
@@ -214,79 +216,115 @@ async function loadOfferedPlayerIds(leagueId: string, threadId: string): Promise
   return thread?.currentOffer?.players.map((player) => player.playerId) ?? [];
 }
 
-export async function processDueLeagueTrades(now = new Date(), limit = 50): Promise<number> {
-  const due = await prisma.leagueTradeThread.findMany({
-    where: {
-      OR: [
-        { status: 'PENDING_VETO_REVIEW', reviewEndsAt: { lte: now } },
-        { status: 'OPEN', currentOffer: { expiresAt: { lte: now } } },
-      ],
-    },
-    select: { id: true, leagueId: true, status: true, version: true },
-    orderBy: { updatedAt: 'asc' },
-    take: Math.min(Math.max(limit, 1), 100),
-  });
+/** How many batches one sweep reads past threads it has to leave for a later run. */
+const DUE_TRADE_MAX_BATCHES = 10;
 
+export async function processDueLeagueTrades(now = new Date(), limit = 50): Promise<number> {
+  const take = Math.min(Math.max(limit, 1), 100);
+  // Threads this run has already looked at. A held trade (a bite waiting, a player whose game has
+  // started) keeps its place at the front of the queue, so each batch reads past the ones before it.
+  const seen: string[] = [];
   let processed = 0;
   const failures: unknown[] = [];
-  for (const candidate of due) {
-    try {
-      // A trade whose review ends mid-round waits for a later run once a traded player's game
-      // has started (or match timing is unreadable); it completes after the round ends.
-      if (candidate.status === 'PENDING_VETO_REVIEW') {
-        await enforcePlayersMovable(
-          candidate.leagueId,
-          await loadOfferedPlayerIds(candidate.leagueId, candidate.id),
-          now
-        );
-      }
 
-      const completed = await prisma.$transaction(async (tx) => {
-        const thread = await loadTradeForMutation(tx, candidate.id);
-        if (!thread || thread.version !== candidate.version) return;
+  for (let batch = 0; batch < DUE_TRADE_MAX_BATCHES && processed < take; batch += 1) {
+    const due = await prisma.leagueTradeThread.findMany({
+      where: {
+        id: { notIn: seen },
+        OR: [
+          { status: 'PENDING_VETO_REVIEW', reviewEndsAt: { lte: now } },
+          { status: 'OPEN', currentOffer: { expiresAt: { lte: now } } },
+        ],
+      },
+      select: { id: true, leagueId: true, status: true, version: true },
+      orderBy: { updatedAt: 'asc' },
+      take,
+    });
 
-        const invalidationReason = await getTradeLifecycleInvalidationReason(tx, thread);
-        if (invalidationReason) {
-          await resolveThread(
-            tx,
-            thread,
-            'INVALIDATED',
-            'INVALIDATED',
-            null,
-            now,
-            invalidationReason
+    for (const candidate of due) {
+      seen.push(candidate.id);
+      try {
+        // A trade whose review ends mid-round waits for a later run once a traded player's game
+        // has started (or match timing is unreadable); it completes after the round ends.
+        if (candidate.status === 'PENDING_VETO_REVIEW') {
+          await enforcePlayersMovable(
+            candidate.leagueId,
+            await loadOfferedPlayerIds(candidate.leagueId, candidate.id),
+            now
           );
-          processed += 1;
-          return;
         }
 
-        if (thread.status === 'OPEN' && thread.currentOffer.expiresAt <= now) {
-          await resolveThread(tx, thread, 'EXPIRED', 'EXPIRED', null, now, 'OFFER_EXPIRED');
-          processed += 1;
-          return;
-        }
+        const completed = await prisma.$transaction(async (tx) => {
+          await lockLeagueRow(tx, candidate.leagueId);
+          const thread = await loadTradeForMutation(tx, candidate.id);
+          if (!thread || thread.version !== candidate.version) return;
 
-        if (
-          thread.status === 'PENDING_VETO_REVIEW' &&
-          thread.reviewEndsAt &&
-          thread.reviewEndsAt <= now
-        ) {
-          const result = await finalizeTrade(tx, thread, null, now);
-          processed += 1;
-          return result.status === 'COMPLETED';
-        }
-      });
-      if (completed) await refreshOwnershipProjection(candidate.leagueId);
-    } catch (error) {
-      if (error instanceof TradeServiceError) continue;
-      // A thread that keeps failing stays first in updatedAt order, so skipping it keeps the rest moving.
-      logger.error('Failed to process a due league trade', {
-        threadId: candidate.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      failures.push(error);
+          const invalidationReason = await getTradeLifecycleInvalidationReason(tx, thread);
+          if (invalidationReason) {
+            await resolveThread(
+              tx,
+              thread,
+              'INVALIDATED',
+              'INVALIDATED',
+              null,
+              now,
+              invalidationReason
+            );
+            processed += 1;
+            return;
+          }
+
+          if (thread.status === 'OPEN' && thread.currentOffer.expiresAt <= now) {
+            await resolveThread(tx, thread, 'EXPIRED', 'EXPIRED', null, now, 'OFFER_EXPIRED');
+            processed += 1;
+            return;
+          }
+
+          if (
+            thread.status === 'PENDING_VETO_REVIEW' &&
+            thread.reviewEndsAt &&
+            thread.reviewEndsAt <= now
+          ) {
+            // Voters who left since the last veto lower the threshold, so the vetoes already cast
+            // can be enough by the time the window ends.
+            const vetoCount = thread.currentOffer.vetoes.length;
+            const { eligibleVoters } = await loadTradeReviewContext(tx, thread);
+            if (
+              vetoCount >= effectiveVetoThreshold(thread.currentOffer.vetoThreshold, eligibleVoters)
+            ) {
+              await resolveThread(
+                tx,
+                thread,
+                'VETOED',
+                'VETOED',
+                null,
+                now,
+                'VETO_THRESHOLD_REACHED',
+                { vetoCount }
+              );
+              processed += 1;
+              return;
+            }
+            const result = await finalizeTrade(tx, thread, null, now);
+            processed += 1;
+            return result.status === 'COMPLETED';
+          }
+        });
+        if (completed) await refreshOwnershipProjection(candidate.leagueId);
+      } catch (error) {
+        if (error instanceof TradeServiceError) continue;
+        logger.error('Failed to process a due league trade', {
+          threadId: candidate.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        failures.push(error);
+      }
     }
+    if (due.length < take) break;
   }
+
+  processed += await moveStrandedAdminReviews(now, take, failures);
+
   if (failures.length > 0) {
     // Still report the run as failed, so the cron route surfaces the stuck thread.
     throw new Error(`${failures.length} due league trade(s) failed to process`, {
@@ -294,6 +332,84 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
     });
   }
   return processed;
+}
+
+/**
+ * A trade waiting on commissioner review whose commissioner is now one of its two teams (ownership
+ * moved, or a team was made co-commissioner, after it was accepted) has nobody allowed to approve
+ * it. It gets the review it would get if accepted now: a veto vote, or completion when no team is
+ * left to vote.
+ */
+async function moveStrandedAdminReviews(
+  now: Date,
+  take: number,
+  failures: unknown[]
+): Promise<number> {
+  const stranded = await prisma.$queryRaw<Array<{ id: string; leagueId: string }>>`
+    SELECT DISTINCT t."id", t."leagueId"
+    FROM "LeagueTradeThread" t
+    JOIN "League" l ON l."id" = t."leagueId"
+    JOIN "LeagueMember" m ON m."id" IN (t."memberOneId", t."memberTwoId")
+    WHERE t."status" = 'PENDING_ADMIN_REVIEW'
+      AND m."isActive" AND m."status" = 'ACTIVE'
+      AND (m."isCoCommissioner" OR m."userId" = l."ownerId")
+    LIMIT ${take}`;
+
+  let moved = 0;
+  for (const candidate of stranded) {
+    try {
+      const completed = await prisma.$transaction(async (tx) => {
+        await lockLeagueRow(tx, candidate.leagueId);
+        const thread = await loadTradeForMutation(tx, candidate.id);
+        if (!thread || thread.status !== 'PENDING_ADMIN_REVIEW') return null;
+        const reviewMode = resolveTradeReviewMode(
+          'admin',
+          await loadTradeReviewContext(tx, thread)
+        );
+        if (reviewMode === 'admin') return null;
+
+        if (reviewMode === 'none') {
+          return (await finalizeTrade(tx, thread, null, now)).status === 'COMPLETED';
+        }
+        const transition = determineAcceptanceTransition(
+          reviewMode,
+          now,
+          thread.currentOffer.reviewHours
+        );
+        await claimThreadVersion(tx, thread.id, thread.version, 'PENDING_ADMIN_REVIEW', {
+          status: transition.threadStatus,
+          reviewEndsAt: transition.reviewEndsAt,
+        });
+        await tx.leagueTradeOffer.update({
+          where: { id: thread.currentOffer.id },
+          data: { reviewMode: 'VETO', version: { increment: 1 } },
+        });
+        await recordTradeEvent(
+          tx,
+          { leagueId: thread.leagueId, seasonId: thread.seasonId, memberId: null },
+          {
+            threadId: thread.id,
+            offerId: thread.currentOffer.id,
+            type: 'ACCEPTED',
+            previousStatus: thread.status,
+            nextStatus: transition.threadStatus,
+            reasonCode: 'REVIEW_MOVED_TO_VETO',
+          }
+        );
+        return false;
+      });
+      if (completed !== null) moved += 1;
+      if (completed) await refreshOwnershipProjection(candidate.leagueId);
+    } catch (error) {
+      if (error instanceof TradeServiceError) continue;
+      logger.error('Failed to move a stranded league trade review', {
+        threadId: candidate.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      failures.push(error);
+    }
+  }
+  return moved;
 }
 
 async function createTradeInTransaction(
@@ -445,7 +561,7 @@ async function executeActionInTransaction(
       const offeredMode = toReviewModeDto(thread.currentOffer.reviewMode);
       const reviewMode = resolveTradeReviewMode(
         offeredMode,
-        (await loadTradeReviewContext(tx, thread)).commissionerIsParty
+        await loadTradeReviewContext(tx, thread)
       );
       const transition = determineAcceptanceTransition(
         reviewMode,
@@ -465,7 +581,9 @@ async function executeActionInTransaction(
           acceptedAt: now,
           version: { increment: 1 },
           // The offer records the route it actually took, so the trade centre shows a vote.
-          ...(reviewMode !== offeredMode ? { reviewMode: 'VETO' as const } : {}),
+          ...(reviewMode === 'veto' && offeredMode !== 'veto'
+            ? { reviewMode: 'VETO' as const }
+            : {}),
         },
       });
       await recordTradeEvent(tx, access, {
@@ -619,7 +737,7 @@ async function castVeto(
 async function loadTradeReviewContext(
   tx: Transaction,
   thread: Pick<LoadedTrade, 'leagueId' | 'memberOneId' | 'memberTwoId'>
-): Promise<{ commissionerIsParty: boolean; eligibleVoters: number }> {
+): Promise<TradeReviewContext> {
   const league = await tx.league.findUnique({
     where: { id: thread.leagueId },
     select: {
@@ -1178,6 +1296,10 @@ async function executeIdempotentTradeCommand<T extends Prisma.InputJsonValue>(
   const requestHash = createHash('sha256').update(stableStringify(request)).digest('hex');
   try {
     return await prisma.$transaction(async (tx) => {
+      // Every writer to a league's rosters (waivers, bites, scoring's bite grants) takes this lock
+      // first. Taking it before the command row is written lets a trade see their commits, and two
+      // trades for one team check the trade limit and roster size one after the other.
+      await lockLeagueRow(tx, access.leagueId);
       const existing = await tx.leagueTradeCommand.findUnique({
         where: {
           leagueId_actorUserId_idempotencyKey: {

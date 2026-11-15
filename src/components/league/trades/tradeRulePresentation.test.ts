@@ -6,6 +6,7 @@ import {
   getTradeDeadlineDescription,
   getTradeOfferExpiryDescription,
   getTradeReviewSummary,
+  getTradeRulesForOffer,
 } from './tradeRulePresentation';
 
 const rules: TradeRulePresentationInput = {
@@ -21,6 +22,17 @@ describe('trade rule presentation', () => {
     expect(getTradeReviewSummary(rules)).toBe('No review');
     expect(getTradeAcceptanceConsequence(rules, 'AFL Legends')).toBe(
       'If AFL Legends accepts, the players swap straight away.'
+    );
+  });
+
+  it('tells a team offering to a commissioner that the league votes, not the commissioner', () => {
+    const offer = getTradeRulesForOffer(
+      { ...rules, reviewMode: 'admin' },
+      { commissionerIsParty: true, eligibleVoters: 6 }
+    );
+
+    expect(getTradeAcceptanceConsequence(offer, 'The Commish')).toBe(
+      'If The Commish accepts, the league has 24 hours to veto. 3 votes blocks it.'
     );
   });
 

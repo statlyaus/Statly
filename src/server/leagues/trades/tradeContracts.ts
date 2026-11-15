@@ -40,6 +40,8 @@ export interface TradeTeamDto {
   teamName: string;
   teamLogoUrl: string | null;
   isViewer: boolean;
+  /** The league owner or a co-commissioner: an offer with this team goes to a veto vote. */
+  isCommissioner: boolean;
   players: TradePlayerDto[];
 }
 
@@ -90,6 +92,8 @@ export interface LeagueTradeDto {
   createdAt: string;
   updatedAt: string;
   allowedActions: TradeActionName[];
+  /** Set while a Bloodsucker bite waits on either team: the trade cannot complete until it is done. */
+  heldReason: 'BITE_PENDING' | null;
 }
 
 export interface LeagueTradeCentreSnapshot {

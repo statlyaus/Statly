@@ -201,7 +201,12 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   stay pending, and settle at the first waiver run after the last bite is done. A trade with a
   frozen member on either side is held, not invalidated: the other team's acceptance and a
   commissioner's approval answer 409 `BITE_PENDING`, and a due veto-review trade waits and completes
-  at the first cron run after the bite is done. An open offer still expires on time while held.
+  at the first cron run after the bite is done. An open offer still expires on time while held
+  (owner decision 2026-11-15: acceptance is refused, not recorded, and the offer can be re-sent).
+  The trade centre says the trade is on hold (`heldReason: 'BITE_PENDING'`) and does not offer
+  accept or approve. Every trade command and the trade cron take the League row lock first, as
+  waivers, bite execution and the scoring run that grants bites do, so a bite granted while a trade
+  is completing is seen by one or the other, never missed by both.
 - **Commissioner (BR-34, BR-35, E1).** `POST /api/leagues/[id]/bites/[biteId]/commissioner` with
   `{ action: 'cancel' | 'redo', reason, takenPlayerId?, returnedPlayerId? }`. The reason is required.
   A commissioner who is the Bloodsucker or the victim gets 403; another commissioner or the owner
@@ -458,8 +463,26 @@ A commissioner never approves their own trade (owner decision 2026-11-14). In a 
 go to commissioner review, a trade with the owner or a co-commissioner on either side goes to a veto
 vote instead, decided when it is accepted; a commissioner who is a party to a trade already in
 commissioner review can reject it but not approve it. The vetoes that block a trade are the league's
-threshold capped at the active teams outside the trade, counted when each veto is cast, so a veto can
-always pass. Owned by `src/server/leagues/trades/tradePolicy.ts`.
+threshold capped at the active teams outside the trade, so a veto can always pass. It is counted
+when each veto is cast and again when the review window ends: if voters have left and the vetoes
+already cast now meet the threshold, the trade is vetoed, not completed.
+
+Further rules (owner decisions 2026-11-15):
+
+- A veto vote that no team is left to cast is no review. In a league with no active team outside the
+  trade, the trade completes when it is accepted.
+- A trade already in commissioner review whose commissioner becomes one of its two teams (ownership
+  moved, or a team was made co-commissioner) is moved by the trade cron to the review it would get
+  if accepted now: a veto vote with a fresh window, or completion when no team can vote.
+- The league rules in the trade centre are the same for every viewer. Each team carries
+  `isCommissioner`, and the composer shows the review an offer to the chosen team will actually get.
+- Two trades completing at once for the same team are checked against the trade limit and roster
+  size one after the other, under the League row lock.
+- The trade cron reads past trades it must leave for a later run (a bite waiting, a player whose
+  game has started), up to ten batches, so they cannot keep later trades from being processed.
+
+Owned by `src/lib/trades/tradeAcceptancePath.ts` (the review a trade gets) and
+`src/server/leagues/trades/tradePolicy.ts`.
 
 ## Required regression coverage
 

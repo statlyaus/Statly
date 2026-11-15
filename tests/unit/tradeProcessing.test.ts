@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMocks = vi.hoisted(() => ({
   leagueTradeThread: { findMany: vi.fn() },
   $transaction: vi.fn(),
+  // The sweep for stranded commissioner reviews: none in these tests.
+  $queryRaw: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -17,6 +19,7 @@ import { processDueLeagueTrades } from '@/server/leagues/trades/tradeService';
 describe('processDueLeagueTrades', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMocks.$queryRaw.mockResolvedValue([]);
   });
 
   it('keeps processing due threads after one thread fails unexpectedly', async () => {
@@ -24,7 +27,10 @@ describe('processDueLeagueTrades', () => {
       { id: 'thread-a', status: 'OPEN', version: 1 },
       { id: 'thread-c', status: 'OPEN', version: 1 },
     ]);
-    const tx = { leagueTradeThread: { findFirst: vi.fn().mockResolvedValue(null) } };
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      leagueTradeThread: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
     prismaMocks.$transaction
       .mockRejectedValueOnce(new Error('unique constraint failed'))
       .mockImplementationOnce(async (work: (client: typeof tx) => unknown) => work(tx));

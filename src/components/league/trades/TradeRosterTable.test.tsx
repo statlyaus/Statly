@@ -24,6 +24,7 @@ const team: TradeTeamDto = {
   teamName: 'Alpha FC',
   teamLogoUrl: null,
   isViewer: true,
+  isCommissioner: false,
   players: [
     { id: 'alice', name: 'Alice Able', club: 'Adelaide Crows', position: 'MID' },
     { id: 'bob', name: 'Bob Best', club: 'Western Bulldogs', position: 'FWD' },

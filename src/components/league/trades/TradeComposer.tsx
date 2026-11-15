@@ -9,6 +9,7 @@ import type { TradeRulesDto, TradeTeamDto } from '@/server/leagues/trades/tradeC
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
 import { TradeReviewStep } from './TradeReviewStep';
+import { getTradeRulesForOffer } from './tradeRulePresentation';
 import { TradeRosterWorkspace } from './TradeRosterWorkspace';
 import { TradeBuildPanel } from './TradeBuildPanel';
 import {
@@ -385,7 +386,11 @@ export function TradeComposer({
                 sendingPlayerIds={validSendingPlayerIds}
                 receivingPlayerIds={validReceivingPlayerIds}
                 message={composerState.message}
-                rules={rules}
+                rules={getTradeRulesForOffer(rules, {
+                  commissionerIsParty:
+                    Boolean(viewerTeam?.isCommissioner) || partner.isCommissioner,
+                  eligibleVoters: teams.length - 2,
+                })}
                 mode={isCounter ? 'counteroffer' : 'proposal'}
                 playerStats={playerStats}
                 isSubmitting={isSubmitting}

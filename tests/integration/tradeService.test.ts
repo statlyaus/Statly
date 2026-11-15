@@ -60,7 +60,10 @@ describe.sequential('league trade service transactions', () => {
   afterAll(async () => {
     vi.doUnmock('@/lib/prisma');
     vi.doUnmock('@/server/waivers/WaiverAvailabilityProjectionService');
-    if (prisma) await deleteFixtures();
+    if (prisma) {
+      await deleteExtras();
+      await deleteFixtures();
+    }
     await prisma?.$disconnect();
   });
 
@@ -949,6 +952,218 @@ describe.sequential('league trade service transactions', () => {
     await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.firstMember);
   });
 
+  it('reaches a due trade behind held ones when the batch is full', async () => {
+    await setReviewMode('VETO', 3);
+    const held = await createTrade();
+    await act(ids.secondUser, held.threadId, 'accept', held.version, 'accept-paging-held-0001');
+    await grantBite(ids.secondMember);
+    const other = await addTeam('paging');
+    const commissionerPlayer = await addPlayer('paging-commissioner', ids.commissionerMember);
+    const open = await service.createLeagueTrade(
+      ids.league,
+      other.userId,
+      {
+        recipientMemberId: ids.commissionerMember,
+        sendingPlayerIds: [other.playerId],
+        receivingPlayerIds: [commissionerPlayer],
+        message: 'Behind the held trade',
+        idempotencyKey: 'create-paging-open-0001',
+      },
+      now
+    );
+
+    await expect(
+      service.processDueLeagueTrades(new Date(now.getTime() + 80 * 60 * 60 * 1000), 1)
+    ).resolves.toBe(1);
+    await expect(statusOf(open.threadId)).resolves.toBe('EXPIRED');
+    await expect(statusOf(held.threadId)).resolves.toBe('PENDING_VETO_REVIEW');
+  });
+
+  it('vetoes a due trade whose vetoes meet the threshold once a voter has left', async () => {
+    await setReviewMode('VETO', 3);
+    const voter = await addTeam('voter');
+    const leaver = await addTeam('leaver');
+    const created = await createTrade();
+    const accepted = await act(
+      ids.secondUser,
+      created.threadId,
+      'accept',
+      created.version,
+      'accept-late-veto-0001'
+    );
+    const first = await act(
+      ids.commissionerUser,
+      created.threadId,
+      'veto',
+      accepted.version,
+      'veto-late-0001'
+    );
+    const second = await act(
+      voter.userId,
+      created.threadId,
+      'veto',
+      first.version,
+      'veto-late-0002'
+    );
+    expect(second).toMatchObject({ status: 'PENDING_VETO_REVIEW' });
+
+    await deactivateMember(leaver.memberId);
+    await expect(
+      service.processDueLeagueTrades(new Date(now.getTime() + 25 * 60 * 60 * 1000))
+    ).resolves.toBe(1);
+    await expect(statusOf(created.threadId)).resolves.toBe('VETOED');
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+  });
+
+  it('caps the veto threshold at the two teams outside the trade in a four-team league', async () => {
+    await setReviewMode('VETO', 3);
+    const voter = await addTeam('cap');
+    const created = await createTrade();
+    const accepted = await act(
+      ids.secondUser,
+      created.threadId,
+      'accept',
+      created.version,
+      'accept-cap-four-0001'
+    );
+    const first = await act(
+      ids.commissionerUser,
+      created.threadId,
+      'veto',
+      accepted.version,
+      'veto-cap-four-0001'
+    );
+    expect(first).toMatchObject({ status: 'PENDING_VETO_REVIEW' });
+    const review = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: voter.userId,
+      view: 'review',
+    });
+    expect(review.trades[0]?.currentOffer.vetoThreshold).toBe(2);
+
+    const second = await act(
+      voter.userId,
+      created.threadId,
+      'veto',
+      first.version,
+      'veto-cap-four-0002'
+    );
+    expect(second).toMatchObject({ status: 'VETOED' });
+  });
+
+  it('lets only one of two simultaneous trades through a trade limit of one', async () => {
+    await prisma.leagueSettings.update({ where: { id: ids.settings }, data: { tradeLimit: 1 } });
+    const other = await addTeam('race');
+    const spare = await addPlayer('race-first', ids.firstMember);
+    const withSecond = await createTrade();
+    const withOther = await service.createLeagueTrade(
+      ids.league,
+      ids.firstUser,
+      {
+        recipientMemberId: other.memberId,
+        sendingPlayerIds: [spare],
+        receivingPlayerIds: [other.playerId],
+        message: 'Second offer',
+        idempotencyKey: 'create-race-0002',
+      },
+      now
+    );
+
+    const results = await Promise.all([
+      act(ids.secondUser, withSecond.threadId, 'accept', withSecond.version, 'accept-race-0001'),
+      act(other.userId, withOther.threadId, 'accept', withOther.version, 'accept-race-0002'),
+    ]);
+
+    expect(results.map((result) => result.status).sort()).toEqual(['COMPLETED', 'INVALIDATED']);
+  });
+
+  it('completes a commissioner trade at once when no other team can review it', async () => {
+    await setReviewMode('ADMIN');
+    await prisma.leagueRosterPlayer.update({
+      where: { leagueId_playerId: { leagueId: ids.league, playerId: ids.firstPlayer } },
+      data: { memberId: ids.commissionerMember },
+    });
+    await deactivateMember(ids.firstMember);
+    const created = await service.createLeagueTrade(
+      ids.league,
+      ids.commissionerUser,
+      createInput({ idempotencyKey: 'create-no-voters-0001' }),
+      now
+    );
+
+    const accepted = await act(
+      ids.secondUser,
+      created.threadId,
+      'accept',
+      created.version,
+      'accept-no-voters-0001'
+    );
+
+    expect(accepted).toMatchObject({ status: 'COMPLETED' });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.secondMember);
+  });
+
+  it('moves an accepted ADMIN trade to a veto vote when a party becomes its only commissioner', async () => {
+    await setReviewMode('ADMIN');
+    const created = await createTrade();
+    const accepted = await act(
+      ids.secondUser,
+      created.threadId,
+      'accept',
+      created.version,
+      'accept-stranded-0001'
+    );
+    expect(accepted).toMatchObject({ status: 'PENDING_ADMIN_REVIEW' });
+    await prisma.league.update({ where: { id: ids.league }, data: { ownerId: ids.firstUser } });
+
+    await expect(
+      act(ids.firstUser, created.threadId, 'approve', accepted.version, 'approve-stranded-0001')
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+
+    const sweptAt = new Date(now.getTime() + 60 * 60 * 1000);
+    await expect(service.processDueLeagueTrades(sweptAt)).resolves.toBe(1);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({
+      status: 'PENDING_VETO_REVIEW',
+      reviewEndsAt: new Date(sweptAt.getTime() + 24 * 60 * 60 * 1000),
+    });
+    await expect(
+      prisma.leagueTradeOffer.findUniqueOrThrow({ where: { id: created.offerId } })
+    ).resolves.toMatchObject({ reviewMode: 'VETO' });
+  });
+
+  it('marks a trade as held and hides accept while a bite is waiting', async () => {
+    await createTrade();
+    await grantBite(ids.firstMember);
+
+    const inbox = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: ids.secondUser,
+      view: 'inbox',
+    });
+
+    expect(inbox.trades[0]).toMatchObject({
+      heldReason: 'BITE_PENDING',
+      allowedActions: ['decline', 'counter'],
+    });
+  });
+
+  it('reports the league review rule to every viewer and flags commissioner teams', async () => {
+    await setReviewMode('ADMIN');
+
+    const centre = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: ids.commissionerUser,
+      view: 'inbox',
+    });
+
+    expect(centre.rules.reviewMode).toBe('admin');
+    expect(
+      Object.fromEntries(centre.teams.map((team) => [team.memberId, team.isCommissioner]))
+    ).toMatchObject({ [ids.firstMember]: false, [ids.secondMember]: false });
+  });
+
   it('completes a VETO trade when its review window expires without enough vetoes', async () => {
     await setReviewMode('VETO', 3);
     const created = await createTrade();
@@ -1148,13 +1363,14 @@ async function resetTradeState(): Promise<void> {
   await prisma.leagueBite.deleteMany({ where: { leagueId: ids.league } });
   await prisma.leagueTradeCommand.deleteMany({ where: { leagueId: ids.league } });
   await prisma.leagueTradeThread.deleteMany({ where: { leagueId: ids.league } });
+  await deleteExtras();
   await prisma.player.update({
     where: { id: ids.firstPlayer },
     data: { name: 'First Player', club: 'AAA', position: 'MID' },
   });
   await prisma.league.update({
     where: { id: ids.league },
-    data: { activeSeasonId: ids.season },
+    data: { activeSeasonId: ids.season, ownerId: ids.commissionerUser },
   });
   await prisma.leagueMember.updateMany({
     where: { leagueId: ids.league },
@@ -1164,6 +1380,7 @@ async function resetTradeState(): Promise<void> {
     where: { id: ids.settings },
     data: {
       rosterSize: 4,
+      tradeLimit: 10,
       tradeDeadline: null,
       tradeOfferExpiryHours: 72,
       tradeReviewHours: 24,
@@ -1180,6 +1397,55 @@ async function resetTradeState(): Promise<void> {
   });
   await setReviewMode('NONE');
   await setDraftStatus('COMPLETED');
+}
+
+const EXTRA = 'trade-test-extra-';
+
+/** A further active team for one test, with one rostered player. Removed by `resetTradeState`. */
+async function addTeam(
+  key: string
+): Promise<{ userId: string; memberId: string; playerId: string }> {
+  const userId = `${EXTRA}user-${key}`;
+  const memberId = `${EXTRA}member-${key}`;
+  await prisma.user.create({ data: user(userId, `extra-${key}`) });
+  await prisma.leagueMember.create({ data: member(memberId, userId, `Extra ${key}`, 'MANAGER') });
+  return { userId, memberId, playerId: await addPlayer(key, memberId) };
+}
+
+async function addPlayer(key: string, memberId: string): Promise<string> {
+  const playerId = `${EXTRA}player-${key}`;
+  await prisma.player.create({
+    data: { id: playerId, name: `Extra ${key}`, club: 'CCC', position: 'DEF' },
+  });
+  await prisma.leagueRosterPlayer.create({ data: { leagueId: ids.league, memberId, playerId } });
+  return playerId;
+}
+
+async function deleteExtras(): Promise<void> {
+  await prisma.leagueRosterPlayer.deleteMany({ where: { playerId: { startsWith: EXTRA } } });
+  await prisma.leagueMember.deleteMany({ where: { id: { startsWith: EXTRA } } });
+  await prisma.player.deleteMany({ where: { id: { startsWith: EXTRA } } });
+  await prisma.user.deleteMany({ where: { id: { startsWith: EXTRA } } });
+}
+
+async function act(
+  userId: string,
+  threadId: string,
+  action: 'accept' | 'approve' | 'veto',
+  expectedVersion: number,
+  idempotencyKey: string
+): Promise<Awaited<ReturnType<TradeServiceModule['executeLeagueTradeAction']>>> {
+  return service.executeLeagueTradeAction(
+    ids.league,
+    userId,
+    threadId,
+    { action, expectedVersion, idempotencyKey },
+    now
+  );
+}
+
+async function statusOf(threadId: string): Promise<string> {
+  return (await prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: threadId } })).status;
 }
 
 async function setDraftStatus(status: 'LIVE' | 'PAUSED' | 'COMPLETED'): Promise<void> {

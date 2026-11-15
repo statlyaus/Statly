@@ -58,6 +58,8 @@ const SETTINGS = 'int-locked-moves-settings';
 const SEASON = 'int-locked-moves-2026';
 const FIRST_USER = 'int-locked-moves-user-first';
 const SECOND_USER = 'int-locked-moves-user-second';
+// A team outside every trade here, so a veto vote has someone to cast it.
+const THIRD_USER = 'int-locked-moves-user-third';
 const FIRST = 'int-locked-moves-member-first';
 const SECOND = 'int-locked-moves-member-second';
 const P = {
@@ -79,13 +81,13 @@ const removeFixture = () =>
     leagueIds: [LEAGUE],
     playerIds: Object.values(P),
     settingsIds: [SETTINGS],
-    userIds: [FIRST_USER, SECOND_USER],
+    userIds: [FIRST_USER, SECOND_USER, THIRD_USER],
   });
 
 async function seed() {
   await removeFixture();
   await prisma.user.createMany({
-    data: [FIRST_USER, SECOND_USER].map((id) => ({
+    data: [FIRST_USER, SECOND_USER, THIRD_USER].map((id) => ({
       id,
       email: `${id}@statly.local`,
       passwordHash: 'x',
@@ -127,6 +129,13 @@ async function seed() {
     data: [
       { id: FIRST, leagueId: LEAGUE, userId: FIRST_USER, role: 'OWNER', teamName: 'First' },
       { id: SECOND, leagueId: LEAGUE, userId: SECOND_USER, role: 'MANAGER', teamName: 'Second' },
+      {
+        id: 'int-locked-moves-member-third',
+        leagueId: LEAGUE,
+        userId: THIRD_USER,
+        role: 'MANAGER',
+        teamName: 'Third',
+      },
     ],
   });
   await prisma.player.createMany({

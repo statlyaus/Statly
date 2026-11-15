@@ -1,6 +1,10 @@
 import type { LeagueTradeOfferStatus, LeagueTradeThreadStatus } from '@prisma/client';
 
-import { getTradeAcceptancePath } from '@/lib/trades/tradeAcceptancePath';
+import {
+  getTradeAcceptancePath,
+  resolveTradeReviewMode,
+  type TradeReviewContext,
+} from '@/lib/trades/tradeAcceptancePath';
 
 import type { TradeActionName, TradeReviewModeDto } from './tradeContracts';
 
@@ -11,17 +15,7 @@ export interface AcceptanceTransition {
   shouldFinalize: boolean;
 }
 
-/**
- * A trade with a commissioner (the owner or a co-commissioner) on either side goes to a veto vote
- * instead of commissioner review, so no commissioner approves their own trade. Decided when the
- * trade is accepted, so a later change of commissioner cannot strand it.
- */
-export function resolveTradeReviewMode(
-  reviewMode: TradeReviewModeDto,
-  commissionerIsParty: boolean
-): TradeReviewModeDto {
-  return reviewMode === 'admin' && commissionerIsParty ? 'veto' : reviewMode;
-}
+export { resolveTradeReviewMode, type TradeReviewContext };
 
 /**
  * The vetoes that block a trade: the league setting, capped at the teams able to vote (active

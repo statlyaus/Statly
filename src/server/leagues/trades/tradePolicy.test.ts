@@ -40,10 +40,21 @@ describe('league trade policy', () => {
   });
 
   it("sends a commissioner's own trade to a veto vote instead of commissioner review", () => {
-    expect(resolveTradeReviewMode('admin', true)).toBe('veto');
-    expect(resolveTradeReviewMode('admin', false)).toBe('admin');
-    expect(resolveTradeReviewMode('none', true)).toBe('none');
-    expect(resolveTradeReviewMode('veto', true)).toBe('veto');
+    const party = { commissionerIsParty: true, eligibleVoters: 4 };
+    const outside = { commissionerIsParty: false, eligibleVoters: 4 };
+    expect(resolveTradeReviewMode('admin', party)).toBe('veto');
+    expect(resolveTradeReviewMode('admin', outside)).toBe('admin');
+    expect(resolveTradeReviewMode('none', party)).toBe('none');
+    expect(resolveTradeReviewMode('veto', party)).toBe('veto');
+  });
+
+  it('skips a veto vote that no team is left to cast', () => {
+    const nobody = { commissionerIsParty: true, eligibleVoters: 0 };
+    expect(resolveTradeReviewMode('admin', nobody)).toBe('none');
+    expect(resolveTradeReviewMode('veto', { ...nobody, commissionerIsParty: false })).toBe('none');
+    expect(resolveTradeReviewMode('admin', { ...nobody, commissionerIsParty: false })).toBe(
+      'admin'
+    );
   });
 
   it('lets a commissioner in the trade reject it but never approve it', () => {

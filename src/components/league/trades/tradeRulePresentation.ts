@@ -1,4 +1,9 @@
-import { getTradeAcceptancePath, type TradeReviewMode } from '@/lib/trades/tradeAcceptancePath';
+import {
+  getTradeAcceptancePath,
+  resolveTradeReviewMode,
+  type TradeReviewContext,
+  type TradeReviewMode,
+} from '@/lib/trades/tradeAcceptancePath';
 
 import { formatTradeDate, formatTradeDateTime } from './tradeDateFormatting';
 
@@ -8,6 +13,14 @@ export interface TradeRulePresentationInput {
   offerExpiryHours: number;
   reviewHours: number;
   vetoThreshold: number;
+}
+
+/** The rules one offer follows: the league's, with the review its two teams actually get. */
+export function getTradeRulesForOffer<Rules extends TradeRulePresentationInput>(
+  rules: Rules,
+  review: TradeReviewContext
+): Rules {
+  return { ...rules, reviewMode: resolveTradeReviewMode(rules.reviewMode, review) };
 }
 
 export function getTradeReviewSummary(rules: TradeRulePresentationInput): string {
