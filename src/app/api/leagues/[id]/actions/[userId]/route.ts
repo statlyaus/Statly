@@ -4,8 +4,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import {
-  BITE_PENDING_MESSAGE,
-  hasPendingBite,
+  findBiteFreeze,
   holdsUnexecutedBite,
   LAST_PLAYER_BITE_HELD_MESSAGE,
 } from '@/server/leagues/bitePending';
@@ -132,7 +131,7 @@ export async function POST(
     // E10: during the Bloodsucker's exclusive window nobody else drops, so a dropped player cannot
     // become a free agent only the Bloodsucker can take.
     const transactionWindow = await getTransactionWindow(leagueId, prisma, { memberId: member.id });
-    if (!transactionWindow.open && transactionWindow.code === 'BLOODSUCKER_WINDOW_OPEN') {
+    if (!transactionWindow.open && transactionWindow.code !== 'DRAFT_NOT_COMPLETE') {
       return transactionsClosedResponse(transactionWindow);
     }
 
@@ -156,10 +155,12 @@ export async function POST(
 
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const dropped = await prisma.$transaction(async (tx) => {
-      // BR-30: a member with a Bloodsucker bite waiting cannot drop. Checked under the League row
-      // lock the grant and the bite take, so a drop never races a bite on the same roster.
+      // BR-30, E12: a member with a Bloodsucker bite waiting, or whose matchup against the
+      // Bloodsucker has ended and is not final, cannot drop. Checked under the League row lock the
+      // grant and the bite take, so a drop never races a bite on the same roster.
       await lockLeagueRow(tx, leagueId);
-      if (await hasPendingBite(tx, leagueId, member.id)) return 'BITE_PENDING' as const;
+      const freeze = await findBiteFreeze(tx, leagueId, member.id);
+      if (freeze) return freeze;
       // A Bloodsucker with a bite to make keeps one player to send back (#1343).
       if (
         (await holdsUnexecutedBite(tx, leagueId, member.id)) &&
@@ -190,12 +191,9 @@ export async function POST(
       });
       return true;
     });
-    if (dropped === 'BITE_PENDING') {
+    if (typeof dropped === 'object') {
       // Same flat shape as the window refusal, so clients read one `code` field.
-      return NextResponse.json(
-        { error: BITE_PENDING_MESSAGE, code: 'BITE_PENDING' },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: dropped.message, code: dropped.code }, { status: 409 });
     }
     if (dropped === 'LAST_PLAYER_BITE_HELD') {
       return NextResponse.json(

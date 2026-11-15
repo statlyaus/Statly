@@ -78,7 +78,7 @@ Two failed or missed runs in a row open a Sentry issue.
 ## Missing AFL match result
 
 `netlify/functions/cron-afl-results.mts` calls `/api/cron/afl-results` hourly at :35 UTC. For every
-AFL game in the Firestore fixture that started in the last 14 days and whose scheduled end (start + 3
+AFL game in the Firestore fixture that started this calendar year (UTC) and whose scheduled end (start + 3
 hours) was more than 6 hours ago, it looks for a current `AflMatchResult` row exactly as No Losers
 scoring joins one: same season, round and two clubs in either order, read from each side's
 `matchUid` (`src/server/etl/aflMatchJoinKey.ts`). Each game without one is logged as
@@ -86,7 +86,8 @@ scoring joins one: same season, round and two clubs in either order, read from e
 A stored current result in one of those rounds that no fixture game joins (so no player's stat row
 either) is logged as `Unjoined AFL result: {matchUid} matches no fixture game …` and also answers 500:
 its round waits on a result that is in fact stored, usually because Footywire's round label differs
-from the fixture's. The check writes nothing. It is not a Crons monitor
+from the fixture's. A missing result keeps alerting every hour until it is stored or the year ends
+(owner decision 2026-11-15); Sentry groups the repeats for one game into one issue. The check writes nothing. It is not a Crons monitor
 (billing), so a scheduler outage is silent; the waivers and scoring monitors cover the scheduler.
 
 What to do:

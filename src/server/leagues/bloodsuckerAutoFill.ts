@@ -8,7 +8,7 @@ import {
 import { getLeagueRosterCapacity } from '@/server/rosters/rosterCapacity';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
-import { loadLeagueDraftWindowState } from './bloodsuckerWindow';
+import { hasBloodsuckerAutoFillRun, loadLeagueDraftWindowState } from './bloodsuckerWindow';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { ensureDefaultLineups, parseLeagueCategories } from './defaultLineups';
 import { lockLeagueRow } from './leagueRowLock';
@@ -177,16 +177,9 @@ async function readCloseState(
   const state = await loadLeagueDraftWindowState(leagueId, tx);
   if (!state?.bloodsucker) return { reason: 'NOT_APPLICABLE' };
   if (now < state.bloodsucker.window.closesAt) return { reason: 'WINDOW_OPEN' };
-  // A re-run draft completes later than any earlier close, so only rows since this draft count.
-  const alreadyClosed = await tx.leagueCompetitionAudit.findFirst({
-    where: {
-      leagueId,
-      eventType: 'BLOODSUCKER_WINDOW_CLOSED',
-      createdAt: { gte: state.bloodsucker.window.opensAt },
-    },
-    select: { id: true },
-  });
-  if (alreadyClosed) return { reason: 'ALREADY_CLOSED' };
+  if (await hasBloodsuckerAutoFillRun(tx, leagueId, state.bloodsucker.window)) {
+    return { reason: 'ALREADY_CLOSED' };
+  }
   return { draftId: state.draftId, bloodsucker: state.bloodsucker };
 }
 

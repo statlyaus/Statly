@@ -91,8 +91,10 @@ describe('/api/cron/afl-results', () => {
     readMissingAflResultsMock.mockRejectedValue(new Error('Firestore unavailable'));
     const response = await GET(authorized());
     expect(response.status).toBe(500);
-    expect(loggerMock.error).toHaveBeenCalledWith('Failed to check for missing AFL results', {
-      error: 'Firestore unavailable',
-    });
+    // The error itself is passed, so Sentry keeps its stack and cause.
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      'Failed to check for missing AFL results',
+      expect.objectContaining({ message: 'Firestore unavailable' })
+    );
   });
 });

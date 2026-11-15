@@ -58,6 +58,18 @@ describe('findMissingAflResults', () => {
     expect(findMissingAflResults([game()], [relabelled], NOW)).toEqual([game()]);
   });
 
+  it('keeps flagging a game whose result is still missing weeks later, until it is stored', () => {
+    const weeksAgo = game({
+      start_time_utc: new Date(NOW.getTime() - 60 * 24 * HOUR).toISOString(),
+    });
+    expect(findMissingAflResults([weeksAgo], [], NOW)).toEqual([weeksAgo]);
+    expect(findMissingAflResults([weeksAgo], [RESULT], NOW)).toEqual([]);
+  });
+
+  it('looks back to the start of the season, not into the previous one', () => {
+    expect(missingResultWindow(NOW).from.toISOString()).toBe('2025-01-01T00:00:00.000Z');
+  });
+
   it('ignores games before the look-back and unreadable start times', () => {
     const { from } = missingResultWindow(NOW);
     const old = game({ start_time_utc: new Date(from.getTime() - 1).toISOString() });

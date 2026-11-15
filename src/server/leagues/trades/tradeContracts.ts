@@ -93,7 +93,7 @@ export interface LeagueTradeDto {
   updatedAt: string;
   allowedActions: TradeActionName[];
   /** Set while a Bloodsucker bite waits on either team: the trade cannot complete until it is done. */
-  heldReason: 'BITE_PENDING' | null;
+  heldReason: 'BITE_PENDING' | 'BLOODSUCKER_RESULT_PENDING' | null;
 }
 
 export interface LeagueTradeCentreSnapshot {
@@ -195,7 +195,9 @@ export type TradeServiceErrorCode =
   | 'ROSTER_LIMIT_EXCEEDED'
   | 'DRAFT_NOT_COMPLETE'
   | 'BLOODSUCKER_WINDOW_OPEN'
+  | 'BLOODSUCKER_AUTO_FILL_PENDING'
   | 'BITE_PENDING'
+  | 'BLOODSUCKER_RESULT_PENDING'
   | 'BLOODSUCKER_CANNOT_TRADE'
   | 'BITTEN_PLAYER_TRADE_BACK'
   | 'PLAYER_LOCKED'
