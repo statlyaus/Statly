@@ -60,70 +60,51 @@ describe('public AFL draft trade routing', () => {
     navigation.pathname = '/draft/trades';
   });
 
-  it('leads the homepage with the public archive and unpublished outcome status', () => {
+  it('leads the homepage with the valued trades and the draft record', () => {
     render(<HomePage />);
 
     const promise = screen.getByRole('heading', {
       level: 1,
-      name: 'Explore AFL Draft & Trade Outcomes. Run your fantasy league.',
+      name: 'AFL trades, valued by what happened next',
     });
 
     expect(promise).toBeVisible();
     expect(promise).not.toHaveClass('sr-only');
-    expect(screen.getByText(/are not owned by Statly users or fantasy teams/)).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Explore AFL trade archive' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'See every trade' })).toHaveAttribute(
       'href',
-      '/draft/trades'
+      '/afl/trades'
     );
-    expect(screen.getByRole('link', { name: 'Open Fantasy Workspace' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'How this works' })).toHaveAttribute(
       'href',
-      '/dashboard'
+      '/afl/trades/method'
     );
-    expect(screen.getByText('Numerical outcomes not published')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Outcome publication status' })).toHaveAttribute(
-      'href',
-      '/draft/outcomes'
-    );
-  });
-
-  it('places the public Outcomes product before Fantasy with separate canonical destinations', () => {
-    render(<HomePage />);
-
-    const outcomesHeading = screen.getByRole('heading', {
-      level: 3,
-      name: 'AFL Draft & Trade Outcomes',
-    });
-    const fantasyHeading = screen.getByRole('heading', { level: 3, name: 'Statly Fantasy' });
-    expect(
-      outcomesHeading.compareDocumentPosition(fantasyHeading) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).not.toBe(0);
-    expect(screen.getByText(/are not owned by Statly users or fantasy teams/)).toBeVisible();
-
-    const archiveLink = screen.getByRole('link', { name: 'Explore AFL trade archive' });
+    const archiveLink = screen.getByRole('link', { name: /Trade archive/ });
     expect(archiveLink).toHaveAttribute('href', '/draft/trades');
-    expect(archiveLink).not.toHaveAttribute('href', '/tradecentre');
-    expect(screen.getByRole('link', { name: 'Outcome publication status' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Draft history/ })).toHaveAttribute(
       'href',
-      '/draft/outcomes'
+      '/draft/drafts'
+    );
+    expect(screen.getByRole('link', { name: /Club histories/ })).toHaveAttribute(
+      'href',
+      '/draft/clubs'
     );
   });
 
-  it('offers the fantasy app with a label that is true whether or not the visitor is signed in', () => {
-    render(
+  it('keeps the fantasy app out of the public home page, header and footer', () => {
+    const { container } = render(
       <PublicRouteLayout>
         <HomePage />
       </PublicRouteLayout>
     );
 
-    const primaryNavigation = screen.getByRole('navigation', { name: 'Primary' });
-    expect(within(primaryNavigation).getByRole('link', { name: 'Open Fantasy' })).toHaveAttribute(
-      'href',
-      '/login'
-    );
-    expect(within(primaryNavigation).queryByRole('link', { name: 'Sign in' })).toBeNull();
+    expect(screen.queryByText(/fantasy/i)).toBeNull();
+    const hrefs = [...container.querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    for (const href of hrefs) {
+      expect(href).not.toMatch(/^\/(dashboard|login|signup|league|leagues|app)(\/|$)/);
+    }
   });
 
-  it('provides one public main landmark, skip navigation, and an active Outcomes destination', () => {
+  it('provides one public main landmark, skip navigation, and an active draft record destination', () => {
     render(
       <PublicRouteLayout>
         <HomePage />
@@ -138,11 +119,12 @@ describe('public AFL draft trade routing', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
 
     const primaryNavigation = screen.getByRole('navigation', { name: 'Primary' });
-    const outcomesLink = within(primaryNavigation).getByRole('link', {
-      name: 'AFL Draft & Trade Outcomes',
-    });
-    expect(outcomesLink).toHaveAttribute('href', '/draft/trades');
-    expect(outcomesLink).toHaveAttribute('aria-current', 'page');
+    const draftRecordLink = within(primaryNavigation).getByRole('link', { name: 'Draft record' });
+    expect(draftRecordLink).toHaveAttribute('href', '/draft/trades');
+    expect(draftRecordLink).toHaveAttribute('aria-current', 'page');
+    const tradesLink = within(primaryNavigation).getByRole('link', { name: 'Trades' });
+    expect(tradesLink).toHaveAttribute('href', '/afl/trades');
+    expect(tradesLink).not.toHaveAttribute('aria-current');
 
     const footer = screen.getByRole('contentinfo');
     expect(within(footer).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
@@ -175,7 +157,7 @@ describe('public AFL draft trade routing', () => {
     expect(authLayout).toContain('AuthProvider');
   });
 
-  it('keeps the draft hub status and Fantasy actions pointed at their separate routes', () => {
+  it('keeps the draft hub status action and leaves the fantasy app out', () => {
     render(
       <DraftLayout>
         <main>Draft child</main>
@@ -190,10 +172,7 @@ describe('public AFL draft trade routing', () => {
       'href',
       '/draft/outcomes'
     );
-    expect(screen.getByRole('link', { name: /open statly fantasy/i })).toHaveAttribute(
-      'href',
-      '/dashboard'
-    );
+    expect(screen.queryByRole('link', { name: /fantasy/i })).toBeNull();
     expect(screen.getByRole('link', { name: /trade archive/i })).toHaveAttribute(
       'aria-current',
       'page'
