@@ -16,6 +16,7 @@ import {
   tradeIdFromHash,
   tradeName,
   tradeShortName,
+  type AflTradePageAudience,
   type AflTradePageBidMatch,
 } from './tradePageModel';
 
@@ -36,9 +37,11 @@ const LIST_ANCHOR = 'list';
 export function TradeLineage({
   story,
   bidMatches,
+  audience,
 }: {
   story: AflTradeStory;
   bidMatches: readonly AflTradePageBidMatch[];
+  audience?: AflTradePageAudience;
 }) {
   const clubNames = useMemo(() => storyClubNames(story), [story]);
   const shares = useMemo(() => bidSharesByPickId(bidMatches), [bidMatches]);
@@ -107,6 +110,7 @@ export function TradeLineage({
         clubNames={clubNames}
         headingRef={headingRef}
         onClose={() => show(null)}
+        audience={audience}
       />
     ) : null;
   };

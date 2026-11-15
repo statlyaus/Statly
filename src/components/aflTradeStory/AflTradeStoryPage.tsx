@@ -5,6 +5,7 @@ import './tradeStory.css';
 import { ClubBadge } from './ClubBadge';
 import { TradeDetails } from './TradeDetails';
 import { TradeLineage } from './TradeLineage';
+import { TradePageNotice } from './TradePageNotice';
 import { TradePlayerCards } from './TradePlayerCards';
 import { TradeScarf } from './TradeScarf';
 import { TradeValueLine } from './TradeValueLine';
@@ -16,6 +17,7 @@ import {
   netTone,
   storyClubNames,
   tradeName,
+  tradeStoriesHref,
   type AflTradePageModel,
 } from './tradePageModel';
 
@@ -33,12 +35,15 @@ export function headline(model: AflTradePageModel): string {
 }
 
 /**
- * The private trade page (statlyaus/Statly#789): values, not letter grades. A scarf timeline, the
- * trade's details and players, and the lineage map. Realized values are publication-prohibited, so
- * only the local private reader renders this; public pages never import it.
+ * The trade page (statlyaus/Statly#789): values, not letter grades. A scarf timeline, the trade's
+ * details and players, and the lineage map. It is private unless the model's source says public,
+ * which only the public reader's owner-approved bundle does.
  */
 export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   const { story, throughSeason, bidMatches } = model;
+  const audience = model.source.audience;
+  // The public layout already provides the page's <main>.
+  const Shell = audience === 'public' ? 'div' : 'main';
   const clubNames = storyClubNames(story);
   const shares = bidSharesByPickId(bidMatches);
   const pendingNow = [...story.nets.tradeAlone, ...story.nets.withNextMoves].some(
@@ -49,13 +54,11 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
 
   return (
     <div className="afl-trade-story min-h-screen">
-      <main className="mx-auto w-full max-w-6xl px-4 pt-5 pb-16 sm:px-6">
-        <p className="mb-4 rounded-lg border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 ts-body">
-          <b>Private page.</b> Not for publication. {model.source.label}.
-        </p>
+      <Shell className="mx-auto w-full max-w-6xl px-4 pt-5 pb-16 sm:px-6">
+        <TradePageNotice source={model.source} />
         <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
-          <Link href="/dev/afl-trade-stories" className="underline underline-offset-2">
-            Private trades
+          <Link href={tradeStoriesHref(audience)} className="underline underline-offset-2">
+            {audience === 'public' ? 'AFL trades' : 'Private trades'}
           </Link>{' '}
           / {story.trade.year} / {tradeName(story.trade.clubs)}
         </nav>
@@ -102,9 +105,9 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
 
         {/* Keyed by trade: a client navigation to another trade starts at its latest point. */}
         <TradeValueLine key={story.trade.id} story={story} />
-        <TradeDetails story={story} clubNames={clubNames} shares={shares} />
+        <TradeDetails story={story} clubNames={clubNames} shares={shares} audience={audience} />
         <TradePlayerCards story={story} clubNames={clubNames} shares={shares} />
-        <TradeLineage story={story} bidMatches={bidMatches} />
+        <TradeLineage story={story} bidMatches={bidMatches} audience={audience} />
 
         <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-(--ts-ink2)">
           <p>
@@ -119,7 +122,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           ) : null}
           <p>Players still at their club: values will move. Club colours only, no club marks.</p>
         </footer>
-      </main>
+      </Shell>
     </div>
   );
 }

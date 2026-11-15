@@ -1,6 +1,9 @@
 import { guernseyFor } from '@/lib/clubGuernseys';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
-import type { AflTradePageBidMatch } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
+import type {
+  AflTradePageAudience,
+  AflTradePageBidMatch,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
 import type {
   AflTradeStory,
   AflTradeStoryAsset,
@@ -10,6 +13,7 @@ import type {
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 export type {
+  AflTradePageAudience,
   AflTradePageBidMatch,
   AflTradePageModel,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
@@ -20,13 +24,17 @@ export interface AflTradePageBidShare {
   readonly spentIndex: number;
 }
 
-/** The private reader's trade page path. Never a public path. */
-export const tradeStoryHref = (tradeId: string) =>
-  `/dev/afl-trade-stories/${encodeURIComponent(tradeId)}`;
+/** Where the trade pages live: the private reader's path unless the page is the public one. */
+export const tradeStoriesHref = (audience: AflTradePageAudience = 'private') =>
+  audience === 'public' ? '/afl/trades' : '/dev/afl-trade-stories';
 
-/** The private reader's page of every chain of one club (#1051). Never a public path. */
-export const clubChainsHref = (clubId: string) =>
-  `/dev/afl-trade-stories/clubs/${encodeURIComponent(clubId)}`;
+/** One trade's page. */
+export const tradeStoryHref = (tradeId: string, audience: AflTradePageAudience = 'private') =>
+  `${tradeStoriesHref(audience)}/${encodeURIComponent(tradeId)}`;
+
+/** Every chain of one club (#1051). */
+export const clubChainsHref = (clubId: string, audience: AflTradePageAudience = 'private') =>
+  `${tradeStoriesHref(audience)}/clubs/${encodeURIComponent(clubId)}`;
 
 /** The lineage hash for one trade, so a trade opens from a link. */
 export const tradeHash = (tradeId: string) => `#trade=${encodeURIComponent(tradeId)}`;

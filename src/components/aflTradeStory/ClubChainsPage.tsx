@@ -5,16 +5,29 @@ import type { AflTradeClubChainTrade } from '@/server/aflTradeIntelligence/valua
 
 import './tradeStory.css';
 import { ClubBadge } from './ClubBadge';
-import { formatSigned, netTone, tradeStoryHref } from './tradePageModel';
+import { TradePageNotice } from './TradePageNotice';
+import {
+  formatSigned,
+  netTone,
+  tradeStoriesHref,
+  tradeStoryHref,
+  type AflTradePageAudience,
+} from './tradePageModel';
 
 const signed = (net: number, provisional: boolean) =>
   `${formatSigned(net)}${provisional ? '*' : ''}`;
 
-function TradeRow({ trade }: { trade: AflTradeClubChainTrade }) {
+function TradeRow({
+  trade,
+  audience,
+}: {
+  trade: AflTradeClubChainTrade;
+  audience?: AflTradePageAudience;
+}) {
   return (
     <li>
       <Link
-        href={tradeStoryHref(trade.tradeId)}
+        href={tradeStoryHref(trade.tradeId, audience)}
         className="flex min-h-11 items-center justify-between gap-4 px-4 py-2 ts-body hover:bg-(--ts-bg2)"
       >
         <span>
@@ -31,20 +44,21 @@ function TradeRow({ trade }: { trade: AflTradeClubChainTrade }) {
 
 /**
  * Every chain of one club (#1051): trades linked by a pick the club received and traded on, each
- * trade's own net and the chain's sum. Private reader only.
+ * trade's own net and the chain's sum. Private unless the model's source says public.
  */
 export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
   const { chains } = model;
   const club = chains.clubName;
+  const audience = model.source.audience;
+  // The public layout already provides the page's <main>.
+  const Shell = audience === 'public' ? 'div' : 'main';
   return (
     <div className="afl-trade-story min-h-screen">
-      <main className="mx-auto w-full max-w-3xl px-4 pt-5 pb-16 sm:px-6">
-        <p className="mb-4 rounded-lg border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 ts-body">
-          <b>Private page.</b> Not for publication. {model.source.label}.
-        </p>
+      <Shell className="mx-auto w-full max-w-3xl px-4 pt-5 pb-16 sm:px-6">
+        <TradePageNotice source={model.source} />
         <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
-          <Link href="/dev/afl-trade-stories" className="underline underline-offset-2">
-            Private trades
+          <Link href={tradeStoriesHref(audience)} className="underline underline-offset-2">
+            {audience === 'public' ? 'AFL trades' : 'Private trades'}
           </Link>{' '}
           / {club}
         </nav>
@@ -82,7 +96,7 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
                   </div>
                   <ul className="divide-y divide-(--ts-line)">
                     {chain.trades.map((trade) => (
-                      <TradeRow key={trade.tradeId} trade={trade} />
+                      <TradeRow audience={audience} key={trade.tradeId} trade={trade} />
                     ))}
                   </ul>
                 </li>
@@ -97,7 +111,7 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
           </h2>
           <ul className="mt-3 divide-y divide-(--ts-line) rounded-xl border border-(--ts-line) bg-(--ts-surface)">
             {chains.standalone.map((trade) => (
-              <TradeRow key={trade.tradeId} trade={trade} />
+              <TradeRow audience={audience} key={trade.tradeId} trade={trade} />
             ))}
           </ul>
         </section>
@@ -105,7 +119,7 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
           * Provisional: a pick in the trade has no value yet, so the total leaves it out and will
           move.
         </p>
-      </main>
+      </Shell>
     </div>
   );
 }

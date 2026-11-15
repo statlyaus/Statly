@@ -251,6 +251,7 @@ export function createAflTradeStoryBundleSource(
   const throughSeason = valueLines.content.inputs.throughSeason;
   const source: AflTradePageModel['source'] = {
     kind: 'sealed_batch',
+    ...(options.audience === 'public' ? { audience: 'public' as const } : {}),
     label:
       options.audience === 'public'
         ? `Values to the end of the ${throughSeason} season`
