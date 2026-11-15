@@ -173,6 +173,13 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   row (`BITE_GRANTED` with reason `FINAL` or `GRANTED_ON_RESCORE`, `BITE_CANCELLED`,
   `BITE_RESULT_CHANGED`) with the actor (the commissioner who re-scored, or the system), the time,
   the matchup, the victim and the winner before and after.
+- **Grant message (#1343).** After the scoring transaction commits, each open bite of the scored
+  round posts one league activity message: "The Bloodsucker beat {team} {score} in round {n}
+  and has a bite to make. If it has not chosen by {deadline}, the system makes the pick."
+  (`publishBiteGrantActivity`, `src/server/leagues/bloodsuckerGrantActivity.ts`). It is keyed by bite
+  and `grantedScoreVersion`, so re-running FINAL posts nothing new and a reactivated grant posts
+  once more. It is best effort: a failure is logged, never fails scoring, and is posted by the next
+  scoring run of that round.
 
 - **Execution (BR-21, BR-24 to BR-26, E2, E5, E7, E8).** `POST /api/leagues/[id]/bites/[biteId]`
   with `{ takenPlayerId, returnedPlayerId }`, Bloodsucker only (`executeBite`,
@@ -301,10 +308,17 @@ Built in #1286. The UI never uses the word "Vampire".
   (`BLOODSUCKER_ALREADY_DRAWN`), so clearing the setting cannot re-roll. After a draw the only change
   is choosing a member in settings. A drawn Bloodsucker who leaves (BR-07) may be replaced by a new
   draw.
-- **League home banner (BR-40).** `GET /api/leagues/[id]/bloodsucker` gives every member the
+- **League banner (BR-40, #1343).** `GET /api/leagues/[id]/bloodsucker` gives every member the
   Bloodsucker, its won-lost-drawn record from the current fixture's FINAL matchups, and every bite
-  this season with both players (`src/server/leagues/bloodsuckerReadModel.ts`). The Bloodsucker also
-  gets a link to each open bite.
+  this season with both players (`src/server/leagues/bloodsuckerReadModel.ts`). The banner is on
+  every league tab: in full on the overview, and compact (no record line, no bite list) on the
+  others. The Bloodsucker gets a link to each open bite, the victim of an open bite is told its
+  drops and trades are held, and a commissioner the server would let act gets a "Cancel" or "Cancel
+  or redo" link on each bite (`commissionerActions`, from
+  `src/server/leagues/biteCommissionerActions.ts`). A bite is granted by the scoring job, so the
+  page re-reads the summary on window focus, when it becomes visible, every 60 seconds while
+  visible and on a tab change; it polls and needs no Socket.IO (NFR-7). A failed refresh keeps the
+  last summary and says it may be out of date.
 - **Matchup warning (US-8 AC2).** In the Match Centre, the Bloodsucker's opponent sees, while their
   regular-round matchup is still `SCHEDULED`, that losing gives up a player and that the returned
   player takes the same lineup slot (BR-25). Finals matchups get no warning.
@@ -313,12 +327,30 @@ Built in #1286. The UI never uses the word "Vampire".
   that round's scored lineup after autosubs (DEF, MID, RUC, FWD, UTIL, interchange and bench); any
   player may be taken or sent back (E2). It shows the deadline, the time left in words, and the pair
   the auto-bite would pick now (BR-28). While the server would refuse a bite (`ROUND_IN_PROGRESS`
-  under E8, `EARLIER_BITE_PENDING`, `BITE_SUSPENDED`) every player is disabled and the code and
-  reason are shown. Saving shows "Saving the bite…"; a refusal shows its code; success shows only
-  after the server commits. Players are native radio groups, so the picker works by keyboard and
-  screen reader, and it fits 375 px.
-- **Activity (BR-39).** Unchanged from #1283: one message per executed bite, "The Bloodsucker beat
-  {team} {score} and took {player}, sending back {player}."
+  under E8, `EARLIER_BITE_PENDING`, `BITE_SUSPENDED`) every player is disabled and the block is
+  shown under its own heading with the code and the server's reason. Saving shows "Saving the
+  bite…"; a refusal shows its heading, code and reason; success shows only after the server
+  commits. Players are native radio groups, so the picker works by keyboard and screen reader, and
+  it fits 375 px.
+- **Commissioner control (BR-35, E1, #1343).** The same page, `/leagues/[id]/bites/[biteId]`, shows
+  a commissioner who is not the Bloodsucker the cancel and redo form
+  (`GET /api/leagues/[id]/bites/[biteId]/commissioner`, `loadBiteReview`). It offers cancel on an
+  open or executed bite and redo on an executed one; redo picks from both rosters as they stand
+  once the original swap is undone. The reason is a labelled, required field of up to 500
+  characters. A commissioner who is part of the bite, or a finished bite, gets no form and the
+  reason with its code. The server decides every command; a refusal is shown with its heading, code
+  and message, and success only after the commit.
+- **Refusal wording (NFR-5, #1343).** Bloodsucker screens head each refusal by its code
+  (`refusalHeading`, `src/components/league/bloodsucker/bloodsuckerDisplay.ts`) and always show the
+  code and the server's message; a code or bite status the build does not know gets a generic
+  heading or its own name. The My Team drop keeps the code too, so `BITE_PENDING` and
+  `BLOODSUCKER_WINDOW_OPEN` are named. No screen calls the recalculate route, so
+  `BLOODSUCKER_SELF_OVERRIDE` has a heading ready but no screen to appear on.
+- **Bite reads are season-scoped.** The picker and the commissioner view read a bite by league and
+  active season; a bite of another season is not found.
+- **Activity (BR-39).** One message per granted bite (see the grant message above) and, unchanged
+  from #1283, one per executed bite: "The Bloodsucker beat {team} {score} and took {player}, sending
+  back {player}."
 
 In a **No Losers** league a player's stats count only as far as his AFL club's result allows. The
 setup rules (implemented in #1291, owned by `src/server/leagues/leagueFormat.ts`):

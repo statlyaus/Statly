@@ -6,6 +6,11 @@ import { prisma } from '@/lib/prisma';
 import { loadDraftPlayerStatsLookup } from '@/server/draft/readModels/draftPlayerReadModel';
 
 import { isActivePrismaMembership } from './activeMembership';
+import {
+  BITE_PARTY_MESSAGE,
+  commissionerBiteActions,
+  type BiteCommissionerAction,
+} from './biteCommissionerActions';
 import { loadLeagueScores, pickAutoBitePair } from './bloodsuckerAutoBite';
 import {
   assertMatchupFinal,
@@ -13,12 +18,14 @@ import {
   assertOldestOpenBite,
   BiteError,
 } from './bloodsuckerBites';
+import { isCommissioner } from './competitionRules';
 import { normalizeLeagueFormat, resolveBloodsuckerMemberId } from './leagueFormat';
 
 // What the Bloodsucker screens read (Bloodsucker 9/9, #1286; BR-40, US-6, US-8, NFR-5). Every member
 // sees who the Bloodsucker is, its record and every bite this season. Only the Bloodsucker reads its
-// bite picker. Nothing here writes: the picker shows what the server would refuse and why, and the
-// bite itself still goes through `executeBite`.
+// bite picker; only a commissioner reads the bite review (#1343, BR-35). Nothing here writes: the
+// screens show what the server would refuse and why, and every change still goes through
+// `executeBite` or `commissionerBiteAction`. Every bite is read by league and active season.
 
 export type SlotGroup = 'DEF' | 'MID' | 'RUC' | 'FWD' | 'UTIL' | 'NON_SCORING';
 
@@ -77,6 +84,8 @@ export interface BloodsuckerBiteSummary {
   returnedPlayer: { id: string; name: string } | null;
   deadlineAt: string;
   executedAt: string | null;
+  /** What this viewer may do to the bite as a commissioner (BR-35, E1); empty for everyone else. */
+  commissionerActions: BiteCommissionerAction[];
 }
 
 export interface BloodsuckerSummary {
@@ -84,7 +93,7 @@ export interface BloodsuckerSummary {
   bloodsucker: { memberId: string; teamName: string } | null;
   record: { wins: number; losses: number; draws: number };
   bites: BloodsuckerBiteSummary[];
-  viewer: { memberId: string; isBloodsucker: boolean };
+  viewer: { memberId: string; isBloodsucker: boolean; isCommissioner: boolean };
 }
 
 async function loadMembership(leagueId: string, userId: string) {
@@ -96,7 +105,15 @@ async function loadMembership(leagueId: string, userId: string) {
         select: { leagueFormat: true, bloodsuckerMemberId: true, competitionRulesVersion: true },
       },
       members: {
-        select: { id: true, userId: true, teamName: true, isActive: true, status: true },
+        select: {
+          id: true,
+          userId: true,
+          teamName: true,
+          isActive: true,
+          status: true,
+          role: true,
+          isCoCommissioner: true,
+        },
       },
     },
   });
@@ -124,7 +141,11 @@ export async function loadBloodsuckerSummary(input: {
   );
   const base = {
     leagueFormat: normalizeLeagueFormat(settings.leagueFormat),
-    viewer: { memberId: viewer.id, isBloodsucker: viewer.id === bloodsuckerId },
+    viewer: {
+      memberId: viewer.id,
+      isBloodsucker: viewer.id === bloodsuckerId,
+      isCommissioner: isCommissioner(viewer),
+    },
   };
   if (!bloodsuckerId) {
     return { ...base, bloodsucker: null, record: { wins: 0, losses: 0, draws: 0 }, bites: [] };
@@ -189,6 +210,7 @@ export async function loadBloodsuckerSummary(input: {
       returnedPlayer: player(bite.returnedPlayerId),
       deadlineAt: bite.deadlineAt.toISOString(),
       executedAt: bite.executedAt?.toISOString() ?? null,
+      commissionerActions: commissionerBiteActions(bite, base.viewer),
     })),
   };
 }
@@ -287,6 +309,15 @@ async function currentRefusal(bite: LeagueBite, now: Date) {
   }
 }
 
+/** One bite of the league's active season, or NOT_FOUND. */
+async function findSeasonBite(leagueId: string, seasonId: string | null, biteId: string) {
+  const bite = seasonId
+    ? await prisma.leagueBite.findFirst({ where: { id: biteId, leagueId, seasonId } })
+    : null;
+  if (!bite) throw new BloodsuckerReadError('NOT_FOUND', 'Bite not found.', 404);
+  return bite;
+}
+
 /** `GET /api/leagues/[id]/bites/[biteId]`: the Bloodsucker's bite picker (US-6, BR-27, BR-28). */
 export async function loadBitePicker(input: {
   leagueId: string;
@@ -296,10 +327,7 @@ export async function loadBitePicker(input: {
 }): Promise<BitePicker> {
   const now = input.now ?? new Date();
   const { league, viewer } = await loadMembership(input.leagueId, input.userId);
-  const bite = await prisma.leagueBite.findFirst({
-    where: { id: input.biteId, leagueId: input.leagueId },
-  });
-  if (!bite) throw new BloodsuckerReadError('NOT_FOUND', 'Bite not found.', 404);
+  const bite = await findSeasonBite(input.leagueId, league.activeSeasonId, input.biteId);
   if (viewer.id !== bite.bloodsuckerMemberId) {
     throw new BloodsuckerReadError('FORBIDDEN', 'Only the Bloodsucker can bite.', 403);
   }
@@ -346,5 +374,123 @@ export async function loadBitePicker(input: {
     blocked,
     takenPlayerId: bite.takenPlayerId,
     returnedPlayerId: bite.returnedPlayerId,
+  };
+}
+
+export interface BiteReviewPlayer {
+  id: string;
+  name: string;
+  position: string;
+  club: string;
+}
+
+export interface BiteReview {
+  biteId: string;
+  round: number;
+  status: LeagueBite['status'];
+  bloodsucker: { memberId: string; teamName: string };
+  victim: { memberId: string; teamName: string };
+  takenPlayer: { id: string; name: string } | null;
+  returnedPlayer: { id: string; name: string } | null;
+  cancelledReason: string | null;
+  /** What this commissioner may do (BR-35, E1). */
+  actions: BiteCommissionerAction[];
+  /** Why there is nothing to do, when `actions` is empty. */
+  refusal: { code: string; message: string } | null;
+  /** The victim's roster a redo takes from: as it stands once the original swap is undone. */
+  victimPlayers: BiteReviewPlayer[];
+  /** The Bloodsucker's roster a redo sends back from, on the same basis. */
+  returnPlayers: BiteReviewPlayer[];
+}
+
+/**
+ * `GET /api/leagues/[id]/bites/[biteId]/commissioner`: what a commissioner sees before cancelling
+ * or redoing a bite (BR-35, E1). Any commissioner may read it; one who is part of the bite gets no
+ * actions and the reason. The command itself re-checks everything.
+ */
+export async function loadBiteReview(input: {
+  leagueId: string;
+  biteId: string;
+  userId: string;
+}): Promise<BiteReview> {
+  const { league, viewer } = await loadMembership(input.leagueId, input.userId);
+  if (!isCommissioner(viewer)) {
+    throw new BloodsuckerReadError(
+      'FORBIDDEN',
+      'Only a commissioner can cancel or redo a bite.',
+      403
+    );
+  }
+  const bite = await findSeasonBite(input.leagueId, league.activeSeasonId, input.biteId);
+  const parties = [bite.victimMemberId, bite.bloodsuckerMemberId];
+  const pairIds = [bite.takenPlayerId, bite.returnedPlayerId].flatMap((id) => id ?? []);
+  const [rows, pair] = await Promise.all([
+    prisma.leagueRosterPlayer.findMany({
+      where: { leagueId: input.leagueId, memberId: { in: parties } },
+      select: {
+        memberId: true,
+        player: { select: { id: true, name: true, position: true, club: true } },
+      },
+    }),
+    pairIds.length
+      ? prisma.player.findMany({ where: { id: { in: pairIds } }, select: { id: true, name: true } })
+      : [],
+  ]);
+  // A redo swaps the original pair back first, so each of the two is listed with his old team.
+  const executed = bite.status === 'EXECUTED' || bite.status === 'AUTO_EXECUTED';
+  const ownerBeforeBite = (memberId: string, playerId: string) => {
+    if (executed && playerId === bite.takenPlayerId) return bite.victimMemberId;
+    if (executed && playerId === bite.returnedPlayerId) return bite.bloodsuckerMemberId;
+    return memberId;
+  };
+  const rosterOf = (memberId: string): BiteReviewPlayer[] =>
+    rows
+      .filter((row) => ownerBeforeBite(row.memberId, row.player.id) === memberId)
+      .map(({ player }) => ({
+        id: player.id,
+        name: player.name,
+        position: player.position ?? '',
+        club: player.club ?? '',
+      }))
+      .sort(
+        (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
+      );
+
+  const actions = commissionerBiteActions(bite, {
+    memberId: viewer.id,
+    isCommissioner: true,
+  });
+  const teamName = (memberId: string, fallback: string) =>
+    league.members.find((member) => member.id === memberId)?.teamName ?? fallback;
+  const named = (id: string | null) =>
+    id ? { id, name: pair.find((player) => player.id === id)?.name ?? 'Unknown player' } : null;
+  const refusal = actions.length
+    ? null
+    : parties.includes(viewer.id)
+      ? { code: 'FORBIDDEN', message: BITE_PARTY_MESSAGE }
+      : {
+          code: 'BITE_NOT_OPEN',
+          message: 'This bite is finished, so there is nothing to cancel or redo.',
+        };
+
+  return {
+    biteId: bite.id,
+    round: bite.round,
+    status: bite.status,
+    bloodsucker: {
+      memberId: bite.bloodsuckerMemberId,
+      teamName: teamName(bite.bloodsuckerMemberId, 'The Bloodsucker'),
+    },
+    victim: {
+      memberId: bite.victimMemberId,
+      teamName: teamName(bite.victimMemberId, 'A former team'),
+    },
+    takenPlayer: named(bite.takenPlayerId),
+    returnedPlayer: named(bite.returnedPlayerId),
+    cancelledReason: bite.cancelledReason,
+    actions,
+    refusal,
+    victimPlayers: rosterOf(bite.victimMemberId),
+    returnPlayers: rosterOf(bite.bloodsuckerMemberId),
   };
 }

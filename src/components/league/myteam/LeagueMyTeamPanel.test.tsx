@@ -304,6 +304,34 @@ describe('LeagueMyTeamPanel', () => {
     expect(screen.getByText('2 changes to confirm')).toBeInTheDocument();
   });
 
+  it.each([
+    [
+      { error: 'A bite is waiting on your team.', code: 'BITE_PENDING' },
+      'Not dropped. A bite is waiting on your team (BITE_PENDING). A bite is waiting on your team.',
+    ],
+    [
+      { error: { message: 'Opens Thursday 7:00 pm.', code: 'BLOODSUCKER_WINDOW_OPEN' } },
+      "Not dropped. The Bloodsucker's exclusive window is open (BLOODSUCKER_WINDOW_OPEN). Opens Thursday 7:00 pm.",
+    ],
+    [
+      { error: 'Keep one player.', code: 'A_CODE_FROM_LATER' },
+      'Not dropped. The server refused this (A_CODE_FROM_LATER). Keep one player.',
+    ],
+  ])('keeps the code when a drop is refused (NFR-5)', async (body, shown) => {
+    authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? Promise.resolve({ ok: false, status: 409, json: async () => body })
+        : respond(payload())
+    );
+
+    render(<LeagueMyTeamPanel leagueId="league-1" currentUserId="user-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Drop Back Pocket' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Drop player' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(shown);
+    expect(screen.getByRole('row', { name: 'Bench: Back Pocket' })).toBeInTheDocument();
+  });
+
   it('fills with a player listed as Test, keeping his injury label', async () => {
     const base = payload();
     const rosterPlayers = base.data.rosterPlayers.map((player) =>

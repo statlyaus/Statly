@@ -169,7 +169,9 @@ totals for deterministic secondary ordering and display.
 
 In a Bloodsucker league the same scoring transaction also grants, cancels or reactivates the
 Bloodsucker's bite rights (`LeagueBite`, one row per won matchup) from each matchup's own FINAL
-status and winner, so a right never exists without the result that earned it (see
+status and winner, so a right never exists without the result that earned it. After that
+transaction commits, each bite it granted posts one league activity message, best effort
+(`src/server/leagues/bloodsuckerGrantActivity.ts`; see
 [Bloodsucker bites](../product/league-competition-rules.md#bloodsucker-bites)).
 
 ## Fixtures, lineups, and finals

@@ -322,7 +322,8 @@ export default function LeagueTabs({
   const { summary: bloodsuckerSummary, failed: bloodsuckerFailed } = useBloodsuckerSummary(
     league.id,
     isBloodsuckerLeague,
-    currentUserId
+    currentUserId,
+    activeTab
   );
   const [overviewWaiverClaims, setOverviewWaiverClaims] = useState<OverviewWaiverClaim[]>([]);
   const [overviewWaiversStatus, setOverviewWaiversStatus] = useState<
@@ -677,12 +678,14 @@ export default function LeagueTabs({
               animate={{ opacity: 1 }}
               transition={{ duration: 0.15 }}
             >
-              {activeTab === 'overview' && isBloodsuckerLeague ? (
-                <div className="mb-4">
+              {/* #1343: on every tab, so a granted bite is seen wherever the manager is. */}
+              {isBloodsuckerLeague ? (
+                <div className="mb-4 empty:hidden">
                   <BloodsuckerBanner
                     leagueId={league.id}
                     summary={bloodsuckerSummary}
                     failed={bloodsuckerFailed}
+                    compact={activeTab !== 'overview'}
                   />
                 </div>
               ) : null}
