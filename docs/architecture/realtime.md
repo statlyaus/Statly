@@ -42,6 +42,14 @@ message, post, reply, moderation action). The Socket.IO process drains that outb
 (`useLeagueSocial`) loads the REST snapshot first, applies sequenced envelopes, and resyncs after each
 reconnect once the room is rejoined.
 
+A chat event carries its conversation (`SocialOutboxEvent.conversationId`, the envelope's
+`conversationId`). A DM's or group's event reaches only the sockets of that conversation's current
+members, read from `SocialConversationMember` at delivery (`privateConversationAudience`), never
+taken from the envelope; league chat and conversation-less events go to the whole league season
+room. League chat reads, its latest sequence and its read position ignore DM and group rows; the
+chat unread count adds each unmuted DM's and group's new messages after the member's own read
+position.
+
 While no live room is delivering (no Socket.IO process, a disconnected socket, or a join the server
 never answers), the hook requests `/summary` every 10 seconds while the tab is visible and reloads
 the snapshot only when a channel's latest sequence advanced. An unanswered join is "realtime

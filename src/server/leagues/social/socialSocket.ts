@@ -1,11 +1,13 @@
 import type { Server as SocketIOServer, Socket as SocketIOSocket } from 'socket.io';
 
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { isLeagueSocialRoom, leagueSeasonSocialRoom } from '@/server/realtime/roomNames';
 import type { SocialRealtimeEnvelope } from '@/types/social';
 
 import { ensureActiveLeagueSeason } from './socialAccess';
+import { privateConversationAudience } from './socialConversations';
 import { SocialError } from './socialErrors';
 import { socialPubSub } from './socialPubSub';
 
@@ -272,6 +274,9 @@ export async function broadcastLeagueSocialEvent(
   // and devices), never to the rest of the league.
   const onlyUserId = envelope.event === 'social:read-state' ? readStateUserId(envelope) : undefined;
   if (onlyUserId === null) return;
+  // A DM's or group's event goes to its current members only, never the whole league room. The
+  // audience is read from the database, not trusted from the envelope.
+  const audience = await privateConversationAudience(prisma, envelope.conversationId);
   // One membership lookup per member per event, however many tabs they have open.
   const membership = new Map<string, Promise<boolean>>();
   const isCurrentMember = (userId: string): Promise<boolean> => {
@@ -296,6 +301,7 @@ export async function broadcastLeagueSocialEvent(
         return;
       }
       if (onlyUserId !== undefined && userId !== onlyUserId) return;
+      if (audience && !audience.has(userId)) return;
 
       if (!(await isCurrentMember(userId))) {
         await socket.leave(room);

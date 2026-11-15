@@ -21,6 +21,7 @@ import {
   toSocialPost,
   toSocialReply,
 } from './socialDto';
+import { LEAGUE_CHAT_EVENTS, LEAGUE_CHAT_MESSAGES } from './socialConversations';
 import { SocialError } from './socialErrors';
 import { decodeSocialCursor, encodeSocialCursor, type SocialPageCursor } from './socialValidation';
 
@@ -62,6 +63,7 @@ export async function getLeagueSocialSummary(
           seasonId: access.seasonId,
           channel: 'CHAT',
           eventType: { not: 'social:read-state' },
+          ...LEAGUE_CHAT_EVENTS,
         },
         _max: { sequence: true },
       }),
@@ -90,7 +92,7 @@ export async function getLeagueSocialSummary(
     ]);
 
   const readSequence = new Map(readStates.map((state) => [state.channel, state.lastReadSequence]));
-  const [unreadChat, unreadBoard, unreadActivity] = await Promise.all([
+  const [unreadChat, unreadPrivate, unreadBoard, unreadActivity] = await Promise.all([
     countUnreadEvents({
       leagueId,
       seasonId: access.seasonId,
@@ -98,6 +100,7 @@ export async function getLeagueSocialSummary(
       channel: 'CHAT',
       lastReadSequence: readSequence.get('CHAT') ?? 0,
     }),
+    countUnreadPrivateConversationEvents({ leagueId, seasonId: access.seasonId, userId }),
     countUnreadEvents({
       leagueId,
       seasonId: access.seasonId,
@@ -122,7 +125,7 @@ export async function getLeagueSocialSummary(
     standardsAccepted: access.standardsAccepted,
     mutedUntil: access.mutedUntil?.toISOString() ?? null,
     unread: {
-      chat: unreadChat,
+      chat: unreadChat + unreadPrivate,
       board: unreadBoard,
       activity: unreadActivity,
     },
@@ -184,7 +187,55 @@ async function countUnreadEvents({
       channel,
       sequence: { gt: lastReadSequence },
       eventType: { in: [...SOCIAL_UNREAD_EVENT_TYPES] },
-      OR: [{ actorUserId: null }, { actorUserId: { not: userId } }],
+      AND: [
+        { OR: [{ actorUserId: null }, { actorUserId: { not: userId } }] },
+        // The CHAT read position is league chat's; DMs and groups are counted from their own.
+        ...(channel === 'CHAT' ? [LEAGUE_CHAT_EVENTS] : []),
+      ],
+    },
+  });
+}
+
+/**
+ * New messages in the DMs and groups the member is in now, each counted from that conversation's
+ * own read position. A muted conversation adds nothing to the chat badge.
+ */
+async function countUnreadPrivateConversationEvents({
+  leagueId,
+  seasonId,
+  userId,
+}: {
+  leagueId: string;
+  seasonId: string;
+  userId: string;
+}): Promise<number> {
+  const memberships = await prisma.socialConversationMember.findMany({
+    where: {
+      leagueId,
+      seasonId,
+      userId,
+      leftAt: null,
+      mutedAt: null,
+      conversation: { is: { kind: { in: ['DM', 'GROUP'] } } },
+    },
+    select: { conversationId: true, lastReadSequence: true },
+  });
+  if (memberships.length === 0) return 0;
+  return prisma.socialOutboxEvent.count({
+    where: {
+      leagueId,
+      seasonId,
+      channel: 'CHAT',
+      eventType: { in: [...SOCIAL_UNREAD_EVENT_TYPES] },
+      AND: [
+        { OR: [{ actorUserId: null }, { actorUserId: { not: userId } }] },
+        {
+          OR: memberships.map((membership) => ({
+            conversationId: membership.conversationId,
+            sequence: { gt: membership.lastReadSequence },
+          })),
+        },
+      ],
     },
   });
 }
@@ -205,14 +256,19 @@ export async function listSocialMessages(
       leagueId,
       seasonId: access.seasonId,
       type: 'MEMBER',
-      ...(cursor
-        ? {
-            OR: [
-              { createdAt: { lt: new Date(cursor.createdAt) } },
-              { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
-            ],
-          }
-        : {}),
+      AND: [
+        LEAGUE_CHAT_MESSAGES,
+        ...(cursor
+          ? [
+              {
+                OR: [
+                  { createdAt: { lt: new Date(cursor.createdAt) } },
+                  { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
+                ],
+              },
+            ]
+          : []),
+      ],
     },
     include: socialMessageInclude,
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

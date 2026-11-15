@@ -32,6 +32,17 @@ it has been deployed. Go-live remains blocked until the
 Waiver settings, including the FAAB budget, are part of Prisma's league settings; Firestore holds no
 waiver settings.
 
+League chat is Prisma-owned too. Every coach message belongs to a `SocialConversation` of one league
+season: the league chat (`kind` `LEAGUE`, `uniqueKey` `league`, created on first use), a DM between
+two coaches (`uniqueKey` `dm:<memberId>:<memberId>`, ids sorted) or a group. DMs and groups list
+their coaches in `SocialConversationMember`, each with its own read position, left date and mute;
+league chat has no member rows and keeps its per-season `SocialReadState`. Conversations reset each
+season. Activity items (`SocialMessage.type` `SYSTEM`) sit in no conversation. A message may link
+the message it quotes (`replyToMessageId`) and carry emoji reactions (`SocialMessageReaction`). A
+report keeps the reported text in `SocialReport.retainedContentJson`, so a later edit or delete
+cannot change what the commissioner reviews. The tables arrived in league chat stage 2; DMs and
+groups are created from stage 3.
+
 Authentication is not authorization. A valid Firebase UID does not imply membership, commissioner
 rights, roster ownership, draft participation, or waiver eligibility.
 

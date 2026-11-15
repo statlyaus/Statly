@@ -18,6 +18,7 @@ import {
   requireSocialPublishingAccess,
   type LeagueSocialAccess,
 } from './socialAccess';
+import { ensureLeagueConversation, LEAGUE_CHAT_EVENTS } from './socialConversations';
 import {
   socialMessageInclude,
   socialPostInclude,
@@ -61,10 +62,12 @@ export async function createSocialMessage(
     'CREATE_MESSAGE',
     parsed.data,
     async (tx) => {
+      const conversationId = await ensureLeagueConversation(tx, access);
       const record = await tx.socialMessage.create({
         data: {
           leagueId,
           seasonId: access.seasonId,
+          conversationId,
           authorUserId: userId,
           authorMemberId: access.memberId,
           content: parsed.data.content,
@@ -74,7 +77,16 @@ export async function createSocialMessage(
         include: socialMessageInclude,
       });
       const message = toSocialMessage(record, userId);
-      await enqueueSocialEvent(tx, access, 'CHAT', 'social:message', 'message', record.id, message);
+      await enqueueSocialEvent(
+        tx,
+        access,
+        'CHAT',
+        'social:message',
+        'message',
+        record.id,
+        message,
+        conversationId
+      );
       return { resultType: 'message', resultId: record.id, value: message };
     }
   );
@@ -96,7 +108,7 @@ export async function editSocialMessage(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.socialMessage.findFirst({
       where: { id: messageId, leagueId, seasonId: access.seasonId },
-      select: { authorUserId: true, deletedAt: true },
+      select: { authorUserId: true, deletedAt: true, conversationId: true },
     });
     if (!existing) throw new SocialError('NOT_FOUND', 'Message not found');
     if (existing.authorUserId !== userId) {
@@ -120,7 +132,8 @@ export async function editSocialMessage(
       'social:moderation',
       'message',
       record.id,
-      message
+      message,
+      existing.conversationId
     );
     return message;
   });
@@ -171,7 +184,8 @@ export async function deleteSocialMessage(
       'social:moderation',
       'message',
       record.id,
-      message
+      message,
+      existing.conversationId
     );
     return message;
   });
@@ -508,6 +522,8 @@ export async function markSocialChannelRead(
             seasonId: access.seasonId,
             channel,
             eventType: { not: 'social:read-state' },
+            // The channel read position is league chat's; DMs and groups keep their own.
+            ...(channel === 'CHAT' ? LEAGUE_CHAT_EVENTS : {}),
           },
           orderBy: { sequence: 'desc' },
           select: { sequence: true },
@@ -523,6 +539,7 @@ export async function markSocialChannelRead(
           seasonId: access.seasonId,
           channel,
           eventType: { not: 'social:read-state' },
+          ...(channel === 'CHAT' ? LEAGUE_CHAT_EVENTS : {}),
         },
         select: { sequence: true },
       });
@@ -606,6 +623,9 @@ export async function reportSocialContent(
         reporterMemberId: access.memberId,
         authorUserId: content.authorUserId,
         authorMemberId: content.authorMemberId,
+        conversationId: content.conversationId,
+        // What the reporter saw, kept even if the author edits or deletes it afterwards.
+        retainedContentJson: content.retainedContent,
         contentType: parsed.data.contentType,
         contentId: parsed.data.contentId,
         reason: parsed.data.reason,
@@ -699,11 +719,13 @@ export async function moderateSocialContent(
 
   return prisma.$transaction(async (tx) => {
     const now = new Date();
+    let conversationId: string | null = null;
     if (contentAction.contentType === 'message') {
-      await tx.socialMessage.update({
+      ({ conversationId } = await tx.socialMessage.update({
         where: { id: contentAction.contentId },
         data: { deletedAt: null, moderationStatus: 'ACTIVE' },
-      });
+        select: { conversationId: true },
+      }));
     } else if (contentAction.contentType === 'post') {
       await tx.socialPost.update({
         where: { id: contentAction.contentId },
@@ -735,7 +757,8 @@ export async function moderateSocialContent(
         contentId: contentAction.contentId,
         action: 'restore',
         occurredAt: now.toISOString(),
-      }
+      },
+      conversationId
     );
     return {
       contentType: contentAction.contentType,
@@ -902,12 +925,15 @@ async function enqueueSocialEvent(
   event: SocialRealtimeEnvelope['event'],
   aggregateType: string,
   aggregateId: string,
-  payload: SocialMessage | SocialPost | SocialReply | Record<string, Prisma.InputJsonValue>
+  payload: SocialMessage | SocialPost | SocialReply | Record<string, Prisma.InputJsonValue>,
+  /** The chat conversation; a DM's or group's event reaches only its members. */
+  conversationId: string | null = null
 ): Promise<void> {
   await tx.socialOutboxEvent.create({
     data: {
       leagueId: access.leagueId,
       seasonId: access.seasonId,
+      conversationId,
       channel,
       actorUserId: access.userId,
       eventType: event,
@@ -953,7 +979,12 @@ async function findSocialContentAuthor(
   access: LeagueSocialAccess,
   contentType: SocialContentType,
   contentId: string
-): Promise<{ authorUserId: string | null; authorMemberId: string | null }> {
+): Promise<{
+  authorUserId: string | null;
+  authorMemberId: string | null;
+  conversationId: string | null;
+  retainedContent: Prisma.InputJsonValue;
+}> {
   const where = {
     id: contentId,
     leagueId: access.leagueId,
@@ -962,25 +993,46 @@ async function findSocialContentAuthor(
   if (contentType === 'message') {
     const record = await client.socialMessage.findFirst({
       where,
-      select: { authorUserId: true, authorMemberId: true },
+      select: {
+        authorUserId: true,
+        authorMemberId: true,
+        conversationId: true,
+        content: true,
+        giphyId: true,
+      },
     });
     if (!record) throw new SocialError('NOT_FOUND', 'Message not found');
-    return record;
+    return {
+      authorUserId: record.authorUserId,
+      authorMemberId: record.authorMemberId,
+      conversationId: record.conversationId,
+      retainedContent: { content: record.content, giphyId: record.giphyId },
+    };
   }
   if (contentType === 'post') {
     const record = await client.socialPost.findFirst({
       where,
-      select: { authorUserId: true, authorMemberId: true },
+      select: { authorUserId: true, authorMemberId: true, title: true, body: true },
     });
     if (!record) throw new SocialError('NOT_FOUND', 'Discussion not found');
-    return record;
+    return {
+      authorUserId: record.authorUserId,
+      authorMemberId: record.authorMemberId,
+      conversationId: null,
+      retainedContent: { title: record.title, body: record.body },
+    };
   }
   const record = await client.socialReply.findFirst({
     where,
-    select: { authorUserId: true, authorMemberId: true },
+    select: { authorUserId: true, authorMemberId: true, body: true },
   });
   if (!record) throw new SocialError('NOT_FOUND', 'Reply not found');
-  return record;
+  return {
+    authorUserId: record.authorUserId,
+    authorMemberId: record.authorMemberId,
+    conversationId: null,
+    retainedContent: { body: record.body },
+  };
 }
 
 function stableStringify(value: unknown): string {

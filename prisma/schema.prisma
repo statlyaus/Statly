@@ -37,47 +37,50 @@ model Session {
 }
 
 model League {
-  id                      String                     @id @default(cuid())
-  name                    String
-  inviteCode              String                     @unique
-  ownerId                 String
-  settingsId              String                     @unique
-  activeSeasonId          String?                    @unique
-  categoriesJson          Json?
-  visibility              LeagueVisibility           @default(PRIVATE)
-  description             String?
-  owner                   User                       @relation("LeagueOwner", fields: [ownerId], references: [id])
-  members                 LeagueMember[]
-  settings                LeagueSettings             @relation(fields: [settingsId], references: [id])
-  seasons                 LeagueSeason[]             @relation("LeagueSeasons")
-  activeSeason            LeagueSeason?              @relation("ActiveLeagueSeason", fields: [activeSeasonId], references: [id], onDelete: SetNull)
-  drafts                  Draft[]
-  draftEvents             DraftEvent[]
-  rosterPlayers           LeagueRosterPlayer[]
-  matchups                LeagueMatchup[]
-  lineups                 LeagueLineup[]
-  matchupScores           LeagueMatchupScore[]
-  matchupPlayerScores     LeagueMatchupPlayerScore[]
-  standings               LeagueStanding[]
-  competitionRounds       LeagueCompetitionRound[]
-  competitionAudits       LeagueCompetitionAudit[]
-  bites                   LeagueBite[]
-  socialMessages          SocialMessage[]
-  socialBoardCategories   SocialBoardCategory[]
-  socialPosts             SocialPost[]
-  socialReplies           SocialReply[]
-  socialReadStates        SocialReadState[]
-  socialModerationRecords SocialModerationRecord[]
-  socialReports           SocialReport[]
-  socialMutes             SocialMute[]
-  socialCommands          SocialCommand[]
-  socialOutboxEvents      SocialOutboxEvent[]
-  tradeThreads            LeagueTradeThread[]
-  tradeCommands           LeagueTradeCommand[]
-  tradeOutboxEvents       LeagueTradeOutboxEvent[]
+  id                        String                     @id @default(cuid())
+  name                      String
+  inviteCode                String                     @unique
+  ownerId                   String
+  settingsId                String                     @unique
+  activeSeasonId            String?                    @unique
+  categoriesJson            Json?
+  visibility                LeagueVisibility           @default(PRIVATE)
+  description               String?
+  owner                     User                       @relation("LeagueOwner", fields: [ownerId], references: [id])
+  members                   LeagueMember[]
+  settings                  LeagueSettings             @relation(fields: [settingsId], references: [id])
+  seasons                   LeagueSeason[]             @relation("LeagueSeasons")
+  activeSeason              LeagueSeason?              @relation("ActiveLeagueSeason", fields: [activeSeasonId], references: [id], onDelete: SetNull)
+  drafts                    Draft[]
+  draftEvents               DraftEvent[]
+  rosterPlayers             LeagueRosterPlayer[]
+  matchups                  LeagueMatchup[]
+  lineups                   LeagueLineup[]
+  matchupScores             LeagueMatchupScore[]
+  matchupPlayerScores       LeagueMatchupPlayerScore[]
+  standings                 LeagueStanding[]
+  competitionRounds         LeagueCompetitionRound[]
+  competitionAudits         LeagueCompetitionAudit[]
+  bites                     LeagueBite[]
+  socialMessages            SocialMessage[]
+  socialBoardCategories     SocialBoardCategory[]
+  socialPosts               SocialPost[]
+  socialReplies             SocialReply[]
+  socialReadStates          SocialReadState[]
+  socialModerationRecords   SocialModerationRecord[]
+  socialReports             SocialReport[]
+  socialMutes               SocialMute[]
+  socialCommands            SocialCommand[]
+  socialOutboxEvents        SocialOutboxEvent[]
+  socialConversations       SocialConversation[]
+  socialConversationMembers SocialConversationMember[]
+  socialMessageReactions    SocialMessageReaction[]
+  tradeThreads              LeagueTradeThread[]
+  tradeCommands             LeagueTradeCommand[]
+  tradeOutboxEvents         LeagueTradeOutboxEvent[]
   /// Lease held by the one waiver processing run allowed per league; null when none is running.
-  waiverRunStartedAt      DateTime?
-  createdAt               DateTime                   @default(now())
+  waiverRunStartedAt        DateTime?
+  createdAt                 DateTime                   @default(now())
 
   @@index([ownerId])
   @@index([createdAt])
@@ -89,57 +92,60 @@ enum LeagueVisibility {
 }
 
 model LeagueMember {
-  id                        String                   @id @default(cuid())
-  leagueId                  String
-  userId                    String
-  role                      LeagueRole
-  teamName                  String
-  teamLogoUrl               String?
-  teamLogoPositionX         Int?
-  teamLogoPositionY         Int?
-  teamLogoZoom              Float?
-  notificationSettingsJson  Json?
-  socialStandardsAcceptedAt DateTime?
-  isActive                  Boolean                  @default(true)
-  status                    LeagueMemberStatus       @default(ACTIVE)
-  leftAt                    DateTime?
-  draftSlot                 Int?
-  joinedAt                  DateTime                 @default(now())
-  league                    League                   @relation(fields: [leagueId], references: [id])
-  user                      User                     @relation(fields: [userId], references: [id])
-  picks                     Pick[]
-  orders                    DraftOrder[]
-  rosterPlayers             LeagueRosterPlayer[]
-  homeMatchups              LeagueMatchup[]          @relation("HomeMemberMatchups")
-  awayMatchups              LeagueMatchup[]          @relation("AwayMemberMatchups")
-  byeMatchups               LeagueMatchup[]          @relation("ByeMemberMatchups")
-  winnerMatchups            LeagueMatchup[]          @relation("WinnerMemberMatchups")
-  lineups                   LeagueLineup[]
-  matchupScores             LeagueMatchupScore[]
-  standings                 LeagueStanding[]
-  competitionAuditEvents    LeagueCompetitionAudit[] @relation("CompetitionAuditActor")
-  bloodsuckerOfSettings     LeagueSettings[]         @relation("BloodsuckerMember")
-  socialMessages            SocialMessage[]          @relation("SocialMessageAuthor")
-  socialPosts               SocialPost[]             @relation("SocialPostAuthor")
-  socialReplies             SocialReply[]            @relation("SocialReplyAuthor")
-  socialReadStates          SocialReadState[]
-  socialModerationActions   SocialModerationRecord[] @relation("SocialModerationActor")
-  socialModerationTargets   SocialModerationRecord[] @relation("SocialModerationTarget")
-  socialReportsFiled        SocialReport[]           @relation("SocialReportReporter")
-  socialReportsAgainst      SocialReport[]           @relation("SocialReportAuthor")
-  socialMutesReceived       SocialMute[]             @relation("SocialMuteTarget")
-  socialMutesCreated        SocialMute[]             @relation("SocialMuteActor")
-  socialCommands            SocialCommand[]
-  tradeThreadsAsMemberOne   LeagueTradeThread[]      @relation("TradeThreadMemberOne")
-  tradeThreadsAsMemberTwo   LeagueTradeThread[]      @relation("TradeThreadMemberTwo")
-  proposedTradeOffers       LeagueTradeOffer[]       @relation("TradeOfferProposer")
-  receivedTradeOffers       LeagueTradeOffer[]       @relation("TradeOfferRecipient")
-  outgoingTradePlayers      LeagueTradePlayer[]      @relation("TradePlayerFromMember")
-  incomingTradePlayers      LeagueTradePlayer[]      @relation("TradePlayerToMember")
-  tradeVetoes               LeagueTradeVeto[]
-  tradeEvents               LeagueTradeEvent[]       @relation("TradeEventActor")
-  tradeCommands             LeagueTradeCommand[]     @relation("TradeCommandActor")
-  isCoCommissioner          Boolean                  @default(false)
+  id                         String                     @id @default(cuid())
+  leagueId                   String
+  userId                     String
+  role                       LeagueRole
+  teamName                   String
+  teamLogoUrl                String?
+  teamLogoPositionX          Int?
+  teamLogoPositionY          Int?
+  teamLogoZoom               Float?
+  notificationSettingsJson   Json?
+  socialStandardsAcceptedAt  DateTime?
+  isActive                   Boolean                    @default(true)
+  status                     LeagueMemberStatus         @default(ACTIVE)
+  leftAt                     DateTime?
+  draftSlot                  Int?
+  joinedAt                   DateTime                   @default(now())
+  league                     League                     @relation(fields: [leagueId], references: [id])
+  user                       User                       @relation(fields: [userId], references: [id])
+  picks                      Pick[]
+  orders                     DraftOrder[]
+  rosterPlayers              LeagueRosterPlayer[]
+  homeMatchups               LeagueMatchup[]            @relation("HomeMemberMatchups")
+  awayMatchups               LeagueMatchup[]            @relation("AwayMemberMatchups")
+  byeMatchups                LeagueMatchup[]            @relation("ByeMemberMatchups")
+  winnerMatchups             LeagueMatchup[]            @relation("WinnerMemberMatchups")
+  lineups                    LeagueLineup[]
+  matchupScores              LeagueMatchupScore[]
+  standings                  LeagueStanding[]
+  competitionAuditEvents     LeagueCompetitionAudit[]   @relation("CompetitionAuditActor")
+  bloodsuckerOfSettings      LeagueSettings[]           @relation("BloodsuckerMember")
+  socialMessages             SocialMessage[]            @relation("SocialMessageAuthor")
+  socialPosts                SocialPost[]               @relation("SocialPostAuthor")
+  socialReplies              SocialReply[]              @relation("SocialReplyAuthor")
+  socialReadStates           SocialReadState[]
+  socialModerationActions    SocialModerationRecord[]   @relation("SocialModerationActor")
+  socialModerationTargets    SocialModerationRecord[]   @relation("SocialModerationTarget")
+  socialReportsFiled         SocialReport[]             @relation("SocialReportReporter")
+  socialReportsAgainst       SocialReport[]             @relation("SocialReportAuthor")
+  socialMutesReceived        SocialMute[]               @relation("SocialMuteTarget")
+  socialMutesCreated         SocialMute[]               @relation("SocialMuteActor")
+  socialCommands             SocialCommand[]
+  socialConversationsCreated SocialConversation[]       @relation("SocialConversationCreator")
+  socialConversationMembers  SocialConversationMember[]
+  socialMessageReactions     SocialMessageReaction[]
+  tradeThreadsAsMemberOne    LeagueTradeThread[]        @relation("TradeThreadMemberOne")
+  tradeThreadsAsMemberTwo    LeagueTradeThread[]        @relation("TradeThreadMemberTwo")
+  proposedTradeOffers        LeagueTradeOffer[]         @relation("TradeOfferProposer")
+  receivedTradeOffers        LeagueTradeOffer[]         @relation("TradeOfferRecipient")
+  outgoingTradePlayers       LeagueTradePlayer[]        @relation("TradePlayerFromMember")
+  incomingTradePlayers       LeagueTradePlayer[]        @relation("TradePlayerToMember")
+  tradeVetoes                LeagueTradeVeto[]
+  tradeEvents                LeagueTradeEvent[]         @relation("TradeEventActor")
+  tradeCommands              LeagueTradeCommand[]       @relation("TradeCommandActor")
+  isCoCommissioner           Boolean                    @default(false)
 
   // Lobby relations
   watchlists      DraftWatchlist[]
@@ -155,37 +161,40 @@ model LeagueMember {
 }
 
 model LeagueSeason {
-  id                      String                     @id @default(cuid())
-  leagueId                String
-  label                   String
-  year                    Int?
-  startsAt                DateTime?
-  endsAt                  DateTime?
-  createdAt               DateTime                   @default(now())
-  updatedAt               DateTime                   @updatedAt
-  league                  League                     @relation("LeagueSeasons", fields: [leagueId], references: [id], onDelete: Cascade)
-  activeForLeague         League?                    @relation("ActiveLeagueSeason")
-  competitionRounds       LeagueCompetitionRound[]
-  socialMessages          SocialMessage[]
-  socialBoardCategories   SocialBoardCategory[]
-  socialPosts             SocialPost[]
-  socialReplies           SocialReply[]
-  socialReadStates        SocialReadState[]
-  socialModerationRecords SocialModerationRecord[]
-  socialReports           SocialReport[]
-  socialMutes             SocialMute[]
-  socialCommands          SocialCommand[]
-  socialOutboxEvents      SocialOutboxEvent[]
-  tradeThreads            LeagueTradeThread[]
-  tradeCommands           LeagueTradeCommand[]
-  tradeOutboxEvents       LeagueTradeOutboxEvent[]
-  lineups                 LeagueLineup[]
-  matchupScores           LeagueMatchupScore[]
-  matchupPlayerScores     LeagueMatchupPlayerScore[]
-  standings               LeagueStanding[]
-  waiverPriorities        WaiverPriority[]
-  teamActions             TeamAction[]
-  bites                   LeagueBite[]
+  id                        String                     @id @default(cuid())
+  leagueId                  String
+  label                     String
+  year                      Int?
+  startsAt                  DateTime?
+  endsAt                    DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  league                    League                     @relation("LeagueSeasons", fields: [leagueId], references: [id], onDelete: Cascade)
+  activeForLeague           League?                    @relation("ActiveLeagueSeason")
+  competitionRounds         LeagueCompetitionRound[]
+  socialMessages            SocialMessage[]
+  socialBoardCategories     SocialBoardCategory[]
+  socialPosts               SocialPost[]
+  socialReplies             SocialReply[]
+  socialReadStates          SocialReadState[]
+  socialModerationRecords   SocialModerationRecord[]
+  socialReports             SocialReport[]
+  socialMutes               SocialMute[]
+  socialCommands            SocialCommand[]
+  socialOutboxEvents        SocialOutboxEvent[]
+  socialConversations       SocialConversation[]
+  socialConversationMembers SocialConversationMember[]
+  socialMessageReactions    SocialMessageReaction[]
+  tradeThreads              LeagueTradeThread[]
+  tradeCommands             LeagueTradeCommand[]
+  tradeOutboxEvents         LeagueTradeOutboxEvent[]
+  lineups                   LeagueLineup[]
+  matchupScores             LeagueMatchupScore[]
+  matchupPlayerScores       LeagueMatchupPlayerScore[]
+  standings                 LeagueStanding[]
+  waiverPriorities          WaiverPriority[]
+  teamActions               TeamAction[]
+  bites                     LeagueBite[]
 
   @@unique([leagueId, year])
   @@index([leagueId, createdAt])
@@ -1008,6 +1017,12 @@ enum SocialChannel {
   ACTIVITY
 }
 
+enum SocialConversationKind {
+  LEAGUE
+  DM
+  GROUP
+}
+
 enum SocialOutboxStatus {
   PENDING
   PROCESSING
@@ -1016,27 +1031,37 @@ enum SocialOutboxStatus {
 }
 
 model SocialMessage {
-  id                String                 @id @default(cuid())
+  id                String                  @id @default(cuid())
   leagueId          String
   seasonId          String
   authorUserId      String?
   authorMemberId    String?
-  type              SocialMessageType      @default(MEMBER)
+  type              SocialMessageType       @default(MEMBER)
   content           String
   contextJson       Json?
   giphyId           String?
   relatedEntityType String?
   relatedEntityId   String?
-  moderationStatus  SocialModerationStatus @default(ACTIVE)
+  moderationStatus  SocialModerationStatus  @default(ACTIVE)
   editedAt          DateTime?
   deletedAt         DateTime?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  league            League                 @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season            LeagueSeason           @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  authorMember      LeagueMember?          @relation("SocialMessageAuthor", fields: [authorMemberId], references: [id], onDelete: SetNull)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  league            League                  @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season            LeagueSeason            @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  authorMember      LeagueMember?           @relation("SocialMessageAuthor", fields: [authorMemberId], references: [id], onDelete: SetNull)
+  /// The conversation a coach's message belongs to. Null for SYSTEM activity items, which sit in no
+  /// conversation; a MEMBER message with no conversation is league chat.
+  conversationId    String?
+  conversation      SocialConversation?     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyToMessageId  String?
+  replyToMessage    SocialMessage?          @relation("SocialMessageReplyTo", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies           SocialMessage[]         @relation("SocialMessageReplyTo")
+  reactions         SocialMessageReaction[]
 
   @@index([leagueId, seasonId, createdAt, id])
+  @@index([conversationId, createdAt, id])
+  @@index([replyToMessageId])
   @@index([authorUserId, createdAt])
   @@index([relatedEntityType, relatedEntityId])
 }
@@ -1160,27 +1185,33 @@ model SocialModerationRecord {
 }
 
 model SocialReport {
-  id               String        @id @default(cuid())
-  leagueId         String
-  seasonId         String
-  reporterUserId   String
-  reporterMemberId String?
-  authorUserId     String?
-  authorMemberId   String?
-  contentType      String
-  contentId        String
-  reason           String
-  details          String?
-  status           String        @default("OPEN")
-  resolvedByUserId String?
-  resolvedAt       DateTime?
-  resolutionNotes  String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  league           League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season           LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  reporterMember   LeagueMember? @relation("SocialReportReporter", fields: [reporterMemberId], references: [id], onDelete: SetNull)
-  authorMember     LeagueMember? @relation("SocialReportAuthor", fields: [authorMemberId], references: [id], onDelete: SetNull)
+  id                  String              @id @default(cuid())
+  leagueId            String
+  seasonId            String
+  reporterUserId      String
+  reporterMemberId    String?
+  authorUserId        String?
+  authorMemberId      String?
+  contentType         String
+  contentId           String
+  reason              String
+  details             String?
+  status              String              @default("OPEN")
+  resolvedByUserId    String?
+  resolvedAt          DateTime?
+  resolutionNotes     String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  league              League              @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season              LeagueSeason        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  reporterMember      LeagueMember?       @relation("SocialReportReporter", fields: [reporterMemberId], references: [id], onDelete: SetNull)
+  authorMember        LeagueMember?       @relation("SocialReportAuthor", fields: [authorMemberId], references: [id], onDelete: SetNull)
+  /// A reported chat message's conversation, so a private one is shown only to the commissioner
+  /// handling the report.
+  conversationId      String?
+  conversation        SocialConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  /// The reported content as it was when reported; it survives a later edit or delete.
+  retainedContentJson Json?
 
   @@index([leagueId, seasonId, status, createdAt])
   @@index([contentType, contentId])
@@ -1235,33 +1266,114 @@ model SocialCommand {
 }
 
 model SocialOutboxEvent {
-  sequence      Int                @id @default(autoincrement())
-  id            String             @unique @default(cuid())
-  leagueId      String
-  seasonId      String
-  channel       SocialChannel
-  actorUserId   String?
-  eventType     String
-  aggregateType String
-  aggregateId   String
-  payloadJson   Json
-  status        SocialOutboxStatus @default(PENDING)
-  attempts      Int                @default(0)
-  availableAt   DateTime           @default(now())
-  lockedAt      DateTime?
-  lockedBy      String?
-  publishedAt   DateTime?
-  lastError     String?
-  createdAt     DateTime           @default(now())
-  league        League             @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season        LeagueSeason       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  sequence       Int                 @id @default(autoincrement())
+  id             String              @unique @default(cuid())
+  leagueId       String
+  seasonId       String
+  channel        SocialChannel
+  actorUserId    String?
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  payloadJson    Json
+  status         SocialOutboxStatus  @default(PENDING)
+  attempts       Int                 @default(0)
+  availableAt    DateTime            @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  publishedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime            @default(now())
+  league         League              @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season         LeagueSeason        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  /// The chat conversation the event belongs to. A DM or group event is delivered only to that
+  /// conversation's members; null is league-wide.
+  conversationId String?
+  conversation   SocialConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([status, availableAt, createdAt])
+  @@index([conversationId, sequence])
   @@index([leagueId, seasonId, createdAt])
   @@index([leagueId, seasonId, channel, sequence])
   @@index([actorUserId, sequence])
   @@index([aggregateType, aggregateId])
   @@index([lockedAt, createdAt])
+}
+
+/// One chat conversation of a league season: the league chat, a DM between two coaches, or a group.
+/// Conversations reset each season.
+model SocialConversation {
+  id                String                     @id @default(cuid())
+  leagueId          String
+  seasonId          String
+  kind              SocialConversationKind
+  /// A group's name; null for league chat and DMs.
+  name              String?
+  createdByUserId   String?
+  createdByMemberId String?
+  /// "league" for the league chat and "dm:<memberId>:<memberId>" (ids sorted) for a DM, so each
+  /// exists once per season; null for groups.
+  uniqueKey         String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  league            League                     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season            LeagueSeason               @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  createdByMember   LeagueMember?              @relation("SocialConversationCreator", fields: [createdByMemberId], references: [id], onDelete: SetNull)
+  members           SocialConversationMember[]
+  messages          SocialMessage[]
+  outboxEvents      SocialOutboxEvent[]
+  reports           SocialReport[]
+
+  @@unique([seasonId, uniqueKey])
+  @@index([leagueId, seasonId, kind])
+}
+
+/// A coach in a DM or group, with their own read position. League chat has no member rows: every
+/// coach in the league is in it, and its unread count uses SocialReadState.
+model SocialConversationMember {
+  id               String             @id @default(cuid())
+  conversationId   String
+  leagueId         String
+  seasonId         String
+  userId           String
+  memberId         String
+  lastReadSequence Int                @default(0)
+  lastReadAt       DateTime?
+  joinedAt         DateTime           @default(now())
+  leftAt           DateTime?
+  /// A muted conversation keeps its own unread count but adds nothing to the chat badge.
+  mutedAt          DateTime?
+  addedByUserId    String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  conversation     SocialConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  league           League             @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season           LeagueSeason       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  member           LeagueMember       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([seasonId, userId, leftAt])
+  @@index([memberId])
+}
+
+/// One coach's emoji reaction to a chat message.
+model SocialMessageReaction {
+  id        String        @id @default(cuid())
+  messageId String
+  leagueId  String
+  seasonId  String
+  userId    String
+  memberId  String?
+  emoji     String
+  createdAt DateTime      @default(now())
+  message   SocialMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  league    League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season    LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  member    LeagueMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@unique([messageId, userId, emoji])
+  @@index([leagueId, seasonId])
+  @@index([memberId])
 }
 
 enum TradeReviewMode {

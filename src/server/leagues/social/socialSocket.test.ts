@@ -9,6 +9,13 @@ const mocks = vi.hoisted(() => ({
   loggerError: vi.fn(),
   pubSubPublish: vi.fn(),
   pubSubStart: vi.fn(),
+  privateConversationAudience: vi.fn(),
+}));
+
+vi.mock('@/lib/prisma', () => ({ prisma: {} }));
+
+vi.mock('./socialConversations', () => ({
+  privateConversationAudience: mocks.privateConversationAudience,
 }));
 
 vi.mock('@/server/leagues/membership', () => ({
@@ -341,6 +348,29 @@ describe('league social socket sidecar', () => {
     expect(ioState.inRoom).toHaveBeenCalledWith(SEASON_2026_ROOM);
     expect(ioState.globalInRoom).not.toHaveBeenCalled();
     expect(socketState.emit).toHaveBeenCalledWith('social:message', envelope);
+  });
+
+  it('delivers a DM or group event only to the members the database names', async () => {
+    const member = createSocket('user-1');
+    const outsider = createSocket('user-2');
+    mocks.privateConversationAudience.mockResolvedValueOnce(new Set(['user-1']));
+    const envelope: SocialRealtimeEnvelope = {
+      id: 'event-dm',
+      sequence: 9,
+      leagueId: 'league-1',
+      seasonId: 'season-2026',
+      conversationId: 'dm-1',
+      channel: 'chat',
+      event: 'social:message',
+      payload: { messageId: 'message-dm' },
+      occurredAt: '2026-07-19T10:00:00.000Z',
+    };
+
+    await broadcastLeagueSocialEvent(localIo([member.socket, outsider.socket]), envelope);
+
+    expect(mocks.privateConversationAudience).toHaveBeenCalledWith(expect.anything(), 'dm-1');
+    expect(member.emit).toHaveBeenCalledWith('social:message', envelope);
+    expect(outsider.emit).not.toHaveBeenCalled();
   });
 
   it('delivers a read receipt only to its own member and checks membership once per member', async () => {

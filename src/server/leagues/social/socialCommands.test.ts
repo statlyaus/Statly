@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => {
     socialMessage: {
       create: vi.fn(),
     },
+    socialConversation: {
+      createMany: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+    },
     socialOutboxEvent: {
       findFirst: vi.fn(),
       create: vi.fn(),
@@ -106,6 +110,8 @@ describe('league social Activity commands', () => {
       })
     );
     mocks.tx.socialOutboxEvent.create.mockResolvedValue({ sequence: 22 });
+    mocks.tx.socialConversation.createMany.mockResolvedValue({ count: 0 });
+    mocks.tx.socialConversation.findUniqueOrThrow.mockResolvedValue({ id: 'conversation-1' });
     mocks.tx.socialReadState.findUnique.mockResolvedValue(null);
     mocks.tx.socialReadState.upsert.mockResolvedValue({});
   });
@@ -178,12 +184,14 @@ describe('league social Activity commands', () => {
       data: expect.objectContaining({
         content: '',
         giphyId: 'xT9IgG50Fb7Mi0prBC',
+        conversationId: 'conversation-1',
       }),
       include: {},
     });
     expect(mocks.tx.socialOutboxEvent.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         channel: 'CHAT',
+        conversationId: 'conversation-1',
         eventType: 'social:message',
         payloadJson: expect.objectContaining({
           gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
