@@ -42,7 +42,37 @@ export function computeBloodsuckerWindow(input: {
   return { opensAt, closesAt: new Date(closesAt), skipped: false };
 }
 
-type WindowDb = Pick<Prisma.TransactionClient, 'draft' | 'leagueCompetitionRound'>;
+type WindowDb = Pick<
+  Prisma.TransactionClient,
+  'draft' | 'leagueCompetitionRound' | 'leagueCompetitionAudit'
+>;
+
+/**
+ * E13 (#1355): after the window's close time, free agency stays closed to every other team until
+ * the auto-fill has run. The fill is retried by the 5-minute sweep; if it has still not run this
+ * long after the close time, free agency opens anyway so a failing fill cannot lock a league.
+ */
+export const BLOODSUCKER_AUTO_FILL_GRACE_MINUTES = 60;
+
+/**
+ * True once the auto-fill has run for this window: its BLOODSUCKER_WINDOW_CLOSED audit row exists.
+ * A re-run draft completes later than any earlier close, so only rows since this window opened count.
+ */
+export async function hasBloodsuckerAutoFillRun(
+  db: Pick<Prisma.TransactionClient, 'leagueCompetitionAudit'>,
+  leagueId: string,
+  window: Pick<BloodsuckerWindow, 'opensAt'>
+): Promise<boolean> {
+  const closed = await db.leagueCompetitionAudit.findFirst({
+    where: {
+      leagueId,
+      eventType: 'BLOODSUCKER_WINDOW_CLOSED',
+      createdAt: { gte: window.opensAt },
+    },
+    select: { id: true },
+  });
+  return closed !== null;
+}
 
 export interface LeagueDraftWindowState {
   draftId: string;

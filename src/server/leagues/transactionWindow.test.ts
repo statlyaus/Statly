@@ -7,10 +7,16 @@ const HOUR = 60 * 60 * 1000;
 const DRAFTED_AT = new Date('2026-03-01T02:00:00.000Z');
 const after = (hours: number) => new Date(DRAFTED_AT.getTime() + hours * HOUR);
 
-function dbWithDraft(draft: Record<string, unknown> | null, roundOne: unknown = null) {
+function dbWithDraft(
+  draft: Record<string, unknown> | null,
+  roundOne: unknown = null,
+  /** The BLOODSUCKER_WINDOW_CLOSED audit row, once the auto-fill has run. */
+  closeAudit: unknown = null
+) {
   return {
     draft: { findUnique: vi.fn().mockResolvedValue(draft) },
     leagueCompetitionRound: { findFirst: vi.fn().mockResolvedValue(roundOne) },
+    leagueCompetitionAudit: { findFirst: vi.fn().mockResolvedValue(closeAudit) },
   };
 }
 
@@ -133,12 +139,44 @@ describe('getTransactionWindow', () => {
       ).resolves.toEqual({ open: true, bloodsuckerExclusive: true });
     });
 
-    it('opens to everyone at the close time', async () => {
+    it('stays closed to the others at the close time until the auto-fill has run (#1355)', async () => {
+      const db = dbWithDraft(bloodsuckerDraft());
       await expect(
-        getTransactionWindow('league-1', dbWithDraft(bloodsuckerDraft()) as never, {
-          memberId: 'rival',
-          now: after(24),
-        })
+        getTransactionWindow('league-1', db as never, { memberId: 'rival', now: after(24) })
+      ).resolves.toEqual({
+        open: false,
+        code: 'BLOODSUCKER_AUTO_FILL_PENDING',
+        reason:
+          "The Bloodsucker's window has closed and its empty roster spots are being filled. Adds, drops, waiver claims and trades open in a few minutes.",
+      });
+      expect(db.leagueCompetitionAudit.findFirst).toHaveBeenCalledWith({
+        where: {
+          leagueId: 'league-1',
+          eventType: 'BLOODSUCKER_WINDOW_CLOSED',
+          createdAt: { gte: DRAFTED_AT },
+        },
+        select: { id: true },
+      });
+      // The Bloodsucker is not refused, and is no longer exempt from waiver holds.
+      await expect(
+        getTransactionWindow('league-1', db as never, { memberId: 'bloodsucker', now: after(24) })
+      ).resolves.toEqual({ open: true });
+    });
+
+    it('opens to everyone once the auto-fill has run', async () => {
+      const db = dbWithDraft(bloodsuckerDraft(), null, { id: 'audit-1' });
+      await expect(
+        getTransactionWindow('league-1', db as never, { memberId: 'rival', now: after(24) })
+      ).resolves.toEqual({ open: true });
+    });
+
+    it('opens an hour after the close time even if the auto-fill never ran', async () => {
+      const db = dbWithDraft(bloodsuckerDraft());
+      await expect(
+        getTransactionWindow('league-1', db as never, { memberId: 'rival', now: after(24.99) })
+      ).resolves.toMatchObject({ open: false, code: 'BLOODSUCKER_AUTO_FILL_PENDING' });
+      await expect(
+        getTransactionWindow('league-1', db as never, { memberId: 'rival', now: after(25) })
       ).resolves.toEqual({ open: true });
     });
 
@@ -156,21 +194,28 @@ describe('getTransactionWindow', () => {
       });
       await expect(
         getTransactionWindow('league-1', db as never, { memberId: 'rival', now: after(8) })
-      ).resolves.toEqual({ open: true });
+      ).resolves.toMatchObject({ open: false, code: 'BLOODSUCKER_AUTO_FILL_PENDING' });
       expect(db.leagueCompetitionRound.findFirst).toHaveBeenCalledWith({
         where: { leagueId: 'league-1', fixtureVersion: 3, round: 1 },
         select: { startsAt: true, fallbackLockAt: true },
       });
     });
 
-    it('has no window when the draft finishes within 3 hours of round 1', async () => {
-      const db = dbWithDraft(bloodsuckerDraft({ competitionRulesVersion: 1 }), {
-        startsAt: after(2),
-        fallbackLockAt: null,
-      });
+    it('has no window when the draft finishes within 3 hours of round 1, only the wait for the fill', async () => {
+      const roundOne = { startsAt: after(2), fallbackLockAt: null };
+      const draft = bloodsuckerDraft({ competitionRulesVersion: 1 });
 
       await expect(
-        getTransactionWindow('league-1', db as never, { memberId: 'rival', now: DRAFTED_AT })
+        getTransactionWindow('league-1', dbWithDraft(draft, roundOne) as never, {
+          memberId: 'rival',
+          now: DRAFTED_AT,
+        })
+      ).resolves.toMatchObject({ open: false, code: 'BLOODSUCKER_AUTO_FILL_PENDING' });
+      await expect(
+        getTransactionWindow('league-1', dbWithDraft(draft, roundOne, { id: 'audit-1' }) as never, {
+          memberId: 'rival',
+          now: DRAFTED_AT,
+        })
       ).resolves.toEqual({ open: true });
     });
 

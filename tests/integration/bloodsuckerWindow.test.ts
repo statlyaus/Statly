@@ -177,7 +177,7 @@ describe.sequential('Bloodsucker exclusive window and auto-fill', () => {
     await removeFixture();
   });
 
-  it('refuses another member during the window and lets him in when it closes', async () => {
+  it('refuses another member during the window and lets him in once the auto-fill has run', async () => {
     await expect(add(RIVAL_USER, PLAYER_A)).rejects.toMatchObject({
       code: 'BLOODSUCKER_WINDOW_OPEN',
       status: 409,
@@ -188,7 +188,37 @@ describe.sequential('Bloodsucker exclusive window and auto-fill', () => {
       getTransactionWindow(LEAGUE, prisma, { memberId: RIVAL, now: DURING })
     ).resolves.toMatchObject({ code: 'BLOODSUCKER_WINDOW_OPEN', closesAt: AFTER.toISOString() });
 
-    await expect(add(RIVAL_USER, PLAYER_A, AFTER)).resolves.toMatchObject({ memberId: RIVAL });
+    // #1355, E13: at the close time the Bloodsucker's roster is still short, so nobody else is let
+    // in until the auto-fill has run.
+    await expect(add(RIVAL_USER, PLAYER_D, AFTER)).rejects.toMatchObject({
+      code: 'BLOODSUCKER_AUTO_FILL_PENDING',
+      status: 409,
+    });
+    await expect(
+      getTransactionWindow(LEAGUE, prisma, { memberId: RIVAL, now: AFTER })
+    ).resolves.toMatchObject({ open: false, code: 'BLOODSUCKER_AUTO_FILL_PENDING' });
+    await expect(
+      getTransactionWindow(LEAGUE, prisma, { memberId: BLOODSUCKER, now: AFTER })
+    ).resolves.toEqual({ open: true });
+    await expect(prisma.leagueRosterPlayer.count({ where: { leagueId: LEAGUE } })).resolves.toBe(0);
+
+    const sweep = await sweepBloodsuckerWindows(AFTER);
+    expect(sweep.closedLeagueIds).toContain(LEAGUE);
+    await expect(bloodsuckerRoster()).resolves.toHaveLength(3);
+    await expect(add(RIVAL_USER, PLAYER_E, AFTER)).resolves.toMatchObject({ memberId: RIVAL });
+  });
+
+  it('opens free agency after an hour even when the auto-fill never ran, so a league cannot stay locked', async () => {
+    const lastLockedMinute = new Date(AFTER.getTime() + 59 * 60 * 1000);
+    await expect(add(RIVAL_USER, PLAYER_A, lastLockedMinute)).rejects.toMatchObject({
+      code: 'BLOODSUCKER_AUTO_FILL_PENDING',
+    });
+    const graceOver = new Date(AFTER.getTime() + HOUR);
+    await expect(add(RIVAL_USER, PLAYER_A, graceOver)).resolves.toMatchObject({ memberId: RIVAL });
+    // The sweep still fills what is left when it next works.
+    await expect(closeBloodsuckerWindow(LEAGUE, graceOver)).resolves.toMatchObject({
+      closed: true,
+    });
   });
 
   it.each([
@@ -313,8 +343,12 @@ describe.sequential('Bloodsucker exclusive window and auto-fill', () => {
     });
     try {
       const justAfterDraft = new Date(DRAFTED_AT.getTime() + 60 * 1000);
-      await expect(add(RIVAL_USER, PLAYER_C, justAfterDraft)).resolves.toMatchObject({
-        memberId: RIVAL,
+      await prisma.leagueRosterPlayer.create({
+        data: { leagueId: LEAGUE, memberId: RIVAL, playerId: PLAYER_C, acquiredBy: 'DRAFT' },
+      });
+      // No window, but the others still wait for the fill (#1355, E13).
+      await expect(add(RIVAL_USER, PLAYER_E, justAfterDraft)).rejects.toMatchObject({
+        code: 'BLOODSUCKER_AUTO_FILL_PENDING',
       });
 
       const sweep = await sweepBloodsuckerWindows(justAfterDraft);
@@ -324,6 +358,9 @@ describe.sequential('Bloodsucker exclusive window and auto-fill', () => {
       );
       const [audit] = await closeAudits();
       expect(audit?.payloadJson).toMatchObject({ windowSkipped: true, emptySpots: 3 });
+      await expect(add(RIVAL_USER, PLAYER_E, justAfterDraft)).resolves.toMatchObject({
+        memberId: RIVAL,
+      });
     } finally {
       await prisma.leagueCompetitionRound.deleteMany({ where: { leagueId: LEAGUE } });
       await prisma.leagueSettings.update({

@@ -9,6 +9,7 @@ import {
 
 import { getPlayers } from '@/lib/data';
 import { prisma } from '@/lib/prisma';
+import { type BiteFreezeCode, listBiteFrozenMembers } from '@/server/leagues/bitePending';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 import {
@@ -101,7 +102,7 @@ export async function loadAuthorizedLeagueTradeCentre({
   // Before the snapshot reads: see LeagueTradeCentreSnapshot.revision.
   const revision = await loadTradeRevision(access);
 
-  const [members, records, counts, sourcePlayers, pendingBites] = await Promise.all([
+  const [members, records, counts, sourcePlayers, frozenMemberIds] = await Promise.all([
     prisma.leagueMember.findMany({
       where: { leagueId, isActive: true, status: 'ACTIVE' },
       select: {
@@ -137,13 +138,10 @@ export async function loadAuthorizedLeagueTradeCentre({
     }),
     loadViewCounts(access),
     getPlayers(),
-    prisma.leagueBite.findMany({
-      where: { leagueId, status: { in: ['OPEN', 'WAITING_LOCK'] } },
-      select: { victimMemberId: true },
-    }),
+    listBiteFrozenMembers(prisma, leagueId),
   ]);
-  // BR-30: teams the Bloodsucker has a bite waiting on. A trade with one of them is held.
-  const frozenMemberIds = new Set(pendingBites.map((bite) => bite.victimMemberId));
+  // BR-30, E12: teams the Bloodsucker has a bite waiting on, or that have just played it and wait
+  // for the result. A trade with one of them is held.
 
   const teams: TradeTeamDto[] = members.map((member) => ({
     memberId: member.id,
@@ -394,7 +392,7 @@ function toTradeDto(
   record: TradeThreadRecord,
   access: ReadAccess,
   eligibleVoters: number,
-  frozenMemberIds: ReadonlySet<string>
+  frozenMemberIds: ReadonlyMap<string, BiteFreezeCode>
 ): LeagueTradeDto | null {
   if (!record.currentOffer) return null;
   const participantIds = [record.memberOneId, record.memberTwoId];
@@ -457,7 +455,9 @@ function toTradeDto(
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     allowedActions: actions,
-    heldReason: isHeld ? 'BITE_PENDING' : null,
+    heldReason: isHeld
+      ? (participantIds.map((memberId) => frozenMemberIds.get(memberId)).find(Boolean) ?? null)
+      : null,
   };
 }
 

@@ -201,12 +201,15 @@ In a Bloodsucker league the same guard then keeps adds, drops, waiver claims, an
 counters, and acceptances closed to every member but the Bloodsucker until its exclusive window ends:
 HTTP 409, code `BLOODSUCKER_WINDOW_OPEN`, with the close time (see
 [league formats](../product/league-competition-rules.md#league-formats)). Callers pass the acting
-member, so the guard can tell the Bloodsucker from everyone else.
+member, so the guard can tell the Bloodsucker from everyone else. After the close time the guard
+stays closed to the others until the auto-fill of the Bloodsucker's roster has run, code
+`BLOODSUCKER_AUTO_FILL_PENDING`, for at most 60 minutes.
 
 A member with a Bloodsucker bite waiting on them (`LeagueBite` `OPEN` or `WAITING_LOCK`) is frozen
-until every such bite is done: drops and trade proposals, counters and acceptances are refused with
-HTTP 409, code `BITE_PENDING` (`src/server/leagues/bitePending.ts`), and their waiver claims that drop
-a player stay pending. A trade with a frozen member on either side cannot complete until the bite
+until every such bite is done: free-agent adds, drops and trade proposals, counters and acceptances
+are refused with HTTP 409, code `BITE_PENDING` (`src/server/leagues/bitePending.ts`), and their waiver
+claims stay pending. The freeze starts at round end: from a round's end time until its matchups are
+FINAL, the Bloodsucker's opponent is frozen the same way with code `BLOODSUCKER_RESULT_PENDING`. A trade with a frozen member on either side cannot complete until the bite
 is done: acceptance and approval answer `BITE_PENDING`, and the veto-review cron holds it. The trade centre
 marks such a trade as on hold and does not offer accept or approve. A bite not made by its deadline is made by the system: the 5-minute
 `cron-bloodsucker` sweep (`src/server/leagues/bloodsuckerAutoBite.ts`) takes the victim's
