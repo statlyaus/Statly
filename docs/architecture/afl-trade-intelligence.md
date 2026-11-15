@@ -4438,6 +4438,11 @@ hold is not found. The verified bundle is kept for the life of the server instan
 retried on the next request. The publication-boundary unit test names this module as the single
 public importer of the private story modules.
 
+**Site front door (owner, 2026-11-15).** Trades go live before the fantasy app, so the public home
+page (`/`), header and footer are about AFL trades and the draft record only. Nothing public links to
+the fantasy app (`/login`, `/dashboard`, leagues); those routes still exist and are reached by address.
+Putting fantasy back in the public navigation is an owner decision at fantasy go-live.
+
 **Pages.** `/afl` (hub), `/afl/trades` (every trade by year, and each club), `/afl/trades/<trade>`,
 `/afl/trades/clubs/<club>` and `/afl/trades/method`. The trade and club pages are the private pages'
 components: the bundle source marks its models `audience: public`, which swaps the private notice for

@@ -3,16 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+/** Public links only. The fantasy app is not live, so nothing here points at it. */
 const publicLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/draft/trades', label: 'AFL Draft & Trade Outcomes' },
-  { href: '/dashboard', label: 'Fantasy' },
+  { href: '/', label: 'Home', section: '/' },
+  { href: '/afl/trades', label: 'Trades', section: '/afl' },
+  { href: '/draft/trades', label: 'Draft record', section: '/draft' },
 ] as const;
 
-function isPublicLinkActive(pathname: string, href: (typeof publicLinks)[number]['href']): boolean {
-  if (href === '/') return pathname === '/';
-  if (href === '/draft/trades') return pathname === '/draft' || pathname.startsWith('/draft/');
-  return pathname === href || pathname.startsWith(`${href}/`);
+function isPublicLinkActive(pathname: string, section: string): boolean {
+  if (section === '/') return pathname === '/';
+  return pathname === section || pathname.startsWith(`${section}/`);
 }
 
 export function PublicNavigation() {
@@ -21,7 +21,7 @@ export function PublicNavigation() {
   return (
     <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 overflow-x-auto sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:justify-end">
       {publicLinks.map((link) => {
-        const active = isPublicLinkActive(pathname, link.href);
+        const active = isPublicLinkActive(pathname, link.section);
 
         return (
           <Link
