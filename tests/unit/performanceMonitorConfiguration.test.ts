@@ -1,13 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { shouldSendPerformanceAnalytics } from '@/components/PerformanceMonitor';
 
-const firebaseAnalyticsInitializerSource = readFileSync(
-  join(process.cwd(), 'src/components/FirebaseAnalyticsInitializer.tsx'),
-  'utf8'
-);
 const performanceMonitorSource = readFileSync(
   join(process.cwd(), 'src/components/PerformanceMonitor.tsx'),
   'utf8'
@@ -45,22 +41,9 @@ describe('performance monitoring environment boundary', () => {
     expect(shouldSendPerformanceAnalytics()).toBe(false);
   });
 
-  it('owns Firebase Analytics globally behind an environment-gated dynamic boundary', () => {
-    expect(rootLayoutSource).toContain(
-      "import FirebaseAnalyticsInitializer from '@/components/FirebaseAnalyticsInitializer'"
-    );
-    expect(rootLayoutSource).toContain('<FirebaseAnalyticsInitializer />');
-    expect(firebaseAnalyticsInitializerSource).toContain("process.env.NODE_ENV === 'production'");
-    expect(firebaseAnalyticsInitializerSource).toContain(
-      "process.env.NEXT_PUBLIC_ENABLE_DEVELOPMENT_PERFORMANCE_ANALYTICS === 'true'"
-    );
-    expect(firebaseAnalyticsInitializerSource).toContain('if (!shouldInitialize) return;');
-    expect(firebaseAnalyticsInitializerSource).toContain(
-      "import('@/lib/firebase/clientAnalytics')"
-    );
-    expect(firebaseAnalyticsInitializerSource).not.toMatch(
-      /import\s+\{[^}]*initializeFirebaseAnalytics[^}]*\}\s+from/
-    );
-    expect(performanceMonitorSource).not.toContain('@/lib/firebase/clientAnalytics');
+  it('loads no Firebase Analytics: the privacy policy names no analytics provider', () => {
+    expect(rootLayoutSource).not.toContain('FirebaseAnalytics');
+    expect(performanceMonitorSource).not.toContain('firebase/analytics');
+    expect(existsSync(join(process.cwd(), 'src/lib/firebase/clientAnalytics.ts'))).toBe(false);
   });
 });
