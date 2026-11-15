@@ -146,6 +146,31 @@ the required check never appears and the queue waits on that pull request foreve
 2026). Until the secret exists, sessions update their own green BEHIND pull requests with
 `gh pr update-branch`.
 
+### Merge trains
+
+A merge train lands several ready pull requests together so they share one CI run. It is an exception,
+not a delivery path (owner decision, 15 November 2026). The queue above is the normal route, and a train
+is allowed only when all of these hold:
+
+- at least 10 pull requests are green, have auto-merge on, and are waiting only to be brought up to
+  date with `main`;
+- the train carries at most 20 of them, and none changes `.github/workflows`, a Prisma migration or a
+  ruleset setting;
+- the train branch starts from `origin/main` and holds exactly one commit per pull request, in merge
+  order, each with that pull request's title and number, so `git bisect` and `git revert` still work
+  on one pull request;
+- every conflict resolution is its own commit that names the two pull requests it reconciles; and
+- the train's pull request lists the pull requests it carries as `- #NNNN` lines, and the full `CI Gate`
+  passes on it.
+
+Squash is the only merge method the repository allows, and squashing a train throws away the
+one-commit-per-pull-request history. So a train lands by rebase merge: the owner turns rebase merging
+on in the repository settings for that one merge and off again straight after. Without the owner, there
+is no train. The carried pull requests are closed with a link to the train once it merges.
+
+A train that fails CI is not patched in place past one fix: drop the offending pull request from the
+train and send it back through the queue.
+
 ### Dependabot auto-merge
 
 `.github/workflows/dependabot-auto-merge.yml` turns on squash auto-merge for Dependabot's minor and
