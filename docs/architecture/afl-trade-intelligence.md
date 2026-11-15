@@ -4446,8 +4446,13 @@ layout has one). While the reader is unavailable every page says so; an unknown 
 found. The list shows each club's net at the trade's latest checkpoint, a * while that net is
 provisional, and what the club received; `development/tradeStoryListResults.ts` reads these straight from
 the sealed value lines and structure, because building all 286 full stories for one page takes about
-12 seconds. Until the private storage loader lands, the stored bundle is the file at
-`AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path), which is how the pages are run locally.
+12 seconds. In production the stored bundle is a blob in the site's private Netlify Blobs store
+`afl-trade-story-bundles`, keyed by the bundle id's hash (`publication/publicTradeBundleStore.ts`), so
+approving a different id never reads an older bundle. `POST /api/admin/afl-trade-story-bundle` (bearer
+`CRON_SECRET`) stores an upload only when it verifies and its id equals the approved id; the same
+route's `GET` reports whether the approved bundle is stored. A local run sets
+`AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path) and reads that file instead. The go-live steps
+are in the operations runbook, "Public trade pages: go live".
 
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
