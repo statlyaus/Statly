@@ -19,6 +19,11 @@ tests, and this document together.
   scoring job finds the fixture: it then takes the round's first bounce as its start time and becomes
   scheduled, the same as if the fixture had been there at publication, and is scored once it starts.
   Publication is not reopened.
+- The season status (`LeagueSettings.competitionStatus`) goes `SETUP`, then `PENDING` at publication,
+  then `ACTIVE` when its first round is scored (live or final), then `COMPLETE` when every round,
+  finals included, is `FINAL` or has no matchup (owner decision 2026-11-15). Finals rounds exist from
+  publication, so `COMPLETE` means the grand final, or the last regular round in a league with no
+  finals. Both changes are written in the round-scoring transaction.
 
 ## Category scoring
 
