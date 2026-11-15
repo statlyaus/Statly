@@ -17,6 +17,8 @@ export const RESULTS_REFRESH_MS = Number(process.env.RESULTS_REFRESH_MS) || 10 *
 export const RESULTS_LAST_MATCHES = Number(process.env.RESULTS_LAST_MATCHES) || 18;
 export const RESULTS_FULL_SWEEP_MS =
   Number(process.env.RESULTS_FULL_SWEEP_MS) || 6 * 60 * 60 * 1000;
+/** A season sweep runs only while a game started within this window (owner decision 2026-11-15). */
+export const RESULTS_SWEEP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** A full sweep's R pipeline limit; the default 5-minute limit fits only the recent refresh. */
 export const RESULTS_FULL_SWEEP_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -25,11 +27,16 @@ export function dueResultRefresh(input: {
   live: boolean;
   lastRecentAt: number;
   lastFullSweepAt: number;
+  /** A game started within RESULTS_SWEEP_WINDOW_MS; off-season and long breaks skip the sweep. */
+  gameStartedWithinWindow: boolean;
   refreshMs?: number;
   fullSweepMs?: number;
 }): ResultRefreshKind | null {
   const refreshMs = input.refreshMs ?? RESULTS_REFRESH_MS;
   const fullSweepMs = input.fullSweepMs ?? RESULTS_FULL_SWEEP_MS;
-  if (!input.live) return input.now - input.lastFullSweepAt >= fullSweepMs ? 'full' : null;
+  if (!input.live) {
+    if (!input.gameStartedWithinWindow) return null;
+    return input.now - input.lastFullSweepAt >= fullSweepMs ? 'full' : null;
+  }
   return input.now - input.lastRecentAt >= refreshMs ? 'recent' : null;
 }
