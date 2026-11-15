@@ -204,7 +204,8 @@ member, so the guard can tell the Bloodsucker from everyone else.
 A member with a Bloodsucker bite waiting on them (`LeagueBite` `OPEN` or `WAITING_LOCK`) is frozen
 until every such bite is done: drops and trade proposals, counters and acceptances are refused with
 HTTP 409, code `BITE_PENDING` (`src/server/leagues/bitePending.ts`), and their waiver claims that drop
-a player stay pending. A bite not made by its deadline is made by the system: the 5-minute
+a player stay pending. A trade with a frozen member on either side cannot complete until the bite
+is done: acceptance and approval answer `BITE_PENDING`, and the veto-review cron holds it. A bite not made by its deadline is made by the system: the 5-minute
 `cron-bloodsucker` sweep (`src/server/leagues/bloodsuckerAutoBite.ts`) takes the victim's
 highest-Statly-Z player for the Bloodsucker's lowest, never while a round is in progress. A bite itself is a roster swap through `src/server/leagues/rosterSwap.ts`
 under the League row lock (see

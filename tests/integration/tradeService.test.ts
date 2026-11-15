@@ -784,6 +784,171 @@ describe.sequential('league trade service transactions', () => {
     ).resolves.toBe(1);
   });
 
+  it("sends a commissioner's own ADMIN trade to a veto vote when it is accepted", async () => {
+    await setReviewMode('ADMIN');
+    await prisma.leagueRosterPlayer.update({
+      where: { leagueId_playerId: { leagueId: ids.league, playerId: ids.firstPlayer } },
+      data: { memberId: ids.commissionerMember },
+    });
+    const created = await service.createLeagueTrade(
+      ids.league,
+      ids.commissionerUser,
+      createInput({ idempotencyKey: 'create-own-trade-0001' }),
+      now
+    );
+    const accepted = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      {
+        action: 'accept',
+        expectedVersion: created.version,
+        idempotencyKey: 'accept-own-trade-0001',
+      },
+      now
+    );
+
+    expect(accepted).toMatchObject({ status: 'PENDING_VETO_REVIEW', version: 1 });
+    await expect(
+      prisma.leagueTradeOffer.findUniqueOrThrow({ where: { id: created.offerId } })
+    ).resolves.toMatchObject({ reviewMode: 'VETO' });
+    const vetoed = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.firstUser,
+      created.threadId,
+      {
+        action: 'veto',
+        expectedVersion: accepted.version,
+        idempotencyKey: 'veto-own-trade-0001',
+      },
+      now
+    );
+    expect(vetoed).toMatchObject({ status: 'VETOED' });
+  });
+
+  it('blocks a VETO trade with fewer vetoes than the setting when fewer teams can vote', async () => {
+    await setReviewMode('VETO', 3);
+    const created = await createTrade();
+    const accepted = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      {
+        action: 'accept',
+        expectedVersion: created.version,
+        idempotencyKey: 'accept-veto-cap-0001',
+      },
+      now
+    );
+    const vetoed = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.commissionerUser,
+      created.threadId,
+      {
+        action: 'veto',
+        expectedVersion: accepted.version,
+        idempotencyKey: 'veto-cap-0001',
+      },
+      now
+    );
+
+    expect(vetoed).toMatchObject({ status: 'VETOED' });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+    const review = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: ids.firstUser,
+      view: 'history',
+    });
+    expect(review.rules.vetoThreshold).toBe(1);
+    expect(review.trades[0]?.currentOffer.vetoThreshold).toBe(1);
+  });
+
+  it('refuses to complete an accepted trade while a bite on either team is waiting (BR-30)', async () => {
+    const created = await createTrade();
+    await grantBite(ids.firstMember);
+
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.secondUser,
+        created.threadId,
+        {
+          action: 'accept',
+          expectedVersion: created.version,
+          idempotencyKey: 'accept-bitten-0001',
+        },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'BITE_PENDING', status: 409 });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'OPEN', version: 0 });
+  });
+
+  it('refuses commissioner approval while a bite on either team is waiting (BR-30)', async () => {
+    await setReviewMode('ADMIN');
+    const created = await createTrade();
+    const accepted = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      {
+        action: 'accept',
+        expectedVersion: created.version,
+        idempotencyKey: 'accept-admin-bitten-0001',
+      },
+      now
+    );
+    await grantBite(ids.firstMember);
+
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.commissionerUser,
+        created.threadId,
+        {
+          action: 'approve',
+          expectedVersion: accepted.version,
+          idempotencyKey: 'approve-admin-bitten-0001',
+        },
+        now
+      )
+    ).rejects.toMatchObject({ code: 'BITE_PENDING', status: 409 });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+  });
+
+  it('holds a due VETO trade while a bite is waiting and completes it once the bite is done', async () => {
+    await setReviewMode('VETO', 3);
+    const created = await createTrade();
+    await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      {
+        action: 'accept',
+        expectedVersion: created.version,
+        idempotencyKey: 'accept-veto-bitten-0001',
+      },
+      now
+    );
+    await grantBite(ids.secondMember);
+    const due = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+
+    await expect(service.processDueLeagueTrades(due)).resolves.toBe(0);
+    await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.secondMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'PENDING_VETO_REVIEW', version: 1 });
+
+    await prisma.leagueBite.updateMany({
+      where: { leagueId: ids.league },
+      data: { status: 'CANCELLED' },
+    });
+    await expect(service.processDueLeagueTrades(due)).resolves.toBe(1);
+    await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.firstMember);
+  });
+
   it('completes a VETO trade when its review window expires without enough vetoes', async () => {
     await setReviewMode('VETO', 3);
     const created = await createTrade();
@@ -962,7 +1127,25 @@ async function deleteFixtures(): Promise<void> {
   });
 }
 
+async function grantBite(victimMemberId: string): Promise<void> {
+  await prisma.leagueBite.create({
+    data: {
+      leagueId: ids.league,
+      seasonId: ids.season,
+      roundId: 'trade-test-round-1',
+      round: 1,
+      matchupId: `trade-test-matchup-${victimMemberId}`,
+      bloodsuckerMemberId: ids.commissionerMember,
+      victimMemberId,
+      grantedWinnerMemberId: ids.commissionerMember,
+      opensAt: now,
+      deadlineAt: new Date(now.getTime() + 48 * 60 * 60 * 1000),
+    },
+  });
+}
+
 async function resetTradeState(): Promise<void> {
+  await prisma.leagueBite.deleteMany({ where: { leagueId: ids.league } });
   await prisma.leagueTradeCommand.deleteMany({ where: { leagueId: ids.league } });
   await prisma.leagueTradeThread.deleteMany({ where: { leagueId: ids.league } });
   await prisma.player.update({

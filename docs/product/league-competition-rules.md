@@ -198,7 +198,10 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
 - **Victim freeze (BR-30, E7).** While any bite on a member is `OPEN` or `WAITING_LOCK`, that member's
   drops and trade proposals, acceptances and counters are refused with HTTP 409, code
   `BITE_PENDING`. The drop check runs under the League row lock. Waiver claims that drop a player
-  stay pending, and settle at the first waiver run after the last bite is done.
+  stay pending, and settle at the first waiver run after the last bite is done. A trade with a
+  frozen member on either side is held, not invalidated: the other team's acceptance and a
+  commissioner's approval answer 409 `BITE_PENDING`, and a due veto-review trade waits and completes
+  at the first cron run after the bite is done. An open offer still expires on time while held.
 - **Commissioner (BR-34, BR-35, E1).** `POST /api/leagues/[id]/bites/[biteId]/commissioner` with
   `{ action: 'cancel' | 'redo', reason, takenPlayerId?, returnedPlayerId? }`. The reason is required.
   A commissioner who is the Bloodsucker or the victim gets 403; another commissioner or the owner
@@ -450,6 +453,13 @@ resolved by the higher qualifying seed unless the published rules explicitly cha
 Commissioner authority never bypasses authentication, league membership, or the published-rules
 boundary. Consequential overrides record the actor, time, reason, prior/new values, and affected state.
 The UI must explain recalculation or invalidation before confirmation.
+
+A commissioner never approves their own trade (owner decision 2026-11-14). In a league whose trades
+go to commissioner review, a trade with the owner or a co-commissioner on either side goes to a veto
+vote instead, decided when it is accepted; a commissioner who is a party to a trade already in
+commissioner review can reject it but not approve it. The vetoes that block a trade are the league's
+threshold capped at the active teams outside the trade, counted when each veto is cast, so a veto can
+always pass. Owned by `src/server/leagues/trades/tradePolicy.ts`.
 
 ## Required regression coverage
 

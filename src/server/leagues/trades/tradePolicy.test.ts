@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   determineAcceptanceTransition,
+  effectiveVetoThreshold,
   getAllowedTradeActions,
   isBloodsuckerInTrade,
+  resolveTradeReviewMode,
   validateTradePlayerSelection,
 } from './tradePolicy';
 
@@ -35,6 +37,32 @@ describe('league trade policy', () => {
       reviewEndsAt: new Date('2026-07-23T00:00:00.000Z'),
       shouldFinalize: false,
     });
+  });
+
+  it("sends a commissioner's own trade to a veto vote instead of commissioner review", () => {
+    expect(resolveTradeReviewMode('admin', true)).toBe('veto');
+    expect(resolveTradeReviewMode('admin', false)).toBe('admin');
+    expect(resolveTradeReviewMode('none', true)).toBe('none');
+    expect(resolveTradeReviewMode('veto', true)).toBe('veto');
+  });
+
+  it('lets a commissioner in the trade reject it but never approve it', () => {
+    expect(
+      getAllowedTradeActions({
+        status: 'PENDING_ADMIN_REVIEW',
+        proposerMemberId: 'member-a',
+        recipientMemberId: 'member-b',
+        participantMemberIds: ['member-a', 'member-b'],
+        actorMemberId: 'member-a',
+        isCommissioner: true,
+      })
+    ).toEqual(['reject']);
+  });
+
+  it('caps the veto threshold at the teams able to vote', () => {
+    expect(effectiveVetoThreshold(5, 2)).toBe(2);
+    expect(effectiveVetoThreshold(2, 6)).toBe(2);
+    expect(effectiveVetoThreshold(3, 0)).toBe(1);
   });
 
   it('derives actions from the actor and current lifecycle state', () => {

@@ -11,6 +11,26 @@ export interface AcceptanceTransition {
   shouldFinalize: boolean;
 }
 
+/**
+ * A trade with a commissioner (the owner or a co-commissioner) on either side goes to a veto vote
+ * instead of commissioner review, so no commissioner approves their own trade. Decided when the
+ * trade is accepted, so a later change of commissioner cannot strand it.
+ */
+export function resolveTradeReviewMode(
+  reviewMode: TradeReviewModeDto,
+  commissionerIsParty: boolean
+): TradeReviewModeDto {
+  return reviewMode === 'admin' && commissionerIsParty ? 'veto' : reviewMode;
+}
+
+/**
+ * The vetoes that block a trade: the league setting, capped at the teams able to vote (active
+ * members other than the two in the trade) so a veto can always pass. Counted when a veto is cast.
+ */
+export function effectiveVetoThreshold(setting: number, eligibleVoters: number): number {
+  return Math.max(1, Math.min(setting, eligibleVoters));
+}
+
 export function determineAcceptanceTransition(
   reviewMode: TradeReviewModeDto,
   acceptedAt: Date,
@@ -66,7 +86,9 @@ export function getAllowedTradeActions({
   }
 
   if (status === 'PENDING_ADMIN_REVIEW') {
-    return isCommissioner ? ['approve', 'reject'] : [];
+    if (!isCommissioner) return [];
+    // A commissioner never approves their own trade; rejecting it is always allowed.
+    return participantMemberIds.includes(actorMemberId) ? ['reject'] : ['approve', 'reject'];
   }
 
   if (status === 'PENDING_VETO_REVIEW') {
