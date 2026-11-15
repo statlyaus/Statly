@@ -83,6 +83,7 @@ const snapshot: LeagueTradeCentreSnapshot = {
       teamName: 'Alpha FC',
       teamLogoUrl: null,
       isViewer: true,
+      isCommissioner: false,
       players: [{ id: 'player-1', name: 'Alex Alpha', club: 'AAA', position: 'MID' }],
     },
     {
@@ -90,6 +91,7 @@ const snapshot: LeagueTradeCentreSnapshot = {
       teamName: 'Beta FC',
       teamLogoUrl: null,
       isViewer: false,
+      isCommissioner: false,
       players: [{ id: 'player-2', name: 'Bailey Beta', club: 'BBB', position: 'FWD' }],
     },
   ],
@@ -140,6 +142,7 @@ const snapshot: LeagueTradeCentreSnapshot = {
       createdAt: '2026-07-21T10:00:00.000Z',
       updatedAt: '2026-07-21T10:00:00.000Z',
       allowedActions: ['accept', 'decline', 'counter'],
+      heldReason: null,
     },
   ],
   counts: { inbox: 1, sent: 0, history: 0, review: 0 },
@@ -228,6 +231,21 @@ describe('LeagueTradeCentrePanel', () => {
     expect(screen.getByRole('button', { name: 'Discuss trade: Alpha ↔ Beta' })).toBeInTheDocument();
   });
 
+  it('says a trade is on hold while a bite waits and offers no accept', () => {
+    renderOffersPanel({
+      ...snapshot,
+      trades: snapshot.trades.map((trade) => ({
+        ...trade,
+        heldReason: 'BITE_PENDING',
+        allowedActions: ['decline', 'counter'],
+      })),
+    });
+
+    expect(screen.getByText(/On hold: the Bloodsucker has a bite waiting/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+  });
+
   it('derives commissioner review parties from the trade instead of an unrelated viewer team', () => {
     renderOffersPanel({
       ...snapshot,
@@ -239,6 +257,7 @@ describe('LeagueTradeCentrePanel', () => {
           teamName: 'Commissioner FC',
           teamLogoUrl: null,
           isViewer: true,
+          isCommissioner: false,
           players: [],
         },
         { ...snapshot.teams[0], isViewer: false },
@@ -321,6 +340,7 @@ describe('LeagueTradeCentrePanel', () => {
           teamName: 'Gamma FC',
           teamLogoUrl: null,
           isViewer: false,
+          isCommissioner: false,
           players: [{ id: 'player-3', name: 'Gale Gamma', club: 'CCC', position: 'DEF' }],
         },
       ],
@@ -823,6 +843,7 @@ function createSnapshotWithThirdTeam(): LeagueTradeCentreSnapshot {
         teamName: 'Gamma FC',
         teamLogoUrl: null,
         isViewer: false,
+        isCommissioner: false,
         players: [{ id: 'player-3', name: 'Gale Gamma', club: 'CCC', position: 'DEF' }],
       },
     ],

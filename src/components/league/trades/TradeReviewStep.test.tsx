@@ -27,6 +27,7 @@ const viewerTeam: TradeTeamDto = {
   teamName: 'Robbo Rockers',
   teamLogoUrl: null,
   isViewer: true,
+  isCommissioner: false,
   players: sendingPlayers,
 };
 const partnerTeam: TradeTeamDto = {
@@ -34,6 +35,7 @@ const partnerTeam: TradeTeamDto = {
   teamName: 'AFL Legends',
   teamLogoUrl: null,
   isViewer: false,
+  isCommissioner: false,
   players: receivingPlayers,
 };
 const rules: TradeRulesDto = {

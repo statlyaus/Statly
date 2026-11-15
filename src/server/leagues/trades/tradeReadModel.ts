@@ -24,6 +24,7 @@ import {
   type LeagueTradeDigest,
   type LeagueTradeDto,
   type LeagueTradeRevision,
+  type TradeActionName,
   type TradeOfferStatusDto,
   type TradeOfferDto,
   type TradeReviewModeDto,
@@ -31,11 +32,7 @@ import {
   type TradeThreadStatusDto,
   type TradeView,
 } from './tradeContracts';
-import {
-  effectiveVetoThreshold,
-  getAllowedTradeActions,
-  resolveTradeReviewMode,
-} from './tradePolicy';
+import { effectiveVetoThreshold, getAllowedTradeActions } from './tradePolicy';
 
 const PAGE_SIZE = 20;
 const terminalStatuses: LeagueTradeThreadStatus[] = [
@@ -77,6 +74,7 @@ interface ReadAccess {
   leagueId: string;
   seasonId: string;
   memberId: string;
+  ownerId: string;
   isCommissioner: boolean;
   rules: LeagueTradeCentreSnapshot['rules'];
   categories: FantasyCategoryKey[];
@@ -103,11 +101,13 @@ export async function loadAuthorizedLeagueTradeCentre({
   // Before the snapshot reads: see LeagueTradeCentreSnapshot.revision.
   const revision = await loadTradeRevision(access);
 
-  const [members, records, counts, sourcePlayers] = await Promise.all([
+  const [members, records, counts, sourcePlayers, pendingBites] = await Promise.all([
     prisma.leagueMember.findMany({
       where: { leagueId, isActive: true, status: 'ACTIVE' },
       select: {
         id: true,
+        userId: true,
+        isCoCommissioner: true,
         teamName: true,
         teamLogoUrl: true,
         rosterPlayers: {
@@ -137,13 +137,20 @@ export async function loadAuthorizedLeagueTradeCentre({
     }),
     loadViewCounts(access),
     getPlayers(),
+    prisma.leagueBite.findMany({
+      where: { leagueId, status: { in: ['OPEN', 'WAITING_LOCK'] } },
+      select: { victimMemberId: true },
+    }),
   ]);
+  // BR-30: teams the Bloodsucker has a bite waiting on. A trade with one of them is held.
+  const frozenMemberIds = new Set(pendingBites.map((bite) => bite.victimMemberId));
 
   const teams: TradeTeamDto[] = members.map((member) => ({
     memberId: member.id,
     teamName: member.teamName,
     teamLogoUrl: member.teamLogoUrl,
     isViewer: member.id === access.memberId,
+    isCommissioner: member.isCoCommissioner || member.userId === access.ownerId,
     players: member.rosterPlayers.map(({ player }) => player),
   }));
   const historicalOfferPlayers = records.flatMap((record) =>
@@ -172,11 +179,11 @@ export async function loadAuthorizedLeagueTradeCentre({
     leagueId,
     viewerMemberId: access.memberId,
     isCommissioner: access.isCommissioner,
-    // The rules a new offer from this viewer would follow: a commissioner's own trade goes to a
-    // veto vote, and the threshold is capped at the teams outside the trade.
+    // The league's rules, the same for every viewer, with the veto threshold capped at the teams
+    // outside a trade. The review one offer gets also depends on its two teams: `teams` carries
+    // who is a commissioner, and the composer resolves it for the chosen partner.
     rules: {
       ...access.rules,
-      reviewMode: resolveTradeReviewMode(access.rules.reviewMode, access.isCommissioner),
       vetoThreshold: effectiveVetoThreshold(access.rules.vetoThreshold, members.length - 2),
     },
     playerStats,
@@ -185,7 +192,7 @@ export async function loadAuthorizedLeagueTradeCentre({
       const eligibleVoters = members.filter(
         (member) => member.id !== record.memberOneId && member.id !== record.memberTwoId
       ).length;
-      const trade = toTradeDto(record, access, eligibleVoters);
+      const trade = toTradeDto(record, access, eligibleVoters, frozenMemberIds);
       return trade ? [trade] : [];
     }),
     counts,
@@ -327,6 +334,7 @@ async function requireReadAccess(leagueId: string, userId: string | null): Promi
     leagueId,
     seasonId: league.activeSeasonId,
     memberId: member.id,
+    ownerId: league.ownerId,
     isCommissioner: league.ownerId === userId || member.isCoCommissioner,
     categories,
     categoryDirections: normalizeCategoryDirections(
@@ -385,10 +393,19 @@ async function loadViewCounts(access: ReadAccess): Promise<LeagueTradeCentreSnap
 function toTradeDto(
   record: TradeThreadRecord,
   access: ReadAccess,
-  eligibleVoters: number
+  eligibleVoters: number,
+  frozenMemberIds: ReadonlySet<string>
 ): LeagueTradeDto | null {
   if (!record.currentOffer) return null;
   const participantIds = [record.memberOneId, record.memberTwoId];
+  // The service refuses accept and approve while a bite waits on either team, so they are not
+  // offered; a frozen team cannot counter either.
+  const isHeld =
+    ['OPEN', 'PENDING_ADMIN_REVIEW', 'PENDING_VETO_REVIEW'].includes(record.status) &&
+    participantIds.some((memberId) => frozenMemberIds.has(memberId));
+  const heldActions: TradeActionName[] = frozenMemberIds.has(access.memberId)
+    ? ['accept', 'approve', 'counter']
+    : ['accept', 'approve'];
   const actions = getAllowedTradeActions({
     status: record.status,
     proposerMemberId: record.currentOffer.proposerMemberId,
@@ -398,8 +415,9 @@ function toTradeDto(
     isCommissioner: access.isCommissioner,
   }).filter(
     (action) =>
-      action !== 'veto' ||
-      !record.currentOffer?.vetoes.some((veto) => veto.voterMemberId === access.memberId)
+      !(isHeld && heldActions.includes(action)) &&
+      (action !== 'veto' ||
+        !record.currentOffer?.vetoes.some((veto) => veto.voterMemberId === access.memberId))
   );
 
   return {
@@ -439,6 +457,7 @@ function toTradeDto(
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     allowedActions: actions,
+    heldReason: isHeld ? 'BITE_PENDING' : null,
   };
 }
 
