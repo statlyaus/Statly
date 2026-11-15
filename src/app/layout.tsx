@@ -20,8 +20,8 @@ const sairaExtraCondensed = Saira_Extra_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: 'Statly - Fantasy AFL',
-  description: 'A fantasy sports platform for the Australian Football League (AFL)',
+  title: 'Statly',
+  description: 'AFL trades, valued by what the players and picks went on to do.',
   icons: { icon: '/brand/statly-app-icon.png', apple: '/brand/statly-app-icon.png' },
 };
 

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { PublicNavigation } from '@/components/navigation/PublicNavigation';
 
 const footerLinks = [
+  { href: '/afl/trades/method', label: 'How trades are valued' },
   { href: '/draft/outcomes/methodology', label: 'Outcomes methodology' },
   { href: '/privacy', label: 'Privacy Policy' },
   { href: '/terms', label: 'Terms of Service' },
@@ -24,7 +25,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
       <header className="sticky top-0 z-40 border-b border-brand-bar bg-brand-bar text-brand-bar-foreground">
         <nav
           aria-label="Primary"
-          className="mx-auto grid min-h-16 max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:px-6 sm:py-3 lg:px-10"
+          className="mx-auto grid min-h-16 max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:px-6 sm:py-3 lg:px-10"
         >
           <Link
             href="/"
@@ -41,12 +42,6 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
             />
           </Link>
           <PublicNavigation />
-          <Link
-            href="/login"
-            className="col-start-2 row-start-1 inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-white px-3 py-2 text-sm font-semibold text-brand-bar transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-bar sm:col-start-3 sm:ml-2"
-          >
-            Open Fantasy
-          </Link>
         </nav>
       </header>
       <main id="main-content" tabIndex={-1} className="w-full min-w-0 outline-none">
