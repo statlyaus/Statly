@@ -108,9 +108,34 @@ describe('BitePicker', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(
-      'The bite did not save (ROUND_IN_PROGRESS). Round 4 is in progress.'
+      'The bite did not save. A round is in progress (ROUND_IN_PROGRESS). Round 4 is in progress.'
     );
     await waitFor(() => expect(screen.queryByText(/^Done\./)).not.toBeInTheDocument());
+  });
+
+  it.each([
+    ['EARLIER_BITE_PENDING', 'An earlier bite comes first'],
+    ['BITE_SUSPENDED', 'This bite is on hold'],
+    ['ROUND_IN_PROGRESS', 'A round is in progress'],
+    ['A_CODE_FROM_LATER', 'The server refused this'],
+  ])('heads a %s block with what it is, not "Players are locked"', (code, heading) => {
+    render(
+      <BitePicker
+        leagueId="league-1"
+        initial={{ ...picker, blocked: { code, message: 'The reason from the server.' } }}
+      />
+    );
+
+    const status = screen.getByText(/The reason from the server\./);
+    expect(status).toHaveTextContent(`${heading} (${code}). The reason from the server.`);
+    expect(status).not.toHaveTextContent(/locked/i);
+  });
+
+  it('shows a finished bite in a status this build does not know', () => {
+    render(<BitePicker leagueId="league-1" initial={{ ...picker, status: 'UNPAIRABLE' }} />);
+
+    expect(screen.getByText('Ended without a swap.')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it('disables every player with the reason while a round is in progress', () => {

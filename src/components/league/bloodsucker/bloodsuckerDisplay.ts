@@ -2,7 +2,15 @@
 // from the same committed data.
 
 export type SlotGroup = 'DEF' | 'MID' | 'RUC' | 'FWD' | 'UTIL' | 'NON_SCORING';
-export type BiteStatus = 'OPEN' | 'WAITING_LOCK' | 'EXECUTED' | 'AUTO_EXECUTED' | 'CANCELLED';
+/**
+ * The statuses this build knows, plus any the server adds later: the screens must render a status
+ * they have never seen rather than break on it.
+ */
+export type BiteStatus =
+  'OPEN' | 'WAITING_LOCK' | 'EXECUTED' | 'AUTO_EXECUTED' | 'CANCELLED' | (string & {});
+
+/** A bite the Bloodsucker can still make. Every other status, known or not, is finished. */
+export const isBiteOpen = (status: BiteStatus) => status === 'OPEN' || status === 'WAITING_LOCK';
 
 export const SLOT_GROUP_LABELS: Record<SlotGroup, string> = {
   DEF: 'Defence',
@@ -25,7 +33,73 @@ export function biteStatusLabel(status: BiteStatus): string {
       return 'Bitten by the system at the deadline';
     case 'CANCELLED':
       return 'Cancelled';
+    case 'UNPAIRABLE':
+      return 'Ended without a swap';
+    default: {
+      // A status added after this build: show its own name in plain words.
+      const words = status.toLowerCase().replaceAll('_', ' ').trim();
+      return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Unknown state';
+    }
   }
+}
+
+/**
+ * The honest heading for each refusal code a Bloodsucker screen can show (NFR-5). The server's own
+ * message follows it, so a heading says what kind of block this is and never guesses the detail.
+ */
+const REFUSAL_HEADINGS = new Map<string, string>([
+  ['EARLIER_BITE_PENDING', 'An earlier bite comes first'],
+  ['BITE_SUSPENDED', 'This bite is on hold'],
+  ['ROUND_IN_PROGRESS', 'A round is in progress'],
+  ['BITE_NOT_OPEN', 'This bite is finished'],
+  ['BITE_NOT_EXECUTED', 'This bite has not been made'],
+  ['BITE_UNPAIRABLE', 'This bite ended because a roster was empty'],
+  ['ROSTER_CHANGED', 'A roster has changed'],
+  ['BITE_PENDING', 'A bite is waiting on your team'],
+  ['LAST_PLAYER_BITE_HELD', 'Your last player stays while you hold a bite'],
+  ['BLOODSUCKER_WINDOW_OPEN', "The Bloodsucker's exclusive window is open"],
+  ['BLOODSUCKER_SELF_OVERRIDE', 'You are part of this matchup'],
+  ['FORBIDDEN', 'You cannot do this'],
+  ['UNAUTHORIZED', 'Sign in again'],
+  ['NOT_FOUND', 'Not found'],
+  ['INVALID_INPUT', 'Check what you entered'],
+  ['NETWORK_ERROR', 'The server could not be reached'],
+]);
+
+export function refusalHeading(code: string): string {
+  return REFUSAL_HEADINGS.get(code) ?? 'The server refused this';
+}
+
+export interface Refusal {
+  code: string;
+  message: string;
+}
+
+/** "Heading (CODE). Server message": the code is always shown, known or not. */
+export function formatRefusal(refusal: Refusal): string {
+  return `${refusalHeading(refusal.code)} (${refusal.code}). ${refusal.message}`;
+}
+
+/**
+ * Reads a failed response body without dropping its code. Routes answer either
+ * `{ error: string, code }` or `{ error: { message, code } }`; a body with no code is named by its
+ * HTTP status.
+ */
+export function readRefusal(
+  payload: unknown,
+  httpStatus: number,
+  fallbackMessage: string
+): Refusal {
+  const body = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+  const nested = (body.error && typeof body.error === 'object' ? body.error : {}) as Record<
+    string,
+    unknown
+  >;
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
+  return {
+    code: text(body.code) ?? text(nested.code) ?? `HTTP_${httpStatus}`,
+    message: text(body.error) ?? text(nested.message) ?? text(body.message) ?? fallbackMessage,
+  };
 }
 
 export interface RevealDraw {

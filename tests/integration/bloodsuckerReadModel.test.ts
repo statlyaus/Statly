@@ -21,6 +21,7 @@ import { prisma } from '@/lib/prisma';
 import {
   BloodsuckerReadError,
   loadBitePicker,
+  loadBiteReview,
   loadBloodsuckerSummary,
 } from '@/server/leagues/bloodsuckerReadModel';
 
@@ -272,7 +273,12 @@ describe('loadBloodsuckerSummary (BR-40)', () => {
 
     expect(summary.bloodsucker).toEqual({ memberId: BS, teamName: 'Suckers' });
     expect(summary.record).toEqual({ wins: 1, losses: 1, draws: 1 });
-    expect(summary.viewer).toEqual({ memberId: VICTIM, isBloodsucker: false });
+    expect(summary.viewer).toEqual({
+      memberId: VICTIM,
+      isBloodsucker: false,
+      isCommissioner: false,
+    });
+    expect(summary.bites[0]!.commissionerActions).toEqual([]);
     expect(summary.bites).toEqual([
       expect.objectContaining({
         round: 1,
@@ -282,6 +288,28 @@ describe('loadBloodsuckerSummary (BR-40)', () => {
         returnedPlayer: { id: B2, name: 'Player 5' },
       }),
     ]);
+  });
+
+  it('tells a commissioner outside the bite what it may do to each bite (BR-35)', async () => {
+    const open = await loadBloodsuckerSummary({ leagueId: LEAGUE, userId: USERS.owner });
+    expect(open.viewer).toMatchObject({ memberId: OWNER, isCommissioner: true });
+    expect(open.bites[0]!.commissionerActions).toEqual(['cancel']);
+
+    await prisma.leagueBite.update({
+      where: { id: biteId },
+      data: { status: 'EXECUTED', takenPlayerId: V2, returnedPlayerId: B2, executedAt: NOW },
+    });
+    const executed = await loadBloodsuckerSummary({ leagueId: LEAGUE, userId: USERS.owner });
+    expect(executed.bites[0]!.commissionerActions).toEqual(['cancel', 'redo']);
+  });
+
+  it('offers a commissioner who is the victim nothing (E1)', async () => {
+    await prisma.leagueMember.update({ where: { id: VICTIM }, data: { isCoCommissioner: true } });
+
+    const summary = await loadBloodsuckerSummary({ leagueId: LEAGUE, userId: USERS.victim });
+
+    expect(summary.viewer.isCommissioner).toBe(true);
+    expect(summary.bites[0]!.commissionerActions).toEqual([]);
   });
 
   it('refuses someone who is not a member', async () => {
@@ -329,5 +357,98 @@ describe('loadBitePicker (US-6)', () => {
       (caught: unknown) => caught
     );
     expect((error as BloodsuckerReadError).code).toBe('FORBIDDEN');
+  });
+});
+
+describe('loadBiteReview (BR-35, E1, #1343)', () => {
+  const execute = async () => {
+    // The executed swap: V2 went to the Bloodsucker, B2 to the victim.
+    await prisma.leagueRosterPlayer.updateMany({
+      where: { leagueId: LEAGUE, playerId: V2 },
+      data: { memberId: BS },
+    });
+    await prisma.leagueRosterPlayer.updateMany({
+      where: { leagueId: LEAGUE, playerId: B2 },
+      data: { memberId: VICTIM },
+    });
+    await prisma.leagueBite.update({
+      where: { id: biteId },
+      data: { status: 'EXECUTED', takenPlayerId: V2, returnedPlayerId: B2, executedAt: NOW },
+    });
+  };
+
+  it('gives a commissioner outside the bite cancel and redo, with the rosters a redo picks from', async () => {
+    await execute();
+
+    const review = await loadBiteReview({ leagueId: LEAGUE, biteId, userId: USERS.owner });
+
+    expect(review).toMatchObject({
+      biteId,
+      round: 1,
+      status: 'EXECUTED',
+      bloodsucker: { memberId: BS, teamName: 'Suckers' },
+      victim: { memberId: VICTIM, teamName: 'Victims' },
+      takenPlayer: { id: V2, name: 'Player 2' },
+      returnedPlayer: { id: B2, name: 'Player 5' },
+      actions: ['cancel', 'redo'],
+      refusal: null,
+    });
+    // A redo first swaps the original players back, so it picks from the rosters as they were.
+    expect(review.victimPlayers.map((player) => player.id).sort()).toEqual([V1, V2, V3]);
+    expect(review.returnPlayers.map((player) => player.id).sort()).toEqual([B1, B2]);
+  });
+
+  it('offers cancel only on an open bite', async () => {
+    const review = await loadBiteReview({ leagueId: LEAGUE, biteId, userId: USERS.owner });
+
+    expect(review.actions).toEqual(['cancel']);
+    expect(review.victimPlayers.map((player) => player.id).sort()).toEqual([V1, V2, V3]);
+  });
+
+  it('tells a commissioner who is part of the bite why it cannot act', async () => {
+    await prisma.leagueMember.update({ where: { id: VICTIM }, data: { isCoCommissioner: true } });
+
+    const review = await loadBiteReview({ leagueId: LEAGUE, biteId, userId: USERS.victim });
+
+    expect(review.actions).toEqual([]);
+    expect(review.refusal).toEqual({
+      code: 'FORBIDDEN',
+      message: 'You are part of this bite, so another commissioner or the owner must change it.',
+    });
+  });
+
+  it('names a finished bite as finished', async () => {
+    await prisma.leagueBite.update({
+      where: { id: biteId },
+      data: { status: 'CANCELLED', cancelledBy: 'COMMISSIONER', cancelledReason: 'Wrong result.' },
+    });
+
+    const review = await loadBiteReview({ leagueId: LEAGUE, biteId, userId: USERS.owner });
+
+    expect(review.actions).toEqual([]);
+    expect(review.refusal?.code).toBe('BITE_NOT_OPEN');
+    expect(review.cancelledReason).toBe('Wrong result.');
+  });
+
+  it('is for commissioners only, and only for a bite of the active season', async () => {
+    const forbidden = await loadBiteReview({
+      leagueId: LEAGUE,
+      biteId,
+      userId: USERS.victim,
+    }).catch((caught: unknown) => caught);
+    expect((forbidden as BloodsuckerReadError).code).toBe('FORBIDDEN');
+
+    const other = await prisma.leagueSeason.create({
+      data: { id: `${SEASON}-next`, leagueId: LEAGUE, label: '2027 season', year: 2027 },
+    });
+    await prisma.league.update({ where: { id: LEAGUE }, data: { activeSeasonId: other.id } });
+    const missing = await loadBiteReview({ leagueId: LEAGUE, biteId, userId: USERS.owner }).catch(
+      (caught: unknown) => caught
+    );
+    expect((missing as BloodsuckerReadError).code).toBe('NOT_FOUND');
+    const picker = await loadBitePicker({ leagueId: LEAGUE, biteId, userId: USERS.bs }).catch(
+      (caught: unknown) => caught
+    );
+    expect((picker as BloodsuckerReadError).code).toBe('NOT_FOUND');
   });
 });

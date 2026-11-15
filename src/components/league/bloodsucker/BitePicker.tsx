@@ -10,6 +10,8 @@ import { formatLeagueTime } from '@/lib/leagueTime';
 import {
   biteStatusLabel,
   formatCountdown,
+  isBiteOpen,
+  refusalHeading,
   SLOT_GROUP_LABELS,
   type BiteStatus,
   type SlotGroup,
@@ -158,7 +160,7 @@ export function BitePicker({
     return () => window.clearInterval(tick);
   }, []);
 
-  const open = picker.status === 'OPEN' || picker.status === 'WAITING_LOCK';
+  const open = isBiteOpen(picker.status);
   const blocked = open ? picker.blocked : null;
   const disabled = !open || blocked !== null || command.status === 'saving';
   const nameOf = (id: string | null) =>
@@ -249,7 +251,9 @@ export function BitePicker({
           role="status"
           className="rounded-md border border-[color:var(--league-warning)] bg-[color:var(--league-warning-soft)] p-3 text-sm"
         >
-          <span className="font-semibold">Players are locked ({blocked.code}).</span>{' '}
+          <span className="font-semibold">
+            {refusalHeading(blocked.code)} ({blocked.code}).
+          </span>{' '}
           {blocked.message}
         </p>
       ) : null}
@@ -374,7 +378,9 @@ function BiteFeedback({ command }: { command: Command }) {
           role="alert"
           className="rounded-md border border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)] p-3 text-sm"
         >
-          <span className="font-semibold">The bite did not save ({command.code}).</span>{' '}
+          <span className="font-semibold">
+            The bite did not save. {refusalHeading(command.code)} ({command.code}).
+          </span>{' '}
           {command.message}
         </p>
       ) : null}

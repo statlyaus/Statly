@@ -1,14 +1,23 @@
 import { notFound, redirect } from 'next/navigation';
 
+import { BiteCommissionerPanel } from '@/components/league/bloodsucker/BiteCommissionerPanel';
 import { BitePicker } from '@/components/league/bloodsucker/BitePicker';
-import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
-import { BloodsuckerReadError, loadBitePicker } from '@/server/leagues/bloodsuckerReadModel';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
+import {
+  BloodsuckerReadError,
+  loadBitePicker,
+  loadBiteReview,
+} from '@/server/leagues/bloodsuckerReadModel';
 
 export const dynamic = 'force-dynamic';
 
-// Bloodsucker 9/9 (#1286, US-6): the bite picker, for the Bloodsucker only.
-export default async function BitePickerPage({
+const isRefusal = (error: unknown, code: BloodsuckerReadError['code']) =>
+  error instanceof BloodsuckerReadError && error.code === code;
+
+// One bite. The Bloodsucker gets the bite picker (#1286, US-6); a commissioner who is not the
+// Bloodsucker gets the cancel and redo control (#1343, BR-35); anyone else is told why not.
+export default async function BitePage({
   params,
 }: {
   params: Promise<{ id: string; biteId: string }>;
@@ -22,30 +31,47 @@ export default async function BitePickerPage({
   }
 
   try {
-    const [picker, settings] = await Promise.all([
-      loadBitePicker({ leagueId, biteId, userId }),
-      prisma.leagueSettings.findFirst({
+    const picker = await loadBitePicker({ leagueId, biteId, userId }).catch((error: unknown) => {
+      // Not the Bloodsucker: the commissioner's view is tried next.
+      if (isRefusal(error, 'FORBIDDEN')) return null;
+      throw error;
+    });
+    if (picker) {
+      const settings = await prisma.leagueSettings.findFirst({
         where: { league: { id: leagueId } },
         select: { timeZone: true },
-      }),
-    ]);
+      });
+      return (
+        <div className="min-h-screen bg-[color:var(--league-page)]">
+          <BitePicker
+            leagueId={leagueId}
+            userId={userId}
+            timeZone={settings?.timeZone ?? undefined}
+            initial={JSON.parse(JSON.stringify(picker))}
+          />
+        </div>
+      );
+    }
+    const review = await loadBiteReview({ leagueId, biteId, userId });
     return (
       <div className="min-h-screen bg-[color:var(--league-page)]">
-        <BitePicker
+        <BiteCommissionerPanel
           leagueId={leagueId}
           userId={userId}
-          timeZone={settings?.timeZone ?? undefined}
-          initial={JSON.parse(JSON.stringify(picker))}
+          initial={JSON.parse(JSON.stringify(review))}
         />
       </div>
     );
   } catch (error) {
+    if (isRefusal(error, 'NOT_FOUND')) notFound();
     if (error instanceof BloodsuckerReadError) {
-      if (error.code === 'NOT_FOUND') notFound();
       return (
         <div className="mx-auto max-w-xl px-4 py-10 text-[color:var(--league-text)]">
-          <h1 className="text-xl font-semibold">This bite is not yours to make</h1>
-          <p className="mt-2 text-sm">{error.message}</p>
+          <h1 className="text-xl font-semibold">This bite is not yours to change</h1>
+          <p className="mt-2 text-sm">
+            Only the Bloodsucker can make a bite, and only a commissioner can cancel or redo one (
+            {error.code}).
+          </p>
         </div>
       );
     }

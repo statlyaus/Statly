@@ -177,6 +177,13 @@ const biteAudits = () =>
     select: { eventType: true, actorMemberId: true, payloadJson: true },
   });
 
+const grantMessages = () =>
+  prisma.socialMessage.findMany({
+    where: { leagueId: LEAGUE, seasonId: SEASON, relatedEntityType: 'BLOODSUCKER_BITE_GRANTED' },
+    orderBy: { createdAt: 'asc' },
+    select: { type: true, content: true, relatedEntityId: true },
+  });
+
 describe.sequential('Bloodsucker bite grant on FINAL', () => {
   beforeEach(() => {
     provider.status = 'final';
@@ -216,6 +223,16 @@ describe.sequential('Bloodsucker bite grant on FINAL', () => {
         eventType: 'BITE_GRANTED',
         actorMemberId: null,
         payloadJson: { biteId: rows[0]!.id, reason: 'FINAL', actor: 'system', matchupId },
+      });
+      // #1343: the league is told once, however often FINAL is re-run.
+      const messages = await grantMessages();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatchObject({
+        type: 'SYSTEM',
+        relatedEntityId: `${rows[0]!.id}:grant:1`,
+        content: expect.stringMatching(
+          /^The Bloodsucker beat .+ in round \d+ and has a bite to make\./
+        ),
       });
     }
   );
@@ -290,6 +307,11 @@ describe.sequential('Bloodsucker bite grant on FINAL', () => {
       },
     });
     expect(audits[2]).toMatchObject({ payloadJson: { reason: 'GRANTED_ON_RESCORE' } });
+    // #1343: the first grant and the reactivation are each announced once; the cancel adds none.
+    expect((await grantMessages()).map((message) => message.relatedEntityId)).toEqual([
+      `${granted!.id}:grant:1`,
+      `${granted!.id}:grant:2`,
+    ]);
   });
 
   it('grants on a re-score that turns a loss into a win', async () => {

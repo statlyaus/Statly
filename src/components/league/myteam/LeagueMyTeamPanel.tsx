@@ -18,6 +18,7 @@ import {
   type ClubRecord,
 } from '@/components/league/noLosers/noLosersDisplay';
 import { TeamMark } from '@/components/scores/MatchupScore';
+import { formatRefusal, readRefusal } from '@/components/league/bloodsucker/bloodsuckerDisplay';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
@@ -217,7 +218,10 @@ export function LeagueMyTeamPanel({
   const [assignments, setAssignments] = useState<LineupAssignment[]>([]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ kind: 'idle' });
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{
+    tone: 'done' | 'refused';
+    text: string;
+  } | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [reloadKey, setReloadKey] = useState(0);
   // Phones can fold the field away; remembered per browser. The panel renders client-side after
@@ -469,18 +473,25 @@ export function LeagueMyTeamPanel({
         currentUserId
       );
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string | { message?: string };
-          message?: string;
-        } | null;
-        const message =
-          typeof payload?.error === 'string' ? payload.error : payload?.error?.message;
-        throw new Error(message ?? payload?.message ?? 'Drop failed.');
+        // NFR-5: a refused drop keeps its code (BITE_PENDING, BLOODSUCKER_WINDOW_OPEN, ...).
+        const refusal = readRefusal(
+          await response.json().catch(() => null),
+          response.status,
+          'The server did not say why.'
+        );
+        setActionMessage({ tone: 'refused', text: `Not dropped. ${formatRefusal(refusal)}` });
+        return;
       }
-      setActionMessage(`${player.name} dropped.`);
+      setActionMessage({ tone: 'done', text: `${player.name} dropped.` });
       setReloadKey((key) => key + 1);
-    } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : 'Drop failed.');
+    } catch {
+      setActionMessage({
+        tone: 'refused',
+        text: formatRefusal({
+          code: 'NETWORK_ERROR',
+          message: 'Refresh to see whether the drop saved.',
+        }),
+      });
     }
   }
 
@@ -789,8 +800,11 @@ export function LeagueMyTeamPanel({
           </section>
 
           {actionMessage ? (
-            <p role="status" className="text-sm text-foreground">
-              {actionMessage}
+            <p
+              role={actionMessage.tone === 'refused' ? 'alert' : 'status'}
+              className={`text-sm ${actionMessage.tone === 'refused' ? 'font-semibold text-result-loss' : 'text-foreground'}`}
+            >
+              {actionMessage.text}
             </p>
           ) : null}
 

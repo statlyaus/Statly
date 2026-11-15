@@ -18,6 +18,7 @@ import {
 
 import { activeSeasonIdOf } from './activeSeason';
 import { syncBloodsuckerBites } from './bloodsuckerBiteGrant';
+import { publishBiteGrantActivity } from './bloodsuckerGrantActivity';
 import { normalizeCategoryDirections } from './categoryDirections';
 import { normalizeCompetitionRules } from './competitionRules';
 import { synchronizeFinalsFixtures } from './finalsService';
@@ -1588,6 +1589,8 @@ export async function recalculateLeagueRoundMatchups({
   // cannot leave some matchups final while the round and the ladder are stale. The no-op write on the
   // league row (as in joinLeague) makes a second run for the same league wait for this one, so two
   // runs cannot interleave their standings.
+  // Set when bite rights were synced, so open bites are announced after the commit.
+  const biteSync = { ran: false };
   const finalized = await prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`UPDATE "League" SET "ownerId" = "ownerId" WHERE "id" = ${leagueId}`;
@@ -1744,6 +1747,7 @@ export async function recalculateLeagueRoundMatchups({
         members.map((member) => member.id)
       );
       if (bloodsuckerMemberId) {
+        biteSync.ran = true;
         await syncBloodsuckerBites(tx, {
           leagueId,
           seasonId,
@@ -1811,6 +1815,9 @@ export async function recalculateLeagueRoundMatchups({
     },
     { timeout: ROUND_SCORING_TRANSACTION_TIMEOUT_MS }
   );
+
+  // #1343: the league is told about each bite granted in this round. Best effort, after the commit.
+  if (biteSync.ran) await publishBiteGrantActivity({ leagueId, seasonId, round });
 
   // Finals fixtures follow from the committed standings; a later recalculation re-syncs them.
   if (finalized) {
