@@ -66,6 +66,42 @@ unmigrated database, or a newer format fails with one clear error. It does not d
 mode and never discovers a fantasy database or Firestore source. The application role needs only the
 isolated outcomes queries and the exact object-prefix read operations described below.
 
+## Public trade pages: go live
+
+The pages at `/afl/trades` read one owner-approved trade story bundle from the site's private Netlify
+Blobs store. They need no database, Redis or grading VM. Each step is the owner's, or done on the
+owner's word. See "Public trade pages" in
+[afl-trade-intelligence.md](../architecture/afl-trade-intelligence.md).
+
+1. **Approve the bundle.** In Netlify's environment variables for production set
+   `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` to the bundle's exact id (`trade-story-bundle:<sha256>`, the
+   `bundleId` at the top of the exported file). Leave `AFL_TRADE_STORY_PUBLIC_ENABLED` unset. Deploy.
+2. **Upload the bundle.** From the machine that holds the exported file, with `CRON_SECRET` in the
+   shell and never on the command line or in a file:
+
+   ```sh
+   gzip -c bundle.json | curl --fail-with-body -X POST --data-binary @- \
+     -H "Authorization: Bearer $CRON_SECRET" https://<site>/api/admin/afl-trade-story-bundle
+   ```
+
+   `{"ok":true,"stored":true,...}` means it is stored. `not_the_approved_bundle` means step 1 names a
+   different id; `not_a_valid_bundle` means the file is damaged; `storage_unavailable` means the site is
+   not running on Netlify or Blobs is down. A `GET` to the same address with the same header reports
+   `stored`.
+
+3. **Switch on.** Set `AFL_TRADE_STORY_PUBLIC_ENABLED=true` and deploy. Open `/afl/trades`, one trade
+   and one club page, and `/afl/trades/method`.
+4. **Switch off** at any time by removing `AFL_TRADE_STORY_PUBLIC_ENABLED` and deploying: every page
+   then says the trades are not available.
+
+**A new bundle** (after a grading run): upload is refused until step 1 names the new id, so the order
+is approve, deploy, upload. Between the deploy and the upload the pages say "not available"; to avoid
+that gap, upload from a deploy preview that has the new id first. Older bundles stay in the store
+under their own ids and are never read again.
+
+**Local run:** set `AFL_TRADE_STORY_PUBLIC_ENABLED=true`, `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` and
+`AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (the absolute path of the exported file) and start the dev server.
+
 ## Non-production infrastructure plan validation
 
 `infrastructure/afl-trade-nonproduction` defines the isolated Stage 2A foundation only. It does not

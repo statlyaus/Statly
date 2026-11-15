@@ -1,8 +1,5 @@
 import 'server-only';
 
-import { readFile } from 'node:fs/promises';
-import { isAbsolute } from 'node:path';
-
 import {
   createAflTradeStoryBundleSource,
   verifyAflTradeStoryBundle,
@@ -13,6 +10,7 @@ import type {
   AflTradeStorySampleSource,
 } from '../development/tradeStorySamples';
 import type { AflTradePageModel } from '../valuation/realizedTradePageContracts';
+import { loadStoredTradeStoryBundle } from './publicTradeBundleStore';
 
 /**
  * The public trade pages' only way in (/afl/trades, statlyaus/Statly#789). A trade story bundle is
@@ -31,14 +29,13 @@ export interface PublicTradeStoryReadEnvironment {
 
 export interface PublicTradeStoryReadDependencies {
   environment(): PublicTradeStoryReadEnvironment;
-  /** The stored bundle's JSON text, or null when there is none. */
-  loadBundleText(): Promise<string | null>;
+  /** The stored bundle's JSON text for the approved id, or null when there is none. */
+  loadBundleText(approvedId: string): Promise<string | null>;
 }
 
 /** `available: false` is the whole surface being off; `value: null` is one trade or club not found. */
 export type PublicTradeStoryRead<T> =
-  | { readonly available: false }
-  | { readonly available: true; readonly value: T };
+  { readonly available: false } | { readonly available: true; readonly value: T };
 
 export interface PublicTradeStoryReads {
   listStories(): Promise<PublicTradeStoryRead<AflTradeStorySampleList>>;
@@ -62,7 +59,7 @@ export function createPublicTradeStoryReads(
     if (!BUNDLE_ID.test(approvedId)) return null;
     if (loaded?.approvedId === approvedId) return loaded.source;
     try {
-      const text = await dependencies.loadBundleText();
+      const text = await dependencies.loadBundleText(approvedId);
       if (text === null) return null;
       const bundle = verifyAflTradeStoryBundle(JSON.parse(text));
       if (bundle.bundleId !== approvedId) return null;
@@ -90,27 +87,13 @@ export function createPublicTradeStoryReads(
   };
 }
 
-/**
- * The stored bundle: the file at `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path). A missing
- * path or file is "no bundle"; any other failure is the reader's to treat as unavailable.
- */
-export async function loadTradeStoryBundleFile(
-  environment: Readonly<Record<string, string | undefined>>
-): Promise<string | null> {
-  const path = environment.AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH?.trim();
-  if (!path || !isAbsolute(path)) return null;
-  try {
-    return await readFile(path, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
 export const publicTradeStoryReads = createPublicTradeStoryReads({
   environment: () => ({
     AFL_TRADE_STORY_PUBLIC_ENABLED: process.env.AFL_TRADE_STORY_PUBLIC_ENABLED,
     AFL_TRADE_STORY_PUBLIC_BUNDLE_ID: process.env.AFL_TRADE_STORY_PUBLIC_BUNDLE_ID,
   }),
-  loadBundleText: () => loadTradeStoryBundleFile(process.env),
+  loadBundleText: (approvedId) =>
+    loadStoredTradeStoryBundle(approvedId, {
+      AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH: process.env.AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH,
+    }),
 });

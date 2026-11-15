@@ -24,7 +24,7 @@ const approved: PublicTradeStoryReadEnvironment = {
 
 function reads(
   environment: PublicTradeStoryReadEnvironment,
-  loadBundleText: () => Promise<string | null> = async () => text
+  loadBundleText: (approvedId: string) => Promise<string | null> = async () => text
 ) {
   const load = vi.fn(loadBundleText);
   return {
@@ -100,9 +100,9 @@ describe('public trade story reads', () => {
     ).toEqual({ available: false });
     const altered = JSON.parse(text) as { content: { names: { clubs: [string, string][] } } };
     altered.content.names.clubs[0]![1] = 'Altered';
-    expect(
-      await reads(approved, async () => JSON.stringify(altered)).reads.listStories()
-    ).toEqual({ available: false });
+    expect(await reads(approved, async () => JSON.stringify(altered)).reads.listStories()).toEqual({
+      available: false,
+    });
   });
 
   it('loads and verifies the bundle once, and retries after a failed load', async () => {
@@ -111,6 +111,7 @@ describe('public trade story reads', () => {
     await r.loadStory('x');
     await r.loadClubChains('x');
     expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(bundle.bundleId);
 
     let calls = 0;
     const flaky = reads(approved, async () => (++calls === 1 ? null : text));

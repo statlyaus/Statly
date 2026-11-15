@@ -185,7 +185,7 @@ describe('publication boundary', () => {
     /^server\/aflTradeIntelligence\/valuation\/valueLine(s|Specs|Assets|Contracts|Slots)\.ts$/u,
     // The one public way in (owner, 2026-11-15): it shows only the bundle whose exact id the owner
     // approved, and is unavailable otherwise. See "Public trade pages" in afl-trade-intelligence.md.
-    /^server\/aflTradeIntelligence\/publication\/publicTradeStoryReads\.ts$/u,
+    /^server\/aflTradeIntelligence\/publication\/(publicTradeStoryReads|publicTradeBundleStore)\.ts$/u,
     // Its pages: they render only what that reader returns (see public-trade-story-route.test.tsx).
     /^app\/\(public\)\/afl\/trades\//u,
   ];
