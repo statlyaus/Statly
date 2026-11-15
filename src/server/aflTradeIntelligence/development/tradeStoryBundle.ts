@@ -234,9 +234,13 @@ export function verifyAflTradeStoryBundle(value: unknown): AflTradeStoryBundle {
   return bundle;
 }
 
-/** The page source over one verified bundle: the same list and load shape as the samples. */
+/**
+ * The page source over one verified bundle: the same list and load shape as the samples. The label
+ * says "private" unless the caller is the public reader showing an owner-approved bundle.
+ */
 export function createAflTradeStoryBundleSource(
-  bundle: AflTradeStoryBundle
+  bundle: AflTradeStoryBundle,
+  options: { readonly audience: 'private' | 'public' } = { audience: 'private' }
 ): AflTradeStorySampleSource {
   const { structure, valueLines, names, bidMatches } = bundle.content;
   const storyNames: AflTradeStoryNames = {
@@ -247,7 +251,10 @@ export function createAflTradeStoryBundleSource(
   const throughSeason = valueLines.content.inputs.throughSeason;
   const source: AflTradePageModel['source'] = {
     kind: 'sealed_batch',
-    label: `Genuine value lines ${valueLines.valueLinesId.slice(0, 24)}…, values to ${throughSeason}; private, not for publication`,
+    label:
+      options.audience === 'public'
+        ? `Values to the end of the ${throughSeason} season`
+        : `Genuine value lines ${valueLines.valueLinesId.slice(0, 24)}…, values to ${throughSeason}; private, not for publication`,
   };
   const trades = new Set(structure.content.trades.map(({ transactionId }) => transactionId));
   return {

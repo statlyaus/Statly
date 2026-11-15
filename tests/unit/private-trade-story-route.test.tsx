@@ -183,6 +183,9 @@ describe('publication boundary', () => {
     /^server\/aflTradeIntelligence\/valuation\/clubTradeChains\.ts$/u,
     // The value lines (#789 step 3) are private output; the story (step 5) reads them.
     /^server\/aflTradeIntelligence\/valuation\/valueLine(s|Specs|Assets|Contracts|Slots)\.ts$/u,
+    // The one public way in (owner, 2026-11-15): it shows only the bundle whose exact id the owner
+    // approved, and is unavailable otherwise. See "Public trade pages" in afl-trade-intelligence.md.
+    /^server\/aflTradeIntelligence\/publication\/publicTradeStoryReads\.ts$/u,
   ];
 
   it('no public page, API or publication module imports the private trade page', () => {
