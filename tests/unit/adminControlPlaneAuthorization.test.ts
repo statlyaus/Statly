@@ -98,17 +98,22 @@ describe('administrative control-plane authorization', () => {
     expect(workerPool.stop).not.toHaveBeenCalled();
   });
 
-  it('allows queue and worker control when the operator secret matches', async () => {
+  it('allows queue control when the operator secret matches', async () => {
     process.env.ADMIN_SECRET = operatorSecret;
     draftQueue.pause.mockResolvedValue(undefined);
-    workerPool.stop.mockResolvedValue(undefined);
 
     const queueResponse = await queuePost(operatorHeaders);
-    const workerResponse = await workersPost(operatorHeaders);
 
     expect(queueResponse.status).toBe(200);
-    expect(workerResponse.status).toBe(200);
     expect(draftQueue.pause).toHaveBeenCalledTimes(1);
-    expect(workerPool.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells an operator that workers cannot be started or stopped from a web request', async () => {
+    process.env.ADMIN_SECRET = operatorSecret;
+
+    const workerResponse = await workersPost(operatorHeaders);
+
+    expect(workerResponse.status).toBe(501);
+    expect(workerPool.stop).not.toHaveBeenCalled();
   });
 });

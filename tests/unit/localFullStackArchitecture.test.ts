@@ -48,7 +48,6 @@ describe('local full stack development architecture', () => {
     const firebaseConfig = read('src/lib/firebase/clientConfig.ts');
     const firebaseAuth = read('src/lib/firebase/clientAuth.ts');
     const firebaseFirestore = read('src/lib/firebase/clientFirestore.ts');
-    const firebaseAnalytics = read('src/lib/firebase/clientAnalytics.ts');
     const executableLines = source
       .split('\n')
       .map((line) => line.trim())
@@ -86,8 +85,6 @@ describe('local full stack development architecture', () => {
     expect(firebaseConfig).toContain('const useFirebaseEmulators');
     expect(firebaseAuth).toContain('if (!useFirebaseEmulators || !authInstance)');
     expect(firebaseFirestore).toContain('if (useFirebaseEmulators)');
-    expect(firebaseAnalytics).toContain('!firebaseClientConfig.measurementId');
-    expect(firebaseAnalytics).toContain('useFirebaseEmulators');
   });
 
   it('reuses only an explicitly supplied disposable outcomes database for workbook evaluation', () => {

@@ -58,8 +58,8 @@ describe('monitorCronRun', () => {
     expect(statuses()).toEqual(['in_progress', 'error']);
   });
 
-  it('checks in error when an NBA ingest is rejected with 422', async () => {
-    await monitorCronRun('cron-nba-boxscores', () =>
+  it('checks in error when a run is rejected with 422', async () => {
+    await monitorCronRun('cron-scoring', () =>
       Promise.resolve(new Response('{}', { status: 422 }))
     );
 
