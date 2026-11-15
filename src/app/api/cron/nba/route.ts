@@ -19,8 +19,9 @@ export const dynamic = 'force-dynamic';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-// One bounded NBA ingest job per call: `?job=boxscores|schedule|players|injuries`, each called by its
-// own netlify/functions/cron-nba-*.mts schedule. A rejected run (fetch_failed, parse_failed,
+// One bounded NBA ingest job per call: `?job=boxscores|schedule|players|injuries`. Nothing schedules
+// it since 2026-11-15 (owner decision: no licensed provider, basketball paused); call it by hand
+// with the cron secret. A rejected run (fetch_failed, parse_failed,
 // out_of_bounds, unlicensed_provider) wrote only its NbaIngestRun row and answers 422; any other
 // failure answers 500. Either way the scheduler logs it.
 export async function GET(request: NextRequest) {
