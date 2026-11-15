@@ -3,6 +3,7 @@ import type { Server as SocketIOServer, Socket as SocketIOSocket } from 'socket.
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import { privateTradeAudience } from '@/server/leagues/trades/tradeAudience';
 import { isLeagueSocialRoom, leagueSeasonSocialRoom } from '@/server/realtime/roomNames';
 import type { SocialRealtimeEnvelope } from '@/types/social';
 
@@ -276,7 +277,10 @@ export async function broadcastLeagueSocialEvent(
   if (onlyUserId === null) return;
   // A DM's or group's event goes to its current members only, never the whole league room. The
   // audience is read from the database, not trusted from the envelope.
-  const audience = await privateConversationAudience(prisma, envelope.conversationId);
+  // A private trade stage goes to the two teams in the trade only, the same way.
+  const audience =
+    (await privateConversationAudience(prisma, envelope.conversationId)) ??
+    (await privateTradeAudience(prisma, envelope));
   // One membership lookup per member per event, however many tabs they have open.
   const membership = new Map<string, Promise<boolean>>();
   const isCurrentMember = (userId: string): Promise<boolean> => {
