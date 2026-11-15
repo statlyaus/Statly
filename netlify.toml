@@ -6,6 +6,7 @@
   NODE_VERSION = "22"
   # The build needs devDependencies (cross-env, TypeScript, Tailwind, Prisma). The production
   # environment sets NODE_ENV=production, which makes npm skip them unless told otherwise.
+  # `.npmrc` (include=dev) is the primary guard; this flag is kept as a fallback.
   NPM_FLAGS = "--include=dev"
   # Type-checking the app needs more than Node's default 2 GB heap (the first build died there).
   NODE_OPTIONS = "--max-old-space-size=4096"
