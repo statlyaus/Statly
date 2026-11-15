@@ -6,6 +6,7 @@ import {
   isServerDevelopmentAuthEnabled,
 } from '@/lib/devAuth';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
+import { isServedInTradesOnlyMode, isTradesOnlyMode } from '@/lib/tradesOnlyMode';
 
 function getBearerToken(request: NextRequest): string | null {
   const authorization = request.headers.get('authorization');
@@ -20,6 +21,19 @@ function getBearerToken(request: NextRequest): string | null {
 export function proxy(request: NextRequest): NextResponse {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
+
+  if (
+    isTradesOnlyMode({ STATLY_TRADES_ONLY: process.env.STATLY_TRADES_ONLY }) &&
+    !isServedInTradesOnlyMode(pathname)
+  ) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    // No such route, so the app's own not-found page answers with a 404.
+    url.pathname = '/_trades-only-not-found';
+    url.search = '';
+    return NextResponse.rewrite(url);
+  }
 
   if (pathname.startsWith('/api/')) {
     if (request.method === 'OPTIONS') {

@@ -73,6 +73,12 @@ Blobs store. They need no database, Redis or grading VM. Each step is the owner'
 owner's word. See "Public trade pages" in
 [afl-trade-intelligence.md](../architecture/afl-trade-intelligence.md).
 
+0. **Trades-only mode, while fantasy is not live.** Set `STATLY_TRADES_ONLY=true` in Netlify's
+   production environment. The proxy then serves only the home page, `/afl`, `/draft`, the legal pages,
+   public files, and the `/api/admin/afl-trade-story-bundle` and `/api/draft-trades` APIs
+   (`src/lib/tradesOnlyMode.ts`). Every other page is the site's not-found page and every other API is a
+   404, so no visitor is sent to a sign-in that has no database behind it. Remove the variable when
+   fantasy goes live.
 1. **Approve the bundle.** In Netlify's environment variables for production set
    `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` to the bundle's exact id (`trade-story-bundle:<sha256>`, the
    `bundleId` at the top of the exported file). Leave `AFL_TRADE_STORY_PUBLIC_ENABLED` unset. Deploy.
