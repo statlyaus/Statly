@@ -429,6 +429,7 @@ describe('WaiverProcessingService', () => {
     expect(tx.leagueBite.findFirst).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
+        seasonId: 'season-1',
         victimMemberId: 'member-1',
         status: { in: ['OPEN', 'WAITING_LOCK'] },
       },

@@ -135,7 +135,11 @@ export async function fillPendingRoundStartTimes(): Promise<number> {
  * It calls the same recalculation as the commissioner route, always with `finalize: false`, so a round
  * becomes FINAL only when `recalculateLeagueRoundMatchups` itself decides it: every AFL match of the
  * round is final and every matchup with two teams was scored. Rerunning it rewrites the same scores,
- * and FINAL rounds are never selected again.
+ * and a FINAL round is selected again only while it holds a demoted matchup: a commissioner re-score
+ * run before every AFL match was final again writes a scored matchup back to LIVE while its round
+ * stays FINAL (owner decision E5). Nothing else would ever re-finalise that matchup, and a
+ * Bloodsucker bite on it stays suspended, freezing the victim (#1343). Such a round is rescored each
+ * run until the matchup is FINAL again; its failure never stops the league's later rounds.
  *
  * A round that stays open is not a league failure (later rounds still score), but once it is still not
  * FINAL past `STALLED_ROUND_GRACE_HOURS` it is returned in `stalledRounds` with its `reason` and logged
@@ -149,7 +153,23 @@ export async function scoreStartedLeagueRounds(
 
   const startedRounds = await prisma.leagueCompetitionRound.findMany({
     where: {
-      status: { notIn: ['FINAL', 'NO_MATCHUP'] },
+      OR: [
+        { status: { notIn: ['FINAL', 'NO_MATCHUP'] } },
+        // A FINAL round holding a matchup that was scored and is no longer FINAL. A matchup that
+        // was never scored (a team with no lineup) has no score rows and is left to
+        // docs/runbooks/unscored-finalized-matchups.md.
+        {
+          status: 'FINAL',
+          matchups: {
+            some: {
+              status: { not: 'FINAL' },
+              homeMemberId: { not: null },
+              awayMemberId: { not: null },
+              scores: { some: {} },
+            },
+          },
+        },
+      ],
       // A round with no official start time stays pending; the job never guesses one.
       startsAt: { lte: now },
       league: {
@@ -159,6 +179,7 @@ export async function scoreStartedLeagueRounds(
     select: {
       leagueId: true,
       round: true,
+      status: true,
       startsAt: true,
       season: { select: { year: true } },
       fixtureVersion: true,
@@ -169,7 +190,7 @@ export async function scoreStartedLeagueRounds(
 
   const roundsByLeagueId = new Map<
     string,
-    Array<{ round: number; startsAt: Date | null; season: number | null }>
+    Array<{ round: number; startsAt: Date | null; season: number | null; recovering: boolean }>
   >();
   for (const competitionRound of startedRounds) {
     // Recalculation reads the league's current fixture version only.
@@ -183,6 +204,7 @@ export async function scoreStartedLeagueRounds(
       round: competitionRound.round,
       startsAt: competitionRound.startsAt,
       season: competitionRound.season?.year ?? null,
+      recovering: competitionRound.status === 'FINAL',
     });
     roundsByLeagueId.set(competitionRound.leagueId, rounds);
   }
@@ -193,7 +215,7 @@ export async function scoreStartedLeagueRounds(
   for (const [leagueId, rounds] of roundsByLeagueId) {
     const league: ScheduledRoundScoringLeague = { leagueId, rounds: [] };
     leagues.push(league);
-    for (const { round, startsAt, season } of rounds) {
+    for (const { round, startsAt, season, recovering } of rounds) {
       try {
         const result = await recalculate({ leagueId, round, finalize: false });
         if (!result) break; // The league was deleted after the rounds were read.
@@ -206,6 +228,8 @@ export async function scoreStartedLeagueRounds(
             error: result.blocked,
             unscoredMatchupIds: result.unscoredMatchupIds,
           });
+          // A FINAL round being recovered is behind the league's live rounds: they still score.
+          if (recovering) continue;
           break;
         }
         league.rounds.push({ round, status: result.status, recalculated: result.recalculated });
@@ -231,6 +255,7 @@ export async function scoreStartedLeagueRounds(
           round,
           error: league.error,
         });
+        if (recovering) continue;
         break;
       }
     }

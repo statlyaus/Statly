@@ -3,7 +3,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
-import { BITE_PENDING_MESSAGE, hasPendingBite } from '@/server/leagues/bitePending';
+import {
+  BITE_PENDING_MESSAGE,
+  hasPendingBite,
+  holdsUnexecutedBite,
+  LAST_PLAYER_BITE_HELD_MESSAGE,
+} from '@/server/leagues/bitePending';
 import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import {
   describeLockedPlayers,
@@ -155,6 +160,13 @@ export async function POST(
       // lock the grant and the bite take, so a drop never races a bite on the same roster.
       await lockLeagueRow(tx, leagueId);
       if (await hasPendingBite(tx, leagueId, member.id)) return 'BITE_PENDING' as const;
+      // A Bloodsucker with a bite to make keeps one player to send back (#1343).
+      if (
+        (await holdsUnexecutedBite(tx, leagueId, member.id)) &&
+        (await tx.leagueRosterPlayer.count({ where: { leagueId, memberId: member.id } })) <= 1
+      ) {
+        return 'LAST_PLAYER_BITE_HELD' as const;
+      }
       const removed = await tx.leagueRosterPlayer.deleteMany({
         where: { leagueId, memberId: member.id, playerId },
       });
@@ -182,6 +194,12 @@ export async function POST(
       // Same flat shape as the window refusal, so clients read one `code` field.
       return NextResponse.json(
         { error: BITE_PENDING_MESSAGE, code: 'BITE_PENDING' },
+        { status: 409 }
+      );
+    }
+    if (dropped === 'LAST_PLAYER_BITE_HELD') {
+      return NextResponse.json(
+        { error: LAST_PLAYER_BITE_HELD_MESSAGE, code: 'LAST_PLAYER_BITE_HELD' },
         { status: 409 }
       );
     }

@@ -1,5 +1,6 @@
-import type { Prisma } from '@prisma/client';
+import type { LeagueLineupSlot, Prisma } from '@prisma/client';
 
+import { positionSuitsSlot } from '@/lib/leagues/lineupAutoFill';
 import { prisma } from '@/lib/prisma';
 
 import { requireActiveSeasonId } from './activeSeason';
@@ -131,6 +132,7 @@ type LineupCleanupDb = Pick<
   Prisma.TransactionClient,
   'league' | 'leagueSettings' | 'leagueCompetitionRound' | 'leagueLineupPlayer'
 >;
+type LineupReplaceDb = LineupCleanupDb & Pick<Prisma.TransactionClient, 'player'>;
 
 /**
  * Removes players who just left a member's roster from that member's unlocked lineup rows, from the
@@ -166,9 +168,14 @@ export async function removePlayersFromOpenLineups(
  * Puts `incomingPlayerId` in the slot `outgoingPlayerId` held in a member's unlocked lineup rows,
  * from the round in progress onward (a Bloodsucker bite, BR-25). Scored rounds and locked rows stay
  * as they are. Run it before the roster swap, which then finds nothing of the outgoing player to remove.
+ *
+ * A lineup save only lets a player into a DEF, MID, RUC or FWD slot he is listed for, and scoring
+ * trusts the saved slot. So an incoming player who is not listed for the slot is left out of that
+ * lineup (the slot is empty and he is on the bench for the manager to place) rather than scored in
+ * a position he cannot play (#1343). Returns the rows he took over.
  */
 export async function replacePlayerInOpenLineups(
-  tx: LineupCleanupDb,
+  tx: LineupReplaceDb,
   input: {
     leagueId: string;
     memberId: string;
@@ -180,7 +187,7 @@ export async function replacePlayerInOpenLineups(
   const open = await findOpenLineupRounds(tx, input.leagueId, input.now ?? new Date());
   if (!open) return 0;
 
-  const replaced = await tx.leagueLineupPlayer.updateMany({
+  const rows = await tx.leagueLineupPlayer.findMany({
     where: {
       lockedAt: null,
       playerId: input.outgoingPlayerId,
@@ -192,8 +199,23 @@ export async function replacePlayerInOpenLineups(
         lockedAt: null,
       },
     },
+    select: { id: true, slot: true },
+  });
+  if (rows.length === 0) return 0;
+
+  const incoming = await tx.player.findUnique({
+    where: { id: input.incomingPlayerId },
+    select: { position: true },
+  });
+  const suits = (row: { slot: LeagueLineupSlot }) =>
+    positionSuitsSlot(incoming?.position ?? null, row.slot);
+  const idsOf = (wanted: boolean) => rows.filter((row) => suits(row) === wanted).map((r) => r.id);
+
+  const replaced = await tx.leagueLineupPlayer.updateMany({
+    where: { id: { in: idsOf(true) }, lockedAt: null },
     data: { playerId: input.incomingPlayerId },
   });
+  await tx.leagueLineupPlayer.deleteMany({ where: { id: { in: idsOf(false) }, lockedAt: null } });
   return replaced.count;
 }
 

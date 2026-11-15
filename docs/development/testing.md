@@ -350,7 +350,10 @@ feed can be one off its own box scores. Both scripts refuse a non-local `DATABAS
 `netlify/functions/cron-scoring.mts` does every hour (`src/server/leagues/roundScoringSchedule.ts`).
 For every league with a published competition it recalculates each round that has an official start
 time in the past and is not `FINAL` or a no-matchup week, through the same
-`recalculateLeagueRoundMatchups` the commissioner route uses, never forcing finalization. A round
+`recalculateLeagueRoundMatchups` the commissioner route uses, never forcing finalization. It also
+rescores a `FINAL` round that holds a scored matchup which is no longer `FINAL` (a commissioner
+re-score sent it back to `LIVE`), until that matchup is `FINAL` again; a failure on such a round
+does not stop the league's later rounds. A round
 becomes `FINAL`, with standings and finals seeding updated, only when that function decides it: every
 AFL match of the round is final and every matchup with two teams was scored. A round with no official
 start time is left pending. Leagues are scored one at a time; a league whose round throws or is refused

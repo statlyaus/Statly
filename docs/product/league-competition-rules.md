@@ -165,7 +165,10 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   - A re-score that turns a loss or draw into a Bloodsucker win grants a right, or reactivates the
     same row a re-score cancelled (new `grantedScoreVersion`, new deadline), so win-loss-win gives
     one bite. A right a commissioner cancelled is never reactivated.
-  - A matchup that drops back from FINAL leaves its right as it is until it is FINAL again.
+  - A matchup that drops back from FINAL leaves its right as it is until it is FINAL again. The
+    hourly scoring job rescores a FINAL round that holds a scored matchup which is no longer FINAL
+    (`scoreStartedLeagueRounds`), so the matchup is re-finalised without anyone acting and the bite
+    runs again; a failure on such a round never stops the league's later rounds (#1343).
 - **Audit (BR-38).** Every grant, cancellation and result change writes a `LeagueCompetitionAudit`
   row (`BITE_GRANTED` with reason `FINAL` or `GRANTED_ON_RESCORE`, `BITE_CANCELLED`,
   `BITE_RESULT_CHANGED`) with the actor (the commissioner who re-scored, or the system), the time,
@@ -184,11 +187,19 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   - `ROUND_IN_PROGRESS`: any round is between its first lock and its end (E8, no bites during lock
     periods; this replaces the per-player lock check for bites).
   - `ROSTER_CHANGED`: a player is no longer where the bite expects him.
+  - `LEAGUE_BUSY` (503): round scoring or another move still held the League row after 8 seconds.
+    Nothing changed; the same command can be sent again. Bite commands, the auto-bite and waiver
+    settlement bound their wait for the row (`lockLeagueRowOrBusy`) and run in a transaction that
+    outlasts it, because scoring can hold the row for up to 30 seconds and Prisma's default
+    transaction lasts 5.
 
   The swap runs through the shared roster-swap primitive under the League row lock, so it is atomic
   and a concurrent trade, waiver run or second execution gives no lost or double move. Moved roster
   rows carry `acquiredBy = BLOODSUCKER_BITE`. In each side's unlocked future lineups the incoming
-  player takes the outgoing player's slot; scored and locked lineups never change. Pending trades
+  player takes the outgoing player's slot when he is listed for it (UTIL and interchange take
+  anyone); if he is not listed for a DEF, MID, RUC or FWD slot, that slot is left empty and he is
+  on the bench for the manager to place, the same position rule a lineup save enforces. Scored and
+  locked lineups never change. Pending trades
   with either player are invalidated and pending waiver claims that would drop either player are
   rejected, both with reason `PLAYER_BITTEN`. The bite records the taken player's slot in the
   victim's lineup for that round, a `BLOODSUCKER_BITE` team action is written, and after commit the
@@ -197,7 +208,8 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
 
 - **Victim freeze (BR-30, E7).** While any bite on a member is `OPEN` or `WAITING_LOCK`, that member's
   drops and trade proposals, acceptances and counters are refused with HTTP 409, code
-  `BITE_PENDING`. The drop check runs under the League row lock. Waiver claims that drop a player
+  `BITE_PENDING`. The drop check runs under the League row lock. The freeze counts bites of the
+  league's active season only. Waiver claims that drop a player
   stay pending, and settle at the first waiver run after the last bite is done. A trade with a
   frozen member on either side is held, not invalidated: the other team's acceptance and a
   commissioner's approval answer 409 `BITE_PENDING`, and a due veto-review trade waits and completes
@@ -212,7 +224,10 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   A commissioner who is the Bloodsucker or the victim gets 403; another commissioner or the owner
   can act. `cancel` ends an open bite unused (`cancelledBy = COMMISSIONER`, never reactivated), or
   swaps an executed bite's players back as a new move. `redo` swaps an executed bite's players back
-  and makes the new pair's swap, in one transaction. Nothing in history is rolled back (BR-36), and
+  and makes the new pair's swap, in one transaction. A redone bite is `EXECUTED` by that
+  commissioner even when the system made the first pick: the auto-bite rule version and snapshot
+  are cleared from the row and kept in the `BITE_REDONE` audit row, and a new `BLOODSUCKER_BITE`
+  team action records the new pair. Nothing in history is rolled back (BR-36), and
   each writes `BITE_CANCELLED` or `BITE_REDONE` and posts an activity message. A commissioner who
   is the Bloodsucker or plays it in a round cannot recalculate or force-finalize that round: HTTP
   403, code `BLOODSUCKER_SELF_OVERRIDE`.
@@ -236,9 +251,22 @@ one `LeagueBite` row, unique per `(roundId, matchupId)`.
   - A deadline that falls while a round is in progress (E8) turns the bite `WAITING_LOCK` once
     (audit `BITE_WAITING_LOCK`); it runs at the first sweep after the round ends. The Bloodsucker
     can still bite it manually once the round is over.
+  - A bite with no pair, because the Bloodsucker or the victim has no player at the deadline, ends
+    as `CANCELLED` with `cancelledBy = NO_PAIR` (audit `BITE_CANCELLED`, actor `system`, with both
+    rosters), posts one activity message and unfreezes the victim; it is never reactivated. To keep
+    a pair, a Bloodsucker holding an unexecuted bite cannot drop its last player: HTTP 409, code
+    `LAST_PLAYER_BITE_HELD`.
+  - Only bites of the league's active season run.
+  - A bite that throws, or is still suspended 2 hours past its deadline, is recorded on its row
+    (`failureCount`, `lastFailureAt`, `lastFailureReason`, `failureAlertedAt`) and fails one run,
+    which is the alert; later runs keep trying and list it in `knownFailingBiteIds` without
+    failing (see the [monitoring runbook](../runbooks/monitoring-and-alerts.md#bloodsucker-sweep)).
+    Other leagues' bites run regardless.
   - A bite whose matchup is not FINAL (E5), or behind an older unexecuted bite (E7), waits for a
     later sweep. Lock periods come from the stored round windows, so no live match timing is read;
-    any other failure stops that league's sweep, the run answers 500, and the next run retries.
+    any other failure stops that league's sweep at that bite, as described above. A sweep that
+    cannot get the League row within 20 seconds skips the bite without failing; the next run
+    takes it.
 
 ### Bloodsucker trade rules
 
