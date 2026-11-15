@@ -16,6 +16,7 @@ import {
 import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
 import { fetchApi } from '@/lib/api';
 import { formatLeagueTime } from '@/lib/leagueTime';
+import { MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import {
   draftScheduleFromInstant,
   resolveDraftSchedule,
@@ -235,7 +236,7 @@ export default function DraftManager({
   const isCommissioner =
     (Boolean(currentUserId) && currentUserId === league.ownerId) ||
     currentMember?.isCoCommissioner === true;
-  const hasEnoughMembers = members.length >= 4;
+  const hasEnoughMembers = members.length >= MIN_LEAGUE_TEAMS;
   const canCreateDraft = isCommissioner && hasEnoughMembers && !existingDraft;
   const draftOrderMembers = draftOrderMemberIds
     .map((memberId) => members.find((member) => member.id === memberId))

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { copyText } from '@/lib/copyText';
 import { StandingsLadderCompact } from '@/components/league/standings/StandingsLadderCompact';
 import type { StandingsData } from '@/components/league/standings/standingsFormat';
@@ -411,7 +412,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 
 // The draft row only covers what a commissioner can act on: the date and the minimum team count.
 // Room creation, draft order and the player pool are system concerns that stay in the draft room.
-const MIN_DRAFT_TEAMS = 2; // DraftReadinessService's insufficient_members rule
+const MIN_DRAFT_TEAMS = MIN_LEAGUE_TEAMS; // DraftReadinessService's insufficient_members rule
 
 type DraftBlocker = { code?: string };
 

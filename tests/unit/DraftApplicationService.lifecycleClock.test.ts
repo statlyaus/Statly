@@ -56,6 +56,14 @@ function aggregate(overrides: Record<string, unknown> = {}) {
         displayName: 'Owner',
         role: 'OWNER',
       },
+      // A draft needs four teams to start (MIN_LEAGUE_TEAMS).
+      ...['a', 'b', 'c'].map((key, index) => ({
+        memberId: `member-${key}`,
+        userId: `drafter-${key}`,
+        slot: index + 2,
+        displayName: `Drafter ${key}`,
+        role: 'MANAGER',
+      })),
     ],
     managerUserIds: ['owner-1'],
     picks: [],
@@ -220,6 +228,19 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
         ],
       })
     );
+  });
+
+  it('refuses to start a draft with fewer than four teams', async () => {
+    draftRepository.getDraftAggregate.mockResolvedValue(
+      aggregate({
+        status: DraftStatus.SCHEDULED,
+        participants: aggregate().participants.slice(0, 3),
+      })
+    );
+
+    await expect(
+      new DraftApplicationService().startDraft({ draftId: 'draft-1', actorUserId: 'owner-1' })
+    ).rejects.toThrow('bad_request:At least 4 teams are required to run a draft.');
   });
 
   it('refuses start, pause and resume from a league member who is not the owner', async () => {

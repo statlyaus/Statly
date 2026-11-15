@@ -4,6 +4,7 @@ import { draftRepository } from '../repository/DraftRepository';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
 import { closeBloodsuckerWindowAfterDraft } from '@/server/leagues/bloodsuckerAutoFill';
 import { findLeagueFormatStartBlocker } from '@/server/leagues/leagueFormat';
+import { MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
 import {
   buildAvailableDraftPlayer,
@@ -242,6 +243,14 @@ export class DraftApplicationService {
 
       if (draft.participants.length === 0) {
         throw new Error('bad_request:Draft configuration is incomplete');
+      }
+
+      // The same minimum the Draft tab and the readiness blocker use; this is the one that binds,
+      // because every start (the room button and the scheduled worker) comes through here.
+      if (draft.participants.length < MIN_LEAGUE_TEAMS) {
+        throw new Error(
+          `bad_request:At least ${MIN_LEAGUE_TEAMS} teams are required to run a draft.`
+        );
       }
 
       // BR-02, BR-06: the format and Bloodsucker lock once the draft starts, so check them here.
