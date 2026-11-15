@@ -126,9 +126,30 @@ The legacy development-auth fallback is not enabled by that harness. It remains 
 `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true` and `STATLY_ENABLE_DEV_AUTH=true` are both set explicitly and
 `NODE_ENV` is not `production`.
 
-Bloodsucker leagues are held back until epic #1275 ships. Set
-`NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` to offer the format locally; see
+Bloodsucker leagues are built (epic #1275) and switched off: the format is offered and accepted only
+when `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true`. Set it locally to try the format; see
 [League formats](../product/league-competition-rules.md#league-formats).
+
+### Switching Bloodsucker on in production
+
+This is an owner step. Do it in this order:
+
+1. In Netlify, confirm `CRON_SECRET` is set. The 5-minute Bloodsucker sweep
+   (`netlify/functions/cron-bloodsucker.mts` → `/api/cron/bloodsucker`) closes exclusive windows
+   and runs bites at their deadline, and the route refuses every call without the secret.
+2. In Netlify, confirm `SENTRY_DSN` is set. Without it the sweep's failures and missed runs alert
+   nobody.
+3. Set `NEXT_PUBLIC_STATLY_ENABLE_BLOODSUCKER=true` in Netlify.
+4. Redeploy. A `NEXT_PUBLIC_` value is inlined into the bundle at build time, so changing the
+   variable does nothing until a new build is deployed.
+5. Within 10 minutes, confirm Sentry Crons shows a `cron-bloodsucker` monitor with successful
+   check-ins. The first run creates the monitor; no monitor means the sweep is not running, so
+   switch the flag back off until it is. See
+   [Bloodsucker sweep](../runbooks/monitoring-and-alerts.md#bloodsucker-sweep).
+
+**Rollback.** Remove the variable (or set it to anything but `true`) and redeploy. That only stops
+new leagues choosing the format: leagues already set to Bloodsucker keep it, and the sweep keeps
+running their windows and bites. It does not undo any bite.
 
 ## Ordinary development
 
