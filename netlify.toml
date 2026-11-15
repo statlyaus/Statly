@@ -4,6 +4,9 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # The build needs devDependencies (cross-env, TypeScript, Tailwind, Prisma). The production
+  # environment sets NODE_ENV=production, which makes npm skip them unless told otherwise.
+  NPM_FLAGS = "--include=dev"
   NEXT_TELEMETRY_DISABLED = "1"
 
 [[plugins]]
