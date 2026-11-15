@@ -62,6 +62,8 @@ function metricRequest(name: 'FCP' | 'TTFB', suffix: string) {
 describe('performance analytics contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379');
     queueAddMock.mockResolvedValue({ id: 'queued-job' });
     redisSetMock.mockResolvedValue('OK');
     redisEvalMock.mockResolvedValue(1);
@@ -139,6 +141,17 @@ describe('performance analytics contract', () => {
     );
 
     expect(response.status).toBe(400);
+    expect(queueAddMock).not.toHaveBeenCalled();
+  });
+
+  it('logs the metric and answers 204 without a queue when Redis is not configured', async () => {
+    vi.stubEnv('REDIS_URL', '');
+    vi.stubEnv('REDIS_HOST', '');
+    vi.stubEnv('REDIS_CLUSTER_NODES', '');
+
+    const response = await POST(metricRequest('FCP', `no-redis-${Date.now()}`));
+
+    expect(response.status).toBe(204);
     expect(queueAddMock).not.toHaveBeenCalled();
   });
 

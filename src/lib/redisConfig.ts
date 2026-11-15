@@ -45,3 +45,11 @@ export function shouldDisableRedisClients(env: NodeJS.ProcessEnv = process.env):
     hasPlaceholderRedisConfig(env)
   );
 }
+
+/** True when this deployment names a Redis to connect to. Netlify today has none. */
+export function isRedisConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    !shouldDisableRedisClients(env) &&
+    Boolean(env.REDIS_URL || env.REDIS_HOST || env.REDIS_CLUSTER_NODES)
+  );
+}
