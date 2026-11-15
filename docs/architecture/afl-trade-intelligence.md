@@ -3969,9 +3969,9 @@ realized grade is read. `buildAflTradeStory({ structure, valueLines }, tradeId, 
 player names and each pick transfer's label are injected, and a missing name, leg, line or onward leg
 fails the build rather than being guessed. It refuses value lines that are not
 `afl-trade-value-lines/v3`, do not match their content address, or were not computed on the given
-structure (`inputs.structureId`). It serves only the local private valuation reader ("Private trade
-page" below). Value lines are publication-prohibited, so public pages stay on the publication runtime
-and never read this model.
+structure (`inputs.structureId`). It serves the local private valuation reader ("Private trade
+page" below) and, for one owner-approved bundle only, the public reader ("Public trade pages" below).
+Value lines themselves stay publication-prohibited: the publication runtime never reads this model.
 
 It returns, for one trade:
 
@@ -4414,6 +4414,34 @@ from `aflTradeMatchedBidShares`. The chain is a trade structure and value lines,
 `development/tradeStorySampleLines.ts`, which nets each sample trade with the value lines' own net rule:
 values at the 2026 season end are the mockups' first-stint PAV, and draft-night and at-trade values are
 illustrative, from a sample slot curve. The page labels it as sample data.
+
+### Public trade pages
+
+**Decision (owner, 2026-11-15).** The value-line trade stories go public as the first trade product,
+at `/afl/trades`, ahead of the database-backed publication runtime. Addresses are sport first, product
+second (`/afl/trades`, later `/afl/draft` and `/afl/fantasy`, and other sports beside `/afl`). The
+owner's 2026-09-19 approval of retained trade-grading evidence for "public data and grades"
+([afl-trade-source-rights-assessment.md](afl-trade-source-rights-assessment.md)) is the source-use
+basis; it is an internal product-use risk assumption, not a third-party licence.
+
+**What may be shown.** One trade story bundle at a time, chosen by the owner. A bundle is built private
+(`environment: non_production`, `publicationProhibited: true`) and its id is a hash of its content, so
+it is never edited to mark it public. Publication is the owner approving one exact
+`trade-story-bundle:<sha256>` id, held in `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID`. Value lines, the asset
+ledger and every other bundle stay private.
+
+**Boundary.** `publication/publicTradeStoryReads.ts` is the only public way in. It serves the stored
+bundle only when `AFL_TRADE_STORY_PUBLIC_ENABLED=true`, the bundle passes
+`verifyAflTradeStoryBundle`, and its id equals the approved id. Otherwise every read is unavailable:
+never the samples, never another bundle, never a partial page. A trade or club the bundle does not
+hold is not found. The verified bundle is kept for the life of the server instance; a failed load is
+retried on the next request. The publication-boundary unit test names this module as the single
+public importer of the private story modules.
+
+**Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
+season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
+Draftguru and Official AFL, draft boards from Footyinfo, and the PAV method and published values from
+HPN. The public pages credit each and state which values are provisional or pending.
 
 ## Immutable publication
 
