@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { hasPendingBite } from '@/server/leagues/bitePending';
-import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
+import { lockLeagueRowOrBusy, SCHEDULED_LEAGUE_LOCK } from '@/server/leagues/leagueRowLock';
 import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
 import {
   describeLockedPlayers,
@@ -453,7 +453,9 @@ export class WaiverProcessingService {
     return this.db.$transaction(async (tx: PrismaTransactionClient): Promise<ClaimSettlement> => {
       // Serialises the settlement with every other League-row writer (a bite, the Bloodsucker
       // window close), so the ownership read below is still true when the roster change commits.
-      await lockLeagueRow(tx, leagueId);
+      // Round scoring can hold the row for 30 seconds, so the wait is bounded and the transaction
+      // outlasts it; a league still busy throws LeagueBusyError and the claim stays PENDING.
+      await lockLeagueRowOrBusy(tx, leagueId, SCHEDULED_LEAGUE_LOCK.waitMs);
       if (claim.dropPlayerId && (await hasPendingBite(tx, leagueId, claim.teamId))) {
         return { status: 'HELD' };
       }
@@ -480,7 +482,7 @@ export class WaiverProcessingService {
       await this.applyCanonicalRosterPlan(tx, leagueId, claim, plan, waiverSettings);
       await this.claimStore.completeClaim(tx, claim, isFAAB);
       return { status: 'SUCCESSFUL', processedAt };
-    });
+    }, SCHEDULED_LEAGUE_LOCK.transaction);
   }
 
   private async applyCanonicalRosterPlan(

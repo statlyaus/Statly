@@ -31,13 +31,19 @@ async function runSweep(): Promise<NextResponse> {
     const windows = await sweepBloodsuckerWindows(now);
     const bites = await sweepDueBloodsuckerBites(now);
     const failedLeagueIds = [...new Set([...windows.failedLeagueIds, ...bites.failedLeagueIds])];
-    if (bites.autoExecutedBiteIds.length > 0 || bites.waitingLockBiteIds.length > 0) {
+    if (
+      bites.autoExecutedBiteIds.length > 0 ||
+      bites.waitingLockBiteIds.length > 0 ||
+      bites.unpairableBiteIds.length > 0
+    ) {
       logger.info('Bloodsucker sweep moved bites', {
         autoExecuted: bites.autoExecutedBiteIds.length,
         waitingLock: bites.waitingLockBiteIds.length,
+        unpairable: bites.unpairableBiteIds.length,
       });
     }
-    // A failed league makes the run fail, so the scheduler and Sentry record it (NFR-6).
+    // A failed league makes the run fail, so the scheduler and Sentry record it (NFR-6). A bite
+    // that keeps failing fails one run only; after that it is listed in `knownFailingBiteIds`.
     const ok = failedLeagueIds.length === 0;
     if (!ok) logger.error('Bloodsucker sweep failed for some leagues', { failedLeagueIds });
     return NextResponse.json(
@@ -47,6 +53,8 @@ async function runSweep(): Promise<NextResponse> {
         closedLeagueIds: windows.closedLeagueIds,
         autoExecutedBiteIds: bites.autoExecutedBiteIds,
         waitingLockBiteIds: bites.waitingLockBiteIds,
+        unpairableBiteIds: bites.unpairableBiteIds,
+        knownFailingBiteIds: bites.knownFailingBiteIds,
         failedLeagueIds,
         checkedAt: now.toISOString(),
       },

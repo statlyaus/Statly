@@ -910,12 +910,18 @@ model LeagueBite {
   takenSlot             String?
   executedAt            DateTime?
   executedByUserId      String?
-  /// RESULT_CHANGED (a re-score lost the win) or COMMISSIONER.
+  /// RESULT_CHANGED (a re-score lost the win), COMMISSIONER, or NO_PAIR (a roster was empty at the
+  /// deadline, so the auto-bite had no player to take or return).
   cancelledBy           String?
   cancelledReason       String?
   /// The auto-bite rule and the Statly-Z inputs it used, so the pick is reproducible (#1284, BR-28).
   autoBiteRuleVersion   Int?
   autoBiteSnapshotJson  Json?
+  /// Sweep failures on this bite (#1343): counted on every failed or stuck sweep, alerted once.
+  failureCount          Int              @default(0)
+  lastFailureAt         DateTime?
+  lastFailureReason     String?
+  failureAlertedAt      DateTime?
   version               Int              @default(1)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt

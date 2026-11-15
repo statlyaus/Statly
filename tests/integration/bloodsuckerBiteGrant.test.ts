@@ -35,6 +35,7 @@ import type { LeagueScoringMode } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { recalculateLeagueRoundMatchups } from '@/server/leagues/matchupReadModel';
+import { scoreStartedLeagueRounds } from '@/server/leagues/roundScoringSchedule';
 
 import { deleteLeagueFixtures } from './helpers/deleteLeagueFixtures';
 
@@ -351,5 +352,90 @@ describe.sequential('Bloodsucker bite grant on FINAL', () => {
       'BITE_GRANTED',
       'BITE_RESULT_CHANGED',
     ]);
+  });
+
+  it('puts the Bloodsucker on the ladder like any other team (BR-37)', async () => {
+    await seedLeague({ nextRoundStartsAt: null });
+    provider.goals = [3, 1];
+
+    await score();
+
+    const standings = await prisma.leagueStanding.findMany({
+      where: { leagueId: LEAGUE, seasonId: SEASON },
+      select: { memberId: true, wins: true, losses: true },
+    });
+    expect(standings).toHaveLength(2);
+    expect(standings).toContainEqual({ memberId: BLOODSUCKER, wins: 1, losses: 0 });
+  });
+
+  it('re-finalises a matchup a re-score sent back to LIVE, so its bite is not suspended for good (#1343, E5)', async () => {
+    const { matchupId, roundId } = await seedLeague({ nextRoundStartsAt: null });
+    await prisma.leagueCompetitionRound.update({
+      where: { id: roundId },
+      data: { startsAt: new Date(Date.now() - 100 * HOUR) },
+    });
+    provider.goals = [3, 1];
+    await score();
+    // A commissioner re-score while an AFL match is reported live again: the matchup drops to LIVE
+    // and the round stays FINAL, so the bite is suspended.
+    provider.status = 'live';
+    await score(VICTIM);
+    const matchupStatus = async () =>
+      (await prisma.leagueMatchup.findUniqueOrThrow({ where: { id: matchupId } })).status;
+    expect(await matchupStatus()).toBe('LIVE');
+    expect(
+      (await prisma.leagueCompetitionRound.findUniqueOrThrow({ where: { id: roundId } })).status
+    ).toBe('FINAL');
+
+    // While the match is still live the scheduled job keeps rescoring the round and reports it.
+    const stuck = await scoreStartedLeagueRounds();
+    expect(stuck.stalledRounds).toContainEqual(
+      expect.objectContaining({ leagueId: LEAGUE, round: ROUND })
+    );
+    expect(await matchupStatus()).toBe('LIVE');
+
+    provider.status = 'final';
+    const run = await scoreStartedLeagueRounds();
+
+    expect(run.leagues.find((league) => league.leagueId === LEAGUE)?.rounds).toEqual([
+      { round: ROUND, status: 'FINAL', recalculated: 1 },
+    ]);
+    expect(await matchupStatus()).toBe('FINAL');
+    const rows = await bites();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'OPEN', grantedScoreVersion: 1 });
+    // Once FINAL again the round is left alone.
+    const later = await scoreStartedLeagueRounds();
+    expect(later.leagues.find((league) => league.leagueId === LEAGUE)).toBeUndefined();
+  });
+
+  it("ignores a bite row of another season when it reads the matchup's right", async () => {
+    const { matchupId } = await seedLeague({ nextRoundStartsAt: null });
+    await prisma.leagueSeason.create({
+      data: { id: `${SEASON}-old`, leagueId: LEAGUE, label: '2025 season', year: 2025 },
+    });
+    await prisma.leagueBite.create({
+      data: {
+        leagueId: LEAGUE,
+        seasonId: `${SEASON}-old`,
+        roundId: 'old-season-round',
+        round: ROUND,
+        matchupId,
+        bloodsuckerMemberId: BLOODSUCKER,
+        victimMemberId: VICTIM,
+        grantedWinnerMemberId: BLOODSUCKER,
+        status: 'CANCELLED',
+        cancelledBy: 'COMMISSIONER',
+        opensAt: new Date(),
+        deadlineAt: new Date(),
+      },
+    });
+    provider.goals = [3, 1];
+
+    await score();
+
+    expect(
+      await prisma.leagueBite.findMany({ where: { leagueId: LEAGUE, seasonId: SEASON } })
+    ).toMatchObject([{ status: 'OPEN' }]);
   });
 });

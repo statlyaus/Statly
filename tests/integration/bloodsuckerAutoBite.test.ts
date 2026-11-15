@@ -26,8 +26,10 @@ vi.mock('@/lib/data', () => ({ getPlayers: async () => [] }));
 import type { LeagueBite } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { hasPendingBite } from '@/server/leagues/bitePending';
 import {
   AUTO_BITE_RULE_VERSION,
+  autoBite,
   sweepDueBloodsuckerBites,
 } from '@/server/leagues/bloodsuckerAutoBite';
 
@@ -46,13 +48,70 @@ const [V1, V2, V3, B1, B2, B3] = PLAYERS as [string, string, string, string, str
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date();
 
+// A second league whose only bite always fails, to show one league never stops another.
+const BROKEN = {
+  league: `${P}-broken-league`,
+  settings: `${P}-broken-settings`,
+  season: `${P}-broken-2026`,
+};
+
 const removeFixture = () =>
   deleteLeagueFixtures(prisma, {
-    leagueIds: [LEAGUE],
+    leagueIds: [LEAGUE, BROKEN.league],
     playerIds: PLAYERS,
-    settingsIds: [SETTINGS],
+    settingsIds: [SETTINGS, BROKEN.settings],
     userIds: Object.values(USERS),
   });
+
+async function seedBrokenLeagueBite() {
+  await prisma.leagueSettings.create({
+    data: {
+      id: BROKEN.settings,
+      rosterSize: 3,
+      benchSize: 0,
+      maxTeams: 3,
+      pickSeconds: 60,
+      draftType: 'SNAKE',
+      leagueFormat: 'BLOODSUCKER',
+    },
+  });
+  await prisma.league.create({
+    data: {
+      id: BROKEN.league,
+      name: 'Broken bite',
+      inviteCode: 'INTAUTOX',
+      ownerId: USERS.owner,
+      settingsId: BROKEN.settings,
+      categoriesJson: ['goals'],
+    },
+  });
+  await prisma.leagueSeason.create({
+    data: { id: BROKEN.season, leagueId: BROKEN.league, label: '2026 season', year: 2026 },
+  });
+  await prisma.league.update({
+    where: { id: BROKEN.league },
+    data: { activeSeasonId: BROKEN.season },
+  });
+  return prisma.leagueBite.create({
+    data: {
+      leagueId: BROKEN.league,
+      seasonId: BROKEN.season,
+      roundId: `${P}-broken-round`,
+      round: 1,
+      matchupId: `${P}-broken-matchup`,
+      bloodsuckerMemberId: `${P}-broken-bs`,
+      victimMemberId: `${P}-broken-victim`,
+      grantedWinnerMemberId: `${P}-broken-bs`,
+      ...overdue(),
+    },
+  });
+}
+
+/** The real auto-bite, except that the broken league's bite throws. */
+const failingBrokenLeague: typeof autoBite = (bite, scores, now) =>
+  bite.leagueId === BROKEN.league
+    ? Promise.reject(new Error('swap exploded'))
+    : autoBite(bite, scores, now);
 
 const rounds: Record<number, { id: string; matchupId: string }> = {};
 
@@ -300,6 +359,145 @@ describe.sequential('Bloodsucker auto-bite sweep', () => {
       // worst is B3 (tied 5 with nothing lower left).
       expect(await reload(older)).toMatchObject({ takenPlayerId: V2, returnedPlayerId: B2 });
       expect(await reload(newer)).toMatchObject({ takenPlayerId: V1, returnedPlayerId: B3 });
+    });
+
+    it('never expires a right: weeks past its deadline it still runs (BR-20)', async () => {
+      const bite = await grant(1, {
+        opensAt: new Date(NOW.getTime() - 40 * 24 * HOUR),
+        deadlineAt: new Date(NOW.getTime() - 38 * 24 * HOUR),
+      });
+
+      const run = await sweepDueBloodsuckerBites(NOW);
+
+      expect(run.autoExecutedBiteIds).toEqual([bite.id]);
+      expect(await reload(bite)).toMatchObject({ status: 'AUTO_EXECUTED' });
+    });
+
+    it('ends a bite as CANCELLED / NO_PAIR when the Bloodsucker has no player to send back, audited, without failing the run (#1343)', async () => {
+      const bite = await grant(1, overdue());
+      await prisma.leagueRosterPlayer.deleteMany({ where: { leagueId: LEAGUE, memberId: BS } });
+
+      const run = await sweepDueBloodsuckerBites(NOW);
+      const again = await sweepDueBloodsuckerBites(new Date(NOW.getTime() + 5 * 60_000));
+
+      expect(run).toMatchObject({
+        unpairableBiteIds: [bite.id],
+        autoExecutedBiteIds: [],
+        failedLeagueIds: [],
+      });
+      expect(again).toMatchObject({ unpairableBiteIds: [], failedLeagueIds: [] });
+      expect(await reload(bite)).toMatchObject({
+        status: 'CANCELLED',
+        cancelledBy: 'NO_PAIR',
+        takenPlayerId: null,
+      });
+      expect(await ownerOf(V2)).toBe(VICTIM);
+      const audits = await prisma.leagueCompetitionAudit.findMany({
+        where: { leagueId: LEAGUE, eventType: 'BITE_CANCELLED' },
+      });
+      expect(audits).toHaveLength(1);
+      expect(audits[0]).toMatchObject({ actorMemberId: null });
+      expect(audits[0]?.payloadJson).toMatchObject({
+        biteId: bite.id,
+        actor: 'system',
+        reason: 'NO_PAIR',
+        rostersBefore: { bloodsucker: [] },
+      });
+      // The victim is no longer frozen (BR-30).
+      await expect(hasPendingBite(prisma, LEAGUE, VICTIM)).resolves.toBe(false);
+      const messages = await prisma.socialMessage.findMany({ where: { leagueId: LEAGUE } });
+      expect(messages.map((message) => message.content)).toEqual([
+        "The Bloodsucker's round 1 bite on Victims ended unused: a roster was empty at the deadline, so there was no player to swap.",
+      ]);
+    });
+
+    it("keeps sweeping other leagues when one league's bite fails, alerts for it once, then only counts it (#1343)", async () => {
+      const good = await grant(1, overdue());
+      const broken = await seedBrokenLeagueBite();
+
+      const first = await sweepDueBloodsuckerBites(NOW, failingBrokenLeague);
+
+      expect(first).toMatchObject({
+        autoExecutedBiteIds: [good.id],
+        failedLeagueIds: [BROKEN.league],
+        knownFailingBiteIds: [],
+      });
+      expect(await reload(broken)).toMatchObject({
+        status: 'OPEN',
+        failureCount: 1,
+        lastFailureReason: 'swap exploded',
+        failureAlertedAt: NOW,
+        lastFailureAt: NOW,
+      });
+
+      const later = new Date(NOW.getTime() + 5 * 60_000);
+      const second = await sweepDueBloodsuckerBites(later, failingBrokenLeague);
+
+      // The run is green again: the stuck bite is listed, not failed, so a new failure elsewhere shows.
+      expect(second).toMatchObject({ failedLeagueIds: [], knownFailingBiteIds: [broken.id] });
+      expect(await reload(broken)).toMatchObject({
+        failureCount: 2,
+        failureAlertedAt: NOW,
+        lastFailureAt: later,
+      });
+    });
+
+    it('leaves a bite of a season that is not the active one alone', async () => {
+      await prisma.leagueSeason.create({
+        data: { id: `${SEASON}-old`, leagueId: LEAGUE, label: '2025 season', year: 2025 },
+      });
+      const old = await prisma.leagueBite.create({
+        data: {
+          leagueId: LEAGUE,
+          seasonId: `${SEASON}-old`,
+          roundId: `${P}-old-round`,
+          round: 1,
+          matchupId: rounds[1]!.matchupId,
+          bloodsuckerMemberId: BS,
+          victimMemberId: VICTIM,
+          grantedWinnerMemberId: BS,
+          ...overdue(),
+          opensAt: new Date(NOW.getTime() - 400 * 24 * HOUR),
+        },
+      });
+      const current = await grant(1, overdue());
+
+      const run = await sweepDueBloodsuckerBites(NOW);
+
+      // The old-season bite neither runs nor holds the current one up as an "earlier" bite.
+      expect(run.autoExecutedBiteIds).toEqual([current.id]);
+      expect(await reload(old)).toMatchObject({ status: 'OPEN', takenPlayerId: null });
+      await expect(hasPendingBite(prisma, LEAGUE, VICTIM)).resolves.toBe(false);
+    });
+
+    it('alerts once when a bite is still suspended two hours past its deadline (#1343)', async () => {
+      const bite = await grant(1, {
+        opensAt: new Date(NOW.getTime() - 60 * HOUR),
+        deadlineAt: new Date(NOW.getTime() - 3 * HOUR),
+      });
+      await prisma.leagueMatchup.update({
+        where: { id: rounds[1]!.matchupId },
+        data: { status: 'LIVE' },
+      });
+
+      const first = await sweepDueBloodsuckerBites(NOW);
+      const second = await sweepDueBloodsuckerBites(new Date(NOW.getTime() + 5 * 60_000));
+
+      expect(first).toMatchObject({ failedLeagueIds: [LEAGUE], knownFailingBiteIds: [] });
+      expect(second).toMatchObject({ failedLeagueIds: [], knownFailingBiteIds: [bite.id] });
+      expect(await reload(bite)).toMatchObject({
+        status: 'OPEN',
+        failureCount: 2,
+        lastFailureReason: expect.stringContaining('BITE_SUSPENDED'),
+      });
+
+      // Once the matchup is FINAL again the bite runs.
+      await prisma.leagueMatchup.update({
+        where: { id: rounds[1]!.matchupId },
+        data: { status: 'FINAL' },
+      });
+      const third = await sweepDueBloodsuckerBites(new Date(NOW.getTime() + 10 * 60_000));
+      expect(third.autoExecutedBiteIds).toEqual([bite.id]);
     });
 
     it('waits while the matchup is being re-scored (E5)', async () => {
