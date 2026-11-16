@@ -2,11 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { STORY_FONT_CLASS } from '@/components/aflStories/CameronMasthead';
-
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
-
-import './publicLineage.css';
 
 import { ClubBadge } from './ClubBadge';
 import { Connector, Outcome, TradeButton } from './LineageParts';
@@ -123,11 +119,18 @@ export function TradeLineage({
   };
 
   /** A trade's button; a trade the lineage does not list (an earlier one) is plain text. */
-  const tradeButton = (tradeId: string, anchor: string, label: string, slip?: 'plain' | 'this') => {
+  const tradeButton = (
+    tradeId: string,
+    anchor: string,
+    label: string,
+    refined?: 'pill' | 'this'
+  ) => {
     const trade = trades.get(tradeId);
     if (!trade)
-      return slip ? (
-        <span>{label}</span>
+      return refined ? (
+        <span className="rounded-full border border-dashed border-(--ts-muted) px-2.5 py-1 ts-small whitespace-nowrap text-(--ts-ink2)">
+          {label}
+        </span>
       ) : (
         <span className="ts-body text-(--ts-ink2)">{label}</span>
       );
@@ -138,7 +141,7 @@ export function TradeLineage({
         name={`${tradeName(trade.clubs)}, ${trade.year}`}
         open={open?.tradeId === tradeId && open.anchor === anchor}
         controls={panelId(tradeId)}
-        slip={slip}
+        refined={refined}
         onToggle={() => toggle(tradeId, anchor, key)}
         buttonRef={(element) => {
           if (element) triggers.current.set(key, element);
@@ -166,124 +169,137 @@ export function TradeLineage({
         .filter(({ assetKind }) => assetKind === 'player')
         .map(({ transferId }) => transferId)
     );
+    /** What a club's assets are worth where they stayed, and what went to another club. */
+    const totals = (clubId: string, assets: typeof story.lineage.assets) => {
+      let kept = 0;
+      let left = 0;
+      for (const asset of assets) {
+        const value = knownPav(asset.value) ?? 0;
+        if ('clubId' in asset.outcome && asset.outcome.clubId !== clubId) left += value;
+        else kept += value;
+      }
+      return { kept, left };
+    };
+    const thisTrade = `${tradeShortName(story.trade.clubs)} ${story.trade.year}`;
     return (
-      <section aria-labelledby="lineage-title" className={`mp-lineage ${STORY_FONT_CLASS}`}>
-        <header>
-          <h2 id="lineage-title" className="mp-title">
-            Where everything went
-          </h2>
-          <p className="mp-lede">
-            Every player and pick in the deal, followed to the player it became and what he has been
-            worth since.
-          </p>
-        </header>
-        <ul className="mp-key" aria-label="Key">
-          <li>
-            <span aria-hidden="true" className="mp-key-bar" />
-            PAV, on one scale for every row
-          </li>
-          <li>
-            <span aria-hidden="true" className="mp-key-bar mp-key-away" />
-            value that went to another club
-          </li>
-          {ticks.length > 0 ? (
-            <li>
-              <span aria-hidden="true" className="mp-key-tick" />
-              marks every 50
-            </li>
-          ) : null}
-        </ul>
-        <div className="mp-columns">
-          {groups.map(({ club, assets }, index) => {
-            const style = clubStyle(club.clubName);
-            const side = story.sides.find(({ clubId }) => clubId === club.clubId);
-            const tilt = index % 2 === 0 ? -0.8 : 0.7;
-            return (
-              <article
-                key={club.clubId}
-                className="mp-card"
-                style={{ transform: `rotate(${tilt}deg)` }}
-                aria-label={`${club.clubName} received`}
-              >
-                <span
-                  aria-hidden="true"
-                  className="mp-tape"
-                  style={{ transform: `translateX(-50%) rotate(${-tilt * 3}deg)` }}
-                />
-                <header
-                  className="mp-card-head"
-                  style={{
-                    backgroundColor: style.fill,
-                    borderBottomColor: style.trim,
-                    color: style.ink,
-                  }}
-                >
-                  <div>
-                    <h3>{club.clubName}</h3>
-                    <p className="mp-hand">received</p>
-                  </div>
-                  {side ? (
-                    <p className="mp-total">
-                      <b>
-                        {formatPav(side.receivedValue)}
-                        {side.receivedPendingCount > 0 ? '*' : ''}
-                      </b>
-                      <span>PAV received</span>
-                    </p>
-                  ) : null}
-                </header>
-                <ol>
-                  {assets.map((asset) => (
-                    <PublicLineageRow
-                      key={asset.transferId}
-                      asset={asset}
-                      isPlayer={tradedPlayers.has(asset.transferId)}
-                      receiver={club.clubName}
-                      receiverId={club.clubId}
-                      colour={style.fill}
-                      scaleMax={scaleMax}
-                      ticks={ticks}
-                      maxValue={maxValue}
-                      share={bidShareOf(asset, shares)}
-                      cameVia={asset.hops
-                        .filter(({ relation }) => relation === 'before')
-                        .map((hop) =>
-                          tradeButton(hop.tradeId, asset.transferId, `a ${hop.year} trade`, 'plain')
-                        )}
-                      tradedOn={asset.hops
-                        .filter(({ relation }) => relation === 'after')
-                        .map((hop) =>
-                          tradeButton(
-                            hop.tradeId,
-                            asset.transferId,
-                            `${tradeShortName([hop])} ${hop.year}`,
-                            'plain'
-                          )
-                        )}
-                      panel={panel(asset.transferId)}
-                    />
-                  ))}
-                </ol>
-              </article>
-            );
-          })}
-        </div>
-        <footer className="mp-foot">
-          <h3>Every trade in this map</h3>
-          <ul>
-            {story.lineage.trades.map((trade) => (
-              <li key={trade.tradeId}>
-                {tradeButton(
-                  trade.tradeId,
-                  LIST_ANCHOR,
-                  `${tradeShortName(trade.clubs)} ${trade.year}${trade.tradeId === story.trade.id ? ' · this trade' : ''}`,
-                  trade.tradeId === story.trade.id ? 'this' : 'plain'
-                )}
+      <section aria-labelledby="lineage-title" className="mt-12">
+        <div className="rounded-2xl border border-(--ts-line) bg-(--ts-surface)">
+          <header className="px-5 pt-6 sm:px-8 sm:pt-8">
+            <h2 id="lineage-title" className="ts-head font-bold">
+              Where everything went
+            </h2>
+            <p className="mt-2 max-w-[70ch] text-(--ts-ink2)">
+              Every player and pick in the trade, followed to the player it became and his PAV. Open
+              any <span aria-hidden="true">⇄</span>
+              <span className="sr-only">trade button</span> to see that trade here.
+            </p>
+            <ul
+              aria-label="Key"
+              className="mt-5 flex flex-wrap gap-x-6 gap-y-2.5 border-t border-(--ts-line) pt-4 ts-small text-(--ts-ink2)"
+            >
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-(--ts-accent)" />
+                this trade, {thisTrade}
               </li>
-            ))}
-          </ul>
-          {panel(LIST_ANCHOR)}
-        </footer>
+              <li className="flex items-center gap-2">
+                <Connector /> held by the receiving club
+              </li>
+              <li className="flex items-center gap-2">
+                <Connector dashed /> held by another club
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="h-2 w-9 rounded-full bg-(--ts-accent)" />
+                bar length is PAV, one scale for every row
+              </li>
+            </ul>
+          </header>
+          <div className="mt-6 space-y-4 px-3 sm:space-y-5 sm:px-6">
+            {groups.map(({ club, tint, assets }) => {
+              const style = clubStyle(club.clubName);
+              const { kept, left } = totals(club.clubId, assets);
+              return (
+                <div key={club.clubId} className={`rounded-xl px-4 py-4 sm:px-6 sm:py-5 ${tint}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <h3 className="flex items-center gap-3 ts-body font-bold">
+                      <ClubBadge clubName={club.clubName} size="md" named />
+                      {club.clubName} received
+                    </h3>
+                    <p className="ts-small text-(--ts-ink2)">
+                      <span className="ts-body font-bold text-(--ts-ink) tabular-nums">
+                        {formatPav(kept)}
+                      </span>{' '}
+                      PAV kept
+                      {left > 0 ? <span> · {formatPav(left)} went elsewhere</span> : null}
+                    </p>
+                  </div>
+                  <ol className="mt-3 divide-y divide-(--ts-line) border-t border-(--ts-line)">
+                    {assets.map((asset) => {
+                      const before = asset.hops.filter(({ relation }) => relation === 'before');
+                      const years = [...new Set(before.map(({ year }) => year))].join(', ');
+                      return (
+                        <PublicLineageRow
+                          key={asset.transferId}
+                          asset={asset}
+                          isPlayer={tradedPlayers.has(asset.transferId)}
+                          receiverId={club.clubId}
+                          colour={style.fill}
+                          scaleMax={scaleMax}
+                          ticks={ticks}
+                          maxValue={maxValue}
+                          share={bidShareOf(asset, shares)}
+                          via={
+                            before.length === 0
+                              ? null
+                              : before.length === 1
+                                ? tradeButton(
+                                    before[0]!.tradeId,
+                                    asset.transferId,
+                                    `via ${before[0]!.year} trade`,
+                                    'pill'
+                                  )
+                                : tradeButton(
+                                    '',
+                                    asset.transferId,
+                                    `via ${before.length} trades, ${years}`,
+                                    'pill'
+                                  )
+                          }
+                          tradedOn={asset.hops
+                            .filter(({ relation }) => relation === 'after')
+                            .map((hop) =>
+                              tradeButton(
+                                hop.tradeId,
+                                asset.transferId,
+                                `⇄ ${tradeShortName([hop])} ${hop.year}`,
+                                'pill'
+                              )
+                            )}
+                          panel={panel(asset.transferId)}
+                        />
+                      );
+                    })}
+                  </ol>
+                </div>
+              );
+            })}
+          </div>
+          <footer className="mt-8 border-t border-(--ts-line) px-5 py-6 sm:px-8">
+            <h3 className="ts-small font-semibold">Trades in this lineage</h3>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {story.lineage.trades.map((trade) => (
+                <li key={trade.tradeId}>
+                  {tradeButton(
+                    trade.tradeId,
+                    LIST_ANCHOR,
+                    `${tradeShortName(trade.clubs)} ${trade.year}${trade.tradeId === story.trade.id ? ' · this trade' : ''}`,
+                    trade.tradeId === story.trade.id ? 'this' : 'pill'
+                  )}
+                </li>
+              ))}
+            </ul>
+            {panel(LIST_ANCHOR)}
+          </footer>
+        </div>
       </section>
     );
   }

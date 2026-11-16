@@ -6,6 +6,16 @@ import { formatPav, knownPav, PENDING_TEXT, type AflTradePageBidShare } from './
 /** The longest outcome bar, in pixels: every row's bar is on the same scale. */
 const BAR_WIDTH = 240;
 
+/** The public map's trade pills: 44px tall to tap, filled when open or when it is this trade. */
+function refinedClass(kind: 'pill' | 'this', open: boolean): string {
+  const filled = kind === 'this' || open;
+  return `inline-flex min-h-11 items-center rounded-full border px-3.5 ts-small font-medium whitespace-nowrap transition-colors ${
+    filled
+      ? 'border-(--ts-accent) bg-(--ts-accent) text-(--ts-surface)'
+      : 'border-(--ts-accent)/40 bg-(--ts-surface) text-(--ts-accent) hover:border-(--ts-accent)'
+  }`;
+}
+
 export function TradeButton({
   label,
   name,
@@ -13,7 +23,7 @@ export function TradeButton({
   controls,
   onToggle,
   buttonRef,
-  slip,
+  refined,
 }: {
   label: string;
   name: string;
@@ -21,8 +31,8 @@ export function TradeButton({
   controls: string;
   onToggle: () => void;
   buttonRef: (element: HTMLButtonElement | null) => void;
-  /** The public map's paper-slip look; `this` marks the page's own trade. */
-  slip?: 'plain' | 'this';
+  /** The public map's smaller pill; `this` fills it for the page's own trade. */
+  refined?: 'pill' | 'this';
 }) {
   return (
     <button
@@ -32,8 +42,8 @@ export function TradeButton({
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
       className={
-        slip
-          ? `mp-btn ${slip === 'this' ? 'mp-btn-this' : ''}`
+        refined
+          ? refinedClass(refined, open)
           : `inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
               open
                 ? 'border-(--ts-accent) text-(--ts-accent)'
