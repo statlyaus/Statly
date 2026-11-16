@@ -8,11 +8,22 @@ import type {
 import './tradeStory.css';
 import { ClubBadge } from './ClubBadge';
 import { clubChainsHref, formatSigned, netTone, tradeStoryHref } from './tradePageModel';
+import {
+  filterTrades,
+  tradesListClubs,
+  tradesListHref,
+  tradesListYears,
+  type TradesListQuery,
+} from './tradesListQuery';
 
 const underline = 'underline underline-offset-2';
+const chip =
+  'inline-flex min-h-11 items-center gap-2 rounded-full border px-4 ts-body font-medium transition';
+const chipOff = 'border-(--ts-line) bg-(--ts-surface) hover:bg-(--ts-bg2)';
+const chipOn = 'border-(--ts-accent) bg-(--ts-accent) text-(--ts-surface)';
 
-/** One trade in the list: each club's result so far and what it got, or just the clubs. */
-function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
+/** One trade in a list: each club's result so far and what it got, or just the clubs. */
+export function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
   const results = story.results ?? [];
   return (
     <li>
@@ -48,95 +59,169 @@ function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
   );
 }
 
+/** A filter choice: a link to the list under that choice, marked when it is the current one. */
+function Choice({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        aria-current={active ? 'true' : undefined}
+        className={`${chip} ${active ? chipOn : chipOff}`}
+      >
+        {children}
+      </Link>
+    </li>
+  );
+}
+
 /**
- * The public list of graded trades (/afl/trades): every trade by year, newest first, with each
- * club's result so far, and a link to each club's chains.
+ * The public list of graded trades (/afl/trades). Year and club filters combine and live in the
+ * address; each row shows every club's result so far and what it got.
  */
-export function TradesListPage({ list }: { list: AflTradeStorySampleList }) {
+export function TradesListPage({
+  list,
+  query,
+}: {
+  list: AflTradeStorySampleList;
+  query: TradesListQuery;
+}) {
   const { stories, source } = list;
-  const clubs = [
-    ...new Map(
-      stories.flatMap((story) =>
-        story.clubIds.map((id, index) => [id, story.clubNames[index]!] as const)
-      )
-    ),
-  ].sort(([, left], [, right]) => left.localeCompare(right));
-  const years = [...new Set(stories.map(({ year }) => year))].sort((a, b) => b - a);
-  const anyProvisional = stories.some((story) =>
+  const clubs = tradesListClubs(stories);
+  const years = tradesListYears(stories);
+  const shown = filterTrades(stories, query);
+  const club = clubs.find(({ slug }) => slug === query.club) ?? null;
+  const shownYears = [...new Set(shown.map(({ year }) => year))];
+  const grouped = query.sort === 'newest' && shownYears.length > 1;
+  const anyProvisional = shown.some((story) =>
     story.results?.some(({ provisional }) => provisional)
   );
+  const summary = [
+    `${shown.length} trade${shown.length === 1 ? '' : 's'}`,
+    query.year === null ? `${years.at(-1)} to ${years[0]}` : String(query.year),
+    club?.name ?? 'every club',
+  ].join(' · ');
 
   return (
-    <div className="afl-trade-story min-h-screen">
-      <div className="mx-auto w-full max-w-3xl px-4 pt-5 pb-16 sm:px-6">
+    <div className="afl-trade-story ts-public min-h-screen">
+      <div className="mx-auto w-full max-w-4xl px-4 pt-6 pb-16 sm:px-6">
         <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
-          <Link href="/afl" className={underline}>
-            AFL
+          <Link href="/" className={underline}>
+            Home
           </Link>{' '}
           / Trades
         </nav>
-        <h1 className="ts-head font-semibold text-balance">AFL trades, valued</h1>
+        <h1 className="ts-net font-display font-bold text-balance">AFL trades, valued</h1>
         <p className="mt-2 max-w-[65ch] ts-body text-(--ts-ink2)">
-          {stories.length} trades, each valued by what the players and picks went on to do for the
-          club that got them. The number beside each club is its result so far, in PAV.{' '}
-          {source.label}.{' '}
+          Each trade is valued by what the players and picks went on to do for the club that got
+          them. The number beside a club is its result so far, in PAV. {source.label}.{' '}
           <Link href="/afl/trades/method" className={underline}>
             How this works
           </Link>
         </p>
 
-        <nav aria-label="Jump to a year" className="mt-5">
-          <ul className="flex flex-wrap gap-2">
-            {years.map((year) => (
-              <li key={year}>
-                <a
-                  href={`#year-${year}`}
-                  className="inline-flex min-h-11 items-center rounded-full border border-(--ts-line) bg-(--ts-surface) px-4 ts-body font-medium hover:bg-(--ts-bg2)"
+        <section aria-label="Filter the trades" className="mt-6 grid gap-5">
+          <div>
+            <h2 className="ts-small font-semibold text-(--ts-ink2)">Year</h2>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {years.map((year) => (
+                <Choice
+                  key={year}
+                  href={tradesListHref({ ...query, year })}
+                  active={query.year === year}
                 >
                   {year}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <section aria-labelledby="clubs-heading" className="mt-8">
-          <h2 id="clubs-heading" className="ts-body font-semibold">
-            By club
-          </h2>
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {clubs.map(([clubId, clubName]) => (
-              <li key={clubId}>
-                <Link
-                  href={clubChainsHref(clubId, 'public')}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-(--ts-line) bg-(--ts-surface) py-1 pr-4 pl-2 ts-body hover:bg-(--ts-bg2)"
+                </Choice>
+              ))}
+              <Choice href={tradesListHref({ ...query, year: null })} active={query.year === null}>
+                All years
+              </Choice>
+            </ul>
+          </div>
+          <div>
+            <h2 className="ts-small font-semibold text-(--ts-ink2)">Club</h2>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              <Choice href={tradesListHref({ ...query, club: null })} active={query.club === null}>
+                All clubs
+              </Choice>
+              {clubs.map(({ slug, name }) => (
+                <Choice
+                  key={slug}
+                  href={tradesListHref({ ...query, club: slug })}
+                  active={query.club === slug}
                 >
-                  <ClubBadge clubName={clubName} named />
-                  {clubName}
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  <ClubBadge clubName={name} named />
+                  {name}
+                </Choice>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h2 className="ts-small font-semibold text-(--ts-ink2)">Order</h2>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              <Choice
+                href={tradesListHref({ ...query, sort: 'newest' })}
+                active={query.sort === 'newest'}
+              >
+                Newest first
+              </Choice>
+              <Choice
+                href={tradesListHref({ ...query, sort: 'biggest' })}
+                active={query.sort === 'biggest'}
+              >
+                Biggest result first
+              </Choice>
+            </ul>
+          </div>
         </section>
 
-        {years.map((year) => {
-          const inYear = stories.filter((story) => story.year === year);
-          return (
-            <section key={year} aria-labelledby={`year-${year}`} className="mt-10 scroll-mt-24">
-              <h2 id={`year-${year}`} className="ts-head font-semibold">
-                {year}{' '}
-                <span className="ts-small font-normal text-(--ts-ink2)">
-                  {inYear.length} trade{inYear.length === 1 ? '' : 's'}
-                </span>
-              </h2>
-              <ul className="mt-3 divide-y divide-(--ts-line) overflow-hidden rounded-xl border border-(--ts-line) bg-(--ts-surface)">
-                {inYear.map((story) => (
-                  <TradeRow key={story.tradeId} story={story} />
-                ))}
-              </ul>
-            </section>
-          );
-        })}
+        <section aria-labelledby="results-heading" className="mt-8">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 id="results-heading" className="ts-head font-semibold" aria-live="polite">
+              {summary}
+            </h2>
+            {club ? (
+              <Link href={clubChainsHref(club.clubId, 'public')} className={`ts-body ${underline}`}>
+                {club.name}’s trade chains
+              </Link>
+            ) : null}
+          </div>
+
+          {shown.length === 0 ? (
+            <p className="mt-4 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-4 py-5 ts-body">
+              No trades match. {club?.name ?? 'No club'} made no graded trade in {query.year}.{' '}
+              <Link href={tradesListHref({ ...query, year: null })} className={underline}>
+                Show every year
+              </Link>
+            </p>
+          ) : grouped ? (
+            shownYears.map((year) => (
+              <div key={year} className="mt-6">
+                <h3 className="ts-body font-semibold text-(--ts-ink2)">{year}</h3>
+                <ul className="mt-2 divide-y divide-(--ts-line) overflow-hidden rounded-xl border border-(--ts-line) bg-(--ts-surface)">
+                  {shown
+                    .filter((story) => story.year === year)
+                    .map((story) => (
+                      <TradeRow key={story.tradeId} story={story} />
+                    ))}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <ul className="mt-4 divide-y divide-(--ts-line) overflow-hidden rounded-xl border border-(--ts-line) bg-(--ts-surface)">
+              {shown.map((story) => (
+                <TradeRow key={story.tradeId} story={story} />
+              ))}
+            </ul>
+          )}
+        </section>
 
         {anyProvisional ? (
           <p className="mt-8 ts-small text-(--ts-ink2)">

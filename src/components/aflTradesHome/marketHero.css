@@ -1,0 +1,207 @@
+/*
+ * The top of the home page (owner's concept E, 2026-11-16): "Every October, footy goes to market."
+ * The desktop layout is the owner's 1440 by 820 artboard; every size is a share of the stage's width
+ * (cqw), so it keeps its proportions at any desktop width. Below 900px it stacks.
+ */
+.mh {
+  background: #fff;
+  color: #161616;
+  font-family: var(--font-sc-serif), Georgia, serif;
+  overflow: hidden;
+}
+.mh-stage {
+  position: relative;
+  container-type: inline-size;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  aspect-ratio: 1440 / 820;
+  overflow: hidden;
+}
+.mh-label {
+  font-family: var(--font-sc-label), sans-serif;
+  text-transform: uppercase;
+}
+.mh-art img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+}
+.mh-chart {
+  left: 38.89%;
+  top: 25.6%;
+  width: 59.72%;
+  opacity: 0.32;
+}
+.mh-stadium {
+  left: 37.5%;
+  bottom: -10.98%;
+  width: 62.5%;
+  z-index: 2;
+}
+.mh-art img.mh-mark {
+  left: 47.92%;
+  bottom: -1.7%;
+  height: 90.24%;
+  width: auto;
+  z-index: 3;
+}
+.mh-traders {
+  right: -1.39%;
+  bottom: -2.44%;
+  width: 29.86%;
+  z-index: 4;
+}
+.mh-rule {
+  position: absolute;
+  left: 4.44cqw;
+  right: 4.44cqw;
+  top: 2.5cqw;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.83cqw;
+  border-bottom: 1px solid #161616;
+  letter-spacing: 0.14em;
+  font-size: max(11px, 0.9cqw);
+  font-weight: 500;
+}
+.mh-words {
+  position: absolute;
+  left: 4.44cqw;
+  top: 11.8cqw;
+  width: 37.5cqw;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 1.53cqw;
+}
+.mh-kicker {
+  letter-spacing: 0.16em;
+  font-size: max(11px, 0.9cqw);
+  color: #555;
+}
+.mh-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 5.833cqw;
+  line-height: 0.9;
+}
+.mh-lede {
+  max-width: 32.64cqw;
+  font-size: max(15px, 1.32cqw);
+  line-height: 1.5;
+  color: #333;
+}
+.mh-record {
+  max-width: 32.64cqw;
+  padding-top: 0.83cqw;
+  border-top: 1px solid #161616;
+  letter-spacing: 0.06em;
+  font-size: max(13px, 1.04cqw);
+  line-height: 1.4;
+}
+.mh a.mh-button {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: max(44px, 3.61cqw);
+  padding: 0 1.67cqw;
+  background: #161616;
+  color: #fff;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  font-size: max(13px, 0.97cqw);
+  text-decoration: none;
+}
+.mh a.mh-button:hover {
+  background: #c21f33;
+}
+.mh a.mh-button:focus-visible {
+  outline: 3px solid #c21f33;
+  outline-offset: 3px;
+}
+.mh-note {
+  position: absolute;
+  left: 4.44cqw;
+  bottom: 1.94cqw;
+  z-index: 5;
+  letter-spacing: 0.14em;
+  font-size: max(10px, 0.76cqw);
+  color: #6a6a6a;
+}
+@media (max-width: 899px) {
+  .mh-stage {
+    aspect-ratio: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1rem 0;
+    box-sizing: border-box;
+  }
+  .mh-rule,
+  .mh-words,
+  .mh-note {
+    position: static;
+    width: auto;
+  }
+  .mh-rule {
+    padding-bottom: 0.75rem;
+    font-size: 12px;
+  }
+  .mh-words {
+    gap: 1.25rem;
+    padding-top: 2rem;
+  }
+  .mh-kicker {
+    font-size: 12px;
+  }
+  .mh-title {
+    font-size: clamp(3rem, 14.5cqw, 5.25rem);
+  }
+  .mh-lede {
+    max-width: 34rem;
+    font-size: 1.15rem;
+  }
+  .mh-record {
+    max-width: 34rem;
+    padding-top: 0.75rem;
+    font-size: 0.95rem;
+  }
+  .mh a.mh-button {
+    min-height: 52px;
+    padding: 0 1.5rem;
+    font-size: 14px;
+  }
+  .mh-note {
+    order: 2;
+    padding: 1rem 0 0.5rem;
+    font-size: 10px;
+  }
+  .mh-art {
+    position: relative;
+    order: 3;
+    margin: 0 -1rem;
+    aspect-ratio: 900 / 780;
+    overflow: hidden;
+  }
+  .mh-chart {
+    left: 0;
+    top: 22%;
+    width: 100%;
+  }
+  .mh-stadium {
+    left: -4%;
+    bottom: -12%;
+    width: 108%;
+  }
+  .mh-art img.mh-mark {
+    left: 14%;
+    bottom: -2%;
+    height: 96%;
+  }
+  .mh-traders {
+    right: -4%;
+    bottom: -3%;
+    width: 50%;
+  }
+}

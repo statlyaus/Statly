@@ -4459,6 +4459,18 @@ route's `GET` reports whether the approved bundle is stored. A local run sets
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path) and reads that file instead. The go-live steps
 are in the operations runbook, "Public trade pages: go live".
 
+**List filters.** `/afl/trades?year=2024&club=geelong&sort=biggest` (`tradesListQuery.ts`): the year,
+club and order live in the address, so a filtered list can be shared and works without scripts. With no
+year named the list shows the latest year, or every year once a club is chosen.
+
+**Home page and stories.** While the reader is available the home page (`components/aflTradesHome/`)
+is the trade pages' front page: the owner's "Every October, footy goes to market" collage, the Jeremy
+Cameron year band, the trade ladder (every club's combined net), the next biggest wins and each season,
+all from the same reader's list. `/afl/stories/jeremy-cameron` (`components/aflStories/`) is a
+hand-written story, not bundle data: its facts are in `cameronChapters.tsx` with the sources named at
+the foot of the page, and a change to them needs a source. Story components never import the private
+trade modules.
+
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
 Draftguru and Official AFL, draft boards from Footyinfo, and the PAV method and published values from

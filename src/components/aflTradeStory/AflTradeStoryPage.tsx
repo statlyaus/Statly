@@ -53,7 +53,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   const pendingAtTrade = story.nets.tradeAlone.some(({ atTrade }) => atTrade.pendingCount > 0);
 
   return (
-    <div className="afl-trade-story min-h-screen">
+    <div className={`afl-trade-story min-h-screen ${audience === 'public' ? 'ts-public' : ''}`}>
       <Shell className="mx-auto w-full max-w-6xl px-4 pt-5 pb-16 sm:px-6">
         <TradePageNotice source={model.source} />
         <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
@@ -64,7 +64,11 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         </nav>
 
         <header>
-          <h1 className="ts-head max-w-[24ch] font-semibold text-balance">{headline(model)}</h1>
+          <h1
+            className={`max-w-[24ch] text-balance ${audience === 'public' ? 'ts-net font-display font-bold' : 'ts-head font-semibold'}`}
+          >
+            {headline(model)}
+          </h1>
           <p className="mt-1 ts-body text-(--ts-ink2)">
             {tradeName(story.trade.clubs)} trade, {story.trade.year}
           </p>
