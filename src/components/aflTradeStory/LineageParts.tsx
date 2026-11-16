@@ -49,6 +49,46 @@ export const Connector = ({ dashed }: { dashed?: boolean }) => (
   />
 );
 
+/** The public table's last two cells for a player: who he is, then his value and its bar. */
+function PlayerCells({
+  outcome,
+  away,
+  shown,
+  maxValue,
+}: {
+  outcome: Extract<AflTradeStoryLineageAsset['outcome'], { kind: 'player' }>;
+  away: boolean;
+  shown: number;
+  maxValue: number;
+}) {
+  const width = maxValue > 0 ? Math.max(3, (Math.max(0, shown) / maxValue) * 100) : 0;
+  return (
+    <>
+      <p className="ts-body">
+        <span className="font-semibold">{outcome.playerName}</span>
+        {outcome.selection ? (
+          <span className="text-(--ts-ink2)">
+            {' '}
+            (pick {outcome.selection.selectionNumber}, {outcome.selection.draftYear})
+          </span>
+        ) : null}
+        {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null}
+      </p>
+      <p className="lg-worth">
+        <b className="tabular-nums">{formatPav(shown)}</b>
+        <span aria-hidden="true" className="lg-track">
+          <span
+            className={away ? 'lg-bar-away' : 'lg-bar'}
+            style={{
+              width: `${maxValue > 0 ? Math.max(3, (Math.max(0, shown) / maxValue) * 100) : 0}%`,
+            }}
+          />
+        </span>
+      </p>
+    </>
+  );
+}
+
 export function Outcome({
   asset,
   groupClubId,
@@ -109,32 +149,7 @@ export function Outcome({
     );
   const away = outcome.clubId !== groupClubId;
   const shown = value ?? 0;
-  if (split)
-    return (
-      <>
-        <p className="ts-body">
-          <span className="font-semibold">{outcome.playerName}</span>
-          {outcome.selection ? (
-            <span className="text-(--ts-ink2)">
-              {' '}
-              (pick {outcome.selection.selectionNumber}, {outcome.selection.draftYear})
-            </span>
-          ) : null}
-          {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null}
-        </p>
-        <p className="lg-worth">
-          <b className="tabular-nums">{formatPav(shown)}</b>
-          <span aria-hidden="true" className="lg-track">
-            <span
-              className={away ? 'lg-bar-away' : 'lg-bar'}
-              style={{
-                width: `${maxValue > 0 ? Math.max(3, (Math.max(0, shown) / maxValue) * 100) : 0}%`,
-              }}
-            />
-          </span>
-        </p>
-      </>
-    );
+  if (split) return <PlayerCells outcome={outcome} away={away} shown={shown} maxValue={maxValue} />;
   return (
     <span className="inline-flex min-w-0 flex-col gap-1">
       <span className="ts-body">
