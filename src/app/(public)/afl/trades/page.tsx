@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { TradesListPage } from '@/components/aflTradeStory/TradesListPage';
+import { parseTradesListQuery } from '@/components/aflTradeStory/tradesListQuery';
 import { publicTradeStoryReads } from '@/server/aflTradeIntelligence/publication/publicTradeStoryReads';
 
 import { TradesUnavailable } from './TradesUnavailable';
@@ -14,8 +15,13 @@ export const metadata: Metadata = {
 };
 
 /** The public list of graded trades, newest year first, from the owner-approved bundle. */
-export default async function PublicTradesPage() {
+export default async function PublicTradesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const read = await publicTradeStoryReads.listStories();
   if (!read.available) return <TradesUnavailable />;
-  return <TradesListPage list={read.value} />;
+  const query = parseTradesListQuery(await searchParams, read.value.stories);
+  return <TradesListPage list={read.value} query={query} />;
 }
