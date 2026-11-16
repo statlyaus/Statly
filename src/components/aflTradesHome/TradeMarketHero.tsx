@@ -58,8 +58,8 @@ export function TradeMarketHero({
         <a href={recordHref} className="mh-button mh-label">
           Read the record deal ↓
         </a>
+        <p className="mh-note mh-label">Illustrations generated with AI · figures are invented</p>
       </div>
-      <p className="mh-note mh-label">Illustrations generated with AI · figures are invented</p>
     </div>
   );
 }

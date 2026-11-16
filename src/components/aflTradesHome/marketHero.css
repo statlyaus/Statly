@@ -1,7 +1,7 @@
 /*
  * The top of the home page (owner's concept E, 2026-11-16): "Every October, footy goes to market."
  * The desktop layout is the owner's 1440 by 820 artboard; every size is a share of the stage's width
- * (cqw), so it keeps its proportions at any desktop width. Below 900px it stacks.
+ * (cqw), so it keeps its proportions at any desktop width. Below 1024px it stacks.
  */
 .mh {
   background: #fff;
@@ -15,8 +15,14 @@
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
-  aspect-ratio: 1440 / 820;
   overflow: hidden;
+}
+/* The artboard's 1440 by 820 shape as a minimum: the stage grows when the words need more room. */
+.mh-stage::before {
+  content: '';
+  float: left;
+  width: 0;
+  padding-top: 56.944%;
 }
 .mh-label {
   font-family: var(--font-sc-label), sans-serif;
@@ -67,14 +73,14 @@
   font-weight: 500;
 }
 .mh-words {
-  position: absolute;
-  left: 4.44cqw;
-  top: 11.8cqw;
-  width: 37.5cqw;
+  position: relative;
   z-index: 5;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 1.53cqw;
+  width: 42cqw;
+  padding: 11.8cqw 0 2cqw 4.44cqw;
 }
 .mh-kicker {
   letter-spacing: 0.16em;
@@ -122,25 +128,22 @@
   outline-offset: 3px;
 }
 .mh-note {
-  position: absolute;
-  left: 4.44cqw;
-  bottom: 1.94cqw;
-  z-index: 5;
   letter-spacing: 0.14em;
   font-size: max(10px, 0.76cqw);
   color: #6a6a6a;
 }
-@media (max-width: 899px) {
+@media (max-width: 1023px) {
+  .mh-stage::before {
+    content: none;
+  }
   .mh-stage {
-    aspect-ratio: auto;
     display: flex;
     flex-direction: column;
     padding: 1.25rem 1rem 0;
     box-sizing: border-box;
   }
   .mh-rule,
-  .mh-words,
-  .mh-note {
+  .mh-words {
     position: static;
     width: auto;
   }
@@ -150,7 +153,7 @@
   }
   .mh-words {
     gap: 1.25rem;
-    padding-top: 2rem;
+    padding: 2rem 0 0;
   }
   .mh-kicker {
     font-size: 12px;
@@ -173,8 +176,6 @@
     font-size: 14px;
   }
   .mh-note {
-    order: 2;
-    padding: 1rem 0 0.5rem;
     font-size: 10px;
   }
   .mh-art {
