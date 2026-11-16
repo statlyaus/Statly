@@ -127,11 +127,6 @@
   outline: 3px solid #c21f33;
   outline-offset: 3px;
 }
-.mh-note {
-  letter-spacing: 0.14em;
-  font-size: max(10px, 0.76cqw);
-  color: #6a6a6a;
-}
 @media (max-width: 1023px) {
   .mh-stage::before {
     content: none;
@@ -174,9 +169,6 @@
     min-height: 52px;
     padding: 0 1.5rem;
     font-size: 14px;
-  }
-  .mh-note {
-    font-size: 10px;
   }
   .mh-art {
     position: relative;
