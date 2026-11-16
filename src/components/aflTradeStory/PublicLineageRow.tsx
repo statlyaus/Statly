@@ -6,6 +6,75 @@ import type { AflTradeStoryLineageAsset } from '@/server/aflTradeIntelligence/va
 import { Outcome } from './LineageParts';
 import { formatPav, knownPav, type AflTradePageBidShare } from './tradePageModel';
 
+type PlayerOutcome = Extract<AflTradeStoryLineageAsset['outcome'], { kind: 'player' }>;
+
+/** Where the player was drafted or joined, and the other club when he did not stay. */
+function draftedText(player: PlayerOutcome, isPlayer: boolean, receiver: string): string | null {
+  if (isPlayer) return `joined ${receiver}`;
+  return player.selection
+    ? `Pick ${player.selection.selectionNumber}, ${player.selection.draftYear}`
+    : null;
+}
+
+/** The player an asset became, his value, and its bar on the shared scale. */
+function BecamePlayer({
+  player,
+  away,
+  isPlayer,
+  receiver,
+  value,
+  colour,
+  scaleMax,
+  ticks,
+}: {
+  player: PlayerOutcome;
+  away: boolean;
+  isPlayer: boolean;
+  receiver: string;
+  value: number;
+  colour: string;
+  scaleMax: number;
+  ticks: readonly number[];
+}) {
+  return (
+    <>
+      <div className="mp-became">
+        <div>
+          <p className="mp-player">
+            <CornerDownRight aria-hidden="true" size={16} />
+            <span>{player.playerName}</span>
+          </p>
+          <p className="mp-drafted">
+            {draftedText(player, isPlayer, receiver)}
+            {away ? (
+              <>
+                {' '}
+                · at <b>{player.clubName}</b>
+              </>
+            ) : null}
+          </p>
+        </div>
+        <p className="mp-value">
+          <b>{formatPav(value)}</b>
+          <span>{away ? `PAV · to ${player.clubName}` : 'PAV'}</span>
+        </p>
+      </div>
+      <div className="mp-track" aria-hidden="true">
+        {ticks.map((tick) => (
+          <span key={tick} className="mp-tick" style={{ left: `${(tick / scaleMax) * 100}%` }} />
+        ))}
+        <span
+          className={away ? 'mp-bar mp-bar-away' : 'mp-bar'}
+          style={{
+            width: `${Math.min(100, (Math.max(0, value) / scaleMax) * 100)}%`,
+            backgroundColor: away ? undefined : colour,
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
 /**
  * One asset on the public lineage map (the owner's Magic Patterns design, 2026-11-17): what was
  * traded, any trades it came through or went on to, the player it became, his value, and a bar on
@@ -75,49 +144,16 @@ export function PublicLineageRow({
         </div>
       ) : null}
       {player ? (
-        <>
-          <div className="mp-became">
-            <div>
-              <p className="mp-player">
-                <CornerDownRight aria-hidden="true" size={16} />
-                <span>{player.playerName}</span>
-              </p>
-              <p className="mp-drafted">
-                {isPlayer
-                  ? `joined ${receiver}`
-                  : player.selection
-                    ? `Pick ${player.selection.selectionNumber}, ${player.selection.draftYear}`
-                    : null}
-                {away ? (
-                  <>
-                    {' '}
-                    · at <b>{player.clubName}</b>
-                  </>
-                ) : null}
-              </p>
-            </div>
-            <p className="mp-value">
-              <b>{formatPav(value)}</b>
-              <span>{away ? `PAV · to ${player.clubName}` : 'PAV'}</span>
-            </p>
-          </div>
-          <div className="mp-track" aria-hidden="true">
-            {ticks.map((tick) => (
-              <span
-                key={tick}
-                className="mp-tick"
-                style={{ left: `${(tick / scaleMax) * 100}%` }}
-              />
-            ))}
-            <span
-              className={away ? 'mp-bar mp-bar-away' : 'mp-bar'}
-              style={{
-                width: `${Math.min(100, (Math.max(0, value) / scaleMax) * 100)}%`,
-                backgroundColor: away ? undefined : colour,
-              }}
-            />
-          </div>
-        </>
+        <BecamePlayer
+          player={player}
+          away={away}
+          isPlayer={isPlayer}
+          receiver={receiver}
+          value={value}
+          colour={colour}
+          scaleMax={scaleMax}
+          ticks={ticks}
+        />
       ) : (
         <div className="mp-other">
           <Outcome asset={asset} groupClubId={receiverId} maxValue={maxValue} share={share} />

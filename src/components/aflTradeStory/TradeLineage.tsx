@@ -6,6 +6,8 @@ import { STORY_FONT_CLASS } from '@/components/aflStories/CameronMasthead';
 
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
+import './publicLineage.css';
+
 import { ClubBadge } from './ClubBadge';
 import { Connector, Outcome, TradeButton } from './LineageParts';
 import { LineageTradePanel, panelId } from './LineageTradePanel';
