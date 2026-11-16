@@ -13,6 +13,7 @@ export function TradeButton({
   controls,
   onToggle,
   buttonRef,
+  slip,
 }: {
   label: string;
   name: string;
@@ -20,6 +21,8 @@ export function TradeButton({
   controls: string;
   onToggle: () => void;
   buttonRef: (element: HTMLButtonElement | null) => void;
+  /** The public map's paper-slip look; `this` marks the page's own trade. */
+  slip?: 'plain' | 'this';
 }) {
   return (
     <button
@@ -28,11 +31,15 @@ export function TradeButton({
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
-      className={`lg-btn inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
-        open
-          ? 'border-(--ts-accent) text-(--ts-accent)'
-          : 'border-(--ts-line) hover:border-(--ts-muted)'
-      }`}
+      className={
+        slip
+          ? `mp-btn ${slip === 'this' ? 'mp-btn-this' : ''}`
+          : `inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
+              open
+                ? 'border-(--ts-accent) text-(--ts-accent)'
+                : 'border-(--ts-line) hover:border-(--ts-muted)'
+            }`
+      }
     >
       <span aria-hidden="true">{label}</span>
       <span className="sr-only">
@@ -45,63 +52,20 @@ export function TradeButton({
 export const Connector = ({ dashed }: { dashed?: boolean }) => (
   <span
     aria-hidden="true"
-    className={`lg-connector h-0 w-5 flex-none border-t-2 sm:w-8 ${dashed ? 'border-dashed border-(--ts-muted)' : 'border-(--ts-accent)'}`}
+    className={`h-0 w-5 flex-none border-t-2 sm:w-8 ${dashed ? 'border-dashed border-(--ts-muted)' : 'border-(--ts-accent)'}`}
   />
 );
-
-/** The public table's last two cells for a player: who he is, then his value and its bar. */
-function PlayerCells({
-  outcome,
-  away,
-  shown,
-  maxValue,
-}: {
-  outcome: Extract<AflTradeStoryLineageAsset['outcome'], { kind: 'player' }>;
-  away: boolean;
-  shown: number;
-  maxValue: number;
-}) {
-  const width = maxValue > 0 ? Math.max(3, (Math.max(0, shown) / maxValue) * 100) : 0;
-  return (
-    <>
-      <p className="ts-body">
-        <span className="font-semibold">{outcome.playerName}</span>
-        {outcome.selection ? (
-          <span className="text-(--ts-ink2)">
-            {' '}
-            (pick {outcome.selection.selectionNumber}, {outcome.selection.draftYear})
-          </span>
-        ) : null}
-        {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null}
-      </p>
-      <p className="lg-worth">
-        <b className="tabular-nums">{formatPav(shown)}</b>
-        <span aria-hidden="true" className="lg-track">
-          <span
-            className={away ? 'lg-bar-away' : 'lg-bar'}
-            style={{
-              width: `${width}%`,
-            }}
-          />
-        </span>
-      </p>
-    </>
-  );
-}
 
 export function Outcome({
   asset,
   groupClubId,
   maxValue,
   share,
-  split = false,
 }: {
   asset: AflTradeStoryLineageAsset;
   groupClubId: string;
   maxValue: number;
   share: AflTradePageBidShare | null;
-  /** Public layout: the player in one column, the value and its bar in the next. */
-  split?: boolean;
 }) {
   const { outcome } = asset;
   const value = knownPav(asset.value);
@@ -149,7 +113,6 @@ export function Outcome({
     );
   const away = outcome.clubId !== groupClubId;
   const shown = value ?? 0;
-  if (split) return <PlayerCells outcome={outcome} away={away} shown={shown} maxValue={maxValue} />;
   return (
     <span className="inline-flex min-w-0 flex-col gap-1">
       <span className="ts-body">
@@ -163,12 +126,12 @@ export function Outcome({
         {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null} ·{' '}
         <span className="font-semibold tabular-nums">{formatPav(shown)}</span>
       </span>
-      <span aria-hidden="true" className="lg-bar-row block h-2.5">
+      <span aria-hidden="true" className="block h-2.5">
         <span
           className={`block h-full rounded-full border-2 ${
             away
-              ? 'lg-bar-away border-dashed border-(--ts-muted) bg-transparent'
-              : 'lg-bar border-(--ts-accent) bg-(--ts-accent)/30'
+              ? 'border-dashed border-(--ts-muted) bg-transparent'
+              : 'border-(--ts-accent) bg-(--ts-accent)/30'
           }`}
           style={{
             width: `${Math.max(10, maxValue > 0 ? (Math.max(0, shown) / maxValue) * BAR_WIDTH : 0)}px`,

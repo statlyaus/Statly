@@ -114,155 +114,328 @@
 }
 
 /*
- * The public lineage map in the story collage look (owner, 2026-11-17): a sheet of paper, each club's
- * assets on a taped card edged in its colour, dotted ink routes and value bars in the club's colour.
+ * The public lineage map (the owner's Magic Patterns design, 2026-11-17): cream paper, one taped card
+ * per club with its colour across the top, and every value bar on one shared scale.
  */
-.afl-trade-story .lg-collage h2 {
-  font-family: var(--font-sc-marker), cursive;
-  font-weight: 400;
-  font-size: clamp(2rem, 4.2vw, 3.2rem);
-  line-height: 1.05;
-}
-.lg-collage .lg-sheet {
-  border: 0;
+.mp-lineage {
+  --mp-paper: #f9f4e9;
+  --mp-card: #fbfaf6;
+  --mp-ink: #161616;
+  --mp-soft: #5b5650;
+  --mp-rule: #e3dccb;
+  --mp-accent: #c21f33;
+  margin-top: 3rem;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 3vw, 3rem);
   border-radius: 4px;
-  background-color: #f9f4e9;
-  background-image: url('/Assets/stories/cameron/paper-grain.svg');
-  padding: clamp(1rem, 2.5vw, 2rem);
+  background: var(--mp-paper);
+  color: var(--mp-ink);
+  font-family: var(--font-sc-serif), Georgia, serif;
 }
-.lg-collage .lg-group {
-  position: relative;
-  margin-top: 2.25rem;
-  border-top: 10px solid var(--lg-fill);
-  border-radius: 2px;
-  background: #fbfaf6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-}
-.lg-collage .lg-group::before {
-  content: '';
-  position: absolute;
-  top: -24px;
-  left: 6%;
-  width: 6.5rem;
-  height: 28px;
-  background: rgba(222, 210, 172, 0.85);
-  transform: rotate(-3deg);
-}
-.lg-collage .lg-group:nth-of-type(even)::before {
-  left: auto;
-  right: 8%;
-  transform: rotate(4deg);
-}
-.lg-collage .lg-group .lg-club {
+.mp-lineage .mp-hand {
   font-family: var(--font-sc-hand), cursive;
   font-weight: 700;
-  font-size: 1.9rem;
-  line-height: 1.1;
 }
-.lg-collage .lg-asset {
-  font-family: var(--font-sc-label), sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.afl-trade-story .mp-lineage .mp-title {
+  font-family: var(--font-sc-marker), cursive;
+  font-weight: 400;
+  font-size: clamp(2.25rem, 5vw, 3.75rem);
+  line-height: 1;
 }
-.lg-collage .lg-connector {
-  border-top: 2px solid #161616;
+.mp-lineage .mp-lede {
+  max-width: 44rem;
+  margin-top: 1rem;
+  font-size: clamp(1.1rem, 1.6vw, 1.25rem);
+  line-height: 1.35;
+  color: var(--mp-soft);
 }
-.lg-collage .lg-connector.border-dashed {
-  border-top-style: dotted;
-}
-.lg-collage .lg-node {
-  border-color: #c21f33;
-  border-radius: 0;
-  transform: rotate(45deg);
-}
-.lg-collage .lg-bar-row {
-  height: 1rem;
-}
-.lg-collage .lg-bar {
-  --lg-fallback: #8a8a86;
-  border: 2px solid #161616;
-  border-radius: 2px;
-  background-color: var(--lg-fill, var(--lg-fallback));
-  background-image: radial-gradient(rgba(255, 255, 255, 0.28) 1.3px, transparent 1.8px);
-  background-size: 7px 7px;
-}
-.lg-collage .lg-bar-away {
-  border: 2px dashed #161616;
-  border-radius: 2px;
-}
-.lg-collage .lg-btn {
-  border: 0;
-  border-radius: 2px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
-  font-family: var(--font-sc-label), sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transform: rotate(-1deg);
-}
-.lg-collage .lg-btn:hover {
-  background: #f7c9b3;
-}
-.lg-collage .lg-btn[aria-expanded='true'] {
-  background: #141414;
-  color: #f4f1ea;
-}
-
-/* Public lineage rows as a plain table: what they got, what it became, what it has been worth. */
-.lg-collage .lg-row {
-  display: grid;
-  gap: 0.5rem 1.5rem;
-}
-.lg-collage .lg-became {
-  display: grid;
-  gap: 0.35rem 1.5rem;
-}
-.lg-collage .lg-head {
-  display: none;
-}
-.lg-collage .lg-worth {
-  display: grid;
-  grid-template-columns: 3.75rem minmax(0, 1fr);
+.mp-lineage .mp-key {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem 1.5rem;
+  margin-top: 1.5rem;
+  font-size: 15px;
+  color: var(--mp-soft);
 }
-.lg-collage .lg-worth b {
+.mp-lineage .mp-key li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mp-lineage .mp-key-bar {
+  width: 2.5rem;
+  height: 0.625rem;
+  border-radius: 1px;
+  background: var(--mp-ink);
+}
+.mp-lineage .mp-key-away {
+  background: none;
+  border: 1.5px dashed var(--mp-soft);
+}
+.mp-lineage .mp-key-tick {
+  width: 1px;
+  height: 0.875rem;
+  background: rgba(22, 22, 22, 0.3);
+}
+.mp-lineage .mp-columns {
+  display: grid;
+  gap: 2.5rem 2rem;
+  margin-top: 2.5rem;
+}
+@media (min-width: 1024px) {
+  .mp-lineage .mp-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.mp-lineage .mp-card {
+  position: relative;
+  background: var(--mp-card);
+  box-shadow:
+    0 1px 0 rgba(22, 22, 22, 0.06),
+    0 6px 14px -8px rgba(22, 22, 22, 0.35);
+}
+.mp-lineage .mp-tape {
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  width: 7rem;
+  height: 1.75rem;
+  background: rgba(232, 220, 186, 0.82);
+  box-shadow: 0 1px 1px rgba(22, 22, 22, 0.08);
+  clip-path: polygon(3% 0, 97% 4%, 100% 50%, 96% 100%, 2% 94%, 0 45%);
+}
+.mp-lineage .mp-card-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.75rem 1.5rem 1rem;
+  border-bottom: 5px solid;
+}
+.mp-lineage .mp-card-head h3,
+.mp-lineage .mp-total b,
+.mp-lineage .mp-total span,
+.mp-lineage .mp-chip,
+.mp-lineage .mp-player,
+.mp-lineage .mp-value,
+.mp-lineage .mp-btn,
+.mp-lineage .mp-foot h3 {
   font-family: var(--font-sc-label), sans-serif;
-  font-weight: 600;
-  font-size: 1.35rem;
+  text-transform: uppercase;
+}
+.mp-lineage .mp-card-head h3 {
+  font-size: clamp(1.5rem, 2.6vw, 1.875rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.025em;
+}
+.mp-lineage .mp-card-head .mp-hand {
+  margin-top: 0.25rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  opacity: 0.85;
+}
+.mp-lineage .mp-total {
+  flex: none;
   text-align: right;
 }
-.lg-collage .lg-track {
+.mp-lineage .mp-total b {
   display: block;
-  height: 1rem;
+  font-size: clamp(1.875rem, 3vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
-.lg-collage .lg-track > span {
+.mp-lineage .mp-total span {
   display: block;
-  height: 100%;
+  margin-top: 0.25rem;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  opacity: 0.75;
+  white-space: nowrap;
 }
-@media (min-width: 768px) {
-  .lg-collage .lg-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr);
-    align-items: center;
-  }
-  .lg-collage .lg-became {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-    align-items: center;
-  }
-  .lg-collage .lg-became > :first-child:nth-last-child(3) {
-    grid-column: 1 / -1;
-  }
-  .lg-collage .lg-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr);
-    margin-top: 0.75rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 2px solid #161616;
-    font-family: var(--font-sc-label), sans-serif;
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
+.mp-lineage .mp-row {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--mp-rule);
+}
+.mp-lineage .mp-row:first-child {
+  border-top: 0;
+}
+.mp-lineage .mp-row-away {
+  background: rgba(249, 244, 233, 0.6);
+}
+.mp-lineage .mp-away-note {
+  margin: -0.25rem 0 0.5rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--mp-accent);
+  transform: rotate(-1deg);
+}
+.mp-lineage .mp-traded,
+.mp-lineage .mp-hops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.625rem;
+}
+.mp-lineage .mp-hops {
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.mp-lineage .mp-hop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-chip {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid rgba(22, 22, 22, 0.2);
+  background: var(--mp-paper);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+.mp-lineage .mp-aside {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-via {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-became {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.mp-lineage .mp-player {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.025em;
+}
+.mp-lineage .mp-player svg {
+  flex: none;
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-drafted {
+  padding-left: 22px;
+  font-size: 15px;
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-drafted b {
+  font-weight: 500;
+  color: var(--mp-ink);
+}
+.mp-lineage .mp-value {
+  flex: none;
+  text-align: right;
+}
+.mp-lineage .mp-value b {
+  display: block;
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.mp-lineage .mp-value span {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--mp-soft);
+  white-space: nowrap;
+}
+.mp-lineage .mp-row-away .mp-player,
+.mp-lineage .mp-row-away .mp-value b {
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-row-away .mp-value span {
+  color: var(--mp-accent);
+}
+.mp-lineage .mp-track {
+  position: relative;
+  height: 0.75rem;
+  margin-top: 0.75rem;
+  background: rgba(227, 220, 203, 0.45);
+}
+.mp-lineage .mp-tick {
+  position: absolute;
+  top: -0.25rem;
+  bottom: -0.25rem;
+  width: 1px;
+  background: rgba(22, 22, 22, 0.25);
+}
+.mp-lineage .mp-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+.mp-lineage .mp-bar-away {
+  border: 1.5px dashed var(--mp-soft);
+}
+.mp-lineage .mp-other {
+  margin-top: 0.75rem;
+}
+.mp-lineage .mp-btn {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid rgba(22, 22, 22, 0.4);
+  border-radius: 2px;
+  background: var(--mp-card);
+  color: var(--mp-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+.mp-lineage .mp-row .mp-btn {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  font-size: 0.75rem;
+}
+.mp-lineage .mp-btn:hover,
+.mp-lineage .mp-btn[aria-expanded='true'] {
+  border-color: var(--mp-ink);
+  background: var(--mp-ink);
+  color: var(--mp-card);
+}
+.mp-lineage .mp-btn-this {
+  border-color: var(--mp-accent);
+  background: var(--mp-accent);
+  color: var(--mp-card);
+}
+.mp-lineage .mp-btn:focus-visible {
+  outline: 3px solid var(--mp-accent);
+  outline-offset: 2px;
+}
+.mp-lineage .mp-foot {
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--mp-rule);
+}
+.mp-lineage .mp-foot h3 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--mp-soft);
+}
+.mp-lineage .mp-foot ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
