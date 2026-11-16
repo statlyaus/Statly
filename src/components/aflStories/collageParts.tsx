@@ -43,6 +43,7 @@ export function Sketch({ name, style, ...box }: Place & { name: string; style?: 
       src={`/Assets/stories/cameron/${name}.svg`}
       alt=""
       aria-hidden="true"
+      className={`sc-sk-${name}`}
       style={{ ...place(box), ...style }}
     />
   );
@@ -85,7 +86,16 @@ export function Note({
     <div className="sc-note" style={place(box)}>
       <Tape left="30%" top="-14px" width="40%" rotate={-3} />
       <b className="sc-label">
-        {circled ? <Sketch name="circle-small" left="-12%" top="-18%" width="124%" z={0} /> : null}
+        {circled ? (
+          <Sketch
+            name="circle"
+            left="-24%"
+            top="-10%"
+            width="148%"
+            z={0}
+            style={{ height: '120%' }}
+          />
+        ) : null}
         <span style={{ position: 'relative' }}>{value}</span>
       </b>
       <p className="sc-hand sc-hand-sm">{children}</p>

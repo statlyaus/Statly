@@ -57,7 +57,7 @@ const noteLine = { margin: 0, fontSize: 'clamp(18px, 1.9vw, 26px)', lineHeight: 
 function CircledPick({ pick }: { pick: string }) {
   return (
     <span style={{ position: 'relative', display: 'inline-block', padding: '0 0.35em' }}>
-      <Sketch name="circle" left="-18%" top="-6%" width="136%" />
+      <Sketch name="circle" left="-14%" top="-10%" width="128%" style={{ height: '118%' }} />
       <span
         className="sc-hand"
         style={{ position: 'relative', fontSize: 'clamp(40px, 5vw, 76px)', lineHeight: 1 }}
@@ -312,13 +312,13 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         <div
           aria-hidden="true"
           className="sc-tornC sc-hoops"
-          style={place({ left: '64%', top: '0%', width: '26%', height: '100%', rotate: 2, z: 0 })}
+          style={place({ left: '70%', top: '0%', width: '26%', height: '100%', rotate: 2, z: 0 })}
         />
-        <Sketch name="light-tower" left="68%" top="2%" width="16%" z={2} />
+        <Sketch name="light-tower" left="49%" top="40%" width="12%" z={2} />
         <div
           className="sc-pricetag"
           style={{
-            ...place({ left: '4%', top: '8%', width: '40%', rotate: -6, z: 3 }),
+            ...place({ left: '4%', top: '3%', width: '40%', rotate: -6, z: 3 }),
             boxSizing: 'border-box',
             padding: '4% 5% 4% 12%',
             background: 'var(--sc-paper)',
@@ -347,7 +347,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         <div
           className="sc-tape"
           style={{
-            ...place({ left: '6%', top: '64%', width: '52%', height: '64px', rotate: 3, z: 4 }),
+            ...place({ left: '3%', top: '80%', width: '44%', height: '64px', rotate: 3, z: 4 }),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -355,10 +355,10 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         >
           <span className="sc-hand sc-hand-xl">2021: 15 games. Injuries.</span>
         </div>
-        <Hand left="44%" top="36%" rotate={-3} weight={600}>
+        <Hand left="47%" top="5%" width="20%" rotate={-3} weight={600}>
           + Tom Hawkins up forward
         </Hand>
-        <Sketch name="arrow" left="46%" top="16%" width="16%" rotate={-14} z={1} />
+        <Sketch name="arrow" left="50%" top="22%" width="16%" rotate={-8} z={1} />
       </Stage>
     ),
     body: [
@@ -444,9 +444,9 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         ))}
         <Sketch name="cup" left="2%" top="3%" width="30%" rotate={-2} z={2} />
         <div
-          className="sc-tornB sc-label"
+          className="sc-tornB sc-label sc-wide"
           style={{
-            ...place({ left: '35%', top: '8%', width: '40%', rotate: -2, z: 3 }),
+            ...place({ left: '34%', top: '8%', width: '42%', rotate: -2, z: 3 }),
             boxSizing: 'border-box',
             padding: '4% 5%',
             background: '#141414',
@@ -469,8 +469,9 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
               justifyContent: 'space-between',
               gap: '1rem',
               margin: '0.8rem 0 0',
-              fontSize: 'clamp(20px, 2.4vw, 36px)',
+              fontSize: 'clamp(18px, 2.05vw, 31px)',
               lineHeight: 1.1,
+              whiteSpace: 'nowrap',
             }}
           >
             <span>Geelong</span>
@@ -495,9 +496,9 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         <p
           className="sc-marker"
           style={{
-            ...place({ left: '37%', top: '58%', rotate: -5, z: 6 }),
+            ...place({ left: '3%', top: '68%', rotate: -4, z: 6 }),
             margin: 0,
-            fontSize: 'clamp(48px, 6.5vw, 104px)',
+            fontSize: 'clamp(44px, 5.6vw, 88px)',
             lineHeight: 1.05,
             color: 'var(--sc-red)',
           }}
@@ -510,7 +511,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         <Note value="2 · 18" left="78%" top="38%" width="20%" rotate={-3}>
           goals · disposals from Cameron
         </Note>
-        <Note value="100,024" left="74%" top="70%" width="24%" rotate={2}>
+        <Note value="100,024" left="71%" top="70%" width="28%" rotate={2}>
           people at the MCG
         </Note>
       </Stage>

@@ -213,9 +213,54 @@
   font-size: 24px;
   color: #333;
 }
+/*
+ * On a phone a collage cannot keep its desktop arrangement without the pieces landing on each other,
+ * so the pieces are laid out in a wrapping row instead: sketches first, then notes at a readable size.
+ */
 @media (max-width: 720px) {
   .sc-stage {
-    aspect-ratio: 4/5;
+    aspect-ratio: auto;
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem 1rem;
+    padding: 0.75rem 0;
+  }
+  .sc-stage > * {
+    position: relative !important;
+    inset: auto !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+  .sc-stage > [aria-hidden='true']:not(img),
+  .sc-stage > .sc-sk-arrow,
+  .sc-stage > .sc-sk-underline,
+  .sc-stage > .sc-sk-star,
+  .sc-stage > .sc-sk-route {
+    display: none;
+  }
+  .sc-stage > img {
+    width: 38% !important;
+  }
+  .sc-stage > .sc-sk-light-tower,
+  .sc-stage > .sc-sk-stopwatch {
+    width: 24% !important;
+  }
+  .sc-stage > .sc-note {
+    flex: 0 1 44%;
+    margin-top: 0.5rem;
+  }
+  .sc-stage > .sc-tornTop,
+  .sc-stage > .sc-tornA,
+  .sc-stage > .sc-wide {
+    flex: 1 1 100%;
+  }
+  .sc-stage > .sc-tape {
+    padding: 0.9rem 1.2rem;
+    clip-path: none;
   }
 }
 .sc-tornA {
