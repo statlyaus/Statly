@@ -745,3 +745,138 @@ a.sc-line-slot:focus-visible {
   outline: 3px solid var(--sc-red);
   outline-offset: 3px;
 }
+
+/* The collage at the top of every public trade page: drawn from the trade's own values. */
+.tc {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  margin-bottom: 1.5rem;
+  padding: clamp(1rem, 2.5vw, 2rem);
+  border-radius: 4px;
+}
+.tc-title {
+  margin: 0;
+  font-size: clamp(2.4rem, 5.6vw, 5rem);
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.tc-title span {
+  display: inline-block;
+  padding: 0 0.18em;
+  transform: rotate(-1.5deg);
+}
+.tc-clubs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 2rem 2.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tc-club {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+.tc-hang {
+  position: relative;
+  flex: 0 0 clamp(5.5rem, 10vw, 8.5rem);
+}
+.tc-guernsey {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tc-tape {
+  left: 28%;
+  top: -4%;
+  width: 44%;
+  z-index: 1;
+}
+.tc-club-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.tc-note {
+  position: relative;
+  max-width: 100%;
+  transform: rotate(-2deg);
+}
+.tc-note b {
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+}
+.tc-got ul {
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-sc-hand), cursive;
+  font-weight: 600;
+  font-size: clamp(1.1rem, 1.5vw, 1.35rem);
+  line-height: 1.25;
+}
+.tc-got li + li {
+  margin-top: 0.2rem;
+}
+.tc-band-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.tc-band {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tc-stop {
+  display: grid;
+  grid-template-rows: 4.6rem auto 4.6rem;
+}
+.tc-stop-words {
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.25rem 0;
+  text-align: center;
+}
+.tc-stop-up .tc-stop-words {
+  grid-row: 1;
+  justify-content: flex-end;
+  padding: 0 0.25rem 0.5rem;
+}
+.tc-stop-words .sc-line-chapter {
+  font-size: 1.35rem;
+}
+.tc-stop-lead {
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+.tc-stop-year {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 4.5rem;
+  border-block: 4px solid;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1.3px, transparent 1.8px);
+  background-size: 9px 9px;
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  letter-spacing: 0;
+  flex-direction: column;
+  line-height: 1;
+}
+.tc-stop-year small {
+  font-size: 0.42em;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
+}
+.tc-boxed {
+  padding: 0 0.3em;
+  background: #141414;
+  color: #fff;
+}

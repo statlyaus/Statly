@@ -3,6 +3,7 @@ import Link from 'next/link';
 import './tradeStory.css';
 
 import { ClubBadge } from './ClubBadge';
+import { TradeCollage } from './TradeCollage';
 import { TradeDetails } from './TradeDetails';
 import { TradeLineage } from './TradeLineage';
 import { TradePageNotice } from './TradePageNotice';
@@ -63,29 +64,32 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           / {story.trade.year} / {tradeName(story.trade.clubs)}
         </nav>
 
+        {audience === 'public' ? <TradeCollage story={story} headline={headline(model)} /> : null}
         <header>
-          <h1
-            className={`max-w-[24ch] text-balance ${audience === 'public' ? 'ts-net font-display font-bold' : 'ts-head font-semibold'}`}
-          >
-            {headline(model)}
-          </h1>
-          <p className="mt-1 ts-body text-(--ts-ink2)">
-            {tradeName(story.trade.clubs)} trade, {story.trade.year}
-          </p>
-          <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s net on this trade">
-            {story.nets.tradeAlone.map((net) => (
-              <li
-                key={net.clubId}
-                className="flex items-center gap-2.5 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-3.5 py-2"
-              >
-                <ClubBadge clubName={net.clubName} named />
-                <b className={`ts-net font-semibold tabular-nums ${netTone(net.net)}`}>
-                  {netText(net)}
-                </b>
-                <span className="ts-small text-(--ts-ink2)">{net.clubName}</span>
-              </li>
-            ))}
-          </ul>
+          {audience === 'public' ? null : (
+            <>
+              <h1 className="max-w-[24ch] text-balance ts-head font-semibold">{headline(model)}</h1>
+              <p className="mt-1 ts-body text-(--ts-ink2)">
+                {tradeName(story.trade.clubs)} trade, {story.trade.year}
+              </p>
+            </>
+          )}
+          {audience === 'public' ? null : (
+            <ul className="mt-4 flex flex-wrap gap-2.5" aria-label="Each club’s net on this trade">
+              {story.nets.tradeAlone.map((net) => (
+                <li
+                  key={net.clubId}
+                  className="flex items-center gap-2.5 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-3.5 py-2"
+                >
+                  <ClubBadge clubName={net.clubName} named />
+                  <b className={`ts-net font-semibold tabular-nums ${netTone(net.net)}`}>
+                    {netText(net)}
+                  </b>
+                  <span className="ts-small text-(--ts-ink2)">{net.clubName}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <ul className="mt-3 grid gap-1.5" aria-label="What each club gave">
             {story.sides.map((side) => (
               <li key={side.clubId} className="flex flex-wrap items-center gap-x-2 gap-y-1">

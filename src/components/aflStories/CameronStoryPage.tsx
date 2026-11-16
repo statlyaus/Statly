@@ -18,7 +18,7 @@ import { Sketch } from './collageParts';
  * The Jeremy Cameron story page: the masthead, then six chapters. Each chapter shows its headline and
  * collage; "Read the chapter" opens the words behind it.
  */
-export function CameronStoryPage() {
+export function CameronStoryPage({ tradeHref }: { tradeHref: string | null }) {
   const [open, setOpen] = useState<readonly boolean[]>(() => CAMERON_CHAPTERS.map(() => false));
   const allOpen = open.every(Boolean);
   const set = (chapter: number, value: boolean) =>
@@ -227,6 +227,16 @@ export function CameronStoryPage() {
           style={{ position: 'static', width: '100%', maxWidth: 900, height: 'auto' }}
         />
         <ChapterSlips label="Chapters again" onOpen={(chapter) => set(chapter, true)} />
+        <p style={{ margin: '1rem 0 0', display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.5rem' }}>
+          {tradeHref ? (
+            <a href={tradeHref} className="sc-more sc-label">
+              Who won the trade? See the numbers →
+            </a>
+          ) : null}
+          <a href="/afl/trades" className="sc-more sc-label">
+            Every trade →
+          </a>
+        </p>
         <p style={{ margin: '1.5rem 0 0', fontSize: 14, lineHeight: 1.6, color: '#444' }}>
           {CAMERON_SOURCES}
         </p>
