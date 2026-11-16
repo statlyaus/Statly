@@ -169,31 +169,47 @@ export function TradeLineage({
         here.
       </p>
       <div className="lg-sheet mt-4 rounded-2xl border border-(--ts-line) bg-(--ts-surface) p-3 sm:p-4">
-        <ul
-          className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-(--ts-ink2)"
-          aria-label="Key"
-        >
-          <li className="flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="lg-node size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
-            />
-            this trade
-          </li>
-          <li className="flex items-center gap-1.5">
-            <Connector /> stayed with the club
-          </li>
-          <li className="flex items-center gap-1.5">
-            <Connector dashed /> went to another club
-          </li>
-          <li className="flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="lg-bar inline-block h-2.5 w-8 rounded-full border-2 border-(--ts-accent) bg-(--ts-accent)/30"
-            />
-            a longer bar is more value (PAV)
-          </li>
-        </ul>
+        {isPublic ? (
+          <ul
+            className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-(--ts-ink2)"
+            aria-label="Key"
+          >
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="lg-bar inline-block h-3 w-8" />a longer bar is
+              more value
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="lg-bar-away inline-block h-3 w-8" />
+              value the player gave another club
+            </li>
+          </ul>
+        ) : (
+          <ul
+            className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-(--ts-ink2)"
+            aria-label="Key"
+          >
+            <li className="flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="lg-node size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
+              />
+              this trade
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Connector /> stayed with the club
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Connector dashed /> went to another club
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="lg-bar inline-block h-2.5 w-8 rounded-full border-2 border-(--ts-accent) bg-(--ts-accent)/30"
+              />
+              a longer bar is more value (PAV)
+            </li>
+          </ul>
+        )}
         {groups.map(({ club, tint, assets }) => (
           <div
             key={club.clubId}
@@ -204,6 +220,13 @@ export function TradeLineage({
               <ClubBadge clubName={club.clubName} size="md" named />
               <span className="lg-club">{club.clubName} received</span>
             </h3>
+            {isPublic ? (
+              <p aria-hidden="true" className="lg-row lg-head">
+                <span>Got</span>
+                <span>Became</span>
+                <span>Worth so far (PAV)</span>
+              </p>
+            ) : null}
             <ul className="mt-2">
               {assets.map((asset) => {
                 const before = asset.hops.filter(({ relation }) => relation === 'before');
@@ -214,47 +237,99 @@ export function TradeLineage({
                     key={asset.transferId}
                     className="border-t border-(--ts-line) py-3 first:border-t-0"
                   >
-                    <div className="grid gap-2 md:grid-cols-[180px_1fr] md:items-center">
-                      <div>
-                        <p className="lg-asset ts-body font-medium">{asset.label}</p>
-                        {before.length > 0 ? (
-                          <p className="mt-1 flex flex-wrap items-center gap-1.5 ts-small text-(--ts-ink2)">
-                            <span>Came via</span>
-                            {before.map((hop, at) => (
-                              <Fragment key={`before-${hop.tradeId}`}>
-                                {at > 0 ? <span>then</span> : null}
-                                {tradeButton(hop.tradeId, asset.transferId, `a ${hop.year} trade`)}
-                              </Fragment>
-                            ))}
-                          </p>
-                        ) : null}
+                    {isPublic ? (
+                      <div className="lg-row">
+                        <div>
+                          <p className="lg-asset ts-body font-medium">{asset.label}</p>
+                          {before.length > 0 ? (
+                            <p className="mt-1 flex flex-wrap items-center gap-1.5 ts-small text-(--ts-ink2)">
+                              <span>Came via</span>
+                              {before.map((hop, at) => (
+                                <Fragment key={`before-${hop.tradeId}`}>
+                                  {at > 0 ? <span>then</span> : null}
+                                  {tradeButton(
+                                    hop.tradeId,
+                                    asset.transferId,
+                                    `a ${hop.year} trade`
+                                  )}
+                                </Fragment>
+                              ))}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="lg-became">
+                          {after.length > 0 ? (
+                            <p className="mb-1.5 flex flex-wrap items-center gap-1.5 ts-small text-(--ts-ink2)">
+                              <span>Traded on:</span>
+                              {after.map((hop) => (
+                                <Fragment key={`after-${hop.tradeId}`}>
+                                  {tradeButton(
+                                    hop.tradeId,
+                                    asset.transferId,
+                                    `⇄ ${tradeShortName([hop])} ${hop.year}`
+                                  )}
+                                </Fragment>
+                              ))}
+                            </p>
+                          ) : null}
+                          <Outcome
+                            asset={asset}
+                            groupClubId={club.clubId}
+                            maxValue={maxValue}
+                            share={share}
+                            split
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-y-2">
-                        <span
-                          aria-hidden="true"
-                          className="lg-node size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
-                        />
-                        {after.map((hop) => (
-                          <Fragment key={`after-${hop.tradeId}`}>
-                            <Connector />
-                            {tradeButton(
-                              hop.tradeId,
-                              asset.transferId,
-                              `⇄ ${tradeShortName([hop])} ${hop.year}`
-                            )}
-                          </Fragment>
-                        ))}
-                        <Connector
-                          dashed={'clubId' in asset.outcome && asset.outcome.clubId !== club.clubId}
-                        />
-                        <Outcome
-                          asset={asset}
-                          groupClubId={club.clubId}
-                          maxValue={maxValue}
-                          share={share}
-                        />
+                    ) : (
+                      <div className="grid gap-2 md:grid-cols-[180px_1fr] md:items-center">
+                        <div>
+                          <p className="lg-asset ts-body font-medium">{asset.label}</p>
+                          {before.length > 0 ? (
+                            <p className="mt-1 flex flex-wrap items-center gap-1.5 ts-small text-(--ts-ink2)">
+                              <span>Came via</span>
+                              {before.map((hop, at) => (
+                                <Fragment key={`before-${hop.tradeId}`}>
+                                  {at > 0 ? <span>then</span> : null}
+                                  {tradeButton(
+                                    hop.tradeId,
+                                    asset.transferId,
+                                    `a ${hop.year} trade`
+                                  )}
+                                </Fragment>
+                              ))}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-y-2">
+                          <span
+                            aria-hidden="true"
+                            className="lg-node size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
+                          />
+                          {after.map((hop) => (
+                            <Fragment key={`after-${hop.tradeId}`}>
+                              <Connector />
+                              {tradeButton(
+                                hop.tradeId,
+                                asset.transferId,
+                                `⇄ ${tradeShortName([hop])} ${hop.year}`
+                              )}
+                            </Fragment>
+                          ))}
+                          <Connector
+                            dashed={
+                              'clubId' in asset.outcome && asset.outcome.clubId !== club.clubId
+                            }
+                          />
+                          <Outcome
+                            asset={asset}
+                            groupClubId={club.clubId}
+                            maxValue={maxValue}
+                            share={share}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
                     {panel(asset.transferId)}
                   </li>
                 );
