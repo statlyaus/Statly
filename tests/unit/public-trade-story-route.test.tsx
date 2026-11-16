@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAflTradeStoryBundleSource } from '@/server/aflTradeIntelligence/development/tradeStoryBundle';
@@ -134,6 +134,19 @@ describe('public trade pages', () => {
     );
     // The public layout provides <main>; the page must not nest a second one.
     expect(document.querySelector('main')).toBeNull();
+  });
+
+  it('opens a trade with its collage: one heading, each club’s result, and who led when', async () => {
+    const model = source.load(first.tradeId)!;
+    loadStoryMock.mockResolvedValue(available(model));
+    render(await PublicTradeStoryPage(params({ tradeId: encodeURIComponent(first.tradeId) })));
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    const clubs = within(screen.getByRole('list', { name: 'Each club’s result and what it got' }));
+    for (const side of model.story.sides)
+      expect(clubs.getAllByText(side.clubName).length).toBeGreaterThan(0);
+    // One stop for every point the trade's net line holds, oldest first.
+    const band = within(screen.getByRole('list', { name: 'Who was ahead, point by point' }));
+    expect(band.getAllByRole('listitem')).toHaveLength(model.story.nets.tradeAlone[0]!.line.length);
   });
 
   it('shows a club’s chains with public links', async () => {

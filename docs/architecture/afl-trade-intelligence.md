@@ -4471,6 +4471,11 @@ hand-written story, not bundle data: its facts are in `cameronChapters.tsx` with
 the foot of the page, and a change to them needs a source. Story components never import the private
 trade modules.
 
+**Trade collage.** Every public trade page opens with `TradeCollage.tsx`, drawn only from that trade's
+story: each club's guernsey sketch in its colours (`aflStories/guernseySketch.ts`), its net on a taped
+note, what it received, and a band of who was ahead at each checkpoint of the net line. It adds no
+facts of its own. The private page keeps the plain header.
+
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
 Draftguru and Official AFL, draft boards from Footyinfo, and the PAV method and published values from

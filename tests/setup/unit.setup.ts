@@ -3,6 +3,20 @@ import { afterEach, beforeAll, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+// next/font only runs inside Next. Each typeface the app asks for gets a stand-in class.
+vi.mock('next/font/google', () => {
+  const font = () => ({ className: 'font', variable: 'font' });
+  return {
+    Caveat: font,
+    Inter: font,
+    Newsreader: font,
+    Oswald: font,
+    Permanent_Marker: font,
+    Saira: font,
+    Saira_Extra_Condensed: font,
+  };
+});
+
 // Constructing a PrismaClient loads the native query engine immediately, without a query. Inside a
 // Vitest worker that has aborted the whole unit run (#809), so the unit tier never constructs one.
 // Modules that import the shared client get one that throws on first use; a test that needs it
