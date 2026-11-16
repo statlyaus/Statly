@@ -803,10 +803,8 @@ a.sc-line-slot:focus-visible {
 }
 .tc-note {
   position: relative;
-  transform: rotate(-2deg);
-}
-.tc-note {
   max-width: 100%;
+  transform: rotate(-2deg);
 }
 .tc-note b {
   font-size: clamp(1.8rem, 3vw, 2.8rem);
