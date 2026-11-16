@@ -1,6 +1,16 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
+
+import { STORY_FONT_CLASS } from '@/components/aflStories/CameronMasthead';
 
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
@@ -10,6 +20,7 @@ import { LineageTradePanel, panelId } from './LineageTradePanel';
 import {
   bidShareOf,
   bidSharesByPickId,
+  clubStyle,
   knownPav,
   storyClubNames,
   tradeHash,
@@ -135,6 +146,7 @@ export function TradeLineage({
     );
   };
 
+  const isPublic = audience === 'public';
   const groups = story.trade.clubs.map((club, index) => ({
     club,
     tint: index % 2 === 0 ? 'bg-(--ts-group-a)' : 'bg-(--ts-group-b)',
@@ -144,39 +156,53 @@ export function TradeLineage({
   }));
 
   return (
-    <section aria-labelledby="lineage-title" className="mt-12">
+    <section
+      aria-labelledby="lineage-title"
+      className={`mt-12 ${isPublic ? `lg-collage ${STORY_FONT_CLASS}` : ''}`}
+    >
       <h2 id="lineage-title" className="ts-head font-semibold">
-        Lineage
+        {isPublic ? 'Where everything went' : 'Lineage'}
       </h2>
-      <p className="mt-1 text-(--ts-ink2)">
-        Every asset from the trade, followed to the player it became. Open any{' '}
-        <span aria-hidden="true">⇄</span>
-        <span className="sr-only">trade button</span> to see that trade here.
+      <p className="mt-1 max-w-[70ch] text-(--ts-ink2)">
+        Every player and pick in the trade, followed to the player it became and what he has been
+        worth. A pick that was traded again shows each later trade on the way: open one to see it
+        here.
       </p>
-      <div className="mt-4 rounded-2xl border border-(--ts-line) bg-(--ts-surface) p-3 sm:p-4">
+      <div className="lg-sheet mt-4 rounded-2xl border border-(--ts-line) bg-(--ts-surface) p-3 sm:p-4">
         <ul
           className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-(--ts-ink2)"
           aria-label="Key"
         >
           <li className="flex items-center gap-1.5">
-            <Connector /> held by the club
+            <span
+              aria-hidden="true"
+              className="lg-node size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
+            />
+            this trade
           </li>
           <li className="flex items-center gap-1.5">
-            <Connector dashed /> after it left the club
+            <Connector /> stayed with the club
+          </li>
+          <li className="flex items-center gap-1.5">
+            <Connector dashed /> went to another club
           </li>
           <li className="flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className="inline-block h-2.5 w-8 rounded-full border-2 border-(--ts-accent) bg-(--ts-accent)/30"
+              className="lg-bar inline-block h-2.5 w-8 rounded-full border-2 border-(--ts-accent) bg-(--ts-accent)/30"
             />
-            bar length is PAV
+            a longer bar is more value (PAV)
           </li>
         </ul>
         {groups.map(({ club, tint, assets }) => (
-          <div key={club.clubId} className={`mt-3 rounded-xl p-3 sm:p-4 ${tint}`}>
+          <div
+            key={club.clubId}
+            className={`lg-group mt-3 rounded-xl p-3 sm:p-4 ${tint}`}
+            style={{ '--lg-fill': clubStyle(club.clubName).fill } as CSSProperties}
+          >
             <h3 className="flex items-center gap-2 ts-body font-semibold">
               <ClubBadge clubName={club.clubName} size="md" named />
-              {club.clubName} received
+              <span className="lg-club">{club.clubName} received</span>
             </h3>
             <ul className="mt-2">
               {assets.map((asset) => {
@@ -189,17 +215,24 @@ export function TradeLineage({
                     className="border-t border-(--ts-line) py-3 first:border-t-0"
                   >
                     <div className="grid gap-2 md:grid-cols-[180px_1fr] md:items-center">
-                      <p className="ts-body font-medium">{asset.label}</p>
+                      <div>
+                        <p className="lg-asset ts-body font-medium">{asset.label}</p>
+                        {before.length > 0 ? (
+                          <p className="mt-1 flex flex-wrap items-center gap-1.5 ts-small text-(--ts-ink2)">
+                            <span>Came via</span>
+                            {before.map((hop, at) => (
+                              <Fragment key={`before-${hop.tradeId}`}>
+                                {at > 0 ? <span>then</span> : null}
+                                {tradeButton(hop.tradeId, asset.transferId, `a ${hop.year} trade`)}
+                              </Fragment>
+                            ))}
+                          </p>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap items-center gap-y-2">
-                        {before.map((hop) => (
-                          <Fragment key={`before-${hop.tradeId}`}>
-                            {tradeButton(hop.tradeId, asset.transferId, `via ${hop.year}`)}
-                            <Connector dashed />
-                          </Fragment>
-                        ))}
                         <span
                           aria-hidden="true"
-                          className="size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
+                          className="lg-node size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
                         />
                         {after.map((hop) => (
                           <Fragment key={`after-${hop.tradeId}`}>
@@ -230,7 +263,7 @@ export function TradeLineage({
           </div>
         ))}
         <div className="mt-4">
-          <h3 className="ts-small font-medium text-(--ts-ink2)">Trades in this lineage</h3>
+          <h3 className="ts-small font-medium text-(--ts-ink2)">Every trade in this map</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {story.lineage.trades.map((trade) => (
               <li key={trade.tradeId}>

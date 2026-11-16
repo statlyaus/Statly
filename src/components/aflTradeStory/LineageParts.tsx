@@ -28,7 +28,7 @@ export function TradeButton({
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
-      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
+      className={`lg-btn inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
         open
           ? 'border-(--ts-accent) text-(--ts-accent)'
           : 'border-(--ts-line) hover:border-(--ts-muted)'
@@ -45,7 +45,7 @@ export function TradeButton({
 export const Connector = ({ dashed }: { dashed?: boolean }) => (
   <span
     aria-hidden="true"
-    className={`h-0 w-5 flex-none border-t-2 sm:w-8 ${dashed ? 'border-dashed border-(--ts-muted)' : 'border-(--ts-accent)'}`}
+    className={`lg-connector h-0 w-5 flex-none border-t-2 sm:w-8 ${dashed ? 'border-dashed border-(--ts-muted)' : 'border-(--ts-accent)'}`}
   />
 );
 
@@ -119,12 +119,12 @@ export function Outcome({
         {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null} ·{' '}
         <span className="font-semibold tabular-nums">{formatPav(shown)}</span>
       </span>
-      <span aria-hidden="true" className="block h-2.5">
+      <span aria-hidden="true" className="lg-bar-row block h-2.5">
         <span
           className={`block h-full rounded-full border-2 ${
             away
-              ? 'border-dashed border-(--ts-muted) bg-transparent'
-              : 'border-(--ts-accent) bg-(--ts-accent)/30'
+              ? 'lg-bar-away border-dashed border-(--ts-muted) bg-transparent'
+              : 'lg-bar border-(--ts-accent) bg-(--ts-accent)/30'
           }`}
           style={{
             width: `${Math.max(10, maxValue > 0 ? (Math.max(0, shown) / maxValue) * BAR_WIDTH : 0)}px`,

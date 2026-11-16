@@ -112,3 +112,99 @@
     --vl: var(--vl-dark);
   }
 }
+
+/*
+ * The public lineage map in the story collage look (owner, 2026-11-17): a sheet of paper, each club's
+ * assets on a taped card edged in its colour, dotted ink routes and value bars in the club's colour.
+ */
+.afl-trade-story .lg-collage h2 {
+  font-family: var(--font-sc-marker), cursive;
+  font-weight: 400;
+  font-size: clamp(2rem, 4.2vw, 3.2rem);
+  line-height: 1.05;
+}
+.lg-collage .lg-sheet {
+  border: 0;
+  border-radius: 4px;
+  background-color: #f9f4e9;
+  background-image: url('/Assets/stories/cameron/paper-grain.svg');
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+.lg-collage .lg-group {
+  position: relative;
+  margin-top: 2.25rem;
+  border-top: 10px solid var(--lg-fill);
+  border-radius: 2px;
+  background: #fbfaf6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.lg-collage .lg-group::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: 6%;
+  width: 6.5rem;
+  height: 28px;
+  background: rgba(222, 210, 172, 0.85);
+  transform: rotate(-3deg);
+}
+.lg-collage .lg-group:nth-of-type(even)::before {
+  left: auto;
+  right: 8%;
+  transform: rotate(4deg);
+}
+.lg-collage .lg-group .lg-club {
+  font-family: var(--font-sc-hand), cursive;
+  font-weight: 700;
+  font-size: 1.9rem;
+  line-height: 1.1;
+}
+.lg-collage .lg-asset {
+  font-family: var(--font-sc-label), sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.lg-collage .lg-connector {
+  border-top: 2px solid #161616;
+}
+.lg-collage .lg-connector.border-dashed {
+  border-top-style: dotted;
+}
+.lg-collage .lg-node {
+  border-color: #c21f33;
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.lg-collage .lg-bar-row {
+  height: 1rem;
+}
+.lg-collage .lg-bar {
+  --lg-fallback: #8a8a86;
+  border: 2px solid #161616;
+  border-radius: 2px;
+  background-color: var(--lg-fill, var(--lg-fallback));
+  background-image: radial-gradient(rgba(255, 255, 255, 0.28) 1.3px, transparent 1.8px);
+  background-size: 7px 7px;
+}
+.lg-collage .lg-bar-away {
+  border: 2px dashed #161616;
+  border-radius: 2px;
+}
+.lg-collage .lg-btn {
+  border: 0;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  font-family: var(--font-sc-label), sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transform: rotate(-1deg);
+}
+.lg-collage .lg-btn:hover {
+  background: #f7c9b3;
+}
+.lg-collage .lg-btn[aria-expanded='true'] {
+  background: #141414;
+  color: #f4f1ea;
+}
