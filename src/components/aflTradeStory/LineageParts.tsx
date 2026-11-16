@@ -80,7 +80,7 @@ function PlayerCells({
           <span
             className={away ? 'lg-bar-away' : 'lg-bar'}
             style={{
-              width: `${maxValue > 0 ? Math.max(3, (Math.max(0, shown) / maxValue) * 100) : 0}%`,
+              width: `${width}%`,
             }}
           />
         </span>
