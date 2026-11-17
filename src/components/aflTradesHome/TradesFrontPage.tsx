@@ -17,7 +17,7 @@ import {
   CameronTitle,
   STORY_COLLAGE_CLASS,
 } from '@/components/aflStories/CameronMasthead';
-import { ScarfLadder } from './ScarfLadder';
+import { TowerLadder } from './TowerLadder';
 import { TradeMarketHero } from './TradeMarketHero';
 import { CameronTimeline } from '@/components/aflStories/CameronTimeline';
 import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
@@ -25,7 +25,7 @@ import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/deve
 /**
  * The home page while the trade pages are live (owner, 2026-11-16: "a home page that draws someone
  * in"). It opens on the owner's paper collage of one trade, the Jeremy Cameron story, which leads to
- * that story and to the trade itself; then the trade ladder drawn as club scarves, the biggest wins and each season. Real
+ * that story and to the trade itself; then the trade ladder drawn as ground light towers, the biggest wins and each season. Real
  * numbers only, club colours only, original sketches, and no player or club imagery.
  */
 
@@ -149,7 +149,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
         </div>
       </section>
 
-      <ScarfLadder ladder={ladder} firstYear={firstYear} />
+      <TowerLadder ladder={ladder} firstYear={firstYear} />
 
       <div className={`${container} grid gap-14 py-12 lg:py-16`}>
         {nextWins.length > 0 ? (
