@@ -1,0 +1,326 @@
+/*
+ * The trade ladder as club scarves on a taped line (ScarfLadder.tsx). It sits on the story collage's
+ * paper (.sc) and uses its ink, tape and lettering. Narrow first: one club per row with the line
+ * upright; from a wide chart up, the line lies flat and the scarves stand on it or hang from it.
+ */
+.sl {
+  --sl-h: clamp(420px, 46vw, 600px);
+  --sl-pad: 3.4rem;
+  --sl-label: 3.75rem;
+  --sl-value: 5.25rem;
+  padding-block: 4rem 3.5rem;
+}
+.sl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.25rem 3rem;
+}
+.sl-title {
+  margin: 0;
+  font-size: clamp(50px, 6.6vw, 104px);
+  line-height: 1.02;
+  text-wrap: balance;
+}
+.sl-title span {
+  display: inline-block;
+  padding: 0 0.2em;
+  color: var(--sc-paper);
+  background: var(--sc-ink);
+  transform: rotate(-1.5deg);
+}
+.sl-lede {
+  max-width: 31rem;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.5;
+  color: #2a2a2a;
+}
+.sl-chart {
+  container-type: inline-size;
+  position: relative;
+  margin-top: 2.5rem;
+}
+.sl-cols {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sl-foot {
+  margin: 1.25rem 0 0;
+  font-size: 15px;
+  color: #3a3a3a;
+}
+
+/* Narrow: rows across an upright line. */
+.sl-axis {
+  display: grid;
+  grid-template-columns:
+    var(--sl-label) calc((100% - var(--sl-label) - var(--sl-value)) * var(--sl-down))
+    1fr;
+  margin: 0 0 0.4rem;
+  font-size: 13px;
+  color: #3a3a3a;
+}
+.sl-axis span:first-child {
+  grid-column: 2;
+  padding-right: 0.6rem;
+  text-align: right;
+}
+.sl-axis span:last-child {
+  padding-left: 0.6rem;
+}
+.sl-line {
+  position: absolute;
+  z-index: 1;
+  top: 1.6rem;
+  bottom: 0;
+  left: calc(var(--sl-label) + (100% - var(--sl-label) - var(--sl-value)) * var(--sl-down) - 1px);
+  width: 3px;
+  background: var(--sc-ink);
+  pointer-events: none;
+}
+.sl-tape,
+.sl-note {
+  display: none;
+}
+.sl-col {
+  display: grid;
+  grid-template-columns: var(--sl-label) minmax(0, 1fr) var(--sl-value);
+  align-items: center;
+  min-height: 2.9rem;
+  color: var(--sc-ink);
+  text-decoration: none;
+  transition: opacity 0.2s ease-out;
+}
+.sc a.sl-col:hover {
+  color: var(--sc-ink);
+}
+.sl-col:focus-visible {
+  outline: 3px solid var(--sc-red);
+  outline-offset: 2px;
+}
+.sl-cols:has(.sl-col:hover) .sl-col:not(:hover) {
+  opacity: 0.42;
+}
+.sl-club {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.sl-club .sc-label {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+.sl-record {
+  font-size: 12px;
+  color: #3a3a3a;
+  font-variant-numeric: tabular-nums;
+}
+.sl-bar {
+  position: relative;
+  height: 1.3rem;
+}
+.sl-scarf {
+  --sl-dir: to right;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: max(4px, calc(var(--sl-len) * 100%));
+  box-shadow: inset 0 0 0 1.5px var(--sc-ink);
+  mix-blend-mode: multiply;
+  transform-origin: left center;
+  animation: sl-unfurl-x 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--sl-i) * 30ms);
+}
+.sl-ahead .sl-scarf {
+  left: calc(var(--sl-down) * 100% + 2px);
+}
+.sl-behind .sl-scarf {
+  --sl-dir: to left;
+  right: calc(var(--sl-up) * 100% + 1px);
+  transform-origin: right center;
+}
+/* The riso grain: paper showing through the ink. */
+.sl-scarf::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/Assets/trades/riso-grain.svg');
+  background-size: 160px;
+}
+/* The fringe at the scarf's free end. */
+.sl-scarf::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 9px;
+  background: repeating-linear-gradient(to bottom, var(--sl-fringe) 0 2px, transparent 2px 4px);
+}
+.sl-ahead .sl-scarf::before {
+  left: 100%;
+}
+.sl-behind .sl-scarf::before {
+  right: 100%;
+}
+.sl-val {
+  font-size: 23px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.sl-behind .sl-val {
+  color: var(--sc-red);
+}
+
+@keyframes sl-unfurl-x {
+  from {
+    scale: 0 1;
+  }
+}
+@keyframes sl-unfurl-y {
+  from {
+    scale: 1 0;
+  }
+}
+
+/* Wide: the line lies flat, ahead scarves stand on it and behind scarves hang from it. */
+@container (min-width: 860px) {
+  .sl-axis {
+    display: none;
+  }
+  .sl-cols {
+    display: grid;
+    grid-template-columns: repeat(var(--sl-n), minmax(0, 1fr));
+  }
+  .sl-line {
+    top: calc(var(--sl-pad) + var(--sl-up) * var(--sl-h) - 1px);
+    bottom: auto;
+    left: -0.5rem;
+    right: -0.5rem;
+    width: auto;
+    height: 3px;
+  }
+  .sl-tape {
+    display: block;
+    top: -13px;
+    width: 76px;
+  }
+  .sl-tape-start {
+    left: -46px;
+    transform: rotate(-7deg);
+  }
+  .sl-tape-end {
+    right: -46px;
+    transform: rotate(6deg);
+  }
+  .sl-note {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    max-width: 19rem;
+    margin: 0;
+    padding: 0.8rem 1rem 0.9rem;
+    font-size: clamp(20px, 2cqi, 26px);
+    background: var(--sc-paper);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  }
+  .sl-note-up {
+    top: calc(var(--sl-pad) + 0.5rem);
+    right: 4%;
+    transform: rotate(1.4deg);
+  }
+  .sl-note-down {
+    bottom: calc(var(--sl-pad) + 1.5rem);
+    left: 6%;
+    transform: rotate(-1.2deg);
+  }
+  .sl-col {
+    display: block;
+    position: relative;
+    height: calc(var(--sl-h) + 2 * var(--sl-pad));
+    min-height: 0;
+  }
+  .sl-bar {
+    position: absolute;
+    top: var(--sl-pad);
+    left: 0;
+    right: 0;
+    height: var(--sl-h);
+  }
+  .sl-scarf,
+  .sl-ahead .sl-scarf,
+  .sl-behind .sl-scarf {
+    left: 50%;
+    right: auto;
+    width: min(62%, 46px);
+    height: max(4px, calc(var(--sl-len) * 100%));
+    translate: -50% 0;
+    rotate: var(--sl-tilt);
+    animation-name: sl-unfurl-y;
+  }
+  .sl-ahead .sl-scarf {
+    --sl-dir: to top;
+    top: auto;
+    bottom: calc(var(--sl-down) * 100% + 2px);
+    transform-origin: center bottom;
+  }
+  .sl-behind .sl-scarf {
+    --sl-dir: to bottom;
+    top: calc(var(--sl-up) * 100% + 1px);
+    bottom: auto;
+    transform-origin: center top;
+  }
+  .sl-scarf::before,
+  .sl-ahead .sl-scarf::before,
+  .sl-behind .sl-scarf::before {
+    top: auto;
+    bottom: auto;
+    left: 2px;
+    right: 2px;
+    width: auto;
+    height: 11px;
+    background: repeating-linear-gradient(to right, var(--sl-fringe) 0 2px, transparent 2px 4.5px);
+  }
+  .sl-ahead .sl-scarf::before {
+    bottom: 100%;
+  }
+  .sl-behind .sl-scarf::before {
+    top: 100%;
+  }
+  .sl-val,
+  .sl-club {
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    text-align: center;
+    align-items: center;
+  }
+  .sl-val {
+    font-size: clamp(14px, 1.5cqi, 20px);
+    white-space: nowrap;
+  }
+  .sl-ahead .sl-val {
+    bottom: calc(var(--sl-pad) + (var(--sl-down) + var(--sl-len)) * var(--sl-h) + 16px);
+  }
+  .sl-behind .sl-val {
+    top: calc(var(--sl-pad) + (var(--sl-up) + var(--sl-len)) * var(--sl-h) + 16px);
+  }
+  .sl-ahead .sl-club {
+    top: calc(var(--sl-pad) + var(--sl-up) * var(--sl-h) + 10px);
+  }
+  .sl-behind .sl-club {
+    bottom: calc(var(--sl-pad) + var(--sl-down) * var(--sl-h) + 10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sl-scarf {
+    animation: none;
+  }
+  .sl-col {
+    transition: none;
+  }
+}
