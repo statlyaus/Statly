@@ -10,7 +10,6 @@ import {
   tradeLadder,
   tradesListHref,
   tradeYearSummaries,
-  type TradeLadderRow,
 } from '@/components/aflTradeStory/tradesListQuery';
 import {
   CAMERON_STANDFIRST,
@@ -18,6 +17,7 @@ import {
   CameronTitle,
   STORY_COLLAGE_CLASS,
 } from '@/components/aflStories/CameronMasthead';
+import { TowerLadder } from './TowerLadder';
 import { TradeMarketHero } from './TradeMarketHero';
 import { CameronTimeline } from '@/components/aflStories/CameronTimeline';
 import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
@@ -25,14 +25,12 @@ import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/deve
 /**
  * The home page while the trade pages are live (owner, 2026-11-16: "a home page that draws someone
  * in"). It opens on the owner's paper collage of one trade, the Jeremy Cameron story, which leads to
- * that story and to the trade itself; then the trade ladder, the biggest wins and each season. Real
+ * that story and to the trade itself; then the trade ladder drawn as ground light towers, the biggest wins and each season. Real
  * numbers only, club colours only, original sketches, and no player or club imagery.
  */
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
-const lightRing =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-bar';
 const container = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10';
 const sectionTitle = 'font-display text-5xl font-extrabold leading-none sm:text-6xl';
 const tone = (net: number) =>
@@ -41,63 +39,6 @@ const tone = (net: number) =>
     : net > 0
       ? 'text-result-win'
       : 'text-result-loss';
-const kicker = 'font-display text-sm font-semibold tracking-[0.14em]';
-
-/** One club on the trade ladder: a bar from the middle line, right when ahead, left when behind. */
-function LadderRow({ row, place, scale }: { row: TradeLadderRow; place: number; scale: number }) {
-  const style = clubStyle(row.name);
-  const ahead = row.net >= 0;
-  const record = (
-    <span className="shrink-0 whitespace-nowrap text-xs font-normal text-white/70 tabular-nums">
-      {row.ahead}–{row.behind}
-      <span className="sr-only">
-        : ahead on {row.ahead} trades, behind on {row.behind}
-      </span>
-    </span>
-  );
-  return (
-    <li className="border-b border-white/15">
-      <Link
-        href={tradesListHref({ year: null, club: row.slug, sort: 'newest' })}
-        className={`grid grid-cols-[1.75rem_auto_minmax(0,1fr)_auto] items-center gap-x-3 py-2 transition hover:bg-white/10 ${lightRing}`}
-      >
-        <span className="text-right font-display text-xl font-bold text-white/70 tabular-nums">
-          {place}
-        </span>
-        <ClubBadge clubName={row.name} size="md" named />
-        <span className="min-w-0">
-          <span className="flex items-baseline justify-between gap-2 sm:hidden">
-            <span className="truncate font-semibold">{row.name}</span>
-            {record}
-          </span>
-          <span className="relative mt-1.5 block h-5 sm:mt-0 sm:h-9">
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 rounded-sm border-2"
-              style={{
-                width: `${Math.max(0.5, (Math.abs(row.net) / scale) * 50)}%`,
-                background: style.fill,
-                borderColor: style.trim,
-                ...(ahead ? { left: '50%' } : { right: '50%' }),
-              }}
-            />
-            <span aria-hidden="true" className="absolute inset-y-0 left-1/2 w-px bg-white/70" />
-            <span
-              className={`absolute inset-y-0 hidden items-center gap-2 font-display text-xl font-bold sm:flex ${ahead ? 'right-[calc(50%+0.75rem)]' : 'left-[calc(50%+0.75rem)]'}`}
-            >
-              {row.name}
-              {record}
-            </span>
-          </span>
-        </span>
-        <b className="w-[5.5rem] text-right font-display text-3xl font-bold leading-none tabular-nums">
-          {formatSigned(row.net)}
-          {row.provisional ? '*' : ''}
-        </b>
-      </Link>
-    </li>
-  );
-}
 
 export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const { stories } = list;
@@ -111,11 +52,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const cameron = received.find(({ result }) =>
     result.received.some((name) => name.includes('Jeremy Cameron'))
   );
-  const scale = Math.max(1, ...ladder.map(({ net }) => Math.abs(net)));
   const firstYear = years.at(-1)?.year;
-  const top = ladder[0];
-  const bottom = ladder.at(-1);
-  const anyProvisional = ladder.some(({ provisional }) => provisional);
 
   return (
     <>
@@ -212,40 +149,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
         </div>
       </section>
 
-      <section aria-labelledby="trade-ladder" className="bg-brand-bar text-white">
-        <div className={`${container} py-12 lg:py-16`}>
-          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
-            <h2
-              id="trade-ladder"
-              className="font-display text-6xl font-extrabold leading-[0.9] sm:text-7xl lg:text-8xl"
-            >
-              The trade ladder
-            </h2>
-            <p className="max-w-md text-base leading-7 text-white/80">
-              Every club’s combined result from every trade since {firstYear}, in PAV. {top?.name}{' '}
-              is {formatSigned(top?.net ?? 0)} in front. {bottom?.name} is{' '}
-              {formatSigned(bottom?.net ?? 0)}. Pick a club to see its trades.
-            </p>
-          </div>
-          <p
-            aria-hidden="true"
-            className={`mt-8 grid grid-cols-2 border-b-4 border-white pb-2 pl-[5.75rem] pr-[6.25rem] ${kicker} text-white/80`}
-          >
-            <span>← Behind</span>
-            <span className="text-right">Ahead →</span>
-          </p>
-          <ol>
-            {ladder.map((row, index) => (
-              <LadderRow key={row.clubId} row={row} place={index + 1} scale={scale} />
-            ))}
-          </ol>
-          {anyProvisional ? (
-            <p className="mt-3 text-xs text-white/70">
-              * Includes a trade with a value not in yet, so this total will move.
-            </p>
-          ) : null}
-        </div>
-      </section>
+      <TowerLadder ladder={ladder} firstYear={firstYear} />
 
       <div className={`${container} grid gap-14 py-12 lg:py-16`}>
         {nextWins.length > 0 ? (
