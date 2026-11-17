@@ -44,16 +44,7 @@ function BecamePlayer({
         <p className={`truncate ts-body font-bold ${tone}`}>{player.playerName}</p>
         <p className={`shrink-0 ts-body font-bold tabular-nums ${tone}`}>{formatPav(value)}</p>
       </div>
-      <p className="ts-small leading-tight text-(--ts-ink2)">
-        {drafted}
-        {away ? (
-          <>
-            {' '}
-            at <span className="font-semibold text-(--ts-ink)">{player.clubName}</span>
-          </>
-        ) : null}
-      </p>
-      <div className="relative mt-2 h-2 rounded-full bg-(--ts-surface)/80" aria-hidden="true">
+      <div className="relative mt-1 h-2 rounded-full bg-(--ts-surface)/80" aria-hidden="true">
         {ticks.map((tick) => (
           <span
             key={tick}
@@ -69,6 +60,15 @@ function BecamePlayer({
           }}
         />
       </div>
+      <p className="mt-2.5 ts-small leading-tight text-(--ts-ink2)">
+        {drafted}
+        {away ? (
+          <>
+            {' '}
+            at <span className="font-semibold text-(--ts-ink)">{player.clubName}</span>
+          </>
+        ) : null}
+      </p>
     </div>
   );
 }
@@ -117,13 +117,19 @@ export function PublicLineageRow({
           <p className="ts-body leading-tight font-semibold">{name}</p>
           <p className="mt-0.5 ts-small leading-tight text-(--ts-ink2)">{note}</p>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-y-2">
-          {via ? (
-            <>
-              {via}
-              <Connector dashed />
-            </>
-          ) : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-y-2 sm:flex-nowrap">
+          {/* A fixed slot from 640px up, so this trade's square sits at the same place on every row. */}
+          <span className="flex shrink-0 items-center sm:w-[11.5rem]">
+            {via ? (
+              <>
+                {via}
+                <span
+                  aria-hidden="true"
+                  className="h-0 min-w-3 flex-1 border-t-2 border-dashed border-(--ts-muted)"
+                />
+              </>
+            ) : null}
+          </span>
           <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px] bg-(--ts-accent)" />
           {tradedOn.map((node, at) => (
             <span key={at} className="flex items-center">
