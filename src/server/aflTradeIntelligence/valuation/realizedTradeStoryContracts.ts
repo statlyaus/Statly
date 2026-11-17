@@ -2,6 +2,7 @@ import type { AflTradeStructure } from './tradeStructureContracts';
 import type {
   AflTradeValueLineCheckpoint,
   AflTradeValueLinePendingReason,
+  AflTradeValueLinePoint,
   AflTradeValueLines,
   AflTradeValueLineSlotSource,
 } from './valueLineContracts';
@@ -188,6 +189,18 @@ export interface AflTradeStoryLineageTrade {
   readonly assets: readonly AflTradeStoryAsset[];
 }
 
+/** One point of an asset's value line, for drawing it over time. Values are signed PAV, null pending. */
+export interface AflTradeStoryAssetPoint {
+  readonly checkpoint: AflTradeValueLineCheckpoint;
+  readonly state: AflTradeValueLinePoint['state'];
+  readonly value: number | null;
+  /** PAV played through the checkpoint, and PAV still expected. */
+  readonly produced: number | null;
+  readonly expectedRemaining: number | null;
+  /** The slot the point reads: the pick's number before the draft, the used selection after. */
+  readonly selectionNumber: number | null;
+}
+
 export interface AflTradeStoryLineageAsset {
   readonly transferId: string;
   readonly assetId: string;
@@ -195,6 +208,8 @@ export interface AflTradeStoryLineageAsset {
   readonly hops: readonly AflTradeStoryHop[];
   readonly outcome: AflTradeStoryOutcome;
   readonly value: AflTradeStoryValue;
+  /** The leg's value line in this trade: its at-trade view, then every checkpoint, oldest first. */
+  readonly line: readonly AflTradeStoryAssetPoint[];
 }
 
 /**
