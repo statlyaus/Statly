@@ -52,15 +52,12 @@ export function createPostgresAflTradeRetainedValuationInputBundleSelector(confi
   readonly specificationId: string;
   readonly specificationArtifact: AflTradeArtifactRef;
 }): AflTradePrivateCurrentValuationInputBundleSelector {
-  const selected = z
-    .object({
-      specificationId: aflTradeContentAddressedIdSchema(
-        'valuation-input-bundle-construction-specification'
-      ),
-      specificationArtifact: aflTradeArtifactRefSchema,
-    })
-    .strict()
-    .parse(configuration);
+  const selected = z.object({
+    specificationId: aflTradeContentAddressedIdSchema(
+      'valuation-input-bundle-construction-specification'
+    ),
+    specificationArtifact: aflTradeArtifactRefSchema,
+  }).strict().parse(configuration);
 
   return async ({ transaction, modelEvidence }) => {
     const retained = await transaction.query<{ readonly valuation_input_bundle_id: string }>(

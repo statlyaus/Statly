@@ -226,7 +226,9 @@ export class PostgresGovernedValuationComponentRunRepository {
       );
       if (existing.rowCount) {
         const replay = await loadExactFrom(transaction, this.dependencies, manifest.runId);
-        if (canonicalizeAflTradeJson(replay) !== canonicalizeAflTradeJson({ manifest, artifact })) {
+        if (
+          canonicalizeAflTradeJson(replay) !== canonicalizeAflTradeJson({ manifest, artifact })
+        ) {
           throw new GovernedValuationComponentRunRepositoryError(
             'REPLAY_CONFLICT',
             'Component-run replay conflicts with retained evidence.'

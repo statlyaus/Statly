@@ -163,10 +163,11 @@ async function proveResultGeneration(
         FOR KEY SHARE`,
       [selector.valuationScopeKey, selector.tradeId, fromHead.revision, previousTransitionId]
     );
-    if (withdrawal.rows.length !== 1 || withdrawal.rows[0]?.from_generation_id !== generationId) {
-      throw new TypeError(
-        'Recovery requires the exact generation removed by the current withdrawal.'
-      );
+    if (
+      withdrawal.rows.length !== 1 ||
+      withdrawal.rows[0]?.from_generation_id !== generationId
+    ) {
+      throw new TypeError('Recovery requires the exact generation removed by the current withdrawal.');
     }
   }
   if (action.kind === 'rollback') {
@@ -200,16 +201,15 @@ async function proveResultGeneration(
     ]
   );
   if (generation.rows.length !== 1) {
-    throw new TypeError(
-      'The lifecycle result generation is absent or escaped its transition intent.'
-    );
+    throw new TypeError('The lifecycle result generation is absent or escaped its transition intent.');
   }
   if (receipt.content.schemaVersion === 'private-evaluation-transition-receipt/v2') {
     const retainedGeneration = parseGovernedPrivateEvaluationGeneration(
       generation.rows[0]!.generation_json
     );
     if (
-      retainedGeneration.content.schemaVersion !== 'local-private-trade-evaluation-generation/v2' ||
+      retainedGeneration.content.schemaVersion !==
+        'local-private-trade-evaluation-generation/v2' ||
       !same(
         retainedGeneration.content.constructionAuthority,
         receipt.content.intent.content.constructionAuthority
@@ -343,11 +343,7 @@ async function proveStoredAuthority(
        JOIN outcome_artifact_custody inspection_artifact
          ON inspection_artifact.artifact_id=ir.artifact_id
       WHERE ti.transition_intent_id=$1 AND ti.valuation_scope_key=$2 AND ti.trade_id=$3`,
-    [
-      content.intent.transitionIntentId,
-      content.selector.valuationScopeKey,
-      content.selector.tradeId,
-    ]
+    [content.intent.transitionIntentId, content.selector.valuationScopeKey, content.selector.tradeId]
   );
   const row = result.rows[0];
   const requiresCalculationAuthority = content.action.kind !== 'withdraw';
@@ -396,7 +392,8 @@ async function proveStoredAuthority(
   });
   if (
     content.schemaVersion === 'private-evaluation-transition-receipt/v2' &&
-    (retained.snapshot.content.schemaVersion !== 'private-evaluation-authority-snapshot/v3' ||
+    (retained.snapshot.content.schemaVersion !==
+      'private-evaluation-authority-snapshot/v3' ||
       retained.inspection.content.schemaVersion !== 'private-evaluation-inspection/v3')
   ) {
     throw new TypeError(
@@ -534,7 +531,9 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
   readonly enableAutomatedPrivateCalculation?: true;
 }) {
   if ('automatedPrincipalId' in dependencies) {
-    throw new TypeError('Lifecycle commits do not accept a caller-supplied automated principal.');
+    throw new TypeError(
+      'Lifecycle commits do not accept a caller-supplied automated principal.'
+    );
   }
   if (
     dependencies.artifactRepository.artifactClass !== 'derived_private' ||
@@ -543,7 +542,8 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
   ) {
     throw new TypeError('Lifecycle commits require bounded private artifact custody.');
   }
-  const automatedCalculationEnabled = dependencies.enableAutomatedPrivateCalculation === true;
+  const automatedCalculationEnabled =
+    dependencies.enableAutomatedPrivateCalculation === true;
   async function commitReceipt(input: {
     readonly receipt: AnyGovernedPrivateEvaluationTransitionReceipt;
     readonly receiptArtifact: AflTradeArtifactRef;
@@ -594,7 +594,8 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
         trusted.rows.length !== 1 ||
         trusted.rows[0] === undefined ||
         parseTime(trusted.rows[0].trusted_at) < parseTime(receipt.content.transitionedAt) ||
-        parseTime(trusted.rows[0].trusted_at) > parseTime(receipt.content.intent.content.expiresAt)
+        parseTime(trusted.rows[0].trusted_at) >
+          parseTime(receipt.content.intent.content.expiresAt)
       ) {
         throw new TypeError('The lifecycle transition is future-dated or its authority expired.');
       }
@@ -623,11 +624,7 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
       }
       await proveResultGeneration(transaction, receipt);
       await insertReceiptAndCasHead(transaction, receipt, artifact);
-      return {
-        state: 'committed',
-        head: receipt.content.toHead,
-        transitionId: receipt.transitionId,
-      };
+      return { state: 'committed', head: receipt.content.toHead, transitionId: receipt.transitionId };
     });
   }
   return {

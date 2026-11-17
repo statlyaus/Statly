@@ -149,7 +149,10 @@ export function createAflTradeValuationSourceQualificationReport(
 ): AflTradeValuationSourceQualificationReport {
   const content = aflTradeValuationSourceQualificationReportContentSchema.parse(input);
   return aflTradeValuationSourceQualificationReportSchema.parse({
-    qualificationReportId: createAflTradeContentAddress('valuation-source-qualification', content),
+    qualificationReportId: createAflTradeContentAddress(
+      'valuation-source-qualification',
+      content
+    ),
     content,
   });
 }

@@ -78,7 +78,9 @@ export async function loadAuthenticatedGovernedPrivateEvaluationMaterialization(
   ) {
     throw new TypeError('The retained private evaluation generation is malformed.');
   }
-  const narrativeReference = aflTradeArtifactRefSchema.parse(generationContent.narrativeArtifact);
+  const narrativeReference = aflTradeArtifactRefSchema.parse(
+    generationContent.narrativeArtifact
+  );
   const manifestReference = aflTradeArtifactRefSchema.parse(
     generationContent.projectionManifestArtifact
   );
@@ -116,7 +118,11 @@ export async function loadAuthenticatedGovernedPrivateEvaluationMaterialization(
     documentArtifacts.push({
       kind: document.kind,
       reference,
-      bytes: await loadExact(input.artifactRepository, reference, input.maximumArtifactBytes),
+      bytes: await loadExact(
+        input.artifactRepository,
+        reference,
+        input.maximumArtifactBytes
+      ),
     });
   }
   const materialization: GovernedPrivateEvaluationGenerationMaterialization = {

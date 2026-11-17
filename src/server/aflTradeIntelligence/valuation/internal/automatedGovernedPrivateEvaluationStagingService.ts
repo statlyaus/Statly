@@ -1,13 +1,7 @@
 import { z } from 'zod';
 
-import {
-  createAflTradeCanonicalJsonArtifactRef,
-  type AflTradeArtifactRef,
-} from '../../artifacts/artifactReference';
-import {
-  aflTradeContentAddressedIdSchema,
-  canonicalizeAflTradeJson,
-} from '../../artifacts/contentAddress';
+import { createAflTradeCanonicalJsonArtifactRef, type AflTradeArtifactRef } from '../../artifacts/artifactReference';
+import { aflTradeContentAddressedIdSchema, canonicalizeAflTradeJson } from '../../artifacts/contentAddress';
 import {
   createAutomatedGovernedPrivateEvaluationGeneration,
   type GovernedPrivateEvaluationGenerationMaterialization,
@@ -96,9 +90,13 @@ function same(left: unknown, right: unknown): boolean {
   return canonicalizeAflTradeJson(left) === canonicalizeAflTradeJson(right);
 }
 
-export function createAutomatedGovernedPrivateEvaluationStagingService(dependencies: Dependencies) {
+export function createAutomatedGovernedPrivateEvaluationStagingService(
+  dependencies: Dependencies
+) {
   if ('principalId' in dependencies) {
-    throw new TypeError('Automated private staging does not accept a caller-supplied principal.');
+    throw new TypeError(
+      'Automated private staging does not accept a caller-supplied principal.'
+    );
   }
   const activate = async (input: {
     readonly request: z.infer<typeof requestSchema>;

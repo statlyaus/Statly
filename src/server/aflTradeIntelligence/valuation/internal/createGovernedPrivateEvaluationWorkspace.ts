@@ -37,7 +37,9 @@ export function createGovernedPrivateEvaluationWorkspaceForInternalComposition(
       if (composition.stageAutomated === undefined) {
         throw new TypeError('Automated private staging is not configured for this workspace.');
       }
-      const request = governedPrivateEvaluationAutomatedStageRequestSchema.parse(unparsedRequest);
+      const request = governedPrivateEvaluationAutomatedStageRequestSchema.parse(
+        unparsedRequest
+      );
       const result = governedPrivateEvaluationAutomatedStageResultSchema.parse(
         await composition.stageAutomated(request)
       );
@@ -77,9 +79,7 @@ export function createGovernedPrivateEvaluationWorkspaceForInternalComposition(
 
     async read(unparsedRequest) {
       const request = governedPrivateEvaluationReadRequestSchema.parse(unparsedRequest);
-      const result = governedPrivateEvaluationReadResultSchema.parse(
-        await composition.read(request)
-      );
+      const result = governedPrivateEvaluationReadResultSchema.parse(await composition.read(request));
       if (!sameCanonicalJson(result.selector, request.selector)) {
         throw new RangeError('The governed private evaluation read escaped its selector.');
       }
@@ -87,9 +87,7 @@ export function createGovernedPrivateEvaluationWorkspaceForInternalComposition(
         throw new RangeError('The governed private evaluation read escaped its exact selection.');
       }
       if (result.document.kind !== request.document.kind) {
-        throw new RangeError(
-          'The governed private evaluation read escaped its document selection.'
-        );
+        throw new RangeError('The governed private evaluation read escaped its document selection.');
       }
       if (
         result.state === 'available' &&
@@ -102,9 +100,7 @@ export function createGovernedPrivateEvaluationWorkspaceForInternalComposition(
         result.state === 'available' &&
         !doesAflTradeArtifactRefMatchBytes(result.document.artifact, result.bytes)
       ) {
-        throw new RangeError(
-          'The governed private evaluation read returned unauthenticated bytes.'
-        );
+        throw new RangeError('The governed private evaluation read returned unauthenticated bytes.');
       }
       return result;
     },

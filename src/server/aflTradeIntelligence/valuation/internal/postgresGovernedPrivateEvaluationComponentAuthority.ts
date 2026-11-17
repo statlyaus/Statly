@@ -144,14 +144,17 @@ async function loadCurrentQualification(input: {
   scopeKey: string;
   artifactRepository: AflTradeImmutableArtifactRepository;
   maximumArtifactBytes: number;
-}): Promise<null | Readonly<{
-  qualification: GovernedValuationModelQualification;
-  artifact: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
-  playerRunId: string;
-  pickRunId: string;
-  playerGate3DecisionId: string;
-  pickGate3DecisionId: string;
-}>> {
+}): Promise<
+  | null
+  | Readonly<{
+      qualification: GovernedValuationModelQualification;
+      artifact: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+      playerRunId: string;
+      pickRunId: string;
+      playerGate3DecisionId: string;
+      pickGate3DecisionId: string;
+    }>
+> {
   const result = await input.transaction.query<CurrentQualificationRow>(
     `SELECT current_pair.qualification_id,current_pair.player_run_id,current_pair.pick_run_id,
        current_pair.player_gate3_decision_id,current_pair.pick_gate3_decision_id,

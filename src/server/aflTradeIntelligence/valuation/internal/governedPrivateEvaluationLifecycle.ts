@@ -14,7 +14,9 @@ const instantSchema = z.iso.datetime({ offset: true });
 const generationIdSchema = aflTradeContentAddressedIdSchema(
   'local-private-trade-evaluation-generation'
 );
-const transitionIdSchema = aflTradeContentAddressedIdSchema('private-evaluation-transition');
+const transitionIdSchema = aflTradeContentAddressedIdSchema(
+  'private-evaluation-transition'
+);
 
 const lifecycleHeadSchema = z
   .object({
@@ -87,8 +89,7 @@ const transitionIntentContentSchema = z
       context.addIssue({
         code: 'custom',
         path: ['authoritySnapshotId'],
-        message:
-          'Activating transitions require retained authority; withdrawal must not relabel it.',
+        message: 'Activating transitions require retained authority; withdrawal must not relabel it.',
       });
     }
     if (Date.parse(intent.expiresAt) <= Date.parse(intent.requestedAt)) {
@@ -127,7 +128,9 @@ const transitionIntentContentSchema = z
 
 export const governedPrivateEvaluationTransitionIntentSchema = z
   .object({
-    transitionIntentId: aflTradeContentAddressedIdSchema('private-evaluation-transition-intent'),
+    transitionIntentId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-transition-intent'
+    ),
     content: transitionIntentContentSchema,
   })
   .strict()
@@ -201,8 +204,7 @@ const transitionReceiptContentSchema = z
       context.addIssue({
         code: 'custom',
         path: ['toHead'],
-        message:
-          'A transition receipt must bind its intent, exact predecessor, next revision, and validity window.',
+        message: 'A transition receipt must bind its intent, exact predecessor, next revision, and validity window.',
       });
     }
     if (
@@ -294,7 +296,9 @@ const automatedTransitionIntentContentSchema = z
     publicationProhibited: z.literal(true),
     selector: governedPrivateEvaluationSelectorSchema,
     inspectionId: aflTradeContentAddressedIdSchema('private-evaluation-inspection'),
-    authoritySnapshotId: aflTradeContentAddressedIdSchema('private-evaluation-authority-snapshot'),
+    authoritySnapshotId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-authority-snapshot'
+    ),
     operationId: aflTradeContentAddressedIdSchema('private-evaluation-operation'),
     action: automatedTransitionActionSchema,
     expectedHead: lifecycleHeadSchema,
@@ -316,7 +320,9 @@ const automatedTransitionIntentContentSchema = z
 
 export const automatedGovernedPrivateEvaluationTransitionIntentSchema = z
   .object({
-    transitionIntentId: aflTradeContentAddressedIdSchema('private-evaluation-transition-intent'),
+    transitionIntentId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-transition-intent'
+    ),
     content: automatedTransitionIntentContentSchema,
   })
   .strict()
@@ -416,9 +422,11 @@ export type AutomatedGovernedPrivateEvaluationTransitionReceipt = z.infer<
   typeof automatedGovernedPrivateEvaluationTransitionReceiptSchema
 >;
 export type AnyGovernedPrivateEvaluationTransitionIntent =
-  GovernedPrivateEvaluationTransitionIntent | AutomatedGovernedPrivateEvaluationTransitionIntent;
+  | GovernedPrivateEvaluationTransitionIntent
+  | AutomatedGovernedPrivateEvaluationTransitionIntent;
 export type AnyGovernedPrivateEvaluationTransitionReceipt =
-  GovernedPrivateEvaluationTransitionReceipt | AutomatedGovernedPrivateEvaluationTransitionReceipt;
+  | GovernedPrivateEvaluationTransitionReceipt
+  | AutomatedGovernedPrivateEvaluationTransitionReceipt;
 
 export function parseAnyGovernedPrivateEvaluationTransitionIntent(
   value: unknown

@@ -23,7 +23,9 @@ const requestSchema = z
     selector: governedPrivateEvaluationSelectorSchema,
     inspectionId: aflTradeContentAddressedIdSchema('private-evaluation-inspection'),
     operationId: aflTradeContentAddressedIdSchema('private-evaluation-operation'),
-    generationId: aflTradeContentAddressedIdSchema('local-private-trade-evaluation-generation'),
+    generationId: aflTradeContentAddressedIdSchema(
+      'local-private-trade-evaluation-generation'
+    ),
   })
   .strict();
 
@@ -76,7 +78,10 @@ async function findExisting(
   return result.rows[0] ?? null;
 }
 
-function replayExisting(existing: ExistingRow, request: z.output<typeof requestSchema>) {
+function replayExisting(
+  existing: ExistingRow,
+  request: z.output<typeof requestSchema>
+) {
   const verification = structuredClone(existing.verification_json) as {
     readonly verificationId?: string;
     readonly content?: {
@@ -97,8 +102,10 @@ function replayExisting(existing: ExistingRow, request: z.output<typeof requestS
     content.generationId !== request.generationId ||
     content.exactMatch !== true ||
     !same(content.selector, request.selector) ||
-    createAflTradeContentAddress('private-evaluation-reconstruction-verification', content) !==
-      verification.verificationId ||
+    createAflTradeContentAddress(
+      'private-evaluation-reconstruction-verification',
+      content
+    ) !== verification.verificationId ||
     createAflTradeCanonicalJsonArtifactRef(verification, content.verifiedAt).artifactId !==
       existing.artifact_id
   ) {

@@ -83,8 +83,12 @@ const privateFactualAuthoritySchema = z
 
 const factualRefreshResultSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION),
-    operationId: aflTradeContentAddressedIdSchema('current-valuation-factual-refresh-operation'),
+    schemaVersion: z.literal(
+      AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION
+    ),
+    operationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-factual-refresh-operation'
+    ),
     scopeKey: idSchema,
     trigger: aflTradeCurrentValuationRefreshTriggerSchema,
     stableOperationKey: idSchema,
@@ -104,8 +108,12 @@ const factualRefreshResultSchema = z
 
 const unavailableRefreshResultSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION),
-    operationId: aflTradeContentAddressedIdSchema('current-valuation-factual-refresh-operation'),
+    schemaVersion: z.literal(
+      AFL_TRADE_CURRENT_VALUATION_FACTUAL_REFRESH_RESULT_SCHEMA_VERSION
+    ),
+    operationId: aflTradeContentAddressedIdSchema(
+      'current-valuation-factual-refresh-operation'
+    ),
     scopeKey: idSchema,
     trigger: aflTradeCurrentValuationRefreshTriggerSchema,
     stableOperationKey: idSchema,

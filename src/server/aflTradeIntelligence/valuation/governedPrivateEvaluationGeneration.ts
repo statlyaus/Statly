@@ -17,7 +17,10 @@ import type { createAflTradeCalculationNarrative } from './tradeCalculationNarra
 type CalculationNarrative = ReturnType<typeof createAflTradeCalculationNarrative>;
 type ReaderDocumentKind = 'archive_summary' | 'detail' | 'reader_api' | 'json_export';
 type RetainedArtifactKind =
-  'calculation_narrative' | ReaderDocumentKind | 'projection_manifest' | 'generation';
+  | 'calculation_narrative'
+  | ReaderDocumentKind
+  | 'projection_manifest'
+  | 'generation';
 
 export interface GovernedPrivateEvaluationSelector {
   readonly valuationScopeKey: string;
@@ -123,7 +126,12 @@ const retainedSelectorSchema = z
     tradeId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,399}$/u),
   })
   .strict();
-const readerDocumentKindSchema = z.enum(['archive_summary', 'detail', 'reader_api', 'json_export']);
+const readerDocumentKindSchema = z.enum([
+  'archive_summary',
+  'detail',
+  'reader_api',
+  'json_export',
+]);
 const retainedGenerationV1Schema = z
   .object({
     generationId: aflTradeContentAddressedIdSchema('local-private-trade-evaluation-generation'),
@@ -244,7 +252,9 @@ function retainedSchemaVersion(value: unknown): string | null {
   return typeof schemaVersion === 'string' ? schemaVersion : null;
 }
 
-export function parseGovernedPrivateEvaluationGeneration(value: unknown): EvaluationGeneration {
+export function parseGovernedPrivateEvaluationGeneration(
+  value: unknown
+): EvaluationGeneration {
   const version = retainedSchemaVersion(value);
   if (version === 'local-private-trade-evaluation-generation/v1') {
     return retainedGenerationV1Schema.parse(value) as EvaluationGenerationV1;
@@ -378,9 +388,7 @@ export function createGovernedPrivateEvaluationGeneration(input: {
       input.narrative.narrativeId ||
     input.narrative.content.publicationProhibited !== true
   ) {
-    throw new TypeError(
-      'Private evaluation generation requires one authentic test-fixture narrative.'
-    );
+    throw new TypeError('Private evaluation generation requires one authentic test-fixture narrative.');
   }
 
   const current = input.narrative.content.views.find(({ view }) => view === 'current');
@@ -540,7 +548,9 @@ export function verifyGovernedPrivateEvaluationGeneration(
   materialization: GovernedPrivateEvaluationGenerationMaterialization
 ): boolean {
   try {
-    const retainedGeneration = parseGovernedPrivateEvaluationGeneration(materialization.generation);
+    const retainedGeneration = parseGovernedPrivateEvaluationGeneration(
+      materialization.generation
+    );
     const retainedProjectionManifest = parseGovernedPrivateEvaluationProjectionManifest(
       materialization.projectionManifest
     );
@@ -549,7 +559,11 @@ export function verifyGovernedPrivateEvaluationGeneration(
       materialization.artifacts.some(
         (artifact, index) =>
           artifact.kind !== artifactOrder[index] ||
-          !doesAflTradeArtifactRefMatchBytes(artifact.reference, artifact.bytes, 'application/json')
+          !doesAflTradeArtifactRefMatchBytes(
+            artifact.reference,
+            artifact.bytes,
+            'application/json'
+          )
       )
     ) {
       return false;
@@ -566,9 +580,9 @@ export function verifyGovernedPrivateEvaluationGeneration(
     const generation = parseGovernedPrivateEvaluationGeneration(
       parseArtifactJson(byKind.get('generation')!)
     );
-    const expectedDocuments = (
-      ['archive_summary', 'detail', 'reader_api', 'json_export'] as const
-    ).map((kind) => ({ kind, artifact: byKind.get(kind)!.reference }));
+    const expectedDocuments = (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map(
+      (kind) => ({ kind, artifact: byKind.get(kind)!.reference })
+    );
     const narrativeEnvelope = narrative as CalculationNarrative;
     return (
       createAflTradeContentAddress('trade-calculation-narrative', narrativeEnvelope.content) ===

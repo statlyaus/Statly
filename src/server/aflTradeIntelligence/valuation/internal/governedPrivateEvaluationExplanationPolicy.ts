@@ -37,9 +37,9 @@ export const governedPrivateEvaluationExplanationPolicyContentSchema = z
     practicalEquivalence: z
       .object({
         basis: z.string().trim().min(1).max(500),
-        bandByView: z
-          .array(practicalEquivalenceBandSchema)
-          .length(AFL_TRADE_VALUATION_VIEWS.length),
+        bandByView: z.array(practicalEquivalenceBandSchema).length(
+          AFL_TRADE_VALUATION_VIEWS.length
+        ),
       })
       .strict(),
     createdAt: z.iso.datetime({ offset: true }),
@@ -87,7 +87,10 @@ export function createGovernedPrivateEvaluationExplanationPolicy(
 ): GovernedPrivateEvaluationExplanationPolicy {
   const content = governedPrivateEvaluationExplanationPolicyContentSchema.parse(input);
   return governedPrivateEvaluationExplanationPolicySchema.parse({
-    policyId: createAflTradeContentAddress('private-evaluation-explanation-policy', content),
+    policyId: createAflTradeContentAddress(
+      'private-evaluation-explanation-policy',
+      content
+    ),
     content,
   });
 }

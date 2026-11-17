@@ -81,7 +81,8 @@ export interface AflTradePrivateEvaluationCohortExecutionPolicyShape {
  * policy directly rather than mocking this module.
  */
 export function resolveAflTradePrivateEvaluationCohortExecutionLimits(
-  policy: AflTradePrivateEvaluationCohortExecutionPolicyShape = AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY
+  policy: AflTradePrivateEvaluationCohortExecutionPolicyShape =
+    AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY
 ): AflTradePrivateEvaluationCohortExecutionLimits {
   const { maximumConcurrency, heartbeatSeconds } = policy;
   if (

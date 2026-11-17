@@ -35,7 +35,9 @@ const assetIdentitySchema = z.discriminatedUnion('kind', [
     .object({
       kind: z.literal('player'),
       playerId: publicIdSchema,
-      acquisitionSpellVersionId: aflTradeContentAddressedIdSchema('acquisition-spell-version'),
+      acquisitionSpellVersionId: aflTradeContentAddressedIdSchema(
+        'acquisition-spell-version'
+      ),
       identityEvidenceRefs: evidenceRefsSchema,
       acquisitionSpellEvidenceRefs: evidenceRefsSchema,
     })
@@ -45,7 +47,9 @@ const assetIdentitySchema = z.discriminatedUnion('kind', [
       kind: z.literal('pick'),
       selectionId: publicIdSchema,
       selectedPlayerId: publicIdSchema,
-      acquisitionSpellVersionId: aflTradeContentAddressedIdSchema('acquisition-spell-version'),
+      acquisitionSpellVersionId: aflTradeContentAddressedIdSchema(
+        'acquisition-spell-version'
+      ),
       selectionLineageArtifact: aflTradeArtifactRefSchema,
       identityEvidenceRefs: evidenceRefsSchema,
     })
@@ -148,7 +152,9 @@ const contentSchema = z
     reviewSetId: aflTradeContentAddressedIdSchema('workbook-transaction-review-set'),
     reviewSetArtifact: aflTradeArtifactRefSchema,
     reviewSubjectId: aflTradeContentAddressedIdSchema('workbook-transaction-review-subject'),
-    reviewDecisionId: aflTradeContentAddressedIdSchema('workbook-transaction-review-decision'),
+    reviewDecisionId: aflTradeContentAddressedIdSchema(
+      'workbook-transaction-review-decision'
+    ),
     reviewDecisionArtifact: aflTradeArtifactRefSchema,
     sourceTitle: z.string().trim().min(1).max(10_000),
     seasonYear: z.number().int().min(1897).max(2200),
@@ -178,8 +184,7 @@ const contentSchema = z
   .superRefine((content, context) => {
     const assetRowIds = content.assets.map(({ sourcePartyRowId }) => sourcePartyRowId);
     if (
-      new Set(content.expectedSourcePartyRowIds).size !==
-        content.expectedSourcePartyRowIds.length ||
+      new Set(content.expectedSourcePartyRowIds).size !== content.expectedSourcePartyRowIds.length ||
       assetRowIds.length !== content.expectedSourcePartyRowIds.length ||
       assetRowIds.some((rowId, index) => rowId !== content.expectedSourcePartyRowIds[index])
     ) {
@@ -212,7 +217,10 @@ const contentSchema = z
           ...asset.identity.acquisitionSpellEvidenceRefs,
         ];
       }
-      return [asset.identity.selectionLineageArtifact, ...asset.identity.identityEvidenceRefs];
+      return [
+        asset.identity.selectionLineageArtifact,
+        ...asset.identity.identityEvidenceRefs,
+      ];
     });
     if (
       [content.reviewSetArtifact, content.reviewDecisionArtifact, ...identityEvidence].some(
@@ -246,7 +254,10 @@ export type AflTradePrivateTradeAssetCustody = z.infer<
   typeof aflTradePrivateTradeAssetCustodySchema
 >;
 
-function assetAddress(tradeId: string, asset: z.infer<typeof assetInputSchema>): string {
+function assetAddress(
+  tradeId: string,
+  asset: z.infer<typeof assetInputSchema>
+): string {
   return createAflTradeContentAddress('private-confirmed-trade-asset', {
     tradeId,
     ...asset,

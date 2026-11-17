@@ -117,8 +117,7 @@ export function deriveAflTradeAssetLineageNarrativeEvidence(
     const sourceDepth = depths.get(sourceAssetId)!;
     const edges = [...(outgoing.get(sourceAssetId) ?? [])].sort(
       (left, right) =>
-        compareInstants(left.effectiveAt, right.effectiveAt) ||
-        left.edgeId.localeCompare(right.edgeId)
+        compareInstants(left.effectiveAt, right.effectiveAt) || left.edgeId.localeCompare(right.edgeId)
     );
     for (const edge of edges) {
       traversedEdgeIds.add(edge.edgeId);

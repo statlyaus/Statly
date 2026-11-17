@@ -1,4 +1,7 @@
-import { canonicalizeAflTradeJson, sha256AflTradeCanonicalJson } from '../artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  sha256AflTradeCanonicalJson,
+} from '../artifacts/contentAddress';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   aflTradeValuationSourceQualificationReportSchema,
@@ -17,7 +20,9 @@ export interface AflTradeValuationSourceQualificationReportStore {
   ): Promise<AflTradeValuationSourceQualificationReport>;
 }
 
-export class PostgresAflTradeValuationSourceQualificationReportStore implements AflTradeValuationSourceQualificationReportStore {
+export class PostgresAflTradeValuationSourceQualificationReportStore
+  implements AflTradeValuationSourceQualificationReportStore
+{
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
   async register(

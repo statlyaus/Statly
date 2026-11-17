@@ -34,11 +34,13 @@ async function loadJson(input: {
   }
 }
 
-export function createPostgresGovernedPrivateEvaluationMaterializationReplay(dependencies: {
-  readonly client: AflOutcomeSqlClient;
-  readonly artifactRepository: AflTradeImmutableArtifactRepository;
-  readonly maximumArtifactBytes: number;
-}) {
+export function createPostgresGovernedPrivateEvaluationMaterializationReplay(
+  dependencies: {
+    readonly client: AflOutcomeSqlClient;
+    readonly artifactRepository: AflTradeImmutableArtifactRepository;
+    readonly maximumArtifactBytes: number;
+  }
+) {
   const manifests = new PostgresGovernedPrivateEvaluationMaterializationManifestRepository(
     dependencies.client
   );
@@ -52,12 +54,13 @@ export function createPostgresGovernedPrivateEvaluationMaterializationReplay(dep
     const retained = await manifests.loadExact(input.materializationManifestId);
     const manifest = retained.manifest;
     const content = manifest.content;
-    const [trace, calculationInputPackage, explanationPolicy, lineageGraph] = await Promise.all([
-      load(content.inputTraceArtifact),
-      load(content.calculationInputArtifact),
-      load(content.explanationPolicyArtifact),
-      load(content.lineageGraphArtifact),
-    ]);
+    const [trace, calculationInputPackage, explanationPolicy, lineageGraph] =
+      await Promise.all([
+        load(content.inputTraceArtifact),
+        load(content.calculationInputArtifact),
+        load(content.explanationPolicyArtifact),
+        load(content.lineageGraphArtifact),
+      ]);
     const pickBenchmarks = await Promise.all(
       content.pickBenchmarks.map(async ({ artifact }) =>
         aflTradePickPavDistributionBenchmarkSchema.parse(await load(artifact))
@@ -73,7 +76,8 @@ export function createPostgresGovernedPrivateEvaluationMaterializationReplay(dep
       trace: governedPrivateEvaluationInputTraceSchema.parse(trace),
       calculationInputPackage:
         aflTradeValuationCalculationInputPackageSchema.parse(calculationInputPackage),
-      explanationPolicy: governedPrivateEvaluationExplanationPolicySchema.parse(explanationPolicy),
+      explanationPolicy:
+        governedPrivateEvaluationExplanationPolicySchema.parse(explanationPolicy),
       lineageGraph: lineageGraph as AflTradeLineageGraph,
       pickBenchmarks,
       playerObservations,

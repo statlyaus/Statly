@@ -37,7 +37,9 @@ const canonicalMemberSchema = z
     ordinal: z.number().int().positive(),
   })
   .passthrough();
-const sourceCaptureSchema = z.object({ rightsArtifactId: publicIdSchema }).passthrough();
+const sourceCaptureSchema = z
+  .object({ rightsArtifactId: publicIdSchema })
+  .passthrough();
 const releaseManifestSchema = z
   .object({
     releaseId: publicIdSchema,
