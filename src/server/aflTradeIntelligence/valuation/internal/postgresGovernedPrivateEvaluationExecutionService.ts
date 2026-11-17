@@ -244,9 +244,7 @@ export function createPostgresGovernedPrivateEvaluationExecutionService(dependen
       const stagedIntent =
         stagedResult.rows[0] === undefined
           ? null
-          : governedPrivateEvaluationTransitionIntentSchema.parse(
-              stagedResult.rows[0].intent_json
-            );
+          : governedPrivateEvaluationTransitionIntentSchema.parse(stagedResult.rows[0].intent_json);
       if (
         stagedIntent !== null &&
         !doesIntentMatchRequest(stagedIntent.content, request, dependencies.principalId)
@@ -329,10 +327,7 @@ export function createPostgresGovernedPrivateEvaluationExecutionService(dependen
           message: 'Rollback and recovery require exact ready calculation authority.',
         });
       }
-      if (
-        request.action.kind === 'withdraw' &&
-        retained.result.head.status !== 'active'
-      ) {
+      if (request.action.kind === 'withdraw' && retained.result.head.status !== 'active') {
         return governedPrivateEvaluationExecuteResultSchema.parse({
           state: 'invalid_transition',
           ...base,

@@ -75,10 +75,7 @@ function requireExactAncestry(input: {
       trace.evidence.gate3Decision,
       input.gate3DecisionArtifact
     ) ||
-    !doesAflTradeArtifactRefMatchCanonicalJson(
-      input.gate3DecisionArtifact,
-      input.gate3Decision
-    )
+    !doesAflTradeArtifactRefMatchCanonicalJson(input.gate3DecisionArtifact, input.gate3Decision)
   ) {
     throw new GovernedReadyComponentAuthorityError(
       'ANCESTRY_MISMATCH',

@@ -36,10 +36,14 @@ export function authenticateGovernedPrivateEvaluationExplanationSource(input: {
   const trace = governedPrivateEvaluationInputTraceSchema.parse(input.trace);
   const policy = governedPrivateEvaluationExplanationPolicySchema.parse(input.policy);
   if (trace.content.environment !== 'non_production') {
-    throw new TypeError('A private non-production explanation policy requires a non-production input trace.');
+    throw new TypeError(
+      'A private non-production explanation policy requires a non-production input trace.'
+    );
   }
   if (Date.parse(policy.content.createdAt) > Date.parse(trace.content.derivedAt)) {
-    throw new TypeError('The explanation policy must exist before the authenticated input trace derivation.');
+    throw new TypeError(
+      'The explanation policy must exist before the authenticated input trace derivation.'
+    );
   }
   const transaction = deriveGovernedPrivateEvaluationTransaction(trace);
   return {

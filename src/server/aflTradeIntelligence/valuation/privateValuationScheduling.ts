@@ -36,9 +36,7 @@ export const aflTradePrivateValuationDispatchRequestSchema = z
 function localMonday(date: Date): Date {
   const localDate = formatInTimeZone(date, AFL_TRADE_PRIVATE_VALUATION_TIME_ZONE, 'yyyy-MM-dd');
   const localMidnight = new Date(`${localDate}T00:00:00.000Z`);
-  const weekday = Number(
-    formatInTimeZone(date, AFL_TRADE_PRIVATE_VALUATION_TIME_ZONE, 'i')
-  );
+  const weekday = Number(formatInTimeZone(date, AFL_TRADE_PRIVATE_VALUATION_TIME_ZONE, 'i'));
   localMidnight.setUTCDate(localMidnight.getUTCDate() - (weekday - 1));
   return localMidnight;
 }

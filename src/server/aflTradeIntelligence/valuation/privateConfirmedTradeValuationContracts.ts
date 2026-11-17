@@ -36,9 +36,7 @@ const privateAuthoritySchema = z
   .object({
     kind: z.literal('private_confirmed_nonproduction_calculation'),
     evidenceKind: z.literal('retained_private_review'),
-    decisionId: aflTradeContentAddressedIdSchema(
-      'private-reviewed-evidence-evaluation-decision'
-    ),
+    decisionId: aflTradeContentAddressedIdSchema('private-reviewed-evidence-evaluation-decision'),
     evidenceBundleId: aflTradeContentAddressedIdSchema('private-reviewed-evidence-bundle'),
     evidenceBundleArtifact: aflTradeArtifactRefSchema,
     publicationEligible: z.literal(false),
@@ -46,9 +44,7 @@ const privateAuthoritySchema = z
   })
   .strict();
 
-export type AflTradePrivateConfirmedValuationAuthority = z.infer<
-  typeof privateAuthoritySchema
->;
+export type AflTradePrivateConfirmedValuationAuthority = z.infer<typeof privateAuthoritySchema>;
 
 const assetIdentitySchema = z
   .object({
@@ -312,7 +308,8 @@ const resultContentSchema = z
       context.addIssue({
         code: 'custom',
         path: ['clubTotals'],
-        message: 'Club totals must be absent until complete and otherwise equal the exact asset sums.',
+        message:
+          'Club totals must be absent until complete and otherwise equal the exact asset sums.',
       });
     }
     const incomplete = content.assets.some(({ state }) => state === 'unavailable');
@@ -418,10 +415,7 @@ export type AflTradePrivateConfirmedValuationAdmission =
     };
 
 export interface AflTradePrivateConfirmedValuationConstruction {
-  stage(input: {
-    readonly valuationScopeKey: string;
-    readonly tradeId: string;
-  }): Promise<
+  stage(input: { readonly valuationScopeKey: string; readonly tradeId: string }): Promise<
     | {
         readonly state: 'planned';
         readonly plan: AflTradePrivateConfirmedValuationPlan;

@@ -60,41 +60,41 @@ function refineComponentRunManifest(
   manifest: z.infer<typeof governedValuationComponentRunInputSchema>,
   context: z.RefinementCtx
 ) {
-    const roleMatchesNativeExecution =
-      manifest.role === 'player_contribution_and_availability'
-        ? manifest.nativeExecution.kind === 'admitted_player_model_run'
-        : manifest.nativeExecution.kind === 'pick_pav_model_execution' ||
-          manifest.nativeExecution.kind === 'governed_pick_pav_model_execution';
-    if (!roleMatchesNativeExecution) {
-      context.addIssue({
-        code: 'custom',
-        path: ['nativeExecution'],
-        message: 'Component role and native execution kind must agree.',
-      });
-    }
+  const roleMatchesNativeExecution =
+    manifest.role === 'player_contribution_and_availability'
+      ? manifest.nativeExecution.kind === 'admitted_player_model_run'
+      : manifest.nativeExecution.kind === 'pick_pav_model_execution' ||
+        manifest.nativeExecution.kind === 'governed_pick_pav_model_execution';
+  if (!roleMatchesNativeExecution) {
+    context.addIssue({
+      code: 'custom',
+      path: ['nativeExecution'],
+      message: 'Component role and native execution kind must agree.',
+    });
+  }
 
-    const artifacts = [
-      manifest.nativeExecution.artifact,
-      manifest.protocolArtifact,
-      manifest.datasetArtifact,
-      manifest.datasetAdmissionArtifact,
-    ];
-    if (new Set(artifacts.map(({ artifactId }) => artifactId)).size !== artifacts.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['nativeExecution'],
-        message: 'Component-run evidence requires distinct retained artifacts.',
-      });
-    }
-    if (
-      artifacts.some(({ createdAt }) => Date.parse(createdAt) > Date.parse(manifest.registeredAt))
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['registeredAt'],
-        message: 'Every component-run evidence artifact must exist before registration.',
-      });
-    }
+  const artifacts = [
+    manifest.nativeExecution.artifact,
+    manifest.protocolArtifact,
+    manifest.datasetArtifact,
+    manifest.datasetAdmissionArtifact,
+  ];
+  if (new Set(artifacts.map(({ artifactId }) => artifactId)).size !== artifacts.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['nativeExecution'],
+      message: 'Component-run evidence requires distinct retained artifacts.',
+    });
+  }
+  if (
+    artifacts.some(({ createdAt }) => Date.parse(createdAt) > Date.parse(manifest.registeredAt))
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['registeredAt'],
+      message: 'Every component-run evidence artifact must exist before registration.',
+    });
+  }
 }
 
 const legacyGovernedValuationComponentRunManifestContentSchema =

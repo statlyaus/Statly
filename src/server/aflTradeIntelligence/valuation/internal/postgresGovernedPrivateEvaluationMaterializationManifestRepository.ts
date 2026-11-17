@@ -150,9 +150,7 @@ export class PostgresGovernedPrivateEvaluationMaterializationManifestRepository 
       );
       if (existing.rowCount) {
         const replay = await loadExactFrom(transaction, manifest.manifestId);
-        if (
-          canonicalizeAflTradeJson(replay) !== canonicalizeAflTradeJson({ manifest, artifact })
-        ) {
+        if (canonicalizeAflTradeJson(replay) !== canonicalizeAflTradeJson({ manifest, artifact })) {
           throw new GovernedPrivateEvaluationMaterializationManifestRepositoryError(
             'REPLAY_CONFLICT',
             'Materialization manifest replay conflicts with retained evidence.'
@@ -181,9 +179,7 @@ export class PostgresGovernedPrivateEvaluationMaterializationManifestRepository 
     });
   }
 
-  loadExact(
-    manifestId: string
-  ): Promise<RetainedGovernedPrivateEvaluationMaterializationManifest> {
+  loadExact(manifestId: string): Promise<RetainedGovernedPrivateEvaluationMaterializationManifest> {
     return loadExactFrom(this.client, manifestId);
   }
 }

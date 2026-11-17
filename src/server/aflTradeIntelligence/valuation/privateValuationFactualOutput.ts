@@ -294,17 +294,13 @@ export function parseAflTradePrivateValuationFactualOutput(
 }
 
 export type AflTradePlayerModelFactualOutput =
-  | AflTradeAdmittedPlayerFactualOutput
-  | AflTradePrivateValuationFactualOutput;
+  AflTradeAdmittedPlayerFactualOutput | AflTradePrivateValuationFactualOutput;
 
 export function parseAflTradePlayerModelFactualOutput(
   value: unknown
 ): AflTradePlayerModelFactualOutput {
   return z
-    .union([
-      aflTradeAdmittedPlayerFactualOutputSchema,
-      aflTradePrivateValuationFactualOutputSchema,
-    ])
+    .union([aflTradeAdmittedPlayerFactualOutputSchema, aflTradePrivateValuationFactualOutputSchema])
     .parse(value);
 }
 

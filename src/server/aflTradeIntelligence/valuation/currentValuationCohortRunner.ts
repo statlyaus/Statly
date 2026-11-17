@@ -162,9 +162,7 @@ type CurrentBatch = Readonly<{
     | Readonly<{
         preparationOperationId: string;
         currentModelEvidenceOperationId: string;
-        dispatchAuthority: z.infer<
-          typeof aflTradePrivatePreparedValuationDispatchAuthoritySchema
-        >;
+        dispatchAuthority: z.infer<typeof aflTradePrivatePreparedValuationDispatchAuthoritySchema>;
         modelPairRevision: number;
       }>
     | null;
@@ -410,9 +408,7 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
         })
       );
 
-      diagnostics.sort((left, right) =>
-        compareAflTradeCodeUnits(left.tradeId, right.tradeId)
-      );
+      diagnostics.sort((left, right) => compareAflTradeCodeUnits(left.tradeId, right.tradeId));
       if (diagnostics.length > 0) {
         const retained = await dependencies.retainUnexpectedDiagnostics({
           request,

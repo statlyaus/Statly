@@ -81,7 +81,10 @@ const acquisitionSpellSchema = z
   .strict()
   .superRefine((spell, context) => {
     if (spell.departedAt !== null && Date.parse(spell.departedAt) <= Date.parse(spell.joinedAt)) {
-      context.addIssue({ code: 'custom', message: 'Acquisition-spell departure must follow joining.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'Acquisition-spell departure must follow joining.',
+      });
     }
   });
 
@@ -158,7 +161,10 @@ const transformationSchema = z
     }
     for (const field of ['fromAssetIds', 'toAssetIds'] as const) {
       const ids = transformation[field];
-      if (new Set(ids).size !== ids.length || ids.some((id, index) => index > 0 && ids[index - 1]! > id)) {
+      if (
+        new Set(ids).size !== ids.length ||
+        ids.some((id, index) => index > 0 && ids[index - 1]! > id)
+      ) {
         context.addIssue({
           code: 'custom',
           path: [field],
@@ -166,10 +172,9 @@ const transformationSchema = z
         });
       }
     }
-    const expectedLabelIds = [...new Set([
-      ...transformation.fromAssetIds,
-      ...transformation.toAssetIds,
-    ])].sort();
+    const expectedLabelIds = [
+      ...new Set([...transformation.fromAssetIds, ...transformation.toAssetIds]),
+    ].sort();
     const actualLabelIds = transformation.assetLabels.map(({ assetId }) => assetId);
     if (!canonicalIds(actualLabelIds) || !exactJson(actualLabelIds, expectedLabelIds)) {
       context.addIssue({
@@ -257,8 +262,14 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
       'datasetAdmissionId',
       'gate3DecisionId',
     ] as const) {
-      if (new Set(trace.components.map((component) => component[field])).size !== componentRoles.length) {
-        context.addIssue({ code: 'custom', message: `Model component ${field} values must be distinct.` });
+      if (
+        new Set(trace.components.map((component) => component[field])).size !==
+        componentRoles.length
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: `Model component ${field} values must be distinct.`,
+        });
       }
     }
 
@@ -266,10 +277,7 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
     const transferAssetIds = trace.transaction.transfers.map(({ assetId }) => assetId);
     const participatingClubIds = [
       ...new Set(
-        trace.transaction.transfers.flatMap(({ fromClubId, toClubId }) => [
-          fromClubId,
-          toClubId,
-        ])
+        trace.transaction.transfers.flatMap(({ fromClubId, toClubId }) => [fromClubId, toClubId])
       ),
     ].sort();
     const transactionClubIds = trace.transaction.clubs.map(({ aflClubId }) => aflClubId);
@@ -283,7 +291,8 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
       context.addIssue({
         code: 'custom',
         path: ['transaction'],
-        message: 'Transaction clubs must equal the exact clubs participating in directed transfers.',
+        message:
+          'Transaction clubs must equal the exact clubs participating in directed transfers.',
       });
     }
 
@@ -338,15 +347,23 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
       .sort();
     const tracedPlayerIds = trace.playerHorizons.map(({ assetId }) => assetId);
     const pickAssetIds = trace.transaction.transfers
-      .filter(({ assetKind }) => pickAssetKinds.includes(assetKind as (typeof pickAssetKinds)[number]))
+      .filter(({ assetKind }) =>
+        pickAssetKinds.includes(assetKind as (typeof pickAssetKinds)[number])
+      )
       .map(({ assetId }) => assetId)
       .sort();
     const tracedPickIds = trace.pickLineages.map(({ rootAssetId }) => rootAssetId);
     if (!canonicalIds(tracedPlayerIds) || !exactJson(playerAssetIds, tracedPlayerIds)) {
-      context.addIssue({ code: 'custom', message: 'Every player transfer requires one exact player horizon.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'Every player transfer requires one exact player horizon.',
+      });
     }
     if (!canonicalIds(tracedPickIds) || !exactJson(pickAssetIds, tracedPickIds)) {
-      context.addIssue({ code: 'custom', message: 'Every pick transfer requires one exact pick lineage.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'Every pick transfer requires one exact pick lineage.',
+      });
     }
 
     for (const horizon of trace.playerHorizons) {
@@ -355,17 +372,25 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
         left.joinedAt.localeCompare(right.joinedAt)
       );
       const receivingSpell = spells.find(({ clubId }) => clubId === horizon.receivingClubId);
-      const expectedSeasons = receivingSpell === undefined ? [] : trace.seasonUniverse
-        .filter((season) =>
-          Date.parse(season.startsAt) >= Math.max(
-            Date.parse(trace.transaction.effectiveAt),
-            Date.parse(receivingSpell.joinedAt)
-          ) &&
-          (receivingSpell.departedAt === null ||
-            Date.parse(season.startsAt) < Date.parse(receivingSpell.departedAt))
-        )
-        .map(({ season, status }) => ({ season, status }));
-      const actualSeasons = horizon.requiredSeasons.map(({ season, status }) => ({ season, status }));
+      const expectedSeasons =
+        receivingSpell === undefined
+          ? []
+          : trace.seasonUniverse
+              .filter(
+                (season) =>
+                  Date.parse(season.startsAt) >=
+                    Math.max(
+                      Date.parse(trace.transaction.effectiveAt),
+                      Date.parse(receivingSpell.joinedAt)
+                    ) &&
+                  (receivingSpell.departedAt === null ||
+                    Date.parse(season.startsAt) < Date.parse(receivingSpell.departedAt))
+              )
+              .map(({ season, status }) => ({ season, status }));
+      const actualSeasons = horizon.requiredSeasons.map(({ season, status }) => ({
+        season,
+        status,
+      }));
       if (
         transfer?.assetKind !== 'player' ||
         transfer.toClubId !== horizon.receivingClubId ||
@@ -376,19 +401,24 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
         context.addIssue({
           code: 'custom',
           path: ['playerHorizons'],
-          message: 'Player horizon must contain every applicable season from the authenticated universe.',
+          message:
+            'Player horizon must contain every applicable season from the authenticated universe.',
         });
       }
     }
 
     for (const lineage of trace.pickLineages) {
       const transfer = transfersByAsset.get(lineage.rootAssetId);
-      const custodyContinuous = lineage.custody.every((entry, index) =>
-        entry.ordinal === index &&
-        (index === 0
-          ? entry.clubId === lineage.receivingClubId && entry.heldFrom === trace.transaction.effectiveAt
-          : lineage.custody[index - 1]!.heldThrough === entry.heldFrom) &&
-        (index < lineage.custody.length - 1 ? entry.heldThrough !== null : entry.heldThrough === null)
+      const custodyContinuous = lineage.custody.every(
+        (entry, index) =>
+          entry.ordinal === index &&
+          (index === 0
+            ? entry.clubId === lineage.receivingClubId &&
+              entry.heldFrom === trace.transaction.effectiveAt
+            : lineage.custody[index - 1]!.heldThrough === entry.heldFrom) &&
+          (index < lineage.custody.length - 1
+            ? entry.heldThrough !== null
+            : entry.heldThrough === null)
       );
       let frontier = [lineage.rootAssetId];
       const transformationChain = lineage.transformations.every((transformation, index) => {
@@ -409,13 +439,16 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
         context.addIssue({
           code: 'custom',
           path: ['pickLineages'],
-          message: 'Pick lineage must preserve exact identity, continuous custody, and ordered transformations.',
+          message:
+            'Pick lineage must preserve exact identity, continuous custody, and ordered transformations.',
         });
       }
     }
 
     const createdAtValues = [
-      ...trace.components.flatMap(({ evidence }) => Object.values(evidence).map(({ createdAt }) => createdAt)),
+      ...trace.components.flatMap(({ evidence }) =>
+        Object.values(evidence).map(({ createdAt }) => createdAt)
+      ),
       ...trace.transaction.transfers.map(({ evidenceRef }) => evidenceRef.createdAt),
       ...trace.seasonUniverse.map(({ evidenceRef }) => evidenceRef.createdAt),
       ...trace.playerHorizons.flatMap(
@@ -432,7 +465,10 @@ export const governedPrivateEvaluationInputTraceContentSchema = z
       ]),
     ];
     if (createdAtValues.some((createdAt) => Date.parse(createdAt) > Date.parse(trace.derivedAt))) {
-      context.addIssue({ code: 'custom', message: 'Input-trace evidence must exist before derivation.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'Input-trace evidence must exist before derivation.',
+      });
     }
   });
 

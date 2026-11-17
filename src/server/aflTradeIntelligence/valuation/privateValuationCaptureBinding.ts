@@ -41,7 +41,9 @@ const captureSourcePlanShape = {
   gate0AReceiptId: aflTradeContentAddressedIdSchema('gate0a-evaluation'),
 } as const;
 
-export const aflTradePrivateValuationCaptureSourcePlanSchema = z.object(captureSourcePlanShape).strict();
+export const aflTradePrivateValuationCaptureSourcePlanSchema = z
+  .object(captureSourcePlanShape)
+  .strict();
 
 export const aflTradePrivateValuationCaptureSourcePlanV2Schema = z
   .object({

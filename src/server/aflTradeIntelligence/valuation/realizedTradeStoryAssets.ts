@@ -1,6 +1,7 @@
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import type {
   AflTradeStoryAsset,
+  AflTradeStoryAssetPoint,
   AflTradeStoryClub,
   AflTradeStoryLines,
   AflTradeStoryNames,
@@ -231,6 +232,19 @@ export class AflTradeStoryIndex {
     )
       throw new Error(`The value lines move transfer ${ref.leg.transferId} between other clubs.`);
     return leg;
+  }
+
+  /** The leg's value line in its trade, at-trade view first, for drawing it over time. */
+  points(ref: AflTradeStoryHopRef): AflTradeStoryAssetPoint[] {
+    const leg = this.valueLeg(ref);
+    return [leg.atTrade, ...leg.points].map((point) => ({
+      checkpoint: point.checkpoint,
+      state: point.state,
+      value: point.value,
+      produced: point.produced,
+      expectedRemaining: point.expectedRemaining,
+      selectionNumber: point.slot?.selectionNumber ?? null,
+    }));
   }
 
   private lineOf(ref: AflTradeStoryHopRef): AflTradeValueLineAsset {

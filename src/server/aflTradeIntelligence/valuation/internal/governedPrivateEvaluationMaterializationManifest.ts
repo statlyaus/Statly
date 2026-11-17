@@ -32,15 +32,11 @@ export const governedPrivateEvaluationMaterializationManifestContentSchema = z
     schemaVersion: z.literal('private-evaluation-materialization-manifest/v1'),
     environment: z.literal('non_production'),
     selector: governedPrivateEvaluationSelectorSchema,
-    calculationInputPackageId: aflTradeContentAddressedIdSchema(
-      'valuation-calculation-input'
-    ),
+    calculationInputPackageId: aflTradeContentAddressedIdSchema('valuation-calculation-input'),
     calculationInputArtifact: aflTradeArtifactRefSchema,
     inputTraceId: aflTradeContentAddressedIdSchema('private-evaluation-input-trace'),
     inputTraceArtifact: aflTradeArtifactRefSchema,
-    explanationPolicyId: aflTradeContentAddressedIdSchema(
-      'private-evaluation-explanation-policy'
-    ),
+    explanationPolicyId: aflTradeContentAddressedIdSchema('private-evaluation-explanation-policy'),
     explanationPolicyArtifact: aflTradeArtifactRefSchema,
     lineageGraphId: aflTradeContentAddressedIdSchema('lineage-graph'),
     lineageGraphArtifact: aflTradeArtifactRefSchema,
@@ -54,10 +50,7 @@ export const governedPrivateEvaluationMaterializationManifestContentSchema = z
   .superRefine((manifest, context) => {
     for (const [path, ids] of [
       ['pickBenchmarks', manifest.pickBenchmarks.map(({ benchmarkId }) => benchmarkId)],
-      [
-        'playerObservations',
-        manifest.playerObservations.map(({ observationId }) => observationId),
-      ],
+      ['playerObservations', manifest.playerObservations.map(({ observationId }) => observationId)],
     ] as const) {
       const canonical = [...ids].sort();
       if (new Set(ids).size !== ids.length || !exactJson(ids, canonical)) {
@@ -94,9 +87,7 @@ export const governedPrivateEvaluationMaterializationManifestContentSchema = z
 
 export const governedPrivateEvaluationMaterializationManifestSchema = z
   .object({
-    manifestId: aflTradeContentAddressedIdSchema(
-      'private-evaluation-materialization-manifest'
-    ),
+    manifestId: aflTradeContentAddressedIdSchema('private-evaluation-materialization-manifest'),
     content: governedPrivateEvaluationMaterializationManifestContentSchema,
   })
   .strict()

@@ -45,8 +45,7 @@ export type AflTradeCurrentValuationModelEvidenceDispatch = Readonly<{
 type Dispatch = AflTradeCurrentValuationModelEvidenceDispatch;
 
 export type AflTradeCurrentValuationModelEvidencePreparationInput =
-  AflTradeCurrentValuationModelEvidenceRequest &
-    Readonly<{ operationId: string }>;
+  AflTradeCurrentValuationModelEvidenceRequest & Readonly<{ operationId: string }>;
 
 type PairResult = z.infer<typeof terminalPairResultSchema>;
 type TerminalPairResult = Extract<

@@ -47,7 +47,9 @@ function sum(values: readonly number[]): number {
 
 function formatted(value: number): string {
   const normalized = close(value, 0) ? 0 : value;
-  return Number.isInteger(normalized) ? normalized.toString() : normalized.toFixed(4).replace(/0+$/u, '').replace(/\.$/u, '');
+  return Number.isInteger(normalized)
+    ? normalized.toString()
+    : normalized.toFixed(4).replace(/0+$/u, '').replace(/\.$/u, '');
 }
 
 function signed(value: number): string {
@@ -102,10 +104,7 @@ function assertLedgerArithmetic(club: AflTradeValuationExplanationClub): void {
   assertDistribution(club.net.distribution, receivedMean - givenUpMean);
 }
 
-function packageSummary(
-  club: AflTradeValuationExplanationClub,
-  valueUnitId: string
-): string {
+function packageSummary(club: AflTradeValuationExplanationClub, valueUnitId: string): string {
   const arithmetic = `${formatted(club.received.additiveMean)} - ${formatted(club.givenUp.additiveMean)} = ${signed(club.net.additiveMean)} ${valueUnitId}`;
   if (club.grade.grade === null) {
     return `${arithmetic}. The package grade is unavailable (${club.grade.reasonCode}).`;
@@ -121,8 +120,7 @@ function assertPlayerEvidence(
   const contribution = sum(evidence.seasons.map((season) => season.contribution));
   const contributionPerGame = gamesPlayed === 0 ? null : contribution / gamesPlayed;
   const perSeasonRatesReconcile = evidence.seasons.every((season) => {
-    const expected =
-      season.gamesPlayed === 0 ? null : season.contribution / season.gamesPlayed;
+    const expected = season.gamesPlayed === 0 ? null : season.contribution / season.gamesPlayed;
     return (
       (expected === null && season.contributionPerGame === null) ||
       (expected !== null &&
@@ -141,7 +139,7 @@ function assertPlayerEvidence(
         canonicalizeAflTradeJson(evidence.horizon.requiredSeasons)) ||
     !close(evidence.totals.gamesPlayed, gamesPlayed) ||
     !close(evidence.totals.contribution, contribution) ||
-    ((contributionPerGame === null) !== (evidence.totals.contributionPerGame === null)) ||
+    (contributionPerGame === null) !== (evidence.totals.contributionPerGame === null) ||
     (contributionPerGame !== null &&
       evidence.totals.contributionPerGame !== null &&
       !close(evidence.totals.contributionPerGame, contributionPerGame)) ||
@@ -161,8 +159,10 @@ function playerStory(
   assertPlayerEvidence(evidence);
   const totals = evidence.totals;
   const seasonCount = evidence.horizon.observedSeasons.length;
-  const perGame = totals.contributionPerGame === null ? 'unavailable' : formatted(totals.contributionPerGame);
-  const censoring = evidence.state === 'right_censored' ? ' The current season is right-censored.' : '';
+  const perGame =
+    totals.contributionPerGame === null ? 'unavailable' : formatted(totals.contributionPerGame);
+  const censoring =
+    evidence.state === 'right_censored' ? ' The current season is right-censored.' : '';
   return `${label} records ${formatted(totals.gamesPlayed)} games for ${formatted(totals.contribution)} ${valueUnitId} across ${seasonCount} observed season${seasonCount === 1 ? '' : 's'} (${perGame} per game).${censoring}`;
 }
 
@@ -194,7 +194,10 @@ function contributionStory(input: {
   }
   if (view === 'realized') {
     if (evidence.kind === 'player') {
-      if (evidence.state === 'unavailable' || !close(contribution.additiveMean, evidence.totals.contribution)) {
+      if (
+        evidence.state === 'unavailable' ||
+        !close(contribution.additiveMean, evidence.totals.contribution)
+      ) {
         throw new TypeError(
           'Trade calculation narrative player realized value does not reconcile to retained seasons.'
         );
@@ -238,7 +241,9 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
     canonicalizeAflTradeJson(explanation.views.map(({ view }) => view)) !==
       canonicalizeAflTradeJson(AFL_TRADE_VALUATION_VIEWS)
   ) {
-    throw new TypeError('Trade calculation narrative requires one complete canonical four-view calculation.');
+    throw new TypeError(
+      'Trade calculation narrative requires one complete canonical four-view calculation.'
+    );
   }
 
   const identities = new Map<string, AssetIdentity>();
@@ -257,7 +262,9 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
             (side === 'received' && asset.toClubId !== club.aflClubId) ||
             (side === 'givenUp' && asset.fromClubId !== club.aflClubId)
           ) {
-            throw new TypeError('Trade calculation narrative asset direction does not match its club package.');
+            throw new TypeError(
+              'Trade calculation narrative asset direction does not match its club package.'
+            );
           }
           const currentIdentity = identityOf(asset);
           const knownIdentity = identities.get(asset.assetId);
@@ -265,7 +272,9 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
             knownIdentity !== undefined &&
             canonicalizeAflTradeJson(knownIdentity) !== canonicalizeAflTradeJson(currentIdentity)
           ) {
-            throw new TypeError('Trade calculation narrative asset identity changed between package views.');
+            throw new TypeError(
+              'Trade calculation narrative asset identity changed between package views.'
+            );
           }
           identities.set(asset.assetId, currentIdentity);
           const byView = contributions.get(asset.assetId) ?? new Map();
@@ -284,7 +293,9 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
                 ))) ||
             (tradeView.view !== 'current' && asset.currentComponents !== null)
           ) {
-            throw new TypeError('Trade calculation narrative current value does not reconcile to realized plus remaining.');
+            throw new TypeError(
+              'Trade calculation narrative current value does not reconcile to realized plus remaining.'
+            );
           }
         }
       }
@@ -327,8 +338,13 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
 
   authenticateExplanation(explanation);
   const evidenceByAssetId = new Map(input.assets.map((entry) => [entry.assetId, entry]));
-  if (evidenceByAssetId.size !== input.assets.length || evidenceByAssetId.size !== identities.size) {
-    throw new TypeError('Trade calculation narrative requires exactly one evidence package per asset.');
+  if (
+    evidenceByAssetId.size !== input.assets.length ||
+    evidenceByAssetId.size !== identities.size
+  ) {
+    throw new TypeError(
+      'Trade calculation narrative requires exactly one evidence package per asset.'
+    );
   }
   const assets = [...identities.values()]
     .sort((left, right) => left.assetId.localeCompare(right.assetId))
@@ -343,7 +359,9 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
         (evidencePackage.modelEvidence.kind === 'player' &&
           evidencePackage.modelEvidence.state === 'unavailable')
       ) {
-        throw new TypeError('Trade calculation narrative evidence does not authenticate its asset.');
+        throw new TypeError(
+          'Trade calculation narrative evidence does not authenticate its asset.'
+        );
       }
       const modelEvidence = evidencePackage.modelEvidence;
       const story =
@@ -355,7 +373,9 @@ export function createAflTradeCalculationNarrative(input: AflTradeCalculationNar
         contributions: AFL_TRADE_VALUATION_VIEWS.map((view) => {
           const contribution = contributions.get(identity.assetId)?.get(view);
           if (contribution === undefined) {
-            throw new TypeError('Trade calculation narrative is missing an asset view contribution.');
+            throw new TypeError(
+              'Trade calculation narrative is missing an asset view contribution.'
+            );
           }
           return {
             view,

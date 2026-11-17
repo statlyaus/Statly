@@ -144,35 +144,32 @@ export const governedPrivateEvaluationAutomatedStageRequestSchema = z
   })
   .strict();
 
-export const governedPrivateEvaluationAutomatedStageResultSchema = z.discriminatedUnion(
-  'state',
-  [
-    z
-      .object({
-        state: z.literal('activated'),
-        selector: governedPrivateEvaluationSelectorSchema,
-        operationId: operationIdSchema,
-        generationId: generationIdSchema,
-        head: lifecycleHeadSchema,
-      })
-      .strict(),
-    z
-      .object({
-        state: z.literal('unavailable'),
-        selector: governedPrivateEvaluationSelectorSchema,
-        operationId: operationIdSchema,
-        blockers: z.array(blockerSchema).min(1).max(10_000),
-      })
-      .strict(),
-    z
-      .object({
-        state: z.literal('stale_authority'),
-        selector: governedPrivateEvaluationSelectorSchema,
-        operationId: operationIdSchema,
-      })
-      .strict(),
-  ]
-);
+export const governedPrivateEvaluationAutomatedStageResultSchema = z.discriminatedUnion('state', [
+  z
+    .object({
+      state: z.literal('activated'),
+      selector: governedPrivateEvaluationSelectorSchema,
+      operationId: operationIdSchema,
+      generationId: generationIdSchema,
+      head: lifecycleHeadSchema,
+    })
+    .strict(),
+  z
+    .object({
+      state: z.literal('unavailable'),
+      selector: governedPrivateEvaluationSelectorSchema,
+      operationId: operationIdSchema,
+      blockers: z.array(blockerSchema).min(1).max(10_000),
+    })
+    .strict(),
+  z
+    .object({
+      state: z.literal('stale_authority'),
+      selector: governedPrivateEvaluationSelectorSchema,
+      operationId: operationIdSchema,
+    })
+    .strict(),
+]);
 
 const executionResultBase = {
   selector: governedPrivateEvaluationSelectorSchema,

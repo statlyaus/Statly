@@ -42,8 +42,8 @@ export function deriveGovernedPrivateEvaluationTransaction(unparsedTrace: unknow
       displayLabel: transfer.displayLabel,
       directionBasis: 'archive_recorded_transfer',
     }));
-  const clubs: readonly GovernedPrivateEvaluationClubBank[] =
-    trace.content.transaction.clubs.map((club) => ({
+  const clubs: readonly GovernedPrivateEvaluationClubBank[] = trace.content.transaction.clubs.map(
+    (club) => ({
       aflClubId: club.aflClubId,
       clubName: club.clubName,
       receivedAssetIds: transfers
@@ -54,7 +54,8 @@ export function deriveGovernedPrivateEvaluationTransaction(unparsedTrace: unknow
         .filter(({ fromClubId }) => fromClubId === club.aflClubId)
         .map(({ assetId }) => assetId)
         .sort(),
-    }));
+    })
+  );
   if (
     clubs.some(
       ({ receivedAssetIds, givenUpAssetIds }) =>

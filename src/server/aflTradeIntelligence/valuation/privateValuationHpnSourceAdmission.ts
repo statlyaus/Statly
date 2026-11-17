@@ -22,19 +22,13 @@ export const aflTradePrivateValuationHpnSourceRoleSchema = z.enum([
 
 export const aflTradePrivateValuationHpnSourceAdmissionContentSchema = z
   .object({
-    schemaVersion: z.literal(
-      AFL_TRADE_PRIVATE_VALUATION_HPN_SOURCE_ADMISSION_SCHEMA_VERSION
-    ),
+    schemaVersion: z.literal(AFL_TRADE_PRIVATE_VALUATION_HPN_SOURCE_ADMISSION_SCHEMA_VERSION),
     requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
-    dispatchClaimId: aflTradeContentAddressedIdSchema(
-      'private-valuation-dispatch-claim'
-    ),
+    dispatchClaimId: aflTradeContentAddressedIdSchema('private-valuation-dispatch-claim'),
     attemptSequence: z.number().int().positive(),
     attemptNumber: z.number().int().min(1).max(3),
     sourceRole: aflTradePrivateValuationHpnSourceRoleSchema,
-    captureBindingId: aflTradeContentAddressedIdSchema(
-      'private-valuation-capture-binding'
-    ),
+    captureBindingId: aflTradeContentAddressedIdSchema('private-valuation-capture-binding'),
     sourceCaptureId: aflTradeContentAddressedIdSchema('source-capture'),
     normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
     projectedFieldMapId: aflTradeContentAddressedIdSchema('hpn-pav-field-map'),
@@ -58,9 +52,7 @@ export const aflTradePrivateValuationHpnSourceAdmissionContentSchema = z
 
 export const aflTradePrivateValuationHpnSourceAdmissionSchema = z
   .object({
-    admissionId: aflTradeContentAddressedIdSchema(
-      'private-valuation-hpn-source-admission'
-    ),
+    admissionId: aflTradeContentAddressedIdSchema('private-valuation-hpn-source-admission'),
     content: aflTradePrivateValuationHpnSourceAdmissionContentSchema,
   })
   .strict()
@@ -102,10 +94,7 @@ export function createAflTradePrivateValuationHpnSourceAdmission(
     limitation: AFL_TRADE_PRIVATE_VALUATION_HPN_SOURCE_ADMISSION_LIMITATION,
   });
   return aflTradePrivateValuationHpnSourceAdmissionSchema.parse({
-    admissionId: createAflTradeContentAddress(
-      'private-valuation-hpn-source-admission',
-      content
-    ),
+    admissionId: createAflTradeContentAddress('private-valuation-hpn-source-admission', content),
     content,
   });
 }

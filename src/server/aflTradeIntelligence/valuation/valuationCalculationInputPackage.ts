@@ -63,48 +63,48 @@ function reconcileCalculationInput(
   input: z.infer<typeof calculationInputKernelSchema>,
   context: z.RefinementCtx
 ) {
-    const valuationCase = input.valuationCase.content;
-    const drawSet = input.componentDrawSet.content;
-    const ledger = input.realizedContributionLedger.content;
-    const policy = input.packagePolicy.content;
-    if (input.tradeId !== valuationCase.tradeId) {
-      context.addIssue({ code: 'custom', message: 'Calculation input trade identity mismatch.' });
-    }
-    if (
-      [
-        valuationCase.valuationBundleId,
-        drawSet.valuationBundleId,
-        ledger.valuationBundleId,
-        policy.valuationBundleId,
-      ].some((valuationBundleId) => valuationBundleId !== valuationCase.valuationBundleId) ||
-      [valuationCase, drawSet, ledger, policy].some(
-        ({ valuationInputBundleId }) => valuationInputBundleId !== input.valuationInputBundleId
-      )
-    ) {
-      context.addIssue({ code: 'custom', message: 'Calculation input bundle ancestry mismatch.' });
-    }
-    if (
-      valuationCase.componentDrawSetId !== input.componentDrawSet.componentDrawSetId ||
-      valuationCase.realizedContributionLedgerId !==
-        input.realizedContributionLedger.realizedContributionLedgerId ||
-      valuationCase.packagePolicyId !== input.packagePolicy.packagePolicyId
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Valuation case must reference the exact packaged calculation inputs.',
-      });
-    }
-    if (
-      valuationCase.lineageGraphId !== ledger.lineageGraphId ||
-      [drawSet.valueUnitId, ledger.valueUnitId, policy.valueUnitId].some(
-        (valueUnitId) => valueUnitId !== valuationCase.valueUnitId
-      )
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Calculation input lineage or value-unit identity mismatch.',
-      });
-    }
+  const valuationCase = input.valuationCase.content;
+  const drawSet = input.componentDrawSet.content;
+  const ledger = input.realizedContributionLedger.content;
+  const policy = input.packagePolicy.content;
+  if (input.tradeId !== valuationCase.tradeId) {
+    context.addIssue({ code: 'custom', message: 'Calculation input trade identity mismatch.' });
+  }
+  if (
+    [
+      valuationCase.valuationBundleId,
+      drawSet.valuationBundleId,
+      ledger.valuationBundleId,
+      policy.valuationBundleId,
+    ].some((valuationBundleId) => valuationBundleId !== valuationCase.valuationBundleId) ||
+    [valuationCase, drawSet, ledger, policy].some(
+      ({ valuationInputBundleId }) => valuationInputBundleId !== input.valuationInputBundleId
+    )
+  ) {
+    context.addIssue({ code: 'custom', message: 'Calculation input bundle ancestry mismatch.' });
+  }
+  if (
+    valuationCase.componentDrawSetId !== input.componentDrawSet.componentDrawSetId ||
+    valuationCase.realizedContributionLedgerId !==
+      input.realizedContributionLedger.realizedContributionLedgerId ||
+    valuationCase.packagePolicyId !== input.packagePolicy.packagePolicyId
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Valuation case must reference the exact packaged calculation inputs.',
+    });
+  }
+  if (
+    valuationCase.lineageGraphId !== ledger.lineageGraphId ||
+    [drawSet.valueUnitId, ledger.valueUnitId, policy.valueUnitId].some(
+      (valueUnitId) => valueUnitId !== valuationCase.valueUnitId
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Calculation input lineage or value-unit identity mismatch.',
+    });
+  }
 }
 
 const calculationInputV1Schema = z

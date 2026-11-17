@@ -19,9 +19,7 @@ import {
   calculateAflTradeValuation,
   type AflTradeValuationCalculation,
 } from './tradeValuationCalculation';
-import {
-  aflTradeValuationCalculationInputPackageSchema,
-} from './valuationCalculationInputPackage';
+import { aflTradeValuationCalculationInputPackageSchema } from './valuationCalculationInputPackage';
 import { aflTradeValuationCaseSchema, type AflTradeValuationCase } from './valuationCaseContracts';
 
 export const AFL_TRADE_VALUATION_EXPLANATION_SCHEMA_VERSION =
@@ -294,8 +292,7 @@ interface ValidatedExplanationSource {
   practicalEquivalenceBasis: string;
   practicalEquivalenceBandByView: Record<ValuationView, number>;
   practicalEquivalencePolicyReference:
-    | { assumptionSetId: string }
-    | { explanationPolicyId: string };
+    { assumptionSetId: string } | { explanationPolicyId: string };
 }
 
 function contractViolation(message: string, cause?: unknown): never {
@@ -537,8 +534,13 @@ function validateGovernedInput(
   const calculationInputPackage = aflTradeValuationCalculationInputPackageSchema.parse(
     input.calculationInputPackage
   );
-  if (calculationInputPackage.content.schemaVersion !== 'afl-trade-valuation-calculation-input-package/v2') {
-    contractViolation('Governed explanation requires an authenticated v2 calculation input package.');
+  if (
+    calculationInputPackage.content.schemaVersion !==
+    'afl-trade-valuation-calculation-input-package/v2'
+  ) {
+    contractViolation(
+      'Governed explanation requires an authenticated v2 calculation input package.'
+    );
   }
   const source = authenticateGovernedPrivateEvaluationExplanationSource({
     trace,
@@ -558,9 +560,13 @@ function validateGovernedInput(
     Date.parse(packageContent.createdAt) < Date.parse(trace.content.derivedAt) ||
     Date.parse(packageContent.createdAt) < Date.parse(explanationPolicy.content.createdAt)
   ) {
-    contractViolation('Governed calculation package does not match its exact trace, policy, unit, or time ancestry.');
+    contractViolation(
+      'Governed calculation package does not match its exact trace, policy, unit, or time ancestry.'
+    );
   }
-  const tracedComponents = new Map(trace.content.components.map((component) => [component.role, component]));
+  const tracedComponents = new Map(
+    trace.content.components.map((component) => [component.role, component])
+  );
   if (
     packageContent.componentDrawSet.content.components.some((component) => {
       const traced = tracedComponents.get(component.role);
@@ -573,7 +579,9 @@ function validateGovernedInput(
       );
     })
   ) {
-    contractViolation('Governed calculation components do not match the authenticated model ancestry.');
+    contractViolation(
+      'Governed calculation components do not match the authenticated model ancestry.'
+    );
   }
   if (
     caseContent.parties.length !== source.clubs.length ||
@@ -590,7 +598,9 @@ function validateGovernedInput(
       caseContent.parties.flatMap(({ receivedRootAssetIds }) => receivedRootAssetIds)
     )
   ) {
-    contractViolation('Governed transaction clubs and directed roots do not match the valuation case.');
+    contractViolation(
+      'Governed transaction clubs and directed roots do not match the valuation case.'
+    );
   }
   const calculation = calculateAflTradeValuation(
     valuationCase,
@@ -747,8 +757,7 @@ function buildViews(input: {
     const completePackages = packages.filter((candidate) => candidate !== null);
     const finishAheadProbabilities = completePackages.map(() => 0);
     let practicalEquivalenceProbability = 0;
-    const practicalEquivalenceBand =
-      input.source.practicalEquivalenceBandByView[view];
+    const practicalEquivalenceBand = input.source.practicalEquivalenceBandByView[view];
     input.calculation.content.draws.forEach((draw, drawIndex) => {
       const values = completePackages.map((item) => item.netSamples[drawIndex]!.value);
       const maximum = Math.max(...values);

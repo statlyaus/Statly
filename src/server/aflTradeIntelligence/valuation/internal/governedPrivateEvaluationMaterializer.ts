@@ -60,8 +60,7 @@ export interface MaterializeGovernedPrivateEvaluationInput {
   readonly lineageGraph: AflTradeLineageGraph;
 }
 
-export interface ReplayGovernedPrivateEvaluationMaterializationInput
-  extends MaterializeGovernedPrivateEvaluationInput {
+export interface ReplayGovernedPrivateEvaluationMaterializationInput extends MaterializeGovernedPrivateEvaluationInput {
   readonly materializationManifest: GovernedPrivateEvaluationMaterializationManifest;
 }
 
@@ -226,10 +225,7 @@ export function materializeGovernedPrivateEvaluation(
   }
 
   const blockers: GovernedPrivateEvaluationMaterializationBlocker[] = [];
-  const modelEvidence = new Map<
-    string,
-    MaterializedEvidence['modelEvidence']
-  >();
+  const modelEvidence = new Map<string, MaterializedEvidence['modelEvidence']>();
   for (const horizon of trace.content.playerHorizons) {
     const observation = playerObservationById.get(horizon.playerObservationId);
     if (observation === undefined) {
