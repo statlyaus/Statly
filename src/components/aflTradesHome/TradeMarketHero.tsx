@@ -3,7 +3,8 @@ import './marketHero.css';
 /**
  * The top of the home page (owner's concept E, 2026-11-16): "Every October, footy goes to market."
  * A vintage cut-out collage of a high mark over a stadium, a price chart behind it and pit traders
- * in front. The pictures were generated with AI and show invented people, which the page says.
+ * in front. The pictures were generated with AI and show invented people; the owner chose not to
+ * caption them (2026-11-17).
  */
 
 const ART = '/Assets/stories/market';
@@ -59,7 +60,6 @@ export function TradeMarketHero({
           Read the record deal ↓
         </a>
       </div>
-      <p className="mh-note mh-label">Illustrations generated with AI · figures are invented</p>
     </div>
   );
 }
