@@ -45,6 +45,178 @@ function valueText(lane: TreeLane): string {
   return lane.value === null ? 'pending' : formatPav(lane.value);
 }
 
+type Span = TreeLane['spans'][number];
+
+/** The lane's bars: an outline while a pick, then a bar as thick as its PAV. */
+function LaneBars({
+  lane,
+  y,
+  w,
+  colX,
+  stop,
+  fill,
+  outlined,
+}: {
+  lane: TreeLane;
+  y: number;
+  w: number;
+  colX: (at: number) => number;
+  stop: number;
+  fill: (span: Span) => string;
+  outlined: (span: Span) => boolean;
+}) {
+  const xOf = (at: number) => colX(at) + (at === lane.onward?.beforeColumn ? -18 : 0);
+  return (
+    <>
+      {lane.spans.map((span, at) => {
+        const from = xOf(span.from);
+        const next = lane.spans[at + 1];
+        const to = Math.min(next ? xOf(next.from) : stop, stop);
+        if (to <= from) return null;
+        return span.pick ? (
+          <rect
+            key={span.from}
+            x={from}
+            y={y - 2.5}
+            width={to - from}
+            height="5"
+            fill="#fff"
+            stroke={INK}
+            strokeWidth="1.2"
+          />
+        ) : (
+          <rect
+            key={span.from}
+            x={from}
+            y={y - w / 2}
+            width={to - from}
+            height={w}
+            fill={fill(span)}
+            stroke={outlined(span) ? INK : 'none'}
+            strokeWidth="0.8"
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/** The draft dot, the onward-trade marker, the end cap and their notes. */
+function LaneMarks({
+  lane,
+  y,
+  w,
+  colX,
+  stop,
+}: {
+  lane: TreeLane;
+  y: number;
+  w: number;
+  colX: (at: number) => number;
+  stop: number;
+}) {
+  const onwardX = lane.onward ? colX(lane.onward.beforeColumn) - 18 : 0;
+  const took = lane.player
+    ? `; ${lane.player.clubName} took ${lane.player.name}${lane.drafted?.selection ? ` at ${lane.drafted.selection}` : ''}`
+    : '';
+  return (
+    <>
+      {lane.drafted ? <circle cx={colX(lane.drafted.column)} cy={y} r="4" fill={INK} /> : null}
+      {lane.drafted?.selection && !lane.onward ? (
+        <text x={colX(lane.drafted.column) + 8} y={y + w / 2 + 14} fontSize="12" fill={MUTED}>
+          drafted at {lane.drafted.selection}
+        </text>
+      ) : null}
+      {lane.onward ? (
+        <>
+          <circle cx={onwardX} cy={y} r="9" fill="#fff" stroke={INK} strokeWidth="1.5" />
+          <text x={onwardX} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={INK}>
+            ⇄
+          </text>
+          <text x={stop - 2} y={y + w / 2 + 14} textAnchor="end" fontSize="12" fill={MUTED}>
+            traded to {lane.onward.clubNames.join(', then ')}
+            {took}
+          </text>
+        </>
+      ) : null}
+      {lane.endColumn !== null ? (
+        <>
+          <line x1={stop} y1={y - 7} x2={stop} y2={y + 7} stroke={INK} strokeWidth="1.5" />
+          <text x={stop - 4} y={y - 12} textAnchor="end" fontSize="12" fill={MUTED}>
+            {lane.endReason === 'not_used' ? 'not used' : 'stint ended'}
+          </text>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** The player the lane became, his club, and its PAV. */
+function BecameCell({ lane, y, colour }: { lane: TreeLane; y: number; colour: string }) {
+  const away = lane.player?.away ?? false;
+  const name = lane.player?.name ?? (lane.endReason === 'not_used' ? 'Not used' : 'Value pending');
+  return (
+    <>
+      <text x={BECAME_X} y={y - 1} fontSize="14" fontWeight="700" fill={away ? MUTED : INK}>
+        {name}
+      </text>
+      <text x={BECAME_X} y={y + 15} fontSize="12" fill={MUTED}>
+        {lane.player?.clubName ?? ''}
+        {lane.endReason === 'closed' ? ', stint ended' : ''}
+      </text>
+      <text
+        x={W}
+        y={y + 10}
+        textAnchor="end"
+        fontSize="30"
+        fontWeight="600"
+        fill={away || lane.value === null ? MUTED : colour}
+        className="tt-svg-num"
+      >
+        {valueText(lane)}
+      </text>
+    </>
+  );
+}
+
+/** One asset's lane: its label, its bars and marks, and what it became. */
+function TreeLaneRow({
+  lane,
+  y,
+  w,
+  colX,
+  stop,
+  fill,
+  outlined,
+  colour,
+}: {
+  lane: TreeLane;
+  y: number;
+  w: number;
+  colX: (at: number) => number;
+  stop: number;
+  fill: (span: Span) => string;
+  outlined: (span: Span) => boolean;
+  colour: string;
+}) {
+  return (
+    <g>
+      <text x={LANE_X} y={y - 12} fontSize="12.5" fontWeight="600" fill={INK}>
+        {lane.label}
+        {lane.via ? (
+          <tspan fontWeight="400" fill={MUTED}>
+            {'  '}
+            {lane.via}
+          </tspan>
+        ) : null}
+      </text>
+      <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} fill={fill} outlined={outlined} />
+      <LaneMarks lane={lane} y={y} w={w} colX={colX} stop={stop} />
+      <BecameCell lane={lane} y={y} colour={colour} />
+    </g>
+  );
+}
+
 export function TradeTree({ story }: { story: AflTradeStory }) {
   const hatch = `tt-hatch-${useId().replace(/[^a-zA-Z0-9_-]/gu, '')}`;
   const tree = tradeTree(story);
@@ -267,160 +439,20 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
           </text>
 
           {/* Each lane through time. */}
-          {rows.flatMap(({ lanes }) =>
-            lanes.map(({ lane, y: laneY }) => {
-              const w = widthOf(lane.value, maxValue);
-              const stop = lane.endColumn === null ? endX : colX(lane.endColumn);
-              const segments = lane.spans.map((span, at) => {
-                const from = colX(span.from) + (span.from === lane.onward?.beforeColumn ? -18 : 0);
-                const next = lane.spans[at + 1];
-                const to = next
-                  ? colX(next.from) + (next.from === lane.onward?.beforeColumn ? -18 : 0)
-                  : stop;
-                return { span, from, to: Math.min(to, stop) };
-              });
-              const away = lane.player?.away ?? false;
-              return (
-                <g key={lane.asset.transferId}>
-                  <text x={LANE_X} y={laneY - 12} fontSize="12.5" fontWeight="600" fill={INK}>
-                    {lane.label}
-                    {lane.via ? (
-                      <tspan fontWeight="400" fill={MUTED}>
-                        {'  '}
-                        {lane.via}
-                      </tspan>
-                    ) : null}
-                  </text>
-                  {segments.map(({ span, from, to }) =>
-                    to <= from ? null : span.pick ? (
-                      <rect
-                        key={span.from}
-                        x={from}
-                        y={laneY - 2.5}
-                        width={to - from}
-                        height="5"
-                        fill="#fff"
-                        stroke={INK}
-                        strokeWidth="1.2"
-                      />
-                    ) : (
-                      <rect
-                        key={span.from}
-                        x={from}
-                        y={laneY - w / 2}
-                        width={to - from}
-                        height={w}
-                        fill={fillFor(span.clubId, lane.receiverId, span.clubName)}
-                        stroke={
-                          span.clubId !== lane.receiverId && !clubIds.has(span.clubId)
-                            ? INK
-                            : 'none'
-                        }
-                        strokeWidth="0.8"
-                      />
-                    )
-                  )}
-                  {lane.drafted ? (
-                    <g>
-                      <circle cx={colX(lane.drafted.column)} cy={laneY} r="4" fill={INK} />
-                      {lane.drafted.selection && !lane.onward ? (
-                        <text
-                          x={colX(lane.drafted.column) + 8}
-                          y={laneY + w / 2 + 14}
-                          fontSize="12"
-                          fill={MUTED}
-                        >
-                          drafted at {lane.drafted.selection}
-                        </text>
-                      ) : null}
-                    </g>
-                  ) : null}
-                  {lane.onward ? (
-                    <g>
-                      <circle
-                        cx={colX(lane.onward.beforeColumn) - 18}
-                        cy={laneY}
-                        r="9"
-                        fill="#fff"
-                        stroke={INK}
-                        strokeWidth="1.5"
-                      />
-                      <text
-                        x={colX(lane.onward.beforeColumn) - 18}
-                        y={laneY + 4}
-                        textAnchor="middle"
-                        fontSize="11"
-                        fontWeight="700"
-                        fill={INK}
-                      >
-                        ⇄
-                      </text>
-                    </g>
-                  ) : null}
-                  {lane.endColumn !== null ? (
-                    <g>
-                      <line
-                        x1={stop}
-                        y1={laneY - 7}
-                        x2={stop}
-                        y2={laneY + 7}
-                        stroke={INK}
-                        strokeWidth="1.5"
-                      />
-                      <text x={stop - 4} y={laneY - 12} textAnchor="end" fontSize="12" fill={MUTED}>
-                        {lane.endReason === 'not_used' ? 'not used' : 'stint ended'}
-                      </text>
-                    </g>
-                  ) : null}
-                  {lane.onward ? (
-                    <text
-                      x={stop - 2}
-                      y={laneY + w / 2 + 14}
-                      textAnchor="end"
-                      fontSize="12"
-                      fill={MUTED}
-                    >
-                      traded to {lane.onward.clubNames.join(', then ')}
-                      {lane.player
-                        ? `; ${lane.player.clubName} took ${lane.player.name}${lane.drafted?.selection ? ` at ${lane.drafted.selection}` : ''}`
-                        : ''}
-                    </text>
-                  ) : null}
-                  <text
-                    x={BECAME_X}
-                    y={laneY - 1}
-                    fontSize="14"
-                    fontWeight="700"
-                    fill={away ? MUTED : INK}
-                  >
-                    {lane.player?.name ??
-                      (lane.endReason === 'not_used' ? 'Not used' : 'Value pending')}
-                  </text>
-                  <text x={BECAME_X} y={laneY + 15} fontSize="12" fill={MUTED}>
-                    {lane.player ? lane.player.clubName : ''}
-                    {lane.endReason === 'closed' ? ', stint ended' : ''}
-                  </text>
-                  <text
-                    x={W}
-                    y={laneY + 10}
-                    textAnchor="end"
-                    fontSize="30"
-                    fontWeight="600"
-                    fill={
-                      away || lane.value === null
-                        ? MUTED
-                        : clubStyle(
-                            rows.find(({ group }) => group.clubId === lane.receiverId)!.group
-                              .clubName
-                          ).fill
-                    }
-                    className="tt-svg-num"
-                  >
-                    {valueText(lane)}
-                  </text>
-                </g>
-              );
-            })
+          {rows.flatMap(({ group, lanes }) =>
+            lanes.map(({ lane, y: laneY }) => (
+              <TreeLaneRow
+                key={lane.asset.transferId}
+                lane={lane}
+                y={laneY}
+                w={widthOf(lane.value, maxValue)}
+                colX={colX}
+                stop={lane.endColumn === null ? endX : colX(lane.endColumn)}
+                fill={(span) => fillFor(span.clubId, lane.receiverId, span.clubName)}
+                outlined={(span) => span.clubId !== lane.receiverId && !clubIds.has(span.clubId)}
+                colour={clubStyle(group.clubName).fill}
+              />
+            ))
           )}
         </svg>
       </div>

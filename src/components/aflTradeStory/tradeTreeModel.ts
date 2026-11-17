@@ -120,26 +120,30 @@ function columnAt(
   return at === -1 ? columns.length - 1 : at;
 }
 
-function lane(
-  story: AflTradeStory,
+type Hop = AflTradeStoryLineageAsset['hops'][number];
+
+/** Onward trades sit just before the draft of their year, or before that year's season end. */
+function onwardColumnOf(
   columns: readonly TreeColumn[],
-  asset: AflTradeStoryLineageAsset
-): TreeLane {
-  const hops = asset.hops;
-  const thisHop = hops.find(({ relation }) => relation === 'this')!;
-  const before = hops.filter(({ relation }) => relation === 'before');
-  const after = hops.filter(({ relation }) => relation === 'after');
-  const startsAsPick = asset.line[0]?.state === 'pick';
-  const draft = draftPoint(asset.line);
-  const draftColumn = draft ? columnAt(columns, draft.checkpoint) : null;
-  // Onward trades sit just before the draft of their year, or before that year's season end.
-  const onwardColumn =
-    after.length === 0
-      ? null
-      : columnAt(columns, {
-          kind: draft && draft.checkpoint.season === after[0]!.year ? 'draft' : 'season_end',
-          season: after[0]!.year,
-        });
+  after: readonly Hop[],
+  draft: AflTradeStoryAssetPoint | null
+): number | null {
+  if (after.length === 0) return null;
+  const year = after[0]!.year;
+  return columnAt(columns, {
+    kind: draft && draft.checkpoint.season === year ? 'draft' : 'season_end',
+    season: year,
+  });
+}
+
+/** Who holds the lane from each column: this trade's club, then the last onward club. */
+function spansOf(
+  thisHop: Hop,
+  after: readonly Hop[],
+  onwardColumn: number | null,
+  draftColumn: number | null,
+  startsAsPick: boolean
+): TreeSpan[] {
   const spans: TreeSpan[] = [
     { from: -1, clubId: thisHop.clubId, clubName: thisHop.clubName, pick: startsAsPick },
   ];
@@ -154,45 +158,61 @@ function lane(
   }
   if (draftColumn !== null && startsAsPick)
     spans.push({ ...spans.at(-1)!, from: draftColumn, pick: false });
-  spans.sort((left, right) => left.from - right.from);
+  return spans.sort((left, right) => left.from - right.from);
+}
 
-  const closed = asset.line.find(({ state }) => state === 'closed');
-  const notUsed = asset.line.find(({ state }) => state === 'not_used');
+/** Where a lane stops early: its stint closed, or the pick was not used. */
+function endOf(
+  columns: readonly TreeColumn[],
+  line: readonly AflTradeStoryAssetPoint[]
+): Pick<TreeLane, 'endColumn' | 'endReason'> {
+  const closed = line.find(({ state }) => state === 'closed');
+  if (closed) return { endColumn: columnAt(columns, closed.checkpoint), endReason: 'closed' };
+  const notUsed = line.find(({ state }) => state === 'not_used');
+  if (notUsed) return { endColumn: columnAt(columns, notUsed.checkpoint), endReason: 'not_used' };
+  return { endColumn: null, endReason: null };
+}
+
+function playerOf(asset: AflTradeStoryLineageAsset, receiverId: string): TreeLane['player'] {
   const outcome = asset.outcome;
-  const player =
-    outcome.kind === 'player' || outcome.kind === 'bid_share'
-      ? {
-          name: outcome.playerName,
-          clubName: outcome.clubName,
-          away: outcome.clubId !== thisHop.clubId,
-        }
+  if (outcome.kind !== 'player' && outcome.kind !== 'bid_share') return null;
+  return {
+    name: outcome.playerName,
+    clubName: outcome.clubName,
+    away: outcome.clubId !== receiverId,
+  };
+}
+
+function viaOf(before: readonly Hop[]): string | null {
+  if (before.length === 0) return null;
+  return before.length === 1 ? `via a ${before[0]!.year} trade` : `via ${before.length} trades`;
+}
+
+function lane(columns: readonly TreeColumn[], asset: AflTradeStoryLineageAsset): TreeLane {
+  const thisHop = asset.hops.find(({ relation }) => relation === 'this')!;
+  const before = asset.hops.filter(({ relation }) => relation === 'before');
+  const after = asset.hops.filter(({ relation }) => relation === 'after');
+  const startsAsPick = asset.line[0]?.state === 'pick';
+  const draft = draftPoint(asset.line);
+  const draftColumn = draft ? columnAt(columns, draft.checkpoint) : null;
+  const onwardColumn = onwardColumnOf(columns, after, draft);
+  const drafted =
+    draft && draft.checkpoint.kind === 'draft' && draft.state !== 'not_used'
+      ? { column: draftColumn!, selection: draft.selectionNumber }
       : null;
   return {
     asset,
     label: startsAsPick ? laneLabel(asset.label) : asset.label,
-    via:
-      before.length === 0
-        ? null
-        : before.length === 1
-          ? `via a ${before[0]!.year} trade`
-          : `via ${before.length} trades`,
+    via: viaOf(before),
     receiverId: thisHop.clubId,
-    spans,
+    spans: spansOf(thisHop, after, onwardColumn, draftColumn, startsAsPick),
     onward:
       onwardColumn === null
         ? null
         : { beforeColumn: onwardColumn, clubNames: after.map(({ clubName }) => clubName) },
-    drafted:
-      draft && draft.checkpoint.kind === 'draft' && draft.state !== 'not_used'
-        ? { column: draftColumn!, selection: draft.selectionNumber }
-        : null,
-    endColumn: closed
-      ? columnAt(columns, closed.checkpoint)
-      : notUsed
-        ? columnAt(columns, notUsed.checkpoint)
-        : null,
-    endReason: closed ? 'closed' : notUsed ? 'not_used' : null,
-    player,
+    drafted,
+    ...endOf(columns, asset.line),
+    player: playerOf(asset, thisHop.clubId),
     value: knownPav(asset.value),
     latest: asset.line.at(-1) ?? null,
   };
@@ -201,7 +221,7 @@ function lane(
 /** The tree: a group per club of the trade, its lanes biggest value first. */
 export function tradeTree(story: AflTradeStory): TradeTree {
   const columns = columnsOf(story);
-  const lanes = story.lineage.assets.map((asset) => lane(story, columns, asset));
+  const lanes = story.lineage.assets.map((asset) => lane(columns, asset));
   const groups = story.trade.clubs.map((club) => {
     const own = lanes
       .filter(({ receiverId }) => receiverId === club.clubId)
