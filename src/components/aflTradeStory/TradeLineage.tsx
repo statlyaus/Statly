@@ -7,6 +7,7 @@ import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/real
 import { ClubBadge } from './ClubBadge';
 import { Connector, Outcome, TradeButton } from './LineageParts';
 import { LineageTradePanel, panelId } from './LineageTradePanel';
+import { TradeTree } from './TradeTree';
 import {
   bidShareOf,
   bidSharesByPickId,
@@ -142,6 +143,28 @@ export function TradeLineage({
       ({ hops }) => hops.find(({ relation }) => relation === 'this')?.clubId === club.clubId
     ),
   }));
+
+  if (audience === 'public')
+    return (
+      <div>
+        <TradeTree story={story} />
+        <div className="tt-trades">
+          <h3>Every trade in this map</h3>
+          <ul>
+            {story.lineage.trades.map((trade) => (
+              <li key={trade.tradeId}>
+                {tradeButton(
+                  trade.tradeId,
+                  LIST_ANCHOR,
+                  `${tradeShortName(trade.clubs)} ${trade.year}${trade.tradeId === story.trade.id ? ' · this trade' : ''}`
+                )}
+              </li>
+            ))}
+          </ul>
+          {panel(LIST_ANCHOR)}
+        </div>
+      </div>
+    );
 
   return (
     <section aria-labelledby="lineage-title" className="mt-12">
