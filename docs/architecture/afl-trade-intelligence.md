@@ -4459,6 +4459,30 @@ route's `GET` reports whether the approved bundle is stored. A local run sets
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path) and reads that file instead. The go-live steps
 are in the operations runbook, "Public trade pages: go live".
 
+**List filters.** `/afl/trades?year=2024&club=geelong&sort=biggest` (`tradesListQuery.ts`): the year,
+club and order live in the address, so a filtered list can be shared and works without scripts. With no
+year named the list shows the latest year, or every year once a club is chosen.
+
+**Home page and stories.** While the reader is available the home page (`components/aflTradesHome/`)
+is the trade pages' front page: the owner's "Every October, footy goes to market" collage, the Jeremy
+Cameron year band, the trade ladder (every club's combined net), the next biggest wins and each season,
+all from the same reader's list. `/afl/stories/jeremy-cameron` (`components/aflStories/`) is a
+hand-written story, not bundle data: its facts are in `cameronChapters.tsx` with the sources named at
+the foot of the page, and a change to them needs a source. Story components never import the private
+trade modules.
+
+**Trade collage.** Every public trade page opens with `TradeCollage.tsx`, drawn only from that trade's
+story: each club's guernsey sketch in its colours (`aflStories/guernseySketch.ts`), its net on a taped
+note, what it received, and a band of who was ahead at each checkpoint of the net line. It adds no
+facts of its own. The private page keeps the plain header.
+
+**Trade tree.** On public trade pages the lineage map is "Where the trade went" (`TradeTree.tsx`,
+`tradeTreeModel.ts`; owner's design, 2026-11-17): the trade branches to each club and then to a lane
+per asset, running through time to the player it became. A lane is the receiving club's colour, an
+outline while still a pick, and hatched ink at another club; its thickness and end number are PAV.
+Each lineage asset carries its leg's value line (`line`, at-trade view then every checkpoint) for this.
+Below 768px it is a list, which is also the screen-reader text. The private page keeps the lineage map.
+
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
 Draftguru and Official AFL, draft boards from Footyinfo, and the PAV method and published values from

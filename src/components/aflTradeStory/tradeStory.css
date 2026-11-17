@@ -30,7 +30,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .afl-trade-story {
+  .afl-trade-story:not(.ts-public) {
     --ts-bg: #141413;
     --ts-bg2: #1f1f1d;
     --ts-surface: #232321;
@@ -54,6 +54,22 @@
     --ts-group-a: #18212b;
     --ts-group-b: #2a1d19;
   }
+}
+
+/* The public pages (/afl/trades) sit inside the Statly site, which is light only: its page grey, white
+   cards, ink and navy accent, whatever the reader's colour scheme. */
+.afl-trade-story.ts-public {
+  --ts-bg: #f8f9fa;
+  --ts-bg2: #eef1f4;
+  --ts-surface: #ffffff;
+  --ts-line: #d5dae0;
+  --ts-ink: #2b2c2d;
+  --ts-ink2: #4b5560;
+  --ts-muted: #5b6570;
+  --ts-accent: #0f2a44;
+  --ts-scarf-bg: #eef1f4;
+  --ts-scarf-shadow: #d5dae0;
+  --ts-scarf-side: #0f2a44;
 }
 
 /* The page's four text sizes (owner, 2026-10-18). Badges, icons and SVG chart labels are exempt. */
@@ -92,7 +108,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .afl-trade-story .ts-vl {
+  .afl-trade-story:not(.ts-public) .ts-vl {
     --vl: var(--vl-dark);
   }
 }

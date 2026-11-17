@@ -1,0 +1,882 @@
+/*
+ * The story pages' paper collage (owner's design, 2026-11-16): torn paper, masking tape, ink
+ * sketches and handwriting. Everything is scoped under .sc so it cannot leak into the trade pages.
+ */
+.sc {
+  --sc-bg: #f9f4e9;
+  --sc-paper: #fbfaf6;
+  --sc-ink: #161616;
+  --sc-red: #c21f33;
+  --sc-orange: #f15a22;
+  --sc-navy: #0d2a52;
+  width: 100%;
+  overflow: hidden;
+  color: var(--sc-ink);
+  background-color: var(--sc-bg);
+  background-image: url('/Assets/stories/cameron/paper-grain.svg');
+  font-family: var(--font-sc-serif), Georgia, serif;
+}
+.sc a {
+  color: var(--sc-ink);
+}
+.sc a:hover {
+  color: var(--sc-red);
+}
+.sc-wrap {
+  box-sizing: border-box;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding-inline: clamp(1rem, 3vw, 2rem);
+}
+.sc-label {
+  font-family: var(--font-sc-label), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.sc-marker {
+  font-family: var(--font-sc-marker), cursive;
+  font-weight: 400;
+}
+.sc-hand {
+  margin: 0;
+  font-family: var(--font-sc-hand), cursive;
+  font-weight: 700;
+  line-height: 1.05;
+  font-size: clamp(20px, 2.2vw, 30px);
+}
+.sc-hand-xl {
+  font-size: clamp(22px, 2.6vw, 36px);
+}
+.sc-hand-md {
+  font-size: clamp(18px, 2vw, 27px);
+}
+.sc-hand-sm {
+  font-size: clamp(16px, 1.6vw, 22px);
+}
+.sc-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background: #141414;
+  color: #f4f1ea;
+  padding: 0.7rem 1.1rem;
+  font-size: 17px;
+}
+.sc-bar > * {
+  margin: 0;
+  font-size: inherit;
+}
+.sc-title {
+  margin: 0;
+  font-size: var(--sc-title-size, clamp(62px, 7.6vw, 124px));
+  line-height: 1.02;
+}
+.sc-title span {
+  display: inline-block;
+  padding: 0 0.18em;
+  color: var(--sc-paper);
+}
+.sc-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  min-height: 360px;
+}
+.sc-stage img {
+  max-width: none;
+  height: auto;
+}
+.sc-tape {
+  position: absolute;
+  height: 28px;
+  background: rgba(222, 210, 172, 0.82);
+  clip-path: polygon(
+    3.2% 0%,
+    3.3% 20%,
+    1.9% 40%,
+    1% 60%,
+    0% 80%,
+    2.7% 100%,
+    98.1% 100%,
+    97% 80%,
+    98.5% 60%,
+    96.9% 40%,
+    98.9% 20%,
+    96.8% 0%
+  );
+}
+.sc-note {
+  position: absolute;
+  box-sizing: border-box;
+  z-index: 7;
+  background: var(--sc-paper);
+  padding: 0.7rem 0.9rem 0.8rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.sc-note b {
+  position: relative;
+  display: inline-block;
+  font-size: clamp(28px, 3.4vw, 52px);
+  line-height: 1;
+}
+.sc-note p {
+  margin: 0.3rem 0 0;
+  font-weight: 600;
+  color: #333;
+}
+.sc-halftone-o {
+  background-color: var(--sc-orange);
+  background-image: radial-gradient(rgba(22, 22, 22, 0.22) 1.3px, transparent 1.8px);
+  background-size: 9px 9px;
+}
+.sc-halftone-n {
+  background-color: var(--sc-navy);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.22) 1.3px, transparent 1.8px);
+  background-size: 9px 9px;
+}
+.sc-hoops {
+  background: repeating-linear-gradient(180deg, #0d2a52 0 22px, #fbfaf6 22px 40px);
+}
+.sc-lined {
+  background-color: var(--sc-paper);
+  background-image: repeating-linear-gradient(180deg, transparent 0 37px, #afc0d6 37px 38px);
+}
+.sc-pricetag {
+  clip-path: polygon(9% 0, 100% 0, 100% 100%, 9% 100%, 0 50%);
+}
+.sc-cols {
+  max-width: 1000px;
+  column-width: 300px;
+  column-gap: 44px;
+}
+.sc-cols p {
+  margin: 0 0 1rem;
+  font-size: 18px;
+  line-height: 1.65;
+  color: #222;
+}
+.sc-cols p:first-child::first-letter {
+  float: left;
+  font-family: var(--font-sc-marker), cursive;
+  font-size: 4.1em;
+  line-height: 0.85;
+  padding: 6px 10px 0 0;
+  color: var(--sc-red);
+}
+.sc-more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px;
+  background: #141414;
+  color: #f4f1ea;
+  border: 0;
+  font-size: 14px;
+  cursor: pointer;
+  transform: rotate(-1deg);
+  text-decoration: none;
+}
+.sc a.sc-more,
+.sc a.sc-more:hover {
+  color: #f4f1ea;
+}
+.sc-more:hover {
+  background: var(--sc-red);
+}
+.sc-more:focus-visible,
+.sc-slip:focus-visible {
+  outline: 3px solid var(--sc-red);
+  outline-offset: 3px;
+}
+.sc-slip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 18px 16px;
+  min-width: 130px;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.sc-slip:hover {
+  filter: brightness(0.97);
+}
+.sc-slip b {
+  font-size: 22px;
+}
+.sc-slip span {
+  font-family: var(--font-sc-hand), cursive;
+  font-weight: 700;
+  font-size: 24px;
+  color: #333;
+}
+/*
+ * On a phone a collage cannot keep its desktop arrangement without the pieces landing on each other,
+ * so the pieces are laid out in a wrapping row instead: sketches first, then notes at a readable size.
+ */
+@media (max-width: 720px) {
+  .sc-stage {
+    aspect-ratio: auto;
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem 1rem;
+    padding: 0.75rem 0;
+  }
+  .sc-stage > * {
+    position: relative !important;
+    inset: auto !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+  .sc-stage > [aria-hidden='true']:not(img),
+  .sc-stage > .sc-sk-arrow,
+  .sc-stage > .sc-sk-underline,
+  .sc-stage > .sc-sk-star,
+  .sc-stage > .sc-sk-route {
+    display: none;
+  }
+  .sc-stage > img {
+    width: 38% !important;
+  }
+  .sc-stage > .sc-sk-light-tower,
+  .sc-stage > .sc-sk-stopwatch {
+    width: 24% !important;
+  }
+  .sc-stage > .sc-note {
+    flex: 0 1 44%;
+    margin-top: 0.5rem;
+  }
+  .sc-stage > .sc-tornTop,
+  .sc-stage > .sc-tornA,
+  .sc-stage > .sc-wide {
+    flex: 1 1 100%;
+  }
+  .sc-stage > .sc-tape {
+    padding: 0.9rem 1.2rem;
+    clip-path: none;
+  }
+}
+.sc-tornA {
+  clip-path: polygon(
+    0% 0.3%,
+    3.8% 1.9%,
+    7.7% 1.7%,
+    11.5% 0.6%,
+    15.4% 1.1%,
+    19.2% 1%,
+    23.1% 1.4%,
+    26.9% 1.7%,
+    30.8% 0.2%,
+    34.6% 0.1%,
+    38.5% 1.8%,
+    42.3% 1%,
+    46.2% 1.7%,
+    50% 0%,
+    53.8% 1%,
+    57.7% 1.6%,
+    61.5% 0.5%,
+    65.4% 2.1%,
+    69.2% 2%,
+    73.1% 0.1%,
+    76.9% 0.1%,
+    80.8% 1.2%,
+    84.6% 2.1%,
+    88.5% 0.8%,
+    92.3% 0.5%,
+    96.2% 0.9%,
+    100% 0.1%,
+    99.8% 12.5%,
+    99.6% 25%,
+    99.6% 37.5%,
+    99.8% 50%,
+    99.8% 62.5%,
+    99.8% 75%,
+    99.6% 87.5%,
+    100% 99.4%,
+    96.2% 100%,
+    92.3% 98.2%,
+    88.5% 98.8%,
+    84.6% 98.6%,
+    80.8% 99.6%,
+    76.9% 97.8%,
+    73.1% 98.1%,
+    69.2% 99.7%,
+    65.4% 99.3%,
+    61.5% 98.4%,
+    57.7% 98.4%,
+    53.8% 97.9%,
+    50% 99.1%,
+    46.2% 98.2%,
+    42.3% 98.5%,
+    38.5% 99.3%,
+    34.6% 98.7%,
+    30.8% 98.1%,
+    26.9% 98.1%,
+    23.1% 98.9%,
+    19.2% 98.7%,
+    15.4% 99.9%,
+    11.5% 99.5%,
+    7.7% 98.2%,
+    3.8% 99.1%,
+    0% 99.6%,
+    0.4% 87.5%,
+    0.6% 75%,
+    0.5% 62.5%,
+    0.3% 50%,
+    0.4% 37.5%,
+    0.4% 25%,
+    0.6% 12.5%
+  );
+}
+.sc-tornB {
+  clip-path: polygon(
+    0% 3.3%,
+    3.8% 3.3%,
+    7.7% 0.2%,
+    11.5% 0.3%,
+    15.4% 2.9%,
+    19.2% 2.6%,
+    23.1% 2.3%,
+    26.9% 1.1%,
+    30.8% 2.1%,
+    34.6% 2.1%,
+    38.5% 2%,
+    42.3% 0.6%,
+    46.2% 1.5%,
+    50% 1.4%,
+    53.8% 2.5%,
+    57.7% 3.5%,
+    61.5% 3.3%,
+    65.4% 1.9%,
+    69.2% 1.6%,
+    73.1% 0.9%,
+    76.9% 0.1%,
+    80.8% 0.1%,
+    84.6% 1.6%,
+    88.5% 1.1%,
+    92.3% 1.3%,
+    96.2% 3.1%,
+    100% 1.8%,
+    99.3% 12.5%,
+    99.7% 25%,
+    100% 37.5%,
+    99.6% 50%,
+    99.8% 62.5%,
+    99.4% 75%,
+    98.8% 87.5%,
+    100% 97.6%,
+    96.2% 99.4%,
+    92.3% 96.9%,
+    88.5% 97.2%,
+    84.6% 97.4%,
+    80.8% 96.8%,
+    76.9% 97.3%,
+    73.1% 97.2%,
+    69.2% 98.8%,
+    65.4% 96.6%,
+    61.5% 96.6%,
+    57.7% 99.4%,
+    53.8% 97.4%,
+    50% 97.5%,
+    46.2% 98.4%,
+    42.3% 98.1%,
+    38.5% 98.3%,
+    34.6% 96.8%,
+    30.8% 98.2%,
+    26.9% 97.1%,
+    23.1% 98.8%,
+    19.2% 96.9%,
+    15.4% 96.9%,
+    11.5% 98.4%,
+    7.7% 98%,
+    3.8% 96.8%,
+    0% 97.5%,
+    0.6% 87.5%,
+    0.3% 75%,
+    0.4% 62.5%,
+    0.8% 50%,
+    0.2% 37.5%,
+    1.1% 25%,
+    0.3% 12.5%
+  );
+}
+.sc-tornC {
+  clip-path: polygon(
+    0% 0.6%,
+    3.8% 1.4%,
+    7.7% 0.9%,
+    11.5% 1.5%,
+    15.4% 1.6%,
+    19.2% 0.2%,
+    23.1% 0%,
+    26.9% 2.1%,
+    30.8% 0.6%,
+    34.6% 0.6%,
+    38.5% 2.5%,
+    42.3% 1.2%,
+    46.2% 2.1%,
+    50% 1.2%,
+    53.8% 1.6%,
+    57.7% 0.4%,
+    61.5% 1.6%,
+    65.4% 2.2%,
+    69.2% 1.3%,
+    73.1% 1.9%,
+    76.9% 1.7%,
+    80.8% 0.2%,
+    84.6% 1.9%,
+    88.5% 1.5%,
+    92.3% 0.8%,
+    96.2% 0.1%,
+    100% 2.2%,
+    98.8% 12.5%,
+    98.2% 25%,
+    97.8% 37.5%,
+    98.2% 50%,
+    97.7% 62.5%,
+    99% 75%,
+    98% 87.5%,
+    100% 98.9%,
+    96.2% 97.7%,
+    92.3% 97.8%,
+    88.5% 99.8%,
+    84.6% 99.7%,
+    80.8% 99.5%,
+    76.9% 97.6%,
+    73.1% 98.9%,
+    69.2% 98.4%,
+    65.4% 99.2%,
+    61.5% 98.7%,
+    57.7% 99%,
+    53.8% 99.1%,
+    50% 98.5%,
+    46.2% 98.5%,
+    42.3% 97.7%,
+    38.5% 98.3%,
+    34.6% 97.7%,
+    30.8% 97.9%,
+    26.9% 97.5%,
+    23.1% 98.3%,
+    19.2% 99.6%,
+    15.4% 97.8%,
+    11.5% 97.6%,
+    7.7% 97.7%,
+    3.8% 98.6%,
+    0% 98.2%,
+    0.5% 87.5%,
+    2.1% 75%,
+    1.4% 62.5%,
+    0.7% 50%,
+    0.2% 37.5%,
+    2.1% 25%,
+    2.5% 12.5%
+  );
+}
+.sc-tornD {
+  clip-path: polygon(
+    0% 0.4%,
+    3.8% 0.2%,
+    7.7% 0.6%,
+    11.5% 0.2%,
+    15.4% 0.1%,
+    19.2% 0.6%,
+    23.1% 1.5%,
+    26.9% 1.3%,
+    30.8% 1.2%,
+    34.6% 0.4%,
+    38.5% 0.9%,
+    42.3% 0.4%,
+    46.2% 0.3%,
+    50% 0.2%,
+    53.8% 0.3%,
+    57.7% 1.5%,
+    61.5% 1.3%,
+    65.4% 1.3%,
+    69.2% 1.3%,
+    73.1% 0.3%,
+    76.9% 0.5%,
+    80.8% 1%,
+    84.6% 1.2%,
+    88.5% 1.4%,
+    92.3% 1.4%,
+    96.2% 0.1%,
+    100% 1%,
+    99.2% 12.5%,
+    99.4% 25%,
+    99.8% 37.5%,
+    99.4% 50%,
+    99.9% 62.5%,
+    98.9% 75%,
+    99% 87.5%,
+    100% 99.1%,
+    96.2% 99.5%,
+    92.3% 98.5%,
+    88.5% 99.1%,
+    84.6% 98.6%,
+    80.8% 98.6%,
+    76.9% 99.2%,
+    73.1% 99.3%,
+    69.2% 99%,
+    65.4% 99.3%,
+    61.5% 99.7%,
+    57.7% 99.5%,
+    53.8% 98.7%,
+    50% 99.9%,
+    46.2% 99.9%,
+    42.3% 99%,
+    38.5% 99.6%,
+    34.6% 99.1%,
+    30.8% 99.2%,
+    26.9% 99.5%,
+    23.1% 98.4%,
+    19.2% 99.7%,
+    15.4% 99.3%,
+    11.5% 99.7%,
+    7.7% 99%,
+    3.8% 99.6%,
+    0% 99.4%,
+    0.9% 87.5%,
+    0.4% 75%,
+    0.7% 62.5%,
+    1.1% 50%,
+    0.1% 37.5%,
+    0.1% 25%,
+    0.3% 12.5%
+  );
+}
+.sc-tornTop {
+  clip-path: polygon(
+    0% 1.5%,
+    3.8% 1.8%,
+    7.7% 1.9%,
+    11.5% 2.3%,
+    15.4% 1.8%,
+    19.2% 2.2%,
+    23.1% 0.1%,
+    26.9% 1.1%,
+    30.8% 2.3%,
+    34.6% 1.6%,
+    38.5% 2.2%,
+    42.3% 0.3%,
+    46.2% 1.1%,
+    50% 0.6%,
+    53.8% 1.3%,
+    57.7% 1.4%,
+    61.5% 0%,
+    65.4% 0.5%,
+    69.2% 0.7%,
+    73.1% 2.2%,
+    76.9% 1.8%,
+    80.8% 0.4%,
+    84.6% 1.9%,
+    88.5% 0.3%,
+    92.3% 1.5%,
+    96.2% 0.3%,
+    100% 0%,
+    99.7% 12.5%,
+    99.9% 25%,
+    99.9% 37.5%,
+    99.7% 50%,
+    99.7% 62.5%,
+    99.9% 75%,
+    99.7% 87.5%,
+    100% 98.7%,
+    96.2% 98.4%,
+    92.3% 99.5%,
+    88.5% 97.7%,
+    84.6% 98.3%,
+    80.8% 97.7%,
+    76.9% 97.9%,
+    73.1% 99.3%,
+    69.2% 99.1%,
+    65.4% 99.6%,
+    61.5% 99.7%,
+    57.7% 99.8%,
+    53.8% 99.3%,
+    50% 98.6%,
+    46.2% 100%,
+    42.3% 98.4%,
+    38.5% 99.2%,
+    34.6% 99.3%,
+    30.8% 98%,
+    26.9% 98.8%,
+    23.1% 99.2%,
+    19.2% 98.8%,
+    15.4% 98.3%,
+    11.5% 99.9%,
+    7.7% 97.7%,
+    3.8% 99.9%,
+    0% 98.2%,
+    0.3% 87.5%,
+    0% 75%,
+    0.2% 62.5%,
+    0.1% 50%,
+    0.2% 37.5%,
+    0% 25%,
+    0% 12.5%
+  );
+}
+.tape {
+  position: absolute;
+  height: 28px;
+  background: rgba(222, 210, 172, 0.82);
+  clip-path: polygon(
+    3.2% 0%,
+    3.3% 20%,
+    1.9% 40%,
+    1% 60%,
+    0% 80%,
+    2.7% 100%,
+    98.1% 100%,
+    97% 80%,
+    98.5% 60%,
+    96.9% 40%,
+    98.9% 20%,
+    96.8% 0%
+  );
+}
+
+/* The story as one left-to-right band: club colours change at the trade, sketches sit on the band. */
+.sc-line-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+.sc-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: minmax(15rem, auto) 9.5rem minmax(17rem, auto);
+  min-width: 61rem;
+}
+.sc-line-band {
+  grid-row: 2;
+  z-index: 0;
+}
+.sc-line-band-navy {
+  background: linear-gradient(
+    180deg,
+    var(--sc-navy) 0 12%,
+    var(--sc-paper) 12% 20%,
+    var(--sc-navy) 20% 80%,
+    var(--sc-paper) 80% 88%,
+    var(--sc-navy) 88%
+  );
+}
+.sc-line-year {
+  grid-row: 2;
+  z-index: 2;
+  align-self: center;
+  justify-self: center;
+  padding: 0 0.12em;
+  color: #fff;
+  font-size: clamp(2.4rem, 4.2vw, 4.2rem);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+.sc-line-year-boxed {
+  background: #141414;
+}
+.sc-line-slot {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0.5rem;
+  text-align: center;
+  text-decoration: none;
+}
+.sc-line-slot-top {
+  grid-row: 1;
+  justify-content: flex-end;
+  padding-bottom: 1.6rem;
+}
+.sc-line-slot-bottom {
+  grid-row: 3;
+  justify-content: flex-start;
+  padding-top: 1.6rem;
+}
+.sc-line-slot img {
+  max-width: none;
+  height: auto;
+}
+.sc-line-slot-top.sc-line-art {
+  padding-bottom: 0;
+  margin-bottom: -1.6rem;
+}
+.sc-line-slot-bottom.sc-line-art {
+  padding-top: 0;
+  margin-top: -1.6rem;
+}
+.sc-line-chapter {
+  font-family: var(--font-sc-hand), cursive;
+  font-weight: 700;
+  font-size: 1.8rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--sc-red);
+}
+.sc-line-name {
+  font-size: clamp(1.4rem, 2.1vw, 2rem);
+  line-height: 1;
+  margin-top: 0.3rem;
+}
+.sc-line-words {
+  margin-top: 0.35rem;
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  line-height: 1.35;
+  color: #444;
+}
+.sc-line-read {
+  margin-top: 1.1rem;
+  padding-bottom: 2px;
+  border-bottom: 2px solid currentColor;
+  font-size: 1.15rem;
+  letter-spacing: 0.1em;
+}
+a.sc-line-slot:focus-visible {
+  outline: 3px solid var(--sc-red);
+  outline-offset: 3px;
+}
+
+/* The collage at the top of every public trade page: drawn from the trade's own values. */
+.tc {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  margin-bottom: 1.5rem;
+  padding: clamp(1rem, 2.5vw, 2rem);
+  border-radius: 4px;
+}
+.tc-title {
+  margin: 0;
+  font-size: clamp(2.4rem, 5.6vw, 5rem);
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.tc-title span {
+  display: inline-block;
+  padding: 0 0.18em;
+  transform: rotate(-1.5deg);
+}
+.tc-clubs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 2rem 2.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tc-club {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+.tc-hang {
+  position: relative;
+  flex: 0 0 clamp(5.5rem, 10vw, 8.5rem);
+}
+.tc-guernsey {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tc-tape {
+  left: 28%;
+  top: -4%;
+  width: 44%;
+  z-index: 1;
+}
+.tc-club-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.tc-note {
+  position: relative;
+  max-width: 100%;
+  transform: rotate(-2deg);
+}
+.tc-note b {
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+}
+.tc-got ul {
+  margin: 0.15rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-sc-hand), cursive;
+  font-weight: 600;
+  font-size: clamp(1.1rem, 1.5vw, 1.35rem);
+  line-height: 1.25;
+}
+.tc-got li + li {
+  margin-top: 0.2rem;
+}
+.tc-band-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.tc-band {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tc-stop {
+  display: grid;
+  grid-template-rows: 4.6rem auto 4.6rem;
+}
+.tc-stop-words {
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.25rem 0;
+  text-align: center;
+}
+.tc-stop-up .tc-stop-words {
+  grid-row: 1;
+  justify-content: flex-end;
+  padding: 0 0.25rem 0.5rem;
+}
+.tc-stop-words .sc-line-chapter {
+  font-size: 1.35rem;
+}
+.tc-stop-lead {
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+.tc-stop-year {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 4.5rem;
+  border-block: 4px solid;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1.3px, transparent 1.8px);
+  background-size: 9px 9px;
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  letter-spacing: 0;
+  flex-direction: column;
+  line-height: 1;
+}
+.tc-stop-year small {
+  font-size: 0.42em;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
+}
+.tc-boxed {
+  padding: 0 0.3em;
+  background: #141414;
+  color: #fff;
+}

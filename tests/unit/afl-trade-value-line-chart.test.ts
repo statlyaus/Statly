@@ -112,8 +112,14 @@ describe('value line chart: colours', () => {
     );
     const tokens = (name: string) =>
       [...css.matchAll(new RegExp(`--ts-${name}: (#[0-9a-f]{6});`, 'gu'))].map(([, hex]) => hex);
-    expect(tokens('surface')).toEqual([CHART_THEME.light.surface, CHART_THEME.dark.surface]);
-    expect(tokens('ink')).toEqual([CHART_THEME.light.ink, CHART_THEME.dark.ink]);
+    // Light, then dark, then the public pages' block (.ts-public): always the light surface, with
+    // the site's softer text colour, so the chart keeps the light theme there.
+    expect(tokens('surface')).toEqual([
+      CHART_THEME.light.surface,
+      CHART_THEME.dark.surface,
+      CHART_THEME.light.surface,
+    ]);
+    expect(tokens('ink').slice(0, 2)).toEqual([CHART_THEME.light.ink, CHART_THEME.dark.ink]);
   });
 
   it('dashes a club whose line looks like an earlier club’s', () => {

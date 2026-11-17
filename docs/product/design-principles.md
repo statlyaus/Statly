@@ -75,6 +75,11 @@ dashboard patterns.
 
 - Chrome: a solid `brand-bar` header with high-contrast navigation and a filled active item; content
   sits in white cards on a light page, never on decorative gradients or photography.
+- Story surfaces are the exception (owner, 2026-11-16): the public home page hero and `/afl/stories`
+  pages use the owner's collage designs. Club colours only, no club or league marks and no press
+  photography. Sketches are original; a generated illustration shows invented people, never a real
+  player, and carries no caption (owner, 2026-11-17). Build these from the owner's design export,
+  not from a description.
 - Scores lead: a quiet round and status line (Live, Final, start time), team marks on either side,
   large tabular numerals, one plain-language result line, and a box score with the real category
   values. Restraint over decoration: no hanging tabs, glows or oversized badges.

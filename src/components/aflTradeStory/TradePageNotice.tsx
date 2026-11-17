@@ -11,8 +11,7 @@ export function TradePageNotice({ source }: { source: AflTradePageModel['source'
     <p className="mb-4 rounded-lg border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 ts-body">
       {source.audience === 'public' ? (
         <>
-          {source.label}. Values for players still at their club, and for picks marked *, will
-          move.{' '}
+          {source.label}. Values for players still at their club, and for picks marked *, will move.{' '}
           <Link href="/afl/trades/method" className="underline underline-offset-2">
             How this works
           </Link>

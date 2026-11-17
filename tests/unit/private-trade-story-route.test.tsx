@@ -188,6 +188,9 @@ describe('publication boundary', () => {
     /^server\/aflTradeIntelligence\/publication\/(publicTradeStoryReads|publicTradeBundleStore)\.ts$/u,
     // Its pages: they render only what that reader returns (see public-trade-story-route.test.tsx).
     /^app\/\(public\)\/afl\/trades\//u,
+    // The home page leads into them with the same reader's list.
+    /^app\/\(public\)\/page\.tsx$/u,
+    /^components\/aflTradesHome\//u,
   ];
 
   it('no public page, API or publication module imports the private trade page', () => {

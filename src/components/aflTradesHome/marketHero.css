@@ -1,0 +1,338 @@
+/*
+ * The top of the home page (owner's concept E, 2026-11-16): "Every October, footy goes to market."
+ * The desktop layout is the owner's 1440 by 820 artboard; every size is a share of the stage's width
+ * (cqw), so it keeps its proportions at any desktop width. Below 1024px it stacks.
+ */
+.mh {
+  background: #fff;
+  color: #161616;
+  font-family: var(--font-sc-serif), Georgia, serif;
+  overflow: hidden;
+}
+.mh-stage {
+  position: relative;
+  container-type: inline-size;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+/* The artboard's 1440 by 820 shape as a minimum: the stage grows when the words need more room. */
+.mh-stage::before {
+  content: '';
+  float: left;
+  width: 0;
+  padding-top: 56.944%;
+}
+.mh-label {
+  font-family: var(--font-sc-label), sans-serif;
+  text-transform: uppercase;
+}
+.mh-art > img,
+.mh-mark,
+.mh-traders {
+  position: absolute;
+  max-width: none;
+  height: auto;
+}
+.mh-chart {
+  left: 38.89%;
+  top: 25.6%;
+  width: 59.72%;
+  opacity: 0.32;
+}
+.mh-stadium {
+  left: 37.5%;
+  bottom: -10.98%;
+  width: 62.5%;
+  z-index: 2;
+}
+.mh-art .mh-mark {
+  left: 47.92%;
+  bottom: -1.7%;
+  height: 90.24%;
+  width: auto;
+  aspect-ratio: 848 / 1264;
+  z-index: 3;
+}
+.mh-traders {
+  right: -1.39%;
+  bottom: -2.44%;
+  width: 29.86%;
+  aspect-ratio: 1264 / 848;
+  z-index: 4;
+  animation: mh-jostle 0.9s ease-in-out infinite alternate;
+}
+
+/*
+ * Paper-puppet motion (owner, 2026-11-18). Every layer is the full cut-out's size, so the pivots are
+ * the joints' shares of the original image (see Scripts/design/slice-market-hero.mjs). The leaper
+ * climbs over the crouching man's back on load, pivoting on the knee that rests there, and his arm
+ * swings up to the ball; then he hangs. The traders' raised arms pump their slips on staggered beats.
+ * At rest every layer sits at zero, which is the original still.
+ */
+.mh-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+.mh-leap,
+.mh-hang {
+  transform-origin: 55.4% 64.1%;
+}
+.mh-reach,
+.mh-reach-hang {
+  transform-origin: 43.9% 26.5%;
+}
+.mh-leap {
+  animation: mh-leap 1.15s cubic-bezier(0.22, 0.8, 0.3, 1) 0.3s both;
+}
+.mh-hang {
+  animation: mh-hang 6s ease-in-out 1.45s infinite;
+}
+.mh-reach {
+  animation: mh-reach 1s cubic-bezier(0.3, 0.7, 0.35, 1) 0.45s both;
+}
+.mh-reach-hang {
+  animation: mh-reach-hang 6s ease-in-out 1.45s infinite;
+}
+@keyframes mh-leap {
+  0% {
+    transform: rotate(-7deg) scale(0.86);
+  }
+  60% {
+    transform: rotate(1.2deg) scale(1.02);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes mh-hang {
+  50% {
+    transform: rotate(-1.4deg);
+  }
+}
+@keyframes mh-reach {
+  0% {
+    transform: rotate(-38deg);
+  }
+  62% {
+    transform: rotate(5deg);
+  }
+  80% {
+    transform: rotate(-2deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes mh-reach-hang {
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+.mh-pump {
+  animation: mh-pump var(--beat, 2.2s) ease-in-out var(--delay, 0s) infinite;
+}
+.mh-pump-a {
+  transform-origin: 18% 36%;
+  --swing: 9deg;
+  --beat: 2.1s;
+}
+.mh-pump-b {
+  transform-origin: 26.7% 34.4%;
+  --swing: -8deg;
+  --beat: 2.5s;
+  --delay: 0.35s;
+}
+.mh-pump-c {
+  transform-origin: 40.2% 34%;
+  --swing: 7deg;
+  --beat: 1.9s;
+  --delay: 0.8s;
+}
+.mh-pump-d {
+  transform-origin: 56.3% 26.2%;
+  --swing: -9deg;
+  --beat: 2.3s;
+  --delay: 0.15s;
+}
+.mh-pump-e {
+  transform-origin: 82.7% 35.1%;
+  --swing: 8deg;
+  --beat: 2.6s;
+  --delay: 0.55s;
+}
+@keyframes mh-jostle {
+  to {
+    transform: translateY(-0.8%);
+  }
+}
+@keyframes mh-pump {
+  0%,
+  48%,
+  100% {
+    transform: none;
+  }
+  10% {
+    transform: rotate(calc(var(--swing) * -1));
+  }
+  20% {
+    transform: rotate(calc(var(--swing) * 0.35));
+  }
+  31% {
+    transform: rotate(calc(var(--swing) * -0.8));
+  }
+  40% {
+    transform: rotate(calc(var(--swing) * 0.15));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mh-traders,
+  .mh-traders .mh-layer,
+  .mh-mark .mh-layer {
+    animation: none;
+  }
+}
+.mh-rule {
+  position: absolute;
+  left: 4.44cqw;
+  right: 4.44cqw;
+  top: 2.5cqw;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.83cqw;
+  border-bottom: 1px solid #161616;
+  letter-spacing: 0.14em;
+  font-size: max(11px, 0.9cqw);
+  font-weight: 500;
+}
+.mh-words {
+  position: relative;
+  z-index: 5;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1.53cqw;
+  width: 42cqw;
+  padding: 11.8cqw 0 2cqw 4.44cqw;
+}
+.mh-kicker {
+  letter-spacing: 0.16em;
+  font-size: max(11px, 0.9cqw);
+  color: #555;
+}
+.mh-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 5.833cqw;
+  line-height: 0.9;
+}
+.mh-lede {
+  max-width: 32.64cqw;
+  font-size: max(15px, 1.32cqw);
+  line-height: 1.5;
+  color: #333;
+}
+.mh-record {
+  max-width: 32.64cqw;
+  padding-top: 0.83cqw;
+  border-top: 1px solid #161616;
+  letter-spacing: 0.06em;
+  font-size: max(13px, 1.04cqw);
+  line-height: 1.4;
+}
+.mh a.mh-button {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: max(44px, 3.61cqw);
+  padding: 0 1.67cqw;
+  background: #161616;
+  color: #fff;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  font-size: max(13px, 0.97cqw);
+  text-decoration: none;
+}
+.mh a.mh-button:hover {
+  background: #c21f33;
+}
+.mh a.mh-button:focus-visible {
+  outline: 3px solid #c21f33;
+  outline-offset: 3px;
+}
+@media (max-width: 1023px) {
+  .mh-stage::before {
+    content: none;
+  }
+  .mh-stage {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1rem 0;
+    box-sizing: border-box;
+  }
+  .mh-rule,
+  .mh-words {
+    position: static;
+    width: auto;
+  }
+  .mh-rule {
+    padding-bottom: 0.75rem;
+    font-size: 12px;
+  }
+  .mh-words {
+    gap: 1.25rem;
+    padding: 2rem 0 0;
+  }
+  .mh-kicker {
+    font-size: 12px;
+  }
+  .mh-title {
+    font-size: clamp(3rem, 14.5cqw, 5.25rem);
+  }
+  .mh-lede {
+    max-width: 34rem;
+    font-size: 1.15rem;
+  }
+  .mh-record {
+    max-width: 34rem;
+    padding-top: 0.75rem;
+    font-size: 0.95rem;
+  }
+  .mh a.mh-button {
+    min-height: 52px;
+    padding: 0 1.5rem;
+    font-size: 14px;
+  }
+  .mh-art {
+    position: relative;
+    order: 3;
+    margin: 0 -1rem;
+    aspect-ratio: 900 / 780;
+    overflow: hidden;
+  }
+  .mh-chart {
+    left: 0;
+    top: 22%;
+    width: 100%;
+  }
+  .mh-stadium {
+    left: -4%;
+    bottom: -12%;
+    width: 108%;
+  }
+  .mh-art .mh-mark {
+    left: 14%;
+    bottom: -2%;
+    height: 96%;
+  }
+  .mh-traders {
+    right: -4%;
+    bottom: -3%;
+    width: 50%;
+  }
+}

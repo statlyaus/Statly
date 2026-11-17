@@ -11,9 +11,10 @@ function readRequiredFile(relativePath: string): string {
   return readFileSync(absolutePath, 'utf8');
 }
 
-vi.mock('next/font/google', () => ({
-  Inter: () => ({ className: 'font-inter' }),
-}));
+vi.mock('next/font/google', () => {
+  const font = () => ({ className: 'font', variable: 'font' });
+  return { Inter: font, Permanent_Marker: font, Caveat: font, Newsreader: font, Oswald: font };
+});
 
 vi.mock('@/components/PerformanceMonitor', () => ({
   default: () => null,
@@ -42,6 +43,11 @@ vi.mock('@/server/aflTradeIntelligence/runtime/publicReadRuntime', () => ({
   }),
 }));
 
+// The trade pages are not being served in these tests; the home page then shows only its own links.
+vi.mock('@/server/aflTradeIntelligence/publication/publicTradeStoryReads', () => ({
+  publicTradeStoryReads: { listStories: async () => ({ available: false }) },
+}));
+
 const navigation = vi.hoisted(() => ({ pathname: '/draft/trades' }));
 
 vi.mock('next/navigation', () => ({
@@ -60,8 +66,8 @@ describe('public AFL draft trade routing', () => {
     navigation.pathname = '/draft/trades';
   });
 
-  it('leads the homepage with the valued trades and the draft record', () => {
-    render(<HomePage />);
+  it('leads the homepage with the valued trades and the draft record', async () => {
+    render(await HomePage());
 
     const promise = screen.getByRole('heading', {
       level: 1,
@@ -90,12 +96,8 @@ describe('public AFL draft trade routing', () => {
     );
   });
 
-  it('keeps the fantasy app out of the public home page, header and footer', () => {
-    const { container } = render(
-      <PublicRouteLayout>
-        <HomePage />
-      </PublicRouteLayout>
-    );
+  it('keeps the fantasy app out of the public home page, header and footer', async () => {
+    const { container } = render(<PublicRouteLayout>{await HomePage()}</PublicRouteLayout>);
 
     expect(screen.queryByText(/fantasy/i)).toBeNull();
     const hrefs = [...container.querySelectorAll('a')].map((link) => link.getAttribute('href'));
@@ -104,12 +106,8 @@ describe('public AFL draft trade routing', () => {
     }
   });
 
-  it('provides one public main landmark, skip navigation, and an active draft record destination', () => {
-    render(
-      <PublicRouteLayout>
-        <HomePage />
-      </PublicRouteLayout>
-    );
+  it('provides one public main landmark, skip navigation, and an active draft record destination', async () => {
+    render(<PublicRouteLayout>{await HomePage()}</PublicRouteLayout>);
 
     expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveAttribute(
       'href',

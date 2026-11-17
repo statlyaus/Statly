@@ -53,7 +53,7 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
   // The public layout already provides the page's <main>.
   const Shell = audience === 'public' ? 'div' : 'main';
   return (
-    <div className="afl-trade-story min-h-screen">
+    <div className={`afl-trade-story min-h-screen ${audience === 'public' ? 'ts-public' : ''}`}>
       <Shell className="mx-auto w-full max-w-3xl px-4 pt-5 pb-16 sm:px-6">
         <TradePageNotice source={model.source} />
         <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
@@ -64,7 +64,13 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
         </nav>
         <header className="flex items-center gap-3">
           <ClubBadge clubName={club} />
-          <h1 className="ts-head font-semibold">{club}: trade chains</h1>
+          <h1
+            className={
+              audience === 'public' ? 'ts-net font-display font-bold' : 'ts-head font-semibold'
+            }
+          >
+            {club}: trade chains
+          </h1>
         </header>
         <p className="mt-2 ts-body text-(--ts-ink2)">
           Trades linked by a pick {club} received and traded on. A chain&apos;s total is the sum of

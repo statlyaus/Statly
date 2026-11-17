@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAflTradeStoryBundleSource } from '@/server/aflTradeIntelligence/development/tradeStoryBundle';
@@ -21,6 +21,11 @@ const { loadStoryMock, listStoriesMock, loadClubChainsMock, notFoundMock } = vi.
 }));
 
 vi.mock('server-only', () => ({}));
+// The home page's lead story loads its typefaces through next/font, which only runs inside Next.
+vi.mock('next/font/google', () => {
+  const font = () => ({ className: 'font', variable: 'font' });
+  return { Permanent_Marker: font, Caveat: font, Newsreader: font, Oswald: font };
+});
 vi.mock('@/server/aflTradeIntelligence/publication/publicTradeStoryReads', () => ({
   publicTradeStoryReads: {
     loadStory: loadStoryMock,
@@ -39,6 +44,7 @@ import PublicClubChainsPage, {
 import TradeMethodPage from '../../src/app/(public)/afl/trades/method/page';
 import PublicTradesPage from '../../src/app/(public)/afl/trades/page';
 import AflHubPage from '../../src/app/(public)/afl/page';
+import HomePage from '../../src/app/(public)/page';
 
 const source = createAflTradeStoryBundleSource(sampleTradeStoryBundle(), { audience: 'public' });
 const list = source.list();
@@ -52,29 +58,66 @@ beforeEach(() => {
 });
 
 describe('public trade pages', () => {
-  it('lists every trade by year with public links, and each club', async () => {
-    listStoriesMock.mockResolvedValue(available(list));
-    render(await PublicTradesPage());
-    expect(screen.getByRole('heading', { level: 1, name: 'AFL trades, valued' })).toBeVisible();
-    const tradeLinks = screen
+  const tradeLinksOnPage = () =>
+    screen
       .getAllByRole('link')
-      .filter((a) => /^\/afl\/trades\/(?!clubs\/|method$)./u.test(a.getAttribute('href') ?? ''));
+      .filter((a) => /^\/afl\/trades\/(?!clubs\/|method$)[^?]/u.test(a.getAttribute('href') ?? ''));
+  const listPage = (searchParams: Record<string, string> = {}) =>
+    PublicTradesPage({ searchParams: Promise.resolve(searchParams) });
+
+  it('lists every year’s trades with each club’s result, and no private wording', async () => {
+    listStoriesMock.mockResolvedValue(available(list));
+    render(await listPage({ year: 'all' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'AFL trades, valued' })).toBeVisible();
+    const tradeLinks = tradeLinksOnPage();
     expect(tradeLinks).toHaveLength(list.stories.length);
-    expect(
-      screen.getAllByRole('link').some((a) => a.getAttribute('href')?.startsWith('/afl/trades/clubs/'))
-    ).toBe(true);
     expect(document.body.innerHTML).not.toMatch(/\/dev\/afl-trade-stories|Private/u);
-    // Each row shows every club's result so far and what it got.
-    const row = tradeLinks.find((a) => a.getAttribute('href')?.endsWith(encodeURIComponent(first.tradeId)))!;
+    const row = tradeLinks.find((a) =>
+      a.getAttribute('href')?.endsWith(encodeURIComponent(first.tradeId))
+    )!;
     for (const result of first.results!) {
       expect(row).toHaveTextContent(result.clubName);
       expect(row).toHaveTextContent(`got ${result.received.join(', ')}`);
     }
-    expect(screen.getByRole('link', { name: String(first.year) })).toHaveAttribute(
-      'href',
-      `#year-${first.year}`
-    );
     expect(document.querySelector('main')).toBeNull();
+  });
+
+  it('shows the latest year by default and marks the current filter choices', async () => {
+    listStoriesMock.mockResolvedValue(available(list));
+    render(await listPage());
+    const latest = Math.max(...list.stories.map(({ year }) => year));
+    expect(tradeLinksOnPage()).toHaveLength(
+      list.stories.filter(({ year }) => year === latest).length
+    );
+    expect(screen.getByRole('link', { name: String(latest) })).toHaveAttribute(
+      'aria-current',
+      'true'
+    );
+    expect(screen.getByRole('link', { name: 'All clubs' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('link', { name: 'All years' })).toHaveAttribute(
+      'href',
+      '/afl/trades?year=all'
+    );
+  });
+
+  it('filters by club and year together, and offers that club’s chains', async () => {
+    listStoriesMock.mockResolvedValue(available(list));
+    const clubName = first.clubNames[0]!;
+    const slug = clubName.toLowerCase().replace(/[^a-z0-9]+/gu, '-');
+    render(await listPage({ club: slug, year: String(first.year) }));
+    const expected = list.stories.filter(
+      (story) => story.year === first.year && story.clubNames.includes(clubName)
+    );
+    expect(tradeLinksOnPage()).toHaveLength(expected.length);
+    expect(screen.getByRole('link', { name: `${clubName}’s trade chains` })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/afl/trades/clubs/')
+    );
+    // Choosing another year keeps the club.
+    expect(screen.getByRole('link', { name: 'All years' })).toHaveAttribute(
+      'href',
+      `/afl/trades?year=all&club=${slug}`
+    );
   });
 
   it('shows one trade without private wording or private links', async () => {
@@ -93,6 +136,19 @@ describe('public trade pages', () => {
     expect(document.querySelector('main')).toBeNull();
   });
 
+  it('opens a trade with its collage: one heading, each club’s result, and who led when', async () => {
+    const model = source.load(first.tradeId)!;
+    loadStoryMock.mockResolvedValue(available(model));
+    render(await PublicTradeStoryPage(params({ tradeId: encodeURIComponent(first.tradeId) })));
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    const clubs = within(screen.getByRole('list', { name: 'Each club’s result and what it got' }));
+    for (const side of model.story.sides)
+      expect(clubs.getAllByText(side.clubName).length).toBeGreaterThan(0);
+    // One stop for every point the trade's net line holds, oldest first.
+    const band = within(screen.getByRole('list', { name: 'Who was ahead, point by point' }));
+    expect(band.getAllByRole('listitem')).toHaveLength(model.story.nets.tradeAlone[0]!.line.length);
+  });
+
   it('shows a club’s chains with public links', async () => {
     loadClubChainsMock.mockResolvedValue(available(source.loadClub(first.clubIds[0]!)));
     render(await PublicClubChainsPage(params({ clubId: encodeURIComponent(first.clubIds[0]!) })));
@@ -105,7 +161,7 @@ describe('public trade pages', () => {
     loadStoryMock.mockResolvedValue(UNAVAILABLE);
     loadClubChainsMock.mockResolvedValue(UNAVAILABLE);
     for (const page of [
-      await PublicTradesPage(),
+      await PublicTradesPage({ searchParams: Promise.resolve({}) }),
       await PublicTradeStoryPage(params({ tradeId: 'x' })),
       await PublicClubChainsPage(params({ clubId: 'x' })),
     ]) {
@@ -155,6 +211,44 @@ describe('public trade pages', () => {
     for (const name of ['HPN Footy', 'AFL Tables', 'Footywire and the AFL', 'Footyinfo'])
       expect(screen.getByText(name)).toBeVisible();
     expect(screen.getByRole('heading', { name: 'What is not final' })).toBeVisible();
+  });
+
+  it('makes the home page the trades’ front page: ladder, biggest win and seasons', async () => {
+    listStoriesMock.mockResolvedValue(available(list));
+    loadStoryMock.mockImplementation(async (tradeId: string) => available(source.load(tradeId)));
+    render(await HomePage());
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Every October, footy goes to market.' })
+    ).toBeVisible();
+    // The ladder ranks every club and each row opens that club's trades.
+    const ladder = screen.getByRole('heading', { name: 'The trade ladder' }).closest('section')!;
+    const rows = [...ladder.querySelectorAll('ol a')];
+    const clubs = new Set(list.stories.flatMap(({ clubNames }) => clubNames));
+    expect(rows).toHaveLength(clubs.size);
+    for (const row of rows)
+      expect(row.getAttribute('href')).toMatch(/^\/afl\/trades\?year=all&club=[a-z0-9-]+$/u);
+    expect(screen.getByRole('heading', { name: 'Season by season' })).toBeVisible();
+    const latest = Math.max(...list.stories.map(({ year }) => year));
+    expect(
+      screen
+        .getAllByRole('link')
+        .some((a) => a.getAttribute('href') === `/afl/trades?year=${latest}`)
+    ).toBe(true);
+    expect(screen.getByRole('link', { name: /Read the whole trade/u })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/afl\/trades\//u)
+    );
+    expect(document.body.innerHTML).not.toMatch(/\/dev\/afl-trade-stories|Private/u);
+  });
+
+  it('keeps the home page to its own links while the trades are not being served', async () => {
+    listStoriesMock.mockResolvedValue(UNAVAILABLE);
+    render(await HomePage());
+    expect(screen.getByRole('link', { name: 'See every trade' })).toHaveAttribute(
+      'href',
+      '/afl/trades'
+    );
+    expect(screen.queryByRole('heading', { name: 'Pick your club' })).toBeNull();
   });
 
   it('links the AFL hub to the trade pages', () => {
