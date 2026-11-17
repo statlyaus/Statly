@@ -27,6 +27,24 @@ describe('triggerCronEndpoint', () => {
     );
   });
 
+  it('does not call the route in trades-only mode, where every cron route is not found', async () => {
+    vi.stubEnv('STATLY_TRADES_ONLY', 'true');
+    const fetchImpl = fetchReturning(200);
+
+    try {
+      await expect(
+        triggerCronEndpoint('/api/cron/trades', {
+          baseUrl: 'https://statly.example',
+          secret: undefined,
+          fetchImpl,
+        })
+      ).resolves.toBeNull();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('refuses to call the route when CRON_SECRET is missing', async () => {
     const fetchImpl = fetchReturning(200);
 
@@ -63,8 +81,9 @@ describe('triggerCronEndpoint', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('CRON_SECRET', '  cron-secret\n');
     const fetchImpl = (async (input: URL, init?: RequestInit) =>
-      pruneLobbyCron(new NextRequest(input, init as ConstructorParameters<typeof NextRequest>[1]))
-    ) as unknown as typeof fetch;
+      pruneLobbyCron(
+        new NextRequest(input, init as ConstructorParameters<typeof NextRequest>[1])
+      )) as unknown as typeof fetch;
 
     try {
       const status = await triggerCronEndpoint('/api/cron/prune-lobby', {

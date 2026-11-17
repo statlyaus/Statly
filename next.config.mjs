@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { buildContentSecurityPolicyReportOnlyHeaders } from './config/contentSecurityPolicy.mjs';
+import { buildPublicPageCachingHeaders } from './config/publicPageCaching.mjs';
 
 const sentryClientAdapterModule = '@/lib/sentry/clientInstrumentation';
 const sentryClientAdapterPath =
@@ -74,6 +75,7 @@ const nextConfig = {
           },
         ],
       },
+      ...buildPublicPageCachingHeaders(),
     ];
   },
 
