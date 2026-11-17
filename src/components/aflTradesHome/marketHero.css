@@ -28,7 +28,9 @@
   font-family: var(--font-sc-label), sans-serif;
   text-transform: uppercase;
 }
-.mh-art img {
+.mh-art > img,
+.mh-mark,
+.mh-traders {
   position: absolute;
   max-width: none;
   height: auto;
@@ -45,18 +47,154 @@
   width: 62.5%;
   z-index: 2;
 }
-.mh-art img.mh-mark {
+.mh-art .mh-mark {
   left: 47.92%;
   bottom: -1.7%;
   height: 90.24%;
   width: auto;
+  aspect-ratio: 848 / 1264;
   z-index: 3;
 }
 .mh-traders {
   right: -1.39%;
   bottom: -2.44%;
   width: 29.86%;
+  aspect-ratio: 1264 / 848;
   z-index: 4;
+  animation: mh-jostle 0.9s ease-in-out infinite alternate;
+}
+
+/*
+ * Paper-puppet motion (owner, 2026-11-18). Every layer is the full cut-out's size, so the pivots are
+ * the joints' shares of the original image (see Scripts/design/slice-market-hero.mjs). The leaper
+ * climbs over the crouching man's back on load, pivoting on the knee that rests there, and his arm
+ * swings up to the ball; then he hangs. The traders' raised arms pump their slips on staggered beats.
+ * At rest every layer sits at zero, which is the original still.
+ */
+.mh-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+.mh-leap,
+.mh-hang {
+  transform-origin: 55.4% 64.1%;
+}
+.mh-reach,
+.mh-reach-hang {
+  transform-origin: 43.9% 26.5%;
+}
+.mh-leap {
+  animation: mh-leap 1.15s cubic-bezier(0.22, 0.8, 0.3, 1) 0.3s both;
+}
+.mh-hang {
+  animation: mh-hang 6s ease-in-out 1.45s infinite;
+}
+.mh-reach {
+  animation: mh-reach 1s cubic-bezier(0.3, 0.7, 0.35, 1) 0.45s both;
+}
+.mh-reach-hang {
+  animation: mh-reach-hang 6s ease-in-out 1.45s infinite;
+}
+@keyframes mh-leap {
+  0% {
+    transform: rotate(-7deg) scale(0.86);
+  }
+  60% {
+    transform: rotate(1.2deg) scale(1.02);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes mh-hang {
+  50% {
+    transform: rotate(-1.4deg);
+  }
+}
+@keyframes mh-reach {
+  0% {
+    transform: rotate(-38deg);
+  }
+  62% {
+    transform: rotate(5deg);
+  }
+  80% {
+    transform: rotate(-2deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes mh-reach-hang {
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+.mh-pump {
+  animation: mh-pump var(--beat, 2.2s) ease-in-out var(--delay, 0s) infinite;
+}
+.mh-pump-a {
+  transform-origin: 18% 36%;
+  --swing: 9deg;
+  --beat: 2.1s;
+}
+.mh-pump-b {
+  transform-origin: 26.7% 34.4%;
+  --swing: -8deg;
+  --beat: 2.5s;
+  --delay: 0.35s;
+}
+.mh-pump-c {
+  transform-origin: 40.2% 34%;
+  --swing: 7deg;
+  --beat: 1.9s;
+  --delay: 0.8s;
+}
+.mh-pump-d {
+  transform-origin: 56.3% 26.2%;
+  --swing: -9deg;
+  --beat: 2.3s;
+  --delay: 0.15s;
+}
+.mh-pump-e {
+  transform-origin: 82.7% 35.1%;
+  --swing: 8deg;
+  --beat: 2.6s;
+  --delay: 0.55s;
+}
+@keyframes mh-jostle {
+  to {
+    transform: translateY(-0.8%);
+  }
+}
+@keyframes mh-pump {
+  0%,
+  48%,
+  100% {
+    transform: none;
+  }
+  10% {
+    transform: rotate(calc(var(--swing) * -1));
+  }
+  20% {
+    transform: rotate(calc(var(--swing) * 0.35));
+  }
+  31% {
+    transform: rotate(calc(var(--swing) * -0.8));
+  }
+  40% {
+    transform: rotate(calc(var(--swing) * 0.15));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mh-traders,
+  .mh-traders .mh-layer,
+  .mh-mark .mh-layer {
+    animation: none;
+  }
 }
 .mh-rule {
   position: absolute;
@@ -187,7 +325,7 @@
     bottom: -12%;
     width: 108%;
   }
-  .mh-art img.mh-mark {
+  .mh-art .mh-mark {
     left: 14%;
     bottom: -2%;
     height: 96%;
