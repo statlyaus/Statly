@@ -1,0 +1,36 @@
+name: Deploy production
+
+# Production deploys are rationed (owner, 2026-11-18). Each Netlify production deploy costs 15 of the
+# plan's monthly credits and main takes dozens of merges a week, so netlify.toml cancels the build a
+# merge starts. This workflow starts one through a Netlify build hook, which the ignore command cannot
+# cancel. To ship sooner, run it by hand: Actions > Deploy production > Run workflow.
+
+on:
+  schedule:
+    # About 5 am in Melbourne on days 1, 4, 7 ... of the month: ten or eleven deploys a month.
+    - cron: '0 18 */3 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Start a Netlify production deploy
+    if: github.repository == 'statlyaus/Statly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the production build hook
+        env:
+          BUILD_HOOK: ${{ secrets.NETLIFY_PRODUCTION_BUILD_HOOK }}
+        run: |
+          if [ -z "$BUILD_HOOK" ]; then
+            echo "::error::The NETLIFY_PRODUCTION_BUILD_HOOK repository secret is not set."
+            exit 1
+          fi
+          curl --fail --silent --show-error -X POST -d '{}' \
+            "$BUILD_HOOK?trigger_title=Deploy+production+workflow"

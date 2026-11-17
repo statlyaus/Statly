@@ -77,8 +77,9 @@ owner's word. See "Public trade pages" in
    production environment. The proxy then serves only the home page, `/afl`, `/draft`, the legal pages,
    public files, and the `/api/admin/afl-trade-story-bundle` and `/api/draft-trades` APIs
    (`src/lib/tradesOnlyMode.ts`). Every other page is the site's not-found page and every other API is a
-   404, so no visitor is sent to a sign-in that has no database behind it. Remove the variable when
-   fantasy goes live.
+   404, so no visitor is sent to a sign-in that has no database behind it. The scheduled
+   `netlify/functions/cron-*` functions also return at once without calling their routes. Remove the
+   variable when fantasy goes live.
 1. **Approve the bundle.** In Netlify's environment variables for production set
    `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` to the bundle's exact id (`trade-story-bundle:<sha256>`, the
    `bundleId` at the top of the exported file). Leave `AFL_TRADE_STORY_PUBLIC_ENABLED` unset. Deploy.
@@ -104,6 +105,20 @@ owner's word. See "Public trade pages" in
 is approve, deploy, upload. Between the deploy and the upload the pages say "not available"; to avoid
 that gap, upload from a deploy preview that has the new id first. Older bundles stay in the store
 under their own ids and are never read again.
+
+**Deploying.** Every production deploy costs 15 of the Netlify plan's monthly credits (300 on the free
+plan, which also pays for page renders), so merges to `main` do not deploy: `netlify.toml`'s `ignore`
+command cancels them. "Deploy" in the steps above means running the **Deploy production** workflow
+(Actions > Deploy production > Run workflow). It also runs on days 1, 4, 7 and so on of each month at
+about 5 am Melbourne time. It calls the Netlify build hook kept in the `NETLIFY_PRODUCTION_BUILD_HOOK`
+repository secret (Netlify: Project configuration > Build & deploy > Build hooks, branch `main`).
+Netlify's own **Trigger deploy** button may be cancelled by the `ignore` command; use the workflow.
+
+**Caching.** The home, `/afl`, `/draft` and legal pages are cached at Netlify's CDN for an hour and
+served stale for up to a day while a fresh copy renders (`config/publicPageCaching.mjs`). Every deploy
+empties the cache. A page cached while the bundle was missing can say "not available" for up to an
+hour after the upload; deploy again to clear it at once. `public/robots.txt` keeps crawlers off API
+routes and off filtered copies of the lists (`?year=`, `?club=`).
 
 **Local run:** set `AFL_TRADE_STORY_PUBLIC_ENABLED=true`, `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` and
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (the absolute path of the exported file) and start the dev server.

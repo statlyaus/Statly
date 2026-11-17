@@ -1,0 +1,5 @@
+# Crawl the pages, not every filter combination of them: each ?year= and ?club= view is a copy of a
+# list that is already linked, and each one costs a page render.
+User-agent: *
+Disallow: /api/
+Disallow: /*?

@@ -1,6 +1,11 @@
 [build]
   command = "npm run build:production"
   publish = ".next"
+  # Production deploys are rationed: each costs 15 of the plan's monthly credits and main takes dozens
+  # of merges a week. Exit 0 cancels the build a merge to main starts; deploy previews and branch
+  # deploys still build. Production is deployed by .github/workflows/deploy-production.yml through a
+  # build hook, which this command cannot cancel.
+  ignore = 'test "$CONTEXT" = production'
 
 [build.environment]
   NODE_VERSION = "22"
