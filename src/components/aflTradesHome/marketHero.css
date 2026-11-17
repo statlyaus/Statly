@@ -61,6 +61,7 @@
   width: 29.86%;
   aspect-ratio: 1264 / 848;
   z-index: 4;
+  animation: mh-jostle 0.9s ease-in-out infinite alternate;
 }
 
 /*
@@ -131,9 +132,6 @@
   50% {
     transform: rotate(2.5deg);
   }
-}
-.mh-traders {
-  animation: mh-jostle 0.9s ease-in-out infinite alternate;
 }
 .mh-pump {
   animation: mh-pump var(--beat, 2.2s) ease-in-out var(--delay, 0s) infinite;
