@@ -20,6 +20,9 @@ const serif = Newsreader({
 });
 const label = Oswald({ weight: ['500', '600'], subsets: ['latin'], variable: '--font-sc-label' });
 
+/** The four story typefaces as CSS variables, for a surface with its own background. */
+export const STORY_FONT_CLASS = `${marker.variable} ${hand.variable} ${serif.variable} ${label.variable}`;
+
 /** The class every story collage sits under: the paper background and the four typefaces. */
 export const STORY_COLLAGE_CLASS = `sc ${marker.variable} ${hand.variable} ${serif.variable} ${label.variable}`;
 

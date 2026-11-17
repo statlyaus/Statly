@@ -4476,6 +4476,13 @@ story: each club's guernsey sketch in its colours (`aflStories/guernseySketch.ts
 note, what it received, and a band of who was ahead at each checkpoint of the net line. It adds no
 facts of its own. The private page keeps the plain header.
 
+**Trade tree.** On public trade pages the lineage map is "Where the trade went" (`TradeTree.tsx`,
+`tradeTreeModel.ts`; owner's design, 2026-11-17): the trade branches to each club and then to a lane
+per asset, running through time to the player it became. A lane is the receiving club's colour, an
+outline while still a pick, and hatched ink at another club; its thickness and end number are PAV.
+Each lineage asset carries its leg's value line (`line`, at-trade view then every checkpoint) for this.
+Below 768px it is a list, which is also the screen-reader text. The private page keeps the lineage map.
+
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
 Draftguru and Official AFL, draft boards from Footyinfo, and the PAV method and published values from

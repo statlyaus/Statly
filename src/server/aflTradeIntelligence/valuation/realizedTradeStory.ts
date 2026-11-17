@@ -232,7 +232,7 @@ function lineageAsset(
       .slice(1)
       .map((hop) => storyHop(index, hop, 'after')),
   ];
-  return { transferId, assetId, label, hops, outcome, value };
+  return { transferId, assetId, label, hops, outcome, value, line: index.points(ref) };
 }
 
 function lineageTrade(
