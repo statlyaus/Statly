@@ -39,6 +39,7 @@ import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
   buildLeagueFormatAudit,
+  getBloodsuckerLeagueSizeError,
   getLeagueFormatWaiverError,
   normalizeLeagueFormat,
 } from '@/server/leagues/leagueFormat';
@@ -674,6 +675,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ) {
         return NextResponse.json(
           { error: BLOODSUCKER_UNAVAILABLE_MESSAGE, code: 'BLOODSUCKER_UNAVAILABLE' },
+          { status: 400 }
+        );
+      }
+      // The league size and the format are checked together, only when one of them changes, so a
+      // save of other settings never trips over a stored size.
+      const bloodsuckerSizeError =
+        maxTeams !== undefined || leagueFormat !== currentFormat.leagueFormat
+          ? getBloodsuckerLeagueSizeError(leagueFormat, maxTeams ?? prismaLeague.settings.maxTeams)
+          : null;
+      if (bloodsuckerSizeError) {
+        return NextResponse.json(
+          { error: bloodsuckerSizeError, code: 'BLOODSUCKER_INSUFFICIENT_TEAMS' },
           { status: 400 }
         );
       }

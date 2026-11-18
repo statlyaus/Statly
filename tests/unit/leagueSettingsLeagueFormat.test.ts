@@ -88,6 +88,7 @@ const baseSettings = {
 };
 
 let stored: typeof baseSettings;
+let activeMemberCount = 8;
 
 function storedLeague() {
   return {
@@ -95,7 +96,7 @@ function storedLeague() {
     name: 'Statly Premier League',
     inviteCode: 'CODE1234',
     categoriesJson: REAL_DATA_NINE_CATEGORY_PRESET,
-    _count: { members: 8 },
+    _count: { members: activeMemberCount },
     settings: stored,
     members: [
       { id: 'member-1', teamName: 'Owner Team', isActive: true, status: 'ACTIVE' },
@@ -118,6 +119,7 @@ async function put(body: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  activeMemberCount = 8;
   stored = { ...baseSettings };
   mocks.authenticate.mockResolvedValue('owner-user');
   mocks.getAccess.mockResolvedValue({ isMember: true, canManage: true, memberId: 'member-1' });
@@ -186,6 +188,28 @@ describe('league format settings', () => {
     expect(status).toBe(400);
     expect(json.code).toBe('BLOODSUCKER_REQUIRES_ROLLING');
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses a Bloodsucker league sized below the Bloodsucker minimum', async () => {
+    activeMemberCount = 4;
+    const { status, json } = await put({
+      league: { maxTeams: 6 },
+      format: { leagueFormat: 'BLOODSUCKER' },
+    });
+
+    expect(status).toBe(400);
+    expect(json.code).toBe('BLOODSUCKER_INSUFFICIENT_TEAMS');
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses shrinking an existing Bloodsucker league below the minimum', async () => {
+    stored.leagueFormat = 'BLOODSUCKER';
+    activeMemberCount = 4;
+
+    const { status, json } = await put({ league: { maxTeams: 6 } });
+
+    expect(status).toBe(400);
+    expect(json.code).toBe('BLOODSUCKER_INSUFFICIENT_TEAMS');
   });
 
   it('refuses turning FAAB on once the league is already Bloodsucker', async () => {
