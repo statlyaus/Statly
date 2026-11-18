@@ -122,7 +122,10 @@ Rules and indexes reach Firebase only on the next `firebase deploy`.
 - Scope every query, cache key, event, and write to the league and season of the resolved context.
 - Keep operator and scheduler credentials out of league role logic; they authorize infrastructure
   actions, not competition state.
-- Preserve fail-closed behaviour: an unset credential denies access.
+- Preserve fail-closed behaviour: an unset credential denies access. The one exception is the Local
+  development tier: with both dev-auth flags on outside production, a request carrying no credential
+  at all is the scripted tester `statly-dev-tester` (`getDevelopmentUserId` in `src/lib/serverAuth.ts`);
+  any supplied but invalid credential is still refused.
 
 ## Testing
 
