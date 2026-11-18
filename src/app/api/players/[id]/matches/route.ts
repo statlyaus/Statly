@@ -222,8 +222,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         freesAgainst: stat('frees_against'),
         onePercenters: stat('one_percenters'),
         goalAssists: stat('goal_assists'),
-        timeOnGroundPct: stat('time_on_ground_percentage', 'tog_pct') || 85, // Default if missing
-        disposalEffPct: stat('disposal_efficiency') || 75, // Default if missing
+        timeOnGroundPct: stat('time_on_ground_percentage', 'tog_pct'),
+        disposalEffPct: stat('disposal_efficiency'),
         turnovers: stat('turnovers'),
         intercepts: stat('intercepts'),
         metresGained: stat('metres_gained'),
