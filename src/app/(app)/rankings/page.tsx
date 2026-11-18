@@ -1,12 +1,13 @@
 import { unstable_cache } from 'next/cache';
 
 import NineCategoryRankingsTable from '@/components/rankings/NineCategoryRankingsTable';
+import { resolveCurrentStatsSeason } from '@/server/players/currentStatsSeason';
 import { getCategoryRankings } from '@/server/rankings/getCategoryRankings';
 
 // Same five-minute freshness the rankings API advertises to the CDN.
 const getDefaultRankings = unstable_cache(
-  () => getCategoryRankings({ season: 2025 }),
-  ['rankings:default:2025'],
+  async () => getCategoryRankings({ season: await resolveCurrentStatsSeason() }),
+  ['rankings:default:current-season'],
   { revalidate: 300 }
 );
 

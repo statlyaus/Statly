@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
+import { resolveCurrentStatsSeason } from '@/server/players/currentStatsSeason';
 import { getCategoryRankings } from '@/server/rankings/getCategoryRankings';
 
 export const runtime = 'nodejs';
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const response = await getCategoryRankings({
-      season: parseInt(searchParams.get('season') || '2025'),
+      season: Number(searchParams.get('season')) || (await resolveCurrentStatsSeason()),
       period: searchParams.get('period') || 'season',
       position: searchParams.get('position'),
       ownership: searchParams.get('ownership'),
