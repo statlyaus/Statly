@@ -198,8 +198,9 @@ round, as the fixture and stats are. `etl/resultIngest.ts` validates the batch, 
 no Prisma client, so the store writes SQL through `pg`; the schema is Prisma's, and an integration
 test runs the store against the migrated database. The live guard (`etl/liveGuard.ts`) runs the
 ingest for Footywire's last 18 matches every 10 minutes while a stats window is open, and for the
-whole season every 6 hours outside one, so a correction to an older game is ingested too
-(`etl/resultRefresh.ts`, #1315); it needs `DATABASE_URL`.
+whole season every 6 hours outside one while a game started in the last 7 days, so a correction to
+an older game is ingested too (`etl/resultRefresh.ts`, #1315). In the off-season and other breaks of
+more than 7 days the season sweep does not run (owner decision 2026-11-15); it needs `DATABASE_URL`.
 
 Each row records season, round, Footywire match id (`matchId`), the fixture's `matchUid` (the id
 player stat rows carry, so a stat row resolves to its own game's result; the join is by season,
