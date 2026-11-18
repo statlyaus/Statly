@@ -48,6 +48,12 @@ function forwardErrorToSentry(message: string, error: unknown): void {
     .catch(() => undefined);
 }
 
+function isPlainObject(value: unknown): value is LogContext {
+  return (
+    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
 class Logger {
   private isDevelopment = process.env.NODE_ENV === 'development';
   private isTest = process.env.NODE_ENV === 'test';
@@ -140,6 +146,18 @@ class Logger {
   }
 
   error(message: string, error?: Error | unknown, context?: LogContext): void {
+    // Many callers pass their context object in the error slot. Keep it as the context, and report
+    // its `error` field when that is an Error.
+    if (context === undefined && isPlainObject(error)) {
+      const { error: nested, ...rest } = error;
+      if (nested instanceof Error) {
+        context = rest;
+        error = nested;
+      } else {
+        context = error;
+        error = undefined;
+      }
+    }
     if (this.shouldLog('error')) {
       const entry = this.createLogEntry('error', message, context, error);
       console.error(this.serializeEntry(entry));

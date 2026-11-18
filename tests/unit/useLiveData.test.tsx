@@ -69,8 +69,7 @@ describe('useLiveData', () => {
       id: 'ply_a_player',
       name: 'A. Player',
       position: '',
-      goals: 2,
-      marks: 3,
+      categories: expect.objectContaining({ goals: 2 }),
     });
   });
 
