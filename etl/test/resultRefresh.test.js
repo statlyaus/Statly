@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { dueResultRefresh } = require('../dist/resultRefresh');
+const { dueResultRefresh, fullSweepTimerDue } = require('../dist/resultRefresh');
 
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -34,4 +34,10 @@ test('no season sweep once no game has started in the last 7 days (off-season, b
   const base = { now, live: false, lastRecentAt: 0, lastFullSweepAt: 0, ...opts };
   assert.equal(dueResultRefresh({ ...base, gameStartedWithinWindow: false }), null);
   assert.equal(dueResultRefresh({ ...base, gameStartedWithinWindow: true }), 'full');
+});
+
+test('the sweep timer is checked on its own, so the guard reads Firestore only once a sweep could be due', () => {
+  const now = 10 * HOUR;
+  assert.equal(fullSweepTimerDue({ now, lastFullSweepAt: now - HOUR, fullSweepMs: 6 * HOUR }), false);
+  assert.equal(fullSweepTimerDue({ now, lastFullSweepAt: now - 6 * HOUR, fullSweepMs: 6 * HOUR }), true);
 });

@@ -22,6 +22,19 @@ export const RESULTS_SWEEP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** A full sweep's R pipeline limit; the default 5-minute limit fits only the recent refresh. */
 export const RESULTS_FULL_SWEEP_TIMEOUT_MS = 30 * 60 * 1000;
 
+/**
+ * Whether the 6-hour sweep timer has run out. The guard checks it before asking Firestore whether a
+ * game started in the last 7 days, so an off-live pass costs no Firestore read until a sweep could
+ * actually be due.
+ */
+export function fullSweepTimerDue(input: {
+  now: number;
+  lastFullSweepAt: number;
+  fullSweepMs?: number;
+}): boolean {
+  return input.now - input.lastFullSweepAt >= (input.fullSweepMs ?? RESULTS_FULL_SWEEP_MS);
+}
+
 export function dueResultRefresh(input: {
   now: number;
   live: boolean;
@@ -36,7 +49,7 @@ export function dueResultRefresh(input: {
   const fullSweepMs = input.fullSweepMs ?? RESULTS_FULL_SWEEP_MS;
   if (!input.live) {
     if (!input.gameStartedWithinWindow) return null;
-    return input.now - input.lastFullSweepAt >= fullSweepMs ? 'full' : null;
+    return fullSweepTimerDue({ ...input, fullSweepMs }) ? 'full' : null;
   }
   return input.now - input.lastRecentAt >= refreshMs ? 'recent' : null;
 }
