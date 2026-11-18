@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
@@ -216,10 +216,13 @@ export default function LeagueWaiversContainer({
       appendActivity = false,
       cursor,
       playersCursor,
+      playersSearch,
     }: {
       signal?: AbortSignal;
       includePlayers?: boolean;
       appendPlayers?: boolean;
+      /** Searches every available player by name, not only the loaded pages. */
+      playersSearch?: string;
       appendActivity?: boolean;
       cursor?: string | null;
       playersCursor?: string | null;
@@ -232,6 +235,14 @@ export default function LeagueWaiversContainer({
       }
       if (playersCursor) {
         url.searchParams.set('playersCursor', playersCursor);
+      }
+      if (playersSearch) {
+        url.searchParams.set('playersSearch', playersSearch);
+      }
+      // The player page's "Waiver claim" link: the first page includes him even when he is
+      // beyond it, so the claim form can select him.
+      if (includePlayers && !playersCursor && initialPlayerId) {
+        url.searchParams.set('playerId', initialPlayerId);
       }
 
       const response = await fetch(url.toString(), { signal, cache: 'no-store' });
@@ -285,8 +296,23 @@ export default function LeagueWaiversContainer({
         return next;
       });
     },
-    [ACTIVITY_PAGE_SIZE, leagueId]
+    [ACTIVITY_PAGE_SIZE, initialPlayerId, leagueId]
   );
+
+  // Search runs on the server over every available player, debounced, so it is not limited to the
+  // pages already loaded.
+  const [playersSearch, setPlayersSearch] = useState('');
+  const appliedPlayersSearch = useRef('');
+  useEffect(() => {
+    if (!effectiveUserId || playersSearch === appliedPlayersSearch.current) return;
+    const timer = setTimeout(() => {
+      appliedPlayersSearch.current = playersSearch;
+      loadWaiverSnapshot({ includePlayers: true, playersSearch }).catch((error: unknown) => {
+        console.error('Waiver player search failed', error);
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [effectiveUserId, loadWaiverSnapshot, playersSearch]);
 
   // Claims resolve overnight and other managers' moves land without a click here, so
   // refresh the list whenever the tab comes back into view.
@@ -548,6 +574,7 @@ export default function LeagueWaiversContainer({
         appendPlayers: true,
         appendActivity: false,
         playersCursor,
+        playersSearch: appliedPlayersSearch.current,
       });
     } catch (err) {
       console.error('Load more players error', err);
@@ -614,6 +641,7 @@ export default function LeagueWaiversContainer({
         loadingMorePlayers={loadingMorePlayers}
         hasMorePlayers={hasMorePlayers}
         initialPlayerId={initialPlayerId}
+        onSearchPlayers={setPlayersSearch}
         timeZone={timeZone}
       />
 
