@@ -38,6 +38,12 @@ test('no season sweep once no game has started in the last 7 days (off-season, b
 
 test('the sweep timer is checked on its own, so the guard reads Firestore only once a sweep could be due', () => {
   const now = 10 * HOUR;
-  assert.equal(fullSweepTimerDue({ now, lastFullSweepAt: now - HOUR, fullSweepMs: 6 * HOUR }), false);
-  assert.equal(fullSweepTimerDue({ now, lastFullSweepAt: now - 6 * HOUR, fullSweepMs: 6 * HOUR }), true);
+  assert.equal(
+    fullSweepTimerDue({ now, lastFullSweepAt: now - HOUR, fullSweepMs: 6 * HOUR }),
+    false
+  );
+  assert.equal(
+    fullSweepTimerDue({ now, lastFullSweepAt: now - 6 * HOUR, fullSweepMs: 6 * HOUR }),
+    true
+  );
 });
