@@ -81,7 +81,7 @@ describe('local development auth architecture', () => {
 
     expect(source).toContain('if (!isDevelopmentToolsEnabled())');
     expect(source).toContain("body?.mode === 'quick-completion'");
-    expect(source).toContain('const teamCount = quickCompletionMode ? 2 : 12');
+    expect(source).toContain('const teamCount = quickCompletionMode ? MIN_LEAGUE_TEAMS : 12');
     expect(source).toContain('const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS }');
     expect(source).toContain('calculateDraftCapacity');
     expect(source).toContain('positionLimitsJson: positionLimits');
