@@ -246,10 +246,7 @@ export async function scoreStartedLeagueRounds(
             };
             stalledRounds.push(stalled);
             // League, round and reason in the message: each stalled round is its own Sentry issue.
-            logger.error(
-              `Round scoring stalled: league ${leagueId}, season ${season ?? 'unknown'}, round ${round} (${stalled.reason})`,
-              { ...stalled }
-            );
+            logger.error(stalledRoundMessage(stalled), { ...stalled });
           }
         }
       } catch (error) {
@@ -270,6 +267,10 @@ export async function scoreStartedLeagueRounds(
     failedLeagueIds: leagues.flatMap((league) => (league.error ? [league.leagueId] : [])),
     stalledRounds,
   };
+}
+
+function stalledRoundMessage(stalled: StalledLeagueRound): string {
+  return `Round scoring stalled: league ${stalled.leagueId}, season ${stalled.season ?? 'unknown'}, round ${stalled.round} (${stalled.reason})`;
 }
 
 /** Why a recalculated round that is not FINAL is still open. */
