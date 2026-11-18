@@ -129,7 +129,9 @@ export function createAflTradeFactualReleaseLifecycle(dependencies: {
           factualReviewDecisionLedger: ledger,
         };
       }
-      const registryAfter = await releases.apply(command as AflDraftTradeOutcomeReleaseCommand);
+      const registryAfter = await releases.apply(
+        command as unknown as AflDraftTradeOutcomeReleaseCommand
+      );
       return summarize(input.action, String(input.releaseId), registryAfter);
     },
   };

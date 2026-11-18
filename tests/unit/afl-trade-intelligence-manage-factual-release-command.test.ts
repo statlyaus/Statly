@@ -44,7 +44,7 @@ describe('manage AFL trade factual release command', () => {
   it('withdraws a release with the operator evidence and the current time', async () => {
     const { releases, service } = lifecycle('withdrawn', false);
     const command = {
-      action: 'withdraw',
+      action: 'withdraw' as const,
       releaseId: RELEASE_ID,
       expectedRevision: 8,
       actor: 'production-incident-commander',
@@ -67,7 +67,7 @@ describe('manage AFL trade factual release command', () => {
   it('activates against the stored Gate ledger, not one supplied in the input', async () => {
     const { releases, service } = lifecycle('published', true);
     const command = {
-      action: 'activate',
+      action: 'activate' as const,
       releaseId: RELEASE_ID,
       expectedRevision: 8,
       actor: 'release-operator',
@@ -87,7 +87,7 @@ describe('manage AFL trade factual release command', () => {
       sourceRightsDecisionLedger: ledger,
       factualReviewDecisionLedger: ledger,
     });
-    expect(result.activeReleaseId).toBe(RELEASE_ID);
+    expect(result).toMatchObject({ activeReleaseId: RELEASE_ID });
   });
 
   it('registers a candidate manifest', async () => {
