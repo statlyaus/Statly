@@ -5,6 +5,7 @@ import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { prisma } from '@/lib/prisma';
+import { resolveCurrentStatsSeason } from '@/server/players/currentStatsSeason';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 import { getTeamAbbreviation, getTeamName } from '@/lib/teamLogos';
 
@@ -194,11 +195,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return successResponse([]);
     }
 
+    // A stored row with no season is labelled with the current stats season, never a fixed year.
+    const currentSeason = await resolveCurrentStatsSeason();
     const rawMatches = docs.map((doc) => {
       const data = doc.data();
       const opponent = getTeamName(data.opposition || 'Unknown') || 'Unknown';
       const round = readNumber(data.round);
-      const season = readNumber(data.season, 2025);
+      const season = readNumber(data.season, currentSeason);
       console.log(`📋 Processing match: Round ${data.round} vs ${data.opposition}`);
 
       const stat = (...keys: string[]) => readStat(data, keys);
