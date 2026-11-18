@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Badge from '@/components/ui/Badge';
 import { useLiveData } from '@/hooks/useLiveData';
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import type { LegacyPlayerStat } from '@/lib/etlIntegration';
+import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 // Types
 interface LivePlayer {
@@ -12,15 +14,9 @@ interface LivePlayer {
   name: string;
   team: string;
   position: string;
-  fantasyScore: number;
-  realTimeStats: {
-    disposals: number;
-    marks: number;
-    tackles: number;
-    goals: number;
-    behinds: number;
-    hitouts?: number;
-  };
+  /** The nine league categories; null when the provider did not report the stat. */
+  categories: LegacyPlayerStat['categories'];
+  hitouts: number | null;
   isPlaying: boolean;
   injuryStatus?: 'injured' | 'substituted';
 }
@@ -56,7 +52,7 @@ export default function RealTimeMatchCenter({
     () =>
       [
         { id: 'matches', label: 'Live Matches', count: liveMatches.length },
-        { id: 'live-players', label: 'Top Performers', count: playerStats.length },
+        { id: 'live-players', label: 'Players', count: playerStats.length },
       ] as const,
     [liveMatches.length, playerStats.length]
   );
@@ -105,15 +101,8 @@ export default function RealTimeMatchCenter({
         name: p.name,
         team: p.team,
         position: p.position,
-        fantasyScore: p.fantasyScore,
-        realTimeStats: {
-          disposals: p.disposals,
-          marks: p.marks,
-          tackles: p.tackles,
-          goals: p.goals,
-          behinds: p.behinds,
-          hitouts: p.hitouts,
-        },
+        categories: p.categories,
+        hitouts: p.hitouts,
         isPlaying: true,
       });
     }, [p]);
@@ -139,24 +128,22 @@ export default function RealTimeMatchCenter({
               )}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-green-600">{p.fantasyScore}</div>
-            <div className="text-xs text-gray-500">Fantasy Pts</div>
-          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-sm">
+        <div className="grid grid-cols-5 gap-2 text-sm">
+          {REAL_DATA_NINE_CATEGORY_PRESET.map((key) => (
+            <div key={key} className="text-center">
+              <div className="font-medium text-gray-900">{p.categories[key] ?? '-'}</div>
+              <div className="text-gray-500" title={FANTASY_CATEGORIES[key].label}>
+                {FANTASY_CATEGORIES[key].shortLabel}
+              </div>
+            </div>
+          ))}
           <div className="text-center">
-            <div className="font-medium text-gray-900">{p.disposals}</div>
-            <div className="text-gray-500">Disposals</div>
-          </div>
-          <div className="text-center">
-            <div className="font-medium text-gray-900">{p.marks}</div>
-            <div className="text-gray-500">Marks</div>
-          </div>
-          <div className="text-center">
-            <div className="font-medium text-gray-900">{p.goals}</div>
-            <div className="text-gray-500">Goals</div>
+            <div className="font-medium text-gray-900">{p.hitouts ?? '-'}</div>
+            <div className="text-gray-500" title="Hit-outs">
+              HO
+            </div>
           </div>
         </div>
       </motion.div>
