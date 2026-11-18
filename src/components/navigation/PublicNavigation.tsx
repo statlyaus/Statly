@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ArrowLeftRight, House, ListOrdered } from 'lucide-react';
 
 /** Public links only. The fantasy app is not live, so nothing here points at it. */
 const publicLinks = [
-  { href: '/', label: 'Home', section: '/' },
-  { href: '/afl/trades', label: 'Trades', section: '/afl' },
-  { href: '/draft/trades', label: 'Draft record', section: '/draft' },
+  { href: '/', label: 'Home', section: '/', Icon: House },
+  { href: '/afl/trades', label: 'Trades', section: '/afl', Icon: ArrowLeftRight },
+  { href: '/draft/trades', label: 'Draft record', section: '/draft', Icon: ListOrdered },
 ] as const;
 
 function isPublicLinkActive(pathname: string, section: string): boolean {
@@ -15,26 +16,38 @@ function isPublicLinkActive(pathname: string, section: string): boolean {
   return pathname === section || pathname.startsWith(`${section}/`);
 }
 
+/**
+ * Tab bar: equal-width 72px cells, a 24px icon over a 12px label, and a 2px bar on the edge that
+ * faces the page for the current section. Phones get it fixed to the bottom of the screen; from
+ * `sm` up it sits in the header, right of the logo.
+ */
 export function PublicNavigation() {
   const pathname = usePathname() ?? '';
 
   return (
-    <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 overflow-x-auto sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:justify-end">
-      {publicLinks.map((link) => {
-        const active = isPublicLinkActive(pathname, link.section);
+    <div className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/10 bg-brand-bar pb-[env(safe-area-inset-bottom)] sm:static sm:col-start-2 sm:row-start-1 sm:justify-end sm:border-0 sm:bg-transparent sm:pb-0">
+      {publicLinks.map(({ href, label, section, Icon }) => {
+        const active = isPublicLinkActive(pathname, section);
 
         return (
           <Link
-            key={link.href}
-            href={link.href}
+            key={href}
+            href={href}
             aria-current={active ? 'page' : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:text-sm ${
+            className={`relative flex h-18 min-w-0 flex-1 flex-col items-center justify-center gap-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white sm:w-24 sm:flex-none ${
               active
-                ? 'bg-white text-brand-bar'
-                : 'text-brand-bar-foreground/80 hover:bg-white/10 hover:text-brand-bar-foreground'
+                ? 'text-brand-bar-foreground'
+                : 'text-brand-bar-foreground/70 hover:text-brand-bar-foreground'
             }`}
           >
-            {link.label}
+            {active ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 mx-auto h-0.5 w-10 rounded-full bg-sky-300 sm:top-auto sm:bottom-0"
+              />
+            ) : null}
+            <Icon aria-hidden="true" className="size-6" strokeWidth={active ? 2.25 : 1.75} />
+            <span className="text-xs leading-none font-semibold whitespace-nowrap">{label}</span>
           </Link>
         );
       })}
