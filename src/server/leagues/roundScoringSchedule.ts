@@ -245,7 +245,11 @@ export async function scoreStartedLeagueRounds(
               ...stalledRoundCause(result),
             };
             stalledRounds.push(stalled);
-            logger.error('Scheduled round scoring is stalled for a league round', { ...stalled });
+            // League, round and reason in the message: each stalled round is its own Sentry issue.
+            logger.error(
+              `Round scoring stalled: league ${leagueId}, season ${season ?? 'unknown'}, round ${round} (${stalled.reason})`,
+              { ...stalled }
+            );
           }
         }
       } catch (error) {
