@@ -234,7 +234,7 @@ describe('public trade pages', () => {
         .getAllByRole('link')
         .some((a) => a.getAttribute('href') === `/afl/trades?year=${latest}`)
     ).toBe(true);
-    expect(screen.getByRole('link', { name: /Read the whole trade/u })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Read the trade/u })).toHaveAttribute(
       'href',
       expect.stringMatching(/^\/afl\/trades\//u)
     );
