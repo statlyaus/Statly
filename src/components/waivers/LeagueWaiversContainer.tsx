@@ -152,6 +152,33 @@ function mapActivity(item: SerializedLeagueActivityItem): LeagueActivityItem {
   };
 }
 
+/** The waivers snapshot request; empty optional values are left out. */
+function waiverSnapshotUrl(
+  leagueId: string,
+  params: {
+    playersLimit: number;
+    activityLimit: number;
+    activityCursor?: string | null;
+    playersCursor?: string | null;
+    playersSearch?: string;
+    playerId?: string | null;
+  }
+): URL {
+  const url = new URL(`/api/leagues/${leagueId}/waivers`, window.location.origin);
+  url.searchParams.set('playersLimit', String(params.playersLimit));
+  url.searchParams.set('activityLimit', String(params.activityLimit));
+  const optional = {
+    activityCursor: params.activityCursor,
+    playersCursor: params.playersCursor,
+    playersSearch: params.playersSearch,
+    playerId: params.playerId,
+  };
+  for (const [key, value] of Object.entries(optional)) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return url;
+}
+
 export default function LeagueWaiversContainer({
   leagueId,
   currentUserId,
@@ -227,23 +254,16 @@ export default function LeagueWaiversContainer({
       cursor?: string | null;
       playersCursor?: string | null;
     } = {}) => {
-      const url = new URL(`/api/leagues/${leagueId}/waivers`, window.location.origin);
-      url.searchParams.set('playersLimit', includePlayers ? '100' : '0');
-      url.searchParams.set('activityLimit', String(ACTIVITY_PAGE_SIZE));
-      if (cursor) {
-        url.searchParams.set('activityCursor', cursor);
-      }
-      if (playersCursor) {
-        url.searchParams.set('playersCursor', playersCursor);
-      }
-      if (playersSearch) {
-        url.searchParams.set('playersSearch', playersSearch);
-      }
-      // The player page's "Waiver claim" link: the first page includes him even when he is
-      // beyond it, so the claim form can select him.
-      if (includePlayers && !playersCursor && initialPlayerId) {
-        url.searchParams.set('playerId', initialPlayerId);
-      }
+      const url = waiverSnapshotUrl(leagueId, {
+        playersLimit: includePlayers ? 100 : 0,
+        activityLimit: ACTIVITY_PAGE_SIZE,
+        activityCursor: cursor,
+        playersCursor,
+        playersSearch,
+        // The player page's "Waiver claim" link: the first page includes him even when he is
+        // beyond it, so the claim form can select him.
+        playerId: includePlayers && !playersCursor ? initialPlayerId : null,
+      });
 
       const response = await fetch(url.toString(), { signal, cache: 'no-store' });
       const data = (await response.json().catch(() => ({}))) as WaiverBootstrapResponse;
