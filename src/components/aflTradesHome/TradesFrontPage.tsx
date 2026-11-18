@@ -78,7 +78,8 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
           {cameron ? (
             <RecordBanner
               href={tradeStoryHref(cameron.story.tradeId, 'public')}
-              result={`${cameron.result.clubName} ${formatSigned(cameron.result.net)} so far`}
+              clubName={cameron.result.clubName}
+              result={formatSigned(cameron.result.net)}
             />
           ) : null}
           <div
