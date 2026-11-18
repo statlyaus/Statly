@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,7 @@ export default async function AflDraftHistoryIndexPage() {
     );
   } catch (error) {
     if (error && typeof error === 'object' && 'digest' in error) throw error;
+    logger.error('Draft history index read failed', error);
     return (
       <DraftHubState
         variant="error"
