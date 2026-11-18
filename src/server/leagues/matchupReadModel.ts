@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { ensureDefaultLineups } from '@/server/leagues/defaultLineups';
+import { resolveCurrentCompetitionRound } from '@/server/leagues/currentCompetitionRound';
 import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/server/etl/etlRoundData';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -946,40 +947,7 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
   };
 }
 
-export function resolveCurrentCompetitionRound<
-  TRound extends {
-    round: number;
-    status: string;
-    startsAt: Date | null;
-    endsAt: Date | null;
-  },
->(rounds: readonly TRound[], now = new Date()): TRound | null {
-  const playableRounds = rounds.filter(
-    (competitionRound) => competitionRound.status !== 'NO_MATCHUP'
-  );
-  if (!playableRounds.length) return rounds[0] ?? null;
-
-  const startedRounds = playableRounds.filter(
-    (competitionRound) =>
-      competitionRound.startsAt &&
-      competitionRound.startsAt <= now &&
-      (!competitionRound.endsAt || competitionRound.endsAt >= now)
-  );
-  const latestStartedRound = startedRounds.reduce<TRound | null>(
-    (latest, competitionRound) =>
-      !latest || competitionRound.round > latest.round ? competitionRound : latest,
-    null
-  );
-
-  return (
-    latestStartedRound ??
-    playableRounds.find(
-      (competitionRound) => !competitionRound.startsAt || competitionRound.startsAt > now
-    ) ??
-    playableRounds.at(-1) ??
-    null
-  );
-}
+export { resolveCurrentCompetitionRound };
 
 export async function loadLeagueMatchupReadModel({
   leagueId,
