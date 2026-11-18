@@ -5,21 +5,15 @@ import './marketHero.css';
  * A vintage cut-out collage of a high mark over a stadium, a price chart behind it and pit traders
  * in front. The pictures were generated with AI and show invented people; the owner chose not to
  * caption them (2026-11-17). On load the leaper climbs into the mark and the traders pump their slips
- * (owner, 2026-11-18); with reduced motion everything stays still.
+ * (owner, 2026-11-18); with reduced motion everything stays still. The record deal sits in a paper
+ * strip under the hero (`RecordBanner`), not in it (owner, 2026-11-18).
  */
 
 const ART = '/Assets/stories/market';
 const LAYERS = `${ART}/layers`;
 const TRADER_ARMS = ['a', 'b', 'c', 'd', 'e'] as const;
 
-export function TradeMarketHero({
-  headingId,
-  recordHref,
-}: {
-  headingId: string;
-  /** Where "Read the record deal" goes. */
-  recordHref: string;
-}) {
+export function TradeMarketHero({ headingId }: { headingId: string }) {
   return (
     <div className="mh-stage">
       {/* eslint-disable @next/next/no-img-element -- cut-outs placed by shares of the stage */}
@@ -76,13 +70,6 @@ export function TradeMarketHero({
           For a few weeks a year the game turns into a trading floor. Clubs bid in players, picks
           and futures, and the biggest deals go down to the final seconds.
         </p>
-        <p className="mh-record mh-label">
-          <b style={{ fontWeight: 600 }}>The record:</b> picks 13, 15 and 20 for one forward. GWS to
-          Geelong, 2020.
-        </p>
-        <a href={recordHref} className="mh-button mh-label">
-          Read the record deal ↓
-        </a>
       </div>
     </div>
   );

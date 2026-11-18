@@ -18,6 +18,7 @@ import {
   STORY_COLLAGE_CLASS,
 } from '@/components/aflStories/CameronMasthead';
 import { TowerLadder } from './TowerLadder';
+import { RecordBanner } from './RecordBanner';
 import { TradeMarketHero } from './TradeMarketHero';
 import { CameronTimeline } from '@/components/aflStories/CameronTimeline';
 import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
@@ -25,7 +26,7 @@ import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/deve
 /**
  * The home page while the trade pages are live (owner, 2026-11-16: "a home page that draws someone
  * in"). It opens on the owner's paper collage of one trade, the Jeremy Cameron story, which leads to
- * that story and to the trade itself; then the trade ladder drawn as ground light towers, the biggest wins and each season. Real
+ * that story and, through the record strip under the hero, to the trade itself; then the trade ladder drawn as ground light towers, the biggest wins and each season. Real
  * numbers only, club colours only, original sketches, and no player or club imagery.
  */
 
@@ -60,7 +61,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
         aria-labelledby="front-heading"
         className={`mh ${STORY_COLLAGE_CLASS.replace(/^sc /u, '')}`}
       >
-        <TradeMarketHero headingId="front-heading" recordHref="#record-deal" />
+        <TradeMarketHero headingId="front-heading" />
       </section>
 
       <section aria-label="The record deal" className={STORY_COLLAGE_CLASS}>
@@ -74,6 +75,12 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
             paddingBottom: '3rem',
           }}
         >
+          {cameron ? (
+            <RecordBanner
+              href={tradeStoryHref(cameron.story.tradeId, 'public')}
+              result={`${cameron.result.clubName} ${formatSigned(cameron.result.net)} so far`}
+            />
+          ) : null}
           <div
             id="record-deal"
             style={{
@@ -112,20 +119,6 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
                   Read the story
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
-                {cameron ? (
-                  <Link
-                    href={tradeStoryHref(cameron.story.tradeId, 'public')}
-                    className="sc-hand"
-                    style={{
-                      textDecoration: 'underline',
-                      textDecorationThickness: 2,
-                      textUnderlineOffset: 4,
-                    }}
-                  >
-                    {cameron.result.clubName} {formatSigned(cameron.result.net)} so far. Read the
-                    whole trade
-                  </Link>
-                ) : null}
               </div>
             </div>
           </div>
