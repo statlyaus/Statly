@@ -47,13 +47,13 @@ the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` a
 Two failed or missed runs in a row open a Sentry issue.
 
 - **Failed league.** A bite that throws, or is still suspended (its matchup not FINAL) 2 hours past
-  its deadline, fails **one** run: the log line `Bloodsucker auto-bite failed` (an error, so it
+  its deadline, fails **one** run: the log line `Bloodsucker auto-bite failed: league {leagueId}, bite {biteId}` (an error, so it
   reaches Sentry) names the league and bite, and the bite row records `failureCount`,
   `lastFailureAt`, `lastFailureReason` and `failureAlertedAt`. That one failed run is the alert.
   Later runs still try the bite every 5 minutes and count the failure, but answer 200 and list the
-  bite in `knownFailingBiteIds` (log line `Bloodsucker auto-bite is still failing`, a warning), so
+  bite in `knownFailingBiteIds` (log line `Bloodsucker auto-bite is still failing: league …, bite …`, a warning), so
   one stuck bite cannot keep the monitor red or hide another league's failure. A window close that
-  fails (`Bloodsucker window close failed`) still fails every run until it works.
+  fails (`Bloodsucker window close failed: league {leagueId}`) still fails every run until it works.
 - **A bite the alert named does not fix itself by being ignored.** Later bites in that league wait
   for it (oldest grant first) and its victim stays frozen. Read the reason and fix the cause; the
   next run then runs the bite with no manual step. Bites that are failing now:
