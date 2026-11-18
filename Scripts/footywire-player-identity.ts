@@ -45,16 +45,18 @@ async function readEtlPlayers(season: number): Promise<FootywireEtlPlayer[]> {
     .where('season', '==', season)
     .get();
 
-  // A player's club for the proposal is the one from his latest round this season.
+  // One row per ETL id and club, from that pair's latest round: an id seen at two clubs is two
+  // namesakes, which the proposal reports as AMBIGUOUS.
   const latest = new Map<string, FootywireEtlPlayer & { round: number }>();
   for (const doc of snapshot.docs) {
     const data = doc.data();
     const externalId = String(data.player_uid ?? '');
     const round = Number(data.round ?? data.round_number ?? 0);
     if (!externalId) continue;
-    const current = latest.get(externalId);
+    const key = `${externalId}|${String(data.team ?? '')}`;
+    const current = latest.get(key);
     if (!current || round >= current.round) {
-      latest.set(externalId, {
+      latest.set(key, {
         externalId,
         name: String(data.player_name ?? ''),
         club: String(data.team ?? ''),
