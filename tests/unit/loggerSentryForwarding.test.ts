@@ -57,6 +57,36 @@ describe('server logger.error reaches Sentry', () => {
     expect(sentry.captureException).not.toHaveBeenCalled();
   });
 
+  it('keeps a context object passed in the error slot and reports its nested Error', async () => {
+    const logger = await loadLogger();
+    const failure = new Error('bite swap failed');
+
+    logger.error('Bloodsucker auto-bite failed', {
+      leagueId: 'league-1',
+      biteId: 'bite-1',
+      error: failure,
+    });
+    await settle();
+
+    const entry = JSON.parse(vi.mocked(console.error).mock.calls[0][0] as string);
+    expect(entry.context).toEqual({ leagueId: 'league-1', biteId: 'bite-1' });
+    expect(entry.error.message).toBe('bite swap failed');
+    expect(sentry.captureException).toHaveBeenCalledWith(failure, {
+      extra: { logMessage: 'Bloodsucker auto-bite failed' },
+    });
+  });
+
+  it('keeps a context object with no Error and reports the message', async () => {
+    const logger = await loadLogger();
+
+    logger.error('Round scoring stalled', { leagueId: 'league-1', round: 4, reason: 'no-stats' });
+    await settle();
+
+    const entry = JSON.parse(vi.mocked(console.error).mock.calls[0][0] as string);
+    expect(entry.context).toEqual({ leagueId: 'league-1', round: 4, reason: 'no-stats' });
+    expect(sentry.captureMessage).toHaveBeenCalledWith('Round scoring stalled', 'error');
+  });
+
   it('sends nothing while Sentry is not initialised', async () => {
     sentry.isInitialized.mockReturnValue(false);
     const logger = await loadLogger();
