@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {},
@@ -195,6 +195,11 @@ function createCompatibilityProjectionMock() {
 }
 
 describe('WaiverProcessingService', () => {
+  beforeEach(() => {
+    moveLock.findPlayersLockedForMove.mockReset();
+    moveLock.findPlayersLockedForMove.mockResolvedValue({ ok: true, lockedPlayers: [] });
+  });
+
   it('writes successful waiver ownership to canonical Prisma roster tables and refreshes availability', async () => {
     const { db, tx } = createDbMock();
     const claimStore = createClaimStoreMock();
@@ -626,10 +631,11 @@ describe('WaiverProcessingService', () => {
   });
 
   it('fails a claim whose drop player has started his game this round, without debit or roster change', async () => {
-    moveLock.findPlayersLockedForMove.mockResolvedValueOnce({
-      ok: true,
-      lockedPlayers: [{ playerId: 'old-player', name: 'Old Player' }],
-    });
+    moveLock.findPlayersLockedForMove.mockImplementation(async ({ playerIds }) =>
+      playerIds.includes('old-player')
+        ? { ok: true, lockedPlayers: [{ playerId: 'old-player', name: 'Old Player' }] }
+        : { ok: true, lockedPlayers: [] }
+    );
     const { db, tx } = createDbMock();
     const claimStore = createClaimStoreMock();
     const service = new WaiverProcessingService(db as never, claimStore, {
@@ -660,7 +666,7 @@ describe('WaiverProcessingService', () => {
   });
 
   it('leaves a claim pending and ends the run when match timing for its drop cannot be read', async () => {
-    moveLock.findPlayersLockedForMove.mockResolvedValueOnce({
+    moveLock.findPlayersLockedForMove.mockResolvedValue({
       ok: false,
       error: 'Official AFL match timing is temporarily unavailable.',
     });
@@ -678,6 +684,29 @@ describe('WaiverProcessingService', () => {
       })
     ).rejects.toThrow('Official AFL match timing is temporarily unavailable.');
     expect(claimStore.claimPending).not.toHaveBeenCalled();
+  });
+
+  it("keeps a claim pending, unsettled, while the claimed player's game has started this round", async () => {
+    moveLock.findPlayersLockedForMove.mockImplementation(async ({ playerIds }) =>
+      playerIds.includes('free-player')
+        ? { ok: true, lockedPlayers: [{ playerId: 'free-player', name: 'Free Player' }] }
+        : { ok: true, lockedPlayers: [] }
+    );
+    const { db } = createDbMock();
+    const claimStore = createClaimStoreMock();
+    const service = new WaiverProcessingService(db as never, claimStore, {
+      projectLeague: vi.fn(),
+    });
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ playerId: 'free-player' })],
+    });
+
+    expect(result.results).toEqual([]);
+    expect(claimStore.claimPending).not.toHaveBeenCalled();
+    expect(claimStore.rejectClaim).not.toHaveBeenCalled();
   });
 
   it('rejects a claim when another alias for the logical player is already owned', async () => {

@@ -366,6 +366,20 @@ export class WaiverProcessingService {
       // A rethrown error leaves this claim PENDING and ends the run: a later claim must not be
       // settled ahead of one whose outcome is unknown. Match timing is read before the settling
       // transaction, so that transaction never waits on Firestore.
+      // The mid-round pickup rule covers waivers (owner decision 2026-11-15): a claimed player whose
+      // game has started this round stays a pending claim until the round ends.
+      const addLock = await findPlayersLockedForMove({
+        leagueId: input.leagueId,
+        playerIds: [claim.playerId],
+      });
+      if (!addLock.ok) throw new Error(addLock.error);
+      if (addLock.lockedPlayers.length > 0) {
+        logger.info("Held a waiver claim: the player's game has started this round", {
+          leagueId: input.leagueId,
+          claimId: claim.id,
+        });
+        continue;
+      }
       const dropLock = claim.dropPlayerId
         ? await findPlayersLockedForMove({
             leagueId: input.leagueId,
