@@ -119,6 +119,8 @@ The setup rules (implemented in #1278, owned by `src/server/leagues/leagueFormat
   the draft is sized for the other teams, and readiness blocks a player pool too small to fill the
   Bloodsucker's roster afterwards (#1279; see
   [Drafts and waivers](../domain/draft-and-waivers.md#snake-order-and-availability)).
+  Draft start re-checks it under the League row lock: if the order still holds the Bloodsucker (the
+  order is rebuilt after the setting commits), the start is refused until the order is rebuilt.
 
 - After the draft the Bloodsucker has an **exclusive free-agency window** (#1280). It opens when the
   draft completes and closes at the earlier of 24 hours later or 2 hours before round 1's first
