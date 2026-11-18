@@ -8,6 +8,7 @@ import {
   type AflDraftHistoryReadRequest,
 } from '@/server/aflTradeIntelligence/outcomes/draftHistoryReadService';
 import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,8 @@ export default async function AflDraftHistoryYearPage({
     return (
       <AflDraftHistoryExplorer response={response} query={query} filterNotice={filterNotice} />
     );
-  } catch {
+  } catch (error) {
+    logger.error('Draft history year read failed', error);
     return (
       <DraftHubState
         variant="error"

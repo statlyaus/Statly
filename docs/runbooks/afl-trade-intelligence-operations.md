@@ -3895,7 +3895,13 @@ use separate registries and must be evaluated independently.
 2. Capture the exact source-object, import, exception, factual pointer, release-view, API projection,
    deployment, cache, health, and incident evidence before mutation.
 3. Apply the factual registry's governed withdrawal command with the expected revision, authorized
-   actor, evidence identifier, timestamp, affected scope, and reason.
+   actor, evidence identifier, affected release, and reason:
+   `npm run outcomes:publication:manage-factual -- --input <command.json>` with
+   `{"action":"withdraw","releaseId":…,"expectedRevision":…,"actor":…,"evidenceId":…,"reason":…}`
+   and `AFL_OUTCOMES_DATABASE_URL` set. The command stamps the current time. The same command
+   records reviewed Gate 4/5 decisions (`record-gate`: `expectedRevision`, `proposal`, `decision`)
+   and registers, validates, approves, activates or rejects a release; it reads Gate evidence from
+   the stored Gate ledger, never from the input file.
 4. Confirm affected factual API/UI responses are unavailable or explicitly partial and caches cannot
    serve the withdrawn release after the captured selection is invalidated.
 5. Follow source-specific retention, deletion, or access-revocation duties without deleting the

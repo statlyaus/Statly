@@ -3,6 +3,7 @@
 
 import { db } from '@/lib/firebase/clientFirestore';
 import { logger } from '@/lib/logger';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import {
   collection,
   query,
@@ -41,6 +42,10 @@ export interface ETLPlayerStats {
     goals?: number | null;
     behinds?: number | null;
     hitouts?: number | null;
+    /** The ETL writes these three in snake case (etl/normalizePlayerRow.ts). */
+    hit_outs?: number | null;
+    inside_50s?: number | null;
+    rebound_50s?: number | null;
     clearances?: number | null;
     inside50s?: number | null;
     rebound50s?: number | null;
@@ -241,33 +246,48 @@ export async function getTeamCurrentStats(
   }
 }
 
+export type NineCategoryKey = (typeof REAL_DATA_NINE_CATEGORY_PRESET)[number];
+
 export interface LegacyPlayerStat {
   id: string;
   name: string;
   team: string;
   position: string;
-  kicks: number;
-  handballs: number;
-  disposals: number;
-  marks: number;
-  tackles: number;
-  goals: number;
-  behinds: number;
-  hitouts: number;
-  clearances: number;
-  inside50s: number;
-  rebound50s: number;
-  contested_possessions: number;
-  uncontested_possessions: number;
-  fantasyScore: number;
+  /** The nine league categories; null when the provider did not report the stat. */
+  categories: Record<NineCategoryKey, number | null>;
+  hitouts: number | null;
   round: number;
   season: number;
   lastUpdated: string;
   source: string;
 }
 
+type ETLStatKey = keyof ETLPlayerStats['stats'];
+
+// The ETL's keys for each category, snake case first (what etl/normalizePlayerRow.ts writes).
+const NINE_CATEGORY_ETL_KEYS: Record<NineCategoryKey, ETLStatKey[]> = {
+  goals: ['goals'],
+  tackles: ['tackles'],
+  inside50s: ['inside_50s', 'inside50s'],
+  intercepts: ['intercepts'],
+  contestedMarks: ['contested_marks'],
+  rebound50s: ['rebound_50s', 'rebound50s'],
+  contestedPossessions: ['contested_possessions'],
+  effectiveDisposals: ['effective_disposals'],
+  scoreInvolvements: ['score_involvements'],
+};
+
+function readStat(stats: ETLPlayerStats['stats'], keys: ETLStatKey[]): number | null {
+  for (const key of keys) {
+    const value = stats[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
 /**
- * Transform ETL stats to legacy format for backward compatibility
+ * Transform ETL stats to the Match Centre's player rows: the nine categories and hit-outs, with
+ * null (shown as "-") for a stat the provider did not report.
  */
 export function transformToLegacyPlayerStats(
   etlStats: ETLPlayerStats[],
@@ -282,46 +302,17 @@ export function transformToLegacyPlayerStats(
       name: stat.player_name || stat.player_uid.replace('ply_', '').replace(/_/g, ' '),
       team: stat.team,
       position,
-      // Core stats
-      kicks: stat.stats.kicks || 0,
-      handballs: stat.stats.handballs || 0,
-      disposals: stat.stats.disposals || 0,
-      marks: stat.stats.marks || 0,
-      tackles: stat.stats.tackles || 0,
-      goals: stat.stats.goals || 0,
-      behinds: stat.stats.behinds || 0,
-      // Advanced stats
-      hitouts: stat.stats.hitouts || 0,
-      clearances: stat.stats.clearances || 0,
-      inside50s: stat.stats.inside50s || 0,
-      rebound50s: stat.stats.rebound50s || 0,
-      contested_possessions: stat.stats.contested_possessions || 0,
-      uncontested_possessions: stat.stats.uncontested_possessions || 0,
-      // Calculated fantasy score
-      fantasyScore: calculateFantasyScore(stat.stats),
-      // Metadata
+      categories: Object.fromEntries(
+        REAL_DATA_NINE_CATEGORY_PRESET.map((key) => [
+          key,
+          readStat(stat.stats, NINE_CATEGORY_ETL_KEYS[key]),
+        ])
+      ) as Record<NineCategoryKey, number | null>,
+      hitouts: readStat(stat.stats, ['hit_outs', 'hitouts']),
       round: stat.round_number,
       season: stat.season,
       lastUpdated: stat.last_seen_at,
       source: stat.source,
     };
   });
-}
-
-/**
- * Calculate basic AFL fantasy score from stats
- */
-function calculateFantasyScore(stats: ETLPlayerStats['stats']): number {
-  // Basic AFL fantasy scoring formula
-  return (
-    (stats.kicks || 0) * 3 +
-    (stats.handballs || 0) * 2 +
-    (stats.marks || 0) * 3 +
-    (stats.tackles || 0) * 4 +
-    (stats.goals || 0) * 6 +
-    (stats.behinds || 0) * 1 +
-    (stats.hitouts || 0) * 1 +
-    (stats.frees_against || 0) * -3 +
-    (stats.clangers || 0) * -4
-  );
 }
