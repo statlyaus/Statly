@@ -12,6 +12,7 @@ import {
 import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
 import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import { readPublicValuationOrUnavailable } from '@/server/aflTradeIntelligence/runtime/publicValuationRead';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,7 +160,8 @@ export default async function DraftTradesPage({
         </Suspense>
       </div>
     );
-  } catch {
+  } catch (error) {
+    logger.error('Draft trades archive read failed', error);
     return (
       <DraftHubState
         variant="error"
