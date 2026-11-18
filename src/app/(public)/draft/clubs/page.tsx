@@ -2,6 +2,7 @@ import { DraftArchiveUnavailableState } from '@/components/draft/DraftArchiveUna
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftClubsDirectory } from '@/components/draft/DraftClubsDirectory';
 import { getDraftTradeReleaseAvailability, listDraftClubs } from '@/lib/draftTrades/read';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,8 @@ export default async function DraftClubsPage() {
     }
 
     return <DraftClubsDirectory clubs={clubs} />;
-  } catch {
+  } catch (error) {
+    logger.error('Draft clubs archive read failed', error);
     return (
       <DraftHubState
         variant="error"
