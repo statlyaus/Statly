@@ -69,6 +69,9 @@ current value is accepted, so the commissioner can still save the rest of the fo
   own because rescheduling a LIVE draft puts it back to `SCHEDULED` with its picks kept. The same
   test (`hasDraftStarted`, `src/server/leagues/draftStarted.ts`) closes member removal and joining.
   Code `DRAFT_STRUCTURE_LOCKED`.
+- Every member removal (or a manager leaving) and every ownership transfer is written to the league
+  audit (`LeagueCompetitionAudit`, `MEMBER_REMOVED` / `OWNERSHIP_TRANSFERRED`) in the same transaction
+  as the change, with the acting member (owner decision 2026-11-15).
 
 A save re-checks both locks inside its write transaction, under the League row lock and the
 settings row lock. The draft start takes the same League row lock, so a save racing a draft start

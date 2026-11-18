@@ -138,6 +138,16 @@ export async function removeLeagueMember(
       where: { id: target.id },
       data: { isActive: false, status: 'REMOVED', leftAt: new Date(), draftSlot: null },
     });
+    const actorMemberId =
+      activeMembers.find((member) => member.userId === input.actorUserId)?.id ?? null;
+    await tx.leagueCompetitionAudit.create({
+      data: {
+        leagueId: league.id,
+        actorMemberId,
+        eventType: 'MEMBER_REMOVED',
+        payloadJson: { memberId: target.id, userId: input.targetUserId, left: isSelf },
+      },
+    });
     // BR-07: a departing Bloodsucker clears the setting, so the draft blocks until a new one is set.
     await clearBloodsuckerOnDeparture(tx, {
       leagueId: league.id,
@@ -278,6 +288,19 @@ export async function transferLeagueOwnership(
       data: { role: LeagueRole.MANAGER },
     });
     await tx.leagueMember.update({ where: { id: target.id }, data: { role: LeagueRole.OWNER } });
+    await tx.leagueCompetitionAudit.create({
+      data: {
+        leagueId: league.id,
+        actorMemberId:
+          activeMembers.find((member) => member.userId === input.actorUserId)?.id ?? null,
+        eventType: 'OWNERSHIP_TRANSFERRED',
+        payloadJson: {
+          fromUserId: input.actorUserId,
+          toUserId: input.targetUserId,
+          toMemberId: target.id,
+        },
+      },
+    });
 
     return { ok: true, data: { ownerUserId: input.targetUserId } };
   });
