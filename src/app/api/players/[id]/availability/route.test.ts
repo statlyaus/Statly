@@ -35,9 +35,9 @@ vi.mock('@/lib/serverAuth', () => ({
 
 import { GET } from './route';
 
-function request() {
-  return GET(new NextRequest('http://localhost/api/players/player-1/availability'), {
-    params: Promise.resolve({ id: 'player-1' }),
+function request(id = 'player-1') {
+  return GET(new NextRequest(`http://localhost/api/players/${id}/availability`), {
+    params: Promise.resolve({ id }),
   });
 }
 
@@ -188,5 +188,31 @@ describe('GET /api/players/[id]/availability', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('answers for the one Prisma player a slug names', async () => {
+    mocks.playerFindMany.mockResolvedValue([{ id: 'cuid-daicos' }]);
+
+    const body = await (await request('nick-daicos-collingwood')).json();
+
+    expect(body.data.playerIds).toEqual(['cuid-daicos']);
+    expect(body.data.leagues[0].action.href).toBe(
+      '/leagues/league-1?tab=roster&addPlayerId=cuid-daicos'
+    );
+  });
+
+  it('refuses a slug that matches two namesakes instead of merging them', async () => {
+    mocks.playerFindMany.mockResolvedValue([{ id: 'cuid-a' }, { id: 'cuid-b' }]);
+
+    const response = await request('josh-kennedy');
+
+    expect(response.status).toBe(404);
+    expect(mocks.leagueRosterPlayerFindMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses an id that matches no Prisma player', async () => {
+    mocks.playerFindMany.mockResolvedValue([]);
+
+    expect((await request('nobody-here')).status).toBe(404);
   });
 });
