@@ -128,6 +128,10 @@ const QUERY = `query($owner: String!, $name: String!, $after: String) {
   }
 }`;
 
+/**
+ * @param {string} repo
+ * @param {(args: string[]) => { stdout: string }} [run]
+ */
 export function loadPullRequests(repo, run = gh) {
   const [owner, name] = repo.split('/');
   const nodes = [];
