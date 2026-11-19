@@ -135,6 +135,8 @@ interface WaiverFAABSystemProps {
   loadingMorePlayers?: boolean;
   hasMorePlayers?: boolean;
   initialPlayerId?: string | null;
+  /** Called with the trimmed search text so the parent can search every available player. */
+  onSearchPlayers?: (term: string) => void;
   timeZone?: string;
 }
 
@@ -145,7 +147,9 @@ const PROFILE_COLUMN_WIDTH = 180;
 const STAT_COLUMN_WIDTH = 88;
 const ACTIONS_COLUMN_WIDTH = 280;
 
-function normalizeCategories(selectedCategories: readonly FantasyCategoryKey[]): FantasyCategoryKey[] {
+function normalizeCategories(
+  selectedCategories: readonly FantasyCategoryKey[]
+): FantasyCategoryKey[] {
   const seen = new Set<FantasyCategoryKey>();
   const normalized = selectedCategories.filter((category) => {
     if (!FANTASY_CATEGORIES[category] || seen.has(category)) return false;
@@ -186,7 +190,9 @@ function claimStatusLabel(status: WaiverClaimStatus): string {
 
 function ClaimStatusIcon({ status }: { status: WaiverClaimStatus }): React.JSX.Element {
   if (status === 'successful') {
-    return <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" aria-hidden="true" />;
+    return (
+      <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" aria-hidden="true" />
+    );
   }
   if (status === 'failed') {
     return <XCircleIcon className="h-5 w-5 text-[color:var(--league-danger)]" aria-hidden="true" />;
@@ -221,9 +227,9 @@ function WaiverOverview(): React.JSX.Element {
         <div>
           <h1 className="text-xl font-semibold text-foreground">Waivers Overview</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Players who are not on a league roster are available through the waiver wire. Add
-            from this free-agent table, and drop a rostered player when your roster would exceed
-            the league maximum.
+            Players who are not on a league roster are available through the waiver wire. Add from
+            this free-agent table, and drop a rostered player when your roster would exceed the
+            league maximum.
           </p>
         </div>
         <div className="rounded-md border border-border bg-background p-3">
@@ -236,15 +242,15 @@ function WaiverOverview(): React.JSX.Element {
         <div className="rounded-md border border-border bg-background p-3">
           <h2 className="text-sm font-semibold text-foreground">Salary Cap Continuous</h2>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Teams bid from a budget. Claims process in batches; the highest offer wins, with
-            waiver priority used as the tiebreaker.
+            Teams bid from a budget. Claims process in batches; the highest offer wins, with waiver
+            priority used as the tiebreaker.
           </p>
         </div>
         <div className="rounded-md border border-border bg-background p-3">
           <h2 className="text-sm font-semibold text-foreground">No Waivers</h2>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Free agents are immediately available. Most leagues use waivers so every manager has
-            a fair claim window.
+            Free agents are immediately available. Most leagues use waivers so every manager has a
+            fair claim window.
           </p>
         </div>
       </div>
@@ -772,9 +778,13 @@ export default function WaiverFAABSystem({
   loadingMorePlayers,
   hasMorePlayers,
   initialPlayerId,
+  onSearchPlayers,
   timeZone,
 }: WaiverFAABSystemProps): React.JSX.Element {
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => {
+    onSearchPlayers?.(searchTerm.trim());
+  }, [onSearchPlayers, searchTerm]);
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<WaiverSortKey>('statlyZ');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -790,7 +800,9 @@ export default function WaiverFAABSystem({
   );
   const availablePositions = useMemo(() => {
     const positions = new Set(
-      availablePlayers.map((player) => player.position).filter((position): position is string => Boolean(position))
+      availablePlayers
+        .map((player) => player.position)
+        .filter((position): position is string => Boolean(position))
     );
     return ['ALL', ...Array.from(positions).sort()];
   }, [availablePlayers]);
@@ -867,7 +879,9 @@ export default function WaiverFAABSystem({
     const confirmed = await confirm({
       title: `Bid $${bidAmount} on ${player.name}?`,
       description: [
-        dropPlayerName ? `${dropPlayerName} will be dropped if the claim succeeds.` : 'No player will be dropped.',
+        dropPlayerName
+          ? `${dropPlayerName} will be dropped if the claim succeeds.`
+          : 'No player will be dropped.',
         balanceAfterBid === null ? null : `FAAB left after this bid: $${balanceAfterBid}.`,
         'Claims are processed automatically at 6 am Melbourne time.',
       ]
