@@ -10,7 +10,7 @@ echo "================================"
 # Configuration
 PROJECT_ID=${GOOGLE_CLOUD_PROJECT:-"statly-4cbed"}
 REGION=${DEPLOY_REGION:-"us-central1"}
-SERVICE_NAME="statly-etl"
+JOB_NAME="statly-etl"
 
 # Check requirements
 echo "📋 Checking requirements..."
@@ -25,15 +25,17 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" ]; then
-    echo "❌ FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required"
-    echo "   Set this to your base64-encoded Firebase service account JSON"
-    exit 1
-fi
+# Credentials come from Secret Manager, never from this shell or the job's plain environment.
+FIREBASE_SECRET=${ETL_FIREBASE_SECRET:-"statly-etl-firebase-service-account"}
+DATABASE_URL_SECRET=${ETL_DATABASE_URL_SECRET:-"statly-etl-database-url"}
 
-if [ -z "$DATABASE_URL" ]; then
-    echo "⚠️  DATABASE_URL is not set: AFL match results will not be stored (each ingest fails closed)"
-fi
+for secret in "$FIREBASE_SECRET" "$DATABASE_URL_SECRET"; do
+    if ! gcloud secrets describe "$secret" --project "$PROJECT_ID" &> /dev/null; then
+        echo "❌ Secret Manager secret '$secret' is missing in $PROJECT_ID"
+        echo "   Create it and grant the job's service account roles/secretmanager.secretAccessor"
+        exit 1
+    fi
+done
 
 echo "✅ Requirements met"
 
@@ -48,34 +50,32 @@ echo "📊 Verifying R data fetcher dependencies..."
 Rscript -e 'packages <- c("fitzRoy", "jsonlite", "janitor", "dplyr", "stringr"); stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))'
 echo "✅ R data fetcher dependencies available"
 
-# Deploy to Cloud Run
+# Deploy as a Cloud Run Job: the live guard is a long-running loop with no HTTP listener, so it
+# cannot be a Cloud Run service. One task runs the loop for just under a day; Cloud Scheduler starts
+# the next execution each day. Nothing is public: the job has no URL.
 echo ""
-echo "☁️  Deploying to Google Cloud Run..."
+echo "☁️  Deploying the Cloud Run Job..."
 
-gcloud run deploy $SERVICE_NAME \
+gcloud run jobs deploy $JOB_NAME \
     --source . \
-    --platform managed \
     --region $REGION \
     --project $PROJECT_ID \
-    --allow-unauthenticated \
-    --set-env-vars="FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64${DATABASE_URL:+,DATABASE_URL=$DATABASE_URL}" \
+    --set-secrets="FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=$FIREBASE_SECRET:latest,DATABASE_URL=$DATABASE_URL_SECRET:latest" \
     --memory 512Mi \
     --cpu 1 \
-    --timeout 900 \
-    --max-instances 1 \
-    --no-traffic
+    --tasks 1 \
+    --max-retries 1 \
+    --task-timeout 86100s
 
 echo ""
-echo "✅ Deployment completed!"
-echo ""
-echo "📊 Service Details:"
-echo "   Name: $SERVICE_NAME"
-echo "   Region: $REGION" 
-echo "   Project: $PROJECT_ID"
+echo "✅ Job deployed. It does not run until it is scheduled or executed."
 echo ""
 echo "🔧 Management Commands:"
-echo "   View logs: gcloud run services logs read $SERVICE_NAME --region $REGION"
-echo "   Update traffic: gcloud run services update-traffic $SERVICE_NAME --to-latest --region $REGION"
-echo "   Delete service: gcloud run services delete $SERVICE_NAME --region $REGION"
-echo ""
-echo "📈 Monitor at: https://console.cloud.google.com/run/detail/$REGION/$SERVICE_NAME"
+echo "   Run once:      gcloud run jobs execute $JOB_NAME --region $REGION --project $PROJECT_ID"
+echo "   Schedule daily (needs an invoker service account with roles/run.invoker):"
+echo "     gcloud scheduler jobs create http $JOB_NAME-daily --location $REGION --project $PROJECT_ID \\"
+echo "       --schedule '0 0 * * *' --time-zone 'Australia/Melbourne' --http-method POST \\"
+echo "       --uri https://run.googleapis.com/v2/projects/$PROJECT_ID/locations/$REGION/jobs/$JOB_NAME:run \\"
+echo "       --oauth-service-account-email <invoker-sa>@$PROJECT_ID.iam.gserviceaccount.com"
+echo "   View logs:     gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=$JOB_NAME' --project $PROJECT_ID --limit 50"
+echo "   Delete job:    gcloud run jobs delete $JOB_NAME --region $REGION --project $PROJECT_ID"

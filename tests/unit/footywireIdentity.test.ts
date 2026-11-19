@@ -68,6 +68,31 @@ describe('proposeFootywireIdentityManifest', () => {
   });
 });
 
+describe('proposeFootywireIdentityManifest with namesakes', () => {
+  it('reports an ETL id seen at two clubs in the season as AMBIGUOUS, not a mapping', () => {
+    const manifest = proposeFootywireIdentityManifest({
+      etlPlayers: [
+        { externalId: 'ply_josh_kennedy', name: 'Josh Kennedy', club: 'Sydney' },
+        { externalId: 'ply_josh_kennedy', name: 'Josh Kennedy', club: 'West Coast' },
+      ],
+      players: [
+        { id: 'p-jk-syd', name: 'Josh Kennedy', club: 'Sydney' },
+        { id: 'p-jk-wce', name: 'Josh Kennedy', club: 'West Coast' },
+      ],
+      existingIdentities: [],
+    });
+
+    expect(manifest.mappings).toEqual([]);
+    expect(manifest.unmatched).toEqual([
+      expect.objectContaining({
+        externalId: 'ply_josh_kennedy',
+        reason: 'AMBIGUOUS',
+        candidatePlayerIds: ['p-jk-syd', 'p-jk-wce'],
+      }),
+    ]);
+  });
+});
+
 describe('validateReviewedFootywireIdentityManifest', () => {
   const reviewed = {
     schemaVersion: 1,
