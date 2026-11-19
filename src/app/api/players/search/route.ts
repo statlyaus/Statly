@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { getPlayers } from '@/lib/data';
 import { logger } from '@/lib/logger';
+import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 import type { Player, PlayerSearchResult } from '@/types/players';
 export const runtime = 'nodejs';
@@ -49,7 +50,17 @@ function seasonPerGameValue(stats: SeasonStats, games: number): number {
   return calculateTotalValue(playerStats);
 }
 
+const checkRateLimit = withRateLimit(rateLimitConfigs.public);
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const rateLimit = await checkRateLimit(request);
+  if (!rateLimit.success) {
+    return NextResponse.json(rateLimit.body, {
+      status: rateLimit.status,
+      headers: rateLimit.headers,
+    });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
