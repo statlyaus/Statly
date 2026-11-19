@@ -109,7 +109,7 @@ export function getLeagueFormatDraftBlockers(input: {
 export async function findLeagueFormatStartBlocker(
   tx: Prisma.TransactionClient,
   leagueId: string
-): Promise<LeagueFormatBlocker | null> {
+): Promise<LeagueFormatBlocker | { code: 'bloodsucker_in_draft_order'; message: string } | null> {
   const league = await tx.league.findUnique({
     where: { id: leagueId },
     select: {
@@ -118,13 +118,30 @@ export async function findLeagueFormatStartBlocker(
     },
   });
   if (!league?.settings) return null;
-  return (
+  const blocker =
     getLeagueFormatDraftBlockers({
       leagueFormat: league.settings.leagueFormat,
       bloodsuckerMemberId: league.settings.bloodsuckerMemberId,
       activeMemberIds: league.members.filter(isActivePrismaMembership).map((member) => member.id),
-    })[0] ?? null
-  );
+    })[0] ?? null;
+  if (blocker) return blocker;
+
+  // BR-09: the Bloodsucker never drafts. Setting one commits before the order is rebuilt, so a
+  // failed or raced rebuild could leave them in it; never start a draft in that state.
+  const bloodsuckerMemberId = league.settings.bloodsuckerMemberId;
+  if (league.settings.leagueFormat === 'BLOODSUCKER' && bloodsuckerMemberId) {
+    const slots = await tx.draftOrder.count({
+      where: { memberId: bloodsuckerMemberId, draft: { leagueId } },
+    });
+    if (slots > 0) {
+      return {
+        code: 'bloodsucker_in_draft_order',
+        message:
+          'The draft order still includes the Bloodsucker. Save the league settings to rebuild it, then start.',
+      };
+    }
+  }
+  return null;
 }
 
 export interface LeagueFormatState {
