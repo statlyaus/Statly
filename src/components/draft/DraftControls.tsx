@@ -71,7 +71,7 @@ const DraftControls = memo(function DraftControls({
             signal: abortControllerRef.current.signal,
           });
 
-          showNotification('success', 'Draft paused successfully. Only you can resume it.');
+          showNotification('success', 'Draft paused. A commissioner can resume it.');
           onStatusChange?.();
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {

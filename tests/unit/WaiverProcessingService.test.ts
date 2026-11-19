@@ -935,6 +935,27 @@ describe('WaiverProcessingService', () => {
 });
 
 describe('PrismaWaiverClaimStore', () => {
+  it('reports a cancel as done when only the Firestore priority mirror fails after the commit', async () => {
+    const tx = { teamAction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) } };
+    const db = {
+      $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<void>) => fn(tx)),
+      leagueMember: { findFirst: vi.fn().mockRejectedValue(new Error('mirror read failed')) },
+      waiverPriority: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const { firestore, waiverDoc } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await expect(
+      store.cancelPendingClaim({
+        leagueId: 'league-1',
+        claimId: 'action-1',
+        claim: { teamId: 'member-1' },
+        cancelledBy: 'user-1',
+      } as never)
+    ).resolves.toBeUndefined();
+    expect(waiverDoc.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'CANCELLED' }));
+  });
+
   it('loads pending canonical TeamAction waiver claims with Prisma waiver priority state', async () => {
     const createdAt = new Date('2026-06-23T10:00:00.000Z');
     const processingAt = new Date('2026-06-24T10:00:00.000Z');

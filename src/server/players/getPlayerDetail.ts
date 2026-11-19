@@ -5,6 +5,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { prisma } from '@/lib/prisma';
+import { resolveCurrentStatsSeason } from '@/server/players/currentStatsSeason';
 import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import type { Player } from '@/types/players';
 
@@ -32,9 +33,6 @@ type LatestPlayerStats = {
   team?: string;
   playerName?: string;
 };
-
-const CURRENT_YEAR = new Date().getFullYear();
-let cachedStatsSeason: number | null = null;
 
 function parseNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -87,25 +85,9 @@ function getStatSortKey(data: Record<string, unknown>): number {
   return parseNumber(data.round ?? data.round_number) ?? 0;
 }
 
-async function resolveStatsSeason(): Promise<number> {
-  if (cachedStatsSeason) return cachedStatsSeason;
-  try {
-    const snap = await adminDb.collection('player_match_stats').limit(500).get();
-    let maxSeason = 0;
-    snap.forEach((doc) => {
-      const season = parseNumber(doc.data().season);
-      if (season && season > maxSeason) maxSeason = season;
-    });
-    cachedStatsSeason = maxSeason || CURRENT_YEAR;
-  } catch {
-    cachedStatsSeason = CURRENT_YEAR;
-  }
-  return cachedStatsSeason;
-}
-
 async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | null> {
   try {
-    const season = await resolveStatsSeason();
+    const season = await resolveCurrentStatsSeason();
     const snap = await adminDb
       .collection('player_match_stats')
       .where('season', '==', season)
