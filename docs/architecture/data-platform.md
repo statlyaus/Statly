@@ -96,9 +96,10 @@ Bump `schema_format` only when a reader built for the previous format would misr
 new one; it is a compatibility decision, not a refactor. The applied migration head is deliberately
 not duplicated in the row, because `_prisma_migrations` already reports it and a copy would rot.
 
-Startup does not yet assert compatibility. Enforcement is currently at deploy time (the migration
-fails closed) and in CI (the binding test); a runtime precondition that refuses a database whose
-identity disagrees with the running application is still outstanding.
+The public read runtime also asserts it: `getPublicAflTradeReadRuntime` calls
+`assertOutcomeDatabaseIdentity` (`src/server/aflTradeIntelligence/outcomes/outcomeDatabaseIdentity.ts`)
+before serving, and refuses a database whose row does not match `OUTCOME_DATABASE_IDENTITY`. That is
+in addition to the migration (fails closed at deploy time) and the CI binding test.
 
 ## Firebase boundaries
 
