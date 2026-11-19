@@ -25,6 +25,7 @@ import {
 } from '@/server/waivers/waiverPlayerIdentity';
 import { loadPinnedPriorityMemberId } from '@/server/waivers/pinnedWaiverPriority';
 import { publishWaiverOutcome } from '@/server/waivers/waiverActivity';
+import { previousWaiverRunAt } from './nextWaiverRun';
 
 export interface WaiverSettings {
   system?: 'FAAB' | 'PRIORITY' | string;
@@ -324,14 +325,34 @@ export class WaiverProcessingService {
         this.claimStore.loadPendingClaims?.(input.leagueId) ?? Promise.resolve([]),
       ]);
 
-      return await this.processClaims({
+      const result = await this.processClaims({
         leagueId: input.leagueId,
         waiverSettings,
         claims,
       });
+      await this.settleEndedDropHolds(input.leagueId);
+      return result;
     } finally {
       if (lease) await this.claimStore.releaseProcessingLease?.(input.leagueId, lease);
     }
+  }
+
+  /**
+   * A dropped player's waiver hold ends at the first run after the drop (loadWaiverOnlyHolds stops
+   * counting it then). Mark those rows processed, so PENDING means a hold that is still on.
+   */
+  private async settleEndedDropHolds(leagueId: string): Promise<void> {
+    const now = new Date();
+    await this.db.teamAction.updateMany({
+      where: {
+        leagueId,
+        actionType: 'DROP_PLAYER',
+        status: 'PENDING',
+        processingAt: { lte: now },
+        createdAt: { lt: previousWaiverRunAt(now) },
+      },
+      data: { status: 'PROCESSED', processedAt: now },
+    });
   }
 
   async processClaims(input: {
@@ -366,6 +387,20 @@ export class WaiverProcessingService {
       // A rethrown error leaves this claim PENDING and ends the run: a later claim must not be
       // settled ahead of one whose outcome is unknown. Match timing is read before the settling
       // transaction, so that transaction never waits on Firestore.
+      // The mid-round pickup rule covers waivers (owner decision 2026-11-15): a claimed player whose
+      // game has started this round stays a pending claim until the round ends.
+      const addLock = await findPlayersLockedForMove({
+        leagueId: input.leagueId,
+        playerIds: [claim.playerId],
+      });
+      if (!addLock.ok) throw new Error(addLock.error);
+      if (addLock.lockedPlayers.length > 0) {
+        logger.info("Held a waiver claim: the player's game has started this round", {
+          leagueId: input.leagueId,
+          claimId: claim.id,
+        });
+        continue;
+      }
       const dropLock = claim.dropPlayerId
         ? await findPlayersLockedForMove({
             leagueId: input.leagueId,
@@ -1111,7 +1146,16 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       }
     });
 
-    await this.mirrorPriorityProjection(input.leagueId, input.claim.teamId);
+    try {
+      await this.mirrorPriorityProjection(input.leagueId, input.claim.teamId);
+    } catch (error) {
+      // The claim is already cancelled in Prisma; a stale projection must not report a failure.
+      logger.warn('Failed to mirror waiver priority projection after cancel', {
+        leagueId: input.leagueId,
+        claimId: input.claimId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     await this.updateClaimProjection(input.leagueId, input.claimId, {
       status: 'CANCELLED',
       processedAt: cancelledAt,

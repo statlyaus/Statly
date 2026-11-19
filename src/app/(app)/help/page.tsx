@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { NO_LOSERS_EXPLANATION } from '@/lib/leagueFormatOptions';
 import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 // The rules here restate docs/product/league-competition-rules.md and docs/domain/. Change them together.
@@ -65,6 +66,15 @@ export default function HelpPage() {
             categories wins the round. A 6–3 round is one win. Equal category wins is a draw.
           </li>
         </ul>
+      </Section>
+
+      <Section title="League formats">
+        <p>
+          <strong className="text-foreground">Standard:</strong> every stat a player records counts.
+        </p>
+        <p>
+          <strong className="text-foreground">No Losers:</strong> {NO_LOSERS_EXPLANATION}
+        </p>
       </Section>
 
       <Section title="The draft">

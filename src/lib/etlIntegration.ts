@@ -2,7 +2,6 @@
 // Place this in src/lib/etlIntegration.ts
 
 import { db } from '@/lib/firebase/clientFirestore';
-import { logger } from '@/lib/logger';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import {
   collection,
@@ -90,28 +89,6 @@ export interface ETLPlayer {
   current_team: string;
   positions: string[];
   provider_ids?: Record<string, unknown>;
-}
-
-export async function getRoundPlayerStatsResult(
-  season: number,
-  round: number
-): Promise<ETLRoundPlayerStatsResult> {
-  try {
-    const firestore = getFirestore();
-    const statsQuery = query(
-      collection(firestore, 'player_match_stats'),
-      where('season', '==', season),
-      where('round_number', '==', round)
-    );
-    const snapshot = await getDocs(statsQuery);
-    return {
-      ok: true,
-      stats: snapshot.docs.map((document) => document.data() as ETLPlayerStats),
-    };
-  } catch (error) {
-    logger.error('Failed to fetch round player statistics', error, { season, round });
-    return { ok: false, error };
-  }
 }
 
 /**
