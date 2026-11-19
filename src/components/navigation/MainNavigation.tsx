@@ -575,7 +575,7 @@ export default function MainNavigation({
           {isMobileOpen ? (
             <motion.nav
               id="mobile-main-navigation"
-              aria-label="Main"
+              aria-label="Menu"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}

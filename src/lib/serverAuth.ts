@@ -45,10 +45,9 @@ function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null
   );
   if (hasSuppliedCredential) return null;
 
-  const configuredUserId = process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID;
-  return configuredUserId === DEVELOPMENT_AUTH_USER_ID
-    ? configuredUserId
-    : DEVELOPMENT_AUTH_USER_ID;
+  // Local development only: a request with no credential at all is the scripted tester
+  // (docs/architecture/authorization.md, Local development tier).
+  return DEVELOPMENT_AUTH_USER_ID;
 }
 
 /**
@@ -74,11 +73,31 @@ function signedOutOrRethrow(error: unknown): null {
   throw error;
 }
 
+/**
+ * A token that passed the full check (signature and revocation) is trusted again for up to a minute,
+ * so an authenticated page does not make a Firebase backend call per request. Revoking a user
+ * therefore takes effect within a minute. Failures are never cached.
+ */
+const VERIFIED_TOKEN_CACHE_MS = 60_000;
+const VERIFIED_TOKEN_CACHE_MAX = 5_000;
+const verifiedTokens = new Map<string, { uid: string; until: number }>();
+
 async function validateFirebaseIdToken(token: string): Promise<string | null> {
+  const now = Date.now();
+  const cached = verifiedTokens.get(token);
+  if (cached && cached.until > now) return cached.uid;
   try {
     const decoded = await adminAuth.verifyIdToken(token, true);
-    return decoded.uid ?? null;
+    const uid = decoded.uid ?? null;
+    if (uid) {
+      if (verifiedTokens.size >= VERIFIED_TOKEN_CACHE_MAX) verifiedTokens.clear();
+      // Never past the token's own expiry.
+      const expiresAt = typeof decoded.exp === 'number' ? decoded.exp * 1000 : Infinity;
+      verifiedTokens.set(token, { uid, until: Math.min(now + VERIFIED_TOKEN_CACHE_MS, expiresAt) });
+    }
+    return uid;
   } catch (error) {
+    verifiedTokens.delete(token);
     return signedOutOrRethrow(error);
   }
 }

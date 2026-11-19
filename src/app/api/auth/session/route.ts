@@ -1,42 +1,13 @@
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
-import { adminAuth } from '@/lib/firebaseAdmin';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-export async function POST(request: Request): Promise<NextResponse> {
-  if (!isSameOriginRequest(request)) {
-    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
-  }
-
-  try {
-    const { idToken, expiresInDays = 7 } = await request.json();
-    if (!idToken || typeof idToken !== 'string') {
-      return NextResponse.json({ error: 'Missing idToken' }, { status: 400 });
-    }
-
-    const decoded = await adminAuth.verifyIdToken(idToken, true);
-    // Optionally reject if token is revoked/invalid; verifyIdToken with checkRevoked=true would be in another call
-
-    const expiresIn = Math.min(Math.max(1, Number(expiresInDays)), 14) * 24 * 60 * 60 * 1000; // clamp 1..14 days
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
-
-    const res = NextResponse.json({ ok: true, uid: decoded.uid });
-    res.cookies.set(SESSION_COOKIE_NAME, sessionCookie, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: Math.floor(expiresIn / 1000),
-    });
-    return res;
-  } catch (error) {
-    console.error('Session creation failed:', error);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-}
-
+/**
+ * Clears the legacy session cookie on sign-out. Nothing mints one any more (the 14-day cookie
+ * exchange had no caller); the server still reads an existing cookie until it expires.
+ */
 export async function DELETE(request: Request): Promise<NextResponse> {
   if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });

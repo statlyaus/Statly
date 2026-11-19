@@ -69,6 +69,9 @@ current value is accepted, so the commissioner can still save the rest of the fo
   own because rescheduling a LIVE draft puts it back to `SCHEDULED` with its picks kept. The same
   test (`hasDraftStarted`, `src/server/leagues/draftStarted.ts`) closes member removal and joining.
   Code `DRAFT_STRUCTURE_LOCKED`.
+- Every member removal (or a manager leaving) and every ownership transfer is written to the league
+  audit (`LeagueCompetitionAudit`, `MEMBER_REMOVED` / `OWNERSHIP_TRANSFERRED`) in the same transaction
+  as the change, with the acting member (owner decision 2026-11-15).
 
 A save re-checks both locks inside its write transaction, under the League row lock and the
 settings row lock. The draft start takes the same League row lock, so a save racing a draft start
@@ -484,7 +487,9 @@ The same rule keeps a free agent whose AFL game has started in the round in prog
 roster until the round ends (owner decision 2026-11-11): free-agent Add
 (`POST /api/leagues/[id]/roster/add`, through `src/server/rosters/freeAgentAdd.ts`) answers 409 with
 code `PLAYER_LOCKED` ("<name>'s game has started; he can be picked up after the round ends."), and 503
-with code `TIMING_UNAVAILABLE` when match timing cannot be read.
+with code `TIMING_UNAVAILABLE` when match timing cannot be read. A waiver claim for such a player stays pending
+(owner decision 2026-11-15): the waiver run leaves it unsettled, and a later run settles it once the
+round has ended.
 
 ## Interchange autosubs
 
@@ -557,6 +562,9 @@ Further rules (owner decisions 2026-11-15):
 
 - A veto vote that no team is left to cast is no review. In a league with no active team outside the
   trade, the trade completes when it is accepted.
+- Commissioner review ends after the league's trade review hours, like a veto window. A trade the
+  commissioner has not approved or rejected by then is approved by the trade cron. A commissioner
+  cannot approve a trade after the league trade deadline; they can still reject it.
 - A trade already in commissioner review whose commissioner becomes one of its two teams (ownership
   moved, or a team was made co-commissioner) is moved by the trade cron to the review it would get
   if accepted now: a veto vote with a fresh window, or completion when no team can vote.

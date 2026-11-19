@@ -144,4 +144,7 @@ described above. To undo an apply, delete the `footywire` rows carrying that man
 Nothing else was changed.
 
 The ETL id is the slugged player name, so two AFL players with the same name share one id. The
-proposal reports that case as `AMBIGUOUS`. Do not link it until the ETL carries a distinguishing id.
+proposal reads every club each id was seen at in the season and reports an id seen at more than one
+club as `AMBIGUOUS`, with the candidates from each club. Do not link it until the ETL carries a
+distinguishing id. Two namesakes at the same club cannot be told apart this way; they show as
+`AMBIGUOUS` only when Statly has both players.
