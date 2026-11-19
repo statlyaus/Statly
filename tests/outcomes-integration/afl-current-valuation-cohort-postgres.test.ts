@@ -120,8 +120,7 @@ function coordinator() {
       factualReleaseArtifact: artifact('release'),
       releaseMembershipArtifact: artifact('membership'),
       releaseTradeIds: ['trade-a', 'trade-b'],
-      sourceQualificationReportId:
-        `valuation-source-qualification:${digest('6')}`,
+      sourceQualificationReportId: `valuation-source-qualification:${digest('6')}`,
       sourceQualificationReportArtifact: artifact('source-qualification'),
       sourceQualificationEvidenceRefs: [artifact('source-evidence')],
       ...bundle,
@@ -142,11 +141,13 @@ function coordinator() {
     prepareTrade: async ({ tradeId, context }) => ({
       tradeId,
       state: 'blocked',
-      blockers: [{
-        code: 'component_output_unavailable',
-        subject: { kind: 'trade', id: tradeId },
-        evidenceRefs: [context.valuationInputBundleArtifact],
-      }],
+      blockers: [
+        {
+          code: 'component_output_unavailable',
+          subject: { kind: 'trade', id: tradeId },
+          evidenceRefs: [context.valuationInputBundleArtifact],
+        },
+      ],
     }),
     commitIfCurrent: createPostgresAflTradeCurrentValuationCohortCommitter({
       client,
@@ -195,8 +196,7 @@ describe('automatic current valuation cohort PostgreSQL coordination', () => {
         factualReleaseArtifact: artifact('release'),
         releaseMembershipArtifact: artifact('membership'),
         releaseTradeIds: ['trade-a'],
-        sourceQualificationReportId:
-          `valuation-source-qualification:${digest('6')}`,
+        sourceQualificationReportId: `valuation-source-qualification:${digest('6')}`,
         sourceQualificationReportArtifact: artifact('source-qualification'),
         sourceQualificationEvidenceRefs: [artifact('source-evidence')],
         ...bundle,
@@ -223,11 +223,13 @@ describe('automatic current valuation cohort PostgreSQL coordination', () => {
         prepareTrade: async ({ tradeId }) => ({
           tradeId,
           state: 'blocked',
-          blockers: [{
-            code: 'component_output_unavailable',
-            subject: { kind: 'trade', id: tradeId },
-            evidenceRefs: [context.valuationInputBundleArtifact],
-          }],
+          blockers: [
+            {
+              code: 'component_output_unavailable',
+              subject: { kind: 'trade', id: tradeId },
+              evidenceRefs: [context.valuationInputBundleArtifact],
+            },
+          ],
         }),
         commitIfCurrent: async ({ preparedInputSet }) => {
           retained = preparedInputSet;
@@ -245,9 +247,9 @@ describe('automatic current valuation cohort PostgreSQL coordination', () => {
       `UPDATE outcome_active_release SET release_id=$2,revision=8 WHERE scope_key=$1`,
       [releaseScopeKey, `outcome-release:${digest('9')}`]
     );
-    await expect(
-      commit({ context, preparedInputSet })
-    ).resolves.toMatchObject({ state: 'stale_authority' });
+    await expect(commit({ context, preparedInputSet })).resolves.toMatchObject({
+      state: 'stale_authority',
+    });
 
     await seedAuthority();
     context = await capture({ operationId, scopeKey });

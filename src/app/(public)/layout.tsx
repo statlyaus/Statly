@@ -34,32 +34,26 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
         Skip to content
       </a>
       <div className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-40 border-b border-brand-bar bg-brand-bar text-brand-bar-foreground">
+        <header className="sticky top-0 z-40 border-b border-border bg-background">
           <nav
             aria-label="Primary"
-            className="mx-auto grid min-h-16 max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:px-6 sm:py-0 lg:px-10"
+            className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-7 px-4 pt-2 sm:h-16 sm:flex-nowrap sm:px-6 sm:pt-0 lg:px-10"
           >
             <Link
               href="/"
-              className="col-start-1 row-start-1 inline-flex min-h-11 w-fit shrink-0 items-center rounded-md transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-md text-2xl font-extrabold tracking-[-0.045em] text-brand-bar transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Statly home"
             >
-              <Image
-                src="/brand/statly-hero-logo-overlay.png"
-                alt="Statly"
-                width={136}
-                height={40}
-                loading="eager"
-                className="h-auto w-28 sm:w-32"
-              />
+              Statly<span className="text-blue-700">.</span>
             </Link>
+            <span aria-hidden="true" className="hidden h-6 w-px bg-border sm:block" />
             <PublicNavigation />
           </nav>
         </header>
         <main id="main-content" tabIndex={-1} className="w-full min-w-0 flex-1 outline-none">
           {children}
         </main>
-        <footer className="bg-brand-bar pb-[calc(4.5rem+env(safe-area-inset-bottom))] text-brand-bar-foreground sm:pb-0">
+        <footer className="bg-brand-bar pb-[env(safe-area-inset-bottom)] text-brand-bar-foreground">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-12 sm:px-6 lg:px-10">
             <div className="flex flex-col gap-3">
               <Image

@@ -559,6 +559,9 @@ Further rules (owner decisions 2026-11-15):
 
 - A veto vote that no team is left to cast is no review. In a league with no active team outside the
   trade, the trade completes when it is accepted.
+- Commissioner review ends after the league's trade review hours, like a veto window. A trade the
+  commissioner has not approved or rejected by then is approved by the trade cron. A commissioner
+  cannot approve a trade after the league trade deadline; they can still reject it.
 - A trade already in commissioner review whose commissioner becomes one of its two teams (ownership
   moved, or a team was made co-commissioner) is moved by the trade cron to the review it would get
   if accepted now: a veto vote with a fresh window, or completion when no team can vote.
