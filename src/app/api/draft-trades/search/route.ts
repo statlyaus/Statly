@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { searchDraftTrades } from '@/lib/draftTrades/search';
 import { logger } from '@/lib/logger';
+import { limitPublicTradeRequest } from '@/server/aflTradeIntelligence/runtime/publicTradeRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,8 @@ const querySchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const limited = await limitPublicTradeRequest(request);
+  if (limited) return limited;
   try {
     const url = new URL(request.url);
     const parsed = querySchema.safeParse({

@@ -11,6 +11,7 @@ const txMocks = vi.hoisted(() => ({
     delete: vi.fn(),
   },
   leagueMatchupScore: { deleteMany: vi.fn(), findMany: vi.fn() },
+  leagueMatchupPlayerScore: { deleteMany: vi.fn() },
   leagueLineup: { deleteMany: vi.fn() },
   leagueStanding: { deleteMany: vi.fn(), createMany: vi.fn() },
   leagueCompetitionAudit: { create: vi.fn() },
@@ -63,6 +64,7 @@ describe('competition fixture mutations', () => {
     });
     txMocks.leagueMatchupScore.deleteMany.mockResolvedValue({ count: 1 });
     txMocks.leagueMatchupScore.findMany.mockResolvedValue([]);
+    txMocks.leagueMatchupPlayerScore.deleteMany.mockResolvedValue({ count: 3 });
     txMocks.leagueLineup.deleteMany.mockResolvedValue({ count: 2 });
     txMocks.leagueStanding.deleteMany.mockResolvedValue({ count: 4 });
     txMocks.leagueStanding.createMany.mockResolvedValue({ count: 2 });
@@ -101,6 +103,27 @@ describe('competition fixture mutations', () => {
     expect(txMocks.leagueLineup.deleteMany).not.toHaveBeenCalled();
     expect(txMocks.leagueStanding.deleteMany).not.toHaveBeenCalled();
     expect(txMocks.leagueCompetitionAudit.create).toHaveBeenCalledOnce();
+  });
+
+  it("removes an edited fixture's No Losers per-player rows with its scores", async () => {
+    txMocks.leagueMatchup.findFirst
+      .mockResolvedValueOnce({ id: 'fixture-1', bracketKey: null })
+      .mockResolvedValue(null);
+
+    const result = await saveCompetitionFixture({
+      leagueId: 'league-1',
+      round: 1,
+      actorMemberId: 'commissioner-1',
+      fixture: { matchupId: 'fixture-1', homeMemberId: 'member-2', awayMemberId: 'member-1' },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(txMocks.leagueMatchupScore.deleteMany).toHaveBeenCalledWith({
+      where: { matchupId: 'fixture-1' },
+    });
+    expect(txMocks.leagueMatchupPlayerScore.deleteMany).toHaveBeenCalledWith({
+      where: { matchupId: 'fixture-1' },
+    });
   });
 
   it('rejects a team that already has a fixture in the round', async () => {

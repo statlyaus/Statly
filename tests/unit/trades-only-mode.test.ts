@@ -41,6 +41,8 @@ describe('trades-only mode', () => {
     '/brand/statly-hero-logo-overlay.png',
     '/favicon.svg',
     '/robots.txt',
+    '/Assets/clubs/carlton.png',
+    '/logos/statly.svg',
     '/api/admin/afl-trade-story-bundle',
     '/api/draft-trades/methodology',
   ])('serves %s', (path) => {
@@ -61,6 +63,11 @@ describe('trades-only mode', () => {
     '/api/admin/queue',
     '/api/admin/afl-trade-story-bundle-other',
     '/api/players.json',
+    // A fantasy page path that merely ends like a file name is still a fantasy page.
+    '/leagues/x.png',
+    '/leagues/abc.json',
+    '/dashboard/x.json',
+    '/players/a.bc',
   ])('does not serve %s', (path) => {
     expect(isServedInTradesOnlyMode(path)).toBe(false);
   });
