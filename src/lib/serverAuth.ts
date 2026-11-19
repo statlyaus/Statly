@@ -45,10 +45,9 @@ function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null
   );
   if (hasSuppliedCredential) return null;
 
-  const configuredUserId = process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID;
-  return configuredUserId === DEVELOPMENT_AUTH_USER_ID
-    ? configuredUserId
-    : DEVELOPMENT_AUTH_USER_ID;
+  // Local development only: a request with no credential at all is the scripted tester
+  // (docs/architecture/authorization.md, Local development tier).
+  return DEVELOPMENT_AUTH_USER_ID;
 }
 
 /**
