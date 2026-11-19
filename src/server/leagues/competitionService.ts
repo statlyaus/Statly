@@ -463,6 +463,10 @@ export async function saveCompetitionFixture({
           },
         });
 
+    if (existingFixture) {
+      // No Losers per-player rows belong to the old pairing too; the next scoring run rebuilds them.
+      await tx.leagueMatchupPlayerScore.deleteMany({ where: { matchupId: existingFixture.id } });
+    }
     const removedScores = existingFixture
       ? await tx.leagueMatchupScore.deleteMany({ where: { matchupId: existingFixture.id } })
       : { count: 0 };

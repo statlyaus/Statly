@@ -13,6 +13,7 @@ import {
   aflTradePublicIdSchema,
   aflTradeValuationViewSchema,
 } from '@/types/aflTradeIntelligence';
+import { limitPublicTradeRequest } from '@/server/aflTradeIntelligence/runtime/publicTradeRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ tradeId: string }> }
 ) {
+  const limited = await limitPublicTradeRequest(request);
+  if (limited) return limited;
   const url = new URL(request.url);
   const requestedViews = url.searchParams.getAll('view');
   const { tradeId: rawTradeId } = await params;

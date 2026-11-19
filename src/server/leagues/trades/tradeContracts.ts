@@ -201,7 +201,8 @@ export type TradeServiceErrorCode =
   | 'BLOODSUCKER_CANNOT_TRADE'
   | 'BITTEN_PLAYER_TRADE_BACK'
   | 'PLAYER_LOCKED'
-  | 'TIMING_UNAVAILABLE';
+  | 'TIMING_UNAVAILABLE'
+  | 'LEAGUE_BUSY';
 
 export class TradeServiceError extends Error {
   constructor(

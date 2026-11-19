@@ -37,12 +37,9 @@ export const PUBLIC_API_ROUTES: readonly PublicRouteEntry[] = [
   },
 
   // Public AFL statistics and match read models.
-  { route: '/players', reason: 'Public AFL player read model.' },
   { route: '/players/search', reason: 'Public AFL player search.' },
   { route: '/players/[id]/matches', reason: 'Public AFL player match history.' },
-  { route: '/player-stats', reason: 'Public AFL player statistics read model.' },
   { route: '/matches', reason: 'Public AFL match read model.' },
-  { route: '/injuries', reason: 'Public AFL injury list.' },
   { route: '/rankings', reason: 'Public ranking reads.' },
 
   // Live-stat ingestion projections, read-only from the application's perspective.
