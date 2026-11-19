@@ -41,19 +41,18 @@ export function determineAcceptanceTransition(
     };
   }
 
-  if (acceptancePath.kind === 'commissioner-review') {
-    return {
-      threadStatus: 'PENDING_ADMIN_REVIEW',
-      offerStatus: 'ACCEPTED',
-      reviewEndsAt: null,
-      shouldFinalize: false,
-    };
-  }
-
+  // Both reviews end after the league's review hours: a veto vote completes unless vetoed, and a
+  // commissioner review the commissioner has not decided is approved (owner decision 2026-11-15).
+  const reviewEndsAt = new Date(
+    acceptedAt.getTime() + normalizeHours(reviewHours) * 60 * 60 * 1000
+  );
   return {
-    threadStatus: 'PENDING_VETO_REVIEW',
+    threadStatus:
+      acceptancePath.kind === 'commissioner-review'
+        ? 'PENDING_ADMIN_REVIEW'
+        : 'PENDING_VETO_REVIEW',
     offerStatus: 'ACCEPTED',
-    reviewEndsAt: new Date(acceptedAt.getTime() + normalizeHours(reviewHours) * 60 * 60 * 1000),
+    reviewEndsAt,
     shouldFinalize: false,
   };
 }

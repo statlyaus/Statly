@@ -56,6 +56,7 @@ import {
 } from '@/server/socketRedisAdapter';
 import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
 import { flushProcessSentry, initProcessSentry } from '@/server/monitoring/processSentry';
+import { socketClientIp } from '@/server/socketClientIp';
 
 // Report errors to Sentry before anything else can fail (docs/runbooks/monitoring-and-alerts.md).
 initProcessSentry('socket-server');
@@ -79,10 +80,7 @@ type SocketRequestDecision = {
 
 async function evaluateSocketRequest(req: IncomingMessage): Promise<SocketRequestDecision> {
   const start = Date.now();
-  const ip =
-    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-    req.socket.remoteAddress ||
-    'unknown';
+  const ip = socketClientIp(req);
   const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60);
   const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10);
   const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
