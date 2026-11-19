@@ -116,6 +116,28 @@ export function requireSocialManager(access: LeagueSocialAccess): void {
 }
 
 export async function ensureActiveLeagueSeason(leagueId: string): Promise<string> {
+  // Nearly every request finds the season and its default categories in place: answer from reads,
+  // and open the seeding (write) transaction only when something is missing.
+  const known = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { activeSeasonId: true },
+  });
+  if (known?.activeSeasonId) {
+    const [season, defaults] = await Promise.all([
+      prisma.leagueSeason.findFirst({
+        where: { id: known.activeSeasonId, leagueId },
+        select: { id: true },
+      }),
+      prisma.socialBoardCategory.count({
+        where: {
+          seasonId: known.activeSeasonId,
+          slug: { in: DEFAULT_BOARD_CATEGORIES.map(({ slug }) => slug) },
+        },
+      }),
+    ]);
+    if (season && defaults === DEFAULT_BOARD_CATEGORIES.length) return season.id;
+  }
+
   return prisma.$transaction(async (tx) => {
     const ensureDefaultCategories = async (seasonId: string): Promise<void> => {
       for (const category of DEFAULT_BOARD_CATEGORIES) {

@@ -92,8 +92,7 @@ describe('governed pick-PAV native execution PostgreSQL custody', () => {
         );
       }
       const content = value.execution.content;
-      const [datasetDocument, admissionDocument, protocolDocument] =
-        value.authorityDocuments;
+      const [datasetDocument, admissionDocument, protocolDocument] = value.authorityDocuments;
       const observationSet = content.observationSet;
       await seed.query(
         `INSERT INTO outcome_pick_pav_observation_set

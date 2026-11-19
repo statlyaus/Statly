@@ -15,6 +15,17 @@ export type { LeagueFormat };
 
 export const BLOODSUCKER_MIN_TEAMS = 8;
 export const BLOODSUCKER_RECOMMENDED_TEAMS = 12;
+
+/** A Bloodsucker league sized below BLOODSUCKER_MIN_TEAMS could never start its draft. */
+export function getBloodsuckerLeagueSizeError(
+  leagueFormat: string,
+  maxTeams: number | undefined
+): string | null {
+  if (leagueFormat !== 'BLOODSUCKER' || maxTeams === undefined) return null;
+  return maxTeams < BLOODSUCKER_MIN_TEAMS
+    ? `A Bloodsucker league needs at least ${BLOODSUCKER_MIN_TEAMS} teams (${BLOODSUCKER_RECOMMENDED_TEAMS} recommended).`
+    : null;
+}
 export const BLOODSUCKER_REQUIRES_ROLLING_MESSAGE =
   'A Bloodsucker league must use rolling waivers with no FAAB budget.';
 

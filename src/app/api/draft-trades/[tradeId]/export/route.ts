@@ -6,14 +6,17 @@ import { escapeCsvCell as csvEscape } from '@/lib/draftTrades/csv';
 import { getDraftTradeById } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
 import { parseAflTradePublicRouteParam } from '@/server/aflTradeIntelligence/runtime/publicTradeRouteParam';
+import { limitPublicTradeRequest } from '@/server/aflTradeIntelligence/runtime/publicTradeRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ tradeId: string }> }
 ) {
+  const limited = await limitPublicTradeRequest(request);
+  if (limited) return limited;
   try {
     const { tradeId: rawTradeId } = await params;
     const tradeId = parseAflTradePublicRouteParam(rawTradeId);

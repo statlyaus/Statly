@@ -68,6 +68,15 @@ describe('league settings route architecture', () => {
     expect(source).toContain("code: 'DRAFT_STRUCTURE_LOCKED'");
   });
 
+  it('re-checks the scoring lock for a No Losers change inside the settings write', () => {
+    const route = readSource();
+    const transaction = route.slice(route.indexOf('const saved = await prisma.$transaction'));
+
+    expect(transaction).toContain(
+      '(scoringSettingsChanged || noLosersChanged) && currentLocks.scoring'
+    );
+  });
+
   it('converges the draft setup after Prisma settings updates', () => {
     const source = readSource();
 

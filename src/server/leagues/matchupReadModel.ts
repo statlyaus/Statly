@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { ensureDefaultLineups } from '@/server/leagues/defaultLineups';
+import { resolveCurrentCompetitionRound } from '@/server/leagues/currentCompetitionRound';
 import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/server/etl/etlRoundData';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -117,7 +118,8 @@ export interface LeagueMatchupPlayerContribution {
   categories: Array<{
     category: FantasyCategoryKey;
     shortLabel: string;
-    value: number;
+    /** Null when the provider did not report this stat for the player. */
+    value: number | null;
     /** No Losers: the player's raw value, present only when his club result halved or zeroed it. */
     rawValue?: number;
   }>;
@@ -366,7 +368,7 @@ const TEAM_SHEET_SLOT_ORDER: Record<string, number> = {
   INTERCHANGE: 5,
 };
 
-function buildPlayerContributions({
+export function buildPlayerContributions({
   lineup,
   categories,
   totalsByPlayerId,
@@ -400,8 +402,9 @@ function buildPlayerContributions({
             ? rawTotalsByPlayerId?.get(lineupPlayer.playerId)
             : undefined;
         const categoryValues = categories.map((category) => {
-          const value = totals[category] ?? 0;
-          const rawValue = rawTotals ? (rawTotals[category] ?? 0) : value;
+          // A stat the provider did not report is null ("–"), not a real zero.
+          const value = totals[category] ?? null;
+          const rawValue = rawTotals ? (rawTotals[category] ?? null) : value;
           return {
             category,
             shortLabel:
@@ -409,7 +412,7 @@ function buildPlayerContributions({
               FANTASY_CATEGORIES[category]?.abbrev ??
               category,
             value,
-            ...(rawValue !== value ? { rawValue } : {}),
+            ...(rawValue !== null && rawValue !== value ? { rawValue } : {}),
           };
         });
 
@@ -946,40 +949,7 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
   };
 }
 
-export function resolveCurrentCompetitionRound<
-  TRound extends {
-    round: number;
-    status: string;
-    startsAt: Date | null;
-    endsAt: Date | null;
-  },
->(rounds: readonly TRound[], now = new Date()): TRound | null {
-  const playableRounds = rounds.filter(
-    (competitionRound) => competitionRound.status !== 'NO_MATCHUP'
-  );
-  if (!playableRounds.length) return rounds[0] ?? null;
-
-  const startedRounds = playableRounds.filter(
-    (competitionRound) =>
-      competitionRound.startsAt &&
-      competitionRound.startsAt <= now &&
-      (!competitionRound.endsAt || competitionRound.endsAt >= now)
-  );
-  const latestStartedRound = startedRounds.reduce<TRound | null>(
-    (latest, competitionRound) =>
-      !latest || competitionRound.round > latest.round ? competitionRound : latest,
-    null
-  );
-
-  return (
-    latestStartedRound ??
-    playableRounds.find(
-      (competitionRound) => !competitionRound.startsAt || competitionRound.startsAt > now
-    ) ??
-    playableRounds.at(-1) ??
-    null
-  );
-}
+export { resolveCurrentCompetitionRound };
 
 export async function loadLeagueMatchupReadModel({
   leagueId,
