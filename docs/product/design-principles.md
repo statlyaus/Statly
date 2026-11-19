@@ -26,11 +26,13 @@ copy; this page holds the principles behind them.
   so it cannot regress.
 - Statly is light only (owner, 2026-11-19). Do not add `dark:` utilities or a dark theme.
 - Keep spacing, radius, typography, and elevation consistent with existing tokens.
-- Type is Saira for text (`font-sans`) and Saira Extra Condensed for headings and scores
-  (`font-display`, set in uppercase by the base layer; add `normal-case` to opt out). Numbers are
-  tabular across the app so stats line up in columns.
+- Type is Geist for display and UI, Saira for reading and table numbers, and Caveat for hand notes
+  (owner, 2026-11-19; target, phase 3 of the [style guide](style-guide.md#enforcement)). Until then
+  the code uses Saira (`font-sans`) and Saira Extra Condensed (`font-display`). Numbers are tabular
+  across the app so stats line up in columns.
 - Navigation icons come from `StatlyIcon` (`src/components/ui/StatlyIcon.tsx`): stroke-only,
-  `currentColor`, secondary strokes at reduced opacity. Each animates when its link or button is
+  `currentColor`; the glyphs are being redrawn as the hand-drawn marker set in the
+  [style guide](style-guide.md#icons) (target, phase 5). Each animates when its link or button is
   hovered or focused and once for the current page (`aria-current="page"`), and stays still under
   reduced motion. Add a glyph there rather than inlining another SVG in a nav item.
 - Add a new abstraction only when immediate reuse exists; fix the owning shared primitive when a shared
@@ -78,8 +80,8 @@ dashboard patterns.
 
 - Chrome: the fantasy app uses a solid `brand-bar` header with high-contrast navigation and a filled
   active item. The public site (owner, 2026-11-18) uses a white header: the "Statly." wordmark, a
-  thin divider, then text tabs, the current one navy semibold with a 2px underline on the header's
-  bottom border; the footer is `brand-bar`. Content sits in white cards on a light page, never on
+  thin divider, then text tabs, the current one semibold with an underline on the header's bottom
+  border in the brand colour (cobalt from phase 3 of the style guide); the footer is `brand-bar`. Content sits in white cards on a light page, never on
   decorative gradients or photography.
 - Story surfaces are the exception (owner, 2026-11-16): the public home page hero and `/afl/stories`
   pages use the owner's collage designs. Club colours only, no club or league marks and no press
@@ -93,14 +95,15 @@ dashboard patterns.
 - Tables and ladders: fixed row heights, a position column, the user's row highlighted, the key
   column emphasised, and short condensed section titles.
 - LIVE status uses the `status-live` token, never a result token, so a live match is not read as a loss.
-  Unread counts use the navy `primary` token.
+  Unread counts use the `primary` token (cobalt from phase 3; sun on the cobalt app bar).
 - Results use the `result-win`, `result-loss` and `result-draw` tokens and always carry a letter or
   symbol (W, L, D) so meaning never depends on colour.
 - Show real state only. Omit a module rather than fill it with estimates or placeholder numbers.
 - One palette. Area tokens such as `--league-*` and `--trade-*` alias the core tokens; no area
-  gets its own colour scheme, card shadow or accent. Primary actions and focus use the navy
-  `brand-bar`. The one exception is the warm paper surface mode on public trade pages (owner,
-  2026-11-19), which redefines the core roles rather than adding a palette.
+  gets its own colour scheme, card shadow or accent. Primary actions and focus use the brand
+  colour (navy `brand-bar` today, cobalt from phase 3 of the style guide). The one exception is
+  the warm paper surface mode on public trade pages (owner, 2026-11-19), which redefines the core
+  roles rather than adding a palette.
 - Section navigation is one row of underlined tabs with a thin divider between groups, never pills
   or uppercase group labels. Each page opens with a plain heading, not a coloured hero block.
 
