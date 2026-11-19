@@ -192,7 +192,7 @@ describe('LeagueTradeCentrePanel', () => {
     expect(title.previousElementSibling).toBeNull();
     expect(screen.queryByRole('button', { name: 'Propose trade' })).not.toBeInTheDocument();
     expect(proposalHeading).toHaveClass('text-lg');
-    expect(screen.getByText('Commissioner approves')).toBeInTheDocument();
+    expect(screen.getByText('Commissioner approves within 24h')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Alpha FC sends' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Beta FC sends' })).toBeInTheDocument();
     expect(selectedPartner()).toBe('member-2');

@@ -12,6 +12,10 @@ vi.mock('@/lib/data', () => ({ getPlayers: mocks.getPlayers }));
 vi.mock('../../src/lib/data', () => ({ getPlayers: mocks.getPlayers }));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: { collection: mocks.collection } }));
 vi.mock('../../src/lib/firebaseAdmin', () => ({ adminDb: { collection: mocks.collection } }));
+vi.mock('@/lib/rateLimit', () => ({
+  rateLimitConfigs: { public: {} },
+  withRateLimit: () => async () => ({ success: true }),
+}));
 
 function search(q: string) {
   return new Request(
