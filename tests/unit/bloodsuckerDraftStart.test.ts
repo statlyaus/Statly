@@ -25,6 +25,8 @@ const activeIds = Array.from({ length: 8 }, (_, index) => `member-${index + 1}`)
 function txFor(settings: { leagueFormat: string; bloodsuckerMemberId: string | null }) {
   return {
     $queryRaw: vi.fn().mockResolvedValue([]),
+    // BR-09: the Bloodsucker holds no draft order slot.
+    draftOrder: { count: vi.fn().mockResolvedValue(0) },
     league: {
       findUnique: vi.fn().mockResolvedValue({
         settings,
