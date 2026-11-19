@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { canUpdateBranches, planQueue, requiredChecksState } from '../../Scripts/ci/pr-queue.mjs';
+import {
+  canUpdateBranches,
+  loadPullRequests,
+  planQueue,
+  requiredChecksState,
+} from '../../Scripts/ci/pr-queue.mjs';
 
 const pr = (overrides: Record<string, unknown> = {}) => ({
   number: 1,
@@ -193,5 +198,46 @@ describe('canUpdateBranches', () => {
   it('refuses with only GITHUB_TOKEN, whose merge commit leaves pull_request CI awaiting approval', () => {
     expect(canUpdateBranches({ QUEUE_TOKEN_SET: 'false' })).toBe(false);
     expect(canUpdateBranches({})).toBe(false);
+  });
+});
+
+describe('loadPullRequests', () => {
+  const node = (number: number) => ({
+    number,
+    createdAt: '2026-11-01T00:00:00Z',
+    isDraft: false,
+    isCrossRepository: false,
+    mergeStateStatus: 'BEHIND',
+    headRefName: `feat/${number}`,
+    autoMergeRequest: { enabledAt: '2026-11-01T00:00:00Z' },
+    commits: { nodes: [] },
+  });
+  const page = (numbers: number[], endCursor: string | null) => ({
+    stdout: JSON.stringify({
+      data: {
+        repository: {
+          pullRequests: {
+            pageInfo: { hasNextPage: endCursor !== null, endCursor },
+            nodes: numbers.map(node),
+          },
+        },
+      },
+    }),
+  });
+
+  // One query for 50 pull requests with their check runs timed out (HTTP 502/504) and stalled the
+  // queue, so it reads them a small page at a time.
+  it('reads every page of open pull requests', () => {
+    const calls: string[][] = [];
+    const pages = [page([1, 2], 'cursor-1'), page([3], null)];
+    const prs = loadPullRequests('owner/name', (args: string[]) => {
+      calls.push(args);
+      return pages[calls.length - 1];
+    });
+
+    expect(prs.map((item: { number: number }) => item.number)).toEqual([1, 2, 3]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).not.toContain('after=cursor-1');
+    expect(calls[1]).toContain('after=cursor-1');
   });
 });
