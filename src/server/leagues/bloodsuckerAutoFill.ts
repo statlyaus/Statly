@@ -281,7 +281,7 @@ export async function sweepBloodsuckerWindows(now = new Date()): Promise<Bloodsu
       if (closed.closed) result.closedLeagueIds.push(league.id);
     } catch (error) {
       result.failedLeagueIds.push(league.id);
-      logger.error('Bloodsucker window close failed', {
+      logger.error(`Bloodsucker window close failed: league ${league.id}`, {
         leagueId: league.id,
         error: error instanceof Error ? error.message : String(error),
       });
