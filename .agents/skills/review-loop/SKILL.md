@@ -1,6 +1,6 @@
 ---
 name: review-loop
-description: Use when the user says "review loop" (or "sol loop", the upstream name).
+description: A fresh Claude reviewer subagent reviews the current change in up to 3 rounds (5 for security, auth, data loss or concurrency) while the author fixes blockers and declines nits. Use at the end of every change before filing a pull request, and when the user says "review loop" (or "sol loop", the upstream name).
 ---
 
 # review-loop

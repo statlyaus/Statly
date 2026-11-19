@@ -1,31 +1,30 @@
 # Statly skill routing
 
-This policy is the Statly-owned routing layer over the locked upstream `ask-matt` skill. The upstream
-file remains byte-for-byte compatible with `skills-lock.json`; where its route map conflicts with
-this document or root `AGENTS.md`, the Statly guidance wins.
+This policy is the Statly-owned routing layer over the locked upstream skills. The upstream files
+remain byte-for-byte compatible with `skills-lock.json`; where their instructions conflict with this
+document or root `AGENTS.md`, the Statly guidance wins.
 
 ## Availability rule
 
 Any skill not installed under `.agents/skills/` is unavailable and must not be recommended or
-invoked. Mentions of unavailable upstream flows in `ask-matt` are descriptive upstream content, not
-routes that Statly supports. Do not approximate a missing route by creating its expected files or by
-silently substituting a different workflow.
+invoked. Mentions of unavailable upstream skills inside locked upstream files (for example
+`/setup-matt-pocock-skills` in `to-spec` and `to-tickets`, or `code-review` in `tdd`) are
+descriptive upstream content, not routes that Statly supports. Do not approximate a missing route
+by creating its expected files or by silently substituting a different workflow.
 
 Use these supported routes:
 
-- New or materially unresolved product work: `grill-with-docs` or `grilling`, then
-  `domain-modeling`; use `prototype` only for a question requiring a runnable answer.
+- New or materially unresolved product work: `grilling`, reconciled with the canonical docs in
+  `docs/agents/domain.md`; use `prototype` only for a question requiring a runnable answer.
 - Large implementation: `to-spec`, then `to-tickets`, then `ponytail` with `tdd`.
-- Focused implementation: `ponytail` with `tdd`. `ponytail` replaces `implement` as the default
-  route; `implement` stays installed and locked but is not recommended.
+- Focused implementation: `ponytail` with `tdd`.
 - Difficult defects: `diagnosing-bugs`, then `tdd` for the correction.
-- Architecture and module design: `codebase-design` with `domain-modeling` where terminology or
-  ownership is involved.
-- Review: `code-review`; use `product-design-review` for product-level UI review.
+- Architecture and module design: `codebase-design`, with `docs/agents/domain.md` where terminology
+  or ownership is involved.
+- Review: `review-loop`; use `product-design-review` for product-level UI review.
 - Merge or rebase conflicts: `resolving-merge-conflicts`.
 - Documentation drift: `docs-sweep-loop`.
 - Draft-room reliability: `draft-reliability-loop`.
-- Primary-source investigation: `research`.
 - Delivery, from a working change to a merged pull request: the Statly-owned adaptations of
   `t3dotgg/tstack` in `docs/agents/delivery-skills.md`. `review-loop` ("review loop") before a
   pull request; `council` for security, auth, data loss, state or architecture; `file-pr` to open
@@ -33,6 +32,9 @@ Use these supported routes:
   for another session's work; `leaving-pr-comments` for every GitHub comment; `full-send` and
   `full-stop` when the user walks away. Offer the fitting one at its moment; run `full-send`,
   `full-stop`, `council` and a `modernize` update or rebuild only on the user's word.
+
+Statly override: `grilling` asks one question at a time through the AskUserQuestion tool (owner
+preference), not as prose questions inside a reply.
 
 Where `ponytail` conflicts with `statly-engineering-workflow` (planning gates, `tdd`
 red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its
@@ -50,11 +52,8 @@ into `.agents/skills/`. Registered: `statly-engineering-workflow`, `grilling`, `
 `unslop-design`, `review-loop`, `council`, `file-pr`, `pr-findings`, `modernize`, `takeover`,
 `leaving-pr-comments`, `full-send`, and `full-stop`.
 
-The rest stay installed and locked but unregistered. `code-review` would shadow Claude Code's
-built-in `/code-review`, so load it by path at completion as the workflow says. `ask-matt`,
-`implement`, `setup-matt-pocock-skills`, `grill-with-docs`, `domain-modeling`, and `research` either
-duplicate a registered route or write files this policy forbids. To register another skill, add its
-symlink: `ln -s ../../.agents/skills/<name> .claude/skills/<name>`.
+Every installed skill is registered. To register a new one, add its symlink:
+`ln -s ../../.agents/skills/<name> .claude/skills/<name>`.
 
 ## Repository-owned persistence
 
