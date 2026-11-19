@@ -91,6 +91,10 @@ if [ ! -e .env ]; then cp .env.example .env; fi
 npm run dev
 ```
 
+Before each commit, run `npm run check:changed`. It checks only the files changed against `origin/main`
+(committed, staged, unstaged and untracked): Prettier, ESLint, the matching typecheck once, and
+`vitest related`. Use it instead of chaining those tools by hand.
+
 Run checks relevant to the changed boundary. Before a pull request, run the full supported set:
 
 ```sh
