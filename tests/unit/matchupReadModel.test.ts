@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import {
   aggregateFinalizedCategoryTotals,
+  buildPlayerContributions,
   mirrorCategoryRows,
   parseStoredCategoryRows,
   resolveCurrentCompetitionRound,
@@ -313,5 +314,24 @@ describe('matchupReadModel helpers', () => {
     expect(readModel).not.toContain('generateLeagueFixtures');
     expect(readModel).toContain('resolveAflRoundForScoring');
     expect(readModel).toContain('categoryRows: buildCategoryRows');
+  });
+});
+
+describe('matchup player rows', () => {
+  it('keeps a stat the provider did not report as null, not 0', () => {
+    const [row] = buildPlayerContributions({
+      lineup: {
+        players: [
+          { playerId: 'p1', slot: 'MID', slotIndex: 0, player: { name: 'A', position: 'MID' } },
+        ],
+      },
+      categories: ['goals', 'tackles'],
+      totalsByPlayerId: new Map([['p1', { goals: 0 }]]),
+    });
+
+    expect(row.categories).toEqual([
+      expect.objectContaining({ category: 'goals', value: 0 }),
+      expect.objectContaining({ category: 'tackles', value: null }),
+    ]);
   });
 });

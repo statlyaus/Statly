@@ -99,7 +99,8 @@ interface MatchupPlayerContribution {
   categories: Array<{
     category: string;
     shortLabel: string;
-    value: number;
+    /** Null when the provider did not report this stat. */
+    value: number | null;
     /** No Losers: the raw value, sent only when the club result halved or zeroed it. */
     rawValue?: number;
   }>;
@@ -656,7 +657,7 @@ function PlayerCategoryCell({
 }) {
   const entry = player?.categories.find((row) => row.category === category.category);
   const value = entry?.value;
-  const hasValue = value !== undefined && player?.hasStats !== false;
+  const hasValue = value !== undefined && value !== null && player?.hasStats !== false;
   const rawValue = hasValue ? entry?.rawValue : undefined;
   const zeroed = player?.noLosers?.status === 'COUNTED' && player.noLosers.multiplier === 0;
 
