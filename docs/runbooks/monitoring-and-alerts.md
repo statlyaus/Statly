@@ -111,8 +111,9 @@ What to do:
 1. Look at the ETL logs (Cloud Run job `statly-etl`) for `AFL results ingest failed`. The usual causes are
    a Footywire or fitzRoy failure, `DATABASE_URL` unset, or a database outage. Every failure writes
    nothing; the ETL retries every 10 minutes while a stats window is open (6 hours after each start)
-   and re-reads the whole season every 6 hours outside one, which also picks up a correction to an
-   older game.
+   and re-reads the whole season every 6 hours outside one while a game started in the last 7 days,
+   which also picks up a correction to an older game. More than 7 days after the last game start the
+   sweep stops, so a result still missing then needs the hand run in step 2.
 2. Re-run the ingest by hand from `etl/` with `DATABASE_URL` naming the fantasy database. For the
    season's last 18 matches: `npm run build && Rscript fetch_fw_results.R 2026 18 | node dist/processResultData.js`.
    Leave the count off to re-read the whole season (about 10 minutes, one page per match). Unchanged
