@@ -11,7 +11,7 @@ whether the action is operational rather than competition state.
 | Tier                     | Requirement                                                                                                        | Resolved by                                                                                | Examples                                                                       |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | Public                   | none                                                                                                               | route code                                                                                 | player and match reads, public draft and trade research, `/api/ping`           |
-| User                     | verified Firebase identity                                                                                         | `getAuthenticatedUserId` (`src/lib/serverAuth.ts`)                                         | user watchlists, user league settings, team actions                            |
+| User                     | verified Firebase identity                                                                                         | `getAuthenticatedUserId` (`src/lib/serverAuth.ts`)                                         | `/api/user/teams`, `/api/dashboard/home`, team actions                         |
 | League participant       | active `LeagueMember`                                                                                              | `getLeagueMembershipAccess` (`src/server/leagues/membership.ts`)                           | own roster and lineup writes, social posting, own draft queue and watchlist    |
 | League manager           | league owner or co-commissioner                                                                                    | `canManageLeague` / `LeagueMembershipAccess.canManage`                                     | waiver processing, league settings, social moderation, draft lifecycle actions |
 | Basketball section       | listed in `BASKETBALL_ALLOWED_USER_IDS` (unset: any user outside production, nobody in production); others get 404 | `canUseBasketball` (`src/server/basketball/basketballAccess.ts`)                           | every `/basketball` page and `/api/basketball/*` route, before the owner check |
@@ -122,7 +122,10 @@ Rules and indexes reach Firebase only on the next `firebase deploy`.
 - Scope every query, cache key, event, and write to the league and season of the resolved context.
 - Keep operator and scheduler credentials out of league role logic; they authorize infrastructure
   actions, not competition state.
-- Preserve fail-closed behaviour: an unset credential denies access.
+- Preserve fail-closed behaviour: an unset credential denies access. The one exception is the Local
+  development tier: with both dev-auth flags on outside production, a request carrying no credential
+  at all is the scripted tester `statly-dev-tester` (`getDevelopmentUserId` in `src/lib/serverAuth.ts`);
+  any supplied but invalid credential is still refused.
 
 ## Testing
 

@@ -12,6 +12,7 @@ import {
   aflDraftTradeOutcomeCheckStatusSchema,
   aflDraftTradeOutcomeMetricSchema,
 } from '@/types/aflDraftTradeOutcomes';
+import { limitPublicTradeRequest } from '@/server/aflTradeIntelligence/runtime/publicTradeRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,8 @@ function singleSearchParam(request: NextRequest, name: string): string | null {
 }
 
 export async function GET(request: NextRequest) {
+  const limited = await limitPublicTradeRequest(request);
+  if (limited) return limited;
   try {
     const parsed = querySchema.safeParse({
       year: singleSearchParam(request, 'year'),
