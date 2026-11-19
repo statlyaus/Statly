@@ -65,8 +65,17 @@ async function loadActor(leagueId: string, userId: string): Promise<BiteActor> {
   return { userId, memberId: member.id, commissioner: isCommissioner(member) };
 }
 
+/** A bite of the league's active season only, as the read model loads it; any other is not found. */
 async function loadBite(leagueId: string, biteId: string): Promise<LeagueBite> {
-  const bite = await prisma.leagueBite.findFirst({ where: { id: biteId, leagueId } });
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { activeSeasonId: true },
+  });
+  const bite = league?.activeSeasonId
+    ? await prisma.leagueBite.findFirst({
+        where: { id: biteId, leagueId, seasonId: league.activeSeasonId },
+      })
+    : null;
   if (!bite) throw new BiteError('NOT_FOUND', 'Bite not found.', 404);
   return bite;
 }
