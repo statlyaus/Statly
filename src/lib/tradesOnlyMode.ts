@@ -8,6 +8,7 @@
 
 const PAGE_PREFIXES = ['/afl', '/draft', '/privacy', '/terms', '/data-deletion'] as const;
 const API_PREFIXES = ['/api/admin/afl-trade-story-bundle', '/api/draft-trades'] as const;
+const PUBLIC_FILE_FOLDERS = ['/brand', '/Assets', '/logos'] as const;
 
 const under = (pathname: string, prefix: string) =>
   pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -20,7 +21,14 @@ export function isTradesOnlyMode(environment: { STATLY_TRADES_ONLY?: string }): 
 export function isServedInTradesOnlyMode(pathname: string): boolean {
   if (pathname.startsWith('/api/')) return API_PREFIXES.some((prefix) => under(pathname, prefix));
   if (pathname === '/') return true;
-  // Public files and generated metadata: /brand/logo.png, /favicon.svg, /robots.txt.
-  if (/\.[a-z0-9]{2,5}$/iu.test(pathname)) return true;
+  // Public files and generated metadata live at the root (/favicon.svg, /robots.txt) or in the
+  // public folders (/brand/logo.png). A deeper path that only ends like a file name
+  // (/leagues/x.png) is a fantasy page, not a file.
+  if (/\.[a-z0-9]{2,5}$/iu.test(pathname)) {
+    return (
+      pathname.lastIndexOf('/') === 0 ||
+      PUBLIC_FILE_FOLDERS.some((folder) => pathname.startsWith(`${folder}/`))
+    );
+  }
   return PAGE_PREFIXES.some((prefix) => under(pathname, prefix));
 }

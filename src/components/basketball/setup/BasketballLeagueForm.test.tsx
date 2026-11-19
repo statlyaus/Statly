@@ -97,7 +97,8 @@ describe('BasketballLeagueForm (create)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create league' }));
 
     const summary = await screen.findByRole('group', { name: /Check 2 fields/ });
-    expect(summary).toHaveFocus();
+    // The reply arrives outside act, so the summary can render before the effect that focuses it.
+    await waitFor(() => expect(summary).toHaveFocus());
     expect(summary).toHaveTextContent('League name: Enter a name');
     expect(summary).toHaveTextContent('PG slots: Use 0 to 10');
 

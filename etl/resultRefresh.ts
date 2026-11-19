@@ -3,7 +3,8 @@
  *
  * - **recent**: in a live window, every RESULTS_REFRESH_MS (10 min), Footywire's last
  *   RESULTS_LAST_MATCHES (18) matches, which covers the latest two rounds, where a new result appears.
- * - **full**: every RESULTS_FULL_SWEEP_MS (6 h), outside live windows only, the whole season. It
+ * - **full**: every RESULTS_FULL_SWEEP_MS (6 h), outside live windows only, and only while a game
+ *   started within RESULTS_SWEEP_WINDOW_MS (7 days), the whole season. It
  *   reads one Footywire page per match (about 10 minutes for a season) and the guard does nothing
  *   else meanwhile, so it never runs while stats are being fetched. A correction Footywire makes to
  *   an older game is ingested by the next sweep (within about 6 hours, or once a long live window
