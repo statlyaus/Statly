@@ -5,11 +5,12 @@ import type { Server as SocketIOServer } from 'socket.io';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { OUTBOX_MAX_ATTEMPTS } from '@/server/outbox/outboxRetention';
 import type { SocialRealtimeEnvelope } from '@/types/social';
 
 import { publishLeagueSocialRealtimeEvent } from './socialSocket';
 
-const MAX_ATTEMPTS = 8;
+const MAX_ATTEMPTS = OUTBOX_MAX_ATTEMPTS;
 const STALE_LOCK_MS = 60_000;
 const SOCIAL_REALTIME_EVENTS = new Set<SocialRealtimeEnvelope['event']>([
   'social:message',

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createPublicTradeStoryReads,
@@ -8,6 +8,8 @@ import {
 import { sampleTradeStoryBundle } from '../fixtures/aflTradeStorySampleBundle';
 
 vi.mock('server-only', () => ({}));
+const logger = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ logger }));
 
 /**
  * The public trade pages (/afl/trades) show one owner-approved trade story bundle and nothing else.
@@ -117,5 +119,58 @@ describe('public trade story reads', () => {
     const flaky = reads(approved, async () => (++calls === 1 ? null : text));
     expect(await flaky.reads.listStories()).toEqual({ available: false });
     expect((await flaky.reads.listStories()).available).toBe(true);
+  });
+
+  describe('says why the switched-on pages are unavailable', () => {
+    beforeEach(() => {
+      logger.error.mockClear();
+      logger.warn.mockClear();
+    });
+
+    it('warns about a malformed approved id', async () => {
+      await reads({ ...approved, AFL_TRADE_STORY_PUBLIC_BUNDLE_ID: 'nope' }).reads.listStories();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/malformed/u), {
+        approvedId: 'nope',
+      });
+    });
+
+    it('warns when the approved bundle is not stored', async () => {
+      await reads(approved, async () => null).reads.listStories();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/not stored/u), {
+        approvedId: bundle.bundleId,
+      });
+    });
+
+    it('warns when the stored bundle is a different one', async () => {
+      const otherId = `trade-story-bundle:${'0'.repeat(64)}`;
+      await reads(
+        { ...approved, AFL_TRADE_STORY_PUBLIC_BUNDLE_ID: otherId },
+        async () => text
+      ).reads.listStories();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/does not match/u), {
+        approvedId: otherId,
+        storedId: bundle.bundleId,
+      });
+    });
+
+    it('logs a load or verification failure as an error', async () => {
+      const failure = new Error('storage down');
+      await reads(approved, async () => {
+        throw failure;
+      }).reads.listStories();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringMatching(/could not be loaded/u),
+        failure,
+        {
+          approvedId: bundle.bundleId,
+        }
+      );
+    });
+
+    it('logs nothing while switched off', async () => {
+      await reads({}).reads.listStories();
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
   });
 });
