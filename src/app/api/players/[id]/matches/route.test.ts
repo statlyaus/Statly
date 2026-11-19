@@ -23,6 +23,11 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: { player: { findMany: mocks.findMany } },
 }));
+// Rate limiting is covered in tests/unit/publicPlayerRoutesRateLimit.test.ts; never reach Redis here.
+vi.mock('@/lib/rateLimit', () => ({
+  rateLimitConfigs: { public: {} },
+  withRateLimit: () => async () => ({ success: true }),
+}));
 
 import { GET } from './route';
 

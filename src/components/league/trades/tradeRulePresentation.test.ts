@@ -38,9 +38,9 @@ describe('trade rule presentation', () => {
 
   it('describes commissioner review without promising an immediate roster change', () => {
     const adminRules = { ...rules, reviewMode: 'admin' as const };
-    expect(getTradeReviewSummary(adminRules)).toBe('Commissioner approves');
+    expect(getTradeReviewSummary(adminRules)).toBe('Commissioner approves within 24h');
     expect(getTradeAcceptanceConsequence(adminRules, 'AFL Legends')).toBe(
-      'If AFL Legends accepts, the commissioner approves it before the players swap.'
+      'If AFL Legends accepts, the commissioner has 24 hours to approve or reject it. Undecided, it goes through.'
     );
   });
 

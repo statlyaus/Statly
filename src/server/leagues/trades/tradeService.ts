@@ -234,6 +234,7 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
         id: { notIn: seen },
         OR: [
           { status: 'PENDING_VETO_REVIEW', reviewEndsAt: { lte: now } },
+          { status: 'PENDING_ADMIN_REVIEW', reviewEndsAt: { lte: now } },
           { status: 'OPEN', currentOffer: { expiresAt: { lte: now } } },
         ],
       },
@@ -247,7 +248,10 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
       try {
         // A trade whose review ends mid-round waits for a later run once a traded player's game
         // has started (or match timing is unreadable); it completes after the round ends.
-        if (candidate.status === 'PENDING_VETO_REVIEW') {
+        if (
+          candidate.status === 'PENDING_VETO_REVIEW' ||
+          candidate.status === 'PENDING_ADMIN_REVIEW'
+        ) {
           await enforcePlayersMovable(
             candidate.leagueId,
             await loadOfferedPlayerIds(candidate.leagueId, candidate.id),
@@ -306,6 +310,17 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
               processed += 1;
               return;
             }
+            const result = await finalizeTrade(tx, thread, null, now);
+            processed += 1;
+            return result.status === 'COMPLETED';
+          }
+
+          // A commissioner review the commissioner has not decided is approved when it ends.
+          if (
+            thread.status === 'PENDING_ADMIN_REVIEW' &&
+            thread.reviewEndsAt &&
+            thread.reviewEndsAt <= now
+          ) {
             const result = await finalizeTrade(tx, thread, null, now);
             processed += 1;
             return result.status === 'COMPLETED';
@@ -603,6 +618,7 @@ async function executeActionInTransaction(
       };
     }
     case 'approve':
+      enforceTradeDeadline(access, now);
       return finalizeTrade(tx, thread, access.memberId, now);
     case 'veto':
       return castVeto(tx, access, thread, now);
