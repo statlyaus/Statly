@@ -172,10 +172,17 @@ stats, source checksum, source label, and update time. Category keys must stay a
 `Dockerfile` builds the ETL runtime: Node 22 for the live guard and processor, and R 4.5.1 with
 fitzRoy 1.7.0 on the same pinned base and CRAN snapshot as the trade capture image. The ETL CI job
 builds it on every change and checks that Node, the R packages and `fetch_fw_round.R` are present.
-`deploy.sh` is the existing explicit Cloud Run deployment command;
-it builds, verifies R packages, deploys a no-traffic revision, and requires a separately authorized
-traffic switch. It is not called by the repository's GitHub Actions and must not be treated as an
-automatic deployment.
+`deploy.sh` is the explicit deployment command. It builds, verifies R packages and deploys the image
+as a Cloud Run **Job** (`statly-etl`), not a service: the live guard is a long-running loop with no
+HTTP listener, so a service could never pass its readiness check, and a job has no public URL. One
+task runs the loop for just under a day (`--task-timeout 86100s`); a Cloud Scheduler trigger, created
+separately with the command `deploy.sh` prints, starts the next execution daily. The credentials
+come from Secret Manager (`--set-secrets`): `statly-etl-firebase-service-account` for
+`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` and `statly-etl-database-url` for `DATABASE_URL` (override the
+names with `ETL_FIREBASE_SECRET` / `ETL_DATABASE_URL_SECRET`); the job's service account needs
+`roles/secretmanager.secretAccessor` on both. The script refuses to deploy when either secret is
+missing. Deploying does not run the job. It is not called by the repository's GitHub Actions and
+must not be treated as an automatic deployment; run it only at go-live.
 
 `Dockerfile` is the only ETL image definition; the stale `Dockerfile.backup` and `Dockerfile.new` copies
 have been removed. Do not use one-off upload/debug scripts as production source of truth.
