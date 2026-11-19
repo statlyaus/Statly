@@ -2,6 +2,11 @@ import { NextRequest } from 'next/server';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const pruneOutboxes = vi.hoisted(() =>
+  vi.fn(async () => ({ tradeDeleted: 5, deadSocial: 0, deadTrade: 0 }))
+);
+vi.mock('@/server/outbox/outboxRetention', () => ({ pruneOutboxes }));
+
 import { GET } from './route';
 
 const URL_BASE = 'http://localhost/api/cron/daily';
@@ -72,5 +77,28 @@ describe('GET /api/cron/daily authorization', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).ok).toBe(true);
+  });
+});
+
+describe('GET /api/cron/daily work', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('prunes the outboxes and reports the counts', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+
+    const response = await GET(
+      new NextRequest(URL_BASE, { headers: { authorization: 'Bearer cron-secret' } })
+    );
+
+    expect(response.status).toBe(200);
+    expect(pruneOutboxes).toHaveBeenCalledOnce();
+    expect((await response.json()).outbox).toEqual({
+      tradeDeleted: 5,
+      deadSocial: 0,
+      deadTrade: 0,
+    });
   });
 });

@@ -179,6 +179,8 @@ describe('clearing the Bloodsucker when they leave (BR-07)', () => {
     ];
     const tx = {
       ...departureTx('member-2'),
+      // The League row lock (a no-op UPDATE) finds the league.
+      $executeRaw: vi.fn(async () => 1),
       league: {
         findUnique: vi.fn(async () => ({
           id: 'league-1',

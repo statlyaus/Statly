@@ -46,19 +46,43 @@ describe('PlayerDetail category profile', () => {
     await waitFor(() => expect(screen.getAllByText('No match data')).toHaveLength(2));
     expect(screen.queryByText('Season profile')).toBeNull();
     expect(within(categoryCell('Goals')).getByText('-')).toBeTruthy();
-    expect(within(categoryCell('Disposals')).getByText('-')).toBeTruthy();
+    expect(within(categoryCell('Contested Marks')).getByText('-')).toBeTruthy();
   });
 
   it('shows per-game averages over the match logs', async () => {
     fetchApi.mockResolvedValue([
-      { season: 2026, round: 2, opponent: 'Carlton', stats: { goals: 4, disposals: 30 } },
-      { season: 2026, round: 1, opponent: 'Geelong', stats: { goals: 2, disposals: 20 } },
+      { season: 2026, round: 2, opponent: 'Carlton', stats: { goals: 4, contested_marks: 3 } },
+      { season: 2026, round: 1, opponent: 'Geelong', stats: { goals: 2, contested_marks: 1 } },
     ]);
 
     render(<PlayerDetail player={player} />);
 
     expect(await screen.findByText('Per-game averages')).toBeTruthy();
     expect(within(categoryCell('Goals')).getByText('3.0')).toBeTruthy();
-    expect(within(categoryCell('Disposals')).getByText('25')).toBeTruthy();
+    expect(within(categoryCell('Contested Marks')).getByText('2.0')).toBeTruthy();
+  });
+
+  it('profiles the nine league categories', async () => {
+    fetchApi.mockResolvedValue([]);
+
+    render(<PlayerDetail player={player} />);
+
+    await waitFor(() => expect(screen.getAllByText('No match data')).toHaveLength(2));
+    for (const label of [
+      'Goals',
+      'Tackles',
+      'Inside 50s',
+      'Intercepts',
+      'Contested Marks',
+      'Rebound 50s',
+      'Contested Possessions',
+      'Effective Disposals',
+      'Score Involvements',
+    ]) {
+      expect(categoryCell(label)).toBeTruthy();
+    }
+    const profile = screen.getByRole('heading', { name: 'Category Profile' }).parentElement!;
+    expect(within(profile).queryByText('Disposals')).toBeNull();
+    expect(within(profile).queryByText('Hitouts')).toBeNull();
   });
 });

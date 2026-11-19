@@ -1,12 +1,13 @@
 export const runtime = 'nodejs';
 
-import { type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { prisma } from '@/lib/prisma';
 import { resolveCurrentStatsSeason } from '@/server/players/currentStatsSeason';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
+import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
 import { getTeamAbbreviation, getTeamName } from '@/lib/teamLogos';
 
 type MatchRecord = {
@@ -156,7 +157,17 @@ function mergeDuplicateMatches(matches: MatchRecord[]): MatchRecord[] {
   );
 }
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const checkRateLimit = withRateLimit(rateLimitConfigs.public);
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const rateLimit = await checkRateLimit(request);
+  if (!rateLimit.success) {
+    return NextResponse.json(rateLimit.body, {
+      status: rateLimit.status,
+      headers: rateLimit.headers,
+    });
+  }
+
   try {
     const { id } = await params;
     const playerNames = await resolvePlayerMatchNames(id);
@@ -225,8 +236,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         freesAgainst: stat('frees_against'),
         onePercenters: stat('one_percenters'),
         goalAssists: stat('goal_assists'),
-        timeOnGroundPct: stat('time_on_ground_percentage', 'tog_pct') || 85, // Default if missing
-        disposalEffPct: stat('disposal_efficiency') || 75, // Default if missing
+        timeOnGroundPct: stat('time_on_ground_percentage', 'tog_pct'),
+        disposalEffPct: stat('disposal_efficiency'),
         turnovers: stat('turnovers'),
         intercepts: stat('intercepts'),
         metresGained: stat('metres_gained'),
