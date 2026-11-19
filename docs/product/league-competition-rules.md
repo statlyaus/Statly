@@ -484,7 +484,9 @@ The same rule keeps a free agent whose AFL game has started in the round in prog
 roster until the round ends (owner decision 2026-11-11): free-agent Add
 (`POST /api/leagues/[id]/roster/add`, through `src/server/rosters/freeAgentAdd.ts`) answers 409 with
 code `PLAYER_LOCKED` ("<name>'s game has started; he can be picked up after the round ends."), and 503
-with code `TIMING_UNAVAILABLE` when match timing cannot be read.
+with code `TIMING_UNAVAILABLE` when match timing cannot be read. A waiver claim for such a player stays pending
+(owner decision 2026-11-15): the waiver run leaves it unsettled, and a later run settles it once the
+round has ended.
 
 ## Interchange autosubs
 
@@ -557,6 +559,9 @@ Further rules (owner decisions 2026-11-15):
 
 - A veto vote that no team is left to cast is no review. In a league with no active team outside the
   trade, the trade completes when it is accepted.
+- Commissioner review ends after the league's trade review hours, like a veto window. A trade the
+  commissioner has not approved or rejected by then is approved by the trade cron. A commissioner
+  cannot approve a trade after the league trade deadline; they can still reject it.
 - A trade already in commissioner review whose commissioner becomes one of its two teams (ownership
   moved, or a team was made co-commissioner) is moved by the trade cron to the review it would get
   if accepted now: a veto vote with a fresh window, or completion when no team can vote.
