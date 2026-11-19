@@ -32,7 +32,7 @@ editing.
 ### Routing
 
 Use [`docs/agents/skill-routing.md`](docs/agents/skill-routing.md) as the Statly-owned routing layer
-over the locked upstream `ask-matt` skill. Do not recommend or invoke upstream routes that are not
+over the locked upstream skills. Do not recommend or invoke upstream routes that are not
 installed in this repository, and keep domain, architecture, specification, and delivery records in
 the Statly-owned locations defined there.
 
@@ -52,8 +52,9 @@ ADR structure. See `docs/agents/domain.md`.
 
 ### Setup and upstream updates
 
-When running `setup-matt-pocock-skills`, apply the Statly-owned constraints in
-`docs/agents/setup-matt-pocock-skills.md` without modifying vendored upstream skill files.
+The upstream `setup-matt-pocock-skills` skill is not installed. Where `to-spec` or `to-tickets`
+expect its configuration, apply the Statly-owned constraints in
+`docs/agents/setup-matt-pocock-skills.md` instead, without modifying vendored upstream skill files.
 
 Run `npx skills update -p -y` only on a dedicated scheduled branch or pull-request branch, never
 directly against `main`. Review upstream instruction changes and require the normal CI and pull

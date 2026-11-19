@@ -178,16 +178,13 @@ patch pull requests. Majors (which only security updates open) and unknown updat
 The queue updates them like any other auto-merge pull request; if Dependabot later rebases one, it
 only replaces the queue's merge commit.
 
-## Shipping with `/ship`
+## Opening and landing a pull request
 
-Agents commit, push the feature branch, open the pull request and turn on auto-merge without waiting
-to be asked; `/ship` (gstack) is the standard route. It owns `VERSION`, `CHANGELOG.md`, the
-`package.json` version and the `v<version>` title prefix, so never edit those by hand. Its pre-landing
-review reads `.claude/skills/review/checklist.md`, a symlink to the local gstack install.
-
-Parallel pull requests each bump `VERSION`, so the second one conflicts once the first merges.
-`CHANGELOG.md` merges as a union (`.gitattributes`), which leaves only the one-line `VERSION`: re-run
-`/ship` on the branch, or resolve it to the higher version, and push.
+Agents commit, push the feature branch, open the pull request and turn on squash auto-merge without
+waiting to be asked. The `file-pr` skill opens the pull request and the app's auto-merge lands it once
+the gates above pass. When the owner says "full send", the `full-send` skill carries the change from
+its current state to a merged pull request unattended. See
+[delivery skills](../agents/delivery-skills.md).
 
 ## Re-running CI
 
