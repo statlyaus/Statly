@@ -39,7 +39,9 @@ describe('getSocketIoConfig', () => {
 
     expect(socketServerSource).toContain('socket.handshake.auth.token');
     expect(socketServerSource).toContain('validateAuthToken(token)');
-    expect(socketServerSource).toContain("token.startsWith('dev:')");
+    // Dev tokens are validated by validateAuthToken (only the scripted tester), not trusted here.
+    expect(socketServerSource).not.toContain("token.startsWith('dev:')");
+    expect(socketServerSource).not.toContain('socket.data.userId = devUserId');
     expect(socketServerSource).toContain(
       'authenticateSocketConnection(socket, next).catch((error) =>'
     );
