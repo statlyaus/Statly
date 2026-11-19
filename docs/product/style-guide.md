@@ -25,7 +25,8 @@ strings.
   Caveat for hand notes (target, phase 3; until then Saira and Saira Extra Condensed). NEVER load
   another font outside the story collage exception. NEVER set text below 11px.
 - MUST write sentence case, Australian English, and the copy patterns under [Content](#content).
-  NEVER "successfully", "please", "sorry", "oops" or an exclamation mark in system messages.
+  NEVER "successfully", "please", "sorry", "oops", an exclamation mark in system messages, or any
+  pattern under [Patterns that read as machine-written](#patterns-that-read-as-machine-written).
 - MUST format dates, times and numbers with an explicit `en-AU` locale; league times go through
   `formatLeagueTime`. NEVER a bare `toLocaleString()`.
 - MUST give every status a word or letter as well as a colour (W, L, D, Live, Provisional).
@@ -234,12 +235,12 @@ never set on a club colour. A unit test checks the squares against every ground 
 
 ### Voice
 
-- **Plain:** say what happened in the reader's words.
-- **Exact:** numbers, names, dates and what actually persisted. Never inflate.
-- **Footy-literate:** the game's terms used correctly; dry, not jokey.
+Say what happened in the reader's words. State numbers, names and dates exactly, and report only
+what persisted. Use the game's terms correctly; any humour is dry.
 
-Two registers. The fantasy app is peer to peer: contractions are fine, and dry humour only in success
-and social moments, never in errors, FAAB or destructive flows. The public outcomes site is a
+The fantasy app and the public outcomes site use different registers. The fantasy app is peer to
+peer: contractions are fine, and dry humour belongs only in success and social moments, never in
+errors, FAAB or destructive flows. The public outcomes site is a
 reference: neutral, third person, no humour. Prefer "cannot" and "did not" in errors and on the
 outcomes site.
 
@@ -262,8 +263,10 @@ A list of times may carry one "Times in AEST" note instead of a zone on every ro
 ### Copy patterns
 
 - **Errors:** what failed, what is still true, what to do. "League not created. Nothing was saved.
-  Check your connection and try again." Problems the user cannot fix use a service-unavailable
-  message instead.
+  Check your connection and try again." For an outage the user cannot fix, name what is down and what
+  it blocks, and promise no fix time: "Waivers are down, so your claim was not saved. Try again in a
+  few minutes." On the outcomes site: "Trade records are unavailable. This page cannot load until
+  they are back."
 - **Success:** state the persisted fact. "Waiver claim saved. It runs at 6 am AEST on Wednesday 17
   June."
 - **Empty states:** why the view is empty, plus one next action.
@@ -283,9 +286,36 @@ A list of times may carry one "Times in AEST" note instead of a zone on every ro
 ### Banned words
 
 - Hype: unlock, unleash, elevate, empower, seamless, effortless, robust, leverage, harness,
-  supercharge, game-changer, cutting-edge, delve, pivotal, crucial, "dive in", "not just X, but Y".
+  supercharge, game-changer, cutting-edge, delve, pivotal, crucial, journey, embark, landscape,
+  testament, underscore, streamline, comprehensive, actionable, "dive in".
+- Filler phrases: "it's worth noting", "at its core", "when it comes to", "here's the thing",
+  "the numbers speak for themselves", "the data tells a story", "key" as a filler adjective,
+  "quietly" for drama.
 - System-message tics: oops, please, sorry, successfully, invalid, exclamation marks.
 - Verdict overclaims: fleeced, robbery, heist, steal, masterstroke, disaster.
+
+### Patterns that read as machine-written
+
+Swapping words is the weakest fix; generated copy mostly shows in its sentence shape. Check every
+heading, empty state and story paragraph for these:
+
+- **Contrast set-ups:** "not X, but Y", "X, not Y" and "it's not X, it's Y" when nobody suggested X.
+  State Y. A correction ("Pick 23, not 32") stays.
+- **Groups of three:** three adjectives or three matching clauses added for rhythm. List only the
+  items the meaning needs.
+- **Colon reveals:** "The result: a top-ten pick." Write it as a plain sentence.
+- **Slogan headings:** two or three clipped sentences ("Trade. Compare. Win."). Headings are noun
+  labels for the content: "Trade history", "Club totals".
+- **Things that speak:** numbers that "tell a story", pages that "decide". Say what the figure shows
+  or what the code does.
+- **Commentary on the copy:** "This matters", "As you can see", "Here's what you need to know".
+  Delete it, or put the fact there.
+- **Kicker endings:** a closing maxim or metaphor. End on the last concrete sentence.
+- **Em dashes:** none in UI strings. Use a full stop, colon or comma. En dashes stay for ranges.
+- **Vague claims:** "better value", "a big win". Give the number and its basis, or cut the claim.
+
+Portability test: if a sentence would still fit on another product's page, replace it with a fact
+that holds only for Statly, or delete it.
 
 ## Enforcement
 
