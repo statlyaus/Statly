@@ -24,6 +24,7 @@ const requiredDocuments = [
   'docs/development/delivery.md',
   'docs/product/league-competition-rules.md',
   'docs/product/design-principles.md',
+  'docs/product/style-guide.md',
   'docs/runbooks/postgresql-cutover.md',
   'docs/runbooks/player-identity.md',
   'etl/README.md',

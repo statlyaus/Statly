@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return NextResponse.json(
     {
       error:
-        'Fixtures are published from Competition Rules. Save the configuration and publish a new fixture version from League Settings.',
+        'Fixtures are published from Competition Rules. To change a published fixture, edit it under Fixtures in Competition Rules in League Settings.',
     },
     { status: 409 }
   );

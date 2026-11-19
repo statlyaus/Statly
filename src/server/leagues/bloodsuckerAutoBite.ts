@@ -440,10 +440,13 @@ export async function sweepDueBloodsuckerBites(
       const context = { leagueId, biteId: bite.id, error: reason, failures: bite.failureCount + 1 };
       if (await recordBiteFailure(bite, reason, now)) {
         result.failedLeagueIds.push(leagueId);
-        logger.error('Bloodsucker auto-bite failed', context);
+        logger.error(`Bloodsucker auto-bite failed: league ${leagueId}, bite ${bite.id}`, context);
       } else {
         result.knownFailingBiteIds.push(bite.id);
-        logger.warn('Bloodsucker auto-bite is still failing', context);
+        logger.warn(
+          `Bloodsucker auto-bite is still failing: league ${leagueId}, bite ${bite.id}`,
+          context
+        );
       }
     };
     for (const bite of bites) {
