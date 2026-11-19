@@ -8,11 +8,17 @@ import { TradesUnavailable } from './TradesUnavailable';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
+const metadata: Metadata = {
   title: 'AFL trades, valued | Statly',
   description:
     'Every AFL trade Statly has graded: what each club gave and got, valued by what the players went on to do.',
 };
+
+/** While the pages are off, the "not available" answer is not for search engines to index. */
+export async function generateMetadata(): Promise<Metadata> {
+  const read = await publicTradeStoryReads.listStories();
+  return read.available ? metadata : { ...metadata, robots: { index: false, follow: false } };
+}
 
 /** The public list of graded trades, newest year first, from the owner-approved bundle. */
 export default async function PublicTradesPage({

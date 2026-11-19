@@ -6,6 +6,7 @@ import { commonErrors } from '@/lib/apiResponse';
 import { escapeCsvCell as csvEscape } from '@/lib/draftTrades/csv';
 import { listDraftTradesByYear } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
+import { limitPublicTradeRequest } from '@/server/aflTradeIntelligence/runtime/publicTradeRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,8 @@ const querySchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const limited = await limitPublicTradeRequest(request);
+  if (limited) return limited;
   try {
     const url = new URL(request.url);
     const parsed = querySchema.safeParse({

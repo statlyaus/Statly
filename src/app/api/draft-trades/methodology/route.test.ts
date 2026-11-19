@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { NextRequest } from 'next/server';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/server/aflTradeIntelligence/runtime/publicTradeRateLimit', () => ({
+  limitPublicTradeRequest: async () => null,
+}));
 
 import { GET } from './route';
 
 describe('GET /api/draft-trades/methodology', () => {
   it('returns truthful prepublication methodology metadata without numerical or model claims', async () => {
-    const response = await GET();
+    const response = await GET(new NextRequest('http://localhost/api/draft-trades/methodology'));
     const body = await response.json();
 
     expect(response.status).toBe(200);
