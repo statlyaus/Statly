@@ -78,6 +78,15 @@ describe('Tools menu', () => {
     mocks.pathname = '/leagues';
   });
 
+  it('labels the opened menu panel "Menu", so only one landmark is named "Main"', () => {
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+
+    expect(screen.getAllByRole('navigation', { name: 'Main' })).toHaveLength(1);
+    expect(screen.getByRole('navigation', { name: 'Menu' })).toBeInTheDocument();
+  });
+
   it('reports its expanded state and controls the menu it opens', () => {
     renderShell();
 

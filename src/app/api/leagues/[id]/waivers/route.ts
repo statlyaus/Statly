@@ -27,6 +27,7 @@ import {
   loadWaiverOutcomes,
   parseWaiverActivityCursor,
 } from '@/server/waivers/waiverActivity';
+import { pageAvailablePlayers } from '@/server/waivers/availablePlayerPage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -141,6 +142,8 @@ async function loadAvailablePlayers(input: {
   categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
   statsLookup: DraftPlayerStatsLookup | null;
   cursor?: string;
+  search?: string;
+  requestedPlayerId?: string;
 }): Promise<{ items: PlayerLite[]; nextCursor: string | null }> {
   if (input.limit <= 0) {
     return { items: [], nextCursor: null };
@@ -162,11 +165,7 @@ async function loadAvailablePlayers(input: {
   // Keep the name/club grouping only as a transition guard for databases that
   // have not completed the reviewed identity consolidation yet.
   const normalizedPlayers = normalizeAvailableWaiverPlayers(activePlayers, unavailablePlayerIds);
-  const firstPlayerAfterCursor = input.cursor
-    ? normalizedPlayers.findIndex((player) => player.id > input.cursor!)
-    : 0;
-  const pageStart = firstPlayerAfterCursor >= 0 ? firstPlayerAfterCursor : normalizedPlayers.length;
-  const players = normalizedPlayers.slice(pageStart, pageStart + input.limit);
+  const { page: players, hasMore } = pageAvailablePlayers(normalizedPlayers, input);
   const statlyZCohortPlayers = normalizedPlayers.map((player) =>
     buildAvailableDraftPlayer(player, input.statsLookup)
   );
@@ -201,7 +200,7 @@ async function loadAvailablePlayers(input: {
 
   return {
     items,
-    nextCursor: pageStart + players.length < normalizedPlayers.length && last ? last.id : null,
+    nextCursor: hasMore && last ? last.id : null,
   };
 }
 
@@ -269,6 +268,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       MAX_ACTIVITY_LIMIT
     );
     const playersCursor = url.searchParams.get('playersCursor') || undefined;
+    const playersSearch = url.searchParams.get('playersSearch')?.slice(0, 100) || undefined;
+    const requestedPlayerId = url.searchParams.get('playerId') || undefined;
     const activityCursor = url.searchParams.get('activityCursor') || undefined;
     const activityBefore = activityCursor ? parseWaiverActivityCursor(activityCursor) : null;
     const [{ selectedCategories, categoryDirections, noLosers }, statsLookup] = await Promise.all([
@@ -297,6 +298,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           leagueId,
           limit: playersLimit,
           cursor: playersCursor,
+          search: playersSearch,
+          requestedPlayerId,
           selectedCategories,
           categoryDirections,
           statsLookup,

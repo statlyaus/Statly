@@ -44,6 +44,8 @@ authority when a document and implementation disagree; fix the document in the s
   standings, finals, and commissioner actions.
 - [Design principles](product/design-principles.md) — AFL-first product quality, responsive data
   density, accessibility, and evidence expectations.
+- [Style guide](product/style-guide.md) — owner design decisions, tokens, colour roles, type,
+  components, voice and copy rules, and the enforcement phases.
 
 ## Runbooks
 

@@ -26,7 +26,8 @@ export function getTradeRulesForOffer<Rules extends TradeRulePresentationInput>(
 export function getTradeReviewSummary(rules: TradeRulePresentationInput): string {
   const path = getTradeAcceptancePath(rules.reviewMode);
   if (path.kind === 'immediate') return 'No review';
-  if (path.kind === 'commissioner-review') return 'Commissioner approves';
+  if (path.kind === 'commissioner-review')
+    return `Commissioner approves within ${rules.reviewHours}h`;
   return `${rules.reviewHours}h veto, ${formatVotes(rules.vetoThreshold)}`;
 }
 
@@ -60,7 +61,7 @@ export function getTradeAcceptanceConsequence(
   }
 
   if (path.kind === 'commissioner-review') {
-    return `If ${recipientTeamName} accepts, the commissioner approves it before the players swap.`;
+    return `If ${recipientTeamName} accepts, the commissioner has ${rules.reviewHours} hours to approve or reject it. Undecided, it goes through.`;
   }
 
   return `If ${recipientTeamName} accepts, the league has ${rules.reviewHours} hours to veto. ${formatVotes(rules.vetoThreshold)} blocks it.`;
@@ -71,7 +72,7 @@ export function getTradeAcceptanceSummary(rules: TradeRulePresentationInput): st
   const path = getTradeAcceptancePath(rules.reviewMode);
   if (path.kind === 'immediate') return 'The players swap straight away.';
   if (path.kind === 'commissioner-review') {
-    return 'The commissioner approves it before the players swap.';
+    return `The commissioner has ${rules.reviewHours} hours to approve or reject it. Undecided, it goes through.`;
   }
   return `The league has ${rules.reviewHours} hours to veto. ${formatVotes(rules.vetoThreshold)} blocks it.`;
 }

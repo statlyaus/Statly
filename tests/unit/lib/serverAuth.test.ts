@@ -263,4 +263,32 @@ describe('server authentication boundary', () => {
     mocks.verifySessionCookie.mockRejectedValue(firebaseError('auth/session-cookie-revoked'));
     await expect(requireUser()).rejects.toThrow('Authenticated user not found');
   });
+
+  describe('revocation check cache', () => {
+    it('checks a token with Firebase once a minute, not on every request', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+      mocks.verifyIdToken.mockResolvedValue({ uid: 'cached-user', exp: 1_000_000 / 1000 + 3600 });
+
+      await resolveAuthenticatedUserId({ authorization: 'Bearer cache-token' });
+      now.mockReturnValue(1_000_000 + 59_000);
+      await expect(
+        resolveAuthenticatedUserId({ authorization: 'Bearer cache-token' })
+      ).resolves.toBe('cached-user');
+      expect(mocks.verifyIdToken).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(1_000_000 + 61_000);
+      await resolveAuthenticatedUserId({ authorization: 'Bearer cache-token' });
+      expect(mocks.verifyIdToken).toHaveBeenCalledTimes(2);
+      now.mockRestore();
+    });
+
+    it('never caches a refused token', async () => {
+      mocks.verifyIdToken.mockRejectedValue(firebaseError('auth/id-token-revoked'));
+
+      await resolveAuthenticatedUserId({ authorization: 'Bearer refused-token' });
+      await resolveAuthenticatedUserId({ authorization: 'Bearer refused-token' });
+
+      expect(mocks.verifyIdToken).toHaveBeenCalledTimes(2);
+    });
+  });
 });

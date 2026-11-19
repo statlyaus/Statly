@@ -1132,7 +1132,16 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       }
     });
 
-    await this.mirrorPriorityProjection(input.leagueId, input.claim.teamId);
+    try {
+      await this.mirrorPriorityProjection(input.leagueId, input.claim.teamId);
+    } catch (error) {
+      // The claim is already cancelled in Prisma; a stale projection must not report a failure.
+      logger.warn('Failed to mirror waiver priority projection after cancel', {
+        leagueId: input.leagueId,
+        claimId: input.claimId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     await this.updateClaimProjection(input.leagueId, input.claimId, {
       status: 'CANCELLED',
       processedAt: cancelledAt,

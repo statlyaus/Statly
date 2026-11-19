@@ -182,7 +182,11 @@ function titleCaseName(value: string): string {
     .join(' ');
 }
 
-async function resolvePlayerIdentityCandidates(requestedPlayerId: string): Promise<string[]> {
+/**
+ * The one Prisma player the requested id names: the player with that id, else the single player its
+ * slug or name prefixes match. Null when none matches or several do (namesakes are never merged).
+ */
+async function resolveCanonicalPlayerId(requestedPlayerId: string): Promise<string | null> {
   const normalized = requestedPlayerId.trim();
   const slugAsWords = normalized.replace(/[_-]+/g, ' ').trim();
   const tokens = slugAsWords.split(/\s+/).filter(Boolean);
@@ -213,8 +217,9 @@ async function resolvePlayerIdentityCandidates(requestedPlayerId: string): Promi
     take: 20,
   });
 
-  for (const player of players) seedIds.add(player.id);
-  return Array.from(seedIds);
+  if (players.some((player) => player.id === normalized)) return normalized;
+  const matchedIds = new Set(players.map((player) => player.id));
+  return matchedIds.size === 1 ? ([...matchedIds][0] ?? null) : null;
 }
 
 async function loadPrismaOwnerships(input: {
@@ -309,10 +314,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const userId = await getAuthenticatedUserId(request);
     if (!userId) return commonErrors.unauthorized();
 
-    const [leagueContexts, playerIds] = await Promise.all([
+    const [leagueContexts, playerId] = await Promise.all([
       loadUserLeagueContexts(userId),
-      resolvePlayerIdentityCandidates(requestedPlayerId),
+      resolveCanonicalPlayerId(requestedPlayerId),
     ]);
+    if (!playerId) {
+      return commonErrors.notFound('This player does not match exactly one Statly player.');
+    }
+    const playerIds = [playerId];
     const leagueIds = leagueContexts.map((league) => league.leagueId);
 
     const [ownershipByLeagueId, waiversByLeagueId] = await Promise.all([
@@ -323,7 +332,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const leagues = leagueContexts.map((league) =>
       buildAvailabilityRow({
         league,
-        playerId: requestedPlayerId,
+        playerId,
         owner: ownershipByLeagueId.get(league.leagueId),
         waiver: waiversByLeagueId.get(league.leagueId),
       })
