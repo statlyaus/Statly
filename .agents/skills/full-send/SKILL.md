@@ -19,8 +19,9 @@ screenshots). "Full send" confirms those for this task and adds three things: pr
 change, a review loop before filing, and the merge gate below.
 
 It does not add permission for: deleting data, touching production or infrastructure, go-live
-checklist steps, waking the grading VM without `STATLY_VM_WAKE_REASON`, force-pushing, amending or
-resetting a committed branch, pushing `main`, or closing a pull request you did not open.
+checklist steps, restoring or starting the grading VM (only `statly-vm`, only with the owner's
+go-ahead), force-pushing, amending or resetting a committed branch, pushing `main`, or closing a pull
+request you did not open.
 
 ## Steps
 

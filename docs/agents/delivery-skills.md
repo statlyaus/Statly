@@ -46,6 +46,17 @@ wake one when checks go green or the branch falls BEHIND. The PR queue workflow 
 auto-merge pull requests one at a time (see "Pull request queue" in `docs/development/delivery.md`);
 one without auto-merge still needs one word from you: "babysit".
 
+**Two scripts for pull requests.** `Scripts/ci/pr-failures.sh <n>` prints a pull request's merge
+state, each failing check with the first error lines of its log, and its unresolved review threads,
+in one call; `pr-findings` runs it first on every wake instead of `gh pr checks` and `gh run view`.
+`Scripts/ci/await-pr.sh <n> [--timeout-min N]` is how a session waits for its own pull request to
+merge before running post-merge steps: started with Bash `run_in_background` (or the Monitor tool,
+with `--timeout-min` within the monitor's deadline), it polls once a minute and exits printing one
+line: `MERGED <sha>`, `FAILED <checks>`, `CHANGES_REQUESTED`, `BEHIND` (only when auto-merge is
+off; the PR queue updates the rest), `DIRTY`, `CLOSED` or `TIMEOUT` (default 60 minutes). Do not
+write `sleep` loops or ask the owner whether it merged. Both fall back to REST when GitHub's
+GraphQL limit is used up.
+
 ## Learning them
 
 - "I'm going to bed. Land the waiver fix." Say **full send**. The agent proves the fix, runs a
@@ -72,7 +83,7 @@ one without auto-merge still needs one word from you: "babysit".
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sol-loop` reviews with OpenAI's GPT Sol through T3 tools | `review-loop`: a fresh Claude subagent via the Agent tool, continued with `SendMessage` between rounds.                                                                                                                          |
 | `council` seats three providers' flagships                | Three Claude seats with different lenses. Independence of reading, not of training; the skill says so.                                                                                                                           |
-| `babysit-pr` ships a Python watcher, `pr-wait`            | `pr-findings`: the desktop app's Auto-fix monitor watches; the skill keeps only the handling rules.                                                                                                                              |
+| `babysit-pr` ships a Python watcher, `pr-wait`            | `pr-findings`: the desktop app's Auto-fix monitor watches; the skill keeps only the handling rules. `Scripts/ci/await-pr.sh` replaces `pr-wait` for a session's own merge.                                                       |
 | Rebase and `--force-with-lease`                           | Merge `main` into the branch (`sync_with_base_branch` in an app worktree), `gh pr update-branch`, or rebuild from `origin/main`. Agents never force-push; Dependabot force-pushes its own branches, so agents leave those to it. |
 | Open a real PR, never a draft                             | A draft only for complex work you want to see rendered first, per `docs/development/delivery.md`.                                                                                                                                |
 | Merge when the gate passes, stay until merged             | Auto-merge, Auto-fix and auto-archive via the app; the session ends its turn and is woken on events.                                                                                                                             |
