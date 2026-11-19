@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => {
   };
   return {
     getLeagueMembershipAccess: vi.fn(),
+    leagueFindUnique: vi.fn(),
+    categoryCount: vi.fn(),
+    seasonFindFirst: vi.fn(),
     socialMuteFindFirst: vi.fn(),
     leagueMemberFindFirst: vi.fn(),
     tx,
@@ -24,6 +27,9 @@ vi.mock('@/server/leagues/membership', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     $transaction: mocks.transaction,
+    league: { findUnique: mocks.leagueFindUnique },
+    socialBoardCategory: { count: mocks.categoryCount },
+    leagueSeason: { findFirst: mocks.seasonFindFirst },
     socialMute: { findFirst: mocks.socialMuteFindFirst },
     leagueMember: { findFirst: mocks.leagueMemberFindFirst },
   },
@@ -34,6 +40,10 @@ import { requireLeagueSocialAccess, requireSocialPublishingAccess } from './soci
 describe('league social access', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: the read-only path finds the defaults missing, so the seeding transaction runs.
+    mocks.leagueFindUnique.mockResolvedValue({ activeSeasonId: 'season-1' });
+    mocks.categoryCount.mockResolvedValue(0);
+    mocks.seasonFindFirst.mockResolvedValue({ id: 'season-1' });
     mocks.tx.league.findUnique.mockResolvedValue({
       id: 'league-1',
       activeSeasonId: 'season-1',
@@ -116,6 +126,22 @@ describe('league social access', () => {
         where: { seasonId_slug: { seasonId: 'season-1', slug: 'announcements' } },
       })
     );
+  });
+
+  it('reads the active season without a write transaction once the default categories exist', async () => {
+    mocks.categoryCount.mockResolvedValue(4);
+    mocks.getLeagueMembershipAccess.mockResolvedValue({
+      isMember: true,
+      memberId: 'member-1',
+      canManage: false,
+    });
+    mocks.leagueMemberFindFirst.mockResolvedValue({ socialStandardsAcceptedAt: new Date() });
+    mocks.socialMuteFindFirst.mockResolvedValue(null);
+
+    const access = await requireLeagueSocialAccess('league-1', 'user-1');
+
+    expect(access.seasonId).toBe('season-1');
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('requires community standards acceptance before publication', async () => {
