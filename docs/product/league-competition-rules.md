@@ -484,7 +484,9 @@ The same rule keeps a free agent whose AFL game has started in the round in prog
 roster until the round ends (owner decision 2026-11-11): free-agent Add
 (`POST /api/leagues/[id]/roster/add`, through `src/server/rosters/freeAgentAdd.ts`) answers 409 with
 code `PLAYER_LOCKED` ("<name>'s game has started; he can be picked up after the round ends."), and 503
-with code `TIMING_UNAVAILABLE` when match timing cannot be read.
+with code `TIMING_UNAVAILABLE` when match timing cannot be read. A waiver claim for such a player stays pending
+(owner decision 2026-11-15): the waiver run leaves it unsettled, and a later run settles it once the
+round has ended.
 
 ## Interchange autosubs
 
