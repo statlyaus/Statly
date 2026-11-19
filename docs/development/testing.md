@@ -2,6 +2,23 @@
 
 ## Supported checks
 
+Before each commit, run the changed-file check. It is the default pre-commit check for agents; do not
+chain Prettier, ESLint, `tsc` and Vitest by hand:
+
+```sh
+npm run check:changed            # against the merge base with origin/main
+npm run check:changed -- <base>  # against another commit or branch
+```
+
+It takes every file changed since the merge base (committed, staged, unstaged and untracked; deleted
+files excluded) and runs `prettier --check`, ESLint with the CI rules on changed JS/TS files,
+`npm run typecheck` once if application TypeScript changed, `npm run typecheck:tests` once if test
+TypeScript changed, and `vitest related --run` with the unit config. Files under `functions/` and
+`etl/` get Prettier only; their packages own their own checks. It prints a pass/FAIL/skip line per
+step and exits non-zero if any step failed. A Prettier failure is fixed with
+`npx prettier --write <file>`. `npm run lint:changed -- <base-sha>` remains the narrower zero-warning
+ESLint ratchet on changed `src` files.
+
 Run the narrowest check while editing, then the complete relevant set before publishing:
 
 ```sh

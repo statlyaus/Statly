@@ -1,1 +1,0 @@
-/Users/robert/.claude/skills/gstack/review/checklist.md

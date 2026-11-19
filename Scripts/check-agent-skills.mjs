@@ -7,18 +7,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const skillsRoot = path.join(repoRoot, '.agents', 'skills');
 
 const requiredUpstreamSkills = [
-  'ask-matt',
-  'code-review',
   'codebase-design',
   'diagnosing-bugs',
-  'domain-modeling',
-  'grill-with-docs',
   'grilling',
-  'implement',
   'prototype',
-  'research',
   'resolving-merge-conflicts',
-  'setup-matt-pocock-skills',
   'tdd',
   'to-spec',
   'to-tickets',
@@ -26,29 +19,18 @@ const requiredUpstreamSkills = [
 
 const approvedThirdPartySkills = { ponytail: 'DietrichGebert/ponytail' };
 
-const explicitInvocationSkills = [
-  'ask-matt',
-  'grill-with-docs',
-  'implement',
-  'setup-matt-pocock-skills',
-  'to-spec',
-  'to-tickets',
-];
+const explicitInvocationSkills = ['to-spec', 'to-tickets'];
 
 const requiredWorkflowSkills = [
-  'code-review',
   'codebase-design',
   'council',
   'diagnosing-bugs',
   'docs-sweep-loop',
-  'domain-modeling',
   'draft-reliability-loop',
   'file-pr',
   'full-send',
   'full-stop',
-  'grill-with-docs',
   'grilling',
-  'implement',
   'leaving-pr-comments',
   'modernize',
   'pr-findings',
@@ -235,18 +217,16 @@ async function checkStatlyGuidance() {
 
   const workflow = await readRepoFile('.agents/skills/statly-engineering-workflow/SKILL.md');
   for (const requiredReference of [
-    'grill-with-docs',
     'grilling',
+    'docs/agents/domain.md',
     'prototype',
     'diagnosing-bugs',
     'codebase-design',
-    'domain-modeling',
-    '`implement`',
     '`ponytail`',
     'tdd',
     'to-spec',
     'to-tickets',
-    'code-review',
+    'review-loop',
     'docs/development/delivery.md',
   ]) {
     assert(
