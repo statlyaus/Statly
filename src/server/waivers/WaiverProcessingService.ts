@@ -25,6 +25,7 @@ import {
 } from '@/server/waivers/waiverPlayerIdentity';
 import { loadPinnedPriorityMemberId } from '@/server/waivers/pinnedWaiverPriority';
 import { publishWaiverOutcome } from '@/server/waivers/waiverActivity';
+import { previousWaiverRunAt } from './nextWaiverRun';
 
 export interface WaiverSettings {
   system?: 'FAAB' | 'PRIORITY' | string;
@@ -324,14 +325,34 @@ export class WaiverProcessingService {
         this.claimStore.loadPendingClaims?.(input.leagueId) ?? Promise.resolve([]),
       ]);
 
-      return await this.processClaims({
+      const result = await this.processClaims({
         leagueId: input.leagueId,
         waiverSettings,
         claims,
       });
+      await this.settleEndedDropHolds(input.leagueId);
+      return result;
     } finally {
       if (lease) await this.claimStore.releaseProcessingLease?.(input.leagueId, lease);
     }
+  }
+
+  /**
+   * A dropped player's waiver hold ends at the first run after the drop (loadWaiverOnlyHolds stops
+   * counting it then). Mark those rows processed, so PENDING means a hold that is still on.
+   */
+  private async settleEndedDropHolds(leagueId: string): Promise<void> {
+    const now = new Date();
+    await this.db.teamAction.updateMany({
+      where: {
+        leagueId,
+        actionType: 'DROP_PLAYER',
+        status: 'PENDING',
+        processingAt: { lte: now },
+        createdAt: { lt: previousWaiverRunAt(now) },
+      },
+      data: { status: 'PROCESSED', processedAt: now },
+    });
   }
 
   async processClaims(input: {
