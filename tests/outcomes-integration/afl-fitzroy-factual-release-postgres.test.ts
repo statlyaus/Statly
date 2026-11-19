@@ -4,6 +4,12 @@ import { NextRequest } from 'next/server';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+// These tests call the public trade routes many times from one address; the rate limit is tested in
+// tests/unit/publicTradeRateLimit.test.ts.
+vi.mock('@/server/aflTradeIntelligence/runtime/publicTradeRateLimit', () => ({
+  limitPublicTradeRequest: async () => null,
+}));
+
 const { publicRuntime } = vi.hoisted(() => ({
   publicRuntime: {
     outcomeReadService: null as { list(request: unknown): Promise<unknown> } | null,
