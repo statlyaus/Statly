@@ -12,6 +12,7 @@ import { activeSeasonIdOf, requireActiveSeasonId } from './activeSeason';
 import { normalizeCompetitionRules, type CompetitionRules } from './competitionRules';
 import { normalizeLineupSlots } from './lineupSettings';
 import type { ActiveLineupSlot, LeagueLineupSlot, LineupSlotSettings } from './scoringTypes';
+import { resolveCurrentCompetitionRound } from '@/server/leagues/currentCompetitionRound';
 
 const LINEUP_SLOTS = new Set<LeagueLineupSlot>([
   'FWD',
@@ -403,22 +404,8 @@ export async function resolveCurrentCompetitionRoundNumber(
     orderBy: { round: 'asc' },
     select: { round: true, status: true, startsAt: true, endsAt: true },
   });
-  const playableRounds = rounds.filter(
-    (competitionRound) => competitionRound.status !== 'NO_MATCHUP'
-  );
-  const currentRound =
-    playableRounds.find(
-      (competitionRound) =>
-        competitionRound.startsAt &&
-        competitionRound.startsAt <= now &&
-        (!competitionRound.endsAt || competitionRound.endsAt >= now)
-    ) ??
-    playableRounds.find(
-      (competitionRound) => !competitionRound.startsAt || competitionRound.startsAt > now
-    ) ??
-    playableRounds.at(-1);
-
-  return currentRound?.round ?? null;
+  // The same definition as the matchups page (currentCompetitionRound.ts).
+  return resolveCurrentCompetitionRound(rounds, now)?.round ?? null;
 }
 
 function clubKey(club: string) {
