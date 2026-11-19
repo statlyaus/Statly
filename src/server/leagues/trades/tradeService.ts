@@ -14,7 +14,12 @@ import {
 } from '@/server/leagues/rosterSwap';
 import { findBiteFreeze } from '@/server/leagues/bitePending';
 import { resolveBloodsuckerMemberId } from '@/server/leagues/leagueFormat';
-import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
+import {
+  INTERACTIVE_LEAGUE_LOCK,
+  LeagueBusyError,
+  lockLeagueRowOrBusy,
+  SCHEDULED_LEAGUE_LOCK,
+} from '@/server/leagues/leagueRowLock';
 import { getTransactionWindow } from '@/server/leagues/transactionWindow';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
@@ -229,6 +234,7 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
         id: { notIn: seen },
         OR: [
           { status: 'PENDING_VETO_REVIEW', reviewEndsAt: { lte: now } },
+          { status: 'PENDING_ADMIN_REVIEW', reviewEndsAt: { lte: now } },
           { status: 'OPEN', currentOffer: { expiresAt: { lte: now } } },
         ],
       },
@@ -242,7 +248,10 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
       try {
         // A trade whose review ends mid-round waits for a later run once a traded player's game
         // has started (or match timing is unreadable); it completes after the round ends.
-        if (candidate.status === 'PENDING_VETO_REVIEW') {
+        if (
+          candidate.status === 'PENDING_VETO_REVIEW' ||
+          candidate.status === 'PENDING_ADMIN_REVIEW'
+        ) {
           await enforcePlayersMovable(
             candidate.leagueId,
             await loadOfferedPlayerIds(candidate.leagueId, candidate.id),
@@ -251,7 +260,7 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
         }
 
         const completed = await prisma.$transaction(async (tx) => {
-          await lockLeagueRow(tx, candidate.leagueId);
+          await lockLeagueRowOrBusy(tx, candidate.leagueId, SCHEDULED_LEAGUE_LOCK.waitMs);
           const thread = await loadTradeForMutation(tx, candidate.id);
           if (!thread || thread.version !== candidate.version) return;
 
@@ -305,10 +314,22 @@ export async function processDueLeagueTrades(now = new Date(), limit = 50): Prom
             processed += 1;
             return result.status === 'COMPLETED';
           }
-        });
+
+          // A commissioner review the commissioner has not decided is approved when it ends.
+          if (
+            thread.status === 'PENDING_ADMIN_REVIEW' &&
+            thread.reviewEndsAt &&
+            thread.reviewEndsAt <= now
+          ) {
+            const result = await finalizeTrade(tx, thread, null, now);
+            processed += 1;
+            return result.status === 'COMPLETED';
+          }
+        }, SCHEDULED_LEAGUE_LOCK.transaction);
         if (completed) await refreshOwnershipProjection(candidate.leagueId);
       } catch (error) {
-        if (error instanceof TradeServiceError) continue;
+        // A busy league (round scoring holds the row) is left for the next run.
+        if (error instanceof TradeServiceError || error instanceof LeagueBusyError) continue;
         logger.error('Failed to process a due league trade', {
           threadId: candidate.id,
           error: error instanceof Error ? error.message : String(error),
@@ -355,7 +376,7 @@ async function moveStrandedAdminReviews(
   for (const candidate of stranded) {
     try {
       const completed = await prisma.$transaction(async (tx) => {
-        await lockLeagueRow(tx, candidate.leagueId);
+        await lockLeagueRowOrBusy(tx, candidate.leagueId, SCHEDULED_LEAGUE_LOCK.waitMs);
         const thread = await loadTradeForMutation(tx, candidate.id);
         if (!thread || thread.status !== 'PENDING_ADMIN_REVIEW') return null;
         const reviewMode = resolveTradeReviewMode(
@@ -393,11 +414,11 @@ async function moveStrandedAdminReviews(
           }
         );
         return false;
-      });
+      }, SCHEDULED_LEAGUE_LOCK.transaction);
       if (completed !== null) moved += 1;
       if (completed) await refreshOwnershipProjection(candidate.leagueId);
     } catch (error) {
-      if (error instanceof TradeServiceError) continue;
+      if (error instanceof TradeServiceError || error instanceof LeagueBusyError) continue;
       logger.error('Failed to move a stranded league trade review', {
         threadId: candidate.id,
         error: error instanceof Error ? error.message : String(error),
@@ -597,6 +618,7 @@ async function executeActionInTransaction(
       };
     }
     case 'approve':
+      enforceTradeDeadline(access, now);
       return finalizeTrade(tx, thread, access.memberId, now);
     case 'veto':
       return castVeto(tx, access, thread, now);
@@ -1294,7 +1316,7 @@ async function executeIdempotentTradeCommand<T extends Prisma.InputJsonValue>(
       // Every writer to a league's rosters (waivers, bites, scoring's bite grants) takes this lock
       // first. Taking it before the command row is written lets a trade see their commits, and two
       // trades for one team check the trade limit and roster size one after the other.
-      await lockLeagueRow(tx, access.leagueId);
+      await lockLeagueRowOrBusy(tx, access.leagueId, INTERACTIVE_LEAGUE_LOCK.waitMs);
       const existing = await tx.leagueTradeCommand.findUnique({
         where: {
           leagueId_actorUserId_idempotencyKey: {
@@ -1328,8 +1350,11 @@ async function executeIdempotentTradeCommand<T extends Prisma.InputJsonValue>(
         },
       });
       return result;
-    });
+    }, INTERACTIVE_LEAGUE_LOCK.transaction);
   } catch (error) {
+    if (error instanceof LeagueBusyError) {
+      throw new TradeServiceError('LEAGUE_BUSY', error.message, 503);
+    }
     if (!isUniqueConstraintError(error)) throw error;
     const existing = await prisma.leagueTradeCommand.findUnique({
       where: {

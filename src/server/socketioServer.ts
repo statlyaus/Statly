@@ -10,7 +10,6 @@ import { createServer, type IncomingMessage } from 'http';
 import express from 'express';
 import { Server, type Socket as SocketIOSocket } from 'socket.io';
 
-import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { redisClient } from '@/lib/redis';
@@ -56,6 +55,8 @@ import {
 } from '@/server/socketRedisAdapter';
 import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
 import { flushProcessSentry, initProcessSentry } from '@/server/monitoring/processSentry';
+import { socketMetricsAccess } from '@/server/socketMetricsAuth';
+import { socketClientIp } from '@/server/socketClientIp';
 
 // Report errors to Sentry before anything else can fail (docs/runbooks/monitoring-and-alerts.md).
 initProcessSentry('socket-server');
@@ -79,10 +80,7 @@ type SocketRequestDecision = {
 
 async function evaluateSocketRequest(req: IncomingMessage): Promise<SocketRequestDecision> {
   const start = Date.now();
-  const ip =
-    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-    req.socket.remoteAddress ||
-    'unknown';
+  const ip = socketClientIp(req);
   const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60);
   const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10);
   const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
@@ -218,7 +216,12 @@ app.get('/health', async (_req, res) => {
 });
 
 // Prometheus metrics endpoint
-app.get('/metrics', async (_req, res) => {
+app.get('/metrics', async (req, res) => {
+  const access = socketMetricsAccess(req.headers.authorization);
+  if (access !== 'allowed') {
+    res.status(access === 'unconfigured' ? 503 : 401).end();
+    return;
+  }
   try {
     const activeConnections = (io as any)?.engine?.clientsCount ?? 0;
     const roomsCount = await draftRoomStore.getRoomsCount();
@@ -325,22 +328,7 @@ async function authenticateSocketConnection(
       return next(new Error('Authentication required'));
     }
 
-    if (token.startsWith('dev:')) {
-      if (!isServerDevelopmentAuthEnabled()) {
-        incCounter(METRICS.authFailures);
-        return next(new Error('Authentication required'));
-      }
-
-      const devUserId = token.slice(4).trim();
-      if (!devUserId) {
-        incCounter(METRICS.authFailures);
-        return next(new Error('Authentication required'));
-      }
-
-      socket.data.userId = devUserId;
-      return next();
-    }
-
+    // Dev tokens go through validateAuthToken too: only the scripted tester, and only with dev auth on.
     const uid = await validateAuthToken(token);
     if (!uid) {
       incCounter(METRICS.authFailures);

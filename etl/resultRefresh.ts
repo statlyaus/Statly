@@ -3,7 +3,8 @@
  *
  * - **recent**: in a live window, every RESULTS_REFRESH_MS (10 min), Footywire's last
  *   RESULTS_LAST_MATCHES (18) matches, which covers the latest two rounds, where a new result appears.
- * - **full**: every RESULTS_FULL_SWEEP_MS (6 h), outside live windows only, the whole season. It
+ * - **full**: every RESULTS_FULL_SWEEP_MS (6 h), outside live windows only, and only while a game
+ *   started within RESULTS_SWEEP_WINDOW_MS (7 days), the whole season. It
  *   reads one Footywire page per match (about 10 minutes for a season) and the guard does nothing
  *   else meanwhile, so it never runs while stats are being fetched. A correction Footywire makes to
  *   an older game is ingested by the next sweep (within about 6 hours, or once a long live window
@@ -22,6 +23,19 @@ export const RESULTS_SWEEP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** A full sweep's R pipeline limit; the default 5-minute limit fits only the recent refresh. */
 export const RESULTS_FULL_SWEEP_TIMEOUT_MS = 30 * 60 * 1000;
 
+/**
+ * Whether the 6-hour sweep timer has run out. The guard checks it before asking Firestore whether a
+ * game started in the last 7 days, so an off-live pass costs no Firestore read until a sweep could
+ * actually be due.
+ */
+export function fullSweepTimerDue(input: {
+  now: number;
+  lastFullSweepAt: number;
+  fullSweepMs?: number;
+}): boolean {
+  return input.now - input.lastFullSweepAt >= (input.fullSweepMs ?? RESULTS_FULL_SWEEP_MS);
+}
+
 export function dueResultRefresh(input: {
   now: number;
   live: boolean;
@@ -36,7 +50,7 @@ export function dueResultRefresh(input: {
   const fullSweepMs = input.fullSweepMs ?? RESULTS_FULL_SWEEP_MS;
   if (!input.live) {
     if (!input.gameStartedWithinWindow) return null;
-    return input.now - input.lastFullSweepAt >= fullSweepMs ? 'full' : null;
+    return fullSweepTimerDue({ ...input, fullSweepMs }) ? 'full' : null;
   }
   return input.now - input.lastRecentAt >= refreshMs ? 'recent' : null;
 }

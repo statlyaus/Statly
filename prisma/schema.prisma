@@ -359,6 +359,10 @@ enum LeagueCompetitionAuditEventType {
   BITE_REDONE
   /// A re-score changed the winner of a matchup whose bite was already executed; the bite stands.
   BITE_RESULT_CHANGED
+  /// A manager left or was removed; the payload holds the member, user and whether they left.
+  MEMBER_REMOVED
+  /// The owner handed the league to another manager; the payload holds both users.
+  OWNERSHIP_TRANSFERRED
 }
 
 /// Bloodsucker bites (#1283). OPEN until done; WAITING_LOCK when its deadline fell inside a lock period.

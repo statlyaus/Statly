@@ -7,7 +7,6 @@ import type { Player, PlayerSeasonStatBasis } from '@/types/players';
 type AnyObj = Record<string, unknown>;
 
 let _cache: Player[] | null = null;
-const _filteredCache = new Map<string, Player[]>();
 
 export interface PlayerFilters {
   search?: string;
@@ -350,17 +349,10 @@ async function loadAllPlayers(): Promise<Player[]> {
   return players;
 }
 
+// No per-filter cache: every distinct public search would be kept forever, and filtering the cached
+// list is cheap.
 export async function getPlayers(filters: PlayerFilters = {}): Promise<Player[]> {
-  const key = [
-    filters.search?.toLowerCase() ?? '',
-    filters.team?.toLowerCase() ?? '',
-    filters.position?.toLowerCase() ?? '',
-  ].join('|');
-  if (_filteredCache.has(key)) return _filteredCache.get(key)!;
-  const all = await loadAllPlayers();
-  const filtered = filterPlayers(all, filters);
-  _filteredCache.set(key, filtered);
-  return filtered;
+  return filterPlayers(await loadAllPlayers(), filters);
 }
 
 export async function getPlayer(id: string): Promise<Player | null> {
