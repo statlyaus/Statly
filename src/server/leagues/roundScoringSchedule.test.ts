@@ -111,7 +111,7 @@ describe('scoreStartedLeagueRounds stalled rounds', () => {
     ]);
     expect(run.failedLeagueIds).toEqual([]);
     expect(loggerErrorMock).toHaveBeenCalledWith(
-      'Scheduled round scoring is stalled for a league round',
+      'Round scoring stalled: league league-a, season 2026, round 3 (unavailable-stats)',
       expect.objectContaining({
         leagueId: 'league-a',
         round: 3,
@@ -188,7 +188,7 @@ describe('scoreStartedLeagueRounds stalled rounds', () => {
       },
     ]);
     expect(loggerErrorMock).toHaveBeenCalledWith(
-      'Scheduled round scoring is stalled for a league round',
+      'Round scoring stalled: league league-a, season 2026, round 3 (afl-matches-not-final)',
       expect.objectContaining({
         reason: 'afl-matches-not-final',
         aflMatchIdsNotFinal: ['m2', 'm3'],

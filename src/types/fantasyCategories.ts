@@ -370,107 +370,30 @@ export function normalizeFantasyCategoryKeys(
   return categories.length > 0 ? categories : [...fallback];
 }
 
-// Weights for all statistical categories (excluding games, timeOnGroundPct, disposalEffPct)
-const WEIGHTS: Record<
-  keyof Omit<
-    PlayerStats,
-    | 'games'
-    | 'timeOnGroundPct'
-    | 'disposalEffPct'
-    | 'seasonTotal'
-    | 'avgFantasyPoints'
-    | 'lastGameFantasyPoints'
-  >,
-  number
-> = {
-  kicks: 0.5,
-  handballs: 0.5,
-  marks: 2.5,
-  tackles: 4,
+// Statly value weights: one per league category in the nine-category preset, nothing else.
+const STATLY_VALUE_WEIGHTS: Record<(typeof REAL_DATA_NINE_CATEGORY_PRESET)[number], number> = {
   goals: 6,
-  hitouts: 1.5,
-  clearances: 4,
+  tackles: 4,
   inside50s: 2,
-  rebound50s: 3,
-  clangers: -3,
-  contestedPossessions: 3,
-  uncontestedPossessions: 0.5,
-  freesFor: 1,
-  freesAgainst: -1,
-  onePercenters: 3,
-  goalAssists: 3,
-  turnovers: -2,
   intercepts: 4,
-  metresGained: 0.05, // ~1 per 20m
   contestedMarks: 4,
+  rebound50s: 3,
+  contestedPossessions: 3,
   effectiveDisposals: 1,
   scoreInvolvements: 2,
 };
 
 /**
- * Calculate total value using your weighted scoring system with efficiency modulation
+ * Statly value: the weighted per-game sum of the nine league categories, from recorded stats only
+ * (no time-on-ground or disposal-efficiency adjustment, which the data does not reliably carry).
  */
 export function calculateTotalValue(s: PlayerStats): number {
   const gp = Math.max(1, s.games); // avoid divide-by-zero
-
-  // Per‑game rates
-  const perGame = {
-    kicks: s.kicks / gp,
-    handballs: s.handballs / gp,
-    marks: s.marks / gp,
-    tackles: s.tackles / gp,
-    goals: s.goals / gp,
-    hitouts: s.hitouts / gp,
-    clearances: s.clearances / gp,
-    inside50s: s.inside50s / gp,
-    rebound50s: s.rebound50s / gp,
-    clangers: s.clangers / gp,
-    contestedPossessions: s.contestedPossessions / gp,
-    uncontestedPossessions: s.uncontestedPossessions / gp,
-    freesFor: s.freesFor / gp,
-    freesAgainst: s.freesAgainst / gp,
-    onePercenters: s.onePercenters / gp,
-    goalAssists: s.goalAssists / gp,
-    turnovers: s.turnovers / gp,
-    intercepts: s.intercepts / gp,
-    metresGained: s.metresGained / gp,
-    contestedMarks: s.contestedMarks / gp,
-    effectiveDisposals: s.effectiveDisposals / gp,
-    scoreInvolvements: s.scoreInvolvements / gp,
-  };
-
-  // Weighted base score
-  let base =
-    perGame.kicks * WEIGHTS.kicks +
-    perGame.handballs * WEIGHTS.handballs +
-    perGame.marks * WEIGHTS.marks +
-    perGame.tackles * WEIGHTS.tackles +
-    perGame.goals * WEIGHTS.goals +
-    perGame.hitouts * WEIGHTS.hitouts +
-    perGame.clearances * WEIGHTS.clearances +
-    perGame.inside50s * WEIGHTS.inside50s +
-    perGame.rebound50s * WEIGHTS.rebound50s +
-    perGame.clangers * WEIGHTS.clangers +
-    perGame.contestedPossessions * WEIGHTS.contestedPossessions +
-    perGame.uncontestedPossessions * WEIGHTS.uncontestedPossessions +
-    perGame.freesFor * WEIGHTS.freesFor +
-    perGame.freesAgainst * WEIGHTS.freesAgainst +
-    perGame.onePercenters * WEIGHTS.onePercenters +
-    perGame.goalAssists * WEIGHTS.goalAssists +
-    perGame.turnovers * WEIGHTS.turnovers +
-    perGame.intercepts * WEIGHTS.intercepts +
-    perGame.metresGained * WEIGHTS.metresGained +
-    perGame.contestedMarks * WEIGHTS.contestedMarks +
-    perGame.effectiveDisposals * WEIGHTS.effectiveDisposals +
-    perGame.scoreInvolvements * WEIGHTS.scoreInvolvements;
-
-  // Efficiency modulation factors (your exact specification)
-  const togFactor = Math.min(1.5, Math.max(0.7, (s.timeOnGroundPct - 60) / 40 + 1));
-  const deFactor = Math.min(1.3, Math.max(0.8, (s.disposalEffPct - 70) / 30 + 1));
-
-  const totalValue = base * togFactor * deFactor;
-
-  return Math.round(totalValue);
+  let total = 0;
+  for (const key of REAL_DATA_NINE_CATEGORY_PRESET) {
+    total += (s[key] / gp) * STATLY_VALUE_WEIGHTS[key];
+  }
+  return Math.round(total);
 }
 
 /**

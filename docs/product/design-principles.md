@@ -73,8 +73,11 @@ immersive route that skips the shell, such as the live draft room, renders its o
 Follow the conventions managers already read on AFL.com.au, ESPN and Yahoo rather than generic
 dashboard patterns.
 
-- Chrome: a solid `brand-bar` header with high-contrast navigation and a filled active item; content
-  sits in white cards on a light page, never on decorative gradients or photography.
+- Chrome: the fantasy app uses a solid `brand-bar` header with high-contrast navigation and a filled
+  active item. The public site (owner, 2026-11-18) uses a white header: the "Statly." wordmark, a
+  thin divider, then text tabs, the current one navy semibold with a 2px underline on the header's
+  bottom border; the footer is `brand-bar`. Content sits in white cards on a light page, never on
+  decorative gradients or photography.
 - Story surfaces are the exception (owner, 2026-11-16): the public home page hero and `/afl/stories`
   pages use the owner's collage designs. Club colours only, no club or league marks and no press
   photography. Sketches are original; a generated illustration shows invented people, never a real
