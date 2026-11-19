@@ -722,7 +722,9 @@ describe('current valuation refresh PostgreSQL tracer', () => {
     if (newer.state !== 'factual_refresh_complete') {
       throw new TypeError(`Expected factual refresh completion, received ${newer.state}.`);
     }
-    expect(newer.privateFactualAuthority.candidateId).not.toBe(firstCandidate.rows[0]?.candidate_id);
+    expect(newer.privateFactualAuthority.candidateId).not.toBe(
+      firstCandidate.rows[0]?.candidate_id
+    );
 
     await expect(
       refresh.refreshCurrent({

@@ -1164,6 +1164,66 @@ describe.sequential('league trade service transactions', () => {
     ).toMatchObject({ [ids.firstMember]: false, [ids.secondMember]: false });
   });
 
+  it('approves an ADMIN trade the commissioner has not reviewed when its review hours end', async () => {
+    await setReviewMode('ADMIN');
+    const created = await createTrade();
+    const accepted = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      {
+        action: 'accept',
+        expectedVersion: created.version,
+        idempotencyKey: 'accept-admin-window-0001',
+      },
+      now
+    );
+    expect(accepted).toMatchObject({ status: 'PENDING_ADMIN_REVIEW' });
+
+    await expect(
+      service.processDueLeagueTrades(new Date(now.getTime() + 25 * 60 * 60 * 1000))
+    ).resolves.toBe(1);
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.secondMember);
+    await expect(
+      prisma.leagueTradeThread.findUniqueOrThrow({ where: { id: created.threadId } })
+    ).resolves.toMatchObject({ status: 'COMPLETED' });
+  });
+
+  it('refuses commissioner approval after the trade deadline', async () => {
+    await setReviewMode('ADMIN');
+    const created = await createTrade();
+    const accepted = await service.executeLeagueTradeAction(
+      ids.league,
+      ids.secondUser,
+      created.threadId,
+      {
+        action: 'accept',
+        expectedVersion: created.version,
+        idempotencyKey: 'accept-admin-deadline-0001',
+      },
+      now
+    );
+    await prisma.leagueSettings.update({
+      where: { id: ids.settings },
+      data: { tradeDeadline: new Date(now.getTime() + 60_000) },
+    });
+
+    await expect(
+      service.executeLeagueTradeAction(
+        ids.league,
+        ids.commissionerUser,
+        created.threadId,
+        {
+          action: 'approve',
+          expectedVersion: accepted.version,
+          idempotencyKey: 'approve-admin-deadline-0001',
+        },
+        new Date(now.getTime() + 120_000)
+      )
+    ).rejects.toMatchObject({ code: 'TRADE_DEADLINE_PASSED' });
+    await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.firstMember);
+  });
+
   it('completes a VETO trade when its review window expires without enough vetoes', async () => {
     await setReviewMode('VETO', 3);
     const created = await createTrade();
