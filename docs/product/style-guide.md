@@ -263,8 +263,10 @@ A list of times may carry one "Times in AEST" note instead of a zone on every ro
 ### Copy patterns
 
 - **Errors:** what failed, what is still true, what to do. "League not created. Nothing was saved.
-  Check your connection and try again." Problems the user cannot fix use a service-unavailable
-  message instead.
+  Check your connection and try again." For an outage the user cannot fix, name what is down and what
+  it blocks, and promise no fix time: "Waivers are down, so your claim was not saved. Try again in a
+  few minutes." On the outcomes site: "Trade records are unavailable. This page cannot load until
+  they are back."
 - **Success:** state the persisted fact. "Waiver claim saved. It runs at 6 am AEST on Wednesday 17
   June."
 - **Empty states:** why the view is empty, plus one next action.
