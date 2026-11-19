@@ -193,6 +193,20 @@ function validateCreateDraftRequest(body: CreateDraftRequest): ValidatedDraftReq
   return { ok: true, timeZone, scheduledStartTime };
 }
 
+class DraftAlreadyExistsError extends Error {
+  constructor(readonly draftId: string) {
+    super('This league already has a draft.');
+    this.name = 'DraftAlreadyExistsError';
+  }
+}
+
+/** Two creates racing past the check: the second hits Draft.leagueId's unique index (P2002). */
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const userId = await getAuthenticatedUserId(request);
@@ -246,6 +260,13 @@ export async function POST(request: NextRequest) {
       if (!league) {
         throw new Error('League not found');
       }
+
+      // A league has one draft (Draft.leagueId is unique): refuse a second before changing settings.
+      const existingDraft = await tx.draft.findUnique({
+        where: { leagueId: league.id },
+        select: { id: true },
+      });
+      if (existingDraft) throw new DraftAlreadyExistsError(existingDraft.id);
 
       const leagueCategories = normalizeLeagueCategories(body.leagueData?.categories);
       if (!hasStoredLeagueCategories(league.categoriesJson)) {
@@ -392,6 +413,11 @@ export async function POST(request: NextRequest) {
 
     return successResponse(responseData, 201);
   } catch (error) {
+    if (error instanceof DraftAlreadyExistsError || isUniqueConstraintError(error)) {
+      return errorResponse('This league already has a draft.', 409, 'DRAFT_EXISTS', {
+        ...(error instanceof DraftAlreadyExistsError ? { draftId: error.draftId } : {}),
+      });
+    }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to create draft', {
       error: {

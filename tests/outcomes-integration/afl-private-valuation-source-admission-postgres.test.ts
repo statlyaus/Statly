@@ -82,10 +82,7 @@ describe.sequential('private valuation source admission in PostgreSQL', () => {
       new PostgresAflTradePrivateValuationSourceAdmission(client).admit(admissionInput),
       new PostgresAflTradePrivateValuationSourceAdmission(client).admit(admissionInput),
     ]);
-    expect(concurrent.map(({ state }) => state).sort()).toEqual([
-      'admitted',
-      'already_admitted',
-    ]);
+    expect(concurrent.map(({ state }) => state).sort()).toEqual(['admitted', 'already_admitted']);
     const result = concurrent.find(({ state }) => state === 'admitted');
     if (!result) throw new TypeError('Concurrent admission did not retain one created result.');
 
@@ -136,10 +133,9 @@ describe.sequential('private valuation source admission in PostgreSQL', () => {
       )
     ).resolves.toMatchObject({ rows: [{ admissions: '1' }] });
     await expect(
-      outcomesPool.query(
-        `UPDATE outcome_source_capture SET status='staged' WHERE capture_id=$1`,
-        [staged.binding.content.sourceCaptureId]
-      )
+      outcomesPool.query(`UPDATE outcome_source_capture SET status='staged' WHERE capture_id=$1`, [
+        staged.binding.content.sourceCaptureId,
+      ])
     ).rejects.toThrow(/requires exact automated non-production admission/);
     await expect(
       client.transaction(async (transaction) => {

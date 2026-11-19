@@ -5,6 +5,9 @@ fantasy products. Use ESPN Fantasy as a benchmark for structured tables and rost
 SuperCoach for AFL statistical depth, and Yahoo Fantasy for approachable mobile draft/trade flows.
 These are quality references, not assets or layouts to copy.
 
+The [style guide](style-guide.md) is the reference for owner decisions, tokens, type, components and
+copy; this page holds the principles behind them.
+
 ## Product hierarchy
 
 - Lead with the user's current decision: pick, set lineup, compare matchup, claim, trade, or administer.
@@ -21,7 +24,7 @@ These are quality references, not assets or layouts to copy.
   `node Scripts/design/count-raw-colours.mjs --top 15` lists the files that still use raw palette
   classes or colour literals; once a file is clean, add it to `tests/unit/designTokenColours.test.ts`
   so it cannot regress.
-- Preserve light/dark behavior supported by the surrounding surface.
+- Statly is light only (owner, 2026-11-19). Do not add `dark:` utilities or a dark theme.
 - Keep spacing, radius, typography, and elevation consistent with existing tokens.
 - Type is Saira for text (`font-sans`) and Saira Extra Condensed for headings and scores
   (`font-display`, set in uppercase by the base layer; add `normal-case` to opt out). Numbers are
@@ -73,8 +76,11 @@ immersive route that skips the shell, such as the live draft room, renders its o
 Follow the conventions managers already read on AFL.com.au, ESPN and Yahoo rather than generic
 dashboard patterns.
 
-- Chrome: a solid `brand-bar` header with high-contrast navigation and a filled active item; content
-  sits in white cards on a light page, never on decorative gradients or photography.
+- Chrome: the fantasy app uses a solid `brand-bar` header with high-contrast navigation and a filled
+  active item. The public site (owner, 2026-11-18) uses a white header: the "Statly." wordmark, a
+  thin divider, then text tabs, the current one navy semibold with a 2px underline on the header's
+  bottom border; the footer is `brand-bar`. Content sits in white cards on a light page, never on
+  decorative gradients or photography.
 - Story surfaces are the exception (owner, 2026-11-16): the public home page hero and `/afl/stories`
   pages use the owner's collage designs. Club colours only, no club or league marks and no press
   photography. Sketches are original; a generated illustration shows invented people, never a real
@@ -93,7 +99,8 @@ dashboard patterns.
 - Show real state only. Omit a module rather than fill it with estimates or placeholder numbers.
 - One palette. Area tokens such as `--league-*` and `--trade-*` alias the core tokens; no area
   gets its own colour scheme, card shadow or accent. Primary actions and focus use the navy
-  `brand-bar`.
+  `brand-bar`. The one exception is the warm paper surface mode on public trade pages (owner,
+  2026-11-19), which redefines the core roles rather than adding a palette.
 - Section navigation is one row of underlined tabs with a thin divider between groups, never pills
   or uppercase group labels. Each page opens with a plain heading, not a coloured hero block.
 
