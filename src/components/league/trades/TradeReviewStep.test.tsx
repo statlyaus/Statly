@@ -169,7 +169,7 @@ describe('TradeReviewStep', () => {
     );
     const adminCheckpoint = screen.getByRole('region', { name: 'Send to AFL Legends?' });
     expect(adminCheckpoint).toHaveTextContent(/AFL Legends accepts/i);
-    expect(adminCheckpoint).toHaveTextContent(/commissioner approves it before the players swap/i);
+    expect(adminCheckpoint).toHaveTextContent(/commissioner has 24 hours to approve or reject it/i);
     expect(adminCheckpoint).not.toHaveTextContent(/straight away/i);
 
     rerender(
