@@ -118,6 +118,16 @@ describe('creating a league with a format', () => {
     }
   );
 
+  it('refuses a Bloodsucker league sized below the Bloodsucker minimum', async () => {
+    const { result, tx } = create({ leagueFormat: 'BLOODSUCKER', maxTeams: 6 });
+
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      code: 'BLOODSUCKER_INSUFFICIENT_TEAMS',
+    });
+    expect(tx.league.create).not.toHaveBeenCalled();
+  });
+
   it('refuses a Bloodsucker league with weekly waivers', async () => {
     const { result, tx } = create({ leagueFormat: 'BLOODSUCKER', waiverRule: 'weekly' });
 

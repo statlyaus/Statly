@@ -29,7 +29,10 @@ import {
 } from '@/types/leagues';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import { startLeagueSeason } from '@/server/leagues/activeSeason';
-import { getLeagueFormatWaiverError } from '@/server/leagues/leagueFormat';
+import {
+  getBloodsuckerLeagueSizeError,
+  getLeagueFormatWaiverError,
+} from '@/server/leagues/leagueFormat';
 import {
   BLOODSUCKER_UNAVAILABLE_MESSAGE,
   isBloodsuckerSelectable,
@@ -74,6 +77,7 @@ export class LeagueCreationError extends Error {
       | 'PROJECTION'
       | 'BLOODSUCKER_REQUIRES_ROLLING'
       | 'BLOODSUCKER_UNAVAILABLE'
+      | 'BLOODSUCKER_INSUFFICIENT_TEAMS'
   ) {
     super(message);
     this.name = 'LeagueCreationError';
@@ -252,6 +256,10 @@ function normalizeAndValidateInput(input: CreateLeagueRequest): NormalizedCreate
   }
   if (normalized.leagueFormat === 'BLOODSUCKER' && !isBloodsuckerSelectable()) {
     throw new LeagueCreationError(BLOODSUCKER_UNAVAILABLE_MESSAGE, 400, 'BLOODSUCKER_UNAVAILABLE');
+  }
+  const sizeError = getBloodsuckerLeagueSizeError(normalized.leagueFormat, normalized.maxTeams);
+  if (sizeError) {
+    throw new LeagueCreationError(sizeError, 400, 'BLOODSUCKER_INSUFFICIENT_TEAMS');
   }
   // BR-03: a Bloodsucker league defaults to rolling waivers and refuses weekly ones.
   const waiverError = getLeagueFormatWaiverError({
