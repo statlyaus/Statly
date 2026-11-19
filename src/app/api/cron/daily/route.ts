@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { isCronRequestAuthorized } from '@/lib/cronAuth';
+import { pruneOutboxes } from '@/server/outbox/outboxRetention';
 
 // Daily cron endpoint, called by the hosting scheduler
 // - Runs on Node.js runtime so firebase-admin and other Node libs work
@@ -18,17 +19,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 👉 Put your daily job logic here (refresh stats, cleanup, reports, etc.)
-    // Example:
-    // const { db } = await import('@/lib/firebaseAdmin');
-    // await db.collection('jobs').add({ job: 'daily', ranAt: Date.now() });
+    const outbox = await pruneOutboxes();
 
     const ranAt = new Date().toISOString();
     const durationMs = Date.now() - started;
-    console.log('[CRON] Daily job ran', { ranAt, durationMs });
+    console.log('[CRON] Daily job ran', { ranAt, durationMs, outbox });
 
     return NextResponse.json(
-      { ok: true, ranAt, durationMs },
+      { ok: true, ranAt, durationMs, outbox },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (err: unknown) {

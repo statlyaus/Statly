@@ -54,6 +54,24 @@ describe('DraftControls server reasons', () => {
     );
   });
 
+  it('says any commissioner can resume a paused draft, not only the one who paused it', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: true, data: { message: 'Draft paused successfully' } }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    );
+    render(<DraftControls draftId="draft-1" draftStatus="LIVE" isLeagueOwner />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pause draft' }));
+
+    expect(await screen.findByText('Draft paused. A commissioner can resume it.')).toBeTruthy();
+    expect(screen.queryByText(/Only you can resume/u)).toBeNull();
+  });
+
   it("shows the server's reason when a resume is refused", async () => {
     fetchMock.mockResolvedValue(refusal('Only paused drafts can be resumed', 400, 'BAD_REQUEST'));
     render(<DraftControls draftId="draft-1" draftStatus="PAUSED" isLeagueOwner />);

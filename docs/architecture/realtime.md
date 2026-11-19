@@ -18,6 +18,11 @@ season's social room, the room `social:join` admits after a membership check. Th
 snapshot from Prisma on the server, so on each `trade:update` for its league, and again after a
 reconnect, it refreshes that snapshot rather than patching browser state.
 
+The daily cron (`/api/cron/daily`, `server/outbox/outboxRetention.ts`) deletes trade outbox rows older
+than 7 days whatever their status (nothing reads one after it is announced, and nothing drains the
+outbox on Netlify) and logs an error for rows of either outbox at the 8-attempt retry limit. Social
+outbox rows are kept: they also back unread counts, channel sequences and read positions.
+
 A private trade stage (`trade:proposed`, `trade:countered`, `trade:declined`, `trade:withdrawn`,
 `trade:expired`) reaches only the two teams in the trade, read from the thread in the database
 (`src/server/leagues/trades/tradeAudience.ts`). Acceptance into review, vetoes, rulings and completion
