@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { logger } from '@/lib/logger';
+
 import {
   createAflTradeStoryBundleSource,
   verifyAflTradeStoryBundle,
@@ -56,19 +58,41 @@ export function createPublicTradeStoryReads(
     const environment = dependencies.environment();
     if (environment.AFL_TRADE_STORY_PUBLIC_ENABLED?.trim().toLowerCase() !== 'true') return null;
     const approvedId = environment.AFL_TRADE_STORY_PUBLIC_BUNDLE_ID?.trim() ?? '';
-    if (!BUNDLE_ID.test(approvedId)) return null;
+    if (!BUNDLE_ID.test(approvedId)) {
+      logger.warn('Public trade pages are on but the approved bundle id is malformed', {
+        approvedId,
+      });
+      return null;
+    }
     if (loaded?.approvedId === approvedId) return loaded.source;
     try {
       const text = await dependencies.loadBundleText(approvedId);
-      if (text === null) return null;
+      if (text === null) {
+        logger.warn('Public trade pages are on but the approved bundle is not stored', {
+          approvedId,
+        });
+        return null;
+      }
       const bundle = verifyAflTradeStoryBundle(JSON.parse(text));
-      if (bundle.bundleId !== approvedId) return null;
+      if (bundle.bundleId !== approvedId) {
+        logger.warn(
+          'Public trade pages are on but the stored bundle does not match the approved id',
+          {
+            approvedId,
+            storedId: bundle.bundleId,
+          }
+        );
+        return null;
+      }
       loaded = {
         approvedId,
         source: createAflTradeStoryBundleSource(bundle, { audience: 'public' }),
       };
       return loaded.source;
-    } catch {
+    } catch (error) {
+      logger.error('Public trade pages are on but the approved bundle could not be loaded', error, {
+        approvedId,
+      });
       return null;
     }
   }
