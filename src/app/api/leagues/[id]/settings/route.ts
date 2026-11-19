@@ -756,7 +756,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             : null,
           draftStarted: lockedDraftStarted,
         });
-        if (scoringSettingsChanged && currentLocks.scoring) {
+        // A No Losers move is a scoring change too: publication may have locked scoring meanwhile.
+        if ((scoringSettingsChanged || noLosersChanged) && currentLocks.scoring) {
           return {
             refused: { error: currentLocks.scoring, code: 'SCORING_SETTINGS_LOCKED' },
             draftStarted: lockedDraftStarted,
