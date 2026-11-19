@@ -13,7 +13,7 @@ const { adminAuth } = vi.hoisted(() => ({
 
 vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth }));
 
-import { DELETE, POST } from '@/app/api/auth/session/route';
+import { DELETE } from '@/app/api/auth/session/route';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
 import { config as proxyConfig, proxy } from '@/proxy';
 
@@ -84,40 +84,28 @@ describe('session request security', () => {
     expect(rejectedResponse.headers.has('access-control-allow-origin')).toBe(false);
   });
 
-  it('rejects cross-origin session creation before reading or verifying the token', async () => {
-    const response = await POST(
-      new Request('https://statly.test/api/auth/session', {
-        method: 'POST',
-        headers: { origin: 'https://attacker.example', 'content-type': 'application/json' },
-        body: 'not-json',
-      })
-    );
-
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: 'Invalid request origin' });
-    expect(adminAuth.verifyIdToken).not.toHaveBeenCalled();
-    expect(adminAuth.createSessionCookie).not.toHaveBeenCalled();
+  it('no longer mints session cookies: the route only clears one', async () => {
+    const route = await import('@/app/api/auth/session/route');
+    expect('POST' in route).toBe(false);
   });
 
-  it('creates and clears sessions for same-origin requests', async () => {
-    const createResponse = await POST(
-      new Request('https://statly.test/api/auth/session', {
-        method: 'POST',
-        headers: { origin: 'https://statly.test', 'content-type': 'application/json' },
-        body: JSON.stringify({ idToken: 'firebase-token' }),
-      })
-    );
+  it('clears the session for a same-origin request and refuses a cross-origin one', async () => {
     const deleteResponse = await DELETE(
       new Request('https://statly.test/api/auth/session', {
         method: 'DELETE',
         headers: { origin: 'https://statly.test' },
       })
     );
+    const crossOrigin = await DELETE(
+      new Request('https://statly.test/api/auth/session', {
+        method: 'DELETE',
+        headers: { origin: 'https://attacker.example' },
+      })
+    );
 
-    expect(createResponse.status).toBe(200);
-    expect(createResponse.headers.get('set-cookie')).toContain('statly_session=session-cookie');
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.headers.get('set-cookie')).toContain('statly_session=');
+    expect(crossOrigin.status).toBe(403);
   });
 
   it('requires server-verified identity at both authenticated layout boundaries', () => {

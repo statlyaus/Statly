@@ -21,6 +21,7 @@ import {
   developmentToolsNotFoundResponse,
   isDevelopmentToolsEnabled,
 } from '@/server/developmentTools';
+import { MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 
 /**
  * Create a test draft for development/testing
@@ -39,7 +40,8 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const lobbyOpenTime = addMinutes(now, 1);
     const draftStartTime = addMinutes(now, 6);
-    const teamCount = quickCompletionMode ? 2 : 12;
+    // Quick mode stays short through its small roster; it still needs enough teams to start.
+    const teamCount = quickCompletionMode ? MIN_LEAGUE_TEAMS : 12;
     const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS };
     const rosterSize = getRosterSizeFromPositionLimits(positionLimits);
     const benchSize = getBenchSizeFromPositionLimits(positionLimits);

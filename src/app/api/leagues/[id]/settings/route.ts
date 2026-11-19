@@ -39,6 +39,7 @@ import { isActivePrismaMembership } from '@/server/leagues/activeMembership';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import {
   buildLeagueFormatAudit,
+  getBloodsuckerLeagueSizeError,
   getLeagueFormatWaiverError,
   normalizeLeagueFormat,
 } from '@/server/leagues/leagueFormat';
@@ -677,6 +678,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           { status: 400 }
         );
       }
+      // The league size and the format are checked together, only when one of them changes, so a
+      // save of other settings never trips over a stored size.
+      const bloodsuckerSizeError =
+        maxTeams !== undefined || leagueFormat !== currentFormat.leagueFormat
+          ? getBloodsuckerLeagueSizeError(leagueFormat, maxTeams ?? prismaLeague.settings.maxTeams)
+          : null;
+      if (bloodsuckerSizeError) {
+        return NextResponse.json(
+          { error: bloodsuckerSizeError, code: 'BLOODSUCKER_INSUFFICIENT_TEAMS' },
+          { status: 400 }
+        );
+      }
       const formatChanged =
         leagueFormat !== currentFormat.leagueFormat ||
         bloodsuckerMemberId !== currentFormat.bloodsuckerMemberId;
@@ -756,7 +769,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             : null,
           draftStarted: lockedDraftStarted,
         });
-        if (scoringSettingsChanged && currentLocks.scoring) {
+        // A No Losers move is a scoring change too: publication may have locked scoring meanwhile.
+        if ((scoringSettingsChanged || noLosersChanged) && currentLocks.scoring) {
           return {
             refused: { error: currentLocks.scoring, code: 'SCORING_SETTINGS_LOCKED' },
             draftStarted: lockedDraftStarted,

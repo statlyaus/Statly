@@ -158,10 +158,7 @@ const reviewSet = createAflTradeWorkbookTransactionReviewSet(staging);
 
 function relabelledReviewSet() {
   const original = reviewSet.content.transactions[0]!;
-  const parties = [
-    { ...original.parties[0]!, clubLabel: 'Fabricated Club' },
-    original.parties[1]!,
-  ];
+  const parties = [{ ...original.parties[0]!, clubLabel: 'Fabricated Club' }, original.parties[1]!];
   const partySetSha256 = sha256AflTradeCanonicalJson(parties);
   const subjectWithoutId = { ...original, parties, partySetSha256 };
   const subject = {

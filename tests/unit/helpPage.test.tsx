@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import HelpPage from '@/app/(app)/help/page';
+import { NO_LOSERS_EXPLANATION } from '@/lib/leagueFormatOptions';
 import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 describe('/help', () => {
@@ -23,6 +24,13 @@ describe('/help', () => {
     expect(text).toContain('6 am Melbourne');
     expect(text).toContain('7 pm Thursday, Sydney time');
     expect(text).not.toMatch(/price change|trades per week|points each/i);
+  });
+
+  it('explains the No Losers format, which changes how every category counts', () => {
+    render(<HelpPage />);
+
+    expect(screen.getByRole('heading', { name: 'League formats' })).toBeInTheDocument();
+    expect(screen.getByText(NO_LOSERS_EXPLANATION)).toBeInTheDocument();
   });
 
   it('offers no contact form or chat that sends nothing', () => {

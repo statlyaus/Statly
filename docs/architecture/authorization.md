@@ -11,7 +11,7 @@ whether the action is operational rather than competition state.
 | Tier                     | Requirement                                                                                                        | Resolved by                                                                                | Examples                                                                       |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | Public                   | none                                                                                                               | route code                                                                                 | player and match reads, public draft and trade research, `/api/ping`           |
-| User                     | verified Firebase identity                                                                                         | `getAuthenticatedUserId` (`src/lib/serverAuth.ts`)                                         | user watchlists, user league settings, team actions                            |
+| User                     | verified Firebase identity                                                                                         | `getAuthenticatedUserId` (`src/lib/serverAuth.ts`)                                         | `/api/user/teams`, `/api/dashboard/home`, team actions                         |
 | League participant       | active `LeagueMember`                                                                                              | `getLeagueMembershipAccess` (`src/server/leagues/membership.ts`)                           | own roster and lineup writes, social posting, own draft queue and watchlist    |
 | League manager           | league owner or co-commissioner                                                                                    | `canManageLeague` / `LeagueMembershipAccess.canManage`                                     | waiver processing, league settings, social moderation, draft lifecycle actions |
 | Basketball section       | listed in `BASKETBALL_ALLOWED_USER_IDS` (unset: any user outside production, nobody in production); others get 404 | `canUseBasketball` (`src/server/basketball/basketballAccess.ts`)                           | every `/basketball` page and `/api/basketball/*` route, before the owner check |
@@ -28,6 +28,9 @@ commissioner rights, roster ownership, or waiver eligibility.
 belonging to a disabled or deleted user) to no identity. A verification that could not run, such as
 Firebase Admin being unreachable or misconfigured, rejects instead: pages show the error boundary and
 routes fail with a server error, rather than sending a signed-in browser to `/login` and back.
+An ID token that passed the full check (signature and revocation) is trusted again for up to one
+minute (never past its own expiry), so revoking or disabling a user takes effect within a minute
+while pages do not call Firebase on every request.
 
 A browser the server sends to `/login` while Firebase still holds a cached ID token (valid for up to
 an hour after the account is revoked or disabled) does not bounce straight back. `AuthForm` forces a
@@ -122,7 +125,10 @@ Rules and indexes reach Firebase only on the next `firebase deploy`.
 - Scope every query, cache key, event, and write to the league and season of the resolved context.
 - Keep operator and scheduler credentials out of league role logic; they authorize infrastructure
   actions, not competition state.
-- Preserve fail-closed behaviour: an unset credential denies access.
+- Preserve fail-closed behaviour: an unset credential denies access. The one exception is the Local
+  development tier: with both dev-auth flags on outside production, a request carrying no credential
+  at all is the scripted tester `statly-dev-tester` (`getDevelopmentUserId` in `src/lib/serverAuth.ts`);
+  any supplied but invalid credential is still refused.
 
 ## Testing
 

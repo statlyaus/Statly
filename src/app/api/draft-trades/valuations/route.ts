@@ -7,6 +7,7 @@ import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publ
 import { AflTradeValueReadError } from '@/server/aflTradeIntelligence/publication/valueReadService';
 import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import { aflTradePublicIdSchema, aflTradeValuationViewSchema } from '@/types/aflTradeIntelligence';
+import { limitPublicTradeRequest } from '@/server/aflTradeIntelligence/runtime/publicTradeRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,8 @@ const querySchema = z
   .strict();
 
 export async function GET(request: NextRequest) {
+  const limited = await limitPublicTradeRequest(request);
+  if (limited) return limited;
   const url = new URL(request.url);
   const tradeIds = url.searchParams.getAll('tradeId');
   const parsed = querySchema.safeParse({
