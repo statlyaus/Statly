@@ -108,7 +108,7 @@ from the fixture's. A missing result keeps alerting every hour until it is store
 
 What to do:
 
-1. Look at the ETL logs (Cloud Run `statly-etl`) for `AFL results ingest failed`. The usual causes are
+1. Look at the ETL logs (Cloud Run job `statly-etl`) for `AFL results ingest failed`. The usual causes are
    a Footywire or fitzRoy failure, `DATABASE_URL` unset, or a database outage. Every failure writes
    nothing; the ETL retries every 10 minutes while a stats window is open (6 hours after each start)
    and re-reads the whole season every 6 hours outside one, which also picks up a correction to an
