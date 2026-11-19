@@ -28,6 +28,9 @@ commissioner rights, roster ownership, or waiver eligibility.
 belonging to a disabled or deleted user) to no identity. A verification that could not run, such as
 Firebase Admin being unreachable or misconfigured, rejects instead: pages show the error boundary and
 routes fail with a server error, rather than sending a signed-in browser to `/login` and back.
+An ID token that passed the full check (signature and revocation) is trusted again for up to one
+minute (never past its own expiry), so revoking or disabling a user takes effect within a minute
+while pages do not call Firebase on every request.
 
 A browser the server sends to `/login` while Firebase still holds a cached ID token (valid for up to
 an hour after the account is revoked or disabled) does not bounce straight back. `AuthForm` forces a
