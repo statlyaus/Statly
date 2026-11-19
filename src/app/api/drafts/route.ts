@@ -395,12 +395,15 @@ export async function POST(request: NextRequest) {
       createdAt: result.draft.createdAt.toISOString(),
       currentPick: result.draft.currentPick,
       currentRound: result.draft.round,
-      participants: result.members.map((member, index) =>
-        index === 0 ? 'You (Admin)' : `CPU Team ${index}`
-      ),
+      // The league's drafting teams in draft-order slots (a Bloodsucker does not draft).
+      teamCount: result.members.length,
+      participants: result.members.map((member, index) => ({
+        slot: index + 1,
+        memberId: member.id,
+        teamName: member.teamName,
+        displayName: member.user.displayName,
+      })),
       picks: [],
-      yourSlot: 1, // You always get slot 1
-      adminPrivileges: true,
     };
 
     logger.info('Draft created successfully', {
