@@ -125,7 +125,9 @@ Use disposable databases or fixtures for verification. Never use `prisma/dev.db`
 3. Reject realtime success that is not backed by persisted state and reconnect/catch-up behavior.
 4. Reject Firestore or fallback data becoming canonical through an error path.
 5. For UI work, preserve semantic tokens, keyboard access, accessible names, focus visibility, and
-   mobile reflow; use `.agents/skills/product-design-review/SKILL.md` for product-level reviews.
+   mobile reflow; follow the rules in [the style guide](docs/product/style-guide.md) for tokens,
+   components and user-facing copy; use `.agents/skills/product-design-review/SKILL.md` for
+   product-level reviews.
 6. Read review comments before calling a change reviewed, and confirm a review actually ran: a reviewer
    that skipped or exhausted its budget leaves nothing to read, so silence is not approval. Verify a
    claimed fix in the code or by reproducing it rather than trusting an "addressed in `<sha>`"
