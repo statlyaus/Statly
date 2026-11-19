@@ -209,6 +209,32 @@ npm run dev:down
 Redis-disabled/test modes are for repository-supported builds and tests. Do not use them to mask a
 missing required production dependency.
 
+## Serving a worktree
+
+`dev:serve` runs the web app from the current checkout or worktree on the first free port from 3100,
+so several worktrees can each serve their own branch alongside the usual `localhost:3000`:
+
+```sh
+eval "$(npm run -s db:scratch -- up mybranch)"   # optional: a throwaway database
+npm run dev:serve -- start
+npm run dev:serve -- stop
+```
+
+`start` uses `npm run dev:webpack`, because worktrees share the main checkout's `node_modules`
+through a symlink and Turbopack rejects it. It waits up to 90 seconds (`SERVE_WORKTREE_TIMEOUT`
+changes that) for the server to answer, then prints the URL. Running `start` again prints the URL of
+the server that is already up. `stop` ends only the server this checkout started: its PID and port
+are in `tmp/serve-worktree.pid` and its output in `tmp/serve-worktree.log`. Without an exported
+`DATABASE_URL` the server uses the checkout's `.env`, and a worktree usually has none. `next dev`
+rewrites `AGENTS.md` and `next-env.d.ts` on start; `start` restores them once the server answers,
+unless they already had changes.
+
+The server starts with development sign-in switched on. When no Firebase client configuration is
+present (the usual worktree case), sign in as `admin@statly.dev` with the development phrase:
+`STATLY_LOCAL_AUTH_PHRASE` when it is set, otherwise the default that
+`resolveLocalDevelopmentAuthPhrase()` in `src/lib/devAuth.ts` builds. It is a local-only fixture
+credential, never a production one.
+
 ## Firebase Admin credentials
 
 Prefer workload identity or the deployment platform's secret manager. For an authorized local admin
