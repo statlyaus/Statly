@@ -12,6 +12,7 @@ not authorize unrelated redesign or runtime changes.
 
 - `AGENTS.md`
 - `docs/product/design-principles.md`
+- `docs/product/style-guide.md` for owner decisions, tokens, components and copy rules
 - the affected route/layout, shared primitives, and domain documentation
 - the supplied design, screenshot, or product goal when one exists
 - `.agents/skills/unslop-design/SKILL.md` for public or marketing surfaces, to avoid stock SaaS defaults
