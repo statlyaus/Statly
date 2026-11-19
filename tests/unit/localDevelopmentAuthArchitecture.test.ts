@@ -34,7 +34,10 @@ describe('local development auth architecture', () => {
     expect(serverAuth).toContain('request.cookies.get(DEVELOPMENT_AUTH_COOKIE)');
     expect(nextApiAuth).toContain('resolveAuthenticatedUserId');
     expect(proxy).toContain('isServerDevelopmentAuthEnabled()');
-    expect(socketServer).toContain('isServerDevelopmentAuthEnabled()');
+    // The socket server hands every token, dev ones included, to validateAuthToken (serverAuth),
+    // which applies the dev-auth gate; it no longer trusts dev tokens itself.
+    expect(socketServer).toContain('validateAuthToken(token)');
+    expect(socketServer).not.toContain("token.startsWith('dev:')");
     expect(pickCommand).toContain('isServerDevelopmentAuthEnabled()');
     expect(leaguePage).toContain('getAuthenticatedUserIdFromServerContext()');
     expect(teamPage).toContain('getAuthenticatedUserIdFromServerContext()');
@@ -81,7 +84,7 @@ describe('local development auth architecture', () => {
 
     expect(source).toContain('if (!isDevelopmentToolsEnabled())');
     expect(source).toContain("body?.mode === 'quick-completion'");
-    expect(source).toContain('const teamCount = quickCompletionMode ? 2 : 12');
+    expect(source).toContain('const teamCount = quickCompletionMode ? MIN_LEAGUE_TEAMS : 12');
     expect(source).toContain('const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS }');
     expect(source).toContain('calculateDraftCapacity');
     expect(source).toContain('positionLimitsJson: positionLimits');

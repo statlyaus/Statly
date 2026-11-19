@@ -103,9 +103,13 @@ function gh(args, { allowFailure = false } = {}) {
   return { ok: result.status === 0, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
 }
 
-const QUERY = `query($owner: String!, $name: String!) {
+// One query for 50 pull requests with their check runs timed out (HTTP 502/504) and stalled the
+// queue, so pull requests are read a small page at a time.
+const PAGE_SIZE = 10;
+const QUERY = `query($owner: String!, $name: String!, $after: String) {
   repository(owner: $owner, name: $name) {
-    pullRequests(states: OPEN, baseRefName: "main", first: 50) {
+    pullRequests(states: OPEN, baseRefName: "main", first: ${PAGE_SIZE}, after: $after) {
+      pageInfo { hasNextPage endCursor }
       nodes {
         number createdAt isDraft isCrossRepository mergeStateStatus headRefName
         autoMergeRequest { enabledAt }
@@ -124,19 +128,23 @@ const QUERY = `query($owner: String!, $name: String!) {
   }
 }`;
 
-export function loadPullRequests(repo) {
+/**
+ * @param {string} repo
+ * @param {(args: string[]) => { stdout: string }} [run]
+ */
+export function loadPullRequests(repo, run = gh) {
   const [owner, name] = repo.split('/');
-  const { stdout } = gh([
-    'api',
-    'graphql',
-    '-f',
-    `query=${QUERY}`,
-    '-F',
-    `owner=${owner}`,
-    '-F',
-    `name=${name}`,
-  ]);
-  return JSON.parse(stdout).data.repository.pullRequests.nodes.map((node) => {
+  const nodes = [];
+  let after = null;
+  do {
+    const args = ['api', 'graphql', '-f', `query=${QUERY}`, '-F', `owner=${owner}`];
+    args.push('-F', `name=${name}`);
+    if (after) args.push('-f', `after=${after}`);
+    const page = JSON.parse(run(args).stdout).data.repository.pullRequests;
+    nodes.push(...page.nodes);
+    after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+  } while (after);
+  return nodes.map((node) => {
     const commit = node.commits.nodes[0]?.commit;
     return {
       number: node.number,

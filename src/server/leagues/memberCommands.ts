@@ -106,11 +106,25 @@ export function memberRemovalBlock(
  * Removes a member while the league is still forming. Once a draft starts or the competition is
  * published, rosters, fixtures and standings depend on every team, so the member stays.
  */
+/**
+ * Takes the League row lock before membership is read (a no-op write on PostgreSQL; SQLite already
+ * serializes transactions), so join, remove, transfer and update never interleave. False when the
+ * league does not exist.
+ */
+async function lockLeagueRow(tx: Prisma.TransactionClient, leagueId: string): Promise<boolean> {
+  const locked =
+    await tx.$executeRaw`UPDATE "League" SET "ownerId" = "ownerId" WHERE "id" = ${leagueId}`;
+  return locked > 0;
+}
+
 export async function removeLeagueMember(
   input: MemberCommandInput,
   client: CommandClient = defaultPrisma
 ): Promise<MemberCommandResult<{ removedUserId: string; memberCount: number }>> {
   return client.$transaction(async (tx) => {
+    if (!(await lockLeagueRow(tx, input.leagueId))) {
+      return fail('league-not-found', 'League not found.');
+    }
     const league = await loadLeagueForCommand(tx, input.leagueId);
     if (!league) return fail('league-not-found', 'League not found.');
 
@@ -198,6 +212,9 @@ export async function updateLeagueMember(
   client: CommandClient = defaultPrisma
 ): Promise<MemberCommandResult<UpdatedLeagueMember, UpdateMemberFailureCode>> {
   return client.$transaction(async (tx) => {
+    if (!(await lockLeagueRow(tx, input.leagueId))) {
+      return fail('league-not-found', 'League not found.');
+    }
     const league = await tx.league.findUnique({
       where: { id: input.leagueId },
       select: {
@@ -267,6 +284,9 @@ export async function transferLeagueOwnership(
   client: CommandClient = defaultPrisma
 ): Promise<MemberCommandResult<{ ownerUserId: string }>> {
   return client.$transaction(async (tx) => {
+    if (!(await lockLeagueRow(tx, input.leagueId))) {
+      return fail('league-not-found', 'League not found.');
+    }
     const league = await loadLeagueForCommand(tx, input.leagueId);
     if (!league) return fail('league-not-found', 'League not found.');
     if (league.ownerId !== input.actorUserId) {
@@ -363,11 +383,9 @@ export async function joinLeague(
   client: CommandClient = defaultPrisma
 ): Promise<MemberCommandResult<JoinLeagueData, JoinLeagueFailureCode>> {
   return client.$transaction(async (tx) => {
-    // SQLite already serializes Prisma transactions; on PostgreSQL this no-op write takes the league
-    // row lock before membership is read, so a concurrent join waits and then sees this one.
-    const locked =
-      await tx.$executeRaw`UPDATE "League" SET "ownerId" = "ownerId" WHERE "id" = ${input.leagueId}`;
-    if (locked === 0) return fail('league-not-found', 'League not found.');
+    // A concurrent join, remove or transfer waits here and then sees this one.
+    if (!(await lockLeagueRow(tx, input.leagueId)))
+      return fail('league-not-found', 'League not found.');
 
     const league = await tx.league.findUnique({
       where: { id: input.leagueId },
