@@ -5,6 +5,7 @@ import { runFetchPipeline, runFixturePipeline, runResultPipeline } from './fetch
 import { FINAL_STATS_WINDOW_MS, statsWindowOpen, type FixtureMatch } from './fixtureIngest';
 import {
   dueResultRefresh,
+  fullSweepTimerDue,
   RESULTS_FULL_SWEEP_TIMEOUT_MS,
   RESULTS_LAST_MATCHES,
   RESULTS_SWEEP_WINDOW_MS,
@@ -106,7 +107,11 @@ async function refreshResultsIfDue({
     live,
     lastRecentAt: lastResultsRefreshAt,
     lastFullSweepAt: lastResultsFullSweepAt,
-    gameStartedWithinWindow: live || (await gameStartedSince(now - RESULTS_SWEEP_WINDOW_MS, now)),
+    // Off live, the Firestore window check runs only once the sweep timer is due.
+    gameStartedWithinWindow:
+      live ||
+      (fullSweepTimerDue({ now, lastFullSweepAt: lastResultsFullSweepAt }) &&
+        (await gameStartedSince(now - RESULTS_SWEEP_WINDOW_MS, now))),
   });
   if (!due) return;
   lastResultsRefreshAt = now;

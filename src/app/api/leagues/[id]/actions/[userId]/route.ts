@@ -8,7 +8,11 @@ import {
   holdsUnexecutedBite,
   LAST_PLAYER_BITE_HELD_MESSAGE,
 } from '@/server/leagues/bitePending';
-import { lockLeagueRow } from '@/server/leagues/leagueRowLock';
+import {
+  INTERACTIVE_LEAGUE_LOCK,
+  LeagueBusyError,
+  lockLeagueRowOrBusy,
+} from '@/server/leagues/leagueRowLock';
 import {
   describeLockedPlayers,
   findPlayersLockedForMove,
@@ -158,7 +162,7 @@ export async function POST(
       // BR-30, E12: a member with a Bloodsucker bite waiting, or whose matchup against the
       // Bloodsucker has ended and is not final, cannot drop. Checked under the League row lock the
       // grant and the bite take, so a drop never races a bite on the same roster.
-      await lockLeagueRow(tx, leagueId);
+      await lockLeagueRowOrBusy(tx, leagueId, INTERACTIVE_LEAGUE_LOCK.waitMs);
       const freeze = await findBiteFreeze(tx, leagueId, member.id);
       if (freeze) return freeze;
       // A Bloodsucker with a bite to make keeps one player to send back (#1343).
@@ -190,7 +194,7 @@ export async function POST(
         },
       });
       return true;
-    });
+    }, INTERACTIVE_LEAGUE_LOCK.transaction);
     if (typeof dropped === 'object') {
       // Same flat shape as the window refusal, so clients read one `code` field.
       return NextResponse.json({ error: dropped.message, code: dropped.code }, { status: 409 });
@@ -238,6 +242,10 @@ export async function POST(
       },
     });
   } catch (error) {
+    // Round scoring holds the League row while it runs: say so instead of a bare 500.
+    if (error instanceof LeagueBusyError) {
+      return errorResponse(error.message, error.status, error.code);
+    }
     logger.error('Failed to create team action', {
       error: error instanceof Error ? error.message : String(error),
     });
