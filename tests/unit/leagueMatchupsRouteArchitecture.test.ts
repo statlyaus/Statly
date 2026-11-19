@@ -84,6 +84,8 @@ describe('league matchup API route architecture', () => {
     expect(matchupsRoute).toContain('userId');
     expect(matchupsRoute).not.toContain('generateLeagueFixtures');
     expect(matchupsRoute).toContain('Fixtures are published from Competition Rules');
+    expect(matchupsRoute).toContain('edit it under Fixtures in Competition Rules');
+    expect(matchupsRoute).not.toContain('publish a new fixture version');
     expect(matchupsRoute).toContain('export async function GET');
     expect(matchupsRoute).toContain('export async function POST');
 
