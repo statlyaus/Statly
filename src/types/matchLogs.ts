@@ -15,6 +15,8 @@ export interface MatchLog {
   goalAssists?: number;
   scoreInvolvements?: number;
   effectiveDisposals?: number;
+  contestedMarks?: number;
+  contestedPossessions?: number;
   fantasyPoints?: number;
   matchDate?: string;
   venue?: string;
