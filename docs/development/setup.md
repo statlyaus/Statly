@@ -226,14 +226,14 @@ changes that) for the server to answer, then prints the URL. Running `start` aga
 the server that is already up. `stop` ends only the server this checkout started: its PID and port
 are in `tmp/serve-worktree.pid` and its output in `tmp/serve-worktree.log`. Without an exported
 `DATABASE_URL` the server uses the checkout's `.env`, and a worktree usually has none. `next dev`
-rewrites `AGENTS.md` and `next-env.d.ts` on start; `start` restores them once the server answers,
+rewrites `AGENTS.md` and `next-env.d.ts` on start; `start` restores them when it finishes waiting,
 unless they already had changes.
 
 The server starts with development sign-in switched on. When no Firebase client configuration is
-present (the usual worktree case), sign in as `admin@statly.dev` with the development phrase:
-`STATLY_LOCAL_AUTH_PHRASE` when it is set, otherwise the default that
-`resolveLocalDevelopmentAuthPhrase()` in `src/lib/devAuth.ts` builds. It is a local-only fixture
-credential, never a production one.
+present (the usual worktree case), sign in as `admin@statly.dev` with the default phrase that
+`resolveLocalDevelopmentAuthPhrase()` in `src/lib/devAuth.ts` builds. The browser checks it, so
+`STATLY_LOCAL_AUTH_PHRASE` does not change it there: that variable is not `NEXT_PUBLIC_` and never
+reaches client code. It is a local-only fixture credential, never a production one.
 
 ## Firebase Admin credentials
 

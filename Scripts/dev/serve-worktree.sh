@@ -115,6 +115,7 @@ start() {
     sleep 1
   done
 
+  [[ "$restore_generated" == true ]] && git checkout -q HEAD -- "${generated_files[@]}"
   echo "serve-worktree: no answer from $url within ${timeout_seconds}s. A cold first compile can take" >&2
   echo "  minutes on a busy machine; it is still running (log: $log_file). Raise the wait with" >&2
   echo "  SERVE_WORKTREE_TIMEOUT=<seconds>, or stop it with: npm run dev:serve -- stop" >&2
