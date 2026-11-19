@@ -65,6 +65,14 @@ export function proposeFootywireIdentityManifest(input: {
   const mapped = new Set(input.existingIdentities.map((identity) => identity.externalId));
   const linkedPlayers = new Set(input.existingIdentities.map((identity) => identity.playerId));
 
+  // Every club each ETL id was seen at. The ETL id is the slugged name, so an id seen at two clubs
+  // in one season is two namesakes (AFL has no mid-season trades).
+  const clubsByExternalId = new Map<string, Set<string>>();
+  for (const player of input.etlPlayers) {
+    const clubs = clubsByExternalId.get(player.externalId) ?? new Set<string>();
+    clubs.add(normalizeClub(player.club));
+    clubsByExternalId.set(player.externalId, clubs);
+  }
   const etlPlayers = [
     ...new Map(input.etlPlayers.map((player) => [player.externalId, player])).values(),
   ].sort((a, b) => a.externalId.localeCompare(b.externalId));
@@ -88,10 +96,21 @@ export function proposeFootywireIdentityManifest(input: {
       proposal.alreadyMapped += 1;
       continue;
     }
+    const clubs = clubsByExternalId.get(etlPlayer.externalId) ?? new Set<string>();
     const candidates = [
-      ...(candidatesByKey.get(identityKey(etlPlayer.name, etlPlayer.club)) ?? []),
+      ...new Set(
+        input.etlPlayers
+          .filter((player) => player.externalId === etlPlayer.externalId)
+          .flatMap((player) => candidatesByKey.get(identityKey(player.name, player.club)) ?? [])
+      ),
     ].sort();
-    if (candidates.length === 1 && !linkedPlayers.has(candidates[0])) {
+    if (clubs.size > 1) {
+      proposal.unmatched.push({
+        ...etlPlayer,
+        reason: 'AMBIGUOUS',
+        candidatePlayerIds: candidates,
+      });
+    } else if (candidates.length === 1 && !linkedPlayers.has(candidates[0])) {
       proposal.mappings.push({ ...etlPlayer, playerId: candidates[0] });
     } else {
       proposal.unmatched.push({

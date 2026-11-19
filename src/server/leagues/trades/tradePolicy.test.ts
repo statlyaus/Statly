@@ -21,11 +21,11 @@ describe('league trade policy', () => {
     });
   });
 
-  it('routes accepted offers through commissioner review', () => {
+  it('routes accepted offers through commissioner review that ends after the review hours', () => {
     expect(determineAcceptanceTransition('admin', acceptedAt, 24)).toEqual({
       threadStatus: 'PENDING_ADMIN_REVIEW',
       offerStatus: 'ACCEPTED',
-      reviewEndsAt: null,
+      reviewEndsAt: new Date('2026-07-22T12:00:00.000Z'),
       shouldFinalize: false,
     });
   });

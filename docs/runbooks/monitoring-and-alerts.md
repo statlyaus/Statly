@@ -38,6 +38,22 @@ The other crons (daily, injuries, trades, the other NBA jobs) are not monitored:
 the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` and wrap its route in
 `monitorCronRun`; a unit test keeps each monitor's schedule equal to its Netlify function's.
 
+## Stalled scoring round
+
+`/api/cron/scoring` reports a league round that is still not FINAL 12 hours
+(`STALLED_ROUND_GRACE_HOURS`) after its last known match start. Each one is logged as
+`Round scoring stalled: league {leagueId}, season {season}, round {round} ({reason})`, an error that
+opens its own Sentry issue, and the run answers 500 so `cron-scoring` stays red. It keeps alerting
+every hour until the round is FINAL; later rounds of the league still score. The log context and the
+route's JSON (`stalledRounds`) carry the detail for each reason:
+
+| Reason                  | Detail                 | What to do                                                                                                                                                              |
+| ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unavailable-stats`     | `missingPlayerIds`     | Lineup players have no stat totals. Check the round's stats ingest, then each player's Footywire link ([player identity](player-identity.md#footywire-stats-identity)). |
+| `afl-matches-not-final` | `aflMatchIdsNotFinal`  | An AFL match in the round is not final in the fixture. Check the stats/fixture ingest for that match; if the source is wrong, fix the data.                             |
+| `afl-results-missing`   | `waitingOnResults`     | A No Losers league waits on a stored AFL result. See [Missing AFL match result](#missing-afl-match-result).                                                             |
+| `unresolved-matchups`   | `unresolvedMatchupIds` | Two-team matchups stayed unscored. See [unscored finalized matchups](unscored-finalized-matchups.md).                                                                   |
+
 ## Bloodsucker sweep
 
 `cron-bloodsucker` closes due exclusive windows and runs due bites (see
@@ -47,13 +63,13 @@ the plan's included quota is billed. To monitor one, add it to `CRON_MONITORS` a
 Two failed or missed runs in a row open a Sentry issue.
 
 - **Failed league.** A bite that throws, or is still suspended (its matchup not FINAL) 2 hours past
-  its deadline, fails **one** run: the log line `Bloodsucker auto-bite failed` (an error, so it
+  its deadline, fails **one** run: the log line `Bloodsucker auto-bite failed: league {leagueId}, bite {biteId}` (an error, so it
   reaches Sentry) names the league and bite, and the bite row records `failureCount`,
   `lastFailureAt`, `lastFailureReason` and `failureAlertedAt`. That one failed run is the alert.
   Later runs still try the bite every 5 minutes and count the failure, but answer 200 and list the
-  bite in `knownFailingBiteIds` (log line `Bloodsucker auto-bite is still failing`, a warning), so
+  bite in `knownFailingBiteIds` (log line `Bloodsucker auto-bite is still failing: league …, bite …`, a warning), so
   one stuck bite cannot keep the monitor red or hide another league's failure. A window close that
-  fails (`Bloodsucker window close failed`) still fails every run until it works.
+  fails (`Bloodsucker window close failed: league {leagueId}`) still fails every run until it works.
 - **A bite the alert named does not fix itself by being ignored.** Later bites in that league wait
   for it (oldest grant first) and its victim stays frozen. Read the reason and fix the cause; the
   next run then runs the bite with no manual step. Bites that are failing now:
@@ -92,7 +108,7 @@ from the fixture's. A missing result keeps alerting every hour until it is store
 
 What to do:
 
-1. Look at the ETL logs (Cloud Run `statly-etl`) for `AFL results ingest failed`. The usual causes are
+1. Look at the ETL logs (Cloud Run job `statly-etl`) for `AFL results ingest failed`. The usual causes are
    a Footywire or fitzRoy failure, `DATABASE_URL` unset, or a database outage. Every failure writes
    nothing; the ETL retries every 10 minutes while a stats window is open (6 hours after each start)
    and re-reads the whole season every 6 hours outside one while a game started in the last 7 days,

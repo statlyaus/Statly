@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Player } from '@/types/players';
 import type { MatchLog } from '@/types/matchLogs';
+import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import { fetchApi } from '@/lib/api';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import PlayerSummaryCard from './PlayerSummaryCard';
@@ -18,17 +19,11 @@ type PlayerDetailProps = {
   player: Player;
 };
 
-const categoryProfile = [
-  { key: 'goals', label: 'Goals', shortLabel: 'G' },
-  { key: 'goalAssists', label: 'Goal Assists', shortLabel: 'GA' },
-  { key: 'tackles', label: 'Tackles', shortLabel: 'T' },
-  { key: 'clearances', label: 'Clearances', shortLabel: 'CLR' },
-  { key: 'inside50s', label: 'Inside 50s', shortLabel: 'I50' },
-  { key: 'rebound50s', label: 'Rebound 50s', shortLabel: 'R50' },
-  { key: 'hitouts', label: 'Hitouts', shortLabel: 'HO' },
-  { key: 'marks', label: 'Marks', shortLabel: 'M' },
-  { key: 'disposals', label: 'Disposals', shortLabel: 'D' },
-] as const;
+const categoryProfile = REAL_DATA_NINE_CATEGORY_PRESET.map((key) => ({
+  key,
+  label: FANTASY_CATEGORIES[key].label,
+  shortLabel: FANTASY_CATEGORIES[key].shortLabel,
+}));
 
 function normalizeMatchLogsResponse(value: unknown): Record<string, unknown>[] {
   if (Array.isArray(value)) return value as Record<string, unknown>[];
@@ -52,6 +47,8 @@ function readPlayerNumber(player: Player, key: string): number | null {
     rebound50s: ['rebound_50s'],
     scoreInvolvements: ['score_involvements'],
     effectiveDisposals: ['effective_disposals'],
+    contestedMarks: ['contested_marks'],
+    contestedPossessions: ['contested_possessions'],
   };
   const direct = player[key as keyof Player];
   if (typeof direct === 'number' && Number.isFinite(direct)) return direct;
@@ -381,6 +378,8 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
             goalAssists: readMatchNumber('goalAssists', 'goal_assists'),
             scoreInvolvements: readMatchNumber('scoreInvolvements', 'score_involvements'),
             effectiveDisposals: readMatchNumber('effectiveDisposals', 'effective_disposals'),
+            contestedMarks: readMatchNumber('contestedMarks', 'contested_marks'),
+            contestedPossessions: readMatchNumber('contestedPossessions', 'contested_possessions'),
             fantasyPoints: (match.fantasyPoints as number) || (match.fantasyScore as number),
             matchDate: match.matchDate as string,
             venue: match.venue as string,
