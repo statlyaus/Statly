@@ -1,22 +1,29 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Saira, Saira_Extra_Condensed } from 'next/font/google';
+import { Caveat, Geist, Saira } from 'next/font/google';
 
 import '@/index.css';
 
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 import MotionPreferenceProvider from '@/providers/MotionPreferenceProvider';
 
-// Saira for text and Saira Extra Condensed for display (owner's "Stats Panel" pick, 2026-11-08).
+// The three brand typefaces (docs/product/style-guide.md, "Type"): Geist for display and UI, Saira
+// for reading and table numbers, Caveat for one hand note per view.
+const geist = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist',
+});
 const saira = Saira({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-saira',
 });
-const sairaExtraCondensed = Saira_Extra_Condensed({
+const caveat = Caveat({
   subsets: ['latin'],
-  weight: ['600', '700', '800'],
-  variable: '--font-saira-extra-condensed',
+  weight: ['700'],
+  variable: '--font-caveat',
+  // Nothing uses `font-hand` yet; preload it once the first hand note ships.
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -30,7 +37,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
     <html
       lang="en"
       data-theme="light"
-      className={`${saira.variable} ${sairaExtraCondensed.variable}`}
+      className={`${geist.variable} ${saira.variable} ${caveat.variable}`}
     >
       <body className="font-sans" suppressHydrationWarning>
         <PageErrorBoundary name="RootLayout">

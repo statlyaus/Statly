@@ -8,12 +8,12 @@ vi.mock('next/font/google', () => {
   const font = () => ({ className: 'font', variable: 'font' });
   return {
     Caveat: font,
+    Geist: font,
     Inter: font,
     Newsreader: font,
     Oswald: font,
     Permanent_Marker: font,
     Saira: font,
-    Saira_Extra_Condensed: font,
   };
 });
 

@@ -27,8 +27,8 @@ copy; this page holds the principles behind them.
 - Statly is light only (owner, 2026-11-19). Do not add `dark:` utilities or a dark theme.
 - Keep spacing, radius, typography, and elevation consistent with existing tokens.
 - Type is Geist for display and UI, Saira for reading and table numbers, and Caveat for hand notes
-  (owner, 2026-11-19; target, phase 3 of the [style guide](style-guide.md#enforcement)). Until then
-  the code uses Saira (`font-sans`) and Saira Extra Condensed (`font-display`). Numbers are tabular
+  (owner, 2026-11-19): `font-display` is Geist, `font-sans` is Saira and `font-hand` is Caveat, all
+  loaded in `src/app/layout.tsx`. Numbers are tabular
   across the app so stats line up in columns.
 - Navigation icons come from `StatlyIcon` (`src/components/ui/StatlyIcon.tsx`): stroke-only,
   `currentColor`; the glyphs are being redrawn as the hand-drawn marker set in the
