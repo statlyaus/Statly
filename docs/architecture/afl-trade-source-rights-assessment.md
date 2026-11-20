@@ -190,7 +190,8 @@ archive.org use is approved.
 On 2026-10-12 the Statly product owner approved Footyinfo as a new provider for realized trade
 grading (Gate 0A rights and egress, recorded in the owner's session). The decision is exactly seven
 pages, `https://www.footyinfo.com/draft/<year>` for 2019–2025, read as the national draft board with
-passed and removed picks shown. It covers six fields: pick number, club, player or Passed/Removed,
+passed and removed picks shown. On 2026-11-21 the owner added the 2026 page on the same terms, for
+private grading with fetches from the grading VM only. It covers six fields: pick number, club, player or Passed/Removed,
 the route (club chain), points and the note on bids, compensation and assistance. It approves three
 uses:
 
