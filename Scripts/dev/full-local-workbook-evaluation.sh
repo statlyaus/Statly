@@ -73,4 +73,4 @@ echo "workbook evaluation: verifying private synthetic valuation coverage"
 npx tsx Scripts/dev/verify-local-workbook-synthetic-valuations.ts
 
 echo "workbook evaluation: starting the disposable local stack"
-exec npm run dev:full:all
+exec npm run dev:full:local

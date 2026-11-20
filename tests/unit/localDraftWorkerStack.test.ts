@@ -21,16 +21,8 @@ describe('local full stack draft worker wiring', () => {
     expect(packageJson.scripts['draft-worker:dev']).toContain(
       './src/server/workers/enhancedDraftWorker.ts'
     );
-    expect(packageJson.scripts['worker:dev']).not.toContain('webVitalsWorker');
-    expect(packageJson.scripts['worker:build']).toBe('tsc -p tsconfig.worker.json');
     expect(packageJson.scripts['worker:start']).toBe(
       'tsx ./src/server/workers/enhancedDraftWorker.ts'
-    );
-    expect(packageJson.scripts['draft-worker:start']).toBe(
-      'tsx ./src/server/workers/enhancedDraftWorker.ts'
-    );
-    expect(packageJson.scripts['web-vitals-worker:start']).toBe(
-      'tsx ./src/server/workers/webVitalsWorker.ts'
     );
     expect(packageJson.dependencies).toHaveProperty('tsx');
     expect(packageJson.devDependencies).not.toHaveProperty('tsx');

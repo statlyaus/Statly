@@ -104,7 +104,7 @@ draft worker enabled.
 
 ## Local full stack
 
-`npm run dev:full:all` starts the normal local web, Socket.IO, draft-worker and Firebase emulator
+`npm run dev:full:local` starts the normal local web, Socket.IO, draft-worker and Firebase emulator
 boundaries plus a persistent loopback-only PGlite service for the isolated AFL outcomes schema. The
 launcher refuses an already-occupied outcomes port and authenticates its newly spawned database through
 a per-launch nonce stored inside a local-only identity schema before it deploys migrations or seed data.
@@ -222,7 +222,7 @@ projected workbook trade to produce finite received, given-up and net values acr
 it also rejects any scenario that is not publication-prohibited. A malformed trade or unsupported
 asset stops launch instead of receiving a made-up zero. The launcher then selects only the local
 `test_fixture` public-read adapter, enables the private reader for the child stack, and starts the same
-disposable local services as `dev:full:all`. Sign in through the Firebase Auth emulator as
+disposable local services as `dev:full:local`. Sign in through the Firebase Auth emulator as
 `admin@statly.dev` using the local password printed by the stack, then open
 `http://localhost:3000/dev/afl-trade-evaluation` to filter the private archive and review each trade's
 scenario-ready state and synthetic net for at-trade, realized, remaining and current views, then open
@@ -238,7 +238,7 @@ To prove withdrawal, stop the launcher and explicitly override any local environ
 ```sh
 AFL_OUTCOMES_DEV_WORKBOOK_READ_ENABLED=false \
 DATABASE_URL="file:$PWD/.statly-local/statly-app.db" \
-npm run dev:full:all
+npm run dev:full:local
 ```
 
 The `/dev/afl-trade-evaluation` route must return not found while the governed fixture archive, APIs,
@@ -254,7 +254,7 @@ matched bid). Check each page in light and dark mode and at 390 pixels: the scar
 nothing else does, and every lineage trade button opens its trade in the map. The route is not found in
 production, with either switch off, or for any other user.
 
-After `npm run dev:full:all` reports that the web process is ready, open
+After `npm run dev:full:local` reports that the web process is ready, open
 `http://localhost:3000/draft/trades`. Verify the 38 year filters, the 783-trade archive, the 21 trades
 in 2025, and the 20 trades in 1988. Then compare the governed 2025 trade detail page with:
 
