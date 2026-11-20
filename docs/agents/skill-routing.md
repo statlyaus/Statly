@@ -22,6 +22,9 @@ Use these supported routes:
 - Architecture and module design: `codebase-design`, with `docs/agents/domain.md` where terminology
   or ownership is involved.
 - Review: `review-loop`; use `product-design-review` for product-level UI review.
+- Writing or reviewing React and Next.js code (components, hooks, effects, data fetching, bundle
+  size): `vercel-react-best-practices`. Writing or reviewing TypeScript types (casts, `any`,
+  narrowing, exhaustiveness): `ts-best-practices`, with `zod` as the boundary validator.
 - Merge or rebase conflicts: `resolving-merge-conflicts`.
 - Documentation drift: `docs-sweep-loop`.
 - Draft-room reliability: `draft-reliability-loop`.
@@ -35,6 +38,10 @@ Use these supported routes:
 
 Statly override: `grilling` asks one question at a time through the AskUserQuestion tool (owner
 preference), not as prose questions inside a reply.
+
+`vercel-react-best-practices` and `ts-best-practices` are review checklists, not refactor mandates:
+apply them to code a change already touches, never as a reason to widen its scope. Where their
+upstream wording says "this project", read it as general guidance under Statly's own rules.
 
 Where `ponytail` conflicts with `statly-engineering-workflow` (planning gates, `tdd`
 red-green-refactor, test-framework use) or root `AGENTS.md`, the Statly guidance wins. Its
@@ -50,7 +57,8 @@ into `.agents/skills/`. Registered: `statly-engineering-workflow`, `grilling`, `
 `to-tickets`, `ponytail`, `tdd`, `diagnosing-bugs`, `resolving-merge-conflicts`, `codebase-design`,
 `prototype`, `docs-sweep-loop`, `draft-reliability-loop`, `product-design-review`,
 `unslop-design`, `review-loop`, `council`, `file-pr`, `pr-findings`, `modernize`, `takeover`,
-`leaving-pr-comments`, `full-send`, and `full-stop`.
+`leaving-pr-comments`, `full-send`, `full-stop`, `vercel-react-best-practices`, and
+`ts-best-practices`.
 
 Every installed skill is registered. To register a new one, add its symlink:
 `ln -s ../../.agents/skills/<name> .claude/skills/<name>`.
