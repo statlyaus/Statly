@@ -60,3 +60,19 @@ Every installed skill is registered. To register a new one, add its symlink:
 Do not follow upstream instructions to create `CONTEXT.md`, `CONTEXT-MAP.md`, or `docs/adr/`. Record
 domain language in `docs/domain/`, architecture decisions in `docs/architecture/`, specifications and
 tickets in GitHub Issues when authorized, and delivery history in the pull request.
+
+## Agents
+
+Claude Code loads project subagents from `.claude/agents/`.
+
+`repo-steward` audits the whole repository for dead weight, over-engineering, AI-slop prose,
+stock-SaaS design and disorder. Each run checks the whole repository for unused code (`knip.json`
+scopes `npx knip@6.44.1`), docs and worktrees, and reviews one area in rotation plus the past week's
+changes with `ponytail`, `codebase-design`, `unslop-design`, `product-design-review` and
+`docs-sweep-loop`. It ranks findings SAFE, REVIEW or OWNER and writes its report to
+`.statly-local/repo-steward/`. It never edits: the calling session fixes SAFE items through the normal
+workflow. The owner's local scheduled task `statly-repo-steward-weekly` runs it every Monday.
+
+It may load the owner's `unslop:unslop` plugin skill when the session lists it. That is an
+owner-approved exception to the availability rule above; the copy rules in
+`docs/product/style-guide.md` are the tracked baseline.
