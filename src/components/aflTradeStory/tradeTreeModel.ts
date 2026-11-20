@@ -19,7 +19,7 @@ export interface TreeColumn {
 }
 
 /** Who holds a lane from a column on: the club it went to in this trade, or another club. */
-export interface TreeSpan {
+interface TreeSpan {
   /** Column index the span starts at; -1 is the trade itself. */
   readonly from: number;
   readonly clubId: string;
@@ -28,7 +28,7 @@ export interface TreeSpan {
   readonly pick: boolean;
 }
 
-export interface TreeOnward {
+interface TreeOnward {
   /** Column index of the draft (or season) the onward trades come just before. */
   readonly beforeColumn: number;
   readonly clubNames: readonly string[];
@@ -59,7 +59,7 @@ export interface TreeLane {
   readonly latest: AflTradeStoryAssetPoint | null;
 }
 
-export interface TreeGroup {
+interface TreeGroup {
   readonly clubId: string;
   readonly clubName: string;
   readonly lanes: readonly TreeLane[];
