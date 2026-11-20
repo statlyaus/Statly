@@ -56,13 +56,22 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
   const latest = (nets[0]?.line.length ?? 1) - 1;
   const frame = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
+  // The server draws at DEFAULT_WIDTH; squeezed onto a phone that would shrink every label to about
+  // 5px. The chart stays hidden until it has been measured and redrawn at its real width.
+  const [measured, setMeasured] = useState(false);
   const [active, setActive] = useState(latest);
 
   useEffect(() => {
     const element = frame.current;
-    if (!element || typeof ResizeObserver === 'undefined') return;
+    if (!element) return;
+    if (typeof ResizeObserver === 'undefined') {
+      setMeasured(true);
+      return;
+    }
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(Math.max(MIN_WIDTH, Math.floor(entry.contentRect.width)));
+      if (!entry) return;
+      setWidth(Math.max(MIN_WIDTH, Math.floor(entry.contentRect.width)));
+      setMeasured(true);
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -146,6 +155,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
             height={chart.height}
             viewBox={`0 0 ${chart.width} ${chart.height}`}
             className="block max-w-full touch-pan-y"
+            style={measured ? undefined : { visibility: 'hidden' }}
             aria-hidden="true"
             focusable="false"
             onPointerMove={follow}
