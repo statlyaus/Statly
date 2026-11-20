@@ -462,9 +462,12 @@ the spec above is applied; it changes none of the owner's rules.
   AFLM draft type and the reviewed Draftguru 2000 to 2010 rows), else the season before his first game
   (left-censored when it is in the fit's first read season), else assumed youngest (no draft and no
   game: the season before that first trade); his career from the fit's games read model; and his
-  earlier trades in the window (every resolved leg, reviewed or not) for the phases. A leg is pending
-  (`unavailable`) only where the fit refuses it: a trade season outside its window, or a draft origin at
-  or after his first trade. With no fit given the point is pending (`traded_player_fit_not_stored`) and
+  earlier trades in the window (every resolved leg, reviewed or not) for the phases. A leg of a trade
+  season after the fit's last one, through the last season its games read, is projected from the stored
+  fit, never fitted (owner, 2026-11-21: a trade with no season played yet shows a projection from
+  earlier PAV); its line carries `projected: true`. A leg is pending (`unavailable`) only where the fit
+  refuses it: another trade season outside its window, an excluded leg of a projected season, or a
+  draft origin at or after his first trade. With no fit given the point is pending (`traded_player_fit_not_stored`) and
   the trade's net is provisional.
 - **Traded-on picks.** A pick leg follows the trade structure's onward links (a pick trail, or a special
   entitlement's reviewed custody successor) to its final hop, so every trade it passed through carries

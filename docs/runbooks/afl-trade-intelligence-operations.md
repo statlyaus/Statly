@@ -3622,8 +3622,15 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   `stageDigest` (every leg's player, stage basis, origin season, censoring and career start: a
   Draftguru batch, canonical draft row or birth date added or changed since the fit that moves any
   origin, even within one basis, is refused: refit first). `--through-season` may
-  not pass the fit's last season. A traded leg outside the fit's trade seasons, or with a draft origin at
-  or after his first trade, stays pending (`unavailable`).
+  not pass the fit's last season. A traded leg of a candidate trade season after the fit's last trade
+  season, through `--through-season`, is projected from the stored fit (owner, 2026-11-21: a trade with
+  no season played yet shows a projection from earlier PAV), never fitted: its asset carries
+  `projected: true` and `inputs.projectedTradeSeasons` records each such season's legs, staged legs and
+  stage digest. Both are absent when no season is projected, so earlier value lines reproduce exactly.
+  A projected trade's net is not provisional, so do not store or publish value lines that carry
+  `inputs.projectedTradeSeasons` until the trade story labels projected trades.
+  Any other traded leg outside the fit's trade seasons, an excluded projected leg, or a leg with a draft
+  origin at or after his first trade stays pending (`unavailable`).
 - Without `--traded-player-fit`, every traded player's open stint is pending
   (`traded_player_fit_not_stored`) and its trades' nets are provisional. Either way, report the
   provisional count; do not read a provisional net as a result.
