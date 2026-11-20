@@ -50,7 +50,8 @@ import {
  * write is the value lines' evidence record, as the runbook section "Computing the value lines"
  * describes. With `--traded-player-fit` (the traded-player fit command's `--out` file), traded players'
  * open stints are valued by that fit from the evidence it read (its games, draft origins and legs,
- * re-read and refused unless they are the fit's); without it they are pending.
+ * re-read and refused unless they are the fit's), and a later trade season's are projected from it
+ * (marked `projected`); without it they are pending.
  *
  * Usage:
  *   npm run outcomes:grading:value-lines -- --candidate <external-reconciliation:...> \
@@ -155,18 +156,31 @@ export async function readTradedPlayerValueLineFit(
 
 /**
  * The traded-player evaluator from the stored fit and the evidence it read, re-read here: the
- * candidate's player legs in the fit's trade seasons, every canonical and reviewed Draftguru draft
- * origin, the legs' players' birth years, and the games read model over the fit's seasons. Refused unless they are the fit's.
+ * candidate's player legs in the fit's trade seasons and in every later candidate trade season through
+ * `throughSeason` (projected, never fitted), every canonical and reviewed Draftguru draft origin, the
+ * legs' players' birth years, and the games read model over the fit's seasons. Refused unless the fitted
+ * seasons' evidence is the fit's. An excluded projected leg is left out, so its line stays pending.
  */
 async function loadTradedPlayerEvaluator(
   client: AflOutcomeSqlClient,
   fit: AflTradeTradedPlayerValueLineFit,
-  candidate: Parameters<typeof aflTradeTradedPlayerTradeLegs>[0]
+  candidate: Parameters<typeof aflTradeTradedPlayerTradeLegs>[0],
+  throughSeason: number
 ): Promise<AflTradeTradedPlayerValueEvaluator> {
-  const { legs, excludedLegs } = aflTradeTradedPlayerTradeLegs(
-    candidate,
-    fit.content.fitWindow.legsByTradeSeason.map(({ tradeSeason }) => tradeSeason)
-  );
+  const fitted = fit.content.fitWindow.legsByTradeSeason.map(({ tradeSeason }) => tradeSeason);
+  const lastFitted = Math.max(...fitted);
+  const projected = [
+    ...new Set(
+      candidate.transactions
+        .filter(({ transactionType }) => transactionType === 'trade')
+        .map(({ seasonYear }) => seasonYear)
+        .filter((season) => season > lastFitted && season <= throughSeason)
+    ),
+  ];
+  const { legs, excludedLegs } = aflTradeTradedPlayerTradeLegs(candidate, [
+    ...fitted,
+    ...projected,
+  ]);
   return createAflTradeTradedPlayerValueEvaluator({
     fit,
     legs,
@@ -237,7 +251,12 @@ export async function runComputeValueLinesCommand(input: {
     const tradedPlayers =
       tradedPlayerFit === null
         ? undefined
-        : await loadTradedPlayerEvaluator(client, tradedPlayerFit, inputs.candidate);
+        : await loadTradedPlayerEvaluator(
+            client,
+            tradedPlayerFit,
+            inputs.candidate,
+            parsed.throughSeason
+          );
     const valueLines = computeAflTradeValueLines({
       fit,
       ledger,

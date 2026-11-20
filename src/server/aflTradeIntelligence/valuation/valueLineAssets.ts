@@ -345,8 +345,9 @@ export class AflTradeValueLineReader {
    * his stage by the fit's one rule (`aflTradeTradedPlayerStage`) against his first trade in the
    * window, from the fit's merged draft origins, birth years and games; his career at any club from
    * his career start (`aflTradeTradedPlayerCareerStart`) through the checkpoint; his earlier trades in the window; and the
-   * stint so far. Null where the fit refuses the leg: a trade season it did not fit, or a draft origin
-   * at or after his first trade.
+   * stint so far. Null where the fit refuses the leg: a trade season it neither fitted nor projects, a
+   * projected leg its evidence has no trade for (an excluded leg), or a draft origin at or after his
+   * first trade.
    */
   private tradedPlayerInput(
     playerId: string,
@@ -356,11 +357,14 @@ export class AflTradeValueLineReader {
     checkpointSeason: number
   ): AflTradeTradedPlayerValueInput | null {
     const evidence = this.tradedEvidence!;
-    const { tradeSeasons, playerTradeSeasons } = this.tradedPlayers!;
-    if (!tradeSeasons.includes(tradeSeason)) return null;
+    const { tradeSeasons, projectedTradeSeasons, playerTradeSeasons } = this.tradedPlayers!;
+    const projected = projectedTradeSeasons.some((row) => row.tradeSeason === tradeSeason);
+    if (!tradeSeasons.includes(tradeSeason) && !projected) return null;
     const trades = playerTradeSeasons.get(playerId) ?? [];
-    if (!trades.includes(tradeSeason))
+    if (!trades.includes(tradeSeason)) {
+      if (projected) return null;
       throw new Error(`The traded-player fit has no ${tradeSeason} trade of ${playerId}.`);
+    }
     const stage = aflTradeTradedPlayerStage({
       draftOrigin: evidence.origins.get(playerId) ?? null,
       birthYear: evidence.birthYears.get(playerId) ?? null,

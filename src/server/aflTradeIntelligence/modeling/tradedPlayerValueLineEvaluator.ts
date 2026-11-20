@@ -22,7 +22,9 @@ import {
  * method, other seasons or calculations, other leg counts per trade season, or other staged legs per
  * trade season: any leg whose player or stage (basis, origin season, censoring) is not the fit's, as
  * when a Draftguru batch, canonical draft row or birth date added or changed since the fit moves an
- * origin, even within one basis (the fit's `stageDigest`). Pure.
+ * origin, even within one basis (the fit's `stageDigest`). A leg of a season after the fit's last
+ * trade season, through the last season its games read, is projected, never fitted: it joins
+ * `playerTradeSeasons` and is recorded in `projectedTradeSeasons` with its own stage digest. Pure.
  */
 export function createAflTradeTradedPlayerValueEvaluator(input: {
   fit: AflTradeTradedPlayerValueLineFit;
@@ -43,9 +45,15 @@ export function createAflTradeTradedPlayerValueEvaluator(input: {
     throw new Error("The games read model's seasons and calculations are not the fit's.");
 
   const tradeSeasons = fitWindow.legsByTradeSeason.map(({ tradeSeason }) => tradeSeason);
+  const lastFitted = Math.max(...tradeSeasons);
+  const lastRead = Math.max(...fitWindow.seasons.map(({ season }) => season));
   const byPlayer = new Map<string, number[]>();
   for (const leg of legs) {
-    if (!tradeSeasons.includes(leg.tradeSeason))
+    if (leg.tradeSeason > lastRead)
+      throw new Error(
+        `A leg of ${leg.tradeSeason} is after the last season the fit's games read (${lastRead}).`
+      );
+    if (!tradeSeasons.includes(leg.tradeSeason) && leg.tradeSeason <= lastFitted)
       throw new Error(`A leg of ${leg.tradeSeason} is outside the fit's trade seasons.`);
     const seasons = byPlayer.get(leg.playerId) ?? [];
     if (!seasons.includes(leg.tradeSeason)) seasons.push(leg.tradeSeason);
@@ -97,10 +105,28 @@ export function createAflTradeTradedPlayerValueEvaluator(input: {
         `The stages of trade season ${recorded.tradeSeason} are not the fit's: its legs, draft origins, birth years or games differ.`
       );
   }
+  const projectedTradeSeasons = [
+    ...new Set(legs.map(({ tradeSeason }) => tradeSeason).filter((season) => season > lastFitted)),
+  ]
+    .sort((left, right) => left - right)
+    .map((tradeSeason) => {
+      const here = legs.filter((leg) => leg.tradeSeason === tradeSeason);
+      const staged = here.flatMap(({ playerId }) => {
+        const stage = stages.get(playerId);
+        return stage ? [{ playerId, stage }] : [];
+      });
+      return {
+        tradeSeason,
+        legs: here.length,
+        staged: staged.length,
+        stageDigest: aflTradeTradedPlayerStageDigest(staged),
+      };
+    });
   return {
     parameters,
     valueAt: aflTradeTradedPlayerValueAt,
     tradeSeasons,
+    projectedTradeSeasons,
     playerTradeSeasons,
     draftOrigins,
     birthYears,

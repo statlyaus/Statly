@@ -1191,6 +1191,70 @@ describe('createAflTradeTradedPlayerValueEvaluator', () => {
     );
   });
 
+  it('projects legs of a season after its trade seasons, never fitting them', () => {
+    const again = players.find(({ trades }) => trades.length === 1)!;
+    const leg = (playerId: string, tradeSeason: number) => ({
+      ...inputs.legs[0]!,
+      transferId: `transfer-${playerId}-${tradeSeason}`,
+      transactionId: `transaction-${playerId}-${tradeSeason}`,
+      playerId,
+      tradeSeason,
+    });
+    const withProjected = {
+      ...evidence,
+      legs: [
+        ...inputs.legs,
+        leg(again.playerId, LAST_SEASON),
+        leg('newcomer', LAST_SEASON),
+        leg('drafted-late', LAST_SEASON),
+      ],
+      draftOrigins: [
+        ...inputs.draftOrigins,
+        { playerId: 'newcomer', draftYear: 2020, draftType: 'national', selectionId: 's-new' },
+        // An origin at or after his trade leaves him unstaged (pending), never a refusal.
+        { playerId: 'drafted-late', draftYear: 2026, draftType: 'national', selectionId: 's-late' },
+      ],
+    };
+    const projected = createAflTradeTradedPlayerValueEvaluator(withProjected);
+    expect(projected.tradeSeasons).toEqual(TRADE_SEASONS);
+    expect(projected.projectedTradeSeasons).toEqual([
+      { tradeSeason: LAST_SEASON, legs: 3, staged: 2, stageDigest: expect.any(String) },
+    ]);
+    expect(projected.playerTradeSeasons.get('newcomer')).toEqual([LAST_SEASON]);
+    expect(projected.playerTradeSeasons.get(again.playerId)).toEqual([
+      ...again.trades.map(({ season }) => season),
+      LAST_SEASON,
+    ]);
+    // Every fitted season's trades are as the fit read them.
+    for (const [playerId, seasons] of evaluator.playerTradeSeasons)
+      expect(
+        projected.playerTradeSeasons.get(playerId)!.filter((season) => season < LAST_SEASON)
+      ).toEqual(seasons);
+    expect(evaluator.projectedTradeSeasons).toEqual([]);
+    // Another origin for a projected player moves its recorded stages.
+    expect(
+      createAflTradeTradedPlayerValueEvaluator({
+        ...withProjected,
+        draftOrigins: withProjected.draftOrigins.map((origin) =>
+          origin.playerId === 'newcomer' ? { ...origin, draftYear: 2021 } : origin
+        ),
+      }).projectedTradeSeasons[0]!.stageDigest
+    ).not.toBe(projected.projectedTradeSeasons[0]!.stageDigest);
+    // A season the fit's games do not read, or an unfitted one before its last trade season: refused.
+    expect(() =>
+      createAflTradeTradedPlayerValueEvaluator({
+        ...evidence,
+        legs: [...inputs.legs, leg('newcomer', LAST_SEASON + 1)],
+      })
+    ).toThrow(/A leg of 2027 is after the last season the fit's games read/);
+    expect(() =>
+      createAflTradeTradedPlayerValueEvaluator({
+        ...evidence,
+        legs: [...inputs.legs, leg('newcomer', 2018)],
+      })
+    ).toThrow(/A leg of 2018 is outside the fit's trade seasons/);
+  });
+
   it("gives the value lines the fit's own point for every leg at every checkpoint", () => {
     const points: AflTradeTradedPlayerValuePoint[] = [];
     const recording = {
