@@ -1,5 +1,5 @@
-import { getPlayers } from '@/lib/data';
-import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
+import type { Prisma } from '@prisma/client';
+
 import {
   FANTASY_CATEGORY_KEYS,
   normalizeFantasyCategoryKeys,
@@ -9,6 +9,7 @@ import {
 import type { Player } from '@/types/players';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import type { CategoryDirection } from '@/server/leagues/scoringTypes';
+import { listSeasonStatPlayers, listStatSeasons } from '@/server/players/playerPoolReadModel';
 import {
   getLeaguePlayerStatSeasonOptions,
   projectLeaguePlayerStatLine,
@@ -54,12 +55,6 @@ export type DraftStatSeasonOptions = {
   selectedSeason: number;
   availableSeasons: number[];
 };
-
-function normalizeLookupPart(value: string | null | undefined): string {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase();
-}
 
 export function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
   return normalizeFantasyCategoryKeys(raw, []);
@@ -187,79 +182,44 @@ function projectDraftPlayerStats(
   };
 }
 
-export function getDraftStatSeasonOptions(
-  players: Player[],
-  requestedSeason?: number | null
-): DraftStatSeasonOptions {
-  return getLeaguePlayerStatSeasonOptions(players, requestedSeason);
-}
-
+/**
+ * Draft stat projections keyed on the canonical `Player.id`. The stored stats and the draft pool
+ * share that id, so a player gets only their own stats: never a namesake's by name or club.
+ */
 export function buildDraftPlayerStatsLookup(
   players: Player[],
   options: { season?: number | null } = {}
 ) {
   const byId = new Map<string, DraftPlayerStatsProjection>();
-  const byNameAndTeam = new Map<string, DraftPlayerStatsProjection>();
-  const byName = new Map<string, DraftPlayerStatsProjection>();
-  const ambiguousNames = new Set<string>();
-
   for (const player of players) {
     const projection = projectDraftPlayerStats(player, options.season);
-    if (!projection) continue;
-
-    byId.set(player.id, projection);
-    byId.set(buildCanonicalPlayerId(player.id), projection);
-    // No name-derived key here: two players with the same name would overwrite each other. Name lookups go
-    // through byNameAndTeam, then byName, which both account for club and ambiguity.
-
-    const normalizedName = normalizeLookupPart(player.name);
-    const normalizedTeam = normalizeLookupPart(player.team);
-
-    if (normalizedName && normalizedTeam) {
-      byNameAndTeam.set(`${normalizedName}|${normalizedTeam}`, projection);
-    }
-
-    if (!normalizedName || ambiguousNames.has(normalizedName)) {
-      continue;
-    }
-
-    if (!byName.has(normalizedName)) {
-      byName.set(normalizedName, projection);
-      continue;
-    }
-
-    byName.delete(normalizedName);
-    ambiguousNames.add(normalizedName);
+    if (projection) byId.set(player.id, projection);
   }
-
-  return { byId, byNameAndTeam, byName };
+  return { byId };
 }
 
-export async function loadDraftPlayerStatsLookup(
-  options: { season?: number | null } = {}
-): Promise<DraftPlayerStatsLookup> {
-  return buildDraftPlayerStatsLookup(await getPlayers(), options);
-}
-
+/** The draft's stat season: the requested one when stored, else the newest stored season. */
 export async function loadDraftStatSeasonOptions(
   requestedSeason?: number | null
 ): Promise<DraftStatSeasonOptions> {
-  return getDraftStatSeasonOptions(await getPlayers(), requestedSeason);
+  const availableSeasons = await listStatSeasons();
+  const selectedSeason =
+    requestedSeason && availableSeasons.includes(requestedSeason)
+      ? requestedSeason
+      : (availableSeasons[0] ?? new Date().getFullYear());
+  return { selectedSeason, availableSeasons };
 }
 
-function findStatsProjection(
-  lookup: DraftPlayerStatsLookup,
-  player: AvailableDraftPlayerSource
-): DraftPlayerStatsProjection | undefined {
-  return (
-    lookup.byId.get(player.id) ??
-    lookup.byId.get(buildCanonicalPlayerId(player.id)) ??
-    lookup.byId.get(buildCanonicalPlayerId(player.name)) ??
-    lookup.byNameAndTeam.get(
-      `${normalizeLookupPart(player.name)}|${normalizeLookupPart(player.club)}`
-    ) ??
-    lookup.byName.get(normalizeLookupPart(player.name))
-  );
+/**
+ * One season's stored stats (default the newest), read once for the whole draft pool. Inside a
+ * transaction pass `client`, so the read does not wait on a second pool connection.
+ */
+export async function loadDraftPlayerStatsLookup(
+  options: { season?: number | null } = {},
+  client?: Pick<Prisma.TransactionClient, 'playerSeasonStat'>
+): Promise<DraftPlayerStatsLookup> {
+  const season = options.season ?? (await listStatSeasons(client))[0] ?? null;
+  return buildDraftPlayerStatsLookup(await listSeasonStatPlayers({ season }, client), { season });
 }
 
 export function buildAvailableDraftPlayer(
@@ -274,6 +234,6 @@ export function buildAvailableDraftPlayer(
     isAvailable: true,
     // Kept as an undefined compatibility field until roster and waiver adapters stop reading it.
     statsTotal: undefined,
-    ...(statsLookup ? findStatsProjection(statsLookup, player) : undefined),
+    ...statsLookup?.byId.get(player.id),
   };
 }

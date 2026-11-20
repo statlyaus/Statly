@@ -12,8 +12,6 @@ vi.mock('@/server/draft/readModels/draftPlayerReadModel', async (importOriginal)
   ...(await importOriginal<typeof import('@/server/draft/readModels/draftPlayerReadModel')>()),
   loadDraftPlayerStatsLookup: async () => ({
     byId: new Map([...stats.goalsByPlayerId].map(([id, goals]) => [id, { stats: { goals } }])),
-    byNameAndTeam: new Map(),
-    byName: new Map(),
   }),
 }));
 vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
@@ -21,7 +19,6 @@ vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
     projectLeague = vi.fn().mockResolvedValue({ owned: 0, available: 0 });
   },
 }));
-vi.mock('@/lib/data', () => ({ getPlayers: async () => [] }));
 
 import type { LeagueBite } from '@prisma/client';
 

@@ -604,6 +604,20 @@ async function globalSetup() {
           canonicalPlayerId: player.id,
         });
         canonicalPlayerIds.push(canonicalPlayer.id);
+        // A stored season, so lineup, trade and player pages have stats to show.
+        const statRow = {
+          club: player.club,
+          games: 10,
+          lastRound: 10,
+          totalsJson: { goals: 10, tackles: 40, contested_possessions: 100, disposals: 200 },
+          gamesByStatJson: { goals: 10, tackles: 10, contested_possessions: 10, disposals: 10 },
+          source: 'statly-e2e',
+        };
+        await tx.playerSeasonStat.upsert({
+          where: { playerId_season: { playerId: player.id, season: 2025 } },
+          update: statRow,
+          create: { ...statRow, playerId: player.id, season: 2025 },
+        });
       }
 
       await tx.draft.create({

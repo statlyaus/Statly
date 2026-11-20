@@ -28,7 +28,9 @@ const mocks = vi.hoisted(() => ({
   buildLeaguePlayerStatDatasetForTargets: vi.fn(),
 }));
 
-vi.mock('@/lib/data', () => ({ getPlayers: mocks.getPlayers }));
+vi.mock('@/server/players/playerPoolReadModel', () => ({
+  listLatestSeasonStatPlayers: mocks.getPlayers,
+}));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 vi.mock('@/server/leagues/defaultLineups', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/leagues/defaultLineups')>()),

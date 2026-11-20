@@ -94,7 +94,7 @@ describe('player search route', () => {
       disposalEfficiency: 72,
     });
     mocks.getPlayers.mockResolvedValue([
-      // Top-level stat fields are the latest single match (src/lib/data.ts); `stats` is the season.
+      // Top-level stat fields are ignored; `stats` is the season.
       {
         id: 'ten-games',
         name: 'Rate Player Ten',

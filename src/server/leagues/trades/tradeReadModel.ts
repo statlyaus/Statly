@@ -7,10 +7,10 @@ import {
   type TradeReviewMode,
 } from '@prisma/client';
 
-import { getPlayers } from '@/lib/data';
 import { prisma } from '@/lib/prisma';
 import { type BiteFreezeCode, listBiteFrozenMembers } from '@/server/leagues/bitePending';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import { listLatestSeasonStatPlayers } from '@/server/players/playerPoolReadModel';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 import {
   normalizeFantasyCategoryKeys,
@@ -102,7 +102,7 @@ export async function loadAuthorizedLeagueTradeCentre({
   // Before the snapshot reads: see LeagueTradeCentreSnapshot.revision.
   const revision = await loadTradeRevision(access);
 
-  const [members, records, counts, sourcePlayers, frozenMemberIds] = await Promise.all([
+  const [members, records, counts, frozenMemberIds] = await Promise.all([
     prisma.leagueMember.findMany({
       where: { leagueId, isActive: true, status: 'ACTIVE' },
       select: {
@@ -137,7 +137,6 @@ export async function loadAuthorizedLeagueTradeCentre({
       take: take + 1,
     }),
     loadViewCounts(access),
-    getPlayers(),
     listBiteFrozenMembers(prisma, leagueId),
   ]);
   // BR-30, E12: teams the Bloodsucker has a bite waiting on, or that have just played it and wait
@@ -160,9 +159,10 @@ export async function loadAuthorizedLeagueTradeCentre({
       }))
     )
   );
+  const statPlayers = [...teams.flatMap((team) => team.players), ...historicalOfferPlayers];
   const playerStats = buildLeaguePlayerStatDatasetForTargets(
-    sourcePlayers,
-    [...teams.flatMap((team) => team.players), ...historicalOfferPlayers],
+    await listLatestSeasonStatPlayers(statPlayers.map((player) => player.id)),
+    statPlayers,
     {
       categories: access.categories,
       categoryDirections: access.categoryDirections,
