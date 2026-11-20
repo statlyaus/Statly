@@ -10,6 +10,7 @@ const PUBLIC_PAGE_SOURCES = [
   '/privacy',
   '/terms',
   '/data-deletion',
+  '/sitemap.xml',
 ];
 
 // One hour at the CDN, then served stale for up to a day while one request renders a fresh copy.
