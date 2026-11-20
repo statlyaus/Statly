@@ -20,7 +20,7 @@ const reasonLabels: Readonly<Record<AflOutcomesDevelopmentTradeGradeReason, stri
 
 function gradeClass(grade: AflOutcomesDevelopmentGrade): string {
   if (grade === 'A+' || grade === 'A') {
-    return 'border-success/30 bg-success/10 text-success';
+    return 'border-success/30 bg-success/5 text-success';
   }
   if (grade === 'B+' || grade === 'B') {
     return 'border-info/30 bg-info/10 text-info';

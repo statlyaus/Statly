@@ -98,14 +98,14 @@ describe('Button accessibility', () => {
     expect(button.className).not.toMatch(/scale-|bg-blue-/);
   });
 
-  it('marks destructive actions with the loss token', () => {
+  it('marks destructive actions with the destructive token', () => {
     render(
       <Button variant="danger" onClick={vi.fn()}>
         Delete
       </Button>
     );
 
-    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('bg-result-loss');
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('bg-destructive');
   });
 
   it('lets a caller override recipe classes instead of stacking conflicting ones', () => {

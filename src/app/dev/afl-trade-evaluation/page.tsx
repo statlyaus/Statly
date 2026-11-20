@@ -267,7 +267,7 @@ export default async function LocalWorkbookEvaluationPage({
                         Factual transaction loaded
                       </span>
                       <span
-                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${scenario.state === 'ready' ? 'border-success/30 bg-success/10 text-success' : 'border-border bg-muted text-muted-foreground'}`}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${scenario.state === 'ready' ? 'border-success/30 bg-success/5 text-success' : 'border-border bg-muted text-muted-foreground'}`}
                       >
                         {scenario.state === 'ready'
                           ? 'Synthetic scenario ready'

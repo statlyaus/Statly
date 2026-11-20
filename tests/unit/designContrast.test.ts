@@ -29,6 +29,9 @@ describe('design token contrast', () => {
     ['draw label', '--result-draw-foreground', '--result-draw', 4.5],
     ['live label', '--status-live-foreground', '--status-live', 4.5],
     ['destructive text on the page', '--destructive', '--background', 4.5],
+    ['destructive action label', '--destructive-foreground', '--destructive', 4.5],
+    ['success text on the page', '--success', '--background', 4.5],
+    ['link text on a tint panel', '--primary', '--secondary', 4.5],
     ['focus ring', '--ring', '--background', 3],
     ['primary action against the page', '--primary', '--background', 3],
   ])('%s holds %s on %s', (_role, foreground, background, minimum) => {

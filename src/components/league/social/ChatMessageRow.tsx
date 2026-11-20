@@ -156,12 +156,12 @@ export default function ChatMessageRow({
                   highlightMentions
                   className={
                     filled
-                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_[data-mention]]:!bg-social-bubble-own-text [&_[data-mention]]:!text-social-bubble-own'
+                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_a]:focus-visible:!ring-social-bubble-own-text [&_[data-mention]]:!bg-social-bubble-own-text [&_[data-mention]]:!text-social-bubble-own'
                       : ''
                   }
                 />
               ) : null}
-              {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
+              {message.gif ? <GiphyMessageMedia gif={message.gif} onFilledBubble={filled} /> : null}
               {editing ? null : (
                 <p
                   className={`mt-0.5 flex justify-end gap-1.5 text-[0.6875rem] tabular-nums ${
