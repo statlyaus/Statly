@@ -121,7 +121,7 @@ function LinkButton({
   return (
     <Link
       href={props.href}
-      className={cn(classes, isDisabled && 'cursor-not-allowed opacity-50')}
+      className={classes}
       aria-disabled={isDisabled}
       onClick={handleClick}
       tabIndex={isDisabled ? -1 : props.tabIndex}

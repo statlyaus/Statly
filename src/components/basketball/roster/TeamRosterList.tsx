@@ -31,9 +31,10 @@ export interface RosterActions {
 // roster rather than a form. The two edit controls are rendered once per layout (`variant`).
 const ROW_GRID =
   'grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 sm:grid-cols-[minmax(0,1fr)_9.5rem_7rem_16.5rem_5.5rem] sm:items-center';
-// Quiet until hovered or focused on wide screens, so a table of inputs still reads as a list.
+// Quiet until hovered or focused on wide screens, so a table of inputs still reads as a list: a
+// hairline on hover, the full ink field edge on focus.
 const QUIET_CONTROL =
-  'sm:border-transparent sm:bg-transparent sm:hover:border-input sm:focus-visible:border-input';
+  'sm:border-transparent sm:bg-transparent sm:hover:border-border sm:focus-visible:border-input';
 
 type Variant = 'wide' | 'phone';
 

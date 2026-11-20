@@ -1,58 +1,94 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
 /**
- * Class recipes for plain controls built on Statly's semantic tokens. They replace DaisyUI
- * component classes (btn, badge, input, …), which the stylesheet does not load and which
- * therefore rendered unstyled. Primary actions and focus use the navy brand-bar, and badges are
- * squared, per docs/product/design-principles.md.
+ * Class recipes for plain controls built on Statly's semantic tokens: the Marker controls in
+ * docs/product/style-guide.md ("Shape", "Focus", "Motion", "Components"). Buttons and fields have
+ * the shared hand-cut edge (`rounded-cut`) and an ink edge; badges are torn tape (`tape`). Focus is
+ * a 3px dashed outline in the ground's focus colour. Primary follows the ground (cobalt on light
+ * grounds, sun on cobalt and ink); a field is white with ink text on every ground.
+ *
+ * cva does not merge classes, so a border width lives only in the size variants and a border colour
+ * only in the style variants; nothing in a base string is overridden by a variant.
  */
 
+const focusOutline =
+  'focus-visible:outline-[3px] focus-visible:outline-dashed focus-visible:outline-ring focus-visible:outline-offset-4';
+
+// Disabled controls are dashed and muted, with no tilt. `aria-disabled` covers links styled as
+// buttons, which cannot take `disabled`.
+const buttonDisabled =
+  'disabled:cursor-not-allowed disabled:border-dashed disabled:border-muted-foreground disabled:bg-transparent disabled:text-muted-foreground aria-disabled:cursor-not-allowed aria-disabled:border-dashed aria-disabled:border-muted-foreground aria-disabled:bg-transparent aria-disabled:text-muted-foreground';
+
+// Hover tilts 1.5° and grows 3%; pressing squashes to 95%. Only with motion allowed, and never on a
+// disabled control.
+const pressable = 'motion-safe:not-disabled:not-aria-disabled:active:scale-95';
+const tilt =
+  'motion-safe:not-disabled:not-aria-disabled:hover:-rotate-[1.5deg] motion-safe:not-disabled:not-aria-disabled:hover:scale-[1.03]';
+
 export const buttonStyles = cva(
-  'inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+  `inline-flex items-center justify-center gap-2 rounded-cut font-display font-extrabold transition ${focusOutline} ${pressable} ${buttonDisabled}`,
   {
     variants: {
       variant: {
-        primary: 'bg-brand-bar text-brand-bar-foreground hover:bg-brand-bar/90',
-        outline: 'border border-border bg-background text-foreground hover:bg-muted',
-        ghost: 'text-foreground hover:bg-muted',
-        danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        primary: `border-foreground bg-primary text-primary-foreground hover:bg-primary/90 ${tilt}`,
+        outline: `border-foreground bg-background text-foreground hover:bg-muted ${tilt}`,
+        // No tilt: the ghost is an underlined word that gains a quiet fill on hover.
+        ghost:
+          'border-transparent bg-transparent text-foreground underline decoration-2 underline-offset-[5px] hover:bg-muted',
+        danger: `border-foreground bg-destructive text-destructive-foreground hover:bg-destructive/90 ${tilt}`,
       },
       size: {
-        lg: 'min-h-12 px-6 text-base',
-        md: 'min-h-11 px-4 text-sm',
-        sm: 'min-h-9 px-3 text-sm',
-        xs: 'min-h-7 px-2 text-xs',
+        lg: 'min-h-12 border-[2.5px] text-base',
+        md: 'min-h-11 border-[2.5px] text-sm',
+        sm: 'min-h-8 border-2 text-[13px]',
+        xs: 'min-h-7 border-2 text-xs',
       },
     },
+    // Side padding depends on both axes (the ghost is tighter), so it lives here rather than in
+    // a size variant that the ghost would have to override.
+    compoundVariants: [
+      { variant: ['primary', 'outline', 'danger'], size: ['lg', 'md'], class: 'px-6' },
+      { variant: ['primary', 'outline', 'danger'], size: 'sm', class: 'px-4' },
+      { variant: ['primary', 'outline', 'danger'], size: 'xs', class: 'px-2' },
+      { variant: 'ghost', size: ['lg', 'md', 'sm'], class: 'px-3' },
+      { variant: 'ghost', size: 'xs', class: 'px-2' },
+    ],
     defaultVariants: { variant: 'outline', size: 'md' },
   }
 );
 
 export const badgeStyles = cva(
-  'inline-flex items-center gap-1 whitespace-nowrap rounded-sm border font-semibold',
+  'tape inline-flex items-center gap-1 whitespace-nowrap font-display text-[11px] font-extrabold',
   {
     variants: {
       tone: {
-        neutral: 'border-border bg-background text-muted-foreground',
-        muted: 'border-transparent bg-muted text-muted-foreground',
-        brand: 'border-brand-bar/30 bg-brand-bar/5 text-brand-bar',
-        win: 'border-result-win/30 bg-result-win/5 text-result-win',
-        loss: 'border-result-loss/30 bg-result-loss/5 text-result-loss',
-        draw: 'border-result-draw/40 bg-result-draw/10 text-foreground',
-        warning: 'border-warning/50 bg-warning/10 text-foreground',
+        // Quiet tape keeps ink text on its light fill on every ground.
+        neutral: 'bg-muted text-field-foreground',
+        muted: 'bg-muted text-field-foreground',
+        brand: 'bg-secondary text-secondary-foreground',
+        // Results: win solid, loss outlined, draw quiet; always with the W, L or D.
+        win: 'min-w-7 justify-center bg-result-win text-result-win-foreground',
+        loss: 'min-w-7 justify-center bg-background text-foreground shadow-[inset_0_0_0_2px_currentColor]',
+        draw: 'min-w-7 justify-center bg-muted text-field-foreground',
+        warning: 'bg-warning text-warning-foreground',
       },
       size: {
-        xs: 'px-1.5 text-[11px] leading-5',
-        sm: 'px-2 text-xs leading-5',
-        md: 'px-2.5 py-0.5 text-sm',
+        xs: 'px-1.5 leading-5',
+        sm: 'px-2 leading-5',
+        md: 'px-2.5 py-0.5',
+      },
+      // Labels are uppercase; names, queries and other people's words keep their own case.
+      caps: {
+        true: 'uppercase tracking-[0.06em]',
+        false: '',
       },
     },
-    defaultVariants: { tone: 'neutral', size: 'sm' },
+    defaultVariants: { tone: 'neutral', size: 'sm', caps: true },
   }
 );
 
 export const fieldStyles = cva(
-  'w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+  `w-full rounded-cut border-2 border-input bg-field px-3 text-sm text-field-foreground transition placeholder:text-field-placeholder ${focusOutline} disabled:cursor-not-allowed disabled:border-dashed disabled:border-field-placeholder disabled:bg-muted disabled:text-field-placeholder`,
   {
     variants: { size: { md: 'h-11', sm: 'h-9', area: 'min-h-24 py-2' } },
     defaultVariants: { size: 'md' },
@@ -64,8 +100,7 @@ export const fieldLabelStyles = 'flex flex-col gap-1 text-sm font-medium text-fo
 export const kbdStyles =
   'rounded-sm border border-border bg-muted px-1 font-mono text-[11px] font-semibold text-foreground';
 
-export const textLinkStyles =
-  'font-semibold text-foreground underline decoration-transparent underline-offset-4 hover:decoration-current focus:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+export const textLinkStyles = `font-semibold text-foreground underline decoration-transparent underline-offset-4 hover:decoration-current ${focusOutline}`;
 
 export type ButtonStyleProps = VariantProps<typeof buttonStyles>;
 export type BadgeStyleProps = VariantProps<typeof badgeStyles>;

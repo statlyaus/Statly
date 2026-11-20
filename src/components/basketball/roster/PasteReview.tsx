@@ -67,7 +67,9 @@ function LineChoice({
         </p>
       </div>
       <p className="mt-1">
-        <span className={badgeStyles({ tone: status.tone, size: 'xs' })}>{status.label}</span>
+        <span className={badgeStyles({ tone: status.tone, size: 'xs', caps: false })}>
+          {status.label}
+        </span>
       </p>
       {line.status === 'none' ? (
         <p className="mt-2 text-sm text-muted-foreground">

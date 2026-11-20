@@ -501,7 +501,7 @@ const AuthForm = ({
                 className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showEmailError
                     ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
-                    : 'border-input bg-background text-foreground hover:border-foreground/40'
+                    : 'border-input bg-background text-foreground'
                 }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -542,7 +542,7 @@ const AuthForm = ({
                 className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showPasswordError
                     ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
-                    : 'border-input bg-background text-foreground hover:border-foreground/40'
+                    : 'border-input bg-background text-foreground'
                 }`}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -641,7 +641,7 @@ const AuthForm = ({
                   className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                     confirmPassword && password !== confirmPassword
                       ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
-                      : 'border-input bg-background text-foreground hover:border-foreground/40'
+                      : 'border-input bg-background text-foreground'
                   }`}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -710,7 +710,7 @@ const AuthForm = ({
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-input"></div>
+              <div className="w-full border-t border-border"></div>
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-4 bg-background text-muted-foreground font-medium">

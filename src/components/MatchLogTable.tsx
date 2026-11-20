@@ -470,7 +470,7 @@ const MatchLogTable = ({
                 <button
                   type="button"
                   onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
                   aria-label={`Sort ${sortDirection === 'desc' ? 'low to high' : 'high to low'}`}
                 >
                   <ArrowsUpDownIcon className="h-4 w-4" aria-hidden="true" />
@@ -735,7 +735,7 @@ const MatchLogTable = ({
                               e.stopPropagation();
                               setSelectedMatch(log);
                             }}
-                            className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label="View match details"
                           >
                             <EyeIcon className="h-3.5 w-3.5" />

@@ -36,16 +36,14 @@ describe('design token contrast', () => {
     ['destructive action label', '--destructive-foreground', '--destructive', 4.5],
     ['success text on the page', '--success', '--background', 4.5],
     ['link text on a tint panel', '--primary', '--secondary', 4.5],
+    ['field text', '--field-foreground', '--field', 4.5],
+    ['field placeholder', '--field-placeholder', '--field', 4.5],
     ['focus ring', '--ring', '--background', 3],
     ['primary action against the page', '--primary', '--background', 3],
+    ['field edge on the page', '--input', '--background', 3],
+    ['field edge on the field', '--input', '--field', 3],
   ])('%s holds %s on %s', (_role, foreground, background, minimum) => {
     expect(ratio(foreground, background)).toBeGreaterThanOrEqual(minimum);
-  });
-
-  // Known gap: the field edge is 1.49:1 today. Phase 3 makes it a 2px ink edge; when that lands,
-  // this fails and becomes a 3:1 pair in the list above.
-  it('field edge is still below 3:1 on the page (phase 3 fixes it)', () => {
-    expect(ratio('--input', '--background')).toBeLessThan(3);
   });
 });
 

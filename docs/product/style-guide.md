@@ -118,7 +118,10 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
   `@theme inline`.
 - **Brand primitives.** `--brand-cobalt`, `--brand-cobalt-deep`, `--brand-tint`, `--brand-sun`,
   `--brand-ink`, `--brand-stone`, `--brand-secondary-text`, `--brand-hairline` and `--brand-red` (done
-  2026-11-20), plus the shape tokens (target, phase 3) under [Shape](#space-shape-elevation-motion-and-focus).
+  2026-11-20), plus the shape tokens under [Shape](#space-shape-elevation-motion-and-focus): the
+  hand-cut `--radius-cut` (done 2026-11-20) and the floating cut and hard shadow (target, ticket 04b).
+- **Field roles.** `--field`, `--field-foreground` and `--field-placeholder` keep a field white with
+  ink text on every ground; no ground redefines them (done 2026-11-20).
 - **Grounds and surface modes, not namespaces.** A ground or the paper mode redefines the semantic
   roles on its root element; components inside it use the same utilities as everywhere else.
 - **Area palettes collapse (target, phase 3).** A `--league-*`, `--trade-*` or `--social-*` token that
@@ -131,18 +134,18 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
 
 Every pair below must hold on every ground and surface mode.
 
-| Role                    | Rule                                                                   | Status                                                    |
-| ----------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
-| Body text               | At least 4.5:1                                                         | Ink on white is 18.9:1                                    |
-| Small labels (11–12px)  | At least 5.5:1                                                         | Secondary `#55534e` on white is 7.6:1 (target, phase 3)   |
-| `--input` (field edge)  | At least 3:1 against its surface (WCAG 1.4.11)                         | Target, phase 3: a 2px ink edge (today `#ced4da`, 1.49:1) |
-| `--border` (decorative) | No minimum; never the only edge of a control                           | Hairline `#c9c5bc`                                        |
-| Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Cobalt on light grounds done; other grounds phase 3       |
-| Results                 | Win solid, loss outlined, draw stone, always with W, L or D            | Target, phase 3                                           |
-| Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                    |
-| Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                           |
-| Trade sides             | Cobalt and ink, never good/bad colours                                 | Target, phase 3                                           |
-| Selection               | Sun with ink text; ink with white text on a sun ground                 | Done                                                      |
+| Role                    | Rule                                                                   | Status                                                  |
+| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| Body text               | At least 4.5:1                                                         | Ink on white is 18.9:1                                  |
+| Small labels (11–12px)  | At least 5.5:1                                                         | Secondary `#55534e` on white is 7.6:1 (target, phase 3) |
+| `--input` (field edge)  | At least 3:1 against its surface (WCAG 1.4.11)                         | A 2px ink edge, 18.9:1 on white (done 2026-11-20)       |
+| `--border` (decorative) | No minimum; never the only edge of a control                           | Hairline `#c9c5bc`                                      |
+| Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Cobalt on light grounds done; other grounds phase 3     |
+| Results                 | Win solid, loss outlined, draw stone, always with W, L or D            | Target, phase 3                                         |
+| Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                  |
+| Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                         |
+| Trade sides             | Cobalt and ink, never good/bad colours                                 | Target, phase 3                                         |
+| Selection               | Sun with ink text; ink with white text on a sun ground                 | Done                                                    |
 
 A trade has two sides, not a good side and a bad side: trade charts never use green and red.
 
@@ -171,20 +174,24 @@ A trade has two sides, not a good side and a bad side: trade charts never use gr
   tokens.
 - **Shape:** the page is square, like a scoreboard: tiles, cards, tables, alerts and photos have no
   radius. Anything you press or that floats (buttons, inputs, chips, toggles, pagination, menus,
-  dialogs, sheets, toasts, tooltips) has the one shared hand-cut edge (target, phase 3: a
-  `--radius-cut` family of asymmetric radii). Never a neat rounded corner or a pill.
+  dialogs, sheets, toasts, tooltips) has the one shared hand-cut edge, a set of asymmetric radii:
+  `rounded-cut` on buttons and fields (done 2026-11-20); chips, menus, dialogs and the other
+  floating things target ticket 04b. Never a neat rounded corner or a pill.
 - **Lines:** each weight means one thing. Hairline for separation; 2.5px ink for buttons and floating
   things; 2px ink for inputs and chips; 1.5px ink under table headers; 3px for the current tab; a 4px
   top edge for which side; a 6px sun left edge for "yours", the only side stripe allowed; 2px dashed
   cobalt for "not there yet" (empty slot, disabled); a red outline only on an error alert.
 - **Elevation:** everything on the page is flat. Floating things cast one hard shadow, never blurred:
-  5px 6px ink on light floating things, cobalt under ink ones (toasts, tooltips).
-- **Badges:** torn tape, sitting about one degree off straight, never more than two.
+  5px 6px ink on light floating things, cobalt under ink ones (toasts, tooltips) (target, ticket
+  04b).
+- **Badges:** torn tape, sitting about one degree off straight, never more than two (done
+  2026-11-20: the `tape` utility, alternating direction between sibling badges).
 - **Motion:** buttons tilt 1.5° and grow 3% on hover and squash to 95% when pressed, all under
-  `motion-safe:`. The global reduced-motion rule and `MotionConfig` stay. Never flash, pulse or shake
-  a clock.
+  `motion-safe:`, and never when disabled (done 2026-11-20 in `buttonStyles`). The global
+  reduced-motion rule and `MotionConfig` stay. Never flash, pulse or shake a clock.
 - **Focus:** a 3px dashed ring, 4px out, in the ground's focus colour (cobalt on light grounds, white
-  on cobalt, sun on ink, ink on sun) (target, phase 3; today a 2px navy outline). Sticky headers set
+  on cobalt, sun on ink, ink on sun) (done 2026-11-20 in the control recipes; bare buttons and
+  floating things move in ticket 04b, the rest screen by screen). Sticky headers set
   `scroll-padding-top` so focus is never hidden behind them.
 - **Targets:** at least 24px; 44px for every phone control, including the app nav.
 
@@ -204,11 +211,16 @@ One primitive per job, in `src/components/ui/`.
   One primary per view, first in its row and left-aligned. Primary is cobalt on light grounds and sun
   on cobalt and ink; destructive is red and always confirmed in a dialog. 44px tall; the 32px small
   size only inside dense rows (tables, lists, save bars). Disabled buttons are dashed and sit beside
-  their reason. Icon-only buttons need an accessible name.
-- **Badges:** `badgeStyles` only, torn tape, always a word or letter. Three per row at most.
+  their reason; a link styled as a button is disabled with `aria-disabled`. Icon-only buttons need an
+  accessible name. Hand-cut, 2.5px ink edge (2px at the small sizes) and the dashed focus ring are
+  done (2026-11-20); bare `<button>`s move onto the recipe in ticket 04b.
+- **Badges:** `badgeStyles` only, torn tape, always a word or letter. Three per row at most. Labels
+  are uppercase 11px; a badge holding a name, a query or someone's own words passes `caps: false`
+  (done 2026-11-20).
 - **Chips and segmented controls:** hand-cut, turning sun when picked.
-- **Fields:** `fieldStyles`, white with a 2px ink edge on every ground, label above, hint or error
-  below with the error associated with the field. Errors keep what was typed.
+- **Fields:** `fieldStyles`, white with a 2px ink edge on every ground (done 2026-11-20), label
+  above, hint or error below with the error associated with the field. Errors keep what was typed.
+  `border-input` is the field edge only; any other edge uses `border-border`.
 - **Menus, dialogs, sheets, toasts:** hand-cut with the hard shadow. The active menu row gets a sun
   highlighter swipe. Destructive choices never live in a toast or a menu without a dialog.
 - **Alerts:** a ground, not a stripe: tint for info, sun for a deadline, white with a red outline for
@@ -326,14 +338,14 @@ that holds only for Statly, or delete it.
 
 Rules an agent reads are the first layer; tests are the backstop. Phases land in order.
 
-| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                  | Status           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                       | Done             |
-| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket | Done, except axe |
-| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat (done 2026-11-20), the hand-cut shape and hard shadow tokens, `--input` at 3:1 or more, paper surface mode (dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan                                | Planned          |
-| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                       | Planned          |
-| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                        | Planned          |
-| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                     | Planned          |
+| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                                     | Status           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                                          | Done             |
+| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket                    | Done, except axe |
+| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the control cut, tape, field roles and `--input` at 3:1 or more (done 2026-11-20), the floating cut and hard shadow tokens (ticket 04b), paper surface mode (dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan | In progress      |
+| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                                          | Planned          |
+| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                                           | Planned          |
+| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                                        | Planned          |
 
 Automated design checks today:
 

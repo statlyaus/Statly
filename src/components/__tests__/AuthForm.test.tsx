@@ -147,10 +147,10 @@ describe('AuthForm', () => {
     expect(container.innerHTML).not.toMatch(/card-body|stat-|btn|base-content|base-100/);
   });
 
-  it('uses the navy primary action and Statly tokens instead of the blue gradient', () => {
+  it('uses the primary action and Statly tokens instead of the blue gradient', () => {
     const { container } = render(<AuthForm initialMode="login" />);
 
-    expect(screen.getByRole('button', { name: 'Sign In' })).toHaveClass('bg-brand-bar');
+    expect(screen.getByRole('button', { name: 'Sign In' })).toHaveClass('bg-primary');
     expect(container.innerHTML).not.toMatch(/bg-gradient|from-blue-|(bg|text|border)-slate-|dark:/);
   });
 

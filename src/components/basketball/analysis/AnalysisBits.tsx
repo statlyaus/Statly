@@ -127,7 +127,7 @@ export function OwnerLabel({ owner }: { owner: PlayerOwner }) {
     case 'OPPONENT':
       return (
         <span
-          className={`${badgeStyles({ tone: 'neutral', size: 'xs' })} min-w-0 max-w-full`}
+          className={`${badgeStyles({ tone: 'neutral', size: 'xs', caps: false })} min-w-0 max-w-full`}
           title={`This week's opponent: ${owner.teamName}`}
         >
           <span className="min-w-0 truncate">Opp · {owner.teamName}</span>

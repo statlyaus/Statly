@@ -674,7 +674,7 @@ export function DraftTradesExplorer({
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <a
               href={`/api/draft-trades/export?${exportParams.toString()}`}
-              className={cn(buttonStyles({ variant: 'primary', size: 'sm' }), 'shadow-sm')}
+              className={buttonStyles({ variant: 'primary', size: 'sm' })}
             >
               Export CSV
             </a>
@@ -958,7 +958,7 @@ export function DraftTradesExplorer({
           >{`${filteredTrades.length} trades in view`}</span>
           <span className={badgeStyles({ tone: filterBadgeTone('meta') })}>{`Season ${year}`}</span>
           {selectedClub && (
-            <span className={badgeStyles({ tone: filterBadgeTone('club') })}>
+            <span className={badgeStyles({ tone: filterBadgeTone('club'), caps: false })}>
               Club: {selectedClubLabel}
             </span>
           )}
@@ -968,7 +968,7 @@ export function DraftTradesExplorer({
             </span>
           )}
           {queryInput && (
-            <span className={badgeStyles({ tone: filterBadgeTone('query') })}>
+            <span className={badgeStyles({ tone: filterBadgeTone('query'), caps: false })}>
               Query: {queryInput}
             </span>
           )}
@@ -1375,12 +1375,14 @@ export function DraftTradesExplorer({
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        {/* A joined pair: the outer ends keep the hand cut, the inner edges are
+                            square and share one edge, and neither half tilts. */}
                         <div className="inline-flex">
                           <button
                             type="button"
                             className={cn(
                               buttonStyles({ variant: 'outline', size: 'xs' }),
-                              'rounded-none first:rounded-l-md last:-ml-px last:rounded-r-md'
+                              'first:rounded-r-none last:-ml-0.5 last:rounded-l-none rotate-0! scale-100! focus-visible:z-10'
                             )}
                             disabled={!railNav.prev}
                             onClick={() => railNav.prev && openTrade(railNav.prev.tradeId)}
@@ -1392,7 +1394,7 @@ export function DraftTradesExplorer({
                             type="button"
                             className={cn(
                               buttonStyles({ variant: 'outline', size: 'xs' }),
-                              'rounded-none first:rounded-l-md last:-ml-px last:rounded-r-md'
+                              'first:rounded-r-none last:-ml-0.5 last:rounded-l-none rotate-0! scale-100! focus-visible:z-10'
                             )}
                             disabled={!railNav.next}
                             onClick={() => railNav.next && openTrade(railNav.next.tradeId)}

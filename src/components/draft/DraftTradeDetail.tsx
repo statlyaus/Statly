@@ -308,7 +308,7 @@ export function DraftTradeDetail({
                   <span
                     className={cn(
                       badgeStyles({ tone: 'neutral', size: 'sm' }),
-                      'shrink-0 sm:px-2.5 sm:py-0.5 sm:text-sm'
+                      'shrink-0 sm:px-2.5 sm:py-0.5'
                     )}
                   >
                     #{detail.trade.seqInYear}
@@ -316,7 +316,7 @@ export function DraftTradeDetail({
                   <span
                     className={cn(
                       badgeStyles({ tone: 'brand', size: 'sm' }),
-                      'shrink-0 sm:px-2.5 sm:py-0.5 sm:text-sm'
+                      'shrink-0 sm:px-2.5 sm:py-0.5'
                     )}
                   >
                     {detail.trade.year}
