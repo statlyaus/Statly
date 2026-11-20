@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 
-import { getPlayers } from '@/lib/data';
 import {
   buildDefaultLineup,
   scorePlayersByStats,
@@ -20,14 +19,16 @@ import {
 } from '@/server/leagues/lineupService';
 import { normalizeLineupSlots } from '@/server/leagues/lineupSettings';
 import type { LineupSlotSettings } from '@/server/leagues/scoringTypes';
+import { listLatestSeasonStatPlayers } from '@/server/players/playerPoolReadModel';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 import {
   normalizeFantasyCategoryKeys,
   REAL_DATA_NINE_CATEGORY_PRESET,
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
+import type { Player } from '@/types/players';
 
-type SourcePlayer = Awaited<ReturnType<typeof getPlayers>>[number];
+type SourcePlayer = Player;
 type DefaultLineupClient = Pick<
   typeof prisma,
   'league' | 'leagueLineup' | 'leagueRosterPlayer' | 'injuryListSnapshot' | 'injuryListEntry'
@@ -186,10 +187,12 @@ export async function ensureDefaultLineups({
     : new Map<string, RoundPlayerFixture>();
   // The injury list is not league- or season-scoped: every league reads the same snapshot.
   const [sourcePlayers, injuryFor] = await Promise.all([
-    getPlayers().catch((error: unknown): SourcePlayer[] => {
-      logger.warn('Default lineups: player feed unavailable', { leagueId, error });
-      return [];
-    }),
+    listLatestSeasonStatPlayers(roster.map((player) => player.playerId)).catch(
+      (error: unknown): SourcePlayer[] => {
+        logger.warn('Default lineups: player stats unavailable', { leagueId, error });
+        return [];
+      }
+    ),
     loadInjuryLookup({ prisma: client, now, logContext: { leagueId, scope: 'default lineups' } }),
   ]);
   let scores = new Map<string, number>();

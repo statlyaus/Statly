@@ -29,7 +29,10 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/server/draft/services/DraftReadinessService', () => readinessMocks);
 
-vi.mock('@/lib/data', () => dataMocks);
+vi.mock('@/server/players/playerPoolReadModel', () => ({
+  listSeasonStatPlayers: dataMocks.getPlayers,
+  listStatSeasons: async () => [2026],
+}));
 
 vi.mock('@/lib/logger', () => ({
   logger: {

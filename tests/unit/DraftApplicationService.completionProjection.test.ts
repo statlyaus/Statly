@@ -40,8 +40,6 @@ const { draftRepository, statlyZStatsLookup } = vi.hoisted(() => ({
         },
       ],
     ]),
-    byNameAndTeam: new Map(),
-    byName: new Map(),
   },
 }));
 

@@ -13,17 +13,14 @@ vi.mock('@/server/draft/readModels/draftPlayerReadModel', async (importOriginal)
   ...(await importOriginal<typeof import('@/server/draft/readModels/draftPlayerReadModel')>()),
   loadDraftPlayerStatsLookup: async () => ({
     byId: new Map([...stats.goalsByPlayerId].map(([id, goals]) => [id, { stats: { goals } }])),
-    byNameAndTeam: new Map(),
-    byName: new Map(),
   }),
 }));
-// The Firestore ownership projection and the stats file are not part of this rule.
+// The Firestore ownership projection is not part of this rule.
 vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
   WaiverAvailabilityProjectionService: class {
     projectLeague = vi.fn().mockResolvedValue({ owned: 0, available: 0 });
   },
 }));
-vi.mock('@/lib/data', () => ({ getPlayers: async () => [] }));
 
 import { prisma } from '@/lib/prisma';
 import {

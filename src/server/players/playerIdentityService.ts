@@ -3,7 +3,6 @@ import type { Player, Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 export const STATLY_LEGACY_PLAYER_PROVIDER = 'statly-legacy';
-export const PLAYER_STATS_2025_PROVIDER = 'player-stats-2025';
 
 type PlayerIdentityReadClient = Pick<Prisma.TransactionClient, 'player'> &
   Partial<Pick<Prisma.TransactionClient, 'playerExternalIdentity'>>;

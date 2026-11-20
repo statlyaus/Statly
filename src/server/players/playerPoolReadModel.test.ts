@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/prisma', () => ({ prisma: {} }));
+const seasonStat = vi.hoisted(() => ({ groupBy: vi.fn(), findMany: vi.fn() }));
+vi.mock('@/lib/prisma', () => ({ prisma: { playerSeasonStat: seasonStat } }));
 
 import { PLAYER_NUMERIC_FIELDS } from '../../../etl/normalizePlayerRow';
 import { readPerGameValue } from '@/server/players/readModels/leaguePlayerStatReadModel';
 
 import {
   APP_STAT_KEY,
+  listLatestSeasonStatPlayers,
   listPoolPlayers,
+  listSeasonStatPlayers,
   listStatSeasons,
   toPoolPlayer,
   toSeasonStatSource,
@@ -75,6 +78,50 @@ describe('toPoolPlayer', () => {
   it('shows the picked season, and no stats for a season the player has none in', () => {
     expect(toPoolPlayer(player, 2025)).toMatchObject({ games: 4, statsSeason: 2025 });
     expect(toPoolPlayer(player, 2024)).toMatchObject({ games: 0, stats: {}, statsSeason: 2024 });
+  });
+});
+
+describe('listSeasonStatPlayers', () => {
+  it("reads one season's rows with their players, active or not", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        ...season2026,
+        player: { id: 'cuid-walsh', name: 'Sam Walsh', club: 'Carlton', position: 'MID' },
+      },
+    ]);
+    const players = await listSeasonStatPlayers({ season: 2026, ids: ['cuid-walsh'] }, {
+      playerSeasonStat: { findMany },
+    } as never);
+
+    expect(findMany.mock.calls[0][0].where).toEqual({
+      season: 2026,
+      playerId: { in: ['cuid-walsh'] },
+    });
+    expect(players).toEqual([
+      expect.objectContaining({ id: 'cuid-walsh', games: 10, statsSeason: 2026 }),
+    ]);
+    expect(players[0].statsBySeason?.['2026']?.stats.goals).toBe(20);
+  });
+
+  it('reads nothing before any season is filled', async () => {
+    const findMany = vi.fn();
+    await expect(
+      listSeasonStatPlayers({ season: null }, { playerSeasonStat: { findMany } } as never)
+    ).resolves.toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('listLatestSeasonStatPlayers', () => {
+  it('reads the newest stored season for the given players', async () => {
+    seasonStat.groupBy.mockResolvedValue([{ season: 2026 }, { season: 2025 }]);
+    seasonStat.findMany.mockResolvedValue([]);
+
+    await listLatestSeasonStatPlayers(['cuid-walsh']);
+    expect(seasonStat.findMany.mock.calls[0][0].where).toEqual({
+      season: 2026,
+      playerId: { in: ['cuid-walsh'] },
+    });
   });
 });
 

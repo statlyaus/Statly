@@ -164,8 +164,8 @@ describe('league player stat read model', () => {
     ).toBe(1.5);
   });
 
-  it('remaps source statistics onto authoritative league player identifiers', () => {
-    const sourcePlayer = player('alex-alpha-adelaide', {
+  it('joins source statistics to league players by id only, never by name', () => {
+    const sourcePlayer = player('cuid-alex-alpha', {
       '2025': source(10, '2025-07-18', { goals: 20 }, { goals: 'TOTAL' }),
     });
     sourcePlayer.name = 'Alex Alpha';
@@ -173,15 +173,16 @@ describe('league player stat read model', () => {
     const dataset = buildLeaguePlayerStatDatasetForTargets(
       [sourcePlayer],
       [
-        { id: 'alex_alpha', name: 'Alex Alpha', club: 'Adelaide' },
-        { id: 'missing_player', name: 'Missing Player', club: 'Brisbane' },
+        { id: 'cuid-alex-alpha', name: 'Alex Alpha', club: 'Adelaide' },
+        // A namesake at the same club is another Player row: it never borrows these stats.
+        { id: 'cuid-alex-alpha-2', name: 'Alex Alpha', club: 'Adelaide' },
       ],
       { categories: ['goals'] }
     );
 
     expect(dataset.playersById).toEqual({
-      alex_alpha: { gamesPlayed: 10, values: { goals: 2 } },
-      missing_player: { gamesPlayed: 0, values: { goals: null } },
+      'cuid-alex-alpha': { gamesPlayed: 10, values: { goals: 2 } },
+      'cuid-alex-alpha-2': { gamesPlayed: 0, values: { goals: null } },
     });
   });
 });

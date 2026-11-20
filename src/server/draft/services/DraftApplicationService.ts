@@ -164,7 +164,7 @@ async function selectHighestStatlyZAvailablePlayer(
     return null;
   }
 
-  const statsLookup = await loadDraftPlayerStatsLookup();
+  const statsLookup = await loadDraftPlayerStatsLookup({}, tx);
   const projectedCandidates = candidates.map((player) =>
     buildAvailableDraftPlayer(
       {
