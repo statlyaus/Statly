@@ -8,6 +8,7 @@
  */
 
 import { AFL_TRADE_NOT_USED_LATE_WINDOW } from './assetLedgerNotUsedPicks';
+import type { AflTradeTradedPlayerProjectedSeason } from '../modeling/tradedPlayerValueLineContracts';
 
 export const AFL_TRADE_VALUE_LINES_SCHEMA_VERSION = 'afl-trade-value-lines/v3' as const;
 
@@ -149,6 +150,13 @@ export interface AflTradeValueLineAsset {
   readonly draftYear: number | null;
   /** The matched-bid share of the nominee's line. */
   readonly share: number | null;
+  /**
+   * Present, and true, only on a traded player's line from a projected trade season, one after the
+   * traded-player fit's last (`inputs.projectedTradeSeasons`): its open points come from the stored
+   * fit, never fitted, though a pending or closed point there is no projection. Absent everywhere else,
+   * so value lines with no projected season keep their bytes.
+   */
+  readonly projected?: true;
   readonly points: readonly AflTradeValueLinePoint[];
 }
 
@@ -225,6 +233,12 @@ export interface AflTradeValueLinesContent {
     /** Every season read, with the HPN PAV calculation all inputs pinned for it. */
     readonly seasons: readonly { readonly season: number; readonly calculationId: string }[];
     readonly throughSeason: number;
+    /**
+     * Present only when the traded-player fit projected a trade season after its last one: each such
+     * season's resolved legs, legs with a stage, and their stage digest
+     * (`AflTradeTradedPlayerValueEvaluator.projectedTradeSeasons`).
+     */
+    readonly projectedTradeSeasons?: readonly AflTradeTradedPlayerProjectedSeason[];
   };
   readonly assets: readonly AflTradeValueLineAsset[];
   readonly trades: readonly AflTradeValueLineTrade[];

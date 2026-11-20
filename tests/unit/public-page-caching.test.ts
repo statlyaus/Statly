@@ -30,6 +30,7 @@ describe('public page CDN caching', () => {
     '/afl/trades/method',
     '/afl/trades/external-transaction:40cb6950',
     '/afl/trades/clubs/fremantle',
+    '/afl/trades/external-transaction:40cb6950/share-card',
     '/afl/stories/jeremy-cameron',
     '/draft',
     '/draft/trades',

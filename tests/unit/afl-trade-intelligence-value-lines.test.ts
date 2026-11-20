@@ -574,6 +574,7 @@ function stubEvaluator(
 ): AflTradeTradedPlayerValueEvaluator {
   return {
     tradeSeasons: range(2019, 2025),
+    projectedTradeSeasons: [],
     playerTradeSeasons: new Map([
       ['x', [2019]],
       ['y', [2020]],
@@ -899,6 +900,38 @@ describe('computeAflTradeValueLines', () => {
     expect(() => lines({ playerTradeSeasons: new Map([['y', [2020]]]) })).toThrow(
       /has no 2019 trade of x/
     );
+  });
+
+  it('projects a traded stint of a season after the fit, and says so', () => {
+    const lines = (extra: Partial<AflTradeTradedPlayerValueEvaluator>) =>
+      computeAflTradeValueLines({ ...inputs(), tradedPlayers: stubEvaluator([], extra) });
+    const projectedSeason = { tradeSeason: 2019, legs: 1, staged: 1, stageDigest: 'digest' };
+    const projected = lines({ tradeSeasons: [2018], projectedTradeSeasons: [projectedSeason] });
+    expect(pointOf(projected, PLAYER_X, at('season_end', 2024))).toMatchObject({
+      state: 'open',
+      produced: 50,
+      expectedRemaining: 6,
+      pending: null,
+    });
+    const asset = projected.content.assets.find(({ assetKey }) => assetKey === PLAYER_X)!;
+    expect(asset.projected).toBe(true);
+    expect(projected.content.inputs.projectedTradeSeasons).toEqual([projectedSeason]);
+    // A fitted season carries no projection field at all, so earlier value lines keep their bytes.
+    const fitted = lines({});
+    expect(fitted.content.assets.some((row) => 'projected' in row)).toBe(false);
+    expect('projectedTradeSeasons' in fitted.content.inputs).toBe(false);
+    // A projected-season leg the fit's evidence has no trade for (an excluded leg) stays pending.
+    expect(
+      pointOf(
+        lines({
+          tradeSeasons: [2018],
+          projectedTradeSeasons: [projectedSeason],
+          playerTradeSeasons: new Map([['y', [2020]]]),
+        }),
+        PLAYER_X,
+        at('season_end', 2024)
+      )
+    ).toMatchObject({ state: 'pending', pending: 'unavailable' });
   });
 
   it('refuses a traded-player fit that read other games', () => {

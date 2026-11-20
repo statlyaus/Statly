@@ -91,6 +91,8 @@ const nextConfig = {
   // Production optimizations
   output: 'standalone',
   serverExternalPackages: ['bullmq'],
+  // The trade share card reads its fonts from disk (src/app/(public)/afl/trades/[tradeId]/share-card).
+  outputFileTracingIncludes: { '/afl/trades/*/share-card': ['./src/assets/fonts/*.ttf'] },
   poweredByHeader: false,
   generateEtags: false,
 

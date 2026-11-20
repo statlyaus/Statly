@@ -19,6 +19,7 @@
   "src/components/aflStories/CameronStoryPage.tsx": 4,
   "src/components/aflStories/guernseySketch.ts": 110,
   "src/components/aflTradeStory/TradeCollage.tsx": 3,
+  "src/components/aflTradeStory/TradeShareCard.tsx": 3,
   "src/components/aflTradeStory/tradePageModel.ts": 2,
   "src/components/aflTradeStory/valueLineChart.ts": 2,
   "src/components/AuthForm.tsx": 5,

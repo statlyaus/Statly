@@ -201,6 +201,8 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
       ),
     ].sort((left, right) => orderOf(left) - orderOf(right));
 
+  const projectedTradeSeasons = inputs.tradedPlayers?.projectedTradeSeasons ?? [];
+  const projectedSeasons = new Set(projectedTradeSeasons.map(({ tradeSeason }) => tradeSeason));
   const assets: AflTradeValueLineAsset[] = [...specs.values()]
     .sort((left, right) => byCodeUnit(left.assetKey, right.assetKey))
     .map((spec) => ({
@@ -212,6 +214,9 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
       clubId: spec.clubId,
       draftYear: spec.draftYear,
       share: spec.share,
+      ...(spec.basis === 'traded_player' && projectedSeasons.has(spec.firstTradeYear)
+        ? { projected: true as const }
+        : {}),
       points: lineCheckpoints(spec, spec.firstTradeYear).map((checkpoint) =>
         pointAt(spec, checkpoint)
       ),
@@ -297,6 +302,7 @@ export function computeAflTradeValueLines(inputs: AflTradeValueLineInputs): AflT
         .sort(([left], [right]) => left - right)
         .map(([season, calculationId]) => ({ season, calculationId })),
       throughSeason,
+      ...(projectedTradeSeasons.length > 0 ? { projectedTradeSeasons } : {}),
     },
     assets,
     trades: valueTrades,
