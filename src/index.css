@@ -14,6 +14,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* The hand-cut edge every pressable control shares (style guide, "Shape"): asymmetric elliptical
+     radii, never a neat corner or a pill. Utility: rounded-cut. */
+  --radius-cut: 255px 14px 225px 14px / 14px 225px 14px 255px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,6 +50,9 @@
   --color-overlay: var(--overlay);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-field: var(--field);
+  --color-field-foreground: var(--field-foreground);
+  --color-field-placeholder: var(--field-placeholder);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -151,7 +157,11 @@
   --brand-bar-foreground: #fff;
   --overlay: oklch(0 0 0 / 50%);
   --border: var(--brand-hairline); /* Decorative only; never the only edge of a control */
-  --input: #ced4da;
+  --input: var(--brand-ink); /* Field edge: 2px ink, 18.9:1 on white (WCAG 1.4.11 needs 3:1) */
+  /* A field is white with ink text on every ground; no ground redefines these. */
+  --field: #fff;
+  --field-foreground: var(--brand-ink);
+  --field-placeholder: var(--brand-secondary-text);
   --ring: var(--brand-bar); /* Focus is cobalt on light grounds */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -318,7 +328,7 @@
    button, link or focus ring inside it is right by construction. In the components layer so a
    utility on the same element still wins. Only these roles follow a ground: :root aliases such as
    --league-*, --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
-   --input and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
+   --input, --field* and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
    .ground-white. Status words: --warning-text holds on all three light grounds; --success and
    --destructive only on white until the stone ticket fixes them. */
 @layer components {
@@ -401,6 +411,37 @@
   /* Display type is Geist, set tight. Headings are sentence case, so no case transform here. */
   .font-display {
     letter-spacing: -0.02em;
+  }
+}
+
+/* Torn tape for badges (style guide, "Badges"): a ragged clip and about one degree off straight,
+   alternating direction between sibling badges. A still tilt is not motion, so reduced motion keeps
+   it. */
+@utility tape {
+  /* Jags in px on the x axis so a long badge keeps clear of its first and last letters. */
+  clip-path: polygon(
+    0 8%,
+    4px 0,
+    8px 10%,
+    12px 0,
+    100% 4%,
+    calc(100% - 4px) 14%,
+    100% 30%,
+    calc(100% - 3px) 50%,
+    100% 70%,
+    calc(100% - 4px) 86%,
+    100% 100%,
+    calc(100% - 12px) 92%,
+    calc(100% - 16px) 100%,
+    0 96%,
+    4px 82%,
+    0 64%,
+    3px 44%,
+    0 26%
+  );
+  rotate: -1.2deg;
+  &:nth-of-type(even) {
+    rotate: 1deg;
   }
 }
 

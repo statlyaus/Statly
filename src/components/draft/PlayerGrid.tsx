@@ -63,7 +63,7 @@ const ACTION_BUTTON_BASE_CLASS =
 const ACTION_BUTTON_DISABLED_CLASS =
   'cursor-not-allowed border border-border bg-muted/70 text-muted-foreground';
 const ACTION_BUTTON_OUTLINE_CLASS =
-  'border border-input bg-[color:var(--draft-broadcast-field)] text-foreground hover:bg-[color:var(--draft-broadcast-field-strong)]';
+  'border border-border bg-[color:var(--draft-broadcast-field)] text-foreground hover:bg-[color:var(--draft-broadcast-field-strong)]';
 
 interface VisibleRowRange {
   start: number;

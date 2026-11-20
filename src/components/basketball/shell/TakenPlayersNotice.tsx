@@ -1,6 +1,5 @@
 import Link from 'next/link';
 
-import { badgeStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 
 import { basketballLeagueHref } from './basketballFormat';
@@ -26,12 +25,8 @@ export function TakenPlayersNotice({
   return (
     <p
       role="status"
-      // The badge recipe's warning tone, laid out as a wrapping block.
-      className={cn(
-        badgeStyles({ tone: 'warning', size: 'md' }),
-        'block whitespace-normal rounded-md px-3 py-2 font-normal',
-        className
-      )}
+      // A sun alert: a sentence is not a badge, so no tape, capitals or tilt.
+      className={cn('block bg-warning px-3 py-2 text-sm text-warning-foreground', className)}
     >
       Statly knows {takenPlayersSummary(check)}, so some suggestions may already be rostered.{' '}
       <Link

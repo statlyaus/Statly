@@ -135,10 +135,7 @@ export function DraftClubTradeHistory({
             </nav>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <a
-              href={exportHref}
-              className={cn(buttonStyles({ variant: 'primary', size: 'sm' }), 'shadow-sm')}
-            >
+            <a href={exportHref} className={buttonStyles({ variant: 'primary', size: 'sm' })}>
               Export latest year
             </a>
             <span className={`${draftHubSkyPillClass} tabular-nums`}>{refs.length} trades</span>
@@ -199,9 +196,11 @@ export function DraftClubTradeHistory({
           <span className={badgeStyles({ tone: 'neutral', size: 'sm' })}>
             {filtered.length} results
           </span>
-          <span className={badgeStyles({ tone: 'brand', size: 'sm' })}>{clubName}</span>
+          <span className={badgeStyles({ tone: 'brand', size: 'sm', caps: false })}>
+            {clubName}
+          </span>
           {query.trim() ? (
-            <span className={badgeStyles({ tone: 'neutral', size: 'sm' })}>
+            <span className={badgeStyles({ tone: 'neutral', size: 'sm', caps: false })}>
               Query: {query.trim()}
             </span>
           ) : null}

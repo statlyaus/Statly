@@ -33,7 +33,12 @@ describe('Button accessibility', () => {
     const button = screen.getByRole('button', { name: 'Dashboard' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveAttribute('tabindex', '-1');
-    expect(button).toHaveClass('cursor-not-allowed', 'opacity-50');
+    // The recipe styles aria-disabled the same as disabled: dashed, muted, no tilt.
+    expect(button).toHaveClass(
+      'aria-disabled:cursor-not-allowed',
+      'aria-disabled:border-dashed',
+      'aria-disabled:text-muted-foreground'
+    );
 
     fireEvent.click(button);
 
@@ -90,12 +95,17 @@ describe('Button accessibility', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('uses the navy brand-bar for primary actions without decorative scaling', () => {
+  it('uses the primary role for primary actions and moves only when motion is allowed', () => {
     render(<Button onClick={vi.fn()}>Save</Button>);
 
     const button = screen.getByRole('button', { name: 'Save' });
-    expect(button).toHaveClass('bg-brand-bar', 'text-brand-bar-foreground', 'min-h-11');
-    expect(button.className).not.toMatch(/scale-|bg-blue-/);
+    expect(button).toHaveClass('bg-primary', 'text-primary-foreground', 'min-h-11', 'rounded-cut');
+    expect(button.className).not.toMatch(/bg-blue-/);
+    const motionClasses = button.className
+      .split(/\s+/)
+      .filter((name) => /(?:^|:)-?(?:scale|rotate)-/.test(name));
+    expect(motionClasses.length).toBeGreaterThan(0);
+    for (const name of motionClasses) expect(name).toMatch(/^motion-safe:/);
   });
 
   it('marks destructive actions with the destructive token', () => {
@@ -117,6 +127,6 @@ describe('Button accessibility', () => {
 
     const button = screen.getByRole('button', { name: 'Compact' });
     expect(button).toHaveClass('min-h-0', 'px-0');
-    expect(button).not.toHaveClass('min-h-11', 'px-4');
+    expect(button).not.toHaveClass('min-h-11', 'px-6');
   });
 });

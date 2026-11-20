@@ -122,7 +122,7 @@ const ROSTER_ACTIONS_COLUMN_WIDTH = 236;
 const ROSTER_ACTION_BUTTON_BASE_CLASS =
   'inline-flex h-10 w-full items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ROSTER_ACTION_BUTTON_OUTLINE_CLASS =
-  'border border-input bg-background text-foreground hover:bg-muted';
+  'border border-border bg-background text-foreground hover:bg-muted';
 
 function getSafeRankings(rankings: unknown): RankingEntry[] {
   return Array.isArray(rankings) ? rankings : [];
@@ -644,7 +644,7 @@ function RosterToolbar({
           <button
             type="button"
             onClick={onSortDirectionToggle}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
             aria-label={`Sort ${sortDirection === 'desc' ? 'low to high' : 'high to low'}`}
           >
             <ArrowsUpDownIcon className="h-4 w-4" aria-hidden="true" />

@@ -1,15 +1,20 @@
 import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
+
+// Teach tailwind-merge the theme's custom radius (src/index.css `--radius-cut`), so a caller's
+// `rounded-none` replaces a recipe's `rounded-cut` instead of both being kept.
+const twMerge = extendTailwindMerge({ extend: { theme: { radius: ['cut'] } } });
+
+/** Joins class names and drops earlier Tailwind classes that a later one overrides. */
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 /**
  * Capitalizes the first letter of each word in a string.
  * @param str The input string.
  * @returns The capitalized string.
  */
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
 export function capitalizeWords(str: string | null | undefined): string {
   if (!str) return '';
   return str.replace(/\b\w/g, (c) => c.toUpperCase());
