@@ -41,6 +41,7 @@ describe('trades-only mode', () => {
     '/brand/statly-hero-logo-overlay.png',
     '/favicon.svg',
     '/robots.txt',
+    '/sitemap.xml',
     '/Assets/clubs/carlton.png',
     '/logos/statly.svg',
     '/api/admin/afl-trade-story-bundle',

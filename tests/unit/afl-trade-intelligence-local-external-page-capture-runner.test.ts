@@ -1228,7 +1228,7 @@ describe('local Footyinfo draft-board targets and arguments', () => {
     ]);
   });
 
-  it.each([[[]], [[2024, 2024]], [[2018]], [[2026]]])('rejects seasons %j', (seasons) => {
+  it.each([[[]], [[2024, 2024]], [[2018]], [[2027]]])('rejects seasons %j', (seasons) => {
     expect(() => createLocalFootyinfoDraftBoardTargets(seasons)).toThrow(LocalExternalCaptureError);
   });
 

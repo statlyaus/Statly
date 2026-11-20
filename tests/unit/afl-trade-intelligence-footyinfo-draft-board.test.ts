@@ -416,12 +416,12 @@ describe('parseFootyinfoDraftBoard', () => {
 });
 
 describe('Footyinfo board scope and capture', () => {
-  it('reviews exactly one board URL per draft year 2019 to 2025', () => {
+  it('reviews exactly one board URL per draft year 2019 to 2026', () => {
     expect(
-      [2018, 2019, 2025, 2026].map((year) =>
+      [2018, 2019, 2025, 2026, 2027].map((year) =>
         reviewedFootyinfoDraftBoardSeason(footyinfoDraftBoardUrl(year))
       )
-    ).toEqual([null, 2019, 2025, null]);
+    ).toEqual([null, 2019, 2025, 2026, null]);
     for (const url of [
       'https://footyinfo.com/draft/2024',
       'https://www.footyinfo.com/draft/2024?hidePassed=0',
