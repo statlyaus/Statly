@@ -107,6 +107,7 @@
     "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
     "player-identity:consolidate": "tsx Scripts/player-identity-consolidation.ts",
     "player-identity:footywire": "tsx Scripts/footywire-player-identity.ts",
+    "player-season-stats:fill": "tsx Scripts/fill-player-season-stats.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",
     "test:int": "vitest run --config vitest.config.int.ts",
     "test:outcomes:int": "tsx Scripts/dev/run-disposable-afl-trade-outcomes-tests.ts",
