@@ -62,9 +62,9 @@ const VARIANT_CONFIG = {
     border: 'border-gray-200',
   },
   info: {
-    background: 'bg-blue-600',
+    background: 'bg-primary',
     text: 'text-white',
-    border: 'border-blue-600',
+    border: 'border-primary',
   },
   success: {
     background: 'bg-green-600',
@@ -448,7 +448,7 @@ export function InfoTooltip({
     >
       <button
         type="button"
-        className="inline-flex items-center justify-center w-4 h-4 text-blue-500 hover:text-blue-600 transition-colors"
+        className="inline-flex items-center justify-center w-4 h-4 text-primary hover:text-primary/80 transition-colors"
         aria-label="More information"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

@@ -243,7 +243,7 @@ export default function RealTimeMatchCenter({
               Error loading live data
               <button
                 onClick={refresh}
-                className="ml-2 text-blue-600 hover:underline disabled:opacity-60"
+                className="ml-2 text-primary hover:underline disabled:opacity-60"
                 disabled={isLoading}
               >
                 Retry
@@ -277,7 +277,7 @@ export default function RealTimeMatchCenter({
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
+                ? 'bg-white text-primary shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >

@@ -439,7 +439,7 @@ export function getCategoryColorClass(color?: string): string {
     case 'green':
       return 'text-green-600';
     case 'blue':
-      return 'text-blue-600';
+      return 'text-primary';
     case 'orange':
       return 'text-orange-600';
     case 'purple':

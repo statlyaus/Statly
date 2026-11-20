@@ -187,7 +187,7 @@ export default function InfrastructureTestPage() {
       case 'warning':
         return 'text-yellow-600 bg-yellow-50';
       case 'pending':
-        return 'text-blue-600 bg-blue-50';
+        return 'text-secondary-foreground bg-secondary';
       default:
         return 'text-gray-600 bg-gray-50';
     }
@@ -249,7 +249,7 @@ export default function InfrastructureTestPage() {
               <button
                 onClick={runTests}
                 disabled={isRunning}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
               >
                 {isRunning ? 'Running...' : 'Run Tests'}
               </button>

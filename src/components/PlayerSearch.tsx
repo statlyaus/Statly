@@ -190,7 +190,7 @@ export default function PlayerSearch({
       return (
         <div
           className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
-            isSelected ? 'bg-blue-50 text-blue-700' : ''
+            isSelected ? 'bg-secondary text-secondary-foreground' : ''
           }`}
         >
           <div className="font-medium">{player.name}</div>
@@ -205,7 +205,7 @@ export default function PlayerSearch({
     return (
       <div
         className={`w-full border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${
-          isSelected ? 'bg-blue-50 border-blue-200' : ''
+          isSelected ? 'bg-secondary border-secondary-foreground/30' : ''
         }`}
       >
         <div className="flex items-center space-x-3">
@@ -225,7 +225,7 @@ export default function PlayerSearch({
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-gray-900 truncate">{player.name}</h4>
               {variant === 'detailed' && (
-                <span className="text-sm font-medium text-blue-600">{player.averageScore} avg</span>
+                <span className="text-sm font-medium text-primary">{player.averageScore} avg</span>
               )}
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -270,7 +270,7 @@ export default function PlayerSearch({
           aria-activedescendant={activeOptionId}
           aria-label={ariaLabel}
           className={`
-            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
+            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent
             ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
             ${sizeClasses[size]} ${inputClassName}
           `}
@@ -283,7 +283,7 @@ export default function PlayerSearch({
             <div id={listboxId} role="listbox">
               {isLoading ? (
                 <div className="px-4 py-3 text-center text-gray-500" role="status">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
                   <span className="ml-2">Searching...</span>
                 </div>
               ) : players.length > 0 ? (

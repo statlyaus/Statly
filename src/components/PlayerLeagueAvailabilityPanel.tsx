@@ -70,7 +70,7 @@ function formatProcessingAt(value?: string, timeZone?: string): string | null {
 
 function getStatusClass(status: AvailabilityStatus): string {
   if (status === 'owned') return 'text-amber-700';
-  if (status === 'your-roster') return 'text-sky-700';
+  if (status === 'your-roster') return 'text-primary';
   if (status === 'waiver') return 'text-violet-700';
   return 'text-emerald-700';
 }
@@ -84,7 +84,7 @@ function getActionClass(type: AvailabilityActionType): string {
 
 function getStatusDotClass(status: AvailabilityStatus): string {
   if (status === 'owned') return 'bg-amber-500';
-  if (status === 'your-roster') return 'bg-sky-500';
+  if (status === 'your-roster') return 'bg-primary';
   if (status === 'waiver') return 'bg-violet-500';
   return 'bg-emerald-500';
 }

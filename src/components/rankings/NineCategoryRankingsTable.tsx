@@ -51,7 +51,7 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
   const getStatColor = (zScore: number) => {
     if (zScore >= 2) return 'text-green-700 bg-green-50';
     if (zScore >= 1) return 'text-green-600 bg-green-100';
-    if (zScore >= 0.5) return 'text-blue-600 bg-blue-100';
+    if (zScore >= 0.5) return 'text-secondary-foreground bg-secondary';
     if (zScore >= -0.5) return 'text-gray-700 bg-gray-100';
     if (zScore >= -1) return 'text-orange-600 bg-orange-100';
     return 'text-red-600 bg-red-100';
@@ -126,7 +126,7 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
             {players.map((player) => (
               <tr key={player.playerId} className="hover:bg-gray-50">
                 <td className="px-3 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 text-sm font-bold">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-secondary text-secondary-foreground text-sm font-bold">
                     {player.rank}
                   </span>
                 </td>

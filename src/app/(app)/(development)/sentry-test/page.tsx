@@ -72,7 +72,7 @@ export default function SentryTestPage() {
 
                 <button
                   onClick={testMessageCapture}
-                  className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-primary text-white py-2 px-4 rounded hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   💬 Test Info Message
                 </button>
@@ -100,7 +100,7 @@ export default function SentryTestPage() {
 
                 <button
                   onClick={testExtra}
-                  className="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full bg-primary text-white py-2 px-4 rounded hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   📊 Test Extra Context
                 </button>
@@ -145,9 +145,9 @@ export default function SentryTestPage() {
                 )}
               </div>
 
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-medium text-blue-900 mb-2">📋 What to Check</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
+              <div className="mt-4 p-4 bg-secondary rounded-lg">
+                <h3 className="font-medium text-secondary-foreground mb-2">📋 What to Check</h3>
+                <ul className="text-sm text-secondary-foreground space-y-1">
                   <li>• Check your Sentry dashboard for new events</li>
                   <li>• Verify error stack traces are readable</li>
                   <li>• Check that breadcrumbs and context are captured</li>
