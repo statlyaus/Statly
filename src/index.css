@@ -8,7 +8,8 @@
 
 @theme inline {
   --font-sans: var(--font-saira), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-saira-extra-condensed), var(--font-saira), ui-sans-serif, sans-serif;
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-hand: var(--font-caveat), cursive;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -320,11 +321,9 @@
     /* Stats line up in columns across the app: scores, tables and FAAB. */
     font-variant-numeric: tabular-nums;
   }
-  /* Display type is set in condensed caps, scoreboard style. In the base layer so a `normal-case`
-     utility can still opt a heading out. */
+  /* Display type is Geist, set tight. Headings are sentence case, so no case transform here. */
   .font-display {
-    text-transform: uppercase;
-    letter-spacing: 0.01em;
+    letter-spacing: -0.02em;
   }
 }
 
