@@ -32,6 +32,7 @@ describe('trades-only mode', () => {
     '/afl',
     '/afl/trades',
     '/afl/trades/external-transaction:abc',
+    '/afl/trades/external-transaction:abc/share-card',
     '/afl/trades/clubs/club:abc',
     '/afl/trades/method',
     '/draft/trades',
