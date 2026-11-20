@@ -72,12 +72,10 @@ function audit(): Findings {
   };
   const controls = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A', 'SUMMARY']);
 
-  for (const element of document.querySelectorAll('main *')) {
-    if (element.closest('[data-collage]')) continue;
-    const style = getComputedStyle(element);
-    const box = element.getBoundingClientRect();
-    if (box.width < 2 || box.height < 2 || style.visibility === 'hidden') continue;
-    const inSvg = !!element.closest('svg');
+  // One check per rule, each reading the element's computed style and box.
+  type Ctx = { element: Element; style: CSSStyleDeclaration; box: DOMRect; ownText: string };
+
+  const checkShape = ({ element, style, box }: Ctx) => {
     const corners = [
       style.borderTopLeftRadius,
       style.borderTopRightRadius,
@@ -90,72 +88,98 @@ function audit(): Findings {
     const handCut = style.borderRadius.includes('/');
     const even = !handCut && corners.every((corner) => corner === corners[0]);
     const isControl = controls.has(element.tagName) || element.getAttribute('role') === 'button';
-
-    if (
+    const pill =
       even &&
       radius > 6 &&
       radius >= Math.min(box.width, box.height) / 2 - 1 &&
-      box.width > box.height * 1.4
-    )
-      out.pills.push(name(element));
+      box.width > box.height * 1.4;
+    if (pill) out.pills.push(name(element));
     else if (!handCut && !isControl && radius >= 6 && box.width > 120 && box.height > 60)
       out.roundedBlocks.push(`${name(element)} r=${radius}`);
+  };
 
-    // Hard shadows only ("5px 6px 0 ink"): a layer whose third length (the blur) is above zero is soft.
+  // Hard shadows only ("5px 6px 0 ink"): a layer whose third length (the blur) is above zero is soft.
+  const checkShadow = ({ element, style }: Ctx) => {
+    if (style.boxShadow === 'none') return;
     const blurred = style.boxShadow
       .replace(/rgba?\([^)]*\)/g, '')
       .split(',')
       .some((layer) => parseFloat(layer.match(/-?[\d.]+px/g)?.[2] ?? '0') > 0);
-    if (style.boxShadow !== 'none' && blurred) out.blurredShadows.push(name(element));
+    if (blurred) out.blurredShadows.push(name(element));
+  };
 
+  const checkRed = ({ element, style, box, ownText }: Ctx) => {
+    if (element.closest('[role="alert"], [data-status="live"]')) return;
+    if (ownText.length > 0 && isRed(style.color)) out.red.push(name(element));
+    // A red club's 13px square is club colour, not a status.
+    const square = box.width <= 14 && box.height <= 14;
+    if (!square && isRed(style.backgroundColor)) out.red.push(`fill ${name(element)}`);
+  };
+
+  const checkStripe = ({ element, style }: Ctx) => {
+    const left = parseFloat(style.borderLeftWidth);
+    if (left >= 3 && style.borderLeftStyle !== 'none' && parseFloat(style.borderRightWidth) < 1)
+      out.sideStripes.push(`${name(element)} ${left}px`);
+  };
+
+  // Only the three brand faces (style guide, "Typefaces"), SVG labels included.
+  const checkFont = ({ element, style, ownText }: Ctx) => {
+    const face = style.fontFamily.split(',')[0]!.replace(/["']/g, '').trim();
+    if (ownText.length > 0 && !/^(__)?(Geist|Saira|Caveat)(\b|_)/i.test(face))
+      out.offBrandFonts.push(`${name(element)} ${face}`);
+  };
+
+  // SVG text scales with its chart: its rendered size is the font size times the screen scale.
+  const checkSvgText = ({ element, style }: Ctx) => {
+    if (!(element instanceof SVGTextContentElement)) return;
+    const rendered = parseFloat(style.fontSize) * (element.getScreenCTM()?.a ?? 1);
+    if (rendered < 10.95) out.smallText.push(`svg ${name(element)} ${rendered.toFixed(1)}px`);
+  };
+
+  const checkText = ({ element, style, ownText }: Ctx) => {
+    const size = parseFloat(style.fontSize);
+    if (/Geist/i.test(style.fontFamily) && ownText.split(/\s+/).length > 9 && size < 28)
+      out.geistSentences.push(name(element));
+    if (size < 11) out.smallText.push(`${name(element)} ${size}px`);
+    const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
+    const contrast = ratio(style.color, backgroundOf(element));
+    if (contrast < (large ? 3 : 4.5))
+      out.lowContrast.push(`${name(element)} ${contrast.toFixed(2)}`);
+  };
+
+  // Club colour comes from clubGuernseys.ts as an inline background or a literal SVG fill or
+  // stroke (tokens are always var()); only the 13px club square may carry it.
+  const checkClubColour = ({ element, style, box }: Ctx) => {
+    if (box.width <= 14 && box.height <= 14) return;
+    const dims = `${Math.round(box.width)}x${Math.round(box.height)}`;
+    const inline = element.getAttribute('style') ?? '';
+    if (/background/.test(inline) && !transparent(style.backgroundColor))
+      out.clubFills.push(`${name(element)} ${dims}`);
+    const paint = `${element.getAttribute('fill') ?? ''} ${element.getAttribute('stroke') ?? ''}`;
+    if (element.closest('svg') && /#[0-9a-f]{3,8}\b/i.test(paint))
+      out.clubFills.push(`svg ${name(element)} ${paint.trim()} ${dims}`);
+  };
+
+  for (const element of document.querySelectorAll('main *')) {
+    if (element.closest('[data-collage]')) continue;
+    const style = getComputedStyle(element);
+    const box = element.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2 || style.visibility === 'hidden') continue;
     const ownText = [...element.childNodes]
       .filter((node) => node.nodeType === Node.TEXT_NODE)
       .map((node) => node.textContent ?? '')
       .join('')
       .trim();
-    const statusAllowsRed = !!element.closest('[role="alert"], [data-status="live"]');
-    if (!statusAllowsRed && ownText.length > 0 && isRed(style.color)) out.red.push(name(element));
-    // A red club's 13px square is club colour, not a status.
-    const square = box.width <= 14 && box.height <= 14;
-    if (!statusAllowsRed && !square && isRed(style.backgroundColor))
-      out.red.push(`fill ${name(element)}`);
-
-    const left = parseFloat(style.borderLeftWidth);
-    if (left >= 3 && style.borderLeftStyle !== 'none' && parseFloat(style.borderRightWidth) < 1)
-      out.sideStripes.push(`${name(element)} ${left}px`);
-
-    // Only the three brand faces (style guide, "Typefaces"), SVG labels included.
-    const face = style.fontFamily.split(',')[0]!.replace(/["']/g, '').trim();
-    if (ownText.length > 0 && !/^(__)?(Geist|Saira|Caveat)(\b|_)/i.test(face))
-      out.offBrandFonts.push(`${name(element)} ${face}`);
-
-    // SVG text scales with its chart: its rendered size is the font size times the screen scale.
-    if (ownText.length > 0 && element instanceof SVGTextContentElement) {
-      const rendered = parseFloat(style.fontSize) * (element.getScreenCTM()?.a ?? 1);
-      if (rendered < 10.95) out.smallText.push(`svg ${name(element)} ${rendered.toFixed(1)}px`);
-    }
-
-    if (ownText.length > 0 && !inSvg) {
-      const size = parseFloat(style.fontSize);
-      if (/Geist/i.test(style.fontFamily) && ownText.split(/\s+/).length > 9 && size < 28)
-        out.geistSentences.push(name(element));
-      if (size < 11) out.smallText.push(`${name(element)} ${size}px`);
-      const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
-      const contrast = ratio(style.color, backgroundOf(element));
-      if (contrast < (large ? 3 : 4.5))
-        out.lowContrast.push(`${name(element)} ${contrast.toFixed(2)}`);
-    }
-
-    // Club colour comes from clubGuernseys.ts as an inline background or a literal SVG fill or
-    // stroke (tokens are always var()); only the 13px club square may carry it.
-    const dims = `${Math.round(box.width)}x${Math.round(box.height)}`;
-    const big = box.width > 14 || box.height > 14;
-    const inline = element.getAttribute('style') ?? '';
-    if (/background/.test(inline) && !transparent(style.backgroundColor) && big)
-      out.clubFills.push(`${name(element)} ${dims}`);
-    const paint = `${element.getAttribute('fill') ?? ''} ${element.getAttribute('stroke') ?? ''}`;
-    if (inSvg && /#[0-9a-f]{3,8}\b/i.test(paint) && big)
-      out.clubFills.push(`svg ${name(element)} ${paint.trim()} ${dims}`);
+    const ctx: Ctx = { element, style, box, ownText };
+    checkShape(ctx);
+    checkShadow(ctx);
+    checkRed(ctx);
+    checkStripe(ctx);
+    checkClubColour(ctx);
+    if (ownText.length === 0) continue;
+    checkFont(ctx);
+    if (element.closest('svg')) checkSvgText(ctx);
+    else checkText(ctx);
   }
   return out;
 }
