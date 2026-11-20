@@ -1,4 +1,3 @@
-import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
 import {
   FANTASY_CATEGORIES,
@@ -43,28 +42,6 @@ function sourceKeysFor(category: FantasyCategoryKey): readonly string[] {
 
 function readFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function normalizeLookupPart(value: string | null | undefined): string {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase();
-}
-
-function addUniqueLookup<T>(
-  lookup: Map<string, T>,
-  ambiguousKeys: Set<string>,
-  key: string,
-  value: T
-): void {
-  if (!key || ambiguousKeys.has(key)) return;
-  if (!lookup.has(key)) {
-    lookup.set(key, value);
-    return;
-  }
-  if (lookup.get(key) === value) return;
-  lookup.delete(key);
-  ambiguousKeys.add(key);
 }
 
 export function readPlayerSeasonStatAverage(
@@ -188,62 +165,26 @@ export function buildLeaguePlayerStatDataset(
   };
 }
 
+/**
+ * The stat dataset for league players. Source and target ids are both the canonical `Player.id`,
+ * so they join by id only: a name join would hand one Player's stats to a namesake row.
+ */
 export function buildLeaguePlayerStatDatasetForTargets(
   sourcePlayers: readonly Player[],
   targets: readonly LeaguePlayerStatTarget[],
   options: LeaguePlayerStatReadModelOptions
 ): LeaguePlayerStatDatasetDto {
   const sourceDataset = buildLeaguePlayerStatDataset(sourcePlayers, options);
-  const byCanonicalId = new Map<string, LeaguePlayerStatLineDto>();
-  const byNameAndTeam = new Map<string, LeaguePlayerStatLineDto>();
-  const byName = new Map<string, LeaguePlayerStatLineDto>();
-  const ambiguousCanonicalIds = new Set<string>();
-  const ambiguousNames = new Set<string>();
-
-  for (const player of sourcePlayers) {
-    const line = sourceDataset.playersById[player.id];
-    if (!line) continue;
-
-    addUniqueLookup(byCanonicalId, ambiguousCanonicalIds, buildCanonicalPlayerId(player.id), line);
-    addUniqueLookup(
-      byCanonicalId,
-      ambiguousCanonicalIds,
-      buildCanonicalPlayerId(player.name),
-      line
-    );
-
-    const normalizedName = normalizeLookupPart(player.name);
-    const normalizedTeam = normalizeLookupPart(player.team);
-    if (normalizedName && normalizedTeam) {
-      byNameAndTeam.set(`${normalizedName}|${normalizedTeam}`, line);
-    }
-    addUniqueLookup(byName, ambiguousNames, normalizedName, line);
-  }
-
   const emptyValues = () =>
     Object.fromEntries(sourceDataset.columns.map(({ key }) => [key, null] as const));
 
   return {
     ...sourceDataset,
     playersById: Object.fromEntries(
-      targets.map((target) => {
-        const normalizedName = normalizeLookupPart(target.name);
-        const normalizedTeam = normalizeLookupPart(target.club ?? target.team);
-        const line =
-          sourceDataset.playersById[target.id] ??
-          byCanonicalId.get(buildCanonicalPlayerId(target.id)) ??
-          byCanonicalId.get(buildCanonicalPlayerId(target.name)) ??
-          byNameAndTeam.get(`${normalizedName}|${normalizedTeam}`) ??
-          byName.get(normalizedName);
-
-        return [
-          target.id,
-          line ?? {
-            gamesPlayed: 0,
-            values: emptyValues(),
-          },
-        ];
-      })
+      targets.map((target) => [
+        target.id,
+        sourceDataset.playersById[target.id] ?? { gamesPlayed: 0, values: emptyValues() },
+      ])
     ),
   };
 }

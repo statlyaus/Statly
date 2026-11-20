@@ -2,7 +2,6 @@ import { clubRecordFor, loadClubSeasonRecords } from '@/server/leagues/noLosersS
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { getPlayers } from '@/lib/data';
 import { getLeagueMembership } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -35,6 +34,7 @@ import {
   synchronizeLineupPlayerLocks,
 } from '@/server/leagues/lineupService';
 import { activeSeasonIdOf } from '@/server/leagues/activeSeason';
+import { listLatestSeasonStatPlayers } from '@/server/players/playerPoolReadModel';
 import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
 
 async function resolveRoundNumber(leagueId: string, round: string): Promise<number | null> {
@@ -241,10 +241,12 @@ export async function GET(
   let playerStats: ReturnType<typeof buildLeaguePlayerStatDatasetForTargets> | null = null;
   // The injury list is not league- or season-scoped: every league reads the same snapshot.
   const [sourcePlayers, injuryFor] = await Promise.all([
-    getPlayers().catch((error: unknown) => {
-      logger.warn('Lineup player stats unavailable', { leagueId: id, error });
-      return null;
-    }),
+    listLatestSeasonStatPlayers(rosterPlayers.map((row) => row.playerId)).catch(
+      (error: unknown) => {
+        logger.warn('Lineup player stats unavailable', { leagueId: id, error });
+        return null;
+      }
+    ),
     loadInjuryLookup({
       prisma,
       now,
