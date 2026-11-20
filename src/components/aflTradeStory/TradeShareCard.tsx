@@ -14,6 +14,8 @@ import type { ShareCardChart, ShareCardLine, ShareCardModel } from './shareCardM
 
 export const SHARE_CARD_SIZE = { width: 1200, height: 630 } as const;
 
+// Satori cannot read CSS variables, so the brand colours are copied from src/index.css
+// (--brand-cobalt, --brand-sun) and allowed in Scripts/design/raw-colour-baseline.json.
 const COBALT = '#1a2cff';
 const SUN = '#ffc247';
 const WHITE = '#ffffff';
