@@ -663,7 +663,9 @@ function RosterToolbar({
             >
               {capFirst(filter)}
               <span
-                className={filterType === filter ? 'ml-2 text-primary-foreground/80' : 'ml-2 text-slate-500'}
+                className={
+                  filterType === filter ? 'ml-2 text-primary-foreground/80' : 'ml-2 text-slate-500'
+                }
               >
                 {filterCounts[filter]}
               </span>
