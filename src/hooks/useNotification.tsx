@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { floatingStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 import {
   CheckCircleIcon,
@@ -92,13 +93,12 @@ export function NotificationToast({
           className={cn('fixed z-50', positionClasses[position], className)}
         >
           <div
-            className={`max-w-sm rounded-md border bg-background px-4 py-3 text-foreground shadow-lg ${
-              notification.type === 'success'
-                ? 'border-result-win/40 [&_svg]:text-result-win'
-                : notification.type === 'error'
-                  ? 'border-result-loss/40 [&_svg]:text-result-loss'
-                  : 'border-border [&_svg]:text-muted-foreground'
-            }`}
+            // An ink toast with a cobalt shadow; the icon is sun on ink, and the role and words carry
+            // the type.
+            className={cn(
+              floatingStyles({ tone: 'ink' }),
+              'max-w-sm px-4 py-3 [&_svg]:text-primary'
+            )}
             role={notification.type === 'error' ? 'alert' : 'status'}
             aria-live={notification.type === 'error' ? 'assertive' : 'polite'}
             aria-atomic="true"

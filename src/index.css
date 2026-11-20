@@ -17,6 +17,12 @@
   /* The hand-cut edge every pressable control shares (style guide, "Shape"): asymmetric elliptical
      radii, never a neat corner or a pill. Utility: rounded-cut. */
   --radius-cut: 255px 14px 225px 14px / 14px 225px 14px 255px;
+  /* The floating cut: menus, dialogs, sheets, toasts and tooltips. Utility: rounded-cut-float. */
+  --radius-cut-float: 8px 255px 10px 225px / 225px 10px 255px 8px;
+  /* Floating things cast one hard shadow, never blurred (style guide, "Elevation"): ink under light
+     floating things, cobalt under ink ones. Utilities: shadow-hard, shadow-hard-cobalt. */
+  --shadow-hard: 5px 6px 0 var(--brand-ink);
+  --shadow-hard-cobalt: 5px 6px 0 var(--brand-cobalt);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -155,7 +161,7 @@
   --result-draw-foreground: #fff;
   --brand-bar: var(--brand-cobalt);
   --brand-bar-foreground: #fff;
-  --overlay: oklch(0 0 0 / 50%);
+  --overlay: color-mix(in srgb, var(--brand-ink) 60%, transparent); /* Scrim behind dialogs */
   --border: var(--brand-hairline); /* Decorative only; never the only edge of a control */
   --input: var(--brand-ink); /* Field edge: 2px ink, 18.9:1 on white (WCAG 1.4.11 needs 3:1) */
   /* A field is white with ink text on every ground; no ground redefines these. */
@@ -442,6 +448,24 @@
   rotate: -1.2deg;
   &:nth-of-type(even) {
     rotate: 1deg;
+  }
+}
+
+/* The sun highlighter swipe behind the current row of a menu or list (style guide, "Menus, dialogs,
+   sheets, toasts"). The row is its own stacking context so the swipe sits above the panel fill and
+   below the words. Sun takes ink words only. */
+@utility highlighter {
+  position: relative;
+  z-index: 0;
+  font-weight: 800;
+  color: var(--warning-foreground);
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 6px 2px;
+    z-index: -1;
+    background: var(--warning);
+    clip-path: polygon(1% 18%, 99% 4%, 100% 82%, 0 96%);
   }
 }
 

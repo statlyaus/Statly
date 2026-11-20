@@ -213,7 +213,7 @@ export default function GiphyPicker({
           align="start"
           aria-label="Choose a GIF"
           aria-busy={selectionPending}
-          className="bottom-full top-auto mb-2 mt-0 w-[min(24rem,calc(100vw-2rem))] border-social-border bg-social-surface p-3 text-social-text"
+          className="bottom-full top-auto mb-2 mt-0 w-[min(24rem,calc(100vw-2rem))] bg-social-surface p-3 text-social-text"
         >
           <div className="flex items-center gap-2" role="search">
             <label htmlFor={searchId} className="sr-only">

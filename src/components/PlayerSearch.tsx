@@ -7,9 +7,11 @@ import { useRouter } from 'next/navigation';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { Loader2 } from 'lucide-react';
 
+import { floatingStyles, menuItemStyles } from '@/components/ui/controlStyles';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fetchApi } from '@/lib/api';
 import { guernseyFor } from '@/lib/clubGuernseys';
+import { cn } from '@/lib/utils';
 import type { PlayerSearchResult } from '@/types/players';
 
 interface PlayerSearchProps {
@@ -183,18 +185,12 @@ export default function PlayerSearch({
     setSelectedIndex(index);
   };
 
-  const renderPlayerItem = (player: PlayerSearchResult, index: number) => {
-    const isSelected = index === selectedIndex;
-
+  const renderPlayerItem = (player: PlayerSearchResult) => {
     if (variant === 'minimal') {
       return (
-        <div
-          className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
-            isSelected ? 'bg-secondary text-secondary-foreground' : ''
-          }`}
-        >
+        <div className="w-full py-2">
           <div className="font-medium">{player.name}</div>
-          <div className="text-sm text-gray-600">{player.team}</div>
+          <div className="text-sm font-normal text-muted-foreground">{player.team}</div>
         </div>
       );
     }
@@ -203,11 +199,7 @@ export default function PlayerSearch({
     const guernsey = guernseyFor(player.team);
 
     return (
-      <div
-        className={`w-full border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${
-          isSelected ? 'bg-secondary border-secondary-foreground/30' : ''
-        }`}
-      >
+      <div className="w-full py-2">
         <div className="flex items-center space-x-3">
           {showAvatar && (
             <div
@@ -223,12 +215,12 @@ export default function PlayerSearch({
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-gray-900 truncate">{player.name}</h4>
+              <h4 className="font-semibold text-foreground truncate">{player.name}</h4>
               {variant === 'detailed' && (
                 <span className="text-sm font-medium text-primary">{player.averageScore} avg</span>
               )}
             </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <div className="flex items-center space-x-2 text-sm font-normal text-muted-foreground">
               <span>{player.team}</span>
               {player.position && (
                 <>
@@ -278,11 +270,13 @@ export default function PlayerSearch({
       </div>
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
-        <div className="ground-white absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
-          <div className="max-h-96 overflow-y-auto bg-white text-gray-900">
+        <div className={cn(floatingStyles(), 'absolute z-50 mt-1 w-full')}>
+          {/* The padding keeps square rows off the cut corners and their focus outline inside the
+              scroll area. */}
+          <div className="max-h-96 overflow-y-auto p-2">
             <div id={listboxId} role="listbox">
               {isLoading ? (
-                <div className="px-4 py-3 text-center text-gray-500" role="status">
+                <div className="px-4 py-3 text-center text-muted-foreground" role="status">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
                   <span className="ml-2">Searching...</span>
                 </div>
@@ -295,21 +289,21 @@ export default function PlayerSearch({
                       type="button"
                       role="option"
                       aria-selected={index === selectedIndex}
-                      className="block w-full rounded-none px-0 py-0 hover:bg-transparent"
+                      className={menuItemStyles({ position: 'aria-selected' })}
                       onMouseEnter={() => handleOptionHover(index)}
                       onClick={() => handlePlayerSelect(player)}
                     >
-                      {renderPlayerItem(player, index)}
+                      {renderPlayerItem(player)}
                     </button>
                   ))}
                   {players.length === 20 && (
-                    <div className="border-t px-4 py-2 text-center text-sm text-gray-500">
+                    <div className="border-t px-4 py-2 text-center text-sm text-muted-foreground">
                       Showing top 20 results. Refine your search for more specific results.
                     </div>
                   )}
                 </div>
               ) : trimmedQuery.length >= MIN_QUERY_LENGTH ? (
-                <div className="px-4 py-3 text-sm text-gray-500" role="status">
+                <div className="px-4 py-3 text-sm text-muted-foreground" role="status">
                   No players found for &ldquo;{query}&rdquo;
                 </div>
               ) : null}

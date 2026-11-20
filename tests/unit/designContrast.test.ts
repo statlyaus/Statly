@@ -42,6 +42,9 @@ describe('design token contrast', () => {
     ['primary action against the page', '--primary', '--background', 3],
     ['field edge on the page', '--input', '--background', 3],
     ['field edge on the field', '--input', '--field', 3],
+    ['floating edge on the page', '--foreground', '--background', 3],
+    ['menu row on the highlighter', '--popover-foreground', '--warning', 4.5],
+    ['secondary text on the highlighter', '--muted-foreground', '--warning', 4.5],
   ])('%s holds %s on %s', (_role, foreground, background, minimum) => {
     expect(ratio(foreground, background)).toBeGreaterThanOrEqual(minimum);
   });

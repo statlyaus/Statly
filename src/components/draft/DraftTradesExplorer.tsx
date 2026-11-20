@@ -25,7 +25,9 @@ import {
   buttonStyles,
   fieldLabelStyles,
   fieldStyles,
+  floatingStyles,
   kbdStyles,
+  menuItemStyles,
   textLinkStyles,
 } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
@@ -837,15 +839,14 @@ export function DraftTradesExplorer({
                     portal
                     anchor="bottom start"
                     transition
-                    className="z-[120] mt-2 max-h-72 w-[var(--button-width)] min-w-[16rem] origin-top overflow-auto rounded-xl border border-border bg-popover py-1 shadow-lg ring-1 ring-border transition duration-150 ease-out [--anchor-gap:0.5rem] data-closed:scale-95 data-closed:opacity-0 focus:outline-none"
+                    className={cn(
+                      floatingStyles(),
+                      'z-[120] mt-2 max-h-72 w-[var(--button-width)] min-w-[16rem] origin-top overflow-auto p-2 transition duration-150 ease-out [--anchor-gap:0.5rem] focus:outline-none data-closed:scale-95 data-closed:opacity-0'
+                    )}
                   >
                     <ListboxOption
                       value=""
-                      className={({ focus, selected }) =>
-                        `flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition ${
-                          focus ? 'bg-accent text-accent-foreground' : ''
-                        } ${selected ? 'bg-primary/10 text-foreground' : 'text-popover-foreground'}`
-                      }
+                      className={cn(menuItemStyles(), 'cursor-pointer gap-2')}
                     >
                       {({ selected }) => (
                         <>
@@ -858,7 +859,7 @@ export function DraftTradesExplorer({
                           <span className="truncate">All clubs</span>
                           <span
                             className={`ml-auto text-xs font-semibold ${
-                              selected ? 'text-primary' : 'text-transparent'
+                              selected ? '' : 'text-transparent'
                             }`}
                             aria-hidden
                           >
@@ -871,15 +872,7 @@ export function DraftTradesExplorer({
                       <ListboxOption
                         key={club.slug}
                         value={club.slug}
-                        className={({ focus, selected }) =>
-                          `flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition ${
-                            focus ? 'bg-accent text-accent-foreground' : ''
-                          } ${
-                            selected
-                              ? 'bg-primary/10 font-semibold text-foreground'
-                              : 'text-popover-foreground'
-                          }`
-                        }
+                        className={cn(menuItemStyles(), 'cursor-pointer gap-2')}
                       >
                         {({ selected }) => (
                           <>
@@ -893,7 +886,7 @@ export function DraftTradesExplorer({
                             <span className="truncate">{club.name}</span>
                             <span
                               className={`ml-auto text-xs font-semibold ${
-                                selected ? 'text-primary' : 'text-transparent'
+                                selected ? '' : 'text-transparent'
                               }`}
                               aria-hidden
                             >

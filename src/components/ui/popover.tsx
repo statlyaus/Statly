@@ -11,6 +11,7 @@ import React, {
   type ReactNode,
 } from 'react';
 
+import { floatingStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 
 type PopoverContextValue = {
@@ -128,7 +129,8 @@ export function PopoverContent({
       role="dialog"
       {...props}
       className={cn(
-        'absolute top-full z-50 mt-2 min-w-[18rem] rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md outline-none',
+        floatingStyles(),
+        'absolute top-full z-50 mt-2 min-w-[18rem] p-2 outline-none',
         align === 'end' ? 'right-0' : 'left-0',
         className
       )}
