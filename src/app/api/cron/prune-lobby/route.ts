@@ -5,7 +5,7 @@ import { parseRetentionDays, pruneLobbyActivity } from '@/server/draft/lobbyActi
 
 export const runtime = 'nodejs';
 
-// Not scheduled: nothing calls this route yet. It deletes synchronously and reports what it deleted.
+// Called daily by netlify/functions/cron-prune-lobby.mts. Deletes synchronously and reports what it deleted.
 export async function GET(req: NextRequest) {
   const headers = { 'Cache-Control': 'no-store' };
   if (!isCronRequestAuthorized(req)) {
