@@ -19,9 +19,9 @@ skill conflicts with repository policy.
 ## Route the work
 
 - For a new product, feature concept, materially unresolved product direction, or request asking
-  whether something is worth building, load `grill-with-docs`, `grilling`, and `domain-modeling` as
-  needed to clarify demand, challenge assumptions, reconcile canonical documentation, and identify
-  the narrowest valuable product before implementation planning.
+  whether something is worth building, load `grilling` and reconcile the answers with the canonical
+  documentation that `docs/agents/domain.md` points to, to clarify demand, challenge assumptions,
+  and identify the narrowest valuable product before implementation planning.
 - When one unresolved design question needs a runnable answer, load `prototype` before specification.
   Use its logic branch for backend state, ordering, retry, and authority questions, or its UI branch
   for competing page structures. Keep the prototype throwaway, in-memory or on an explicitly scratch
@@ -34,14 +34,14 @@ skill conflicts with repository policy.
   specification and tickets for approval.
 - For a difficult bug, regression, intermittent failure, or performance problem, load
   `diagnosing-bugs`. Establish one reproducible failing command before proposing a fix.
-- For implementation, load `ponytail` in place of `implement` (`implement` stays installed but is
-  not the default route), agree the observable behaviour and public test seams, then load `tdd`.
-  Ponytail never overrides the planning gates, `tdd`, or its own validation, security, and
-  accessibility exceptions. Work in red-green-refactor slices and keep focused checks passing between slices.
-- For an architecture or domain-language decision, load `codebase-design` and `domain-modeling`.
-  Preserve Prisma, Firebase, Firestore, Redis, league/season scoping, ETL, and realtime ownership
-  boundaries defined by Statly documentation.
-- At completion, load `code-review` and review against both repository standards and the approved
+- For implementation, load `ponytail`, agree the observable behaviour and public test seams, then
+  load `tdd`. Ponytail never overrides the planning gates, `tdd`, or its own validation, security,
+  and accessibility exceptions. Work in red-green-refactor slices and keep focused checks passing
+  between slices.
+- For an architecture or domain-language decision, load `codebase-design` and follow
+  `docs/agents/domain.md`. Preserve Prisma, Firebase, Firestore, Redis, league/season scoping, ETL,
+  and realtime ownership boundaries defined by Statly documentation.
+- At completion, load `review-loop` and review against both repository standards and the approved
   request, specification, or tickets. Resolve actionable findings before declaring the work done.
 - For delivery, follow `docs/development/delivery.md` exactly.
 - Delivery skills (`review-loop`, `council`, `file-pr`, `pr-findings`, `modernize`, `takeover`,
@@ -72,10 +72,9 @@ specialist method only for the phase it covers; this workflow remains the routin
   checks listed in root `AGENTS.md`; CI remains the deterministic authority.
 - Do not create competing domain glossaries, context files, ADR trees, plans, or status archives.
 - Commit, push a feature branch, open a pull request, and merge it once required checks pass, without
-  waiting to be asked. `/ship` opens the pull request and the app's auto-merge lands it. Never push
-  `main` directly or force-push. `/ship` owns `VERSION`, `CHANGELOG.md`, the `package.json` version
-  and the `v<version>` pull request title prefix; do not edit them by hand, and answer "Skip" when it
-  offers to create `TODOS.md`. See `docs/development/delivery.md`.
+  waiting to be asked. `file-pr` opens the pull request and the app's auto-merge lands it
+  (`full-send` when the owner says "full send"). Never push `main` directly or force-push. See
+  `docs/development/delivery.md`.
 - Never create issues, provision infrastructure, or run go-live checklist steps unless the owner
   explicitly requests it.
 - Never include protected environment files, credentials, local databases, generated output, or

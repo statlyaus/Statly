@@ -53,6 +53,7 @@
     "pretest": "npm run typecheck:tests",
     "lint": "cross-env STATLY_LINT_ADVISORY=1 eslint src",
     "lint:changed": "node Scripts/ci/lint-changed.mjs",
+    "check:changed": "node Scripts/ci/lint-changed.mjs --check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docs:check": "node Scripts/check-docs.mjs && npm run ontology:check",

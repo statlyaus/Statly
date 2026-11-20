@@ -58,6 +58,8 @@ export default [
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',
+      // Agent worktrees and skills; CI never has this folder, local runs OOM walking it.
+      '.claude/**',
       '**/firebase-export-*/**',
       '**/graphify-out/**',
       '**/tmp/**',
