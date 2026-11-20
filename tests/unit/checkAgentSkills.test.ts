@@ -25,10 +25,10 @@ afterEach(() => {
 describe('agent skill validation command', () => {
   it('rejects a locked skill whose root directory is a symbolic link', () => {
     const root = createSkillsFixture();
-    const relocatedSkill = join(root, '.outside/ask-matt');
+    const relocatedSkill = join(root, '.outside/grilling');
     mkdirSync(dirname(relocatedSkill), { recursive: true });
-    renameSync(join(root, '.agents/skills/ask-matt'), relocatedSkill);
-    symlinkSync('../../.outside/ask-matt', join(root, '.agents/skills/ask-matt'), 'dir');
+    renameSync(join(root, '.agents/skills/grilling'), relocatedSkill);
+    symlinkSync('../../.outside/grilling', join(root, '.agents/skills/grilling'), 'dir');
 
     const result = spawnSync(process.execPath, ['Scripts/check-agent-skills.mjs'], {
       cwd: root,
@@ -38,13 +38,13 @@ describe('agent skill validation command', () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      '.agents/skills/ask-matt: symbolic links are prohibited in locked skills'
+      '.agents/skills/grilling: symbolic links are prohibited in locked skills'
     );
   });
 
   it('rejects a symbolic link inside locked upstream skill content', () => {
     const root = createSkillsFixture();
-    symlinkSync('SKILL.md', join(root, '.agents/skills/ask-matt/linked-skill.md'));
+    symlinkSync('SKILL.md', join(root, '.agents/skills/grilling/linked-skill.md'));
 
     const result = spawnSync(process.execPath, ['Scripts/check-agent-skills.mjs'], {
       cwd: root,
@@ -54,7 +54,7 @@ describe('agent skill validation command', () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      '.agents/skills/ask-matt/linked-skill.md: symbolic links are prohibited in locked skills'
+      '.agents/skills/grilling/linked-skill.md: symbolic links are prohibited in locked skills'
     );
   });
 });
