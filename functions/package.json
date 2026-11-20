@@ -34,5 +34,11 @@
     "globals": "^17.14.0",
     "typescript": "^5.9.3"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "rimraf": "^6.1.4",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.5"
+    }
+  }
 }
