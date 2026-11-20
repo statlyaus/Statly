@@ -3,3 +3,5 @@
 User-agent: *
 Disallow: /api/
 Disallow: /*?
+
+Sitemap: https://statly.com.au/sitemap.xml
