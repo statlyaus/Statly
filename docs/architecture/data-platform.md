@@ -21,6 +21,7 @@ it has been deployed. Go-live remains blocked until the
 | Leagues, seasons, membership, drafts, rosters, lineups, matchups, trades, waivers | Prisma services                               | Canonical protected state; every operation is league- and season-scoped.   |
 | Live AFL stat evidence                                                            | Footywire/fitzRoy ETL and Firestore ingestion | External data is normalized before fantasy calculations.                   |
 | AFL match results                                                                 | Prisma `AflMatchResult`, written by the ETL   | Season-scoped shared data; supersede, never update; fails closed.          |
+| Player season stat totals                                                         | Prisma `PlayerSeasonStat`, filled from ETL    | Canonical `Player.id` by reviewed Footywire link; unlinked rows reported.  |
 | AFL injury list                                                                   | Prisma snapshots of the Footywire list        | Append-only, 48-hour freshness, exact name-and-club identity match only.   |
 | NBA reference data for fantasy basketball                                         | Prisma `Nba*` tables, written by NBA ingest   | Provider-ID identity only; bounded jobs fail closed; licensing guard.      |
 | Compatibility projections                                                         | Firestore, temporarily                        | Rebuild from canonical relational state; never reverse ownership silently. |

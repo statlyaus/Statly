@@ -33,6 +33,8 @@ dist/
 .cache/
 public/auth-service-worker.js
 src/generated/aflTradeOutcomesPrisma/
+# Scripts/dev/serve-worktree.sh PID file and log
+/tmp/
 
 # --- Firebase ---
 .firebase/
