@@ -3,6 +3,7 @@ import { getTeamAbbreviation } from '@/lib/teamLogos';
 import type {
   AflTradePageAudience,
   AflTradePageBidMatch,
+  AflTradePageModel,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
 import type {
   AflTradeStory,
@@ -203,4 +204,17 @@ export function becameText(asset: AflTradeStoryAsset, clubNames: ReadonlyMap<str
   if (asset.assetKind === 'player') return `first stint at ${outcome.clubName}`;
   const elsewhere = outcome.clubId !== asset.toClubId;
   return `became ${outcome.playerName}${elsewhere ? ` (at ${clubNames.get(outcome.clubId) ?? outcome.clubName})` : ''}`;
+}
+
+/**
+ * "Geelong are ahead so far" on this trade alone (owner, 2026-10-21), or "Level so far" when the top
+ * two nets read the same to one decimal, as the chips show them. The chain's nets are secondary and
+ * never set the headline.
+ */
+export function headline(model: AflTradePageModel): string {
+  const nets = [...model.story.nets.tradeAlone].sort((left, right) => right.net - left.net);
+  const [first, second] = nets;
+  const shown = (net: number) => Number(net.toFixed(1));
+  if (!first || (second && shown(first.net) === shown(second.net))) return 'Level so far';
+  return `${first.clubName} are ahead so far`;
 }

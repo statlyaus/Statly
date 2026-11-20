@@ -20,20 +20,11 @@ import {
   tradeName,
   tradeStoriesHref,
   type AflTradePageModel,
+  headline,
 } from './tradePageModel';
 
-/**
- * "Geelong are ahead so far" on this trade alone (owner, 2026-10-21), or "Level so far" when the top
- * two nets read the same to one decimal, as the chips show them. The chain's nets are secondary and
- * never set the headline.
- */
-export function headline(model: AflTradePageModel): string {
-  const nets = [...model.story.nets.tradeAlone].sort((left, right) => right.net - left.net);
-  const [first, second] = nets;
-  const shown = (net: number) => Number(net.toFixed(1));
-  if (!first || (second && shown(first.net) === shown(second.net))) return 'Level so far';
-  return `${first.clubName} are ahead so far`;
-}
+// The headline lives with the page model so the share card can use it without this page's CSS.
+export { headline };
 
 /**
  * The trade page (statlyaus/Statly#789): values, not letter grades. A scarf timeline, the trade's

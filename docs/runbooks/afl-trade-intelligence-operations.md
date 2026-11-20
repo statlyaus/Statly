@@ -122,6 +122,15 @@ routes and off filtered copies of the lists (`?year=`, `?club=`), and points the
 `/sitemap.xml` (`src/app/sitemap.ts`): home, `/afl`, the Cameron story and, while the bundle is
 available, the trade list, method, every trade and every club page.
 
+**Share cards.** A shared trade link shows a 1200 × 630 card: `/afl/trades/<id>/share-card`
+(`src/app/(public)/afl/trades/[tradeId]/share-card/route.tsx`), named by the trade page's Open Graph
+and X tags with alt text. It draws the PAV value of what each club got at the trade, the first draft
+and every season end (`shareCardModel.ts`, `TradeShareCard.tsx`, owner-approved design 2026-11-21).
+A trade with more than two clubs, or with a value still to come, gets a card without the chart. It is
+cached at the CDN like the pages; while the bundle is unavailable it answers 503.
+The fonts are TTF files in `src/assets/fonts/` (SIL Open Font License, copies beside them), shipped
+with the server function by `outputFileTracingIncludes` in `next.config.mjs`.
+
 **Local run:** set `AFL_TRADE_STORY_PUBLIC_ENABLED=true`, `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` and
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (the absolute path of the exported file) and start the dev server.
 
