@@ -31,6 +31,11 @@ const tokenisedFiles = [
   'src/components/aflTradeStory/TradeTree.tsx',
   'src/components/league/NotLeagueMember.tsx',
   'src/components/ui/Alert.tsx',
+  'src/components/ui/ConfirmDialog.tsx',
+  'src/components/ui/Modal.tsx',
+  'src/components/ui/Tooltip.tsx',
+  'src/components/ui/command.tsx',
+  'src/components/ui/popover.tsx',
   ...tokenisedFolders.flatMap(sourceFilesUnder),
 ];
 

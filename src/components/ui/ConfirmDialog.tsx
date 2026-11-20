@@ -4,7 +4,9 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
 
+import { buttonStyles, fieldStyles, floatingStyles } from '@/components/ui/controlStyles';
 import { useEscapeKey, useFocusTrap } from '@/hooks/useAccessibility';
+import { cn } from '@/lib/utils';
 
 export interface ConfirmOptions {
   title: string;
@@ -123,7 +125,7 @@ export function ConfirmDialogView({
     // Clicking the backdrop is a pointer shortcut; Escape and Cancel cover the keyboard.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+      className="fixed inset-0 z-[70] flex items-end justify-center bg-overlay p-4 sm:items-center"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !busy) onCancel();
       }}
@@ -135,14 +137,17 @@ export function ConfirmDialogView({
         aria-labelledby={titleId}
         aria-describedby={options.description ? descriptionId : undefined}
         aria-busy={busy || undefined}
-        className="w-full max-w-md rounded-lg border border-border bg-card p-5 text-card-foreground shadow-xl"
+        className={cn(floatingStyles(), 'w-full max-w-md p-6')}
       >
         <form onSubmit={submit} noValidate>
-          <h2 id={titleId} className="text-lg font-semibold leading-tight text-foreground">
+          <h2
+            id={titleId}
+            className="font-display text-xl font-black leading-tight text-foreground"
+          >
             {options.title}
           </h2>
           {options.description ? (
-            <div id={descriptionId} className="mt-1.5 text-sm text-muted-foreground">
+            <div id={descriptionId} className="mt-2 text-sm text-muted-foreground">
               {options.description}
             </div>
           ) : null}
@@ -157,13 +162,18 @@ export function ConfirmDialogView({
                 rows={3}
                 value={value}
                 required={input.required}
+                // A text request opens on its field; a plain confirm opens on Cancel.
+                data-autofocus
                 aria-invalid={showError && invalid ? true : undefined}
                 aria-describedby={showError && invalid ? errorId : undefined}
                 onChange={(event) => {
                   setValue(event.target.value);
                   setShowError(false);
                 }}
-                className="mt-1.5 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
+                className={cn(
+                  fieldStyles({ size: 'area' }),
+                  'mt-1.5 resize-y aria-[invalid=true]:border-destructive'
+                )}
               />
               {showError && invalid ? (
                 <p id={errorId} className="mt-1 text-sm font-medium text-destructive">
@@ -173,25 +183,23 @@ export function ConfirmDialogView({
             </div>
           ) : null}
 
-          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {/* Primary first and left-aligned (style guide, "Buttons"). */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className={buttonStyles({ variant: danger ? 'danger' : 'primary' })}
+            >
+              {busy ? 'Working…' : options.confirmLabel}
+            </button>
             <button
               type="button"
               disabled={busy}
               onClick={onCancel}
-              className="inline-flex h-11 items-center justify-center rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 sm:h-10"
+              data-autofocus={input ? undefined : true}
+              className={buttonStyles({ variant: 'outline' })}
             >
               {options.cancelLabel ?? 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={busy}
-              className={`inline-flex h-11 items-center justify-center rounded-md px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-70 sm:h-10 ${
-                danger
-                  ? 'bg-destructive text-white hover:bg-destructive/90'
-                  : 'bg-brand-bar text-brand-bar-foreground hover:bg-brand-bar/90'
-              }`}
-            >
-              {busy ? 'Working…' : options.confirmLabel}
             </button>
           </div>
         </form>

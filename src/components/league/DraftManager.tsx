@@ -14,8 +14,10 @@ import {
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
+import { floatingStyles } from '@/components/ui/controlStyles';
 import { fetchApi } from '@/lib/api';
 import { formatLeagueTime } from '@/lib/leagueTime';
+import { cn } from '@/lib/utils';
 import { MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import {
   draftScheduleFromInstant,
@@ -665,12 +667,15 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-xl"
+            className={cn(
+              floatingStyles(),
+              'flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden'
+            )}
           >
             <div className="border-b border-border p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { textLinkStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 
 import { basketballLeagueHref } from './basketballFormat';
@@ -26,12 +27,13 @@ export function TakenPlayersNotice({
     <p
       role="status"
       // A sun alert: a sentence is not a badge, so no tape, capitals or tilt.
-      className={cn('block bg-warning px-3 py-2 text-sm text-warning-foreground', className)}
+      className={cn('ground-sun block px-3 py-2 text-sm', className)}
     >
       Statly knows {takenPlayersSummary(check)}, so some suggestions may already be rostered.{' '}
       <Link
         href={`${basketballLeagueHref(leagueId, 'roster')}#${OTHER_TEAMS_ANCHOR}`}
-        className="font-semibold underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        // Ink link in ink words: the underline stays so the link is not told by weight alone.
+        className={cn(textLinkStyles, 'decoration-current')}
       >
         Add the other teams&apos; players
       </Link>

@@ -50,6 +50,13 @@ describe('useConfirmDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Drop' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Drop Isaac Quaynor?' });
     expect(dialog).toHaveAccessibleDescription('They go on waivers.');
+    // The confirm button comes first, but a destructive confirm still opens on Cancel.
+    expect(
+      screen
+        .getAllByRole('button')
+        .slice(-2)
+        .map((button) => button.textContent)
+    ).toEqual(['Drop player', 'Cancel']);
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
 
     await user.click(screen.getByRole('button', { name: 'Drop player' }));
@@ -69,6 +76,14 @@ describe('useConfirmDialog', () => {
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(screen.getByRole('status')).toHaveTextContent('false');
+  });
+
+  it('opens a text request on its field', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(screen.getByRole('button', { name: 'Reject' }));
+    expect(screen.getByRole('textbox', { name: 'Reason' })).toHaveFocus();
   });
 
   it('requires text before resolving a text request', async () => {

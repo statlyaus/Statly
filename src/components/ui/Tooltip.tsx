@@ -5,6 +5,9 @@ import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
+import { floatingStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
+
 // Tooltip placement options
 export type TooltipPlacement =
   | 'top'
@@ -23,9 +26,6 @@ export type TooltipPlacement =
 // Tooltip triggers
 export type TooltipTrigger = 'hover' | 'click' | 'focus' | 'manual';
 
-// Tooltip variants
-export type TooltipVariant = 'default' | 'light' | 'info' | 'success' | 'warning' | 'error';
-
 // Tooltip size
 export type TooltipSize = 'sm' | 'md' | 'lg';
 
@@ -35,53 +35,17 @@ interface TooltipProps {
   children: ReactNode;
   placement?: TooltipPlacement;
   trigger?: TooltipTrigger;
-  variant?: TooltipVariant;
   size?: TooltipSize;
   delay?: number;
   offset?: number;
   disabled?: boolean;
   className?: string;
   contentClassName?: string;
-  arrow?: boolean;
   interactive?: boolean;
   maxWidth?: string;
   zIndex?: number;
   portal?: boolean;
 }
-
-// Variant configurations
-const VARIANT_CONFIG = {
-  default: {
-    background: 'bg-popover',
-    text: 'text-popover-foreground',
-    border: 'border-border',
-  },
-  light: {
-    background: 'bg-white',
-    text: 'text-gray-900',
-    border: 'border-gray-200',
-  },
-  info: {
-    background: 'bg-primary',
-    text: 'text-white',
-    border: 'border-primary',
-  },
-  success: {
-    background: 'bg-green-600',
-    text: 'text-white',
-    border: 'border-green-600',
-  },
-  warning: {
-    background: 'bg-yellow-600',
-    text: 'text-white',
-    border: 'border-yellow-600',
-  },
-  error: {
-    background: 'bg-red-600',
-    text: 'text-white',
-    border: 'border-red-600',
-  },
-};
 
 // Size configurations
 const SIZE_CONFIG = {
@@ -158,57 +122,19 @@ function calculatePosition(
   return positions[placement] || positions.top;
 }
 
-// Arrow component
-function TooltipArrow({
-  placement,
-  variant,
-}: {
-  placement: TooltipPlacement;
-  variant: TooltipVariant;
-}) {
-  const variantConfig = VARIANT_CONFIG[variant];
-  const isVertical = placement.startsWith('top') || placement.startsWith('bottom');
-  const isTop = placement.startsWith('top');
-  const isLeft = placement.startsWith('left');
-
-  const arrowClasses = `absolute w-0 h-0 ${
-    isVertical
-      ? isTop
-        ? 'border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent'
-        : 'border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent'
-      : isLeft
-        ? 'border-t-4 border-b-4 border-l-4 border-t-transparent border-b-transparent'
-        : 'border-t-4 border-b-4 border-r-4 border-t-transparent border-b-transparent'
-  }`;
-
-  const positionClasses = placement.startsWith('top')
-    ? 'bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full'
-    : placement.startsWith('bottom')
-      ? 'top-0 left-1/2 transform -translate-x-1/2 -translate-y-full'
-      : placement.startsWith('left')
-        ? 'right-0 top-1/2 transform translate-x-full -translate-y-1/2'
-        : 'left-0 top-1/2 transform -translate-x-full -translate-y-1/2';
-
-  const borderColor = variantConfig.border.replace('border-', 'border-t-') || 'border-t-gray-900';
-
-  return <div className={`${arrowClasses} ${positionClasses} ${borderColor}`} />;
-}
-
 export default function Tooltip({
   content,
   children,
   placement = 'top',
   trigger = 'hover',
-  variant = 'default',
   size = 'md',
   delay = 0,
   offset = 8,
   disabled = false,
   className = '',
   contentClassName = '',
-  arrow = true,
   interactive = false,
-  maxWidth = 'max-w-xs',
+  maxWidth,
   zIndex = 9999,
   portal = true,
 }: TooltipProps) {
@@ -219,7 +145,6 @@ export default function Tooltip({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  const variantConfig = VARIANT_CONFIG[variant];
   const sizeConfig = SIZE_CONFIG[size];
 
   // Show tooltip
@@ -352,11 +277,15 @@ export default function Tooltip({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.15, ease: 'easeOut' }}
-      className={`
-            absolute z-50 rounded-lg shadow-lg border
-            ${variantConfig.background} ${variantConfig.text} ${variantConfig.border}
-            ${sizeConfig} ${maxWidth} ${contentClassName}
-          `}
+      // Ink with a cobalt shadow (style guide, "Elevation"). The design's caret is dropped on
+      // purpose: the hand-cut edge has no straight side for it to sit on.
+      className={cn(
+        floatingStyles({ tone: 'ink' }),
+        'absolute z-50 max-w-[260px]',
+        sizeConfig,
+        maxWidth,
+        contentClassName
+      )}
       style={{
         top: position.top,
         left: position.left,
@@ -375,7 +304,6 @@ export default function Tooltip({
       role="tooltip"
     >
       {content}
-      {arrow && <TooltipArrow placement={placement} variant={variant} />}
     </motion.div>
   ) : null;
 
@@ -422,43 +350,4 @@ export function useTooltip() {
     toggle,
     setIsVisible,
   };
-}
-
-// Info tooltip component - specialized for help text
-interface InfoTooltipProps {
-  content: ReactNode;
-  size?: TooltipSize;
-  placement?: TooltipPlacement;
-  className?: string;
-}
-
-export function InfoTooltip({
-  content,
-  size = 'sm',
-  placement = 'top',
-  className = '',
-}: InfoTooltipProps) {
-  return (
-    <Tooltip
-      content={content}
-      variant="info"
-      size={size}
-      placement={placement}
-      className={className}
-    >
-      <button
-        type="button"
-        className="inline-flex items-center justify-center w-4 h-4 text-primary hover:text-primary/80 transition-colors"
-        aria-label="More information"
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path
-            fillRule="evenodd"
-            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </button>
-    </Tooltip>
-  );
 }

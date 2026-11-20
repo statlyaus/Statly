@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { auth } from '@/lib/firebase/clientAuth';
+import { cn } from '@/lib/utils';
 import {
   EnvelopeIcon,
   CheckCircleIcon,
@@ -93,7 +95,7 @@ export default function ForgotPasswordForm() {
 
         <button
           type="submit"
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          className={cn(buttonStyles({ variant: 'primary' }), 'w-full')}
           disabled={submitting}
         >
           {submitting ? (

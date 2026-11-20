@@ -102,5 +102,40 @@ export const kbdStyles =
 
 export const textLinkStyles = `font-semibold text-foreground underline decoration-transparent underline-offset-4 hover:decoration-current ${focusOutline}`;
 
+// Floating things (menus, dialogs, sheets, popovers, toasts, tooltips) share the floating cut and
+// one hard shadow. Light ones are white with a 2.5px ink edge and an ink shadow; ink ones (toasts,
+// tooltips) have no edge and a cobalt shadow. The ground class sets the roles inside the panel, so a
+// portalled panel reads right wherever it lands.
+export const floatingStyles = cva('rounded-cut-float', {
+  variants: {
+    tone: {
+      light: 'ground-white border-[2.5px] border-foreground shadow-hard',
+      ink: 'ground-ink shadow-hard-cobalt',
+    },
+  },
+  defaultVariants: { tone: 'light' },
+});
+
+// A row in a menu, listbox or command list. The current value gets the sun highlighter
+// (`aria-current` or Headless UI's `data-selected`); the pointer or keyboard position gets a quiet
+// fill and an inset dashed outline, because the fill alone is 1.05:1 on white. Rows that never take
+// DOM focus say where the position is: Headless UI sets `data-focus` (the default); a combobox
+// option sets `aria-selected`, which Headless UI uses for the current value instead, hence the
+// variant.
+export const menuItemStyles = cva(
+  `flex min-h-11 w-full items-center gap-3 px-3 text-left font-display text-sm font-semibold text-foreground transition-colors hover:bg-muted ${focusOutline} aria-[current=true]:highlighter data-selected:highlighter`,
+  {
+    variants: {
+      position: {
+        'data-focus':
+          'data-focus:bg-muted data-focus:outline-2 data-focus:-outline-offset-2 data-focus:outline-dashed data-focus:outline-ring',
+        'aria-selected':
+          'aria-selected:bg-muted aria-selected:outline-2 aria-selected:-outline-offset-2 aria-selected:outline-dashed aria-selected:outline-ring',
+      },
+    },
+    defaultVariants: { position: 'data-focus' },
+  }
+);
+
 export type ButtonStyleProps = VariantProps<typeof buttonStyles>;
 export type BadgeStyleProps = VariantProps<typeof badgeStyles>;

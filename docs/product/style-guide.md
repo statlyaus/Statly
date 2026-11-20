@@ -119,7 +119,8 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
 - **Brand primitives.** `--brand-cobalt`, `--brand-cobalt-deep`, `--brand-tint`, `--brand-sun`,
   `--brand-ink`, `--brand-stone`, `--brand-secondary-text`, `--brand-hairline` and `--brand-red` (done
   2026-11-20), plus the shape tokens under [Shape](#space-shape-elevation-motion-and-focus): the
-  hand-cut `--radius-cut` (done 2026-11-20) and the floating cut and hard shadow (target, ticket 04b).
+  hand-cut `--radius-cut` and the floating cut `--radius-cut-float` with the hard shadows
+  `--shadow-hard` and `--shadow-hard-cobalt` (done 2026-11-20).
 - **Field roles.** `--field`, `--field-foreground` and `--field-placeholder` keep a field white with
   ink text on every ground; no ground redefines them (done 2026-11-20).
 - **Grounds and surface modes, not namespaces.** A ground or the paper mode redefines the semantic
@@ -175,23 +176,25 @@ A trade has two sides, not a good side and a bad side: trade charts never use gr
 - **Shape:** the page is square, like a scoreboard: tiles, cards, tables, alerts and photos have no
   radius. Anything you press or that floats (buttons, inputs, chips, toggles, pagination, menus,
   dialogs, sheets, toasts, tooltips) has the one shared hand-cut edge, a set of asymmetric radii:
-  `rounded-cut` on buttons and fields (done 2026-11-20); chips, menus, dialogs and the other
-  floating things target ticket 04b. Never a neat rounded corner or a pill.
+  `rounded-cut` on buttons and fields, `rounded-cut-float` on menus, dialogs, popovers, toasts and
+  tooltips through `floatingStyles` (done 2026-11-20); chips and toggles move screen by screen.
+  Never a neat rounded corner or a pill.
 - **Lines:** each weight means one thing. Hairline for separation; 2.5px ink for buttons and floating
   things; 2px ink for inputs and chips; 1.5px ink under table headers; 3px for the current tab; a 4px
   top edge for which side; a 6px sun left edge for "yours", the only side stripe allowed; 2px dashed
   cobalt for "not there yet" (empty slot, disabled); a red outline only on an error alert.
 - **Elevation:** everything on the page is flat. Floating things cast one hard shadow, never blurred:
-  5px 6px ink on light floating things, cobalt under ink ones (toasts, tooltips) (target, ticket
-  04b).
+  5px 6px ink on light floating things, cobalt under ink ones (toasts, tooltips) (done 2026-11-20:
+  `shadow-hard`, `shadow-hard-cobalt`). Dialogs sit on a 60% ink scrim (`bg-overlay`). Tooltips
+  have no caret: the cut edge has no straight side for one.
 - **Badges:** torn tape, sitting about one degree off straight, never more than two (done
   2026-11-20: the `tape` utility, alternating direction between sibling badges).
 - **Motion:** buttons tilt 1.5° and grow 3% on hover and squash to 95% when pressed, all under
   `motion-safe:`, and never when disabled (done 2026-11-20 in `buttonStyles`). The global
   reduced-motion rule and `MotionConfig` stay. Never flash, pulse or shake a clock.
 - **Focus:** a 3px dashed ring, 4px out, in the ground's focus colour (cobalt on light grounds, white
-  on cobalt, sun on ink, ink on sun) (done 2026-11-20 in the control recipes; bare buttons and
-  floating things move in ticket 04b, the rest screen by screen). Sticky headers set
+  on cobalt, sun on ink, ink on sun) (done 2026-11-20 in the control and floating recipes; the
+  rest moves screen by screen). Sticky headers set
   `scroll-padding-top` so focus is never hidden behind them.
 - **Targets:** at least 24px; 44px for every phone control, including the app nav.
 
@@ -213,7 +216,7 @@ One primitive per job, in `src/components/ui/`.
   size only inside dense rows (tables, lists, save bars). Disabled buttons are dashed and sit beside
   their reason; a link styled as a button is disabled with `aria-disabled`. Icon-only buttons need an
   accessible name. Hand-cut, 2.5px ink edge (2px at the small sizes) and the dashed focus ring are
-  done (2026-11-20); bare `<button>`s move onto the recipe in ticket 04b.
+  done (2026-11-20); the remaining bare `<button>`s move onto the recipe screen by screen.
 - **Badges:** `badgeStyles` only, torn tape, always a word or letter. Three per row at most. Labels
   are uppercase 11px; a badge holding a name, a query or someone's own words passes `caps: false`
   (done 2026-11-20).
@@ -221,8 +224,13 @@ One primitive per job, in `src/components/ui/`.
 - **Fields:** `fieldStyles`, white with a 2px ink edge on every ground (done 2026-11-20), label
   above, hint or error below with the error associated with the field. Errors keep what was typed.
   `border-input` is the field edge only; any other edge uses `border-border`.
-- **Menus, dialogs, sheets, toasts:** hand-cut with the hard shadow. The active menu row gets a sun
-  highlighter swipe. Destructive choices never live in a toast or a menu without a dialog.
+- **Menus, dialogs, sheets, toasts, tooltips:** hand-cut with the hard shadow, through
+  `floatingStyles` (light: white with a 2.5px ink edge; ink: toasts and tooltips). Menu rows use
+  `menuItemStyles`: the current row gets the sun highlighter swipe (`highlighter`), the pointer or
+  keyboard position a quiet fill and an inset dashed outline. Dialog buttons are `buttonStyles`,
+  primary first; a destructive confirm opens on Cancel (done 2026-11-20 in the `ui/` primitives,
+  the toast and the core-token menus; area menus move with their palettes). Destructive choices
+  never live in a toast or a menu without a dialog.
 - **Alerts:** a ground, not a stripe: tint for info, sun for a deadline, white with a red outline for
   an error, stone for an outage.
 - **Navigation:** the app bar is cobalt with white tabs; the public header is white with the wordmark
@@ -338,14 +346,14 @@ that holds only for Statly, or delete it.
 
 Rules an agent reads are the first layer; tests are the backstop. Phases land in order.
 
-| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                                     | Status           |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                                          | Done             |
-| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket                    | Done, except axe |
-| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the control cut, tape, field roles and `--input` at 3:1 or more (done 2026-11-20), the floating cut and hard shadow tokens (ticket 04b), paper surface mode (dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan | In progress      |
-| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                                          | Planned          |
-| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                                           | Planned          |
-| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                                        | Planned          |
+| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                                          | Status           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                                               | Done             |
+| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket                         | Done, except axe |
+| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the control cut, tape, field roles and `--input` at 3:1 or more (done 2026-11-20), the floating cut and hard shadow tokens (done 2026-11-20), paper surface mode (dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan | In progress      |
+| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                                               | Planned          |
+| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                                                | Planned          |
+| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                                             | Planned          |
 
 Automated design checks today:
 

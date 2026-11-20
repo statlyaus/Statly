@@ -38,7 +38,12 @@ export function useFocusTrap<T extends HTMLElement = HTMLElement>(isActive: bool
     }
 
     container.addEventListener('keydown', handleTabKey);
-    getFocusableElements()[0]?.focus();
+    // A dialog can name its first focus with `data-autofocus` (a destructive confirm opens on
+    // Cancel); otherwise the first focusable element takes it.
+    (
+      container.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)') ??
+      getFocusableElements()[0]
+    )?.focus();
 
     return () => {
       container.removeEventListener('keydown', handleTabKey);

@@ -5,7 +5,9 @@ import type { ReactNode } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { buttonStyles, floatingStyles } from '@/components/ui/controlStyles';
 import { useFocusTrap, useEscapeKey, useReducedMotion } from '@/hooks/useAccessibility';
+import { cn } from '@/lib/utils';
 
 import { ConfirmDialogView } from './ConfirmDialog';
 
@@ -162,7 +164,7 @@ export default function Modal({
 
   // Get modal classes based on variant and size
   const getModalClasses = () => {
-    const baseClasses = 'relative bg-white rounded-lg shadow-xl';
+    const baseClasses = `relative ${floatingStyles()}`;
 
     switch (variant) {
       case 'slide-over':
@@ -187,7 +189,7 @@ export default function Modal({
             animate="visible"
             exit={prefersReducedMotion ? undefined : 'hidden'}
             transition={prefersReducedMotion ? { duration: 0 } : undefined}
-            className={`fixed inset-0 bg-black bg-opacity-50 ${
+            className={`fixed inset-0 bg-overlay ${
               prefersReducedMotion ? '' : 'transition-opacity'
             } ${overlayClassName}`}
             onClick={handleOverlayClick}
@@ -207,7 +209,7 @@ export default function Modal({
                   ? { duration: 0 }
                   : { type: 'spring', damping: 25, stiffness: 500 }
               }
-              className={`${getModalClasses()} ${contentClassName}`}
+              className={cn(getModalClasses(), contentClassName)}
               role="dialog"
               aria-modal="true"
               aria-labelledby={title ? titleId : undefined}
@@ -217,17 +219,17 @@ export default function Modal({
               {(title || showCloseButton) && (
                 <div
                   className={`flex items-start justify-between p-6 ${
-                    variant === 'bottom-sheet' ? 'pb-4' : 'border-b border-gray-200'
+                    variant === 'bottom-sheet' ? 'pb-4' : 'border-b border-border'
                   }`}
                 >
                   <div className="flex-1">
                     {title && (
-                      <h3 id={titleId} className="text-lg font-semibold text-gray-900">
+                      <h3 id={titleId} className="font-display text-xl font-black text-foreground">
                         {title}
                       </h3>
                     )}
                     {description && (
-                      <p id={descriptionId} className="mt-1 text-sm text-gray-500">
+                      <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
                         {description}
                       </p>
                     )}
@@ -237,7 +239,10 @@ export default function Modal({
                     <button
                       type="button"
                       onClick={handleCloseClick}
-                      className="ml-4 text-gray-400 hover:text-gray-600 transition-colors"
+                      className={cn(
+                        buttonStyles({ variant: 'ghost', size: 'md' }),
+                        'ml-4 w-11 px-0'
+                      )}
                       aria-label="Close modal"
                     >
                       <XMarkIcon className="w-6 h-6" />
@@ -265,7 +270,7 @@ export default function Modal({
               {footer && (
                 <div
                   className={`px-6 py-4 ${
-                    variant === 'bottom-sheet' ? 'pt-4' : 'border-t border-gray-200'
+                    variant === 'bottom-sheet' ? 'pt-4' : 'border-t border-border'
                   }`}
                 >
                   {footer}

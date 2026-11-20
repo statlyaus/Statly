@@ -20,7 +20,7 @@ describe('ForgotPasswordForm', () => {
     const { container } = render(<ForgotPasswordForm />);
 
     expect(container.innerHTML).not.toMatch(DAISY_CLASSES);
-    expect(screen.getByRole('button', { name: 'Send reset link' })).toHaveClass('bg-brand-bar');
+    expect(screen.getByRole('button', { name: 'Send reset link' })).toHaveClass('bg-primary');
     expect(screen.getByLabelText('Email Address')).toHaveAttribute('autocomplete', 'email');
   });
 

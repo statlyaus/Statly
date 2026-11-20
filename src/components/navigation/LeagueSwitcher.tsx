@@ -167,18 +167,14 @@ export default function LeagueSwitcher() {
             className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
           />
         </PopoverTrigger>
-        <PopoverContent
-          aria-label="Select league"
-          className="ground-white min-w-[20rem] border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)]"
-        >
-          <Command className="bg-[color:var(--league-surface)] text-[color:var(--league-text)]">
+        <PopoverContent aria-label="Select league" className="min-w-[20rem] p-0">
+          <Command>
             <div className="p-2">
               <CommandInput
                 id="league-switcher-search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search leagues..."
-                className="border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)] placeholder:text-[color:var(--league-text-muted)]"
               />
             </div>
             <CommandList>
@@ -212,14 +208,9 @@ export default function LeagueSwitcher() {
                           setIsOpen(false);
                           setQuery('');
                         }}
-                        className={
-                          isActive
-                            ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)] hover:bg-[color:var(--league-primary-soft)]'
-                            : 'text-[color:var(--league-text)] hover:bg-[color:var(--league-surface-muted)]'
-                        }
                       >
                         <span className="truncate">{league.name}</span>
-                        {isActive ? <Check className="h-4 w-4" /> : null}
+                        {isActive ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
                       </CommandItem>
                     );
                   })}
