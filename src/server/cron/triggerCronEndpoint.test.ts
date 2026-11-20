@@ -6,6 +6,11 @@ import { GET as pruneLobbyCron } from '@/app/api/cron/prune-lobby/route';
 
 import { triggerCronEndpoint } from './triggerCronEndpoint';
 
+vi.mock('@/server/draft/lobbyActivityRetention', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/draft/lobbyActivityRetention')>()),
+  pruneLobbyActivity: vi.fn(async () => ({ count: 0, cutoff: new Date() })),
+}));
+
 function fetchReturning(status: number) {
   return vi.fn(async () => new Response(null, { status })) as unknown as typeof fetch;
 }

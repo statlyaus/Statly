@@ -1,26 +1,26 @@
 /*
-  Prune LobbyActivity rows older than retention window.
+  Prune LobbyActivity rows older than the retention window (default 30 days, across every league).
+  Counts only unless --apply is given. The same logic backs /api/cron/prune-lobby.
   Usage:
-    LOBBY_ACTIVITY_RETENTION_DAYS=30 tsx Scripts/prune-lobby-activity.ts
+    LOBBY_ACTIVITY_RETENTION_DAYS=30 tsx Scripts/prune-lobby-activity.ts [--apply]
 */
 import { prisma } from '@/lib/prisma';
+import { parseRetentionDays, pruneLobbyActivity } from '@/server/draft/lobbyActivityRetention';
 
 async function main() {
-  const rawDays = Number.parseInt(process.env.LOBBY_ACTIVITY_RETENTION_DAYS ?? '', 10);
-  const days = Number.isFinite(rawDays) && rawDays >= 0 ? Math.min(rawDays, 3650) : 30; // cap at ~10 years
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const dryRun = String(process.env.DRY_RUN || 'false') === 'true';
-
-  if (dryRun) {
-    const count = await prisma.lobbyActivity.count({ where: { timestamp: { lt: cutoff } } });
-    console.log(
-      `[DRY RUN] Would delete ${count} LobbyActivity rows older than ${cutoff.toISOString()}`
-    );
+  const days = parseRetentionDays(process.env.LOBBY_ACTIVITY_RETENTION_DAYS);
+  if (days === null) {
+    console.error('LOBBY_ACTIVITY_RETENTION_DAYS must be a whole number from 1 to 3650');
+    process.exitCode = 2;
     return;
   }
-
-  const res = await prisma.lobbyActivity.deleteMany({ where: { timestamp: { lt: cutoff } } });
-  console.log(`Deleted ${res.count} LobbyActivity rows older than ${cutoff.toISOString()}`);
+  const apply = process.argv.includes('--apply');
+  const { count, cutoff } = await pruneLobbyActivity(days, { dryRun: !apply });
+  console.log(
+    apply
+      ? `Deleted ${count} LobbyActivity rows older than ${cutoff.toISOString()}`
+      : `[DRY RUN] Would delete ${count} LobbyActivity rows older than ${cutoff.toISOString()} (pass --apply to delete)`
+  );
 }
 
 main()
