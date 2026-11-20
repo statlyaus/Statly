@@ -77,7 +77,7 @@ export default function ForgotPasswordForm() {
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-3 rounded-md border border-result-loss/30 bg-result-loss/5 p-3 text-sm font-medium text-result-loss"
+            className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive"
           >
             <ExclamationTriangleIcon aria-hidden="true" className="h-5 w-5 shrink-0" />
             <span>{error}</span>
@@ -86,7 +86,7 @@ export default function ForgotPasswordForm() {
         {success && (
           <div
             role="status"
-            className="flex items-start gap-3 rounded-md border border-result-win/30 bg-result-win/5 p-3 text-sm font-medium text-result-win"
+            className="flex items-start gap-3 rounded-md border border-success/30 bg-success/5 p-3 text-sm font-medium text-success"
           >
             <CheckCircleIcon aria-hidden="true" className="h-5 w-5 shrink-0" />
             <span>{success}</span>

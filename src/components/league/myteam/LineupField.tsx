@@ -316,7 +316,7 @@ function StripRow({
 function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; dimmed: boolean }) {
   const onGrass = surface === 'grass';
   const pill = view.selected
-    ? 'bg-[color:var(--chart-1)] text-white shadow-sm'
+    ? 'bg-warning text-warning-foreground shadow-sm'
     : view.target
       ? 'bg-card text-foreground ring-2 ring-brand-bar shadow-sm'
       : onGrass
@@ -368,7 +368,7 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
             aria-hidden="true"
             className={`absolute -right-1.5 top-0 size-2.5 rounded-full ring-2 ${
               onGrass ? 'ring-white' : 'ring-card'
-            } ${view.flagged === 'bad' ? 'bg-result-loss' : 'bg-[color:var(--league-warning)]'}`}
+            } ${view.flagged === 'bad' ? 'bg-destructive' : 'bg-[color:var(--league-warning)]'}`}
           />
         ) : null}
       </span>

@@ -77,7 +77,7 @@ function Moves({ before, after }: { before: CategoryComparison[]; after: Categor
         return (
           <span
             key={move.category}
-            className={badgeStyles({ tone: better ? 'win' : 'loss', size: 'xs' })}
+            className={badgeStyles({ tone: better ? 'brand' : 'neutral', size: 'xs' })}
           >
             {getBasketballCategory(move.category).shortLabel} {CALL_LETTER[move.from]}→
             {CALL_LETTER[move.to]}
@@ -196,15 +196,7 @@ export function PickupsTable({
               </th>
               {row.plan && now ? (
                 <>
-                  <td
-                    className={`px-2 text-right font-display text-base font-bold tabular-nums ${
-                      row.plan.categoryChange > 0
-                        ? 'text-result-win'
-                        : row.plan.categoryChange < 0
-                          ? 'text-result-loss'
-                          : 'text-foreground'
-                    }`}
-                  >
+                  <td className="px-2 text-right font-display text-base font-bold tabular-nums text-foreground">
                     {formatSigned(row.plan.categoryChange)}
                   </td>
                   <td className="px-2 text-right tabular-nums text-foreground">

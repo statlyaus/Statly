@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 
 import { ResultChip, TeamMark } from '@/components/scores/MatchupScore';
+import { badgeStyles, resultFill } from '@/components/ui/controlStyles';
 
 import {
   describeResult,
@@ -275,11 +276,11 @@ export function StandingsLadder({
                       <td colSpan={columnCount} className="bg-card p-0">
                         <div className="flex h-8 items-center gap-3">
                           <span className="sticky left-0 z-20 flex h-full items-center bg-card pl-4 pr-1">
-                            <span className="rounded-full bg-result-win px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-result-win-foreground">
+                            <span className={badgeStyles({ tone: 'brand', size: 'md' })}>
                               Finals
                             </span>
                           </span>
-                          <span className="h-0.5 flex-1 rounded-full bg-result-win" />
+                          <span className="h-0.5 flex-1 bg-primary" />
                         </div>
                       </td>
                     </tr>
@@ -346,7 +347,11 @@ function SortHeader({
 
 function CategoryBar({ team }: { team: StandingsTeam }) {
   const total = team.categoryWins + team.categoryLosses + team.categoryDraws;
-  const share = (value: number) => (total > 0 ? `${(value / total) * 100}%` : '0%');
+  const segments = [
+    { key: 'win', count: team.categoryWins },
+    { key: 'draw', count: team.categoryDraws },
+    { key: 'loss', count: team.categoryLosses },
+  ] as const;
   return (
     <span className="flex flex-col items-end gap-1">
       <span className="tabular-nums text-foreground">
@@ -355,29 +360,18 @@ function CategoryBar({ team }: { team: StandingsTeam }) {
           {formatPct(team.categoryWinPct)}
         </span>
       </span>
-      <span
-        aria-hidden="true"
-        className="flex h-1.5 w-full max-w-28 gap-0.5 overflow-hidden rounded-full"
-      >
-        {total > 0 ? (
-          <>
-            <span
-              className="h-full rounded-l-full bg-result-win"
-              style={{ width: share(team.categoryWins) }}
-            />
-            <span
-              className="h-full bg-muted-foreground/40"
-              style={{ width: share(team.categoryDraws) }}
-            />
-            <span
-              className="h-full rounded-r-full bg-result-loss"
-              style={{ width: share(team.categoryLosses) }}
-            />
-          </>
-        ) : (
-          <span className="h-full w-full rounded-full bg-muted" />
-        )}
-      </span>
+      {/* An ink container with 1px gaps, so the white loss segment and the stone draw both show. */}
+      {total > 0 ? (
+        <span aria-hidden="true" className="flex h-2 w-full max-w-28 gap-px bg-foreground p-px">
+          {segments.map(({ key, count }) =>
+            count > 0 ? (
+              <span key={key} className={`h-full ${resultFill[key]}`} style={{ flexGrow: count }} />
+            ) : null
+          )}
+        </span>
+      ) : (
+        <span aria-hidden="true" className="h-2 w-full max-w-28 bg-muted" />
+      )}
     </span>
   );
 }

@@ -96,8 +96,9 @@ dashboard patterns.
   column emphasised, and short condensed section titles.
 - LIVE status uses the `status-live` token, never a result token, so a live match is not read as a loss.
   Unread counts use the `primary` token (cobalt from phase 3; sun on the cobalt app bar).
-- Results use the `result-win`, `result-loss` and `result-draw` tokens and always carry a letter or
-  symbol (W, L, D) so meaning never depends on colour.
+- Results use the `resultTone` recipe (win solid cobalt, loss a white chip with an ink edge, draw
+  stone) and always carry a letter or symbol (W, L, D) so meaning never depends on colour. Errors use
+  `destructive` and success uses `success`, never a result token.
 - Show real state only. Omit a module rather than fill it with estimates or placeholder numbers.
 - One palette. Area tokens such as `--league-*` and `--trade-*` alias the core tokens; no area
   gets its own colour scheme, card shadow or accent. Primary actions and focus use the brand

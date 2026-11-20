@@ -802,7 +802,7 @@ export function LeagueMyTeamPanel({
           {actionMessage ? (
             <p
               role={actionMessage.tone === 'refused' ? 'alert' : 'status'}
-              className={`text-sm ${actionMessage.tone === 'refused' ? 'font-semibold text-result-loss' : 'text-foreground'}`}
+              className={`text-sm ${actionMessage.tone === 'refused' ? 'font-semibold text-destructive' : 'text-foreground'}`}
             >
               {actionMessage.text}
             </p>
@@ -1034,7 +1034,7 @@ export function LeagueMyTeamPanel({
                                           type="button"
                                           onClick={() => void handleDrop(player)}
                                           aria-label={`Drop ${player.name}`}
-                                          className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-semibold text-result-loss hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+                                          className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-semibold text-destructive hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                                         >
                                           Drop
                                         </button>
@@ -1076,7 +1076,7 @@ export function LeagueMyTeamPanel({
                   {changeCount} {changeCount === 1 ? 'change' : 'changes'} to confirm
                 </p>
                 {saveState.kind === 'error' ? (
-                  <p role="alert" className="text-xs font-semibold text-result-loss">
+                  <p role="alert" className="text-xs font-semibold text-destructive">
                     Not saved: {saveState.message}
                   </p>
                 ) : (
@@ -1274,7 +1274,7 @@ function Tag({ tone, label, title }: { tone: 'warn' | 'bad'; label: string; titl
       title={title}
       className={`shrink-0 rounded-sm px-1 text-[0.6875rem] font-bold leading-4 ${
         tone === 'bad'
-          ? 'bg-result-loss text-result-loss-foreground'
+          ? 'bg-destructive text-destructive-foreground'
           : 'bg-warning text-warning-foreground ring-1 ring-inset ring-warning-text'
       }`}
     >
@@ -1521,7 +1521,7 @@ function ReadinessRow({
             {flagged > 0 ? (
               <div className="flex gap-1">
                 <dt className="text-muted-foreground">Bye or injured</dt>
-                <dd className="font-semibold tabular-nums text-result-loss">{flagged}</dd>
+                <dd className="font-semibold tabular-nums text-destructive">{flagged}</dd>
               </div>
             ) : null}
             <div className="flex gap-1">
@@ -1573,7 +1573,7 @@ function ReadinessRow({
 function StatusDot({ tone, label }: { tone: 'good' | 'warn' | 'neutral'; label: string }) {
   const dot =
     tone === 'good'
-      ? 'bg-result-win'
+      ? 'bg-success'
       : tone === 'warn'
         ? 'bg-[color:var(--league-warning)]'
         : 'bg-muted-foreground';

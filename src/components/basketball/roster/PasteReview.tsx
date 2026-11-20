@@ -12,9 +12,9 @@ type Choice = string | 'skip' | null;
 
 const STATUS: Record<
   PastedRosterLine['status'],
-  { label: string; tone: 'win' | 'warning' | 'neutral' }
+  { label: string; tone: 'brand' | 'warning' | 'neutral' }
 > = {
-  matched: { label: 'Matched', tone: 'win' },
+  matched: { label: 'Matched', tone: 'brand' },
   suggested: { label: 'Check this match', tone: 'warning' },
   ambiguous: { label: 'Pick one', tone: 'warning' },
   none: { label: 'No match', tone: 'neutral' },

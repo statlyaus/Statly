@@ -158,11 +158,11 @@ const OUTCOME_STYLE: Record<
   { valueClassName: string; label: string }
 > = {
   favourable: {
-    valueClassName: 'font-bold text-[color:var(--trade-positive)]',
+    valueClassName: 'font-bold text-[color:var(--trade-text)]',
     label: 'Up',
   },
   unfavourable: {
-    valueClassName: 'font-bold text-[color:var(--trade-negative)]',
+    valueClassName: 'font-bold text-[color:var(--trade-text)]',
     label: 'Down',
   },
   even: { valueClassName: 'font-semibold text-[color:var(--trade-text)]', label: 'Level' },

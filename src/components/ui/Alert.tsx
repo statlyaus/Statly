@@ -26,9 +26,9 @@ const ALERT_TONES: Record<
 > = {
   success: {
     icon: CheckCircleIcon,
-    border: 'border-result-win/30',
-    surface: 'bg-result-win/5',
-    iconClasses: 'text-result-win',
+    border: 'border-success/30',
+    surface: 'bg-success/5',
+    iconClasses: 'text-success',
   },
   error: {
     icon: XCircleIcon,

@@ -120,7 +120,7 @@ describe('AuthForm failed sign-in', () => {
     await submit();
     await screen.findByRole('alert');
 
-    expect(container.querySelector('form')?.innerHTML).not.toMatch(/result-win/);
+    expect(container.querySelector('form')?.innerHTML).not.toMatch(/success/);
   });
 
   it('flags invalid fields for assistive technology', async () => {

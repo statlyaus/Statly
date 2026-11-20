@@ -284,9 +284,9 @@ export default function LivePickHeader({
   const timerTone =
     timerState.tone === 'urgent'
       ? {
-          badge: 'border-result-loss bg-result-loss text-result-loss-foreground',
-          bar: 'bg-result-loss',
-          rail: 'bg-result-loss/15',
+          badge: 'border-destructive bg-destructive text-destructive-foreground',
+          bar: 'bg-destructive',
+          rail: 'bg-destructive/15',
           label: timerState.label,
         }
       : timerState.tone === 'warning'

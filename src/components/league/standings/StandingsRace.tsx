@@ -106,19 +106,18 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
             const before = previous !== null ? winsAfter(team, previous) : null;
             const isYou = team.memberId === data.viewerMemberId;
             const isActive = team.memberId === activeId;
-            const inFinals = data.finalsTeams > 0 && team.rank <= data.finalsTeams;
             const finals = team.finals;
             const record = formatRecord(team.wins, team.losses, team.draws);
             const chance = formatChance(finals);
             const dotColour = isYou
               ? 'bg-primary'
               : isActive
-                ? 'bg-[color:var(--chart-1)]'
-                : 'bg-foreground/70';
+                ? 'bg-foreground'
+                : 'bg-muted-foreground';
             const bandColour = isYou
               ? 'bg-primary/20'
               : isActive
-                ? 'bg-[color:var(--chart-1)]/20'
+                ? 'bg-foreground/20'
                 : 'bg-foreground/10';
             return (
               <li key={team.memberId}>
@@ -132,7 +131,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
                   onClick={() => setActiveId(team.memberId)}
                   onFocus={() => setActiveId(team.memberId)}
                   className={`${GRID} min-h-12 w-full items-center rounded-md text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar ${
-                    isActive ? 'bg-accent hover:bg-accent' : inFinals ? 'bg-result-win/5' : ''
+                    isActive ? 'bg-accent hover:bg-accent' : ''
                   }`}
                 >
                   <span className="text-right font-display text-base font-bold tabular-nums text-foreground">
@@ -163,7 +162,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
                     ))}
                     {cutoffWins !== null ? (
                       <span
-                        className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-result-win/50"
+                        className="absolute inset-y-0 -translate-x-1/2 border-l-2 border-dashed border-foreground"
                         style={{ left: position(cutoffWins) }}
                       />
                     ) : null}
@@ -240,7 +239,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
           ) : null}
           {cutoffWins !== null ? (
             <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="h-3 w-0.5 bg-result-win/60" />
+              <span aria-hidden="true" className="h-3 border-l-2 border-dashed border-foreground" />
               {ordinal(data.finalsTeams)} place now ({winsLabel(cutoffWins)})
             </span>
           ) : null}

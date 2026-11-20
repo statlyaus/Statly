@@ -1106,7 +1106,7 @@ export function DraftTradesExplorer({
                     </div>
                   )}
                   {!isLoadingDetail && detailError && (
-                    <p className="text-sm text-result-loss" role="alert">
+                    <p className="text-sm text-destructive" role="alert">
                       Could not load trade details: {detailError}
                     </p>
                   )}
@@ -1448,7 +1448,7 @@ export function DraftTradesExplorer({
 
                   {loadingTradeId !== selectedTrade.tradeId && detailError ? (
                     <div
-                      className="rounded-2xl border border-result-loss/30 bg-result-loss/5 p-4 text-sm text-result-loss"
+                      className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
                       role="alert"
                     >
                       Could not load trade details: {detailError}
