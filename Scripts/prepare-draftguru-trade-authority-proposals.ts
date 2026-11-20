@@ -48,9 +48,10 @@ const evidenceById = Object.fromEntries(
   evidence.map(({ role, reference }) => [role, reference.artifactId])
 ) as Record<keyof typeof evidenceDocuments, string>;
 
-// The cohort-relevant trade seasons measured from the archive, inside the owner's 2000-2025 decision.
+// The cohort-relevant trade seasons measured from the archive: the owner's 2000-2025 decision, and 2026
+// added by the owner on 2026-11-21 on the same terms.
 const seasons = [
-  2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+  2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
 ];
 const latestEvidenceAt = Math.max(...evidence.map(({ recordedAt }) => recordedAt.getTime()));
 const timing = {
