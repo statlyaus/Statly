@@ -124,6 +124,15 @@ export function clubStyle(clubName: string): ClubStyle {
   return { abbreviation: getTeamAbbreviation(clubName), fill, ink: inkOn(fill), trim };
 }
 
+/**
+ * The 13px club square (style guide, "Club colours"): the guernsey's main colour; a white guernsey
+ * (Geelong, North Melbourne, Sydney) is a white square with an ink edge.
+ */
+export function clubSquare(clubName: string): { readonly fill: string; readonly edged: boolean } {
+  const { base } = guernseyFor(clubName);
+  return { fill: base, edged: luminance(base) > 0.7 };
+}
+
 /** Each matched-bid share, by the story pick id it was spent as. */
 export function bidSharesByPickId(
   bidMatches: readonly AflTradePageBidMatch[]
@@ -157,14 +166,6 @@ export const inSentence = (label: string) => label.replace(/^Pick\b/u, 'pick');
 /** "Geelong ⇄ GWS". */
 export const tradeName = (clubs: readonly { clubName: string }[]) =>
   clubs.map(({ clubName }) => clubName).join(' ⇄ ');
-
-/** A net's ink: neutral when it reads 0.0, so a level net is never painted ahead or behind. */
-export const netTone = (value: number) =>
-  Number(Math.abs(value).toFixed(1)) === 0
-    ? 'text-(--ts-ink)'
-    : value < 0
-      ? 'text-(--ts-neg)'
-      : 'text-(--ts-pos)';
 
 /** Where the story read its values: "the end of 2026", "the 2026 draft", "the 2026 trade period". */
 export function checkpointText({ kind, season }: AflTradeStory['checkpoint']): string {

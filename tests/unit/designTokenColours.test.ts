@@ -67,6 +67,19 @@ describe('design token colours', () => {
     }).toEqual({ palette: [], hex: [], functions: [] });
   });
 
+  // The paper surface mode replaced the trade pages' own --ts-* palette (style guide, "Grounds and
+  // surface modes, not namespaces"); it must not come back in any source file or stylesheet.
+  it('no source file or stylesheet uses the retired --ts-* trade palette', () => {
+    const files = readdirSync(join(process.cwd(), 'src'), { recursive: true, encoding: 'utf8' })
+      .filter((path) => /\.(tsx?|jsx?|css)$/.test(path))
+      .map((path) => join('src', path));
+    const offenders = files.filter((path) =>
+      /--ts-[a-z]|\bts-public\b/.test(readFileSync(join(process.cwd(), path), 'utf8'))
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   // The drift freeze: no file may hold more raw colours than the committed baseline, and a file
   // missing from it may hold none. After a clean-up, lower the baseline with
   // `node Scripts/design/count-raw-colours.mjs --write-baseline`.

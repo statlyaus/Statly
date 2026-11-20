@@ -8,7 +8,6 @@ import { ClubBadge } from './ClubBadge';
 import { TradePageNotice } from './TradePageNotice';
 import {
   formatSigned,
-  netTone,
   tradeStoriesHref,
   tradeStoryHref,
   type AflTradePageAudience,
@@ -28,13 +27,13 @@ function TradeRow({
     <li>
       <Link
         href={tradeStoryHref(trade.tradeId, audience)}
-        className="flex min-h-11 items-center justify-between gap-4 px-4 py-2 ts-body hover:bg-(--ts-bg2)"
+        className="ts-inset-focus flex min-h-11 items-center justify-between gap-4 px-4 py-2 ts-body hover:bg-muted"
       >
         <span>
-          <span className="text-(--ts-ink2)">{trade.year}</span>{' '}
+          <span className="text-muted-foreground">{trade.year}</span>{' '}
           <span className="font-medium">with {trade.withClubs.join(', ')}</span>
         </span>
-        <span className={`font-semibold tabular-nums ${netTone(trade.net)}`}>
+        <span className="font-semibold tabular-nums text-foreground">
           {signed(trade.net, trade.provisional)}
         </span>
       </Link>
@@ -53,10 +52,10 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
   // The public layout already provides the page's <main>.
   const Shell = audience === 'public' ? 'div' : 'main';
   return (
-    <div className={`afl-trade-story min-h-screen ${audience === 'public' ? 'ts-public' : ''}`}>
+    <div className="afl-trade-story min-h-screen" data-surface="paper">
       <Shell className="mx-auto w-full max-w-3xl px-4 pt-5 pb-16 sm:px-6">
         <TradePageNotice source={model.source} />
-        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
+        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-muted-foreground">
           <Link href={tradeStoriesHref(audience)} className="underline underline-offset-2">
             {audience === 'public' ? 'AFL trades' : 'Private trades'}
           </Link>{' '}
@@ -72,7 +71,7 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
             {club}: trade chains
           </h1>
         </header>
-        <p className="mt-2 ts-body text-(--ts-ink2)">
+        <p className="mt-2 ts-body text-muted-foreground">
           Trades linked by a pick {club} received and traded on. A chain&apos;s total is the sum of
           its trades&apos; own results for {club}, in PAV to {chains.throughSeason}. Players never
           link trades: each trade values a player at the club that received him.
@@ -83,24 +82,23 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
             {chains.chains.length} chain{chains.chains.length === 1 ? '' : 's'}
           </h2>
           {chains.chains.length === 0 ? (
-            <p className="mt-2 ts-body text-(--ts-ink2)">No two of these trades share a pick.</p>
+            <p className="mt-2 ts-body text-muted-foreground">
+              No two of these trades share a pick.
+            </p>
           ) : (
             <ol className="mt-3 space-y-4">
               {chains.chains.map((chain) => (
-                <li
-                  key={chain.trades[0]!.tradeId}
-                  className="rounded-xl border border-(--ts-line) bg-(--ts-surface)"
-                >
-                  <div className="flex items-center justify-between gap-4 border-b border-(--ts-line) px-4 py-3">
+                <li key={chain.trades[0]!.tradeId} className="border border-border bg-card">
+                  <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
                     <span className="ts-body font-medium">
                       {chain.trades.length} trades, {chain.trades[0]!.year}–
                       {chain.trades.at(-1)!.year}
                     </span>
-                    <b className={`ts-head font-semibold tabular-nums ${netTone(chain.net)}`}>
+                    <b className="ts-head font-semibold tabular-nums text-foreground">
                       {signed(chain.net, chain.provisional)}
                     </b>
                   </div>
-                  <ul className="divide-y divide-(--ts-line)">
+                  <ul className="divide-y divide-border">
                     {chain.trades.map((trade) => (
                       <TradeRow audience={audience} key={trade.tradeId} trade={trade} />
                     ))}
@@ -115,13 +113,13 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
           <h2 id="standalone-heading" className="ts-head font-semibold">
             {chains.standalone.length} trade{chains.standalone.length === 1 ? '' : 's'} on their own
           </h2>
-          <ul className="mt-3 divide-y divide-(--ts-line) rounded-xl border border-(--ts-line) bg-(--ts-surface)">
+          <ul className="mt-3 divide-y divide-border border border-border bg-card">
             {chains.standalone.map((trade) => (
               <TradeRow audience={audience} key={trade.tradeId} trade={trade} />
             ))}
           </ul>
         </section>
-        <p className="mt-6 ts-small text-(--ts-ink2)">
+        <p className="mt-6 ts-small text-muted-foreground">
           * Provisional: a pick in the trade has no value yet, so the total leaves it out and will
           move.
         </p>

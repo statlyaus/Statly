@@ -13,7 +13,10 @@ import { clubStyle, contrastRatio, formatSigned, netText } from './tradePageMode
 
 type Checkpoint = AflTradeStory['checkpoint'];
 
-/** The chart's surface and ink: `--ts-surface` and `--ts-ink` in tradeStory.css. */
+/**
+ * The chart's card (`--card`, white on the paper surface) and an ink for a club with no colour at 3:1
+ * on it. Club lines are measured against this surface.
+ */
 export const CHART_THEME = { surface: '#ffffff', ink: '#0b0b0b' } as const;
 
 /** WCAG 1.4.11: a line must reach 3:1 against the surface it is drawn on. */

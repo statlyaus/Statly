@@ -12,7 +12,7 @@ import {
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 import { ClubBadge } from './ClubBadge';
-import { netText, netTone } from './tradePageModel';
+import { netText } from './tradePageModel';
 import {
   END_LABEL_OFFSET,
   checkpointName,
@@ -101,15 +101,17 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
       <h2 id="value-line-title" className="ts-head font-semibold">
         This trade over time
       </h2>
-      <p className="mt-1 max-w-[68ch] text-(--ts-ink2)">
+      <p className="mt-1 max-w-[68ch] text-muted-foreground">
         Each club’s net on this trade at the trade, at each draft and at the end of each season.
         Above the middle line, the club is ahead.
         {anyPending ? ' A hollow point leaves out values not in yet.' : null}
       </p>
 
-      <div className="mt-4 rounded-2xl border border-(--ts-line) bg-(--ts-surface) p-4">
+      <div className="mt-4 border border-border bg-card p-4">
         <div aria-live="polite">
-          <p className="ts-small text-(--ts-ink2)">{checkpointName(chart.checkpoints[active]!)}</p>
+          <p className="ts-small text-muted-foreground">
+            {checkpointName(chart.checkpoints[active]!)}
+          </p>
           <ul
             className="mt-1 flex flex-wrap gap-x-5 gap-y-1"
             aria-label="Each club’s net at this point"
@@ -118,10 +120,10 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
               <li key={series.clubId} className="flex items-center gap-2">
                 <LineKey series={series} />
                 <ClubBadge clubName={series.clubName} named />
-                <b className={`font-semibold tabular-nums ${netTone(nets[at]!.line[active]!.net)}`}>
+                <b className="font-semibold tabular-nums text-foreground">
                   {netText(nets[at]!.line[active]!)}
                 </b>
-                <span className="ts-small text-(--ts-ink2)">{series.clubName}</span>
+                <span className="ts-small text-muted-foreground">{series.clubName}</span>
               </li>
             ))}
           </ul>
@@ -137,7 +139,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
           aria-valuenow={active}
           aria-valuetext={readout(active)}
           onKeyDown={step}
-          className="mt-3 rounded-lg"
+          className="mt-3"
         >
           <svg
             width={chart.width}
@@ -160,7 +162,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
                   x2={plot.right}
                   y1={tick.y}
                   y2={tick.y}
-                  stroke={tick.value === 0 ? 'var(--ts-muted)' : 'var(--ts-line)'}
+                  stroke={tick.value === 0 ? 'var(--muted-foreground)' : 'var(--border)'}
                   strokeWidth="1"
                 />
                 <text
@@ -168,7 +170,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
                   y={tick.y + 4}
                   textAnchor="end"
                   fontSize="12"
-                  fill="var(--ts-ink2)"
+                  fill="var(--muted-foreground)"
                   className="tabular-nums"
                 >
                   {tick.label}
@@ -182,7 +184,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
                 y={plot.bottom + 20}
                 textAnchor="middle"
                 fontSize="12"
-                fill="var(--ts-ink2)"
+                fill="var(--muted-foreground)"
               >
                 {label.label}
               </text>
@@ -192,7 +194,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
               x2={xs[active]}
               y1={plot.top}
               y2={plot.bottom}
-              stroke="var(--ts-ink2)"
+              stroke="var(--muted-foreground)"
               strokeWidth="1"
             />
             {chart.series.map((series) => (
@@ -212,8 +214,8 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
                     cx={point.x}
                     cy={point.y}
                     r={at === active ? 5 : 4}
-                    fill={point.pending ? 'var(--ts-surface)' : 'var(--vl)'}
-                    stroke={point.pending ? 'var(--vl)' : 'var(--ts-surface)'}
+                    fill={point.pending ? 'var(--card)' : 'var(--vl)'}
+                    stroke={point.pending ? 'var(--vl)' : 'var(--card)'}
                     strokeWidth="2"
                   />
                 ))}
@@ -226,7 +228,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
                 y={label.y + 4}
                 fontSize="12"
                 fontWeight="600"
-                fill="var(--ts-ink)"
+                fill="var(--foreground)"
                 className="tabular-nums"
               >
                 {label.text}
@@ -236,13 +238,15 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
         </div>
 
         <details className="mt-3">
-          <summary className="cursor-pointer ts-small text-(--ts-ink2)">Show the values</summary>
+          <summary className="cursor-pointer ts-small text-muted-foreground">
+            Show the values
+          </summary>
           <table className="mt-2 w-full ts-small tabular-nums">
             <caption className="sr-only">
               Each club’s net on this trade at each point in time
             </caption>
             <thead>
-              <tr className="text-left text-(--ts-ink2)">
+              <tr className="text-left text-muted-foreground">
                 <th scope="col" className="py-1 pr-3 font-medium">
                   When
                 </th>
@@ -253,7 +257,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-(--ts-line)">
+            <tbody className="divide-y divide-border">
               {chart.checkpoints.map((checkpoint, at) => (
                 <tr key={at}>
                   <th scope="row" className="py-1 pr-3 text-left font-normal">

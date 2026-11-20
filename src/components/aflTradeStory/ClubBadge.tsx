@@ -1,8 +1,9 @@
-import { clubStyle } from './tradePageModel';
+import { clubSquare, clubStyle } from './tradePageModel';
 
 /**
- * A club's short name on its guernsey colour. The full name is read out unless the club's name is
- * already written beside the badge (`named`).
+ * A club as its 13px club square beside its abbreviation (style guide, "Club colours"): the only
+ * place a club's colour appears. Text is never set on the colour. The full name is read out unless
+ * it is already written beside the badge (`named`).
  */
 export function ClubBadge({
   clubName,
@@ -13,16 +14,20 @@ export function ClubBadge({
   size?: 'sm' | 'md';
   named?: boolean;
 }) {
-  const style = clubStyle(clubName);
+  const square = clubSquare(clubName);
   return (
     <span
-      className={`inline-flex flex-none items-center justify-center rounded-full border-2 font-semibold tracking-wide ${
-        size === 'md' ? 'h-7 min-w-11 px-2.5 text-sm' : 'h-6 min-w-10 px-2 text-xs'
+      className={`inline-flex flex-none items-center gap-1.5 font-display font-extrabold tracking-wide ${
+        size === 'md' ? 'text-sm' : 'text-xs'
       }`}
-      style={{ background: style.fill, color: style.ink, borderColor: style.trim }}
       aria-hidden={named || undefined}
     >
-      <span aria-hidden="true">{style.abbreviation}</span>
+      <span
+        aria-hidden="true"
+        className={`size-[13px] flex-none ${square.edged ? 'border-[1.5px] border-foreground' : ''}`}
+        style={{ background: square.fill }}
+      />
+      <span aria-hidden="true">{clubStyle(clubName).abbreviation}</span>
       {named ? null : <span className="sr-only">{clubName}</span>}
     </span>
   );

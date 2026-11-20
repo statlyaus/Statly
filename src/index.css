@@ -118,6 +118,9 @@
   --brand-secondary-text: #55534e;
   --brand-hairline: #c9c5bc;
   --brand-red: #c81e1e;
+  /* Paper surface mode only (data-surface="paper"): the warm page and its quiet panels. */
+  --brand-paper: #fbfaf7;
+  --brand-paper-deep: #f1efe8;
 
   /* Old brand names, kept as cobalt aliases until the area palettes are collapsed. */
   --statly-navy: var(--brand-cobalt);
@@ -402,6 +405,17 @@
   .ground-sun ::selection {
     background-color: var(--brand-ink);
     color: #fff;
+  }
+
+  /* Paper surface mode (style guide, "Grounds"): the warm page of the public trade pages, replacing
+     their old --ts-* palette. Only the page and the quiet panels change; ink, secondary text,
+     cobalt, white cards, the hairline and focus keep their root values, so a component reads the
+     same roles here as anywhere else. The story collage and tower inside it keep their own grounds. */
+  [data-surface='paper'] {
+    --background: var(--brand-paper);
+    --muted: var(--brand-paper-deep);
+    background-color: var(--background);
+    color: var(--foreground);
   }
 }
 

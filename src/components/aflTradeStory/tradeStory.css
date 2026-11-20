@@ -1,48 +1,9 @@
-/* Private trade page tokens (statlyaus/Statly#789). Light only; every text pair meets WCAG AA (4.5:1).
+/* Trade pages (statlyaus/Statly#789). Colours come from the core roles under the paper surface
+   mode (data-surface="paper" in src/index.css); this sheet holds only the page's type scale and focus.
    Club colours come from clubGuernseys.ts. */
 .afl-trade-story {
-  --ts-bg: #fbfaf7;
-  --ts-bg2: #f1efe8;
-  --ts-surface: #ffffff;
-  --ts-line: #d9d7cf;
-  --ts-ink: #0b0b0b;
-  --ts-ink2: #4a4945;
-  --ts-muted: #5c5b56;
-  --ts-accent: #1a2cff;
-  --ts-pos: #136b3c;
-  --ts-neg: #b42318;
-  --ts-live: #15803d;
-  --ts-bid: #7a4a06;
-  --ts-bid-soft: #faeeda;
-  --ts-bar: #c9c6bb;
-  --ts-scarf-bg: #f1efe8;
-  --ts-scarf-shadow: #dcd9cf;
-  --ts-scarf-side: #18222d;
-  --ts-scarf-side-ink: #ffffff;
-  --ts-scarf-side-muted: #c3cbd3;
-  --ts-pin: #a33a3a;
-  --ts-group-a: #eef4fb;
-  --ts-group-b: #fbefeb;
-  background: var(--ts-bg);
-  color: var(--ts-ink);
   font-size: 15px;
   line-height: 1.5;
-}
-
-/* The public pages (/afl/trades) sit inside the Statly site: its page grey, white cards, ink and
-   cobalt accent. */
-.afl-trade-story.ts-public {
-  --ts-bg: #f8f9fa;
-  --ts-bg2: #eef1f4;
-  --ts-surface: #ffffff;
-  --ts-line: #d5dae0;
-  --ts-ink: #111111;
-  --ts-ink2: #4b5560;
-  --ts-muted: #5b6570;
-  --ts-accent: #1a2cff;
-  --ts-scarf-bg: #eef1f4;
-  --ts-scarf-shadow: #d5dae0;
-  --ts-scarf-side: #111111;
 }
 
 /* The page's four text sizes (owner, 2026-10-18). Badges, icons and SVG chart labels are exempt. */
@@ -67,8 +28,14 @@
 }
 
 .afl-trade-story :focus-visible {
-  outline: 2px solid var(--ts-accent);
-  outline-offset: 2px;
+  outline: 3px dashed var(--ring);
+  outline-offset: 4px;
+}
+
+/* Something focusable inside a box that clips its corners (row links, the scarf's scrolling
+   picture): the ring sits inside it so it is never cut off. */
+.afl-trade-story .ts-inset-focus:focus-visible {
+  outline-offset: -4px;
 }
 
 .afl-trade-story svg text {

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, type RefObject } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { AflTradeStoryLineageTrade } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 import { ClubBadge } from './ClubBadge';
@@ -54,7 +55,7 @@ export function LineageTradePanel({
       role="region"
       aria-labelledby={`${id}-title`}
       ref={container}
-      className="mt-3 rounded-xl border border-(--ts-accent) bg-(--ts-surface) p-4"
+      className="mt-3 border border-primary bg-card p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4
@@ -65,14 +66,14 @@ export function LineageTradePanel({
         >
           {name}
           {isThisTrade ? (
-            <span className="ml-2 ts-body font-normal text-(--ts-ink2)">(this trade)</span>
+            <span className="ml-2 ts-body font-normal text-muted-foreground">(this trade)</span>
           ) : null}
         </h4>
         <div className="flex items-center gap-2">
           {isThisTrade ? null : (
             <Link
               href={tradeStoryHref(trade.tradeId, audience)}
-              className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-accent) px-3 ts-body font-semibold text-(--ts-accent) hover:bg-(--ts-bg2)"
+              className={buttonStyles({ variant: 'outline', size: 'md' })}
             >
               Trade page <span aria-hidden="true">&nbsp;→</span>
               <span className="sr-only"> for {name}</span>
@@ -81,7 +82,7 @@ export function LineageTradePanel({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex min-h-10 items-center rounded-lg border border-(--ts-line) px-3 ts-body hover:border-(--ts-muted)"
+            className={buttonStyles({ variant: 'outline', size: 'md' })}
           >
             Close<span className="sr-only"> {name}</span>
           </button>
@@ -97,9 +98,7 @@ export function LineageTradePanel({
                 <ClubBadge clubName={club.clubName} named />
                 {club.clubName} got
                 {net ? (
-                  <span
-                    className={`ml-auto font-semibold tabular-nums ${net.net < 0 ? 'text-(--ts-neg)' : 'text-(--ts-pos)'}`}
-                  >
+                  <span className="ml-auto font-semibold tabular-nums text-foreground">
                     {netText(net)}
                     <span className="sr-only"> net on this trade</span>
                   </span>
@@ -109,11 +108,13 @@ export function LineageTradePanel({
                 {got.map((asset) => (
                   <li
                     key={asset.transferId}
-                    className="flex justify-between gap-3 border-t border-(--ts-line) py-1.5 ts-body"
+                    className="flex justify-between gap-3 border-t border-border py-1.5 ts-body"
                   >
                     <span>
                       {asset.label}{' '}
-                      <span className="text-(--ts-ink2)">· {becameText(asset, clubNames)}</span>
+                      <span className="text-muted-foreground">
+                        · {becameText(asset, clubNames)}
+                      </span>
                     </span>
                     <span className="font-semibold whitespace-nowrap tabular-nums">
                       <AssetValue asset={asset} />

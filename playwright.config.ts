@@ -1,4 +1,9 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
 import { defineConfig, devices } from '@playwright/test';
+
+import { sampleTradeStoryBundle } from './tests/fixtures/aflTradeStorySampleBundle';
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const socketPort = Number(process.env.PLAYWRIGHT_SOCKET_PORT ?? 4102);
@@ -10,6 +15,31 @@ const useSocketWebServer =
   (process.env.PLAYWRIGHT_WITH_SOCKET !== 'false' && !process.env.CI);
 const useDraftWorkerWebServer =
   useSocketWebServer && process.env.PLAYWRIGHT_WITH_DRAFT_WORKER === 'true';
+
+/**
+ * The public trade pages (/, /afl/trades) read one approved bundle. Browser tests serve the synthetic
+ * sample bundle; PLAYWRIGHT_TRADE_BUNDLE_PATH points them at another stored bundle instead (the
+ * genuine one in .statly-local, on the owner's Mac only).
+ */
+function publicTradeBundle(): { id: string; path: string } {
+  const override = process.env.PLAYWRIGHT_TRADE_BUNDLE_PATH?.trim();
+  if (override) {
+    const { bundleId } = JSON.parse(readFileSync(override, 'utf8')) as { bundleId: string };
+    return { id: bundleId, path: override };
+  }
+  const bundle = sampleTradeStoryBundle();
+  const path = join(process.cwd(), 'test-results', 'e2e-public-trade-bundle.json');
+  // The config loads in every worker; write the file only when it is missing or a different bundle.
+  const stored = existsSync(path)
+    ? (JSON.parse(readFileSync(path, 'utf8')) as { bundleId?: string }).bundleId
+    : undefined;
+  if (stored !== bundle.bundleId) {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(bundle));
+  }
+  return { id: bundle.bundleId, path };
+}
+const tradeBundle = publicTradeBundle();
 
 const nextCommand = [
   'NODE_ENV=development',
@@ -30,6 +60,9 @@ const nextCommand = [
   'NEXT_PUBLIC_DISABLE_PERFORMANCE_ANALYTICS=true',
   `NEXT_PUBLIC_SOCKET_DISABLED=${useSocketWebServer ? 'false' : 'true'}`,
   `NEXT_PUBLIC_SOCKET_URL=${socketURL}`,
+  'AFL_TRADE_STORY_PUBLIC_ENABLED=true',
+  `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID=${tradeBundle.id}`,
+  `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH=${tradeBundle.path}`,
   './node_modules/.bin/next dev --turbopack',
   `-p ${port}`,
 ].join(' ');

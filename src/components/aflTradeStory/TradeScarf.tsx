@@ -54,9 +54,11 @@ export function TradeScarf({
     <figure
       aria-label={`Timeline of the ${tradeName(story.trade.clubs)} trade, ${story.trade.year}`}
       className="overflow-hidden rounded-2xl lg:grid lg:grid-cols-[220px_1fr]"
+      // The scarf is a story graphic the owner is redesigning (ticket 06h).
+      data-collage
     >
-      <div className="bg-(--ts-scarf-side) p-5 text-(--ts-scarf-side-ink)">
-        <p className="ts-small text-(--ts-scarf-side-muted)">{`This trade now (${throughSeason})`}</p>
+      <div className="ground-ink p-5">
+        <p className="ts-small text-muted-foreground">{`This trade now (${throughSeason})`}</p>
         <ul className="mt-1 grid gap-1">
           {story.nets.tradeAlone.map((net) => (
             <li key={net.clubId} className="flex items-center gap-2">
@@ -70,11 +72,11 @@ export function TradeScarf({
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-1">
           <p className="flex flex-col">
             <span className="ts-head font-bold tabular-nums">{story.lineage.trades.length}</span>
-            <span className="ts-small text-(--ts-scarf-side-muted)">trades in the chain</span>
+            <span className="ts-small text-muted-foreground">trades in the chain</span>
           </p>
           <p className="flex flex-col">
             <span className="ts-head font-bold tabular-nums">{clubs.size}</span>
-            <span className="ts-small text-(--ts-scarf-side-muted)">clubs involved</span>
+            <span className="ts-small text-muted-foreground">clubs involved</span>
           </p>
         </div>
         {players.length > 0 ? (
@@ -104,7 +106,7 @@ export function TradeScarf({
                       </span>
                       <span className="ts-body leading-tight">
                         <span className="block font-semibold">{player.name}</span>
-                        <span className="ts-small text-(--ts-scarf-side-muted)">
+                        <span className="ts-small text-muted-foreground">
                           {formatPav(player.value)} · {player.clubName}
                         </span>
                       </span>
@@ -115,18 +117,18 @@ export function TradeScarf({
           </>
         ) : null}
         {pending ? (
-          <p className="mt-5 ts-small text-(--ts-scarf-side-muted)">
+          <p className="mt-5 ts-small text-muted-foreground">
             * Totals leave out values not in yet.
           </p>
         ) : null}
       </div>
 
-      <div className="bg-(--ts-scarf-bg)">
-        <p className="px-4 pt-3 ts-small text-(--ts-ink2) lg:hidden">
+      <div className="bg-muted">
+        <p className="px-4 pt-3 ts-small text-muted-foreground lg:hidden">
           Swipe sideways to follow the timeline.
         </p>
         <div
-          className="overflow-x-auto"
+          className="ts-inset-focus overflow-x-auto"
           tabIndex={0}
           role="region"
           aria-label="Timeline picture. It scrolls sideways."
@@ -144,7 +146,7 @@ export function TradeScarf({
                 <path d={bandPath(bandStart, endX)} />
               </clipPath>
             </defs>
-            <path d={bandPath(bandStart, bandEnd, 14)} fill="var(--ts-scarf-shadow)" />
+            <path d={bandPath(bandStart, bandEnd, 14)} fill="var(--border)" />
             <Fringe x={bandStart} direction={-1} colours={fringeColours(players[0]?.clubName)} />
             <Fringe
               x={bandEnd}

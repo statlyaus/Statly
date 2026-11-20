@@ -6,7 +6,12 @@ import { FALLBACK_GUERNSEY } from '@/lib/clubGuernseys';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { contrastRatio, readRootTokens, resolveColour } from '../../Scripts/design/contrast.mjs';
+import {
+  contrastRatio,
+  readRootTokens,
+  readTokenBlock,
+  resolveColour,
+} from '../../Scripts/design/contrast.mjs';
 
 // Every colour pair the style guide names must hold in the values the app ships
 // (docs/product/style-guide.md, "Colour roles"). Text needs 4.5:1; focus rings and control edges
@@ -152,5 +157,42 @@ describe.each(['white', 'tint'] as const)('result bar fills on the %s ground', (
   ])('fill %i and fill %i are distinct', (left, right) => {
     expect(fills[left]).not.toBe(fills[right]);
     expect(contrastRatio(fills[left]!, fills[right]!)).toBeGreaterThanOrEqual(1.2);
+  });
+});
+
+// The paper surface mode on the public trade pages (style guide, "Grounds"): a warm page and quiet
+// panels, every other role from :root. Small labels (13px) sit on both, so secondary text needs 5.5.
+describe('the paper surface', () => {
+  const paper = new Map([...tokens, ...readTokenBlock(css, "[data-surface='paper']")]);
+  const onPaper = (foreground: string, background: string) =>
+    contrastRatio(resolveColour(paper, foreground), resolveColour(paper, background));
+
+  it.each([
+    ['text', '--foreground', '--background', 4.5],
+    ['text on a quiet panel', '--foreground', '--muted', 4.5],
+    ['card text', '--card-foreground', '--card', 4.5],
+    ['secondary text', '--muted-foreground', '--background', 5.5],
+    ['secondary text on a quiet panel', '--muted-foreground', '--muted', 5.5],
+    ['secondary text on a card', '--muted-foreground', '--card', 5.5],
+    ['links and marks', '--primary', '--background', 4.5],
+    ['links on a quiet panel', '--primary', '--muted', 4.5],
+    ['selected chip label', '--primary-foreground', '--primary', 4.5],
+    ['matched-bid words on their chip', '--warning-text', '--muted', 5.5],
+    ['focus ring', '--ring', '--background', 3],
+    ['focus ring on a quiet panel', '--ring', '--muted', 3],
+  ])('%s holds', (_role, foreground, background, minimum) => {
+    expect(onPaper(foreground, background)).toBeGreaterThanOrEqual(minimum);
+  });
+
+  it('keeps cards white, so club lines measured on white hold', () => {
+    expect(resolveColour(paper, '--card')).toBe('#ffffff');
+  });
+
+  it.each(CLUBS)('%s square stands out on the paper page and its quiet panels', (club) => {
+    const { fill } = clubStyle(club);
+    for (const ground of ['--background', '--muted']) {
+      const ratio = contrastRatio(fill, resolveColour(paper, ground));
+      expect({ ground, ratio: ratio >= 3 }).toEqual({ ground, ratio: true });
+    }
   });
 });

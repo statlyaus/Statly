@@ -1,36 +1,68 @@
 import { Fragment, useId } from 'react';
 
-import { STORY_FONT_CLASS } from '@/components/aflStories/CameronMasthead';
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
+import { getTeamAbbreviation } from '@/lib/teamLogos';
+
 import './tradeTree.css';
-import { checkpointText, clubStyle, formatPav } from './tradePageModel';
+
+import { ClubBadge } from './ClubBadge';
+import { checkpointText, clubSquare, formatPav } from './tradePageModel';
 import { tradeTree, type TreeColumn, type TreeLane } from './tradeTreeModel';
 
 /**
  * "Where the trade went" (owner's design, 2026-11-17): the trade at the left branches to each club,
- * then to a lane per asset that runs through time to the player it became and his PAV. A lane is in
- * the receiving club's colour, an outline while still a pick, and hatched ink once it is at another
- * club; its thickness is its PAV. Below 768px, and for screen readers, it is a list.
+ * then to a lane per asset that runs through time to the player it became and his PAV. A lane is
+ * solid ink while the receiving club holds it, grey while the other club in the trade does, an
+ * outline while still a pick, and hatched ink once it is at another club; its thickness is its PAV.
+ * Club colour appears only in the 13px club square beside each club's name (style guide, "Club
+ * colours"). Below 1024px, and for screen readers, it is a list: the chart scales down with its
+ * container, and below 1024px its labels would fall under 11px.
  */
 
 const W = 1100;
-const TREE_X = 120;
-const LANE_X = 230;
+const TREE_X = 150;
+const LANE_X = 250;
 const COL_X0 = 320;
 const COL_X1 = 830;
 const BECAME_X = 860;
 const HEAD = 56;
 const ROW = 56;
 const GAP = 26;
-const INK = 'var(--ts-ink)';
-const MUTED = 'var(--ts-muted)';
-const PAPER = 'var(--ts-surface)';
-const RULE = 'var(--ts-line)';
+const INK = 'var(--foreground)';
+const MUTED = 'var(--muted-foreground)';
+const PAPER = 'var(--card)';
+const RULE = 'var(--border)';
+
+/** Room for a note under a lane, from the lane's start to the "Became" column. */
+const NOTE_ROOM = BECAME_X - 24 - LANE_X;
+/**
+ * A note that fits under its lane (Geist is about 0.55em a letter at 14 units): the
+ * whole note, else without its "took" clause (the Became column names the player), else cut short.
+ */
+function fitNote(main: string, extra: string): string {
+  const fits = (text: string) => text.length * 14 * 0.55 <= NOTE_ROOM;
+  if (fits(main + extra)) return main + extra;
+  if (fits(main)) return main;
+  return `${main.slice(0, Math.floor(NOTE_ROOM / (14 * 0.55)) - 1)}…`;
+}
+
+/** A club label's size, and the room for it between the left edge and the knot's branches. */
+const LABEL_SIZE = 16;
+const LABEL_ROOM = TREE_X - 16 - 21;
+/** The club's name, or its abbreviation when the name would run into the branches (Geist 700 is
+ * about 0.58em a letter). */
+const clubLabel = (clubName: string) =>
+  clubName.length * LABEL_SIZE * 0.58 <= LABEL_ROOM ? clubName : getTeamAbbreviation(clubName);
 
 const columnLabel = ({ kind, season }: TreeColumn) =>
   kind === 'draft' ? ['Draft', `${season}`] : ['', `${season}`];
-const widthOf = (value: number | null, max: number) => 3 + (13 * Math.max(0, value ?? 0)) / max;
+/** A lane's stroke in the chart: 3px at 0 PAV to 16px at the top of the trade's scale. */
+const widthOf = (value: number | null, top: number) => 3 + (13 * Math.max(0, value ?? 0)) / top;
+/** A scale value as a label: "20", "1.5". */
+const scaleText = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(1));
+/** Where a value sits along a track, as a share of the trade's scale (0 to 100). */
+const along = (value: number, top: number) => Math.min(100, (100 * Math.max(0, value)) / top);
 
 /** What happened to a lane, in words, for the list and the chart's labels. */
 function pathText(lane: TreeLane): string {
@@ -122,30 +154,32 @@ function LaneMarks({
   const took = lane.player
     ? `; ${lane.player.clubName} took ${lane.player.name}${lane.drafted?.selection ? ` at ${lane.drafted.selection}` : ''}`
     : '';
+  const onwardNote = lane.onward
+    ? fitNote(`traded to ${lane.onward.clubNames.join(', then ')}`, took)
+    : '';
   return (
     <>
       {lane.drafted ? <circle cx={colX(lane.drafted.column)} cy={y} r="4" fill={INK} /> : null}
       {lane.drafted?.selection && !lane.onward ? (
-        <text x={colX(lane.drafted.column) + 8} y={y + w / 2 + 14} fontSize="12" fill={MUTED}>
+        <text x={colX(lane.drafted.column) + 8} y={y + w / 2 + 14} fontSize="14" fill={MUTED}>
           drafted at {lane.drafted.selection}
         </text>
       ) : null}
       {lane.onward ? (
         <>
-          <circle cx={onwardX} cy={y} r="9" fill={PAPER} stroke={INK} strokeWidth="1.5" />
-          <text x={onwardX} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={INK}>
+          <circle cx={onwardX} cy={y} r="11" fill={PAPER} stroke={INK} strokeWidth="1.5" />
+          <text x={onwardX} y={y + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill={INK}>
             ⇄
           </text>
-          <text x={stop - 2} y={y + w / 2 + 14} textAnchor="end" fontSize="12" fill={MUTED}>
-            traded to {lane.onward.clubNames.join(', then ')}
-            {took}
+          <text x={LANE_X} y={y + Math.max(w / 2, 11) + 16} fontSize="14" fill={MUTED}>
+            {onwardNote}
           </text>
         </>
       ) : null}
       {lane.endColumn !== null ? (
         <>
           <line x1={stop} y1={y - 7} x2={stop} y2={y + 7} stroke={INK} strokeWidth="1.5" />
-          <text x={stop - 4} y={y - 12} textAnchor="end" fontSize="12" fill={MUTED}>
+          <text x={stop - 4} y={y - 12} textAnchor="end" fontSize="14" fill={MUTED}>
             {lane.endReason === 'not_used' ? 'not used' : 'stint ended'}
           </text>
         </>
@@ -155,7 +189,7 @@ function LaneMarks({
 }
 
 /** The player the lane became, his club, and its PAV. */
-function BecameCell({ lane, y, colour }: { lane: TreeLane; y: number; colour: string }) {
+function BecameCell({ lane, y }: { lane: TreeLane; y: number }) {
   const away = lane.player?.away ?? false;
   const name = lane.player?.name ?? (lane.endReason === 'not_used' ? 'Not used' : 'Value pending');
   return (
@@ -163,7 +197,7 @@ function BecameCell({ lane, y, colour }: { lane: TreeLane; y: number; colour: st
       <text x={BECAME_X} y={y - 1} fontSize="14" fontWeight="700" fill={away ? MUTED : INK}>
         {name}
       </text>
-      <text x={BECAME_X} y={y + 15} fontSize="12" fill={MUTED}>
+      <text x={BECAME_X} y={y + 15} fontSize="14" fill={MUTED}>
         {lane.player?.clubName ?? ''}
         {lane.endReason === 'closed' ? ', stint ended' : ''}
       </text>
@@ -173,7 +207,7 @@ function BecameCell({ lane, y, colour }: { lane: TreeLane; y: number; colour: st
         textAnchor="end"
         fontSize={lane.value === null ? 15 : 30}
         fontWeight="600"
-        fill={away || lane.value === null ? MUTED : colour}
+        fill={away || lane.value === null ? MUTED : INK}
         className="tt-svg-num"
       >
         {valueText(lane)}
@@ -191,7 +225,6 @@ function TreeLaneRow({
   stop,
   fill,
   outlined,
-  colour,
 }: {
   lane: TreeLane;
   y: number;
@@ -200,11 +233,10 @@ function TreeLaneRow({
   stop: number;
   fill: (span: Span) => string;
   outlined: (span: Span) => boolean;
-  colour: string;
 }) {
   return (
     <g>
-      <text x={LANE_X} y={y - 12} fontSize="12.5" fontWeight="600" fill={INK}>
+      <text x={LANE_X} y={y - 12} fontSize="14" fontWeight="600" fill={INK}>
         {lane.label}
         {lane.via ? (
           <tspan fontWeight="400" fill={MUTED}>
@@ -215,7 +247,7 @@ function TreeLaneRow({
       </text>
       <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} fill={fill} outlined={outlined} />
       <LaneMarks lane={lane} y={y} w={w} colX={colX} stop={stop} />
-      <BecameCell lane={lane} y={y} colour={colour} />
+      <BecameCell lane={lane} y={y} />
     </g>
   );
 }
@@ -223,7 +255,7 @@ function TreeLaneRow({
 export function TradeTree({ story }: { story: AflTradeStory }) {
   const hatch = `tt-hatch-${useId().replace(/[^a-zA-Z0-9_-]/gu, '')}`;
   const tree = tradeTree(story);
-  const { columns, groups, maxValue } = tree;
+  const { columns, groups, scale } = tree;
   const clubIds = new Set(story.trade.clubs.map(({ clubId }) => clubId));
   const colX = (at: number) =>
     at < 0
@@ -247,8 +279,8 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
   const height = y - GAP + 8;
   const mid = (HEAD + 24 + height - 8 - ROW) / 2;
 
-  const fillFor = (clubId: string, receiverId: string, clubName: string) =>
-    clubId === receiverId || clubIds.has(clubId) ? clubStyle(clubName).fill : `url(#${hatch})`;
+  const fillFor = (clubId: string, receiverId: string) =>
+    clubId === receiverId ? INK : clubIds.has(clubId) ? MUTED : `url(#${hatch})`;
 
   const kept = groups
     .map(({ clubName, kept: value }) => `${clubName} kept ${formatPav(value)}`)
@@ -256,7 +288,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
   const elsewhere = groups.reduce((total, { elsewhere: value }) => total + value, 0);
 
   return (
-    <section aria-labelledby="lineage-title" className={`tt ${STORY_FONT_CLASS}`}>
+    <section aria-labelledby="lineage-title" className="tt">
       <h2 id="lineage-title" className="tt-title">
         Where the trade went
       </h2>
@@ -266,14 +298,18 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
         {elsewhere > 0 ? `; ${formatPav(elsewhere)} went to other clubs` : ''}.
       </p>
       <ul className="tt-key" aria-label="Key">
-        {story.trade.clubs.map((club) => (
-          <li key={club.clubId}>
-            <svg aria-hidden="true" width="26" height="10">
-              <rect width="26" height="10" fill={clubStyle(club.clubName).fill} />
-            </svg>
-            {club.clubName}
-          </li>
-        ))}
+        <li>
+          <svg aria-hidden="true" width="26" height="10">
+            <rect width="26" height="10" fill={INK} />
+          </svg>
+          held by the club that received it
+        </li>
+        <li>
+          <svg aria-hidden="true" width="26" height="10">
+            <rect width="26" height="10" fill={MUTED} />
+          </svg>
+          held by another club in the trade
+        </li>
         <li>
           <svg aria-hidden="true" width="26" height="10">
             <defs>
@@ -315,7 +351,22 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
           </svg>
           traded
         </li>
-        <li>Line thickness is PAV.</li>
+        <li className="tt-thickness">
+          Thickness is PAV:
+          {[scale.ticks[0]!, scale.top].map((value) => (
+            <span key={value} className="tt-thickness-sample">
+              <svg aria-hidden="true" width="26" height="16">
+                <rect
+                  y={8 - widthOf(value, scale.top) / 2}
+                  width="26"
+                  height={widthOf(value, scale.top)}
+                  fill={INK}
+                />
+              </svg>
+              {scaleText(value)} PAV
+            </span>
+          ))}
+        </li>
       </ul>
 
       <div className="tt-chart">
@@ -346,7 +397,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                   strokeDasharray="2 4"
                 />
                 {kicker ? (
-                  <text x={colX(at)} y={HEAD - 20} textAnchor="middle" fontSize="12" fill={MUTED}>
+                  <text x={colX(at)} y={HEAD - 20} textAnchor="middle" fontSize="14" fill={MUTED}>
                     {kicker}
                   </text>
                 ) : null}
@@ -354,7 +405,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                   x={colX(at)}
                   y={HEAD - 4}
                   textAnchor="middle"
-                  fontSize="13"
+                  fontSize="14"
                   fontWeight="600"
                   fill={INK}
                 >
@@ -363,47 +414,63 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
               </g>
             );
           })}
-          <text x={BECAME_X} y={HEAD - 4} fontSize="13" fontWeight="600" fill={INK}>
+          <text x={BECAME_X} y={HEAD - 4} fontSize="14" fontWeight="600" fill={INK}>
             Became
           </text>
-          <text x={W} y={HEAD - 4} textAnchor="end" fontSize="13" fontWeight="600" fill={INK}>
+          <text x={W} y={HEAD - 4} textAnchor="end" fontSize="14" fontWeight="600" fill={INK}>
             PAV
           </text>
           <line x1={BECAME_X} y1={HEAD + 4} x2={W} y2={HEAD + 4} stroke={INK} strokeWidth="1" />
 
           {/* The trade, branching to each club and then to each lane. */}
           {rows.map(({ group, lanes }) => {
-            const style = clubStyle(group.clubName);
+            const square = clubSquare(group.clubName);
             const top = lanes[0]!.y;
             const bottom = lanes.at(-1)!.y;
             const groupMid = (top + bottom) / 2;
+            const labelY = groupMid;
+            const label = clubLabel(group.clubName);
             const trunk = Math.min(
               18,
-              lanes.reduce((total, { lane }) => total + widthOf(lane.value, maxValue), 0) * 0.6
+              lanes.reduce((total, { lane }) => total + widthOf(lane.value, scale.top), 0) * 0.6
             );
             const jx = TREE_X + 60;
             return (
               <g key={group.clubId}>
+                {/* Two short lines in Geist left of the knot; a name too long for the space is
+                    its abbreviation. The square is 14 units, about 12-13px as the chart scales. */}
+                <rect
+                  x="0.75"
+                  y={labelY - 15.25}
+                  width="14"
+                  height="14"
+                  fill={square.fill}
+                  stroke={square.edged ? INK : 'none'}
+                  strokeWidth="1.5"
+                />
                 <text
-                  x="0"
-                  y={groupMid + 5}
-                  fontSize="17"
-                  fontWeight="600"
-                  fill={style.fill}
+                  x="21"
+                  y={labelY - 2}
+                  fontSize={LABEL_SIZE}
+                  fontWeight="700"
+                  fill={INK}
                   className="tt-svg-label"
                 >
-                  {group.clubName} received
+                  {label}
+                  <tspan x="21" dy="17" fontSize="14" fontWeight="400" fill={MUTED}>
+                    received
+                  </tspan>
                 </text>
                 <path
                   d={`M${TREE_X},${mid} C${TREE_X + 30},${mid} ${jx - 30},${groupMid} ${jx},${groupMid}`}
                   fill="none"
-                  stroke={style.fill}
+                  stroke={INK}
                   strokeWidth={trunk}
                   strokeLinecap="round"
                 />
                 {lanes.map(({ lane, y: laneY }) => {
                   const pick = lane.spans[0]!.pick;
-                  const w = widthOf(lane.value, maxValue);
+                  const w = widthOf(lane.value, scale.top);
                   const d = `M${jx},${groupMid} C${jx + 22},${groupMid} ${LANE_X - 22},${laneY} ${LANE_X},${laneY}`;
                   return pick ? (
                     <Fragment key={lane.asset.transferId}>
@@ -415,7 +482,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                       key={lane.asset.transferId}
                       d={d}
                       fill="none"
-                      stroke={style.fill}
+                      stroke={INK}
                       strokeWidth={w}
                     />
                   );
@@ -434,37 +501,56 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
           >
             ⇄
           </text>
-          <text x="0" y={mid - 4} fontSize="16" fontWeight="600" fill={INK}>
+          {/* The knot's name heads its column, like the seasons, so the club labels beside the
+              knot never meet it. */}
+          <text x="0" y={HEAD - 20} fontSize="14" fontWeight="700" fill={INK}>
             The trade
           </text>
-          <text x="0" y={mid + 13} fontSize="12" fill={MUTED}>
+          <text x="0" y={HEAD - 4} fontSize="14" fill={MUTED}>
             {story.trade.year} trade period
           </text>
 
           {/* Each lane through time. */}
-          {rows.flatMap(({ group, lanes }) =>
+          {rows.flatMap(({ lanes }) =>
             lanes.map(({ lane, y: laneY }) => (
               <TreeLaneRow
                 key={lane.asset.transferId}
                 lane={lane}
                 y={laneY}
-                w={widthOf(lane.value, maxValue)}
+                w={widthOf(lane.value, scale.top)}
                 colX={colX}
                 stop={lane.endColumn === null ? endX : colX(lane.endColumn)}
-                fill={(span) => fillFor(span.clubId, lane.receiverId, span.clubName)}
+                fill={(span) => fillFor(span.clubId, lane.receiverId)}
                 outlined={(span) => span.clubId !== lane.receiverId && !clubIds.has(span.clubId)}
-                colour={clubStyle(group.clubName).fill}
               />
             ))
           )}
         </svg>
       </div>
 
+      <div className="tt-scale" aria-hidden="true">
+        <span className="tt-scale-axis">
+          <span>0</span>
+          {scale.ticks.map((tick) => (
+            <span
+              key={tick}
+              className="tt-scale-tick"
+              style={{ left: `${along(tick, scale.top)}%` }}
+            >
+              {scaleText(tick)}
+            </span>
+          ))}
+          <span>{scaleText(scale.top)} PAV</span>
+        </span>
+      </div>
       <ol className="tt-list" aria-label="Every pick and player, and what it became">
         {groups.map((group) => (
           <li key={group.clubId} className="tt-group">
             <h3>
-              {group.clubName} received
+              <span className="inline-flex items-center gap-2">
+                <ClubBadge clubName={group.clubName} named />
+                {group.clubName} received
+              </span>
               <small>
                 {formatPav(group.kept)} PAV kept
                 {group.elsewhere > 0 ? ` · ${formatPav(group.elsewhere)} went elsewhere` : ''}
@@ -484,16 +570,23 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                     ) : null}
                   </p>
                   {pathText(lane) ? <p className="tt-path">{pathText(lane)}</p> : null}
-                  <span
-                    aria-hidden="true"
-                    className="tt-weight"
-                    style={{
-                      width: `${Math.max(2, (100 * Math.max(0, lane.value ?? 0)) / maxValue)}%`,
-                      background: lane.player?.away
-                        ? `repeating-linear-gradient(135deg, ${INK} 0 2px, ${PAPER} 2px 5px)`
-                        : clubStyle(group.clubName).fill,
-                    }}
-                  />
+                  {/* One track per lane, the trade's whole scale long, so bars compare across
+                      clubs; a value not in yet leaves the track empty. */}
+                  <span aria-hidden="true" className="tt-track">
+                    {scale.ticks.map((tick) => (
+                      <span
+                        key={tick}
+                        className="tt-track-tick"
+                        style={{ left: `${along(tick, scale.top)}%` }}
+                      />
+                    ))}
+                    {lane.value === null ? null : (
+                      <span
+                        className={lane.player?.away ? 'tt-weight tt-weight-away' : 'tt-weight'}
+                        style={{ width: `${along(lane.value, scale.top)}%` }}
+                      />
+                    )}
+                  </span>
                   <span
                     className={lane.value === null ? 'tt-num tt-num-words' : 'tt-num'}
                     style={{

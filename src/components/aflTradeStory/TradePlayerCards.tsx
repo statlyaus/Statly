@@ -62,28 +62,26 @@ function PlayerCard({
   const share = bidShareOf(player, shares);
   const holder = outcome.kind === 'player' || outcome.kind === 'bid_share' ? outcome : null;
   return (
-    <li
-      className={`rounded-xl border border-(--ts-line) p-4 ${away ? 'bg-(--ts-bg2)' : 'bg-(--ts-surface)'}`}
-    >
+    <li className={`border border-border p-4 ${away ? 'bg-muted' : 'bg-card'}`}>
       <h4 className="flex items-center gap-2 font-semibold">
         <ClubBadge clubName={player.clubName} />
         {name}
       </h4>
-      <p className="mt-1.5 ts-body text-(--ts-ink2)">
+      <p className="mt-1.5 ts-body text-muted-foreground">
         {acquiredText(player, clubNames, tradeYears)}
       </p>
       <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5">
         <span className="ts-head font-semibold tabular-nums">
           {valueText(player.value, outcome) ?? '—'}
         </span>
-        <span className="ts-small text-(--ts-muted)">
+        <span className="ts-small text-muted-foreground">
           {value === null ? (
             'value not in yet'
           ) : outcome.kind === 'bid_share' ? (
             share ? (
               <a
                 href={`#${bidShareAnchor(player.assetId)}`}
-                className="text-(--ts-accent) underline underline-offset-2"
+                className="text-primary underline underline-offset-2"
               >
                 PAV, share of {outcome.playerName}
               </a>
@@ -100,10 +98,10 @@ function PlayerCard({
         </span>
       </p>
       {holder ? (
-        <p className="mt-2 flex items-center gap-1.5 ts-small text-(--ts-ink2)">
+        <p className="mt-2 flex items-center gap-1.5 ts-small text-muted-foreground">
           <span
             aria-hidden="true"
-            className={`inline-block size-2 rounded-full ${player.stillAtClub ? 'bg-(--ts-live)' : 'border border-(--ts-muted)'}`}
+            className={`inline-block size-2 rounded-full ${player.stillAtClub ? 'bg-foreground' : 'border border-muted-foreground'}`}
           />
           {outcome.kind === 'bid_share' ? `${holder.playerName} ` : ''}
           {player.stillAtClub
@@ -111,10 +109,10 @@ function PlayerCard({
             : `${outcome.kind === 'bid_share' ? 'left' : 'Left'} ${holder.clubName} · value is final`}
         </p>
       ) : null}
-      <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full bg-(--ts-bg2)">
+      <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden bg-muted">
         {value !== null && maxValue > 0 ? (
           <span
-            className={`block h-full rounded-full ${away ? 'bg-(--ts-muted)' : 'bg-(--ts-accent)'}`}
+            className={`block h-full ${away ? 'bg-muted-foreground' : 'bg-primary'}`}
             style={{ width: `${Math.max(1, (Math.max(0, value) / maxValue) * 100)}%` }}
           />
         ) : null}
@@ -157,7 +155,7 @@ export function TradePlayerCards({
       <h2 id="players-title" className="ts-head font-semibold">
         Who they ended up with
       </h2>
-      <p className="mt-1 text-(--ts-ink2)">
+      <p className="mt-1 text-muted-foreground">
         Each player, after every later trade. A green dot means the player is still at the club.
       </p>
       {groups.map((group) => (

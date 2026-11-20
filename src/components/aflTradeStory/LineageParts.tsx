@@ -1,3 +1,4 @@
+import { chipStyles } from '@/components/ui/controlStyles';
 import type { AflTradeStoryLineageAsset } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 import { bidShareAnchor } from './BidMatchShareCard';
@@ -28,11 +29,7 @@ export function TradeButton({
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
-      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-2 bg-(--ts-surface) px-3 ts-body font-semibold ${
-        open
-          ? 'border-(--ts-accent) text-(--ts-accent)'
-          : 'border-(--ts-line) hover:border-(--ts-muted)'
-      }`}
+      className={chipStyles({ picked: open })}
     >
       <span aria-hidden="true">{label}</span>
       <span className="sr-only">
@@ -45,7 +42,7 @@ export function TradeButton({
 export const Connector = ({ dashed }: { dashed?: boolean }) => (
   <span
     aria-hidden="true"
-    className={`h-0 w-5 flex-none border-t-2 sm:w-8 ${dashed ? 'border-dashed border-(--ts-muted)' : 'border-(--ts-accent)'}`}
+    className={`h-0 w-5 flex-none border-t-2 sm:w-8 ${dashed ? 'border-dashed border-muted-foreground' : 'border-primary'}`}
   />
 );
 
@@ -68,14 +65,14 @@ export function Outcome({
   )
     return (
       <span className="inline-flex flex-wrap items-center gap-2 ts-body">
-        <span className="rounded-md bg-(--ts-bid-soft) px-2 py-0.5 ts-small font-bold tracking-wide text-(--ts-bid)">
+        <span className="rounded-md border border-current bg-muted px-2 py-0.5 ts-small font-bold tracking-wide text-warning-text">
           BID MATCH
         </span>
         {outcome.kind === 'bid_share' && value !== null ? (
           share ? (
             <a
               href={`#${bidShareAnchor(asset.assetId)}`}
-              className="text-(--ts-accent) underline underline-offset-2"
+              className="text-primary underline underline-offset-2"
             >
               Share of {outcome.playerName}: {formatPav(value, 2)}
             </a>
@@ -85,18 +82,18 @@ export function Outcome({
             </span>
           )
         ) : (
-          <span className="text-(--ts-ink2)">Value pending</span>
+          <span className="text-muted-foreground">Value pending</span>
         )}
       </span>
     );
   if (outcome.kind === 'pending')
     return (
-      <span className="ts-body text-(--ts-ink2)">
+      <span className="ts-body text-muted-foreground">
         Value pending: {PENDING_TEXT[outcome.pending]}
       </span>
     );
   if (outcome.kind === 'not_used')
-    return <span className="ts-body text-(--ts-ink2)">Not used · 0.0</span>;
+    return <span className="ts-body text-muted-foreground">Not used · 0.0</span>;
   if (outcome.kind === 'pick')
     return (
       <span className="ts-body">
@@ -111,20 +108,20 @@ export function Outcome({
       <span className="ts-body">
         <span className="font-semibold">{outcome.playerName}</span>
         {outcome.selection ? (
-          <span className="text-(--ts-ink2)">
+          <span className="text-muted-foreground">
             {' '}
             (pick {outcome.selection.selectionNumber}, {outcome.selection.draftYear})
           </span>
         ) : null}
-        {away ? <span className="text-(--ts-ink2)"> at {outcome.clubName}</span> : null} ·{' '}
+        {away ? <span className="text-muted-foreground"> at {outcome.clubName}</span> : null} ·{' '}
         <span className="font-semibold tabular-nums">{formatPav(shown)}</span>
       </span>
       <span aria-hidden="true" className="block h-2.5">
         <span
-          className={`block h-full rounded-full border-2 ${
+          className={`block h-full border-2 ${
             away
-              ? 'border-dashed border-(--ts-muted) bg-transparent'
-              : 'border-(--ts-accent) bg-(--ts-accent)/30'
+              ? 'border-dashed border-muted-foreground bg-transparent'
+              : 'border-primary bg-primary/30'
           }`}
           style={{
             width: `${Math.max(10, maxValue > 0 ? (Math.max(0, shown) / maxValue) * BAR_WIDTH : 0)}px`,

@@ -104,7 +104,9 @@ export function TradeCollage({ story, headline }: { story: AflTradeStory; headli
   const tied = headline === 'Level so far' || !leader;
   const leaderStyle = leader ? clubStyle(leader.clubName) : null;
   return (
-    <header className={`${STORY_COLLAGE_CLASS} tc`}>
+    // data-collage: the head is a story collage the owner is redesigning (ticket 06h); the brand
+    // conformance check in tests/e2e/public-trades-brand.test.ts skips it.
+    <header className={`${STORY_COLLAGE_CLASS} tc`} data-collage>
       <div className="sc-bar sc-label" style={{ fontSize: 15 }}>
         <span>AFL trades · {story.trade.year}</span>
         <span>{tradeName(story.trade.clubs)}</span>

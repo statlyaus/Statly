@@ -108,7 +108,8 @@ export function TowerLadder({
   const anyProvisional = ladder.some(({ provisional }) => provisional);
 
   return (
-    <section aria-labelledby="trade-ladder" className={STORY_COLLAGE_CLASS}>
+    // data-collage: the tower is a story graphic the owner is redesigning (ticket 06h).
+    <section aria-labelledby="trade-ladder" className={STORY_COLLAGE_CLASS} data-collage>
       <div className="sc-wrap tl">
         <div className="tl-head-row">
           <h2 id="trade-ladder" className="tl-title">

@@ -69,7 +69,7 @@ export function Panels({
   bandMid: number;
 }) {
   if (players.length === 0)
-    return <rect x={start} y={0} width={end - start} height={HEIGHT} fill="var(--ts-bar)" />;
+    return <rect x={start} y={0} width={end - start} height={HEIGHT} fill="var(--border)" />;
   const width = (end - start) / players.length;
   return (
     <>
@@ -134,14 +134,8 @@ export function EndBlock({
   const rowHeight = (height - 28) / Math.max(nets.length, 1);
   return (
     <g>
-      <rect x={x} y={top} width={END_BLOCK} height={height} fill="var(--ts-scarf-side)" />
-      <text
-        x={x + END_BLOCK / 2}
-        y={top + 20}
-        textAnchor="middle"
-        fontSize={13}
-        fill="var(--ts-scarf-side-ink)"
-      >
+      <rect x={x} y={top} width={END_BLOCK} height={height} fill="var(--foreground)" />
+      <text x={x + END_BLOCK / 2} y={top + 20} textAnchor="middle" fontSize={13} fill="var(--card)">
         {throughSeason}
       </text>
       {nets.map((net, index) => {
@@ -186,26 +180,26 @@ export function Callout({
   const labelWidth = step.label.length * 8.5 + 20;
   return (
     <g>
-      <line x1={x} y1={pinStart} x2={x} y2={pinEnd} stroke="var(--ts-pin)" strokeWidth={1.5} />
+      <line x1={x} y1={pinStart} x2={x} y2={pinEnd} stroke="var(--foreground)" strokeWidth={1.5} />
       <circle
         cx={x}
         cy={above ? pinStart : pinEnd}
         r={5}
-        fill="var(--ts-scarf-bg)"
-        stroke="var(--ts-pin)"
+        fill="var(--muted)"
+        stroke="var(--foreground)"
         strokeWidth={1.5}
       />
-      <circle cx={x} cy={above ? pinEnd : pinStart} r={3.5} fill="var(--ts-pin)" />
+      <circle cx={x} cy={above ? pinEnd : pinStart} r={3.5} fill="var(--foreground)" />
       <rect
         x={x - 10}
         y={boxTop}
         width={labelWidth}
         height={26}
-        fill="var(--ts-surface)"
-        stroke={major ? 'var(--ts-bid)' : 'var(--ts-ink)'}
+        fill="var(--card)"
+        stroke={major ? 'var(--warning-text)' : 'var(--foreground)'}
         strokeWidth={major ? 2 : 1}
       />
-      <text x={x} y={boxTop + 18} fontSize={14} fontWeight={600} fill="var(--ts-ink)">
+      <text x={x} y={boxTop + 18} fontSize={14} fontWeight={600} fill="var(--foreground)">
         {step.label}
       </text>
       <text
@@ -213,7 +207,7 @@ export function Callout({
         y={boxTop + 50}
         fontSize={16}
         fontWeight={700}
-        fill={major ? 'var(--ts-bid)' : 'var(--ts-ink)'}
+        fill={major ? 'var(--warning-text)' : 'var(--foreground)'}
       >
         {step.title}
       </text>
@@ -223,7 +217,7 @@ export function Callout({
           x={x - 10}
           y={boxTop + 70 + index * 17}
           fontSize={14}
-          fill="var(--ts-ink2)"
+          fill="var(--muted-foreground)"
         >
           {line}
         </text>
