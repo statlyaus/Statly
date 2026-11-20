@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('@/lib/data', () => ({ getPlayers: mocks.getPlayers }));
-vi.mock('../../src/lib/data', () => ({ getPlayers: mocks.getPlayers }));
+vi.mock('@/server/players/playerPoolReadModel', () => ({
+  listPoolPlayers: mocks.getPlayers,
+  listStatSeasons: async () => [2026, 2025],
+}));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: { collection: mocks.collection } }));
 vi.mock('../../src/lib/firebaseAdmin', () => ({ adminDb: { collection: mocks.collection } }));
 vi.mock('@/lib/rateLimit', () => ({
@@ -60,6 +62,15 @@ describe('player search route', () => {
       totalGames: 10,
     });
     expect(mocks.collection).not.toHaveBeenCalled();
+    expect(mocks.getPlayers).toHaveBeenCalledWith({ query: 'naughton', season: 2026 });
+  });
+
+  it('returns nothing for a query of spaces', async () => {
+    const { GET } = await import('@/app/api/players/search/route');
+    const response = await GET(search('   '));
+
+    await expect(response.json()).resolves.toEqual({ players: [] });
+    expect(mocks.getPlayers).not.toHaveBeenCalled();
   });
 
   it('returns nothing for queries shorter than two characters', async () => {

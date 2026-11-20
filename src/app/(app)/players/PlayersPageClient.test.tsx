@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
+import { vi } from 'vitest';
+
 import type { Player } from '@/types/players';
+
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 import PlayersPageClient from './PlayersPageClient';
 
@@ -27,7 +32,7 @@ const bodyRows = () => within(screen.getByRole('table')).getAllByRole('row').sli
 
 describe('PlayersPageClient', () => {
   it('lists players in a table of per-game averages for the default categories', () => {
-    render(<PlayersPageClient players={[makePlayer(3)]} />);
+    render(<PlayersPageClient players={[makePlayer(3)]} seasons={[2025]} season={2025} />);
 
     expect(screen.getByRole('heading', { level: 1, name: 'Players' })).toBeInTheDocument();
     const header = within(screen.getByRole('table')).getAllByRole('columnheader');
@@ -77,6 +82,8 @@ describe('PlayersPageClient', () => {
             },
           }),
         ]}
+        seasons={[2025]}
+        season={2025}
       />
     );
 
@@ -88,7 +95,7 @@ describe('PlayersPageClient', () => {
   });
 
   it('sorts by a category from its column header, best first', () => {
-    render(<PlayersPageClient players={makePlayers(3)} />);
+    render(<PlayersPageClient players={makePlayers(3)} seasons={[2025]} season={2025} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Goals' }));
 
@@ -102,7 +109,7 @@ describe('PlayersPageClient', () => {
   });
 
   it('states how many matching players are shown and reveals the rest on request', () => {
-    render(<PlayersPageClient players={makePlayers(60)} />);
+    render(<PlayersPageClient players={makePlayers(60)} seasons={[2025]} season={2025} />);
 
     expect(bodyRows()).toHaveLength(50);
     expect(screen.getByText('Showing 50 of 60 players')).toBeInTheDocument();
@@ -114,7 +121,7 @@ describe('PlayersPageClient', () => {
   });
 
   it('starts again from the first page when the search or club changes', () => {
-    render(<PlayersPageClient players={makePlayers(120)} />);
+    render(<PlayersPageClient players={makePlayers(120)} seasons={[2025]} season={2025} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show 50 more players' }));
     expect(bodyRows()).toHaveLength(100);
@@ -127,12 +134,35 @@ describe('PlayersPageClient', () => {
   });
 
   it('explains an empty result', () => {
-    render(<PlayersPageClient players={makePlayers(2)} />);
+    render(<PlayersPageClient players={makePlayers(2)} seasons={[2025]} season={2025} />);
 
     fireEvent.change(screen.getByLabelText('Search players'), { target: { value: 'nobody' } });
 
     expect(screen.getByText('No players match those filters')).toBeInTheDocument();
     expect(screen.getByText('Showing 0 players')).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('picks the stats season, reloading the page for it', () => {
+    push.mockReset();
+    render(<PlayersPageClient players={[makePlayer(1)]} seasons={[2026, 2025]} season={2026} />);
+
+    const picker = screen.getByRole('combobox', { name: 'Stats season' });
+    expect(picker).toHaveValue('2026');
+    expect(
+      within(picker)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(['2026', '2025']);
+    expect(screen.getByText(/, 2026 season\./)).toBeInTheDocument();
+
+    fireEvent.change(picker, { target: { value: '2025' } });
+    expect(push).toHaveBeenCalledWith('/players?season=2025');
+  });
+
+  it('shows no season picker when no season has stats yet', () => {
+    render(<PlayersPageClient players={[makePlayer(1)]} seasons={[]} season={null} />);
+
+    expect(screen.queryByRole('combobox', { name: 'Stats season' })).not.toBeInTheDocument();
   });
 });
