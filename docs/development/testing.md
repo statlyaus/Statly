@@ -2,6 +2,23 @@
 
 ## Supported checks
 
+Before each commit, run the changed-file check. It is the default pre-commit check for agents; do not
+chain Prettier, ESLint, `tsc` and Vitest by hand:
+
+```sh
+npm run check:changed            # against the merge base with origin/main
+npm run check:changed -- <base>  # against another commit or branch
+```
+
+It takes every file changed since the merge base (committed, staged, unstaged and untracked; deleted
+files excluded) and runs `prettier --check`, ESLint with the CI rules on changed JS/TS files,
+`npm run typecheck` once if application TypeScript changed, `npm run typecheck:tests` once if test
+TypeScript changed, and `vitest related --run` with the unit config. Files under `functions/` and
+`etl/` get Prettier only; their packages own their own checks. It prints a pass/FAIL/skip line per
+step and exits non-zero if any step failed. A Prettier failure is fixed with
+`npx prettier --write <file>`. `npm run lint:changed -- <base-sha>` remains the narrower zero-warning
+ESLint ratchet on changed `src` files.
+
 Run the narrowest check while editing, then the complete relevant set before publishing:
 
 ```sh
@@ -452,19 +469,22 @@ data runners, and reproduction steps must not read from or write to it.
 
 Integration tests use `DATABASE_URL_TEST` and then assign that value to `DATABASE_URL` inside their
 test setup. The suite applies migrations to that database first, files run one at a time, and each
-file deletes only its own fixtures. For an ad hoc Prisma verification, create a disposable database
-on your PostgreSQL server and point both connection variables at it:
+file deletes only its own fixtures. For an ad hoc Prisma verification, make a disposable database
+with `db:scratch`. It creates `statly_scratch_<name>` on the local Homebrew PostgreSQL 16 server,
+applies the migrations, and prints export lines for both `DATABASE_URL` and `DIRECT_DATABASE_URL`, so
+Prisma cannot fall back to the development database in `.env`:
 
 ```sh
-createdb statly_verify_scratch
-export DATABASE_URL="postgresql://statly:change-me@127.0.0.1:5432/statly_verify_scratch"
-export DIRECT_DATABASE_URL="$DATABASE_URL"
+eval "$(npm run -s db:scratch -- up verify)"
 npm run prisma:generate
-npx prisma migrate deploy
+# ... run the verification ...
+npm run db:scratch -- down verify
 ```
 
-Drop the disposable database by its exact name after verification, and only when it holds no
-required evidence. Never drop the development or test database.
+`up` on an existing scratch database reuses it and applies any new migrations. The script handles only
+`statly_scratch_` databases and refuses `statly_fantasy_dev`, `statly_fantasy_test` and every other
+name, so it cannot drop the development or test database. Drop a scratch database only when it holds no
+required evidence. `PGHOST`, `PGPORT` and `PGUSER` override the default `127.0.0.1:5432` and Mac user.
 
 The public AFL outcomes authority uses its own PostgreSQL schema and migration history. Its supported
 local integration command requires a running Docker daemon and provisions PostgreSQL 16 itself:

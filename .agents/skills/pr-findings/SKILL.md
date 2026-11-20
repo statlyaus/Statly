@@ -15,8 +15,19 @@ The desktop app does. With Auto-fix on, it wakes this session on CI failures, me
 review comments, and auto-merge lands the pull request when the gate passes. It does not wake you
 when checks go green or the branch falls BEHIND, so read `get_status` on every wake and every turn,
 and update a BEHIND branch then. Never write a watcher,
-polling loop or `sleep` loop, never schedule a wakeup or a Monitor for CI, and never run upstream's
-`pr-wait`. Every watcher on the GitHub account shares one rate limit.
+polling loop or `sleep` loop, never schedule a wakeup for CI, and never run upstream's
+`pr-wait`. Every watcher on the GitHub account shares one rate limit. The one sanctioned wait is
+`Scripts/ci/await-pr.sh <n>`, for a session that must run steps after its own pull request merges:
+run it with Bash `run_in_background` (or the Monitor tool), and it polls once a minute and exits
+with one line (`MERGED <sha>`, `FAILED <checks>`, `CHANGES_REQUESTED`, `BEHIND`, `DIRTY`, `CLOSED`
+or `TIMEOUT`). Anything but `MERGED` is a finding to handle below.
+
+## First step on every wake
+
+Run `Scripts/ci/pr-failures.sh <n>` before anything else. One call prints the merge state, each
+failing check with its job and the first error lines of its log, and the unresolved review
+threads as `path:line`. Do not hand-roll `gh pr checks`, `gh run view` and grep. It falls back to
+REST when GraphQL is used up and says so.
 
 "Babysit" in this repository means: bind the pull request, turn on Auto-fix and auto-archive, end
 the turn, and act on each wake. Leave auto-merge as you find it: `file-pr` is the only place that

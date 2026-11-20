@@ -1,8 +1,10 @@
 # Statly setup constraints
 
-Apply these repository-owned constraints whenever `setup-matt-pocock-skills` runs. They replace the
-upstream setup defaults where those defaults conflict with Statly's existing sources of truth. Do
-not edit the copied upstream skill to encode these rules.
+The upstream `setup-matt-pocock-skills` skill is not installed. These repository-owned constraints are
+the configuration it would have recorded; apply them wherever an upstream skill such as `to-spec` or
+`to-tickets` expects that setup. They replace the upstream setup defaults where those defaults
+conflict with Statly's existing sources of truth. Do not edit the copied upstream skills to encode
+these rules.
 
 ## Approved decisions
 
