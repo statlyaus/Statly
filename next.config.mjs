@@ -31,10 +31,6 @@ const nextConfig = {
   images: {
     localPatterns: [
       {
-        pathname: '/Assets/statly-stadium-hero.png',
-        search: '?v=20260705b',
-      },
-      {
         pathname: '/brand/**',
       },
     ],
