@@ -2,7 +2,7 @@
 
 # Statly ETL Pipeline Deployment Script
 
-set -e
+set -euo pipefail
 
 echo "🚀 Deploying Statly ETL Pipeline"
 echo "================================"

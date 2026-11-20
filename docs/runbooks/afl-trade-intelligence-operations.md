@@ -3020,7 +3020,7 @@ validation, hosted deployment, and production activation remain separate later p
 For interactive inspection after the disposable proof passes, start the complete local stack:
 
 ```sh
-npm run dev:full:all
+npm run dev:full:local
 ```
 
 The launcher owns loopback PostgreSQL on port `55432`, stores projection envelopes below ignored
