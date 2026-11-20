@@ -166,7 +166,11 @@ describe('public trade pages', () => {
       await PublicClubChainsPage(params({ clubId: 'x' })),
     ]) {
       const { unmount } = render(page);
-      expect(screen.getByText(/not available right now/u)).toBeVisible();
+      expect(
+        screen.getByText(
+          'Trade records are unavailable. This page cannot load until they are back.'
+        )
+      ).toBeVisible();
       unmount();
     }
     expect(notFoundMock).not.toHaveBeenCalled();

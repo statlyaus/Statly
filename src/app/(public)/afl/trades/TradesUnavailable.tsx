@@ -6,8 +6,7 @@ export function TradesUnavailable() {
     <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="text-3xl font-semibold text-foreground">AFL trades</h1>
       <p className="mt-3 max-w-[60ch] text-muted-foreground">
-        The trade pages are not available right now. Nothing is wrong with your link: the graded
-        trade data is not being served at the moment. Please try again later.
+        Trade records are unavailable. This page cannot load until they are back.
       </p>
       <p className="mt-6">
         <Link

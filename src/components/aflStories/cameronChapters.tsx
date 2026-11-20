@@ -70,7 +70,7 @@ function CircledPick({ pick }: { pick: string }) {
 
 export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
   {
-    kicker: 'Chapter 01 — Home',
+    kicker: 'Chapter 01: Home',
     when: '2010',
     slip: ['2010', 'Dartmoor'],
     slipColour: '#FBFAF6',
@@ -101,7 +101,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
         <Tape left="5%" top="2%" width="13%" rotate={-9} z={5} />
         <Tape left="47%" top="3%" width="12%" rotate={7} z={5} />
         <Hand size="xl" left="4%" top="66%" rotate={-2}>
-          Dartmoor, Vic. — pop. ~150
+          Dartmoor, Vic. Pop. ~150
         </Hand>
         <Sketch name="underline" left="4%" top="77%" width="28%" rotate={-2} z={1} />
         <div
@@ -144,7 +144,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     ],
   },
   {
-    kicker: 'Chapter 02 — The Giants',
+    kicker: 'Chapter 02: The Giants',
     when: '2012–2019',
     slip: ['2012–19', 'The Giants'],
     slipColour: '#F7C9B3',
@@ -201,7 +201,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     ],
   },
   {
-    kicker: 'Chapter 03 — The trade',
+    kicker: 'Chapter 03: The trade',
     when: '2020',
     slip: ['2020', 'The trade'],
     slipColour: '#FBFAF6',
@@ -295,7 +295,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     ],
   },
   {
-    kicker: 'Chapter 04 — New stripes',
+    kicker: 'Chapter 04: New stripes',
     when: '2021',
     slip: ['2021', 'New stripes'],
     slipColour: '#C9D6E8',
@@ -367,7 +367,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     ],
   },
   {
-    kicker: 'Chapter 05 — The season',
+    kicker: 'Chapter 05: The season',
     when: '2022',
     slip: ['2022', 'The season'],
     slipColour: '#FBFAF6',
@@ -412,7 +412,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     ],
   },
   {
-    kicker: 'Chapter 06 — Grand final',
+    kicker: 'Chapter 06: Grand final',
     when: '24.09.22',
     slip: ['24.09.22', 'Premiers'],
     slipColour: '#C9D6E8',

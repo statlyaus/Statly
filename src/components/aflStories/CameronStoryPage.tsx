@@ -38,7 +38,7 @@ export function CameronStoryPage({ tradeHref }: { tradeHref: string | null }) {
       >
         <div className="sc-bar sc-label" style={{ fontSize: 15 }}>
           <span>AFL stories · Jeremy Cameron</span>
-          <span>2010 — 2022</span>
+          <span>2010–22</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2.5rem', alignItems: 'center' }}>
           <div

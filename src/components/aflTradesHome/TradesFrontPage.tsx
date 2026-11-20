@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react';
-
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
@@ -65,16 +63,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
       </section>
 
       <section aria-label="The record deal" className={STORY_COLLAGE_CLASS}>
-        <div
-          className="sc-wrap"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2.5rem',
-            paddingTop: '1rem',
-            paddingBottom: '3rem',
-          }}
-        >
+        <div className="sc-wrap flex flex-col gap-12 pt-4 pb-12">
           {cameron ? (
             <RecordBanner
               href={tradeStoryHref(cameron.story.tradeId, 'public')}
@@ -84,38 +73,14 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
           ) : null}
           <div
             id="record-deal"
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'flex-end',
-              gap: '1.5rem 3rem',
-              paddingTop: '2rem',
-              scrollMarginTop: '5rem',
-            }}
+            className="flex scroll-mt-20 flex-wrap items-end gap-x-12 gap-y-6 pt-8"
           >
-            <div style={{ '--sc-title-size': 'clamp(44px, 4.8vw, 78px)' } as CSSProperties}>
+            <div className="[--sc-title-size:clamp(44px,4.8vw,78px)]">
               <CameronTitle as="p" />
             </div>
-            <div
-              style={{
-                flex: '1 1 22rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem',
-                maxWidth: '36rem',
-              }}
-            >
-              <p style={{ fontStyle: 'italic', fontSize: 21, lineHeight: 1.45, color: '#2A2A2A' }}>
-                {CAMERON_STANDFIRST}
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  gap: '1rem 1.5rem',
-                }}
-              >
+            <div className="flex max-w-xl flex-[1_1_22rem] flex-col gap-4">
+              <p className="text-xl/[1.45] italic">{CAMERON_STANDFIRST}</p>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
                 <Link href={CAMERON_STORY_PATH} className="sc-more sc-label">
                   Read the story
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -124,15 +89,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
             </div>
           </div>
           <CameronTimeline base={CAMERON_STORY_PATH} hint="Pick a year to read that chapter ↓" />
-          <p
-            style={{
-              margin: 0,
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.25rem 1.5rem',
-              fontSize: 18,
-            }}
-          >
+          <p className="flex flex-wrap gap-x-6 gap-y-1 text-lg">
             <Link href="/afl/trades" className="inline-flex min-h-11 items-center">
               See every trade
             </Link>
