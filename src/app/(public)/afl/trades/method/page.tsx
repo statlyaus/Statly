@@ -49,9 +49,9 @@ export default function TradeMethodPage() {
             The idea
           </h2>
           <p className="mt-2">
-            A trade is judged by what happened next, not by how it looked on the day. Each club’s
-            result is what it received minus what it gave up, measured in PAV (Player Approximate
-            Value), a single number for how much a player contributed in a season.
+            A trade is judged on the seasons after it. Each club’s result is what it received minus
+            what it gave up, measured in PAV (Player Approximate Value), a single number for how
+            much a player contributed in a season.
           </p>
         </section>
 

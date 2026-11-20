@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AflTradeStoryPage, headline } from '@/components/aflTradeStory/AflTradeStoryPage';
+import { TradeTree } from '@/components/aflTradeStory/TradeTree';
 import { aflTradeStorySamples } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
 import type { AflTradePageModel } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
 
@@ -281,6 +282,33 @@ describe('private trade page: values not in yet', () => {
     expect(textOf(details)).toContain('at the trade +28.1*');
     expect(textOf(details)).toMatch(/at the trade pick slot not known yet/u);
     expect(screen.getByText(/^\* Totals leave out values not in yet/u)).toBeInTheDocument();
+  });
+
+  it('says a trade tree lane’s value is not in yet, as the rest of the page does', () => {
+    const cameron = model(TRADE.cameron);
+    const pending = { kind: 'pending', pending: 'traded_player_fit_not_stored' } as const;
+    const { lineage } = cameron.story;
+    const { container } = render(
+      <TradeTree
+        story={{
+          ...cameron.story,
+          lineage: {
+            ...lineage,
+            assets: lineage.assets.map((asset, index) =>
+              index === 0 ? { ...asset, value: pending } : asset
+            ),
+          },
+        }}
+      />
+    );
+    const list = screen.getByRole('list', { name: 'Every pick and player, and what it became' });
+    const chartNumbers = [...container.querySelectorAll('.tt-svg-num')].map(
+      (node) => node.textContent
+    );
+    expect(textOf(list)).toContain('not in yet');
+    expect(textOf(list)).not.toMatch(/pending|not in yet PAV/u);
+    expect(chartNumbers).toContain('not in yet');
+    expect(chartNumbers).not.toContain('pending');
   });
 });
 

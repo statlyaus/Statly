@@ -21,10 +21,12 @@ function sourceFilesUnder(folder: string): string[] {
     .sort();
 }
 
-// Files whose colours all come from the design tokens in src/index.css. Add a file here once its
-// raw palette classes and colour literals are gone, so it cannot regress.
+// Files whose colours all come from design tokens (src/index.css, or an area's token sheet such as
+// aflTradeStory/tradeStory.css). Add a file here once its raw palette classes and colour literals
+// are gone, so it cannot regress.
 const tokenisedFiles = [
   'src/app/(app)/leagues/[id]/LeaguePageClient.tsx',
+  'src/components/aflTradeStory/TradeTree.tsx',
   'src/components/league/NotLeagueMember.tsx',
   'src/components/ui/Alert.tsx',
   ...tokenisedFolders.flatMap(sourceFilesUnder),

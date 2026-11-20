@@ -8,7 +8,7 @@ import type { AflTradePageModel } from './tradePageModel';
  */
 export function TradePageNotice({ source }: { source: AflTradePageModel['source'] }) {
   return (
-    <p className="mb-4 rounded-lg border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 ts-body">
+    <p className="mb-4 border border-(--ts-line) bg-(--ts-bg2) px-3 py-2 ts-body">
       {source.audience === 'public' ? (
         <>
           {source.label}. Values for players still at their club, and for picks marked *, will move.{' '}

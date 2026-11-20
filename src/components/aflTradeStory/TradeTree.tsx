@@ -23,8 +23,10 @@ const BECAME_X = 860;
 const HEAD = 56;
 const ROW = 56;
 const GAP = 26;
-const INK = '#161616';
-const MUTED = '#666666';
+const INK = 'var(--ts-ink)';
+const MUTED = 'var(--ts-muted)';
+const PAPER = 'var(--ts-surface)';
+const RULE = 'var(--ts-line)';
 
 const columnLabel = ({ kind, season }: TreeColumn) =>
   kind === 'draft' ? ['Draft', `${season}`] : ['', `${season}`];
@@ -41,8 +43,9 @@ function pathText(lane: TreeLane): string {
   return steps.join(' · ');
 }
 
+/** A lane's PAV, or "not in yet" as the rest of the trade page says it. */
 function valueText(lane: TreeLane): string {
-  return lane.value === null ? 'pending' : formatPav(lane.value);
+  return lane.value === null ? 'not in yet' : formatPav(lane.value);
 }
 
 type Span = TreeLane['spans'][number];
@@ -80,7 +83,7 @@ function LaneBars({
             y={y - 2.5}
             width={to - from}
             height="5"
-            fill="#fff"
+            fill={PAPER}
             stroke={INK}
             strokeWidth="1.2"
           />
@@ -129,7 +132,7 @@ function LaneMarks({
       ) : null}
       {lane.onward ? (
         <>
-          <circle cx={onwardX} cy={y} r="9" fill="#fff" stroke={INK} strokeWidth="1.5" />
+          <circle cx={onwardX} cy={y} r="9" fill={PAPER} stroke={INK} strokeWidth="1.5" />
           <text x={onwardX} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill={INK}>
             ⇄
           </text>
@@ -168,7 +171,7 @@ function BecameCell({ lane, y, colour }: { lane: TreeLane; y: number; colour: st
         x={W}
         y={y + 10}
         textAnchor="end"
-        fontSize="30"
+        fontSize={lane.value === null ? 15 : 30}
         fontWeight="600"
         fill={away || lane.value === null ? MUTED : colour}
         className="tt-svg-num"
@@ -281,7 +284,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                 patternUnits="userSpaceOnUse"
                 patternTransform="rotate(45)"
               >
-                <rect width="5" height="5" fill="#fff" />
+                <rect width="5" height="5" fill={PAPER} />
                 <line x1="0" y1="0" x2="0" y2="5" stroke={INK} strokeWidth="2" />
               </pattern>
             </defs>
@@ -296,7 +299,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
               y="2.6"
               width="24.8"
               height="4.8"
-              fill="#fff"
+              fill={PAPER}
               stroke={INK}
               strokeWidth="1.2"
             />
@@ -305,7 +308,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
         </li>
         <li>
           <svg aria-hidden="true" width="18" height="18">
-            <circle cx="9" cy="9" r="8" fill="#fff" stroke={INK} strokeWidth="1.5" />
+            <circle cx="9" cy="9" r="8" fill={PAPER} stroke={INK} strokeWidth="1.5" />
             <text x="9" y="13" textAnchor="middle" fontSize="11" fontWeight="700" fill={INK}>
               ⇄
             </text>
@@ -325,7 +328,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
               patternUnits="userSpaceOnUse"
               patternTransform="rotate(45)"
             >
-              <rect width="5" height="5" fill="#fff" />
+              <rect width="5" height="5" fill={PAPER} />
               <line x1="0" y1="0" x2="0" y2="5" stroke={INK} strokeWidth="2" />
             </pattern>
           </defs>
@@ -339,7 +342,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                   y1={HEAD + 6}
                   x2={colX(at)}
                   y2={height}
-                  stroke="#e4e4e4"
+                  stroke={RULE}
                   strokeDasharray="2 4"
                 />
                 {kicker ? (
@@ -386,7 +389,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                   y={groupMid + 5}
                   fontSize="17"
                   fontWeight="600"
-                  fill={style.fill === '#ffffff' ? INK : style.fill}
+                  fill={style.fill}
                   className="tt-svg-label"
                 >
                   {group.clubName} received
@@ -405,7 +408,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                   return pick ? (
                     <Fragment key={lane.asset.transferId}>
                       <path d={d} fill="none" stroke={INK} strokeWidth="5" />
-                      <path d={d} fill="none" stroke="#fff" strokeWidth="2.6" />
+                      <path d={d} fill="none" stroke={PAPER} strokeWidth="2.6" />
                     </Fragment>
                   ) : (
                     <path
@@ -427,7 +430,7 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
             textAnchor="middle"
             fontSize="14"
             fontWeight="700"
-            fill="#fff"
+            fill={PAPER}
           >
             ⇄
           </text>
@@ -487,13 +490,18 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
                     style={{
                       width: `${Math.max(2, (100 * Math.max(0, lane.value ?? 0)) / maxValue)}%`,
                       background: lane.player?.away
-                        ? `repeating-linear-gradient(135deg, ${INK} 0 2px, #fff 2px 5px)`
+                        ? `repeating-linear-gradient(135deg, ${INK} 0 2px, ${PAPER} 2px 5px)`
                         : clubStyle(group.clubName).fill,
                     }}
                   />
-                  <span className="tt-num" style={{ color: lane.player?.away ? MUTED : undefined }}>
+                  <span
+                    className={lane.value === null ? 'tt-num tt-num-words' : 'tt-num'}
+                    style={{
+                      color: lane.player?.away || lane.value === null ? MUTED : undefined,
+                    }}
+                  >
                     {valueText(lane)}
-                    <span className="sr-only"> PAV</span>
+                    {lane.value === null ? null : <span className="sr-only"> PAV</span>}
                   </span>
                 </li>
               ))}
