@@ -40,7 +40,7 @@ const ALERT_TONES: Record<
     icon: ExclamationTriangleIcon,
     border: 'border-warning/35',
     surface: 'bg-warning/10',
-    iconClasses: 'text-warning',
+    iconClasses: 'text-warning-text',
   },
   info: {
     icon: InformationCircleIcon,

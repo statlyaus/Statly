@@ -1275,7 +1275,7 @@ function Tag({ tone, label, title }: { tone: 'warn' | 'bad'; label: string; titl
       className={`shrink-0 rounded-sm px-1 text-[0.6875rem] font-bold leading-4 ${
         tone === 'bad'
           ? 'bg-result-loss text-result-loss-foreground'
-          : 'bg-warning text-warning-foreground'
+          : 'bg-warning text-warning-foreground ring-1 ring-inset ring-warning-text'
       }`}
     >
       {label}

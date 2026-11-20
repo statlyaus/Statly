@@ -26,7 +26,7 @@ function gradeClass(grade: AflOutcomesDevelopmentGrade): string {
     return 'border-info/30 bg-info/10 text-info';
   }
   if (grade === 'C+' || grade === 'C') {
-    return 'border-warning/35 bg-warning/10 text-warning';
+    return 'border-warning/35 bg-warning/10 text-warning-text';
   }
   return 'border-error/30 bg-error/10 text-error';
 }
