@@ -11,9 +11,13 @@
 //   node Scripts/design/count-raw-colours.mjs --top 15   # only the 15 worst files
 //   node Scripts/design/count-raw-colours.mjs --json     # machine-readable output
 //   node Scripts/design/count-raw-colours.mjs src/components/stats/PlayerComparison.tsx
+//   node Scripts/design/count-raw-colours.mjs --write-baseline  # after a clean-up lowers counts
+//
+// Scripts/design/raw-colour-baseline.json holds each file's count; tests/unit/designTokenColours
+// fails when a file goes above it or a new file adds raw colours. Lower it, never raise it.
 //
 // Test files and stylesheets are skipped: src/index.css is where the tokens are defined.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,7 +51,9 @@ export function countRawColours(source) {
   return { ...counts, total: counts.palette + counts.hex + counts.functions };
 }
 
-function listSourceFiles(dir) {
+export const BASELINE_PATH = 'Scripts/design/raw-colour-baseline.json';
+
+export function listSourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -61,6 +67,7 @@ function listSourceFiles(dir) {
 
 function main(argv) {
   const json = argv.includes('--json');
+  const writeBaseline = argv.includes('--write-baseline');
   const topIndex = argv.indexOf('--top');
   const top = topIndex === -1 ? Infinity : Number(argv[topIndex + 1]);
   const paths = argv.filter(
@@ -76,6 +83,16 @@ function main(argv) {
     .filter((row) => row.total > 0 || paths.length > 0)
     .sort((a, b) => b.total - a.total || a.file.localeCompare(b.file));
   const total = rows.reduce((sum, row) => sum + row.total, 0);
+
+  if (writeBaseline) {
+    if (paths.length > 0) throw new Error('--write-baseline counts all of src; pass no paths.');
+    const baseline = Object.fromEntries(
+      rows.map((row) => [row.file, row.total]).sort(([a], [b]) => a.localeCompare(b))
+    );
+    writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
+    console.log(`Wrote ${BASELINE_PATH}: ${total} raw colours in ${rows.length} files.`);
+    return;
+  }
 
   if (json) {
     console.log(JSON.stringify({ total, files: rows.length, rows: rows.slice(0, top) }, null, 2));

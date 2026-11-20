@@ -4,9 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  BASELINE_PATH,
   countRawColours,
   FUNCTION_LITERAL,
   HEX_LITERAL,
+  listSourceFiles,
   PALETTE_CLASS,
 } from '../../Scripts/design/count-raw-colours.mjs';
 
@@ -58,5 +60,23 @@ describe('design token colours', () => {
       hex: source.match(HEX_LITERAL) ?? [],
       functions: source.match(FUNCTION_LITERAL) ?? [],
     }).toEqual({ palette: [], hex: [], functions: [] });
+  });
+
+  // The drift freeze: no file may hold more raw colours than the committed baseline, and a file
+  // missing from it may hold none. After a clean-up, lower the baseline with
+  // `node Scripts/design/count-raw-colours.mjs --write-baseline`.
+  it('no file has more raw colours than the committed baseline', () => {
+    const baseline: Record<string, number> = JSON.parse(
+      readFileSync(join(process.cwd(), BASELINE_PATH), 'utf8')
+    );
+    const rises = listSourceFiles('src')
+      .map((path: string) => ({
+        file: path,
+        count: countRawColours(readFileSync(join(process.cwd(), path), 'utf8')).total,
+        allowed: baseline[path] ?? 0,
+      }))
+      .filter(({ count, allowed }: { count: number; allowed: number }) => count > allowed);
+
+    expect(rises).toEqual([]);
   });
 });

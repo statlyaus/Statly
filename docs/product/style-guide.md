@@ -321,15 +321,22 @@ that holds only for Statly, or delete it.
 
 Rules an agent reads are the first layer; tests are the backstop. Phases land in order.
 
-| Phase                 | Ships                                                                                                                                                                                                                                                                     | Status  |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                          | Done    |
-| 2. Freeze drift       | `Scripts/design/count-raw-colours.mjs` grows into a drift counter with a committed baseline that CI fails on any rise; `@axe-core/playwright` with the `wcag22aa` tag; contrast unit test over token pairs, grounds and clubs                                             | Planned |
-| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the hand-cut shape and hard shadow tokens, `--input` at 3:1 or more, paper surface mode, dead dark code removed. `src/index.css` is over 300 lines, so it needs an approved edit plan | Planned |
-| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                          | Planned |
-| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                           | Planned |
-| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                        | Planned |
+| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                  | Status           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                       | Done             |
+| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket | Done, except axe |
+| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the hand-cut shape and hard shadow tokens, `--input` at 3:1 or more, paper surface mode, dead dark code removed. `src/index.css` is over 300 lines, so it needs an approved edit plan                                                              | Planned          |
+| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                       | Planned          |
+| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                        | Planned          |
+| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                     | Planned          |
 
-Today the only automated design check is `tests/unit/designTokenColours.test.ts`, which keeps a list of
-cleaned files free of raw colours. `node Scripts/design/count-raw-colours.mjs --top 15` lists what is
-left.
+Automated design checks today:
+
+- `tests/unit/designTokenColours.test.ts` keeps a list of cleaned files free of raw colours, and fails
+  when any file holds more raw colours than `Scripts/design/raw-colour-baseline.json` allows (a new
+  file is allowed none). After a clean-up, lower the baseline with
+  `node Scripts/design/count-raw-colours.mjs --write-baseline`; never raise it.
+  `node Scripts/design/count-raw-colours.mjs --top 15` lists what is left.
+- `tests/unit/designContrast.test.ts` checks the core token pairs that exist today (see [Colour roles](#colour-roles))
+  against the values in `src/index.css`, and each club square against the light grounds. Add a pair
+  when a token gains a job.
