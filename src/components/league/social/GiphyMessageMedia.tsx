@@ -9,6 +9,8 @@ import { getGiphyClient, type GiphyGif } from './giphyClient';
 
 interface GiphyMessageMediaProps {
   gif: SocialGif;
+  /** True inside your own cobalt chat bubble, where the attribution switches to the bubble's colours. */
+  onFilledBubble?: boolean;
 }
 
 function getGifImage(gif: GiphyGif): { url: string; width: number; height: number } | null {
@@ -22,7 +24,10 @@ function getGifImage(gif: GiphyGif): { url: string; width: number; height: numbe
   };
 }
 
-export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): React.JSX.Element {
+export default function GiphyMessageMedia({
+  gif,
+  onFilledBubble = false,
+}: GiphyMessageMediaProps): React.JSX.Element {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const [resolvedGif, setResolvedGif] = useState<GiphyGif | null>(null);
@@ -105,7 +110,7 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
               setExpanded(false);
               expandButtonRef.current?.focus();
             }}
-            className="m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-2rem))] max-w-none rounded-2xl border border-social-border bg-social-surface p-0 text-social-text shadow-2xl backdrop:bg-social-brand-strong/80 backdrop:backdrop-blur-sm"
+            className="m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-2rem))] max-w-none rounded-2xl border border-social-border bg-social-surface p-0 text-social-text shadow-2xl backdrop:bg-overlay backdrop:backdrop-blur-sm"
           >
             <div className="flex min-h-14 items-center justify-between gap-3 border-b border-social-border px-4">
               <h2 id={`giphy-preview-${gif.id}`} className="text-sm font-semibold">
@@ -164,7 +169,11 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
           href="https://giphy.com/"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1 block text-right text-[10px] font-bold tracking-wide text-social-text-muted underline-offset-4 hover:text-social-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+          className={`mt-1 block text-right text-[10px] font-bold tracking-wide underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 ${
+            onFilledBubble
+              ? 'text-social-bubble-own-muted hover:text-social-bubble-own-text focus-visible:ring-social-bubble-own-text'
+              : 'text-social-text-muted hover:text-social-text focus-visible:ring-social-focus'
+          }`}
         >
           Powered by GIPHY
         </a>

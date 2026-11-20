@@ -277,7 +277,7 @@
   --social-action-pressed: var(--brand-ink);
   --social-action-foreground: var(--league-primary-foreground);
   /* Ink, not cobalt: your own bubbles and the header are cobalt, so a cobalt ring would vanish on
-     them. Ink holds 18.9:1 on white, and the offset rings keep a white gap on cobalt. */
+     them. Ink holds 18.9:1 on white; rings drawn on a cobalt fill use the bubble's own text colour. */
   --social-focus: var(--brand-ink);
   --social-brand-soft: var(--secondary);
   --social-canvas: #eef2f6;
