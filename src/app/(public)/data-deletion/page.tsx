@@ -12,7 +12,7 @@ export default function DataDeletionPage() {
       <h1 className="text-3xl font-bold mb-6">Data Deletion</h1>
       <p className="text-sm text-muted-foreground mb-8">Last updated: 11 August 2026</p>
 
-      <section className="prose prose-neutral dark:prose-invert max-w-none">
+      <section className="prose prose-neutral max-w-none">
         <p>
           You can request deletion of your account and associated personal data at any time. Once
           your request is processed, your account will be permanently removed and cannot be

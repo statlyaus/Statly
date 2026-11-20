@@ -267,7 +267,7 @@ The private trade page (statlyaus/Statly#789) has its own switch. Set `STATLY_EN
 and `AFL_TRADE_STORY_READER_ENABLED=true` for the web process, sign in through the Firebase Auth
 emulator as `admin@statly.dev`, and open `http://localhost:3000/dev/afl-trade-stories`. It lists the
 sample stories (the Jeremy Cameron chain and the Geelong ⇄ Western Bulldogs 2021 swap with Sam Darcy's
-matched bid). Check each page in light and dark mode and at 390 pixels: the scarf scrolls sideways,
+matched bid). Check each page at 390 pixels: the scarf scrolls sideways,
 nothing else does, and every lineage trade button opens its trade in the map. The route is not found in
 production, with either switch off, or for any other user.
 

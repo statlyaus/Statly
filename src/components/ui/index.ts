@@ -33,7 +33,7 @@ export {
 export { default as Modal } from './Modal';
 export { ConfirmationModal, useModal, useConfirmation } from './Modal';
 export { default as Tooltip } from './Tooltip';
-export { useTooltip, InfoTooltip, PlayerStatTooltip } from './Tooltip';
+export { useTooltip, InfoTooltip } from './Tooltip';
 export { ErrorBoundary } from './ErrorBoundary';
 
 // Re-export default exports with named exports for convenience

@@ -93,7 +93,6 @@ export default function ChatMessageRow({
 
   return (
     <li
-      data-member-colour
       style={memberColourStyle(colourIndex)}
       className={day || !continuation ? 'mt-4 first:mt-0' : 'mt-1'}
     >

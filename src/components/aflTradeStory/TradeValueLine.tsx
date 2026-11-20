@@ -25,12 +25,11 @@ import {
 const DEFAULT_WIDTH = 720;
 const MIN_WIDTH = 280;
 
-const strokeStyle = ({ stroke }: ValueLineSeries) =>
-  ({ '--vl-light': stroke.light, '--vl-dark': stroke.dark }) as CSSProperties;
+const strokeStyle = ({ stroke }: ValueLineSeries) => ({ '--vl': stroke }) as CSSProperties;
 
 function LineKey({ series }: { series: ValueLineSeries }) {
   return (
-    <svg width="20" height="8" aria-hidden="true" focusable="false" className="ts-vl flex-none">
+    <svg width="20" height="8" aria-hidden="true" focusable="false" className="flex-none">
       <line
         x1="1"
         x2="19"
@@ -197,7 +196,7 @@ export function TradeValueLine({ story }: { story: AflTradeStory }) {
               strokeWidth="1"
             />
             {chart.series.map((series) => (
-              <g key={series.clubId} className="ts-vl" style={strokeStyle(series)}>
+              <g key={series.clubId} style={strokeStyle(series)}>
                 <path
                   d={series.path}
                   fill="none"
