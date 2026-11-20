@@ -1191,7 +1191,7 @@ Prerequisites:
      Staging admits the `trade_period_window` claim kind from migration 0262; an earlier database
      refuses the capture's evidence rows; and
    - one `footyinfo-national-draft-board-issue853-private-<season>-board-v3` decision per captured
-     season, 2019 to 2025, for example `footyinfo-national-draft-board-issue853-private-2024-board-v3`
+     season, 2019 to 2026 (2026 added by the owner on 2026-11-21 on the 2025 terms), for example `footyinfo-national-draft-board-issue853-private-2024-board-v3`
      (issues 853 and 789). Parser `footyinfo-draft-board-parser/v3` reads
      `https://www.footyinfo.com/draft/<season>` as `draft_board_pick` claims for every selected,
      passed and removed pick (from v3 with its original club and pre-draft number), a
@@ -1362,8 +1362,8 @@ Each `draft_board_bid_match` (v2, after every v1 row, source key
 and player; the bidding club and basis; the bid's `points` and the `pointsUsed` the board gives;
 each spent pick (`consumedPicks`: board id, label such as `R2 (GEE) - Pick 34`, original number and
 club, holder, points used); and each leftover-points pick the board says the match created
-(`leftoverPicks`: board id, holder, points or null). Expect, on every reviewed board, 2019 to 2025:
-54 matched bids, 124 spent picks and 48 leftover picks. The parser refuses the whole page when:
+(`leftoverPicks`: board id, holder, points or null). Expect, on the reviewed boards 2019 to 2025:
+54 matched bids, 124 spent picks and 48 leftover picks (2026 has no recorded count yet). The parser refuses the whole page when:
 
 - a spent pick is not the board's own record of a pick spent on that nominee with the same points,
   holder, original club, original number and label;
