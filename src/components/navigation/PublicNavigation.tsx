@@ -16,7 +16,7 @@ function isPublicLinkActive(pathname: string, section: string): boolean {
 }
 
 /**
- * Text tabs: grey labels, the current section in navy semibold with a 2px underline the width of
+ * Text tabs: grey labels, the current section in bold ink with a 3px cobalt underline the width of
  * the word, sitting on the header's bottom divider. Phones put the tabs on their own row under the
  * logo; from `sm` up they sit beside it.
  */
@@ -34,16 +34,14 @@ export function PublicNavigation() {
             href={href}
             aria-current={active ? 'page' : undefined}
             className={`relative inline-flex min-h-11 items-center text-[15px] whitespace-nowrap transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-              active
-                ? 'font-semibold text-brand-bar'
-                : 'text-muted-foreground hover:text-foreground'
+              active ? 'font-bold text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {label}
             {active ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand-bar"
+                className="absolute inset-x-0 -bottom-px h-[3px] bg-primary"
               />
             ) : null}
           </Link>

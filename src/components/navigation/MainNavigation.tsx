@@ -222,10 +222,10 @@ function NavDropdown({
         onClick={() => setIsOpen((open) => !open)}
         aria-expanded={isOpen}
         aria-controls={menuId}
-        className={`inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+        className={`inline-flex min-h-10 items-center gap-2 rounded-none border-b-[3px] px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           isActive
-            ? 'bg-white text-brand-bar'
-            : 'text-brand-bar-foreground/80 hover:bg-white/10 hover:text-brand-bar-foreground'
+            ? 'border-foreground font-bold text-foreground'
+            : 'border-transparent font-semibold text-muted-foreground hover:text-foreground'
         }`}
       >
         <span className="hidden text-current sm:block">{item.icon}</span>
@@ -248,7 +248,7 @@ function NavDropdown({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
-            className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
+            className="ground-white absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
           >
             <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
               <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
@@ -391,7 +391,7 @@ export default function MainNavigation({
       <AlertContainer alerts={alerts} onRemove={removeAlert} />
 
       <header
-        className={`sticky top-0 z-50 border-b border-brand-bar bg-brand-bar text-brand-bar-foreground ${
+        className={`ground-cobalt sticky top-0 z-50 border-b border-transparent ${
           scrolled ? 'shadow-md' : ''
         }`}
         role="banner"
@@ -425,10 +425,10 @@ export default function MainNavigation({
                     key={item.name}
                     href={item.href}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                    className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-none border-b-[3px] px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       isActive
-                        ? 'bg-white text-brand-bar'
-                        : 'text-brand-bar-foreground/80 hover:bg-white/10 hover:text-brand-bar-foreground'
+                        ? 'border-foreground font-bold text-foreground'
+                        : 'border-transparent font-semibold text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <span className="hidden sm:block">{item.icon}</span>
@@ -448,6 +448,7 @@ export default function MainNavigation({
                   size="sm"
                   variant="default"
                   className="w-56"
+                  inputClassName="focus:ring-offset-2 focus:ring-offset-background"
                 />
               </div>
             ) : null}
@@ -464,16 +465,16 @@ export default function MainNavigation({
                   type="button"
                   ref={accountButtonRef}
                   onClick={() => setIsAccountMenuOpen((open) => !open)}
-                  className="inline-flex items-center gap-3 rounded-md border border-white/30 px-2.5 py-1.5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  className="inline-flex items-center gap-3 rounded-md border border-border px-2.5 py-1.5 text-sm font-semibold text-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-expanded={isAccountMenuOpen}
                   aria-controls="account-menu"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-bold text-brand-bar">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
                     {accountInitial}
                   </span>
                   <span className="hidden max-w-[160px] truncate 2xl:block">{accountLabel}</span>
                   <svg
-                    className="h-4 w-4 text-brand-bar-foreground/70"
+                    className="h-4 w-4 text-muted-foreground"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -490,7 +491,7 @@ export default function MainNavigation({
                 {isAccountMenuOpen ? (
                   <div
                     id="account-menu"
-                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
+                    className="ground-white absolute right-0 mt-2 w-56 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
                   >
                     <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
                       <p className="font-semibold text-[color:var(--league-text)]">Signed in</p>
@@ -532,7 +533,7 @@ export default function MainNavigation({
             ) : (
               <Link
                 href="/login"
-                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-brand-bar transition hover:bg-white/90"
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
               >
                 Sign in
               </Link>
@@ -544,7 +545,7 @@ export default function MainNavigation({
             onClick={() => setIsMobileOpen((open) => !open)}
             // Player search and the league switcher join the bar only at 2xl, so signed-in
             // managers keep this toggle (and its quick actions) until then.
-            className={`ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/30 p-2 text-brand-bar-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+            className={`ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border p-2 text-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               user ? '2xl:hidden' : 'lg:hidden'
             }`}
             aria-expanded={isMobileOpen}
@@ -579,7 +580,7 @@ export default function MainNavigation({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className={`border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] ${
+              className={`ground-white border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] ${
                 user ? '2xl:hidden' : 'lg:hidden'
               }`}
             >
