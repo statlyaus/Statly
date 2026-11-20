@@ -82,7 +82,7 @@ export const PENDING_TEXT: Record<AflTradeStoryPendingReason, string> = {
   unavailable: 'value not available yet',
 };
 
-export interface ClubStyle {
+interface ClubStyle {
   readonly abbreviation: string;
   /** The guernsey's main colour, and a text colour that reads on it. */
   readonly fill: string;

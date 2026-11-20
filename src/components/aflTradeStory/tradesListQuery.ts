@@ -5,7 +5,7 @@ import type { AflTradeStorySampleSummary } from '@/server/aflTradeIntelligence/d
  * address so a filtered list can be shared, bookmarked and read without scripts.
  */
 
-export type TradesListSort = 'newest' | 'biggest';
+type TradesListSort = 'newest' | 'biggest';
 
 export interface TradesListQuery {
   /** One trade year, or null for every year. */
@@ -15,7 +15,7 @@ export interface TradesListQuery {
   readonly sort: TradesListSort;
 }
 
-export interface TradesListClub {
+interface TradesListClub {
   readonly clubId: string;
   readonly name: string;
   readonly slug: string;
@@ -78,7 +78,7 @@ export function tradesListHref(query: TradesListQuery): string {
 }
 
 /** The biggest swing in a trade: the largest net either way, or 0 when the trade has no results. */
-export const tradeSwing = (story: AflTradeStorySampleSummary) =>
+const tradeSwing = (story: AflTradeStorySampleSummary) =>
   Math.max(0, ...(story.results ?? []).map(({ net }) => Math.abs(net)));
 
 /** The trades a query shows, in its order. "Newest" keeps the list's own order within a year. */
@@ -96,7 +96,7 @@ export function filterTrades(
     : [...shown].sort((left, right) => right.year - left.year);
 }
 
-export interface TradeWin {
+interface TradeWin {
   readonly story: AflTradeStorySampleSummary;
   readonly clubName: string;
   readonly net: number;
@@ -160,7 +160,7 @@ export function tradeLadder(stories: readonly AflTradeStorySampleSummary[]): Tra
   );
 }
 
-export interface TradeYearSummary {
+interface TradeYearSummary {
   readonly year: number;
   readonly trades: number;
   /** The year's biggest settled-so-far win, when it has one. */
