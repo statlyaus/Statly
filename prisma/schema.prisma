@@ -539,6 +539,7 @@ model Player {
   lineupPlayers      LeagueLineupPlayer[]
   tradePlayers       LeagueTradePlayer[]
   injuryListEntries  InjuryListEntry[]
+  seasonStats        PlayerSeasonStat[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
@@ -562,6 +563,36 @@ model PlayerExternalIdentity {
 
   @@unique([provider, externalId])
   @@index([playerId])
+}
+
+/// One player's stat totals for one AFL season, read by /players, player search and player detail
+/// (process-map finding players-data-11, owner decisions 2026-11-15 and 2026-11-18). A fill job
+/// writes it from the ingested Footywire match stats through reviewed `footywire`
+/// PlayerExternalIdentity links; a stat row without a reviewed link is reported, never guessed.
+/// Shared reference data, not league- or season-scoped fantasy state. Rows are replaced whole by
+/// each fill of their season.
+model PlayerSeasonStat {
+  id              String   @id @default(cuid())
+  playerId        String
+  season          Int
+  /// The club of the player's latest stat row in the season.
+  club            String
+  /// Matches with a stat row.
+  games           Int
+  /// The latest round with a stat row.
+  lastRound       Int
+  /// ETL stat key (e.g. contested_possessions) to its sum over the games that reported it.
+  totalsJson      Json
+  /// ETL stat key to the number of games that reported it. An unreported stat is not a zero, so
+  /// per-game figures divide by this, not by games.
+  gamesByStatJson Json
+  source          String // 'footywire'
+  calculatedAt    DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season])
+  @@index([season])
 }
 
 /// One distinct version of an external injury list. A snapshot is identified by its source rows and
