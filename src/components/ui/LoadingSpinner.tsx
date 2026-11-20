@@ -35,7 +35,7 @@ const SIZE_CONFIG = {
 
 // Color configurations
 const COLOR_CONFIG = {
-  blue: 'text-blue-600 border-blue-600',
+  blue: 'text-primary border-primary',
   green: 'text-green-600 border-green-600',
   red: 'text-red-600 border-red-600',
   yellow: 'text-yellow-600 border-yellow-600',

@@ -51,7 +51,7 @@ export default async function RoundMatchesPage({
     <div className="mx-auto max-w-5xl p-4">
       <div className="flex items-center justify-between mb-4 gap-2">
         <h1 className="text-2xl font-semibold">Round {roundNumber} Matches</h1>
-        <Link href="/matches" className="text-sm text-blue-600 hover:text-blue-700">
+        <Link href="/matches" className="text-sm text-primary hover:text-primary/80">
           Back to Live Center
         </Link>
       </div>

@@ -107,7 +107,7 @@ export default function TestDraftPage() {
               <Button
                 onClick={createTestDraft}
                 disabled={isCreating}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 disabled:opacity-50"
               >
                 {isCreating ? 'Creating...' : 'Create Test Draft'}
               </Button>
@@ -145,7 +145,7 @@ export default function TestDraftPage() {
                       <div className="flex gap-2">
                         <a
                           href={draft.url}
-                          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                          className="bg-primary text-white px-3 py-1 rounded text-sm hover:bg-primary/90"
                         >
                           Enter Draft
                         </a>
@@ -165,9 +165,9 @@ export default function TestDraftPage() {
             </div>
           )}
 
-          <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-medium text-blue-900 mb-2">Testing Instructions:</h3>
-            <ol className="text-sm text-blue-800 space-y-1">
+          <div className="mt-8 p-4 bg-secondary rounded-lg">
+            <h3 className="font-medium text-secondary-foreground mb-2">Testing Instructions:</h3>
+            <ol className="text-sm text-secondary-foreground space-y-1">
               <li>1. Click &quot;Create Test Draft&quot; to create a new draft</li>
               <li>2. Click &quot;Enter Draft&quot; to access the draft page</li>
               <li>3. The lobby will open 1 minute after creation</li>

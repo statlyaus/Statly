@@ -74,10 +74,10 @@ const VARIANT_CONFIG = {
     hover: 'hover:bg-yellow-200',
   },
   info: {
-    background: 'bg-blue-100',
-    text: 'text-blue-800',
-    border: 'border-blue-200',
-    hover: 'hover:bg-blue-200',
+    background: 'bg-secondary',
+    text: 'text-secondary-foreground',
+    border: 'border-secondary-foreground/30',
+    hover: 'hover:bg-secondary/80',
   },
   outline: {
     background: 'bg-transparent',

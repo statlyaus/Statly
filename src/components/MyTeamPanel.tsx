@@ -360,7 +360,7 @@ function EmptyRosterState({
           <button
             type="button"
             onClick={() => onTeamAction?.('draft')}
-            className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             Start Drafting
           </button>
@@ -372,7 +372,7 @@ function EmptyRosterState({
           <button
             type="button"
             onClick={onClearFilters}
-            className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             Clear Filters
           </button>
@@ -405,8 +405,8 @@ function TeamPanelHeader({
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md border border-blue-200 bg-blue-50">
-            <TrophyIcon className="h-5 w-5 text-blue-600" aria-hidden="true" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-md border border-secondary-foreground/30 bg-secondary">
+            <TrophyIcon className="h-5 w-5 text-primary" aria-hidden="true" />
           </span>
           <div>
             <h2
@@ -423,7 +423,7 @@ function TeamPanelHeader({
           </div>
           {isLoading && (
             <span
-              className="ml-1 h-2.5 w-2.5 rounded-full bg-blue-500"
+              className="ml-1 h-2.5 w-2.5 rounded-full bg-primary"
               aria-label="Loading team data"
             />
           )}
@@ -449,7 +449,7 @@ function TeamPanelActions({
       <button
         type="button"
         onClick={() => onTeamAction?.('optimize')}
-        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       >
         <FireIcon className="h-4 w-4 text-emerald-600" aria-hidden="true" />
         Optimize
@@ -457,24 +457,24 @@ function TeamPanelActions({
       <button
         type="button"
         onClick={() => onTeamAction?.('trade')}
-        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       >
-        <ArrowsUpDownIcon className="h-4 w-4 text-blue-600" aria-hidden="true" />
+        <ArrowsUpDownIcon className="h-4 w-4 text-primary" aria-hidden="true" />
         Trade
       </button>
       <button
         type="button"
         onClick={() => onTeamAction?.('analyze')}
-        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       >
-        <ChartBarIcon className="h-4 w-4 text-indigo-600" aria-hidden="true" />
+        <ChartBarIcon className="h-4 w-4 text-primary" aria-hidden="true" />
         Analyze
       </button>
       {onRefresh && (
         <button
           type="button"
           onClick={onRefresh}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           aria-label="Refresh team data"
         >
           <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
@@ -622,7 +622,7 @@ function RosterToolbar({
             placeholder="Search players by name, position, or club"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-ring"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -655,15 +655,15 @@ function RosterToolbar({
               key={filter}
               type="button"
               onClick={() => onFilterChange(filter)}
-              className={`rounded-md border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 ${
+              className={`rounded-md border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                 filterType === filter
-                  ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                  ? 'border-primary bg-primary text-white shadow-sm'
                   : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
               }`}
             >
               {capFirst(filter)}
               <span
-                className={filterType === filter ? 'ml-2 text-blue-100' : 'ml-2 text-slate-500'}
+                className={filterType === filter ? 'ml-2 text-primary-foreground/80' : 'ml-2 text-slate-500'}
               >
                 {filterCounts[filter]}
               </span>

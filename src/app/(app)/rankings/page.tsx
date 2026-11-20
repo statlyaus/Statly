@@ -37,7 +37,7 @@ export default async function RankingsPage() {
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="px-2 py-1 rounded bg-blue-100 text-blue-600">
+              <span className="px-2 py-1 rounded bg-secondary text-secondary-foreground">
                 📈 Above Avg (Z ≥ 0.5)
               </span>
             </div>

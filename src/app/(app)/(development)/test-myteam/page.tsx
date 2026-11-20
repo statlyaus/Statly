@@ -85,8 +85,8 @@ export default function TestMyTeamPage() {
             This page demonstrates your MyTeamPanel component integrated into the main application.
           </p>
           {lastAction && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-700">
+            <div className="mt-4 p-3 bg-secondary border border-secondary-foreground/30 rounded-lg">
+              <p className="text-sm text-secondary-foreground">
                 <strong>Last Action:</strong> {lastAction}
               </p>
             </div>
