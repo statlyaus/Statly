@@ -41,10 +41,10 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
           >
             <Link
               href="/"
-              className="inline-flex min-h-11 shrink-0 items-center rounded-md text-2xl font-extrabold tracking-[-0.045em] text-brand-bar transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-md text-2xl font-extrabold tracking-[-0.045em] text-foreground transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Statly home"
             >
-              Statly<span className="text-blue-700">.</span>
+              Statly<span className="text-primary">.</span>
             </Link>
             <span aria-hidden="true" className="hidden h-6 w-px bg-border sm:block" />
             <PublicNavigation />
@@ -63,13 +63,13 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
                 height={40}
                 className="h-auto w-28"
               />
-              <p className="text-brand-bar-foreground/70">
+              <p className="text-brand-bar-foreground/85">
                 &copy; {new Date().getFullYear()} Statly
               </p>
             </div>
             {footerGroups.map((group) => (
               <nav key={group.label} aria-label={group.label}>
-                <h2 className="text-xs font-semibold tracking-wide text-brand-bar-foreground/70 uppercase">
+                <h2 className="text-xs font-semibold tracking-wide text-brand-bar-foreground/85 uppercase">
                   {group.label}
                 </h2>
                 <ul className="mt-2 flex flex-col">

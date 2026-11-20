@@ -17,8 +17,8 @@ strings.
 
 - MUST use semantic token utilities (`bg-background`, `text-muted-foreground`, `border-input`). NEVER
   palette classes (`text-gray-500`, `bg-blue-600`), hex in `className` or `style`, or a new area
-  palette. Until the brand tokens land (phase 3), never hand-roll the cobalt or sun hex values; use
-  the existing tokens and leave the swap to phase 3.
+  palette. NEVER hand-roll the cobalt or sun hex values or read a `--brand-*` primitive in a
+  component; use the semantic roles (`bg-primary`, `text-secondary-foreground`).
 - MUST use `buttonStyles`, `badgeStyles` and `fieldStyles` from `src/components/ui/controlStyles.ts`.
   NEVER a bare styled `<button>`, `src/components/Button.tsx` or `ui/Badge.tsx` in new code.
 - MUST use the three brand typefaces in their roles: Geist for display and UI, Saira for reading,
@@ -39,23 +39,23 @@ strings.
 Recorded 2026-11-19 from the style guide research, and 2026-11-20 for the brand, unless another date
 is given.
 
-| Topic                             | Decision                                                                                                                                                       |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Theme                             | Light only. The `.dark` tokens and `dark:` utilities are deleted (done).                                                                                       |
-| Brand colour                      | Cobalt `#1a2cff` replaces navy `#0f2a44` everywhere (2026-11-19). It is also the only accent: `#185fa5`, `--statly-blue` and `text-blue-700` retire (phase 3). |
-| Warm accent                       | Sun `#ffc247`: your turn, deadlines, selection and highlights. Always ink text on sun (2026-11-20).                                                            |
-| Typefaces                         | Geist for display and UI, Saira for reading and table numbers, Caveat for hand notes, on both surfaces (2026-11-19, replacing Saira Extra Condensed).          |
-| Controls                          | The Marker direction (2026-11-20): hand-drawn icons, hand-cut edges on anything pressed or floating, torn-tape badges. Pages, tiles and tables stay square.    |
-| Logo                              | The lowercase "statly" wordmark with the hand-drawn Sherrin tilted −14°, resting on the tip of the y. One SVG source; unused logo files are deleted (phase 5). |
-| Sport family                      | Basketball and soccer balls in the same hand-drawn style stand in for the Sherrin on those sports' surfaces.                                                   |
-| Warm trade palette                | Kept as an official surface mode, `data-surface="paper"`, replacing the `--ts-*` namespace (target, phase 3).                                                  |
-| Trade verdicts                    | Public trade pages show values, not letter grades or verdict labels (as built for #789).                                                                       |
-| Two sides                         | One side cobalt, the other ink, on card edges, chart lines and bars alike. Never good and bad colours.                                                         |
-| Match results                     | Win solid (cobalt on light grounds), loss outlined in ink, draw stone, always with W, L or D. Never green and red.                                             |
-| Club colours                      | Only in the 13px club square beside the abbreviation. Never stripes, card edges, page-head blocks or large fills.                                              |
-| Imagery                           | Licensed black-and-white photo cutouts plus the hand marks. No generated people outside the story collage exception.                                           |
-| Story collage                     | Permanent exception, scoped to the home hero and `/afl/stories` (owner, 2026-11-16). Its stylesheets may use literals; counted separately.                     |
-| Time zones and stat abbreviations | AEST or AEDT by date, as `formatLeagueTime` prints. One Statly abbreviation table beside `src/types/fantasyCategories.ts` (phase 5).                           |
+| Topic                             | Decision                                                                                                                                                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Theme                             | Light only. The `.dark` tokens and `dark:` utilities are deleted (done).                                                                                                                                         |
+| Brand colour                      | Cobalt `#1a2cff` replaces navy `#0f2a44` everywhere (2026-11-19). It is also the only accent: `#185fa5` and `text-blue-700` are gone; `--statly-navy` and `--statly-blue` are cobalt aliases until phase 3 ends. |
+| Warm accent                       | Sun `#ffc247`: your turn, deadlines, selection and highlights. Always ink text on sun (2026-11-20).                                                                                                              |
+| Typefaces                         | Geist for display and UI, Saira for reading and table numbers, Caveat for hand notes, on both surfaces (2026-11-19, replacing Saira Extra Condensed).                                                            |
+| Controls                          | The Marker direction (2026-11-20): hand-drawn icons, hand-cut edges on anything pressed or floating, torn-tape badges. Pages, tiles and tables stay square.                                                      |
+| Logo                              | The lowercase "statly" wordmark with the hand-drawn Sherrin tilted −14°, resting on the tip of the y. One SVG source; unused logo files are deleted (phase 5).                                                   |
+| Sport family                      | Basketball and soccer balls in the same hand-drawn style stand in for the Sherrin on those sports' surfaces.                                                                                                     |
+| Warm trade palette                | Kept as an official surface mode, `data-surface="paper"`, replacing the `--ts-*` namespace (target, phase 3).                                                                                                    |
+| Trade verdicts                    | Public trade pages show values, not letter grades or verdict labels (as built for #789).                                                                                                                         |
+| Two sides                         | One side cobalt, the other ink, on card edges, chart lines and bars alike. Never good and bad colours.                                                                                                           |
+| Match results                     | Win solid (cobalt on light grounds), loss outlined in ink, draw stone, always with W, L or D. Never green and red.                                                                                               |
+| Club colours                      | Only in the 13px club square beside the abbreviation. Never stripes, card edges, page-head blocks or large fills.                                                                                                |
+| Imagery                           | Licensed black-and-white photo cutouts plus the hand marks. No generated people outside the story collage exception.                                                                                             |
+| Story collage                     | Permanent exception, scoped to the home hero and `/afl/stories` (owner, 2026-11-16). Its stylesheets may use literals; counted separately.                                                                       |
+| Time zones and stat abbreviations | AEST or AEDT by date, as `formatLeagueTime` prints. One Statly abbreviation table beside `src/types/fantasyCategories.ts` (phase 5).                                                                             |
 
 ## Brand
 
@@ -112,8 +112,9 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
   (`--background`, `--foreground`, `--muted-foreground`, `--input`, `--primary`, `--ring`,
   `--result-win`, `--status-live` and so on) are the only names components use, exposed through
   `@theme inline`.
-- **Brand primitives (target, phase 3).** Cobalt, deep cobalt, tint, sun, ink, stone, the hairline and
-  the red, plus the shape tokens under [Shape](#space-shape-elevation-motion-and-focus).
+- **Brand primitives.** `--brand-cobalt`, `--brand-cobalt-deep`, `--brand-tint`, `--brand-sun`,
+  `--brand-ink`, `--brand-stone`, `--brand-secondary-text`, `--brand-hairline` and `--brand-red` (done
+  2026-11-20), plus the shape tokens (target, phase 3) under [Shape](#space-shape-elevation-motion-and-focus).
 - **Grounds and surface modes, not namespaces.** A ground or the paper mode redefines the semantic
   roles on its root element; components inside it use the same utilities as everywhere else.
 - **Area palettes collapse (target, phase 3).** A `--league-*`, `--trade-*` or `--social-*` token that
@@ -132,7 +133,7 @@ Every pair below must hold on every ground and surface mode.
 | Small labels (11–12px)  | At least 5.5:1                                                         | Secondary `#55534e` on white is 7.6:1 (target, phase 3)   |
 | `--input` (field edge)  | At least 3:1 against its surface (WCAG 1.4.11)                         | Target, phase 3: a 2px ink edge (today `#ced4da`, 1.49:1) |
 | `--border` (decorative) | No minimum; never the only edge of a control                           | Hairline `#c9c5bc`                                        |
-| Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Target, phase 3                                           |
+| Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Cobalt on light grounds done; other grounds phase 3       |
 | Results                 | Win solid, loss outlined, draw stone, always with W, L or D            | Target, phase 3                                           |
 | Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                    |
 | Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                           |

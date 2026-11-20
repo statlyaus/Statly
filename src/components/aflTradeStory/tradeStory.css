@@ -8,7 +8,7 @@
   --ts-ink: #0b0b0b;
   --ts-ink2: #4a4945;
   --ts-muted: #5c5b56;
-  --ts-accent: #185fa5;
+  --ts-accent: #1a2cff;
   --ts-pos: #136b3c;
   --ts-neg: #b42318;
   --ts-live: #15803d;
@@ -29,20 +29,20 @@
   line-height: 1.5;
 }
 
-/* The public pages (/afl/trades) sit inside the Statly site: its page grey, white cards, ink and navy
-   accent. */
+/* The public pages (/afl/trades) sit inside the Statly site: its page grey, white cards, ink and
+   cobalt accent. */
 .afl-trade-story.ts-public {
   --ts-bg: #f8f9fa;
   --ts-bg2: #eef1f4;
   --ts-surface: #ffffff;
   --ts-line: #d5dae0;
-  --ts-ink: #2b2c2d;
+  --ts-ink: #111111;
   --ts-ink2: #4b5560;
   --ts-muted: #5b6570;
-  --ts-accent: #0f2a44;
+  --ts-accent: #1a2cff;
   --ts-scarf-bg: #eef1f4;
   --ts-scarf-shadow: #d5dae0;
-  --ts-scarf-side: #0f2a44;
+  --ts-scarf-side: #111111;
 }
 
 /* The page's four text sizes (owner, 2026-10-18). Badges, icons and SVG chart labels are exempt. */
