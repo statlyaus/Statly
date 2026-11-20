@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GET } from './route';
 
+vi.mock('@/server/draft/lobbyActivityRetention', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/draft/lobbyActivityRetention')>()),
+  pruneLobbyActivity: vi.fn(async () => ({ count: 0, cutoff: new Date() })),
+}));
+
 const URL_BASE = 'http://localhost/api/cron/prune-lobby';
 
 describe('GET /api/cron/prune-lobby authorization', () => {

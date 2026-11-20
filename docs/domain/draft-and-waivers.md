@@ -92,6 +92,13 @@ transport payloads cannot select a member. Legacy `memberId` input is tolerated 
 is ignored. Private responses are non-cacheable, and Prisma remains the only authority—local or
 in-memory shadow stores must not restore stale strategy state.
 
+Each private change also writes a `LobbyActivity` row. `pruneLobbyActivity`
+(`src/server/draft/lobbyActivityRetention.ts`) deletes rows older than `LOBBY_ACTIVITY_RETENTION_DAYS`
+(default 30, a whole number from 1 to 3650) across every league and season, since the table has no
+league or season column. `/api/cron/prune-lobby` runs it synchronously and returns the real
+`deleted` count, or 400 for an invalid retention. Nothing schedules that route yet; scheduling is an
+owner decision. By hand, `tsx Scripts/prune-lobby-activity.ts` only counts unless given `--apply`.
+
 ## Scheduling
 
 A draft needs at least `MIN_LEAGUE_TEAMS` (4) teams to start (owner decision 2026-11-15). The Draft tab,

@@ -1,36 +1,34 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { isCronRequestAuthorized } from '@/lib/cronAuth';
-// import { enqueuePruneLobbyActivity } from '@/queues/maintenanceQueue';
+import { parseRetentionDays, pruneLobbyActivity } from '@/server/draft/lobbyActivityRetention';
 
 export const runtime = 'nodejs';
 
+// Not scheduled: nothing calls this route yet. It deletes synchronously and reports what it deleted.
 export async function GET(req: NextRequest) {
-  try {
-    if (!isCronRequestAuthorized(req)) {
-      return NextResponse.json(
-        { ok: false, error: 'unauthorized' },
-        { status: 401, headers: { 'Cache-Control': 'no-store' } }
-      );
-    }
+  const headers = { 'Cache-Control': 'no-store' };
+  if (!isCronRequestAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401, headers });
+  }
 
-    const retentionDays = Number(process.env.LOBBY_ACTIVITY_RETENTION_DAYS || 30);
-
-    // Log successful cron execution for monitoring
-    console.log(`[CRON] Pruning lobby activity with retention: ${retentionDays} days`);
-
-    // TODO: Implement queue-based pruning when maintenance queue is available
-    // await enqueuePruneLobbyActivity(retentionDays);
-
+  const retentionDays = parseRetentionDays(process.env.LOBBY_ACTIVITY_RETENTION_DAYS);
+  if (retentionDays === null) {
     return NextResponse.json(
-      { ok: true, enqueued: 'prune-lobby-activity', retentionDays },
-      { headers: { 'Cache-Control': 'no-store' } }
+      { ok: false, error: 'LOBBY_ACTIVITY_RETENTION_DAYS must be a whole number from 1 to 3650' },
+      { status: 400, headers }
     );
+  }
+
+  try {
+    const { count } = await pruneLobbyActivity(retentionDays);
+    console.log(`[CRON] Deleted ${count} lobby activity rows older than ${retentionDays} days`);
+    return NextResponse.json({ ok: true, deleted: count, retentionDays }, { headers });
   } catch (error) {
-    console.error('[CRON] Failed to enqueue prune job:', error);
+    console.error('[CRON] Failed to prune lobby activity:', error);
     return NextResponse.json(
-      { ok: false, error: 'Failed to enqueue prune job' },
-      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+      { ok: false, error: 'Failed to prune lobby activity' },
+      { status: 500, headers }
     );
   }
 }
