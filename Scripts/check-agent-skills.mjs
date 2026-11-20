@@ -17,7 +17,16 @@ const requiredUpstreamSkills = [
   'to-tickets',
 ].sort();
 
-const approvedThirdPartySkills = { ponytail: 'DietrichGebert/ponytail' };
+const approvedThirdPartySkills = {
+  ponytail: 'DietrichGebert/ponytail',
+  'ts-best-practices': 'poteto/noodle',
+  'vercel-react-best-practices': 'vercel-labs/agent-skills',
+};
+
+// Upstream folders whose name differs from the skill's declared name.
+const approvedSkillPaths = {
+  'vercel-react-best-practices': 'skills/react-best-practices/SKILL.md',
+};
 
 const explicitInvocationSkills = ['to-spec', 'to-tickets'];
 
@@ -155,7 +164,12 @@ async function checkLockfile() {
     const expectedSource = approvedThirdPartySkills[name] ?? 'mattpocock/skills';
     assert(locked.source === expectedSource, `${name} must be locked to ${expectedSource}`);
     assert(locked.sourceType === 'github', `${name} must use the GitHub source type`);
-    assert(locked.skillPath?.endsWith(`/${name}/SKILL.md`), `${name} has an unexpected skill path`);
+    assert(
+      approvedSkillPaths[name]
+        ? locked.skillPath === approvedSkillPaths[name]
+        : locked.skillPath?.endsWith(`/${name}/SKILL.md`),
+      `${name} has an unexpected skill path`
+    );
     assert(
       /^[a-f0-9]{64}$/.test(locked.computedHash ?? ''),
       `${name} must have a SHA-256 lock hash`
