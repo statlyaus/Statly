@@ -48,7 +48,7 @@ is given.
 | Controls                          | The Marker direction (2026-11-20): hand-drawn icons, hand-cut edges on anything pressed or floating, torn-tape badges. Pages, tiles and tables stay square.                                                                                    |
 | Logo                              | The lowercase "statly" wordmark with the hand-drawn Sherrin tilted −14°, resting on the tip of the y. One SVG source; unused logo files are deleted (phase 5).                                                                                 |
 | Sport family                      | Basketball and soccer balls in the same hand-drawn style stand in for the Sherrin on those sports' surfaces.                                                                                                                                   |
-| Warm trade palette                | Kept as an official surface mode, `data-surface="paper"`, replacing the `--ts-*` namespace (target, phase 3).                                                                                                                                  |
+| Warm trade palette                | Kept as an official surface mode, `data-surface="paper"`, replacing the `--ts-*` namespace (done 2026-11-20).                                                                                                                                  |
 | Trade verdicts                    | Public trade pages show values, not letter grades or verdict labels (as built for #789).                                                                                                                                                       |
 | Two sides                         | One side cobalt, the other ink, on card edges, chart lines and bars alike. Never good and bad colours.                                                                                                                                         |
 | Match results                     | Win solid (cobalt on light grounds), loss outlined in ink, draw stone, always with W, L or D. Never green and red.                                                                                                                             |
@@ -86,6 +86,12 @@ and `.ground-sun` classes in `src/index.css` do this (done 2026-11-20); surfaces
 screen. Only the core roles follow a ground: area aliases such as `--league-*` keep their root values.
 A card inside a cobalt, ink or sun ground carries `.ground-white`.
 
+The public trade pages and the front page sit on the paper surface mode (`data-surface="paper"`,
+done 2026-11-20): a warm page `#fbfaf7` (`--brand-paper`) with quiet panels `#f1efe8`
+(`--brand-paper-deep`). It redefines only `--background` and `--muted`; ink, secondary text, cobalt,
+white cards, the hairline and focus keep their root values. Every net figure on those pages is ink
+until the trade sides land. The story collage inside it keeps its own grounds.
+
 - On cobalt and ink, the primary action is sun with ink text; marks are white on cobalt and sun on
   ink.
 - Cobalt never touches cobalt, and sun never sits next to tint.
@@ -117,7 +123,8 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
   `--result-win`, `--status-live` and so on) are the only names components use, exposed through
   `@theme inline`.
 - **Brand primitives.** `--brand-cobalt`, `--brand-cobalt-deep`, `--brand-tint`, `--brand-sun`,
-  `--brand-ink`, `--brand-stone`, `--brand-secondary-text`, `--brand-hairline` and `--brand-red` (done
+  `--brand-ink`, `--brand-stone`, `--brand-secondary-text`, `--brand-hairline`, `--brand-red` and the
+  paper pair `--brand-paper` and `--brand-paper-deep` (done
   2026-11-20), plus the shape tokens under [Shape](#space-shape-elevation-motion-and-focus): the
   hand-cut `--radius-cut` and the floating cut `--radius-cut-float` with the hard shadows
   `--shadow-hard` and `--shadow-hard-cobalt` (done 2026-11-20).
@@ -220,7 +227,8 @@ One primitive per job, in `src/components/ui/`.
 - **Badges:** `badgeStyles` only, torn tape, always a word or letter. Three per row at most. Labels
   are uppercase 11px; a badge holding a name, a query or someone's own words passes `caps: false`
   (done 2026-11-20).
-- **Chips and segmented controls:** hand-cut, turning sun when picked.
+- **Chips and segmented controls:** `chipStyles`: hand-cut with a 2px ink edge, turning sun when
+  picked (done 2026-11-20 on the public trade pages; the rest move screen by screen).
 - **Fields:** `fieldStyles`, white with a 2px ink edge on every ground (done 2026-11-20), label
   above, hint or error below with the error associated with the field. Errors keep what was typed.
   `border-input` is the field edge only; any other edge uses `border-border`.
@@ -257,6 +265,10 @@ One primitive per job, in `src/components/ui/`.
 `src/lib/clubGuernseys.ts` is the source. Club colour appears only in the 13px club square, always
 beside the club abbreviation; white clubs (Geelong, North, Sydney) get an ink-edged square. Text is
 never set on a club colour. A unit test checks the squares against every ground (target, phase 2).
+On the public trade pages `ClubBadge` draws the square and abbreviation, and the trade tree is ink
+with a club square beside each club's name (done 2026-11-20). The trade page head, the scarf and the
+tower still use club colours: the owner is redesigning them (ticket 06h), so they carry
+`data-collage` and the brand check skips them, like the story collage on the home page.
 
 ## Content
 
@@ -348,14 +360,14 @@ that holds only for Statly, or delete it.
 
 Rules an agent reads are the first layer; tests are the backstop. Phases land in order.
 
-| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                                          | Status           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                                               | Done             |
-| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket                         | Done, except axe |
-| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the control cut, tape, field roles and `--input` at 3:1 or more (done 2026-11-20), the floating cut and hard shadow tokens (done 2026-11-20), paper surface mode (dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan | In progress      |
-| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                                               | Planned          |
-| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                                                | Planned          |
-| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                                             | Planned          |
+| Phase                 | Ships                                                                                                                                                                                                                                                                                                                                                                           | Status           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                                                                | Done             |
+| 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` with the `wcag22aa` tag follows in phase 3's last ticket                                          | Done, except axe |
+| 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the control cut, tape, field roles and `--input` at 3:1 or more (done 2026-11-20), the floating cut and hard shadow tokens (done 2026-11-20), paper surface mode (done 2026-11-20; dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan | In progress      |
+| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                                                                | Planned          |
+| 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                                                                 | Planned          |
+| 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                                                              | Planned          |
 
 Automated design checks today:
 
@@ -365,5 +377,10 @@ Automated design checks today:
   `node Scripts/design/count-raw-colours.mjs --write-baseline`; never raise it.
   `node Scripts/design/count-raw-colours.mjs --top 15` lists what is left.
 - `tests/unit/designContrast.test.ts` checks the core token pairs that exist today (see [Colour roles](#colour-roles))
-  against the values in `src/index.css`, and each club square against the light grounds. Add a pair
-  when a token gains a job.
+  against the values in `src/index.css`, the six grounds and the paper surface, and each club square
+  against the light grounds and paper. `designTokenColours.test.ts` also fails if the retired `--ts-*`
+  trade palette comes back. Add a pair when a token gains a job.
+- `tests/e2e/public-trades-brand.test.ts` loads the front page, the trade list, a trade, a club's
+  chains and the method page at 1280, 1024, 768 and 390px and fails on a pill, a rounded tile or list, a
+  blurred shadow, red outside live and errors, text under 11px or under 4.5:1, a Geist sentence, a
+  side stripe, or club colour bigger than the 13px square. It skips `[data-collage]`.

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { clampLines, wrapText } from '@/components/aflTradeStory/scarfTimeline';
 import {
+  clubSquare,
   clubStyle,
   formatPav,
   formatSigned,
@@ -68,6 +69,12 @@ describe('trade page model helpers', () => {
   it('shows a near-white guernsey by its trim, so the club reads as a colour', () => {
     expect(clubStyle('Geelong')).toMatchObject({ abbreviation: 'GEE', fill: '#001f3d' });
     expect(clubStyle('North Melbourne').fill).toBe('#1a3b8e');
+  });
+
+  it('draws a white guernsey as a white club square with an ink edge, others in their colour', () => {
+    expect(clubSquare('Geelong')).toEqual({ fill: '#ffffff', edged: true });
+    expect(clubSquare('Sydney')).toEqual({ fill: '#ffffff', edged: true });
+    expect(clubSquare('Essendon')).toEqual({ fill: '#000000', edged: false });
   });
 
   it('round-trips a trade id through its hash, and keeps pages on the private path', () => {

@@ -44,8 +44,11 @@ const focusRing =
 export default async function HomePage(): Promise<ReactElement> {
   const trades = await publicTradeStoryReads.listStories();
   return (
+    // The paper surface (style guide, "Grounds") changes only the page and quiet panels; the hero,
+    // record deal and tower paint their own story collage grounds over it.
     <div
       className={trades.available ? 'bg-background text-foreground' : 'bg-muted text-foreground'}
+      data-surface={trades.available ? 'paper' : undefined}
     >
       {trades.available ? <TradesFrontPage list={trades.value} /> : null}
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
@@ -85,7 +88,7 @@ export default async function HomePage(): Promise<ReactElement> {
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className={`block h-full rounded-lg border border-border bg-card px-4 py-4 transition hover:bg-accent ${focusRing}`}
+                  className={`block h-full border border-border bg-card px-4 py-4 transition hover:bg-accent ${focusRing}`}
                 >
                   <span className="font-semibold text-foreground">{item.title}</span>
                   <span className="mt-1 block text-sm leading-6 text-muted-foreground">

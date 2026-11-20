@@ -15,7 +15,6 @@ import {
   checkpointText,
   inSentence,
   netText,
-  netTone,
   storyClubNames,
   tradeName,
   tradeStoriesHref,
@@ -45,10 +44,10 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
   const pendingAtTrade = story.nets.tradeAlone.some(({ atTrade }) => atTrade.pendingCount > 0);
 
   return (
-    <div className={`afl-trade-story min-h-screen ${audience === 'public' ? 'ts-public' : ''}`}>
+    <div className="afl-trade-story min-h-screen" data-surface="paper">
       <Shell className="mx-auto w-full max-w-6xl px-4 pt-5 pb-16 sm:px-6">
         <TradePageNotice source={model.source} />
-        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
+        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-muted-foreground">
           <Link href={tradeStoriesHref(audience)} className="underline underline-offset-2">
             {audience === 'public' ? 'AFL trades' : 'Private trades'}
           </Link>{' '}
@@ -60,7 +59,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           {audience === 'public' ? null : (
             <>
               <h1 className="max-w-[24ch] text-balance ts-head font-semibold">{headline(model)}</h1>
-              <p className="mt-1 ts-body text-(--ts-ink2)">
+              <p className="mt-1 ts-body text-muted-foreground">
                 {tradeName(story.trade.clubs)} trade, {story.trade.year}
               </p>
             </>
@@ -70,13 +69,13 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
               {story.nets.tradeAlone.map((net) => (
                 <li
                   key={net.clubId}
-                  className="flex items-center gap-2.5 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-3.5 py-2"
+                  className="flex items-center gap-2.5 border border-border bg-card px-3.5 py-2"
                 >
                   <ClubBadge clubName={net.clubName} named />
-                  <b className={`ts-net font-semibold tabular-nums ${netTone(net.net)}`}>
+                  <b className="ts-net font-semibold tabular-nums text-foreground">
                     {netText(net)}
                   </b>
-                  <span className="ts-small text-(--ts-ink2)">{net.clubName}</span>
+                  <span className="ts-small text-muted-foreground">{net.clubName}</span>
                 </li>
               ))}
             </ul>
@@ -90,7 +89,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
               </li>
             ))}
           </ul>
-          <p className="mt-3 max-w-[68ch] text-(--ts-ink2)">
+          <p className="mt-3 max-w-[68ch] text-muted-foreground">
             Values are PAV (Player Approximate Value) value lines at{' '}
             {checkpointText(story.checkpoint)}: what each player has given the club that drafted or
             traded for him, plus what a stint still open is expected to add. A pick whose draft is
@@ -108,7 +107,7 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         <TradePlayerCards story={story} clubNames={clubNames} shares={shares} />
         <TradeLineage story={story} bidMatches={bidMatches} audience={audience} />
 
-        <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-(--ts-ink2)">
+        <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-muted-foreground">
           <p>
             PAV (Player Approximate Value): what each player has given the club that drafted or
             traded for him to {throughSeason}, plus what an open stint is expected to add. A pick

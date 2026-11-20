@@ -108,6 +108,23 @@ export const badgeStyles = cva(
   }
 );
 
+/**
+ * Filter and choice chips (style guide, "Chips and segmented controls"): the hand-cut edge with a 2px
+ * ink line, a quiet fill on hover, and sun with ink text when picked. 44px tall for phones.
+ */
+export const chipStyles = cva(
+  `inline-flex min-h-11 items-center gap-2 rounded-cut border-2 border-foreground px-4 font-display text-sm font-bold transition ${focusOutline}`,
+  {
+    variants: {
+      picked: {
+        true: 'bg-warning text-warning-foreground',
+        false: 'bg-card text-foreground hover:bg-muted',
+      },
+    },
+    defaultVariants: { picked: false },
+  }
+);
+
 export const fieldStyles = cva(
   `w-full rounded-cut border-2 border-input bg-field px-3 text-sm text-field-foreground transition placeholder:text-field-placeholder ${focusOutline} disabled:cursor-not-allowed disabled:border-dashed disabled:border-field-placeholder disabled:bg-muted disabled:text-field-placeholder`,
   {

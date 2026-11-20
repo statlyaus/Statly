@@ -1,31 +1,31 @@
 /*
- * The public trade tree (owner's design, 2026-11-17, hatched ink for other clubs). A story surface
- * with its own type: condensed labels and numbers, a serif for words. Outside tradeStory.css, whose
- * four-size scale the trade page's own sections keep; its colours are tradeStory.css's --ts-* tokens.
+ * The public trade tree (owner's design, 2026-11-17, hatched ink for other clubs). Outside
+ * tradeStory.css, whose four-size scale the trade page's own sections keep. Brand type (style guide,
+ * "Type"): Geist for the title, names, labels and the big PAV numbers; Saira for sentences. Its
+ * colours are the core roles of the paper surface mode.
  */
 .tt {
   margin-top: 3rem;
   padding: clamp(1.25rem, 3vw, 2.25rem);
-  border: 1px solid var(--ts-line);
-  border-radius: 12px;
-  background: var(--ts-surface);
-  color: var(--ts-ink);
-  font-family: var(--font-sc-serif), Georgia, serif;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-family: var(--font-saira), ui-sans-serif, system-ui, sans-serif;
 }
 .tt-title {
   margin: 0;
-  font-family: var(--font-sc-label), sans-serif;
-  font-weight: 600;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
   font-size: clamp(1.9rem, 3.6vw, 2.6rem);
   line-height: 1.05;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.04em;
 }
 .tt-lede {
   max-width: 40rem;
   margin: 0.75rem 0 0;
   font-size: 1rem;
   line-height: 1.5;
-  color: var(--ts-ink2);
+  color: var(--muted-foreground);
 }
 .tt-key {
   display: flex;
@@ -36,7 +36,7 @@
   padding: 0;
   list-style: none;
   font-size: 13px;
-  color: var(--ts-muted);
+  color: var(--muted-foreground);
 }
 .tt-key li {
   display: inline-flex;
@@ -56,7 +56,7 @@
   margin: 1rem 0 0;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--ts-muted);
+  color: var(--muted-foreground);
 }
 /* The list is the phone layout, and the chart's text equivalent everywhere. */
 .tt-list {
@@ -74,23 +74,25 @@
   gap: 0.75rem;
   margin: 0;
   padding-bottom: 0.4rem;
-  border-bottom: 2px solid var(--ts-ink);
-  font-family: var(--font-sc-label), sans-serif;
-  font-weight: 600;
+  border-bottom: 2px solid var(--foreground);
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
   font-size: 1.15rem;
 }
 .tt-group h3 small {
-  font-family: var(--font-sc-serif), Georgia, serif;
+  font-family: var(--font-saira), ui-sans-serif, system-ui, sans-serif;
   font-weight: 400;
   font-size: 13px;
-  color: var(--ts-muted);
+  color: var(--muted-foreground);
 }
+/* Words and the number on top; the lane's track runs the full width underneath, the same length as
+   the scale above the first club. */
 .tt-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.15rem 1rem;
   padding: 0.7rem 0;
-  border-bottom: 1px solid var(--ts-line);
+  border-bottom: 1px solid var(--border);
 }
 .tt-item b {
   font-weight: 600;
@@ -102,14 +104,15 @@
 }
 .tt-item .tt-path {
   font-size: 13px;
-  color: var(--ts-muted);
+  color: var(--muted-foreground);
 }
 .tt-num {
-  grid-row: 1 / span 3;
+  grid-row: 1 / span 2;
   grid-column: 2;
   align-self: center;
-  font-family: var(--font-sc-label), sans-serif;
-  font-weight: 600;
+  justify-self: end;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
   font-size: 1.9rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -118,15 +121,70 @@
 .tt-num-words {
   font-size: 15px;
 }
-.tt-weight {
-  grid-column: 1;
-  height: 6px;
+/* Each lane's track is the trade's whole PAV scale; gridlines cross every track at the same values. */
+.tt-track {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  position: relative;
+  height: 10px;
   margin-top: 0.35rem;
-  border-radius: 1px;
+  background: var(--muted);
 }
-@media (min-width: 768px) {
+.tt-track-tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--border);
+}
+/* A zero or negative value keeps a 2px stub at 0, so the lane never looks missing. */
+.tt-weight {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  height: 6px;
+  min-width: 2px;
+  background: var(--foreground);
+}
+/* At another club: hatched ink, as in the chart. */
+.tt-weight-away {
+  background: repeating-linear-gradient(135deg, var(--foreground) 0 2px, var(--card) 2px 5px);
+}
+/* The scale once, above the first club, aligned with the tracks below it. */
+.tt-scale {
+  margin-top: 1rem;
+}
+.tt-scale-axis {
+  position: relative;
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  height: 1rem;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.tt-scale-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+.tt-thickness,
+.tt-thickness-sample {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+/* The chart from 1024px: there its 14-unit labels render at 11.6px or more. */
+@media (min-width: 1024px) {
   .tt-chart {
     display: block;
+  }
+  .tt-scale {
+    display: none;
   }
   .tt-list {
     position: absolute;
@@ -137,22 +195,23 @@
     white-space: nowrap;
   }
 }
-.tt svg text {
-  font-family: var(--font-sc-serif), Georgia, serif;
+/* Chart words are labels (Geist); the PAV numbers are big numbers (Geist 900). `section` outranks
+   tradeStory.css's `.afl-trade-story svg text { font-family: inherit }`. */
+section.tt svg text {
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
 }
-.tt svg .tt-svg-num,
-.tt svg .tt-svg-label {
-  font-family: var(--font-sc-label), sans-serif;
+.tt svg .tt-svg-num {
+  font-weight: 900;
 }
 .tt-trades {
   margin-top: 1.5rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--ts-line);
+  border-top: 1px solid var(--border);
 }
 .tt-trades h3 {
   margin: 0;
-  font-family: var(--font-sc-label), sans-serif;
-  font-weight: 600;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
   font-size: 1rem;
 }
 .tt-trades ul {
@@ -162,4 +221,7 @@
   margin: 0.6rem 0 0;
   padding: 0;
   list-style: none;
+}
+.tt-scale + .tt-list {
+  margin-top: 0.25rem;
 }

@@ -119,7 +119,7 @@ export function TradeLineage({
   /** A trade's button; a trade the lineage does not list (an earlier one) is plain text. */
   const tradeButton = (tradeId: string, anchor: string, label: string) => {
     const trade = trades.get(tradeId);
-    if (!trade) return <span className="ts-body text-(--ts-ink2)">{label}</span>;
+    if (!trade) return <span className="ts-body text-muted-foreground">{label}</span>;
     const key = `${anchor}|${tradeId}`;
     return (
       <TradeButton
@@ -138,7 +138,7 @@ export function TradeLineage({
 
   const groups = story.trade.clubs.map((club, index) => ({
     club,
-    tint: index % 2 === 0 ? 'bg-(--ts-group-a)' : 'bg-(--ts-group-b)',
+    tint: index % 2 === 0 ? 'border border-border bg-card' : 'bg-muted',
     assets: story.lineage.assets.filter(
       ({ hops }) => hops.find(({ relation }) => relation === 'this')?.clubId === club.clubId
     ),
@@ -171,14 +171,14 @@ export function TradeLineage({
       <h2 id="lineage-title" className="ts-head font-semibold">
         Lineage
       </h2>
-      <p className="mt-1 text-(--ts-ink2)">
+      <p className="mt-1 text-muted-foreground">
         Every asset from the trade, followed to the player it became. Open any{' '}
         <span aria-hidden="true">⇄</span>
         <span className="sr-only">trade button</span> to see that trade here.
       </p>
-      <div className="mt-4 rounded-2xl border border-(--ts-line) bg-(--ts-surface) p-3 sm:p-4">
+      <div className="mt-4 border border-border bg-card p-3 sm:p-4">
         <ul
-          className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-(--ts-ink2)"
+          className="mb-3 flex flex-wrap gap-x-5 gap-y-1 ts-small text-muted-foreground"
           aria-label="Key"
         >
           <li className="flex items-center gap-1.5">
@@ -190,13 +190,13 @@ export function TradeLineage({
           <li className="flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className="inline-block h-2.5 w-8 rounded-full border-2 border-(--ts-accent) bg-(--ts-accent)/30"
+              className="inline-block h-2.5 w-8 border-2 border-primary bg-primary/30"
             />
             bar length is PAV
           </li>
         </ul>
         {groups.map(({ club, tint, assets }) => (
-          <div key={club.clubId} className={`mt-3 rounded-xl p-3 sm:p-4 ${tint}`}>
+          <div key={club.clubId} className={`mt-3 p-3 sm:p-4 ${tint}`}>
             <h3 className="flex items-center gap-2 ts-body font-semibold">
               <ClubBadge clubName={club.clubName} size="md" named />
               {club.clubName} received
@@ -209,7 +209,7 @@ export function TradeLineage({
                 return (
                   <li
                     key={asset.transferId}
-                    className="border-t border-(--ts-line) py-3 first:border-t-0"
+                    className="border-t border-border py-3 first:border-t-0"
                   >
                     <div className="grid gap-2 md:grid-cols-[180px_1fr] md:items-center">
                       <p className="ts-body font-medium">{asset.label}</p>
@@ -222,7 +222,7 @@ export function TradeLineage({
                         ))}
                         <span
                           aria-hidden="true"
-                          className="size-3 flex-none rounded-sm border-2 border-(--ts-accent) bg-(--ts-surface)"
+                          className="size-3 flex-none border-2 border-primary bg-card"
                         />
                         {after.map((hop) => (
                           <Fragment key={`after-${hop.tradeId}`}>
@@ -253,7 +253,7 @@ export function TradeLineage({
           </div>
         ))}
         <div className="mt-4">
-          <h3 className="ts-small font-medium text-(--ts-ink2)">Trades in this lineage</h3>
+          <h3 className="ts-small font-medium text-muted-foreground">Trades in this lineage</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {story.lineage.trades.map((trade) => (
               <li key={trade.tradeId}>

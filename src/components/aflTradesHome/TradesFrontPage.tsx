@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 import { ClubBadge } from '@/components/aflTradeStory/ClubBadge';
-import { clubStyle, formatSigned, tradeStoryHref } from '@/components/aflTradeStory/tradePageModel';
+import { formatSigned, tradeStoryHref } from '@/components/aflTradeStory/tradePageModel';
 import {
   biggestWins,
   tradeLadder,
@@ -32,15 +32,6 @@ const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 const container = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10';
 const sectionTitle = 'font-display text-5xl font-extrabold leading-none sm:text-6xl';
-// Pixels held while results moved to cobalt: the public nets go neutral ink with the trade pages'
-// netTone in brand ticket 05 part C, after the owner decides the multi-club chart.
-const tone = (net: number) =>
-  Number(Math.abs(net).toFixed(1)) === 0
-    ? 'text-foreground'
-    : net > 0
-      ? 'text-success'
-      : 'text-destructive';
-
 export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const { stories } = list;
   const ladder = tradeLadder(stories);
@@ -57,14 +48,17 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
 
   return (
     <>
+      {/* The hero and the record deal are the story collage exception (style guide, "Owner
+          decisions"); data-collage keeps them out of the brand conformance check. */}
       <section
         aria-labelledby="front-heading"
         className={`mh ${STORY_COLLAGE_CLASS.replace(/^sc /u, '')}`}
+        data-collage
       >
         <TradeMarketHero headingId="front-heading" />
       </section>
 
-      <section aria-label="The record deal" className={STORY_COLLAGE_CLASS}>
+      <section aria-label="The record deal" className={STORY_COLLAGE_CLASS} data-collage>
         <div className="sc-wrap flex flex-col gap-12 pt-4 pb-12">
           {cameron ? (
             <RecordBanner
@@ -104,7 +98,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
 
       <TowerLadder ladder={ladder} firstYear={firstYear} />
 
-      <div className={`${container} grid gap-14 py-12 lg:py-16`}>
+      <div className={`${container} grid grid-cols-[minmax(0,1fr)] gap-14 py-12 lg:py-16`}>
         {nextWins.length > 0 ? (
           <section aria-labelledby="next-wins">
             <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 border-b-4 border-foreground pb-3">
@@ -118,38 +112,23 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
                 Every trade, biggest result first
               </Link>
             </div>
-            <ul className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {nextWins.map((win) => {
                 const others = (win.story.results ?? []).filter(
                   (result) => result.clubName !== win.clubName
                 );
-                const bands = [win.clubName, win.clubName, ...others.map((o) => o.clubName)];
                 return (
                   <li key={win.story.tradeId}>
                     <Link
                       href={tradeStoryHref(win.story.tradeId, 'public')}
-                      className={`flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition hover:bg-muted ${focusRing}`}
+                      className={`flex h-full flex-col overflow-hidden border border-border bg-card transition hover:bg-muted ${focusRing}`}
                     >
-                      <span aria-hidden="true" className="flex h-3">
-                        {bands.map((name, index) => (
-                          <span
-                            key={index}
-                            className="flex-1 border-b-2"
-                            style={{
-                              background: clubStyle(name).fill,
-                              borderColor: clubStyle(name).trim,
-                            }}
-                          />
-                        ))}
-                      </span>
                       <span className="flex flex-1 flex-col gap-2 px-4 py-4">
-                        <span className="flex items-end justify-between gap-3">
-                          <span className="truncate font-display text-3xl font-bold leading-none">
+                        <span className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+                          <span className="font-display text-3xl font-bold leading-none">
                             {win.clubName}
                           </span>
-                          <b
-                            className={`font-display text-5xl font-extrabold leading-none tabular-nums ${tone(win.net)}`}
-                          >
+                          <b className="font-display text-5xl font-extrabold leading-none tabular-nums text-foreground">
                             {formatSigned(win.net)}
                           </b>
                         </span>
@@ -176,20 +155,12 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
           </h2>
           <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {years.map(({ year, trades, biggest }) => {
-              const style = biggest ? clubStyle(biggest.clubName) : null;
               return (
                 <li key={year} className="last:odd:col-span-2 sm:last:odd:col-span-1">
                   <Link
                     href={tradesListHref({ year, club: null, sort: 'newest' })}
-                    className={`flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition hover:bg-muted ${focusRing}`}
+                    className={`flex h-full flex-col overflow-hidden border border-border bg-card transition hover:bg-muted ${focusRing}`}
                   >
-                    <span
-                      aria-hidden="true"
-                      className="h-2.5 border-b-2"
-                      style={
-                        style ? { background: style.fill, borderColor: style.trim } : undefined
-                      }
-                    />
                     <span className="flex flex-1 flex-col gap-3 px-3 py-3">
                       <span className="font-display text-5xl font-extrabold leading-none tabular-nums">
                         {year}
@@ -198,9 +169,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
                       {biggest ? (
                         <span className="mt-auto flex items-center gap-2">
                           <ClubBadge clubName={biggest.clubName} />
-                          <b
-                            className={`font-display text-xl font-bold tabular-nums ${tone(biggest.net)}`}
-                          >
+                          <b className="font-display text-xl font-bold tabular-nums text-foreground">
                             {formatSigned(biggest.net)}
                           </b>
                         </span>

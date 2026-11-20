@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAflTradeStoryBundleSource } from '@/server/aflTradeIntelligence/development/tradeStoryBundle';
-import { laneLabel, tradeTree } from '@/components/aflTradeStory/tradeTreeModel';
+import { laneLabel, pavScale, tradeTree } from '@/components/aflTradeStory/tradeTreeModel';
 
 import { sampleTradeStoryBundle } from '../fixtures/aflTradeStorySampleBundle';
 
@@ -35,6 +35,26 @@ describe('trade tree', () => {
         const total = group.lanes.reduce((sum, { value }) => sum + (value ?? 0), 0);
         expect(group.kept + group.elsewhere).toBeCloseTo(total, 6);
       }
+    }
+  });
+
+  it('rounds the largest value up to a clean scale with one or two gridlines', () => {
+    expect(pavScale(57.1)).toEqual({ top: 60, ticks: [20, 40] });
+    expect(pavScale(96.2)).toEqual({ top: 100, ticks: [50] });
+    expect(pavScale(62.5)).toEqual({ top: 80, ticks: [40] });
+    expect(pavScale(141)).toEqual({ top: 150, ticks: [50, 100] });
+    expect(pavScale(30)).toEqual({ top: 30, ticks: [10, 20] });
+    // All zero or missing: still a scale, so every track draws.
+    expect(pavScale(0)).toEqual({ top: 1, ticks: [0.5] });
+  });
+
+  it('gives every club of a trade the one scale, from the largest value in the whole trade', () => {
+    for (const summary of stories) {
+      const { story } = source.load(summary.tradeId)!;
+      const tree = tradeTree(story);
+      const values = tree.groups.flatMap(({ lanes }) => lanes.map(({ value }) => value ?? 0));
+      expect(tree.scale).toEqual(pavScale(Math.max(1, ...values)));
+      for (const value of values) expect(value).toBeLessThanOrEqual(tree.scale.top);
     }
   });
 });

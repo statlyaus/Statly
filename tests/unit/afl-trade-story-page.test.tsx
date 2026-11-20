@@ -240,7 +240,16 @@ describe('private trade page: the headline', () => {
     render(<AflTradeStoryPage model={level} />);
     const chips = screen.getByRole('list', { name: 'Each club’s net on this trade' });
     for (const value of within(chips).getAllByText('0.0')) {
-      expect(value.className).not.toMatch(/ts-(pos|neg)/u);
+      expect(value.className).toMatch(/\btext-foreground\b/u);
+    }
+  });
+
+  it('sets every net in ink, never in good and bad colours', () => {
+    render(<AflTradeStoryPage model={model(TRADE.cameron)} />);
+    const chips = screen.getByRole('list', { name: 'Each club’s net on this trade' });
+    for (const value of within(chips).getAllByText(/^[+−]/u)) {
+      expect(value.className).toMatch(/\btext-foreground\b/u);
+      expect(value.className).not.toMatch(/success|destructive|result-|ts-(pos|neg)/u);
     }
   });
 

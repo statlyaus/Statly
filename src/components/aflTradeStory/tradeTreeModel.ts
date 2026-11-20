@@ -72,7 +72,34 @@ interface TreeGroup {
 export interface TradeTree {
   readonly columns: readonly TreeColumn[];
   readonly groups: readonly TreeGroup[];
-  readonly maxValue: number;
+  /** One PAV scale for every club of the trade: bar lengths and line thickness read against it. */
+  readonly scale: PavScale;
+}
+
+export interface PavScale {
+  /** The largest value in the trade, rounded up to a clean step: the full length of every track. */
+  readonly top: number;
+  /** One or two gridlines between 0 and `top`. */
+  readonly ticks: readonly number[];
+}
+
+const NICE_STEPS = [1, 1.5, 2, 3, 4, 5, 6, 8, 10];
+const isClean = (value: number) => {
+  const power = 10 ** Math.floor(Math.log10(value));
+  return [1, 2, 5, 10].some((digit) => Math.abs(value - digit * power) < 1e-9 * power);
+};
+
+/**
+ * The trade's PAV scale: its largest value rounded up to 1, 1.5, 2, 3, 4, 5, 6 or 8 times a power of
+ * ten (57.1 → 60), with gridlines at thirds when they land on clean numbers (20, 40) and otherwise at
+ * the half (100 → 50). A trade whose values are all zero or missing still gets a scale of 1.
+ */
+export function pavScale(largest: number): PavScale {
+  const target = Math.max(1, largest);
+  const power = 10 ** Math.floor(Math.log10(target));
+  const top = NICE_STEPS.map((step) => step * power).find((step) => step >= target - 1e-9)!;
+  const third = top / 3;
+  return { top, ticks: isClean(third) ? [third, 2 * third] : [top / 2] };
 }
 
 const ORDER = { season_end: 0, trade: 1, draft: 2 } as const;
@@ -239,6 +266,6 @@ export function tradeTree(story: AflTradeStory): TradeTree {
   return {
     columns,
     groups: groups.filter(({ lanes: rows }) => rows.length > 0),
-    maxValue: Math.max(1, ...lanes.map(({ value }) => value ?? 0)),
+    scale: pavScale(Math.max(1, ...lanes.map(({ value }) => value ?? 0))),
   };
 }

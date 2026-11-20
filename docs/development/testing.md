@@ -654,6 +654,12 @@ manual pick, one queued auto-pick, one fallback auto-pick, and completion. The f
 22-player, 264-pick contract runs through the persisted application boundary in integration tests so
 browser, dev-server, and database transport pressure cannot masquerade as a product failure.
 
+The server also serves the public trade pages (`/`, `/afl/trades`) from the synthetic sample bundle
+(`tests/fixtures/aflTradeStorySampleBundle.ts`), written to `test-results/` when the config loads.
+`tests/e2e/public-trades-brand.test.ts` audits those pages element by element against the style
+guide at 1280, 1024, 768 and 390px (SVG text at its rendered size), skipping `[data-collage]`. Locally, `PLAYWRIGHT_TRADE_BUNDLE_PATH` points
+the server at another stored bundle instead, such as the genuine one in `.statly-local`.
+
 Use `npm run test:e2e:draft-worker` for the real expiry-worker lifecycle; it requires an isolated Redis
 instance and a migrated disposable database. Never combine worker expiry with another progression
 authority against the same database or Redis namespace.

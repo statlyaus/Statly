@@ -5,9 +5,11 @@ import type {
   AflTradeStorySampleSummary,
 } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
 
+import { chipStyles } from '@/components/ui/controlStyles';
+
 import './tradeStory.css';
 import { ClubBadge } from './ClubBadge';
-import { clubChainsHref, formatSigned, netTone, tradeStoryHref } from './tradePageModel';
+import { clubChainsHref, formatSigned, tradeStoryHref } from './tradePageModel';
 import {
   filterTrades,
   tradesListClubs,
@@ -17,10 +19,6 @@ import {
 } from './tradesListQuery';
 
 const underline = 'underline underline-offset-2';
-const chip =
-  'inline-flex min-h-11 items-center gap-2 rounded-full border px-4 ts-body font-medium transition';
-const chipOff = 'border-(--ts-line) bg-(--ts-surface) hover:bg-(--ts-bg2)';
-const chipOn = 'border-(--ts-accent) bg-(--ts-accent) text-(--ts-surface)';
 
 /** One trade in a list: each club's result so far and what it got, or just the clubs. */
 export function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
@@ -29,7 +27,7 @@ export function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
     <li>
       <Link
         href={tradeStoryHref(story.tradeId, 'public')}
-        className="block min-h-12 px-4 py-3 hover:bg-(--ts-bg2)"
+        className="ts-inset-focus block min-h-12 px-4 py-3 hover:bg-muted"
       >
         {results.length === 0 ? (
           <span className="ts-body font-medium">{story.clubNames.join(' ⇄ ')}</span>
@@ -42,11 +40,11 @@ export function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="ts-body font-medium">{result.clubName}</span>{' '}
-                  <span className="ts-small text-(--ts-ink2)">
+                  <span className="ts-small text-muted-foreground">
                     got {result.received.length === 0 ? 'nothing' : result.received.join(', ')}
                   </span>
                 </span>
-                <b className={`ts-body font-semibold tabular-nums ${netTone(result.net)}`}>
+                <b className="ts-body font-semibold tabular-nums text-foreground">
                   {formatSigned(result.net)}
                   {result.provisional ? '*' : ''}
                 </b>
@@ -74,7 +72,7 @@ function Choice({
       <Link
         href={href}
         aria-current={active ? 'true' : undefined}
-        className={`${chip} ${active ? chipOn : chipOff}`}
+        className={chipStyles({ picked: active })}
       >
         {children}
       </Link>
@@ -110,16 +108,16 @@ export function TradesListPage({
   ].join(' · ');
 
   return (
-    <div className="afl-trade-story ts-public min-h-screen">
+    <div className="afl-trade-story min-h-screen" data-surface="paper">
       <div className="mx-auto w-full max-w-4xl px-4 pt-6 pb-16 sm:px-6">
-        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-(--ts-ink2)">
+        <nav aria-label="Breadcrumb" className="mb-3 ts-small text-muted-foreground">
           <Link href="/" className={underline}>
             Home
           </Link>{' '}
           / Trades
         </nav>
         <h1 className="ts-net font-display font-bold text-balance">AFL trades, valued</h1>
-        <p className="mt-2 max-w-[65ch] ts-body text-(--ts-ink2)">
+        <p className="mt-2 max-w-[65ch] ts-body text-muted-foreground">
           Each trade is valued by what the players and picks went on to do for the club that got
           them. The number beside a club is its result so far, in PAV. {source.label}.{' '}
           <Link href="/afl/trades/method" className={underline}>
@@ -129,7 +127,7 @@ export function TradesListPage({
 
         <section aria-label="Filter the trades" className="mt-6 grid gap-5">
           <div>
-            <h2 className="ts-small font-semibold text-(--ts-ink2)">Year</h2>
+            <h2 className="ts-small font-semibold text-muted-foreground">Year</h2>
             <ul className="mt-2 flex flex-wrap gap-2">
               {years.map((year) => (
                 <Choice
@@ -146,7 +144,7 @@ export function TradesListPage({
             </ul>
           </div>
           <div>
-            <h2 className="ts-small font-semibold text-(--ts-ink2)">Club</h2>
+            <h2 className="ts-small font-semibold text-muted-foreground">Club</h2>
             <ul className="mt-2 flex flex-wrap gap-2">
               <Choice href={tradesListHref({ ...query, club: null })} active={query.club === null}>
                 All clubs
@@ -164,7 +162,7 @@ export function TradesListPage({
             </ul>
           </div>
           <div>
-            <h2 className="ts-small font-semibold text-(--ts-ink2)">Order</h2>
+            <h2 className="ts-small font-semibold text-muted-foreground">Order</h2>
             <ul className="mt-2 flex flex-wrap gap-2">
               <Choice
                 href={tradesListHref({ ...query, sort: 'newest' })}
@@ -195,7 +193,7 @@ export function TradesListPage({
           </div>
 
           {shown.length === 0 ? (
-            <p className="mt-4 rounded-xl border border-(--ts-line) bg-(--ts-surface) px-4 py-5 ts-body">
+            <p className="mt-4 border border-border bg-card px-4 py-5 ts-body">
               No trades match. {club?.name ?? 'No club'} made no graded trade in {query.year}.{' '}
               <Link href={tradesListHref({ ...query, year: null })} className={underline}>
                 Show every year
@@ -204,8 +202,8 @@ export function TradesListPage({
           ) : grouped ? (
             shownYears.map((year) => (
               <div key={year} className="mt-6">
-                <h3 className="ts-body font-semibold text-(--ts-ink2)">{year}</h3>
-                <ul className="mt-2 divide-y divide-(--ts-line) overflow-hidden rounded-xl border border-(--ts-line) bg-(--ts-surface)">
+                <h3 className="ts-body font-semibold text-muted-foreground">{year}</h3>
+                <ul className="mt-2 divide-y divide-border overflow-hidden border border-border bg-card">
                   {shown
                     .filter((story) => story.year === year)
                     .map((story) => (
@@ -215,7 +213,7 @@ export function TradesListPage({
               </div>
             ))
           ) : (
-            <ul className="mt-4 divide-y divide-(--ts-line) overflow-hidden rounded-xl border border-(--ts-line) bg-(--ts-surface)">
+            <ul className="mt-4 divide-y divide-border overflow-hidden border border-border bg-card">
               {shown.map((story) => (
                 <TradeRow key={story.tradeId} story={story} />
               ))}
@@ -224,7 +222,7 @@ export function TradesListPage({
         </section>
 
         {anyProvisional ? (
-          <p className="mt-8 ts-small text-(--ts-ink2)">
+          <p className="mt-8 ts-small text-muted-foreground">
             * A value is not in yet, so this result will change.
           </p>
         ) : null}

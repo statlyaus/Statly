@@ -16,7 +16,6 @@ import {
   formatPav,
   formatSigned,
   netText,
-  netTone,
   type AflTradePageAudience,
   type AflTradePageBidShare,
 } from './tradePageModel';
@@ -37,15 +36,18 @@ function AssetRow({
   const share = bidShareOf(asset, shares);
   const { outcome } = asset;
   return (
-    <li className="grid grid-cols-[1fr_auto] gap-x-3 border-t border-(--ts-line) py-2 ts-body">
+    <li className="grid grid-cols-[1fr_auto] gap-x-3 border-t border-border py-2 ts-body">
       <span className="font-medium">
         {asset.label}
         {showTo ? (
-          <span className="font-normal text-(--ts-ink2)"> to {clubNames.get(asset.toClubId)}</span>
+          <span className="font-normal text-muted-foreground">
+            {' '}
+            to {clubNames.get(asset.toClubId)}
+          </span>
         ) : null}
       </span>
 
-      <span className="text-(--ts-ink2)">
+      <span className="text-muted-foreground">
         {becameText(asset, clubNames)}
         {outcome.kind === 'bid_share' ? (
           <>
@@ -53,7 +55,7 @@ function AssetRow({
             {share ? (
               <a
                 href={`#${bidShareAnchor(asset.assetId)}`}
-                className="text-(--ts-accent) underline underline-offset-2"
+                className="text-primary underline underline-offset-2"
               >
                 share of {outcome.playerName}
               </a>
@@ -76,12 +78,10 @@ function NetRow({ net, note, href }: { net: AflTradeStoryNet; note?: string; hre
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
       <ClubBadge clubName={net.clubName} />
-      <span className={`ts-head font-semibold tabular-nums ${netTone(net.net)}`}>
-        {netText(net)}
-      </span>
-      {note ? <span className="ts-small text-(--ts-ink2)">{note}</span> : null}
+      <span className="ts-head font-semibold tabular-nums text-foreground">{netText(net)}</span>
+      {note ? <span className="ts-small text-muted-foreground">{note}</span> : null}
       {href ? (
-        <Link href={href} className="ts-small underline underline-offset-2 text-(--ts-ink2)">
+        <Link href={href} className="ts-small underline underline-offset-2 text-muted-foreground">
           All {net.clubName} chains
         </Link>
       ) : null}
@@ -127,7 +127,7 @@ export function TradeDetails({
       <h2 id="details-title" className="ts-head font-semibold">
         Trade details
       </h2>
-      <p className="mt-1 text-(--ts-ink2)">
+      <p className="mt-1 text-muted-foreground">
         What each club gave, what every asset became, and its value at the trade.
       </p>
 
@@ -142,10 +142,7 @@ export function TradeDetails({
           );
           const pending = side.gave.some(({ value }) => value.kind === 'pending');
           return (
-            <div
-              key={side.clubId}
-              className="rounded-xl border border-(--ts-line) bg-(--ts-surface) p-4"
-            >
+            <div key={side.clubId} className="border border-border bg-card p-4">
               <h3 className="flex items-center gap-2 font-semibold">
                 <ClubBadge clubName={side.clubName} named />
                 {side.clubName} gave{other ? ` ${other.clubName}` : ''}
@@ -161,7 +158,7 @@ export function TradeDetails({
                   />
                 ))}
               </ul>
-              <p className="flex justify-between border-t border-(--ts-line) pt-2 ts-body">
+              <p className="flex justify-between border-t border-border pt-2 ts-body">
                 <span>{other ? `${other.clubName} received` : 'Total given'}</span>
                 <b className="tabular-nums">
                   {formatPav(given)}
@@ -174,16 +171,18 @@ export function TradeDetails({
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl bg-(--ts-bg2) p-4">
-          <h3 className="ts-small font-medium text-(--ts-ink2)">On this trade alone</h3>
+        <div className="bg-muted p-4">
+          <h3 className="ts-small font-medium text-muted-foreground">On this trade alone</h3>
           <ul className="mt-1">
             {story.nets.tradeAlone.map((net) => (
               <NetRow key={net.clubId} net={net} note={`at the trade ${netText(net.atTrade)}`} />
             ))}
           </ul>
         </div>
-        <div className="rounded-xl border border-(--ts-line) p-4">
-          <h3 className="ts-small font-medium text-(--ts-ink2)">With what each club did next</h3>
+        <div className="border border-border p-4">
+          <h3 className="ts-small font-medium text-muted-foreground">
+            With what each club did next
+          </h3>
           <ul className="mt-1">
             {story.nets.withNextMoves.map((net) => {
               const later = net.net - (alone.get(net.clubId)?.net ?? 0);
@@ -208,7 +207,7 @@ export function TradeDetails({
       {bidAssets.length > 0 ? (
         <div className="mt-6">
           <h3 className="ts-body font-semibold">Picks used to match a bid</h3>
-          <p className="mt-1 ts-body text-(--ts-ink2)">
+          <p className="mt-1 ts-body text-muted-foreground">
             A pick spent on a bid is swapped for a share of the player, by the points it covered.
           </p>
           <div className="mt-3 grid gap-4 md:grid-cols-2">

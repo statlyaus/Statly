@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { readRootTokens, readTokenBlock, resolveColour } from '../../Scripts/design/contrast.mjs';
+
 import { contrastRatio } from '@/components/aflTradeStory/tradePageModel';
 import {
   CHART_THEME,
@@ -101,17 +103,13 @@ describe('value line chart: colours', () => {
       expect(contrastRatio(lineStroke(club), CHART_THEME.surface), club).toBeGreaterThanOrEqual(3);
   });
 
-  it('keeps the chart theme in step with the page tokens', () => {
-    const css = readFileSync(
-      join(__dirname, '../../src/components/aflTradeStory/tradeStory.css'),
-      'utf8'
-    );
-    const tokens = (name: string) =>
-      [...css.matchAll(new RegExp(`--ts-${name}: (#[0-9a-f]{6});`, 'gu'))].map(([, hex]) => hex);
-    // The private page, then the public pages' block (.ts-public): the same white surface, with the
-    // site's softer text colour on the public pages.
-    expect(tokens('surface')).toEqual([CHART_THEME.surface, CHART_THEME.surface]);
-    expect(tokens('ink')[0]).toBe(CHART_THEME.ink);
+  it('keeps the chart theme in step with the paper surface', () => {
+    // The chart sits on a card: the paper surface keeps --card white, so every club line measured
+    // against CHART_THEME.surface still reaches 3:1 on the page.
+    const css = readFileSync(join(__dirname, '../../src/index.css'), 'utf8');
+    const root = readRootTokens();
+    const paper = new Map([...root, ...readTokenBlock(css, "[data-surface='paper']")]);
+    expect(resolveColour(paper, '--card')).toBe(CHART_THEME.surface);
   });
 
   it('dashes a club whose line looks like an earlier club’s', () => {
