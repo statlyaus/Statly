@@ -37,10 +37,12 @@ instructions.
 ## Setup
 
 MAIN is the main checkout, the first path in `git worktree list`; it has `node_modules`. Run from MAIN
-(a linked worktree works if its `node_modules` link resolves). `git fetch origin --quiet`, then analyse
-`origin/main` content: if the checkout is behind, say so. REPORTS is `MAIN/.statly-local/repo-steward/`;
-create it if missing. Read the newest
-report there first: do not repeat an unchanged finding, and carry forward OWNER items still open.
+(a linked worktree works if its `node_modules` link resolves). `git fetch origin --quiet`. knip and
+`docs:check` read the working tree, so record whether it matches `origin/main` for SAFE paths:
+`git diff --quiet HEAD origin/main -- src package.json`. If it does not, no finding is SAFE this run
+(use REVIEW) and the report says so. REPORTS is `MAIN/.statly-local/repo-steward/`; create it if
+missing. Read the newest report there first: do not repeat an unchanged finding, and carry forward
+OWNER items still open.
 
 WEEK is the files changed on `origin/main` in the last 7 days:
 `git log --since='7 days ago' --name-only --format= origin/main | sort -u` (existing files only).
@@ -50,7 +52,7 @@ after 11):
 
 1. `src/app`
 2. `src/components`
-3. `src/server` (fantasy), `src/workers`
+3. `src/server` (fantasy), `src/server/workers`, `src/workers`
 4. Outcomes boundary: `src/server/aflTradeIntelligence`, `prisma/afl-trade-outcomes`
 5. `src/lib`, `src/hooks`, `src/utils`, `src/services`, `src/types`, `src/data`
 6. `Scripts/`, root config files, `package.json` scripts
@@ -67,10 +69,11 @@ Load each named skill with the Skill tool and read it fully before applying it. 
 
 **A. Dead weight (whole repo, every run).** Run
 `npx -y knip@6.44.1 --config knip.json --reporter compact --no-progress`. knip is a lead, not proof: for
-every unused file, export or dependency, `git grep` the tracked tree (package.json, netlify.toml,
-workflows, Dockerfile, docs, Scripts, tests) for its import path without extension and its basename,
-and for a dependency also dynamic `import('<name>')`, string module names and `declare module`. Report
-it only with zero real references. Also: tracked files over 1 MB (`git ls-files` only), duplicate
+every hit, search `origin/main` itself with `git grep -n <pattern> origin/main --` (this covers
+package.json, netlify.toml, workflows, Dockerfile, docs, Scripts and tests). For a file, search its
+import path without extension and its basename; for an export, its symbol name outside its own file;
+for a dependency, its name, including dynamic `import('<name>')`, string module names and
+`declare module`. Report it only with zero real references. Also: tracked files over 1 MB (`git ls-files` only), duplicate
 configs doing one job, npm scripts nothing calls, open pull requests older than 7 days (name
 `modernize`), and the count of untracked junk files in the main checkout root (count and pattern only).
 
@@ -101,14 +104,17 @@ Every finding gets exactly one:
 - **SAFE**: mechanical, provable by CI, one concern. Only these qualify: unused files under `src/`,
   unused exports in `src/`, unused root `package.json` dependencies, each with zero references.
 - **REVIEW**: everything else worth doing. Anything under `Scripts/`, `etl/`, `functions/`, `netlify/`,
-  `prisma/`, `infrastructure/`, `.github/`, `docs/`, config files, `src/workers/`, or the outcomes
+  `prisma/`, `infrastructure/`, `.github/`, `docs/`, config files, `src/workers/`,
+  `src/server/workers/`, or the outcomes
   boundary is never SAFE: its callers live in runbooks and VM checkouts you cannot see.
 - **OWNER**: encodes an undecided product or operations choice (a parked feature, the Firestore-writing
   root scripts, a removal that changes what the public site shows).
 
 ## Output
 
-Write `REPORTS/<YYYY-MM-DD>.md`: the `origin/main` sha, AREA reviewed and the next one, every finding
+A run with a named scope (a path, pull request or diff, or a "before a deletion" question) writes no
+report and does not advance the rotation: return the answer and its evidence only. A sweep writes
+`REPORTS/<YYYY-MM-DD>.md`: the `origin/main` sha, AREA reviewed and the next one, every finding
 ranked by value to the trades-site objective and then by lines removed (bucket, `path:line`, the
 evidence command and its result in one line, the fix), the OWNER list, removable worktrees, and skills
 that were unavailable.

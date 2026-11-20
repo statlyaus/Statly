@@ -3,9 +3,9 @@
   "entry": [
     "netlify/functions/*.{ts,mts}",
     "Scripts/**/*.{ts,mts,js,mjs,cjs}",
-    "src/workers/**/*.ts",
-    "src/scripts/**/*.ts"
+    "src/server/workers/*.ts",
+    "src/workers/**/*.ts"
   ],
-  "ignore": [".claude/**", "etl/**", "functions/**", "tmp/**", "graphify-out/**"],
+  "ignore": [".claude/**", "etl/**", "functions/**"],
   "ignoreWorkspaces": ["etl", "functions"]
 }
