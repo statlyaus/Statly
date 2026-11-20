@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "netlify/functions/*.{ts,mts}",
+    "Scripts/**/*.{ts,mts,js,mjs,cjs}",
+    "src/server/workers/*.ts",
+    "src/workers/**/*.ts"
+  ],
+  "ignore": [".claude/**", "etl/**", "functions/**"],
+  "ignoreWorkspaces": ["etl", "functions"]
+}
