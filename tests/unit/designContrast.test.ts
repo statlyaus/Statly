@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { clubStyle } from '@/components/aflTradeStory/tradePageModel';
 import { FALLBACK_GUERNSEY } from '@/lib/clubGuernseys';
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { contrastRatio, readRootTokens, resolveColour } from '../../Scripts/design/contrast.mjs';
 
 // Every colour pair the style guide names must hold in the values the app ships
@@ -24,6 +27,7 @@ describe('design token contrast', () => {
     ['accent label', '--accent-foreground', '--accent', 4.5],
     ['brand bar label', '--brand-bar-foreground', '--brand-bar', 4.5],
     ['warning label', '--warning-foreground', '--warning', 4.5],
+    ['amber words on the page', '--warning-text', '--background', 4.5],
     ['win label', '--result-win-foreground', '--result-win', 4.5],
     ['loss label', '--result-loss-foreground', '--result-loss', 4.5],
     ['draw label', '--result-draw-foreground', '--result-draw', 4.5],
@@ -78,5 +82,42 @@ describe('club squares', () => {
     for (const [ground, hex] of Object.entries(LIGHT_GROUNDS)) {
       expect({ ground, ratio: contrastRatio(fill, hex) >= 3 }).toEqual({ ground, ratio: true });
     }
+  });
+});
+
+// Each ground redefines the roles a component reads (style guide, "Grounds"); every pair must hold
+// on every ground.
+const css = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
+const GROUNDS = ['white', 'stone', 'tint', 'cobalt', 'ink', 'sun'] as const;
+
+// Every top-level rule whose selector list names the ground, in source order.
+function groundTokens(ground: string): Map<string, string> {
+  const merged = new Map(tokens);
+  for (const match of css.matchAll(/^([.\w\s,-]+)\{([^}]*)\}/gm)) {
+    const selectors = match[1].split(',').map((selector) => selector.trim());
+    if (!selectors.includes(`.ground-${ground}`)) continue;
+    for (const [, name, value] of match[2].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) {
+      merged.set(name, value.trim());
+    }
+  }
+  return merged;
+}
+
+describe.each(GROUNDS)('the %s ground', (ground) => {
+  const tokensOnGround = groundTokens(ground);
+  const onGround = (foreground: string, background: string) =>
+    contrastRatio(
+      resolveColour(tokensOnGround, foreground),
+      resolveColour(tokensOnGround, background)
+    );
+
+  it.each([
+    ['text', '--foreground', '--background', 4.5],
+    ['secondary text', '--muted-foreground', '--background', 4.5],
+    ['primary as text or mark', '--primary', '--background', 4.5],
+    ['primary action label', '--primary-foreground', '--primary', 4.5],
+    ['focus ring', '--ring', '--background', 3],
+  ])('%s holds', (_role, foreground, background, minimum) => {
+    expect(onGround(foreground, background)).toBeGreaterThanOrEqual(minimum);
   });
 });
