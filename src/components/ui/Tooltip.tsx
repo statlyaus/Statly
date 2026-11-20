@@ -24,8 +24,7 @@ export type TooltipPlacement =
 export type TooltipTrigger = 'hover' | 'click' | 'focus' | 'manual';
 
 // Tooltip variants
-export type TooltipVariant =
-  'default' | 'dark' | 'light' | 'info' | 'success' | 'warning' | 'error';
+export type TooltipVariant = 'default' | 'light' | 'info' | 'success' | 'warning' | 'error';
 
 // Tooltip size
 export type TooltipSize = 'sm' | 'md' | 'lg';
@@ -56,11 +55,6 @@ const VARIANT_CONFIG = {
     background: 'bg-popover',
     text: 'text-popover-foreground',
     border: 'border-border',
-  },
-  dark: {
-    background: 'bg-black',
-    text: 'text-white',
-    border: 'border-black',
   },
   light: {
     background: 'bg-white',
@@ -465,48 +459,6 @@ export function InfoTooltip({
           />
         </svg>
       </button>
-    </Tooltip>
-  );
-}
-
-// Player stat tooltip - specialized for sports stats
-interface PlayerStatTooltipProps {
-  playerName: string;
-  stats: Record<string, string | number>;
-  children: ReactNode;
-  placement?: TooltipPlacement;
-}
-
-export function PlayerStatTooltip({
-  playerName,
-  stats,
-  children,
-  placement = 'top',
-}: PlayerStatTooltipProps) {
-  const content = (
-    <div className="p-1">
-      <h4 className="font-semibold text-sm mb-2">{playerName}</h4>
-      <div className="space-y-1">
-        {Object.entries(stats).map(([key, value]) => (
-          <div key={key} className="flex justify-between text-xs">
-            <span className="text-gray-300">{key}:</span>
-            <span className="font-medium">{value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    <Tooltip
-      content={content}
-      variant="dark"
-      size="md"
-      placement={placement}
-      delay={300}
-      maxWidth="max-w-sm"
-    >
-      {children}
     </Tooltip>
   );
 }

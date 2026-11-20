@@ -13,11 +13,8 @@ import { clubStyle, contrastRatio, formatSigned, netText } from './tradePageMode
 
 type Checkpoint = AflTradeStory['checkpoint'];
 
-/** The chart's surface and ink in each theme: `--ts-surface` and `--ts-ink` in tradeStory.css. */
-export const CHART_THEME = {
-  light: { surface: '#ffffff', ink: '#0b0b0b' },
-  dark: { surface: '#232321', ink: '#f0efec' },
-} as const;
+/** The chart's surface and ink: `--ts-surface` and `--ts-ink` in tradeStory.css. */
+export const CHART_THEME = { surface: '#ffffff', ink: '#0b0b0b' } as const;
 
 /** WCAG 1.4.11: a line must reach 3:1 against the surface it is drawn on. */
 const GRAPHIC_CONTRAST = 3;
@@ -46,8 +43,8 @@ const axisLabel = ({ kind, season }: Checkpoint) =>
  * A club's line colour on one surface: its guernsey's main colour, else its trim, else the page ink
  * when neither reaches 3:1 (identity then rides on the end label and the readout).
  */
-export function lineStroke(clubName: string, theme: keyof typeof CHART_THEME): string {
-  const { surface, ink } = CHART_THEME[theme];
+export function lineStroke(clubName: string): string {
+  const { surface, ink } = CHART_THEME;
   const { fill, trim } = clubStyle(clubName);
   return [fill, trim].find((colour) => contrastRatio(colour, surface) >= GRAPHIC_CONTRAST) ?? ink;
 }
@@ -73,8 +70,8 @@ const DASHES = ['6 4', '2 3', '10 3 2 3'];
 export interface ValueLineSeries {
   readonly clubId: string;
   readonly clubName: string;
-  readonly stroke: { readonly light: string; readonly dark: string };
-  /** A dash pattern when its colour is too close to an earlier club's in either theme. */
+  readonly stroke: string;
+  /** A dash pattern when its colour is too close to an earlier club's. */
   readonly dash: string | null;
   readonly path: string;
   readonly points: readonly { readonly x: number; readonly y: number; readonly pending: boolean }[];
@@ -159,16 +156,11 @@ export function valueLineChart(
   }
   const xLabels = kept.sort((l, r) => l.x - r.x).map(({ x, label }) => ({ x, label }));
 
-  const strokes: { light: string; dark: string }[] = [];
+  const strokes: string[] = [];
   let dashes = 0;
   const series = nets.map((net): ValueLineSeries => {
-    const stroke = {
-      light: lineStroke(net.clubName, 'light'),
-      dark: lineStroke(net.clubName, 'dark'),
-    };
-    const dash = strokes.some(
-      (other) => alike(other.light, stroke.light) || alike(other.dark, stroke.dark)
-    )
+    const stroke = lineStroke(net.clubName);
+    const dash = strokes.some((other) => alike(other, stroke))
       ? DASHES[dashes++ % DASHES.length]!
       : null;
     strokes.push(stroke);

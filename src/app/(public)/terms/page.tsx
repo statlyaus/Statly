@@ -12,7 +12,7 @@ export default function TermsPage() {
       <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
       <p className="text-sm text-muted-foreground mb-8">Last updated: 11 August 2026</p>
 
-      <section className="prose prose-neutral dark:prose-invert max-w-none">
+      <section className="prose prose-neutral max-w-none">
         <p>
           These Terms of Service (&quot;Terms&quot;) govern your access to and use of Statly. By
           using the service, you agree to these Terms. If you do not agree, do not use Statly.

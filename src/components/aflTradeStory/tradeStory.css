@@ -1,5 +1,5 @@
-/* Private trade page tokens (statlyaus/Statly#789). The page follows the reader's colour scheme;
-   every text pair meets WCAG AA (4.5:1) in both themes. Club colours come from clubGuernseys.ts. */
+/* Private trade page tokens (statlyaus/Statly#789). Light only; every text pair meets WCAG AA (4.5:1).
+   Club colours come from clubGuernseys.ts. */
 .afl-trade-story {
   --ts-bg: #fbfaf7;
   --ts-bg2: #f1efe8;
@@ -29,35 +29,8 @@
   line-height: 1.5;
 }
 
-@media (prefers-color-scheme: dark) {
-  .afl-trade-story:not(.ts-public) {
-    --ts-bg: #141413;
-    --ts-bg2: #1f1f1d;
-    --ts-surface: #232321;
-    --ts-line: #45453f;
-    --ts-ink: #f0efec;
-    --ts-ink2: #d0cfc6;
-    --ts-muted: #b0afa7;
-    --ts-accent: #8fbdf0;
-    --ts-pos: #6fd99d;
-    --ts-neg: #ff9b8f;
-    --ts-live: #4ade80;
-    --ts-bid: #f2b85b;
-    --ts-bid-soft: #3a2c14;
-    --ts-bar: #5a5a54;
-    --ts-scarf-bg: #1f1f1d;
-    --ts-scarf-shadow: #0d0d0c;
-    --ts-scarf-side: #0d141b;
-    --ts-scarf-side-ink: #f0efec;
-    --ts-scarf-side-muted: #b8c2cc;
-    --ts-pin: #f08a8a;
-    --ts-group-a: #18212b;
-    --ts-group-b: #2a1d19;
-  }
-}
-
-/* The public pages (/afl/trades) sit inside the Statly site, which is light only: its page grey, white
-   cards, ink and navy accent, whatever the reader's colour scheme. */
+/* The public pages (/afl/trades) sit inside the Statly site: its page grey, white cards, ink and navy
+   accent. */
 .afl-trade-story.ts-public {
   --ts-bg: #f8f9fa;
   --ts-bg2: #eef1f4;
@@ -100,15 +73,4 @@
 
 .afl-trade-story svg text {
   font-family: inherit;
-}
-
-/* "This trade over time": each club's line colour for the theme (valueLineChart.ts lineStroke). */
-.afl-trade-story .ts-vl {
-  --vl: var(--vl-light);
-}
-
-@media (prefers-color-scheme: dark) {
-  .afl-trade-story:not(.ts-public) .ts-vl {
-    --vl: var(--vl-dark);
-  }
 }

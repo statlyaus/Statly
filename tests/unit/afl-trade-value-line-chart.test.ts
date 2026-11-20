@@ -96,13 +96,9 @@ describe('value line chart: words', () => {
 });
 
 describe('value line chart: colours', () => {
-  it('draws every club at 3:1 or better on both themes', () => {
-    for (const theme of ['light', 'dark'] as const)
-      for (const club of CLUBS)
-        expect(
-          contrastRatio(lineStroke(club, theme), CHART_THEME[theme].surface),
-          `${club} (${theme})`
-        ).toBeGreaterThanOrEqual(3);
+  it('draws every club at 3:1 or better on the chart surface', () => {
+    for (const club of CLUBS)
+      expect(contrastRatio(lineStroke(club), CHART_THEME.surface), club).toBeGreaterThanOrEqual(3);
   });
 
   it('keeps the chart theme in step with the page tokens', () => {
@@ -112,23 +108,18 @@ describe('value line chart: colours', () => {
     );
     const tokens = (name: string) =>
       [...css.matchAll(new RegExp(`--ts-${name}: (#[0-9a-f]{6});`, 'gu'))].map(([, hex]) => hex);
-    // Light, then dark, then the public pages' block (.ts-public): always the light surface, with
-    // the site's softer text colour, so the chart keeps the light theme there.
-    expect(tokens('surface')).toEqual([
-      CHART_THEME.light.surface,
-      CHART_THEME.dark.surface,
-      CHART_THEME.light.surface,
-    ]);
-    expect(tokens('ink').slice(0, 2)).toEqual([CHART_THEME.light.ink, CHART_THEME.dark.ink]);
+    // The private page, then the public pages' block (.ts-public): the same white surface, with the
+    // site's softer text colour on the public pages.
+    expect(tokens('surface')).toEqual([CHART_THEME.surface, CHART_THEME.surface]);
+    expect(tokens('ink')[0]).toBe(CHART_THEME.ink);
   });
 
   it('dashes a club whose line looks like an earlier club’s', () => {
     const chart = valueLineChart(
-      [net('Collingwood', RISING), net('St Kilda', RISING), net('Gold Coast', RISING)],
+      [net('Collingwood', RISING), net('St Kilda', RISING), net('Essendon', RISING)],
       720
     );
-    // Collingwood and St Kilda are both black on a light page; St Kilda and Gold Coast both red on
-    // a dark one. Each dashed line gets its own pattern.
+    // Collingwood, St Kilda and Essendon are all black. Each dashed line gets its own pattern.
     expect(chart.series.map(({ dash }) => dash)).toEqual([null, '6 4', '2 3']);
     const distinct = valueLineChart(pair('Geelong', 'Gold Coast', RISING), 720);
     expect(distinct.series.map(({ dash }) => dash)).toEqual([null, null]);

@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
       <h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
       <p className="text-sm text-muted-foreground mb-8">Last updated: 11 August 2026</p>
 
-      <section className="prose prose-neutral dark:prose-invert max-w-none">
+      <section className="prose prose-neutral max-w-none">
         <p>
           Statly (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) is committed to protecting
           your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard
