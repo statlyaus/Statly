@@ -148,3 +148,40 @@ proposal reads every club each id was seen at in the season and reports an id se
 club as `AMBIGUOUS`, with the candidates from each club. Do not link it until the ETL carries a
 distinguishing id. Two namesakes at the same club cannot be told apart this way; they show as
 `AMBIGUOUS` only when Statly has both players.
+
+## Player season stat totals
+
+Each player's season totals live in Prisma `PlayerSeasonStat`, keyed on the canonical `Player.id`.
+A fill builds them from one season's `player_match_stats` through the reviewed `footywire` links
+above. A stat row without a link is listed under `unlinked` and left out. An ETL id seen at more
+than one club in the season is two namesakes sharing an id: it is listed under `ambiguous` and left
+out, linked or not. Nothing is matched by name.
+
+Fill only after the round's games are final: the ETL also stores live games, and a run with row
+errors still stores the rows it could read.
+
+1. Check what the fill would write. It reads Firestore and the database and writes nothing. It
+   prints how many linked players it would write and how many stored rows they would replace,
+   and lists every unlinked or ambiguous ETL player:
+
+   ```sh
+   npm run player-season-stats:fill -- --production --season 2026
+   ```
+
+2. Link any `unlinked` player with the Footywire identity steps above, then fill:
+
+   ```sh
+   npm run player-season-stats:fill -- --production --season 2026 --apply
+   ```
+
+   One transaction deletes the season's rows and writes the new ones, so a fill can be repeated
+   after every round. Other seasons are untouched. A fill with no linked player is refused rather
+   than emptying the season. To undo, fill the season again; the table holds nothing the ETL does
+   not.
+
+Without `--production`, the command needs the disposable `statly_verify_player_*` database
+described above.
+
+Go-live prerequisite: the fill and the links attach stats to existing `Player` rows only. No
+production job creates `Player` rows yet, so an ETL player with no Statly player stays `NO_CANDIDATE`
+in the proposal and out of the totals.
