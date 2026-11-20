@@ -15,7 +15,10 @@ vi.mock('@/lib/rateLimit', () => ({
 vi.mock('@/server/rankings/getCategoryRankings', () => ({
   getCategoryRankings: mocks.getCategoryRankings,
 }));
-vi.mock('@/lib/data', () => ({ getPlayers: mocks.getPlayers }));
+vi.mock('@/server/players/playerPoolReadModel', () => ({
+  listPoolPlayers: mocks.getPlayers,
+  listStatSeasons: async () => [2026],
+}));
 vi.mock('@/lib/prisma', () => ({ prisma: { player: { findMany: mocks.findMany } } }));
 vi.mock('@/lib/firebaseAdmin', () => ({ firebaseAdminIsDisabled: () => true, adminDb: {} }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));

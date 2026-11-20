@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 
 import {
@@ -14,6 +15,10 @@ import type { Player, PlayerSeasonStatSource } from '@/types/players';
 
 interface PlayersPageClientProps {
   players: Player[];
+  /** Seasons with stored stats, latest first. */
+  seasons: number[];
+  /** The season the stats are from; null before any season is filled. */
+  season: number | null;
 }
 
 type SortKey = 'name' | 'games' | FantasyCategoryKey;
@@ -62,7 +67,8 @@ function formatAverage(value: number | null): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-export default function PlayersPageClient({ players }: PlayersPageClientProps) {
+export default function PlayersPageClient({ players, seasons, season }: PlayersPageClientProps) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [teamFilter, setTeamFilter] = useState('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('name');
@@ -76,11 +82,6 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
           players.map((player) => player.team?.trim()).filter((team): team is string => !!team)
         )
       ).sort(),
-    [players]
-  );
-
-  const season = useMemo(
-    () => Math.max(0, ...players.map((player) => player.statsSeason ?? 0)) || null,
     [players]
   );
 
@@ -149,7 +150,7 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
         </p>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_140px]">
         <label className="relative block">
           <span className="sr-only">Search players</span>
           <Search
@@ -184,6 +185,22 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
             ))}
           </select>
         </label>
+        {seasons.length > 0 ? (
+          <label className="block">
+            <span className="sr-only">Stats season</span>
+            <select
+              value={season ?? seasons[0]}
+              onChange={(event) => router.push(`/players?season=${event.target.value}`)}
+              className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {seasons.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       {/* Stays mounted so a search that empties the list is announced too. */}

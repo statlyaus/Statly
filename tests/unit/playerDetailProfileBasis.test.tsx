@@ -16,7 +16,7 @@ vi.mock('@/components/league/LeagueSocialDiscussButton', () => ({
 
 import { PlayerDetail } from '@/components/PlayerDetail';
 
-// getPlayerDetail fills `stats` with the latest single match (or season totals from JSON), so the
+// getPlayerDetail fills `stats` with stored season totals (Prisma PlayerSeasonStat), so the
 // player record is not a per-game basis.
 const player = {
   id: 'nick-daicos',

@@ -1,20 +1,39 @@
 import type { Player } from '@/types/players';
-import { getPlayers } from '@/lib/data';
+import { listPoolPlayers, listStatSeasons } from '@/server/players/playerPoolReadModel';
 import PlayersPageClient from './PlayersPageClient';
 import { logger } from '@/lib/logger';
 import { unstable_cache } from 'next/cache';
 import type { JSX } from 'react';
 import Link from 'next/link';
 
-const getCachedPlayers = unstable_cache(() => getPlayers(), ['players:list:all'], {
-  revalidate: 300,
-  tags: ['players', 'players:list'],
-});
+const cacheOptions = { revalidate: 300, tags: ['players', 'players:list'] };
+const getCachedSeasons = unstable_cache(() => listStatSeasons(), ['players:seasons'], cacheOptions);
+// unstable_cache keys each call on its arguments, so every season is cached apart.
+const getCachedPlayers = unstable_cache(
+  (season: number | null, playedOnly: boolean) => listPoolPlayers({ season, playedOnly }),
+  ['players:list'],
+  cacheOptions
+);
 
-export default async function PlayersPageServer(): Promise<JSX.Element> {
+/** The requested season when it has stored stats, otherwise the latest one that does. */
+export function pickStatsSeason(requested: string | undefined, seasons: number[]): number | null {
+  const season = Number(requested);
+  return seasons.includes(season) ? season : (seasons[0] ?? null);
+}
+
+export default async function PlayersPageServer({
+  season: requestedSeason,
+}: {
+  season?: string;
+} = {}): Promise<JSX.Element> {
   let players: Player[] = [];
+  let seasons: number[] = [];
+  let season: number | null = null;
   try {
-    players = await getCachedPlayers();
+    seasons = await getCachedSeasons();
+    season = pickStatsSeason(requestedSeason, seasons);
+    // The latest season shows the live pool; a past season shows who played it, active or not.
+    players = await getCachedPlayers(season, season !== null && season !== seasons[0]);
   } catch (err) {
     logger.error('Failed to fetch players', err);
     return (
@@ -85,5 +104,5 @@ export default async function PlayersPageServer(): Promise<JSX.Element> {
     );
   }
 
-  return <PlayersPageClient players={players} />;
+  return <PlayersPageClient players={players} seasons={seasons} season={season} />;
 }

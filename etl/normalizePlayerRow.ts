@@ -34,7 +34,7 @@ interface PlayerRow {
   tog_pct?: number;
 }
 
-const PLAYER_NUMERIC_FIELDS = [
+export const PLAYER_NUMERIC_FIELDS = [
   'kicks',
   'handballs',
   'disposals',

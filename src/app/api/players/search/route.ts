@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { getPlayers } from '@/lib/data';
 import { logger } from '@/lib/logger';
 import { rateLimitConfigs, withRateLimit } from '@/lib/rateLimit';
+import { listPoolPlayers, listStatSeasons } from '@/server/players/playerPoolReadModel';
 import { calculateTotalValue, type PlayerStats } from '@/types/fantasyCategories';
 import type { Player, PlayerSearchResult } from '@/types/players';
 export const runtime = 'nodejs';
@@ -15,9 +15,9 @@ function seasonStat(stats: SeasonStats, key: string, fallback = 0): number {
 }
 
 /**
- * `player.stats` holds season totals (and per-game TOG and disposal efficiency) from
- * src/lib/data.ts; the player's top-level stat fields are the latest single match, so they are
- * not used. calculateTotalValue divides the totals by games, so its result is already per game.
+ * `player.stats` holds the latest season's totals (and per-game TOG and disposal efficiency) from
+ * Prisma `PlayerSeasonStat`; top-level stat fields are not read. calculateTotalValue divides the
+ * totals by games, so its result is already per game.
  */
 function seasonPerGameValue(stats: SeasonStats, games: number): number {
   const playerStats: PlayerStats = {
@@ -63,15 +63,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
+    const query = searchParams.get('q')?.trim();
 
     if (!query || query.length < 2) {
       return NextResponse.json({ players: [] });
     }
 
-    // Search the canonical player list. Firestore player_match_stats is an ingestion projection,
-    // and scanning it on every keystroke was an unauthenticated read-cost surface.
-    const knownPlayers = await getPlayers();
+    // Search the canonical Prisma player pool. Firestore player_match_stats is an ingestion
+    // projection, and scanning it on every keystroke was an unauthenticated read-cost surface.
+    const [latestSeason = null] = await listStatSeasons();
+    const knownPlayers = await listPoolPlayers({ query, season: latestSeason });
     const seenIds = new Set<string>();
     const players: PlayerSearchResult[] = [];
 
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     // Filter players by search query (case insensitive, search name, team, and position)
-    const queryLower = query.toLowerCase().trim();
+    const queryLower = query.toLowerCase();
     const filteredPlayers = players
       .filter(
         (player) =>
