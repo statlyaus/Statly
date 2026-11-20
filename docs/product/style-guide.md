@@ -135,18 +135,18 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
 
 Every pair below must hold on every ground and surface mode.
 
-| Role                    | Rule                                                                   | Status                                                  |
-| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
-| Body text               | At least 4.5:1                                                         | Ink on white is 18.9:1                                  |
-| Small labels (11–12px)  | At least 5.5:1                                                         | Secondary `#55534e` on white is 7.6:1 (target, phase 3) |
-| `--input` (field edge)  | At least 3:1 against its surface (WCAG 1.4.11)                         | A 2px ink edge, 18.9:1 on white (done 2026-11-20)       |
-| `--border` (decorative) | No minimum; never the only edge of a control                           | Hairline `#c9c5bc`                                      |
-| Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Cobalt on light grounds done; other grounds phase 3     |
-| Results                 | Win solid, loss outlined, draw stone, always with W, L or D            | Target, phase 3                                         |
-| Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                  |
-| Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                         |
-| Trade sides             | Cobalt and ink, never good/bad colours                                 | Target, phase 3                                         |
-| Selection               | Sun with ink text; ink with white text on a sun ground                 | Done                                                    |
+| Role                    | Rule                                                                   | Status                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Body text               | At least 4.5:1                                                         | Ink on white is 18.9:1                                                                          |
+| Small labels (11–12px)  | At least 5.5:1                                                         | Secondary `#55534e` on white is 7.6:1 (target, phase 3)                                         |
+| `--input` (field edge)  | At least 3:1 against its surface (WCAG 1.4.11)                         | A 2px ink edge, 18.9:1 on white (done 2026-11-20)                                               |
+| `--border` (decorative) | No minimum; never the only edge of a control                           | Hairline `#c9c5bc`                                                                              |
+| Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Cobalt on light grounds done; other grounds phase 3                                             |
+| Results                 | Win solid, loss outlined, draw stone, always with W, L or D            | Done 2026-11-20: `resultTone` in `controlStyles.ts`; errors and success never use result tokens |
+| Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                                                          |
+| Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                                                                 |
+| Trade sides             | Cobalt and ink, never good/bad colours                                 | Fantasy trade centre done 2026-11-20; public trade pages target, phase 3                        |
+| Selection               | Sun with ink text; ink with white text on a sun ground                 | Done                                                                                            |
 
 A trade has two sides, not a good side and a bad side: trade charts never use green and red.
 
@@ -248,7 +248,9 @@ One primitive per job, in `src/components/ui/`.
   props carry the destructive-copy rules.
 - **Charts:** two series at most, cobalt and ink, labelled directly; a key only for two-series bars.
   Sun marks the moment that matters; tint and a dashed line mark what is still provisional, with the
-  word. Club identity as the club square and abbreviation, never hue alone.
+  word. Club identity as the club square and abbreviation, never hue alone. Fantasy charts (standings
+  race, category bars, trade centre) done 2026-11-20; the public value-line chart waits on the owner's
+  call on trades with more than two clubs.
 
 ### Club colours
 

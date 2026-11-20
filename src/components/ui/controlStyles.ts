@@ -57,6 +57,27 @@ export const buttonStyles = cva(
   }
 );
 
+/**
+ * Match results (style guide "Owner decisions"): win solid (cobalt on light grounds, white on cobalt
+ * and ink), loss a white chip with a 2px ink edge, draw stone. Every result mark also shows W, L or D.
+ * The only place the result utilities are spelled, so error and success never ride on them.
+ */
+export const resultTone = {
+  win: 'bg-result-win text-result-win-foreground',
+  loss: 'bg-result-loss text-result-loss-foreground shadow-[inset_0_0_0_2px_currentColor]',
+  draw: 'bg-result-draw text-result-draw-foreground',
+} as const;
+
+/**
+ * Result fills alone, for bar segments; the bar's ink container and 1px gaps give the white loss its
+ * edge. Bars sit only on white and tint, where designContrast.test.ts keeps the three fills apart.
+ */
+export const resultFill = {
+  win: 'bg-result-win',
+  loss: 'bg-result-loss',
+  draw: 'bg-result-draw',
+} as const;
+
 export const badgeStyles = cva(
   'tape inline-flex items-center gap-1 whitespace-nowrap font-display text-[11px] font-extrabold',
   {
@@ -66,10 +87,10 @@ export const badgeStyles = cva(
         neutral: 'bg-muted text-field-foreground',
         muted: 'bg-muted text-field-foreground',
         brand: 'bg-secondary text-secondary-foreground',
-        // Results: win solid, loss outlined, draw quiet; always with the W, L or D.
-        win: 'min-w-7 justify-center bg-result-win text-result-win-foreground',
-        loss: 'min-w-7 justify-center bg-background text-foreground shadow-[inset_0_0_0_2px_currentColor]',
-        draw: 'min-w-7 justify-center bg-muted text-field-foreground',
+        // Results: see resultTone.
+        win: `min-w-7 justify-center ${resultTone.win}`,
+        loss: `min-w-7 justify-center ${resultTone.loss}`,
+        draw: `min-w-7 justify-center ${resultTone.draw}`,
         warning: 'bg-warning text-warning-foreground',
       },
       size: {

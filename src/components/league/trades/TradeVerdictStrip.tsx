@@ -6,9 +6,11 @@ import { FANTASY_CATEGORIES, formatStatValue } from '@/types/fantasyCategories';
 
 import type { SquadPositionChange, TradeVerdict, TradeVerdictTone } from './tradeVerdict';
 
+// Ink for both directions: the W, L or D mark and the words carry the verdict, never good and bad
+// colours (style guide "Two sides").
 export const VERDICT_TONE_CLASS: Record<TradeVerdictTone, string> = {
-  good: 'text-[color:var(--trade-positive)]',
-  bad: 'text-[color:var(--trade-negative)]',
+  good: 'text-[color:var(--trade-text)]',
+  bad: 'text-[color:var(--trade-text)]',
   even: 'text-[color:var(--trade-text)]',
   unknown: 'text-[color:var(--trade-text-muted)]',
 };
@@ -147,22 +149,17 @@ export function TradeVerdictStrip({
                   <span className="self-center text-xs leading-tight text-[color:var(--trade-text)]">
                     {comparison.column.label}
                   </span>
-                  {/* Rows sit flush, so the halves meet at one continuous centre line. */}
+                  {/* Rows sit flush, so the halves meet at one continuous centre line. The other
+                      side's half is ink, yours cobalt: two sides, not good and bad. */}
                   <span className="grid grid-cols-2">
                     <span className="flex items-center justify-end border-r border-[color:var(--trade-border-strong)]">
                       {comparison.outcome === 'unfavourable' ? (
-                        <span
-                          className="h-2 rounded-l-[2px] bg-[color:var(--trade-negative)]"
-                          style={{ width }}
-                        />
+                        <span className="h-2 rounded-l-[2px] bg-foreground" style={{ width }} />
                       ) : null}
                     </span>
                     <span className="flex items-center">
                       {comparison.outcome === 'favourable' ? (
-                        <span
-                          className="h-2 rounded-r-[2px] bg-[color:var(--trade-positive)]"
-                          style={{ width }}
-                        />
+                        <span className="h-2 rounded-r-[2px] bg-primary" style={{ width }} />
                       ) : null}
                     </span>
                   </span>

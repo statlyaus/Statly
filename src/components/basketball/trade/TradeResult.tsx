@@ -4,10 +4,10 @@ import { getBasketballCategory } from '@/types/basketball';
 
 import { formatSigned } from '../analysis/format';
 
-const VERDICT: Record<TradeVerdict, { word: string; tone: 'win' | 'loss' | 'draw' }> = {
-  GAIN: { word: 'Gain', tone: 'win' },
-  LOSS: { word: 'Loss', tone: 'loss' },
-  EVEN: { word: 'Even', tone: 'draw' },
+const VERDICT: Record<TradeVerdict, { word: string; tone: 'brand' | 'neutral' }> = {
+  GAIN: { word: 'Gain', tone: 'brand' },
+  LOSS: { word: 'Loss', tone: 'neutral' },
+  EVEN: { word: 'Even', tone: 'neutral' },
 };
 
 /** Per-category z of what I give and get, the net and a GAIN/LOSS/EVEN word for each. */
@@ -25,15 +25,7 @@ export function TradeResult({
     <section aria-label="Trade result" className="space-y-3">
       <div className="rounded-lg border border-border bg-card p-4">
         <p className="text-sm text-muted-foreground">Net season value for you</p>
-        <p
-          className={`font-display text-3xl font-bold tabular-nums ${
-            evaluation.totalNet >= 0.25
-              ? 'text-result-win'
-              : evaluation.totalNet <= -0.25
-                ? 'text-result-loss'
-                : 'text-foreground'
-          }`}
-        >
+        <p className="font-display text-3xl font-bold tabular-nums text-foreground">
           {formatSigned(evaluation.totalNet)}
         </p>
         <p className="mt-1 text-sm text-foreground">

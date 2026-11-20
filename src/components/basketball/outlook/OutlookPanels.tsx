@@ -15,11 +15,10 @@ import type { OutlookPanels as Panels } from './outlookView';
 export const driverText = (driver: OutlookDriver) =>
   `${driver.name} ${driver.status === 'OUT' ? 'out' : 'back'} ${formatSigned(driver.minutes)}`;
 
-/** A signed change on its result token; the sign carries the meaning, not the colour. */
+/** A signed change in ink; the sign carries the meaning, never good and bad colours. */
 export function SignedChange({ value, unit = '' }: { value: number; unit?: string }) {
-  const tone = value > 0 ? 'text-result-win' : value < 0 ? 'text-result-loss' : 'text-foreground';
   return (
-    <span className={`font-semibold tabular-nums ${tone}`}>
+    <span className="font-semibold tabular-nums text-foreground">
       {formatSigned(value)}
       {unit}
     </span>

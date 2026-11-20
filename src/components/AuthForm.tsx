@@ -393,7 +393,7 @@ const AuthForm = ({
   if (user && autoRedirectIfAuthenticated && sessionCheck === 'failed') {
     return (
       <div className={`space-y-4 p-8 text-center ${className}`}>
-        <p role="alert" className="text-sm font-medium text-result-loss">
+        <p role="alert" className="text-sm font-medium text-destructive">
           {error}
         </p>
         <button
@@ -426,7 +426,7 @@ const AuthForm = ({
               Welcome back!
             </h3>
             <p className="truncate text-muted-foreground">{user.displayName || user.email}</p>
-            <p className="mt-1 flex items-center gap-2 text-sm text-result-win">
+            <p className="mt-1 flex items-center gap-2 text-sm text-success">
               <CheckCircleIcon aria-hidden="true" className="h-4 w-4" />
               Authenticated
             </p>
@@ -455,7 +455,7 @@ const AuthForm = ({
         <button
           type="button"
           onClick={handleLogout}
-          className={cn(buttonStyles({ variant: 'outline' }), 'mt-5 text-result-loss')}
+          className={cn(buttonStyles({ variant: 'outline' }), 'mt-5 text-destructive')}
         >
           <ArrowRightOnRectangleIcon aria-hidden="true" className="h-5 w-5" />
           Sign Out
@@ -488,7 +488,7 @@ const AuthForm = ({
                 <EnvelopeIcon
                   className={`w-5 h-5 transition-colors ${
                     showEmailError
-                      ? 'text-result-loss'
+                      ? 'text-destructive'
                       : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
@@ -500,7 +500,7 @@ const AuthForm = ({
                 placeholder="Enter your email address"
                 className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showEmailError
-                    ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
+                    ? 'border-destructive/50 bg-destructive/5 text-destructive'
                     : 'border-input bg-background text-foreground'
                 }`}
                 value={email}
@@ -512,7 +512,7 @@ const AuthForm = ({
               />
             </div>
             {showEmailError && (
-              <p id="email-error" className="text-sm text-result-loss flex items-center gap-1">
+              <p id="email-error" className="text-sm text-destructive flex items-center gap-1">
                 <ExclamationTriangleIcon className="w-4 h-4" />
                 {validation.email.message}
               </p>
@@ -529,7 +529,7 @@ const AuthForm = ({
                 <LockClosedIcon
                   className={`w-5 h-5 transition-colors ${
                     showPasswordError
-                      ? 'text-result-loss'
+                      ? 'text-destructive'
                       : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
@@ -541,7 +541,7 @@ const AuthForm = ({
                 placeholder="Enter your password"
                 className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showPasswordError
-                    ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
+                    ? 'border-destructive/50 bg-destructive/5 text-destructive'
                     : 'border-input bg-background text-foreground'
                 }`}
                 value={password}
@@ -575,12 +575,12 @@ const AuthForm = ({
                   <span
                     className={`text-xs font-semibold ${
                       getPasswordStrength(password) < 25
-                        ? 'text-result-loss'
+                        ? 'text-destructive'
                         : getPasswordStrength(password) < 50
                           ? 'text-foreground'
                           : getPasswordStrength(password) < 75
                             ? 'text-brand-bar'
-                            : 'text-result-win'
+                            : 'text-success'
                     }`}
                   >
                     {getPasswordStrengthLabel(getPasswordStrength(password)).label}
@@ -590,12 +590,12 @@ const AuthForm = ({
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
                       getPasswordStrength(password) < 25
-                        ? 'bg-result-loss'
+                        ? 'bg-destructive'
                         : getPasswordStrength(password) < 50
                           ? 'bg-warning-text'
                           : getPasswordStrength(password) < 75
                             ? 'bg-brand-bar'
-                            : 'bg-result-win'
+                            : 'bg-success'
                     }`}
                     style={{ width: `${getPasswordStrength(password)}%` }}
                   />
@@ -606,7 +606,7 @@ const AuthForm = ({
             {showPasswordError && (
               <p
                 id="password-error"
-                className="text-sm text-result-loss flex items-center gap-1 mt-2"
+                className="text-sm text-destructive flex items-center gap-1 mt-2"
               >
                 <ExclamationTriangleIcon className="w-4 h-4" />
                 {validation.password.message}
@@ -628,7 +628,7 @@ const AuthForm = ({
                   <LockClosedIcon
                     className={`w-5 h-5 transition-colors ${
                       confirmPassword && password !== confirmPassword
-                        ? 'text-result-loss'
+                        ? 'text-destructive'
                         : 'text-muted-foreground group-focus-within:text-foreground'
                     }`}
                   />
@@ -640,7 +640,7 @@ const AuthForm = ({
                   placeholder="Confirm your password"
                   className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                     confirmPassword && password !== confirmPassword
-                      ? 'border-result-loss/50 bg-result-loss/5 text-result-loss'
+                      ? 'border-destructive/50 bg-destructive/5 text-destructive'
                       : 'border-input bg-background text-foreground'
                   }`}
                   value={confirmPassword}
@@ -661,7 +661,7 @@ const AuthForm = ({
                 </button>
               </div>
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-result-loss flex items-center gap-1">
+                <p className="text-sm text-destructive flex items-center gap-1">
                   <ExclamationTriangleIcon className="w-4 h-4" />
                   Passwords do not match
                 </p>
@@ -677,10 +677,10 @@ const AuthForm = ({
               role="alert"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-result-loss/5 border border-result-loss/50 rounded-md p-4 flex items-center gap-3"
+              className="bg-destructive/5 border border-destructive/50 rounded-md p-4 flex items-center gap-3"
             >
-              <ExclamationTriangleIcon className="w-5 h-5 text-result-loss flex-shrink-0" />
-              <span className="text-sm text-result-loss font-medium">{error}</span>
+              <ExclamationTriangleIcon className="w-5 h-5 text-destructive flex-shrink-0" />
+              <span className="text-sm text-destructive font-medium">{error}</span>
             </motion.div>
           )}
 

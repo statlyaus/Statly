@@ -176,7 +176,7 @@ function DefaultErrorFallback({
       className={`${isPageLevel ? 'min-h-screen' : 'min-h-[200px]'} flex items-center justify-center p-4`}
     >
       <div className="text-center max-w-md">
-        <div className="mx-auto mb-4 h-12 w-12 text-result-loss">
+        <div className="mx-auto mb-4 h-12 w-12 text-destructive">
           <ExclamationTriangleIcon aria-hidden="true" />
         </div>
 

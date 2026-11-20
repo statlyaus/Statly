@@ -323,7 +323,7 @@ export function BasketballRosterManager({
       <RosterChecklist steps={checklist} />
       <div aria-live="polite" className="empty:hidden">
         {notice ? (
-          <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-result-win/30 bg-result-win/5 px-3 py-1.5">
+          <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-success/30 bg-success/5 px-3 py-1.5">
             <p className="text-sm font-medium text-foreground">{notice.message}</p>
             {notice.undo ? (
               <button

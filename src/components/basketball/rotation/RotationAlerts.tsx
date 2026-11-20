@@ -8,9 +8,9 @@ import type { RotationPlayerView } from '@/server/basketball/readModels/rotation
 import { InjuryBadge } from '../analysis/AnalysisBits';
 
 const LEVELS = {
-  RED: { icon: '▼', word: 'Role lost', tone: 'loss' },
+  RED: { icon: '▼', word: 'Role lost', tone: 'neutral' },
   AMBER: { icon: '⚠', word: 'At risk', tone: 'warning' },
-  GREEN: { icon: '▲', word: 'Role up', tone: 'win' },
+  GREEN: { icon: '▲', word: 'Role up', tone: 'brand' },
 } as const;
 
 /** An alert level as an icon and a word on its token, never colour alone. */

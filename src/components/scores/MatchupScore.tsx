@@ -1,6 +1,7 @@
 import type React from 'react';
 
 import { getTeamInitials } from '@/components/league/leagueTabPanelUtils';
+import { resultTone } from '@/components/ui/controlStyles';
 import { formatCategoryValue } from '@/types/fantasyCategories';
 
 /** Shared score presentation for category head-to-head matchups (manager home, public homepage). */
@@ -25,9 +26,9 @@ export const resultStyle: Record<
   CategoryResult,
   { letter: string; label: string; className: string }
 > = {
-  won: { letter: 'W', label: 'won', className: 'bg-result-win text-result-win-foreground' },
-  lost: { letter: 'L', label: 'lost', className: 'bg-result-loss text-result-loss-foreground' },
-  drawn: { letter: 'D', label: 'drawn', className: 'bg-result-draw text-result-draw-foreground' },
+  won: { letter: 'W', label: 'won', className: resultTone.win },
+  lost: { letter: 'L', label: 'lost', className: resultTone.loss },
+  drawn: { letter: 'D', label: 'drawn', className: resultTone.draw },
   pending: { letter: '–', label: 'not started', className: 'bg-muted text-muted-foreground' },
 };
 

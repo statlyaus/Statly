@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 
 import { ResultChip } from '@/components/scores/MatchupScore';
+import { badgeStyles } from '@/components/ui/controlStyles';
 
 import { formatChance } from './raceFormat';
 import { RESULT_TO_CHIP, type StandingsTeam } from './standingsFormat';
@@ -18,11 +19,7 @@ export function Movement({ value }: { value: number | null }): React.JSX.Element
   }
   const up = value > 0;
   return (
-    <span
-      className={`inline-flex w-7 items-center text-xs font-semibold ${
-        up ? 'text-result-win' : 'text-result-loss'
-      }`}
-    >
+    <span className="inline-flex w-7 items-center text-xs font-semibold text-foreground">
       {up ? (
         <ArrowUp aria-hidden="true" className="size-3" />
       ) : (
@@ -47,7 +44,7 @@ export function FormChips({ form }: { form: StandingsTeam['form'] }): React.JSX.
   );
 }
 
-/** Finals chance as a number over a green bar; "In" or "Out" once it is certain. */
+/** Finals chance as a number over a cobalt bar; "In" or "Out" once it is certain. */
 export function FinalsChance({ finals }: { finals: StandingsTeam['finals'] }): React.JSX.Element {
   if (!finals) return <span className="block text-right text-muted-foreground">–</span>;
   return (
@@ -55,7 +52,7 @@ export function FinalsChance({ finals }: { finals: StandingsTeam['finals'] }): R
       <span
         className={`font-display text-base font-bold leading-none tabular-nums ${
           finals.status === 'CLINCHED'
-            ? 'text-result-win'
+            ? 'text-primary'
             : finals.status === 'OUT'
               ? 'text-muted-foreground'
               : 'text-foreground'
@@ -68,7 +65,7 @@ export function FinalsChance({ finals }: { finals: StandingsTeam['finals'] }): R
         className="h-1.5 w-full max-w-16 overflow-hidden rounded-full bg-muted"
       >
         <span
-          className="block h-full rounded-full bg-result-win"
+          className="block h-full rounded-full bg-primary"
           style={{ width: `${Math.round(finals.chance * 100)}%` }}
         />
       </span>
@@ -76,14 +73,12 @@ export function FinalsChance({ finals }: { finals: StandingsTeam['finals'] }): R
   );
 }
 
-/** The green FINALS pill and rule that sits under the last finals place. */
+/** The FINALS tape and cobalt rule that sits under the last finals place. */
 export function FinalsDivider({ className = '' }: { className?: string }): React.JSX.Element {
   return (
     <div aria-hidden="true" className={`flex items-center gap-2 ${className}`}>
-      <span className="rounded-full bg-result-win px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-result-win-foreground">
-        Finals
-      </span>
-      <span className="h-0.5 flex-1 rounded-full bg-result-win" />
+      <span className={badgeStyles({ tone: 'brand', size: 'md' })}>Finals</span>
+      <span className="h-0.5 flex-1 bg-primary" />
     </div>
   );
 }

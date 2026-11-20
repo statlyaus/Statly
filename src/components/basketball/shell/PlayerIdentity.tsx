@@ -16,7 +16,7 @@ export function InjuryBadge({ injury }: { injury: BasketballPlayerInjuryDto }) {
     .join(', ');
   return (
     <span
-      className={badgeStyles({ tone: out ? 'loss' : 'warning', size: 'xs' })}
+      className={badgeStyles({ tone: out ? 'neutral' : 'warning', size: 'xs' })}
       title={description}
       aria-label={`Injury report: ${description}`}
     >

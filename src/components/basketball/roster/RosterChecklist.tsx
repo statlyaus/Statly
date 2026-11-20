@@ -31,7 +31,7 @@ export function RosterChecklist({ steps }: { steps: RosterChecklistStep[] }) {
               aria-hidden="true"
               className={`flex size-7 shrink-0 items-center justify-center rounded-full border text-sm font-bold tabular-nums ${
                 step.done
-                  ? 'border-result-win bg-result-win text-result-win-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-foreground'
               }`}
             >
@@ -46,7 +46,9 @@ export function RosterChecklist({ steps }: { steps: RosterChecklistStep[] }) {
                 {step.title}
               </a>
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span className={badgeStyles({ tone: step.done ? 'win' : 'neutral', size: 'xs' })}>
+                <span
+                  className={badgeStyles({ tone: step.done ? 'brand' : 'neutral', size: 'xs' })}
+                >
                   {step.done ? 'Done' : 'To do'}
                 </span>
                 {step.detail}

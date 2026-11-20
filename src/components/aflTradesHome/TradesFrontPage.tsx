@@ -32,12 +32,14 @@ const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 const container = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10';
 const sectionTitle = 'font-display text-5xl font-extrabold leading-none sm:text-6xl';
+// Pixels held while results moved to cobalt: the public nets go neutral ink with the trade pages'
+// netTone in brand ticket 05 part C, after the owner decides the multi-club chart.
 const tone = (net: number) =>
   Number(Math.abs(net).toFixed(1)) === 0
     ? 'text-foreground'
     : net > 0
-      ? 'text-result-win'
-      : 'text-result-loss';
+      ? 'text-success'
+      : 'text-destructive';
 
 export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const { stories } = list;

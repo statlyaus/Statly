@@ -55,7 +55,7 @@ export function MarkTakenButton({
         {saving ? 'Saving…' : 'Mark as taken'}
       </button>
       {error ? (
-        <span role="alert" className="text-right text-xs text-result-loss">
+        <span role="alert" className="text-right text-xs text-destructive">
           Not saved. {error}
         </span>
       ) : null}

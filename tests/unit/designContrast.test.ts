@@ -118,7 +118,39 @@ describe.each(GROUNDS)('the %s ground', (ground) => {
     ['primary as text or mark', '--primary', '--background', 4.5],
     ['primary action label', '--primary-foreground', '--primary', 4.5],
     ['focus ring', '--ring', '--background', 3],
+    ['win letter on the win chip', '--result-win-foreground', '--result-win', 4.5],
+    ['win chip against the ground', '--result-win', '--background', 3],
+    ['loss letter on the loss chip', '--result-loss-foreground', '--result-loss', 4.5],
+    ['draw letter on the draw chip', '--result-draw-foreground', '--result-draw', 4.5],
   ])('%s holds', (_role, foreground, background, minimum) => {
     expect(onGround(foreground, background)).toBeGreaterThanOrEqual(minimum);
+  });
+
+  // No draw-chip-against-the-ground pair: stone on white is 1.26:1 by design and the D letter carries it.
+  // The loss chip is white with a 2px ink edge: one of the two must stand out from the ground.
+  it('loss chip stands out by its fill or its edge', () => {
+    const outline = Math.max(
+      onGround('--result-loss', '--background'),
+      onGround('--result-loss-foreground', '--background')
+    );
+    expect(outline).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Result bars (`resultFill`) sit only on white and tint, split by 1px ink gaps; the three fills must
+// still differ from each other there.
+describe.each(['white', 'tint'] as const)('result bar fills on the %s ground', (ground) => {
+  const tokensOnGround = groundTokens(ground);
+  const fills = ['--result-win', '--result-loss', '--result-draw'].map((token) =>
+    resolveColour(tokensOnGround, token)
+  );
+
+  it.each([
+    [0, 1],
+    [0, 2],
+    [1, 2],
+  ])('fill %i and fill %i are distinct', (left, right) => {
+    expect(fills[left]).not.toBe(fills[right]);
+    expect(contrastRatio(fills[left]!, fills[right]!)).toBeGreaterThanOrEqual(1.2);
   });
 });

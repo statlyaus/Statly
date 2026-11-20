@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { badgeStyles, textLinkStyles } from '@/components/ui/controlStyles';
+import { badgeStyles, resultTone, textLinkStyles } from '@/components/ui/controlStyles';
 import type { PlayerOwner, PoolPlayerInjury } from '@/server/basketball/readModels/playerPool';
 
 import { formatAge, formatGameDate, formatSigned } from './format';
@@ -104,7 +104,7 @@ export function InjuryBadge({
   const old = stale ? ' (injury report over a day old)' : '';
   return (
     <span
-      className={badgeStyles({ tone: out ? 'loss' : 'warning', size: 'xs' })}
+      className={badgeStyles({ tone: out ? 'neutral' : 'warning', size: 'xs' })}
       title={`${injury.detail ?? (out ? 'Out' : 'Day-to-day')}${when}${old}`}
     >
       {out ? 'OUT' : 'DTD'}
@@ -138,19 +138,19 @@ export function OwnerLabel({ owner }: { owner: PlayerOwner }) {
     case 'ELSEWHERE':
       return <span className="text-xs text-muted-foreground">Taken</span>;
     case 'FREE_AGENT':
-      return <span className={badgeStyles({ tone: 'win', size: 'xs' })}>FA</span>;
+      return <span className={badgeStyles({ tone: 'brand', size: 'xs' })}>FA</span>;
   }
 }
 
 export type Call = 'WIN' | 'LOSS' | 'TOSS_UP';
 
 const CALL_STYLE: Record<Call, { letter: string; label: string; className: string }> = {
-  WIN: { letter: 'W', label: 'win', className: 'bg-result-win text-result-win-foreground' },
-  LOSS: { letter: 'L', label: 'loss', className: 'bg-result-loss text-result-loss-foreground' },
+  WIN: { letter: 'W', label: 'win', className: resultTone.win },
+  LOSS: { letter: 'L', label: 'loss', className: resultTone.loss },
   TOSS_UP: {
     letter: 'T',
     label: 'toss-up',
-    className: 'bg-result-draw text-result-draw-foreground',
+    className: resultTone.draw,
   },
 };
 
@@ -168,13 +168,13 @@ export function CallChip({ call, className = '' }: { call: Call; className?: str
 }
 
 const Z_HEAT = [
-  { min: 2, className: 'bg-result-win/30' },
-  { min: 1, className: 'bg-result-win/20' },
-  { min: 0.5, className: 'bg-result-win/10' },
+  { min: 2, className: 'bg-primary/30' },
+  { min: 1, className: 'bg-primary/20' },
+  { min: 0.5, className: 'bg-primary/10' },
   { min: -0.5, className: '' },
-  { min: -1, className: 'bg-result-loss/10' },
-  { min: -2, className: 'bg-result-loss/20' },
-  { min: -Infinity, className: 'bg-result-loss/30' },
+  { min: -1, className: 'bg-foreground/10' },
+  { min: -2, className: 'bg-foreground/20' },
+  { min: -Infinity, className: 'bg-foreground/30' },
 ] as const;
 
 /** Background tint for a z-score; the signed number is always printed alongside. */

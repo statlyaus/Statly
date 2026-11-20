@@ -60,11 +60,6 @@
   --color-field-foreground: var(--field-foreground);
   --color-field-placeholder: var(--field-placeholder);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -151,14 +146,16 @@
   --warning: var(--brand-sun);
   --warning-foreground: var(--brand-ink);
   --warning-text: #7a4a06;
-  --result-win: #15803d;
+  /* Results: win solid cobalt, loss a white chip with an ink edge and ink letter, draw stone. Never
+     green and red; always with W, L or D. Grounds redefine win (and draw on stone). */
+  --result-win: var(--brand-cobalt);
   --result-win-foreground: #fff;
-  --result-loss: #c81e1e;
-  --result-loss-foreground: #fff;
+  --result-loss: #fff;
+  --result-loss-foreground: var(--brand-ink); /* The letter and the 2px edge */
   --status-live: #c81e1e; /* LIVE is a status, not a loss: same hue, its own token */
   --status-live-foreground: #fff;
-  --result-draw: #4b5563; /* Neutral slate: a draw is not a warning */
-  --result-draw-foreground: #fff;
+  --result-draw: var(--brand-stone);
+  --result-draw-foreground: var(--brand-ink);
   --brand-bar: var(--brand-cobalt);
   --brand-bar-foreground: #fff;
   --overlay: color-mix(in srgb, var(--brand-ink) 60%, transparent); /* Scrim behind dialogs */
@@ -169,11 +166,6 @@
   --field-foreground: var(--brand-ink);
   --field-placeholder: var(--brand-secondary-text);
   --ring: var(--brand-bar); /* Focus is cobalt on light grounds */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -336,7 +328,8 @@
    --league-*, --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
    --input, --field* and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
    .ground-white. Status words: --warning-text holds on all three light grounds; --success and
-   --destructive only on white until the stone ticket fixes them. */
+   --destructive only on white until the stone ticket fixes them. Results: win turns white on cobalt
+   and ink; draw turns white on stone. */
 @layer components {
   .ground-white,
   .ground-stone,
@@ -347,6 +340,10 @@
     --primary-foreground: #fff;
     --ring: var(--brand-cobalt);
     --border: var(--brand-hairline);
+    /* Reset what cobalt and ink change, so a light card inside them shows light-ground results. */
+    --result-win: var(--brand-cobalt);
+    --result-win-foreground: #fff;
+    --result-draw: var(--brand-stone);
     background-color: var(--background);
     color: var(--foreground);
   }
@@ -355,6 +352,7 @@
   }
   .ground-stone {
     --background: var(--brand-stone);
+    --result-draw: #fff;
   }
   .ground-tint {
     --background: var(--brand-tint);
@@ -367,6 +365,9 @@
     --primary-foreground: var(--brand-ink);
     --ring: #fff;
     --border: rgb(255 255 255 / 30%);
+    --result-win: #fff;
+    --result-win-foreground: var(--brand-cobalt);
+    --result-draw: var(--brand-stone);
     background-color: var(--background);
     color: var(--foreground);
   }
@@ -378,6 +379,9 @@
     --primary-foreground: var(--brand-ink);
     --ring: var(--brand-sun);
     --border: rgb(255 255 255 / 20%);
+    --result-win: #fff;
+    --result-win-foreground: var(--brand-ink);
+    --result-draw: var(--brand-stone);
     background-color: var(--background);
     color: var(--foreground);
   }
@@ -389,6 +393,9 @@
     --primary-foreground: #fff;
     --ring: var(--brand-ink);
     --border: rgb(17 17 17 / 20%);
+    --result-win: var(--brand-cobalt);
+    --result-win-foreground: #fff;
+    --result-draw: var(--brand-stone);
     background-color: var(--background);
     color: var(--foreground);
   }
