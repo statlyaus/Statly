@@ -82,7 +82,8 @@ npm test
 npm run build
 ```
 
-Install or verify the R dependencies using `setup_r.sh` or the equivalent reviewed R environment.
+The R dependencies come from `etl/Dockerfile`, which pins fitzRoy to `FITZROY_VERSION`; use that image
+or an R environment with the same pinned versions.
 
 ## Environment
 
