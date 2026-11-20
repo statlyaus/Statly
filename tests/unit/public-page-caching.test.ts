@@ -39,6 +39,7 @@ describe('public page CDN caching', () => {
     '/privacy',
     '/terms',
     '/data-deletion',
+    '/sitemap.xml',
   ])('caches %s at the CDN, keyed on its query string', (pathname) => {
     expect(headersFor(pathname)).toEqual([
       { key: 'Netlify-CDN-Cache-Control', value: PUBLIC_PAGE_CDN_CACHE_CONTROL },

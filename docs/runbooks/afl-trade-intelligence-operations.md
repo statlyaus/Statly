@@ -114,11 +114,13 @@ about 5 am Melbourne time. It calls the Netlify build hook kept in the `NETLIFY_
 repository secret (Netlify: Project configuration > Build & deploy > Build hooks, branch `main`).
 Netlify's own **Trigger deploy** button may be cancelled by the `ignore` command; use the workflow.
 
-**Caching.** The home, `/afl`, `/draft` and legal pages are cached at Netlify's CDN for an hour and
+**Caching.** The home, `/afl`, `/draft`, legal pages and `/sitemap.xml` are cached at Netlify's CDN for an hour and
 served stale for up to a day while a fresh copy renders (`config/publicPageCaching.mjs`). Every deploy
 empties the cache. A page cached while the bundle was missing can say "not available" for up to an
 hour after the upload; deploy again to clear it at once. `public/robots.txt` keeps crawlers off API
-routes and off filtered copies of the lists (`?year=`, `?club=`).
+routes and off filtered copies of the lists (`?year=`, `?club=`), and points them at
+`/sitemap.xml` (`src/app/sitemap.ts`): home, `/afl`, the Cameron story and, while the bundle is
+available, the trade list, method, every trade and every club page.
 
 **Local run:** set `AFL_TRADE_STORY_PUBLIC_ENABLED=true`, `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` and
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (the absolute path of the exported file) and start the dev server.
