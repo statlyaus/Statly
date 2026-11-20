@@ -8,17 +8,12 @@ import {
 } from '@prisma/client';
 
 import { DEVELOPMENT_AUTH_EMAIL, DEVELOPMENT_AUTH_USER_ID } from '../../../src/lib/devAuth';
-import { getPlayers } from '../../../src/lib/data';
-import { buildCanonicalPlayerId } from '../../../src/lib/playerIdentity';
 import {
   buildAvailableDraftPlayer,
   buildDraftPlayerStatsLookup,
   calculateStatlyZScores,
 } from '../../../src/server/draft/readModels/draftPlayerReadModel';
-import {
-  PLAYER_STATS_2025_PROVIDER,
-  upsertCanonicalPlayer,
-} from '../../../src/server/players/playerIdentityService';
+import { listSeasonStatPlayers } from '../../../src/server/players/playerPoolReadModel';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../../src/types/fantasyCategories';
 
 export const DRAFT_LIFECYCLE_FIXTURE = {
@@ -137,33 +132,62 @@ async function upsertUsers(tx: TxClient) {
   );
 }
 
+// Fixed fixture players with one stored season each, so Statly-Z ranks them the same every run.
+const STATS_SEASON = 2025;
+const FIXTURE_CLUBS = ['Adelaide', 'Brisbane', 'Carlton', 'Collingwood'] as const;
+const FIXTURE_POSITIONS = ['DEF', 'MID', 'RUC', 'FWD'] as const;
+const FIXTURE_PLAYERS = Array.from({ length: 16 }, (_, index) => {
+  const number = String(index + 1).padStart(2, '0');
+  return {
+    id: `e2e-lifecycle-player-${number}`,
+    name: `Lifecycle Player ${number}`,
+    club: FIXTURE_CLUBS[index % FIXTURE_CLUBS.length],
+    position: FIXTURE_POSITIONS[index % FIXTURE_POSITIONS.length],
+    // Per-game value index + 1 in every category over 10 games.
+    total: (index + 1) * 10,
+  };
+});
+
 async function upsertActivePlayerPool(prisma: PrismaClient): Promise<string[]> {
-  const players = await getPlayers();
-  const activePlayers = players.slice(0, Math.max(DRAFT_LIFECYCLE_FIXTURE.totalPicks + 8, 16));
   const candidateIds: string[] = [];
 
-  for (const player of activePlayers) {
-    const club = player.team ?? 'N/A';
-    const canonicalPlayer = await upsertCanonicalPlayer(prisma, {
-      provider: PLAYER_STATS_2025_PROVIDER,
-      externalId: buildCanonicalPlayerId(`${player.name}|${club}`),
-      name: player.name,
-      club,
-      position: player.position ?? '',
-      active: true,
-      allowExactAttributeMatch: true,
+  for (const player of FIXTURE_PLAYERS) {
+    const { id, name, club, position } = player;
+    await prisma.player.upsert({
+      where: { id },
+      update: { name, club, position, active: true },
+      create: { id, name, club, position, active: true },
     });
-    candidateIds.push(canonicalPlayer.id);
-  }
-
-  const uniqueCandidateIds = [...new Set(candidateIds)];
-  if (uniqueCandidateIds.length < DRAFT_LIFECYCLE_FIXTURE.totalPicks) {
-    throw new Error(
-      `Draft lifecycle requires at least ${DRAFT_LIFECYCLE_FIXTURE.totalPicks} canonical players, found ${uniqueCandidateIds.length}`
+    const totals = Object.fromEntries(
+      [
+        'goals',
+        'tackles',
+        'inside_50s',
+        'intercepts',
+        'contested_marks',
+        'rebound_50s',
+        'contested_possessions',
+        'effective_disposals',
+        'score_involvements',
+      ].map((key) => [key, player.total])
     );
+    const row = {
+      club: player.club,
+      games: 10,
+      lastRound: 10,
+      totalsJson: totals,
+      gamesByStatJson: Object.fromEntries(Object.keys(totals).map((key) => [key, 10])),
+      source: 'statly-e2e',
+    };
+    await prisma.playerSeasonStat.upsert({
+      where: { playerId_season: { playerId: id, season: STATS_SEASON } },
+      update: row,
+      create: { ...row, playerId: id, season: STATS_SEASON },
+    });
+    candidateIds.push(id);
   }
 
-  return uniqueCandidateIds;
+  return candidateIds;
 }
 
 async function rankActivePlayerIds(tx: TxClient, candidateIds: string[]): Promise<string[]> {
@@ -172,7 +196,10 @@ async function rankActivePlayerIds(tx: TxClient, candidateIds: string[]): Promis
     orderBy: [{ position: 'asc' }, { name: 'asc' }],
     select: { id: true, name: true, position: true, club: true },
   });
-  const statsLookup = buildDraftPlayerStatsLookup(await getPlayers());
+  const statsLookup = buildDraftPlayerStatsLookup(
+    await listSeasonStatPlayers({ season: STATS_SEASON, ids: candidateIds }, tx),
+    { season: STATS_SEASON }
+  );
   const projectedCandidates = candidates.map((player) =>
     buildAvailableDraftPlayer(player, statsLookup)
   );

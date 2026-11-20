@@ -12,8 +12,6 @@ vi.mock('@/server/draft/readModels/draftPlayerReadModel', async (importOriginal)
   ...(await importOriginal<typeof import('@/server/draft/readModels/draftPlayerReadModel')>()),
   loadDraftPlayerStatsLookup: async () => ({
     byId: new Map([...stats.goalsByPlayerId].map(([id, goals]) => [id, { stats: { goals } }])),
-    byNameAndTeam: new Map(),
-    byName: new Map(),
   }),
 }));
 

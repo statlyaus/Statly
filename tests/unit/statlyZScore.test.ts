@@ -99,7 +99,7 @@ describe('calculateStatlyZScores', () => {
     expect(scores.get('many')?.score).toBe(1);
   });
 
-  it('gives a draft player the stats of its own club when another player shares the name', () => {
+  it("gives a draft player only the stats stored under its own id, never a namesake's", () => {
     const seasonStats = (id: string, team: string, goals: number) => ({
       id,
       name: 'Max King',
@@ -123,12 +123,17 @@ describe('calculateStatlyZScores', () => {
       { season: 2025 }
     );
 
-    const player = buildAvailableDraftPlayer(
+    const own = buildAvailableDraftPlayer(
+      { id: 'stk-max-king', name: 'Max King', club: 'St Kilda', position: 'FWD' },
+      lookup
+    );
+    const namesake = buildAvailableDraftPlayer(
       { id: 'draft-77', name: 'Max King', club: 'St Kilda', position: 'FWD' },
       lookup
     );
 
-    expect(player.stats?.goals).toBe(1);
+    expect(own.stats?.goals).toBe(1);
+    expect(namesake.stats).toBeUndefined();
   });
 
   it('projects season match-log totals into per-game averages for the selected season', () => {
@@ -162,7 +167,7 @@ describe('calculateStatlyZScores', () => {
     );
 
     const player = buildAvailableDraftPlayer(
-      { id: 'tyson_stengle', name: 'Tyson Stengle', club: 'Geelong', position: 'MID' },
+      { id: 'tyson-stengle-geelong', name: 'Tyson Stengle', club: 'Geelong', position: 'MID' },
       lookup
     );
 

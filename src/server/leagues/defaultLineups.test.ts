@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: mocks.warn } }));
-vi.mock('@/lib/data', () => ({ getPlayers: mocks.getPlayers }));
+vi.mock('@/server/players/playerPoolReadModel', () => ({
+  listLatestSeasonStatPlayers: mocks.getPlayers,
+}));
 vi.mock('@/server/leagues/lineupService', () => ({
   loadLineupRoundSummaries: mocks.loadLineupRoundSummaries,
   loadRoundPlayerFixtures: mocks.loadRoundPlayerFixtures,

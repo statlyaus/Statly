@@ -21,8 +21,9 @@ describe('e2e fixture setup', () => {
     expect(source).toContain('teamCount: 2');
     expect(source).toContain('rosterSize: 2');
     expect(source).toContain('totalPicks: 4');
-    expect(source).toContain('buildCanonicalPlayerId(`${player.name}|${club}`)');
-    expect(source).toContain('provider: PLAYER_STATS_2025_PROVIDER');
+    // Fixed fixture players with stored stats: no checked-in player file, no name matching.
+    expect(source).toContain('const FIXTURE_PLAYERS = Array.from({ length: 16 }');
+    expect(source).toContain('prisma.playerSeasonStat.upsert');
     expect(source).toContain('const candidateIds = await upsertActivePlayerPool(prisma)');
     expect(source.indexOf('upsertActivePlayerPool(prisma)')).toBeLessThan(
       source.indexOf('prisma.$transaction')

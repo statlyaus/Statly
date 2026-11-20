@@ -201,3 +201,29 @@ export async function getPoolPlayer(
   });
   return player ? toPoolPlayer(player) : null;
 }
+
+/**
+ * One season's stored totals with their players, active or not (a rostered player who has since
+ * retired keeps their stats), for the draft, lineup and trade stat columns. `ids` limits it to
+ * those players. Keyed on the canonical `Player.id`, so callers join by id and never by name.
+ */
+export async function listSeasonStatPlayers(
+  { season, ids }: { season: number | null; ids?: readonly string[] },
+  client: Pick<Prisma.TransactionClient, 'playerSeasonStat'> = prisma
+): Promise<Player[]> {
+  if (season === null) return [];
+  const rows = await client.playerSeasonStat.findMany({
+    where: { season, ...(ids ? { playerId: { in: [...ids] } } : {}) },
+    select: {
+      ...seasonStatSelect,
+      player: { select: { id: true, name: true, club: true, position: true } },
+    },
+  });
+  return rows.map(({ player, ...row }) => toPoolPlayer({ ...player, seasonStats: [row] }, season));
+}
+
+/** These players' totals for the newest stored season: the lineup and trade stat columns. */
+export async function listLatestSeasonStatPlayers(ids: readonly string[]): Promise<Player[]> {
+  const [season = null] = await listStatSeasons();
+  return listSeasonStatPlayers({ season, ids });
+}
