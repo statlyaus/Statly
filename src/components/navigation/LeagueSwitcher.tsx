@@ -161,7 +161,7 @@ export default function LeagueSwitcher() {
         Select league
       </label>
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger className="flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-2 text-sm font-semibold text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]">
+        <PopoverTrigger className="flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-2 text-sm font-semibold text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <span className="max-w-[240px] truncate">{buttonLabel}</span>
           <ChevronDown
             className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -169,7 +169,7 @@ export default function LeagueSwitcher() {
         </PopoverTrigger>
         <PopoverContent
           aria-label="Select league"
-          className="min-w-[20rem] border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)]"
+          className="ground-white min-w-[20rem] border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)]"
         >
           <Command className="bg-[color:var(--league-surface)] text-[color:var(--league-text)]">
             <div className="p-2">

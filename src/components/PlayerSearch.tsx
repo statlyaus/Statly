@@ -278,7 +278,7 @@ export default function PlayerSearch({
       </div>
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
-        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="ground-white absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
           <div className="max-h-96 overflow-y-auto bg-white text-gray-900">
             <div id={listboxId} role="listbox">
               {isLoading ? (
