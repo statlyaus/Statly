@@ -592,7 +592,7 @@ const AuthForm = ({
                       getPasswordStrength(password) < 25
                         ? 'bg-result-loss'
                         : getPasswordStrength(password) < 50
-                          ? 'bg-warning'
+                          ? 'bg-warning-text'
                           : getPasswordStrength(password) < 75
                             ? 'bg-brand-bar'
                             : 'bg-result-win'

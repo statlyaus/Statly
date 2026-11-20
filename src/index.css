@@ -43,6 +43,7 @@
   --color-brand-bar-foreground: var(--brand-bar-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-text: var(--warning-text);
   --color-overlay: var(--overlay);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -134,8 +135,10 @@
   --destructive-foreground: #fff;
   /* Success keeps its own green so it stops following --result-win when results move to cobalt. */
   --success: #15803d;
-  --warning: oklch(0.78 0.16 78);
-  --warning-foreground: oklch(0.24 0.06 78);
+  /* Sun: deadlines, your turn, selection. A fill with ink text only; amber words use --warning-text. */
+  --warning: var(--brand-sun);
+  --warning-foreground: var(--brand-ink);
+  --warning-text: #7a4a06;
   --result-win: #15803d;
   --result-win-foreground: #fff;
   --result-loss: #c81e1e;
@@ -311,10 +314,84 @@
   --social-link: var(--brand-cobalt);
 }
 
+/* Grounds (docs/product/style-guide.md, "Grounds"). A ground sets the roles components read, so a
+   button, link or focus ring inside it is right by construction. In the components layer so a
+   utility on the same element still wins. Only these roles follow a ground: :root aliases such as
+   --league-*, --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
+   --input and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
+   .ground-white. Status words: --warning-text holds on all three light grounds; --success and
+   --destructive only on white until the stone ticket fixes them. */
+@layer components {
+  .ground-white,
+  .ground-stone,
+  .ground-tint {
+    --foreground: var(--brand-ink);
+    --muted-foreground: var(--brand-secondary-text);
+    --primary: var(--brand-cobalt);
+    --primary-foreground: #fff;
+    --ring: var(--brand-cobalt);
+    --border: var(--brand-hairline);
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  .ground-white {
+    --background: #fff;
+  }
+  .ground-stone {
+    --background: var(--brand-stone);
+  }
+  .ground-tint {
+    --background: var(--brand-tint);
+  }
+  .ground-cobalt {
+    --background: var(--brand-cobalt);
+    --foreground: #fff;
+    --muted-foreground: var(--brand-tint);
+    --primary: var(--brand-sun);
+    --primary-foreground: var(--brand-ink);
+    --ring: #fff;
+    --border: rgb(255 255 255 / 30%);
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  .ground-ink {
+    --background: var(--brand-ink);
+    --foreground: #fff;
+    --muted-foreground: var(--brand-hairline);
+    --primary: var(--brand-sun);
+    --primary-foreground: var(--brand-ink);
+    --ring: var(--brand-sun);
+    --border: rgb(255 255 255 / 20%);
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  .ground-sun {
+    --background: var(--brand-sun);
+    --foreground: var(--brand-ink);
+    --muted-foreground: #403e3a;
+    --primary: var(--brand-ink);
+    --primary-foreground: #fff;
+    --ring: var(--brand-ink);
+    --border: rgb(17 17 17 / 20%);
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  .ground-sun ::selection {
+    background-color: var(--brand-ink);
+    color: #fff;
+  }
+}
+
 @layer base {
   * {
-    border-color: var(--color-border);
-    outline-color: var(--color-ring);
+    /* Raw roles, not the --color-* aliases, so a ground's redefinition reaches bare borders and
+       outlines inside it. */
+    border-color: var(--border);
+    outline-color: var(--ring);
+  }
+  ::selection {
+    background-color: var(--brand-sun);
+    color: var(--brand-ink);
   }
   body {
     @apply bg-background text-foreground;

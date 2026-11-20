@@ -73,14 +73,18 @@ Six colours, each with one job. Ratios are WCAG 2.2 contrast ratios against whit
 | Sun    | `#ffc247` | Yours and now: your pick, deadlines, selection, highlighter            | Ink only (11.7:1). Never white or cobalt |
 
 Supporting values: secondary text `#55534e`, hairline `#c9c5bc`, red `#c81e1e` for live, errors and
-destructive actions only.
+destructive actions only, and amber `#7a4a06` (`text-warning-text`) for warning words. Sun is a fill:
+`bg-warning` with `text-warning-foreground`. NEVER `text-warning`; sun text is 1.6:1 on white.
 
 ### Grounds
 
 Every tile, card or band sits on one of six grounds (white, stone, tint, cobalt, ink, sun), and the
 ground sets the colours of everything on it: text, secondary text, rules, marks, the primary action,
 focus, win and provisional. Components read those roles, so a button or badge is correct on any ground
-by construction (target, phase 3: one set of semantic roles redefined per ground).
+by construction. The `.ground-white`, `.ground-stone`, `.ground-tint`, `.ground-cobalt`, `.ground-ink`
+and `.ground-sun` classes in `src/index.css` do this (done 2026-11-20); surfaces move onto them screen by
+screen. Only the core roles follow a ground: area aliases such as `--league-*` keep their root values.
+A card inside a cobalt, ink or sun ground carries `.ground-white`.
 
 - On cobalt and ink, the primary action is sun with ink text; marks are white on cobalt and sun on
   ink.
@@ -138,7 +142,7 @@ Every pair below must hold on every ground and surface mode.
 | Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                    |
 | Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                           |
 | Trade sides             | Cobalt and ink, never good/bad colours                                 | Target, phase 3                                           |
-| Selection               | Sun with ink text; ink with white text on a sun ground                 | Target, phase 3                                           |
+| Selection               | Sun with ink text; ink with white text on a sun ground                 | Done                                                      |
 
 A trade has two sides, not a good side and a bad side: trade charts never use green and red.
 
