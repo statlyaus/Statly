@@ -277,6 +277,7 @@ describe('ModularDashboard', () => {
     );
     const liveBadge = within(card).getByText('Live');
     expect(liveBadge).toHaveClass('text-status-live');
+    expect(liveBadge).not.toHaveClass('text-destructive-text');
     expect(liveBadge).not.toHaveClass('text-destructive');
     expect(screen.getByText('Nothing needs you right now.')).toBeInTheDocument();
     expect(fetchJsonMock).toHaveBeenCalledWith(
@@ -305,6 +306,7 @@ describe('ModularDashboard', () => {
       .getAllByText('Draft live')
       .find((element) => element.classList.contains('uppercase'));
     expect(liveBadge).toHaveClass('text-status-live');
+    expect(liveBadge).not.toHaveClass('text-destructive-text');
     expect(liveBadge).not.toHaveClass('text-destructive');
     expect(liveBadge?.querySelector('[aria-hidden="true"]')).toHaveClass('bg-status-live');
   });

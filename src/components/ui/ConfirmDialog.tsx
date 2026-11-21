@@ -176,7 +176,7 @@ export function ConfirmDialogView({
                 )}
               />
               {showError && invalid ? (
-                <p id={errorId} className="mt-1 text-sm font-medium text-destructive">
+                <p id={errorId} className="mt-1 text-sm font-medium text-destructive-text">
                   Add a {input.inputLabel.toLowerCase()}.
                 </p>
               ) : null}

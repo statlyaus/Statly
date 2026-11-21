@@ -442,7 +442,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         <div className="w-full max-w-md text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
             <svg
-              className="h-8 w-8 text-destructive"
+              className="h-8 w-8 text-destructive-text"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

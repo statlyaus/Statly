@@ -803,7 +803,7 @@ export function LeagueMyTeamPanel({
           {actionMessage ? (
             <p
               role={actionMessage.tone === 'refused' ? 'alert' : 'status'}
-              className={`text-sm ${actionMessage.tone === 'refused' ? 'font-semibold text-destructive' : 'text-foreground'}`}
+              className={`text-sm ${actionMessage.tone === 'refused' ? 'font-semibold text-destructive-text' : 'text-foreground'}`}
             >
               {actionMessage.text}
             </p>
@@ -1035,7 +1035,7 @@ export function LeagueMyTeamPanel({
                                           type="button"
                                           onClick={() => void handleDrop(player)}
                                           aria-label={`Drop ${player.name}`}
-                                          className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-semibold text-destructive hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+                                          className="inline-flex min-h-11 items-center rounded-md px-2 text-xs font-semibold text-destructive-text hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                                         >
                                           Drop
                                         </button>
@@ -1077,7 +1077,7 @@ export function LeagueMyTeamPanel({
                   {changeCount} {changeCount === 1 ? 'change' : 'changes'} to confirm
                 </p>
                 {saveState.kind === 'error' ? (
-                  <p role="alert" className="text-xs font-semibold text-destructive">
+                  <p role="alert" className="text-xs font-semibold text-destructive-text">
                     Not saved: {saveState.message}
                   </p>
                 ) : (
@@ -1519,7 +1519,7 @@ function ReadinessRow({
             {flagged > 0 ? (
               <div className="flex gap-1">
                 <dt className="text-muted-foreground">Bye or injured</dt>
-                <dd className="font-semibold tabular-nums text-destructive">{flagged}</dd>
+                <dd className="font-semibold tabular-nums text-destructive-text">{flagged}</dd>
               </div>
             ) : null}
             <div className="flex gap-1">

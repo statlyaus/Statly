@@ -95,7 +95,7 @@ export function PasteImport({
           </p>
         </div>
         {error ? (
-          <p role="alert" className="text-sm font-medium text-destructive">
+          <p role="alert" className="text-sm font-medium text-destructive-text">
             {error}
           </p>
         ) : null}

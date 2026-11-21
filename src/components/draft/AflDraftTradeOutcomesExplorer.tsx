@@ -34,7 +34,7 @@ const statusLabel: Record<AflDraftTradeOutcomeCheckStatus, string> = {
 
 const statusClass: Record<AflDraftTradeOutcomeCheckStatus, string> = {
   matched: 'border-primary/30 bg-primary/10 text-foreground',
-  different: 'border-destructive/30 bg-destructive/10 text-destructive',
+  different: 'border-destructive/30 bg-destructive/10 text-destructive-text',
   recorded_only: 'border-border bg-muted text-foreground',
   source_only: 'border-border bg-muted text-foreground',
   partial: 'border-border bg-muted text-foreground',
@@ -96,7 +96,7 @@ function MetricCheck({ check, unit }: { check: AflDraftTradeOutcomeMetricCheck; 
         </p>
       ) : null}
       {check.delta !== null && check.status === 'different' ? (
-        <p className="mt-2 text-xs font-semibold tabular-nums text-destructive">
+        <p className="mt-2 text-xs font-semibold tabular-nums text-destructive-text">
           Difference: {check.delta > 0 ? '+' : ''}
           {check.delta.toLocaleString('en-AU')} {unit}
         </p>
@@ -172,7 +172,7 @@ export function AflDraftTradeOutcomesExplorer({ response, query, filterNotice = 
             <span
               className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${
                 response.consistency.freshness === 'withdrawn'
-                  ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                  ? 'border-destructive/30 bg-destructive/10 text-destructive-text'
                   : 'border-border bg-background text-foreground'
               }`}
             >

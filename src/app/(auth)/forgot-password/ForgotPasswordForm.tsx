@@ -81,7 +81,7 @@ export default function ForgotPasswordForm() {
           >
             <ExclamationTriangleIcon
               aria-hidden="true"
-              className="h-5 w-5 shrink-0 text-destructive"
+              className="h-5 w-5 shrink-0 text-destructive-text"
             />
             <span>{error}</span>
           </div>

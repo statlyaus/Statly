@@ -218,7 +218,7 @@ export function PlayersControls({
         {message ? (
           <p
             role={message.tone === 'error' ? 'alert' : 'status'}
-            className={`text-sm ${message.tone === 'error' ? 'text-destructive' : 'text-foreground'}`}
+            className={`text-sm ${message.tone === 'error' ? 'text-destructive-text' : 'text-foreground'}`}
           >
             {message.text}
           </p>

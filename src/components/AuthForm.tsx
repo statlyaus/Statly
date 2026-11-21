@@ -393,7 +393,7 @@ const AuthForm = ({
   if (user && autoRedirectIfAuthenticated && sessionCheck === 'failed') {
     return (
       <div className={`space-y-4 p-8 text-center ${className}`}>
-        <p role="alert" className="text-sm font-medium text-destructive">
+        <p role="alert" className="text-sm font-medium text-destructive-text">
           {error}
         </p>
         <button
@@ -455,7 +455,7 @@ const AuthForm = ({
         <button
           type="button"
           onClick={handleLogout}
-          className={cn(buttonStyles({ variant: 'outline' }), 'mt-5 text-destructive')}
+          className={cn(buttonStyles({ variant: 'outline' }), 'mt-5 text-destructive-text')}
         >
           <ArrowRightOnRectangleIcon aria-hidden="true" className="h-5 w-5" />
           Sign Out
@@ -488,7 +488,7 @@ const AuthForm = ({
                 <EnvelopeIcon
                   className={`w-5 h-5 transition-colors ${
                     showEmailError
-                      ? 'text-destructive'
+                      ? 'text-destructive-text'
                       : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
@@ -512,7 +512,7 @@ const AuthForm = ({
               />
             </div>
             {showEmailError && (
-              <p id="email-error" className="text-sm text-destructive flex items-center gap-1">
+              <p id="email-error" className="text-sm text-destructive-text flex items-center gap-1">
                 <ExclamationTriangleIcon className="w-4 h-4" />
                 {validation.email.message}
               </p>
@@ -529,7 +529,7 @@ const AuthForm = ({
                 <LockClosedIcon
                   className={`w-5 h-5 transition-colors ${
                     showPasswordError
-                      ? 'text-destructive'
+                      ? 'text-destructive-text'
                       : 'text-muted-foreground group-focus-within:text-foreground'
                   }`}
                 />
@@ -575,7 +575,7 @@ const AuthForm = ({
                   <span
                     className={`text-xs font-semibold ${
                       getPasswordStrength(password) < 25
-                        ? 'text-destructive'
+                        ? 'text-destructive-text'
                         : getPasswordStrength(password) < 50
                           ? 'text-foreground'
                           : getPasswordStrength(password) < 75
@@ -606,7 +606,7 @@ const AuthForm = ({
             {showPasswordError && (
               <p
                 id="password-error"
-                className="text-sm text-destructive flex items-center gap-1 mt-2"
+                className="text-sm text-destructive-text flex items-center gap-1 mt-2"
               >
                 <ExclamationTriangleIcon className="w-4 h-4" />
                 {validation.password.message}
@@ -628,7 +628,7 @@ const AuthForm = ({
                   <LockClosedIcon
                     className={`w-5 h-5 transition-colors ${
                       confirmPassword && password !== confirmPassword
-                        ? 'text-destructive'
+                        ? 'text-destructive-text'
                         : 'text-muted-foreground group-focus-within:text-foreground'
                     }`}
                   />
@@ -661,7 +661,7 @@ const AuthForm = ({
                 </button>
               </div>
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-destructive flex items-center gap-1">
+                <p className="text-sm text-destructive-text flex items-center gap-1">
                   <ExclamationTriangleIcon className="w-4 h-4" />
                   Passwords do not match
                 </p>
@@ -679,7 +679,7 @@ const AuthForm = ({
               animate={{ opacity: 1, scale: 1 }}
               className={`flex items-center gap-3 p-4 ${alertStyles({ tone: 'error' })}`}
             >
-              <ExclamationTriangleIcon className="w-5 h-5 text-destructive flex-shrink-0" />
+              <ExclamationTriangleIcon className="w-5 h-5 text-destructive-text flex-shrink-0" />
               <span className="text-sm font-medium">{error}</span>
             </motion.div>
           )}
