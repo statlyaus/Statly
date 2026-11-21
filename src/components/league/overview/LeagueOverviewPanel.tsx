@@ -374,10 +374,7 @@ function OverviewCard({
   children: ReactNode;
 }) {
   return (
-    <section
-      aria-labelledby={id}
-      className="overflow-hidden rounded-lg border border-border bg-card"
-    >
+    <section aria-labelledby={id} className="overflow-hidden border border-border bg-card">
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <h2 id={id} className="font-display text-lg font-bold leading-tight text-foreground">
@@ -480,7 +477,7 @@ function SetupChecklist({
   return (
     <section
       aria-labelledby="overview-setup-heading"
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className="overflow-hidden border border-border bg-card"
     >
       <header className="border-b border-border px-4 py-3">
         <h2
@@ -496,7 +493,7 @@ function SetupChecklist({
             <p className="font-semibold text-foreground">Invite managers</p>
             <p className="text-muted-foreground">
               {memberCount} of {league.maxTeams} teams · code{' '}
-              <code className="font-semibold text-foreground">{league.code}</code>
+              <code className="font-sans font-semibold text-foreground">{league.code}</code>
             </p>
           </div>
           <div className="flex gap-2">
@@ -612,7 +609,7 @@ function ThisRoundCard({
   return (
     <section
       aria-labelledby="overview-round-heading"
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className="overflow-hidden border border-border bg-card"
     >
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-4 py-3">
         <h2

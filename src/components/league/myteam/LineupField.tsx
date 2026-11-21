@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronUp, Lock } from 'lucide-react';
 
+import { badgeStyles } from '@/components/ui/controlStyles';
 import { guernseyFor } from '@/lib/clubGuernseys';
 
 import type { LineupAssignment, LineupFieldSpot } from '../matchups/lineupBuilderTypes';
@@ -143,9 +144,12 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
   const dim = (view: TokenView) => selecting && !view.target && !view.selected;
 
   return (
+    // The field is an illustration (owner 2026-11-21): guernseys may carry club colours here, but no
+    // text ever sits on a club colour. The squad list beside it uses the 13px club square.
     <section
       aria-labelledby="my-team-field-heading"
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      data-illustration=""
+      className="overflow-hidden border border-border bg-card"
     >
       <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <h3
@@ -186,7 +190,7 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
               if (zoneSpots.length === 0) return null;
               return (
                 <div key={zone} className="flex items-end gap-1.5">
-                  <span className="pb-1 text-[0.625rem] font-bold uppercase tracking-wide text-white/80">
+                  <span className="pb-1 text-[11px] font-bold uppercase tracking-wide text-white">
                     {ZONE_SHORT[zone]}
                   </span>
                   <ul className="flex gap-1">
@@ -232,7 +236,7 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
                   <li
                     aria-hidden="true"
                     title={line.label}
-                    className="absolute -left-10 bottom-0 flex h-[1.125rem] w-8 items-center sm:-left-12 sm:w-9 justify-center rounded bg-brand-bar text-[0.625rem] font-bold tracking-wide text-brand-bar-foreground"
+                    className="absolute -left-10 bottom-0 flex h-[1.125rem] w-8 items-center sm:-left-12 sm:w-9 justify-center bg-brand-bar text-[11px] font-bold tracking-wide text-brand-bar-foreground"
                   >
                     {line.short}
                   </li>
@@ -316,13 +320,13 @@ function StripRow({
 function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; dimmed: boolean }) {
   const onGrass = surface === 'grass';
   const pill = view.selected
-    ? 'bg-warning text-warning-foreground shadow-sm'
+    ? 'bg-warning text-warning-foreground'
     : view.target
-      ? 'bg-card text-foreground ring-2 ring-brand-bar shadow-sm'
+      ? 'bg-card text-foreground ring-2 ring-brand-bar'
       : onGrass
         ? view.player
-          ? 'bg-white text-slate-900 shadow-sm'
-          : 'bg-white/20 text-white'
+          ? 'bg-white text-foreground'
+          : 'bg-foreground text-white'
         : 'text-foreground';
   return (
     <button
@@ -336,7 +340,9 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
       } ${dimmed ? 'opacity-40' : ''}`}
     >
       {view.target ? (
-        <span className="absolute left-1/2 top-0 z-10 -translate-x-1/2 rounded-full bg-brand-bar px-1.5 text-[0.625rem] font-bold uppercase leading-4 text-brand-bar-foreground shadow">
+        <span
+          className={`absolute left-1/2 top-0 z-10 -translate-x-1/2 ${badgeStyles({ tone: 'brand', size: 'xs' })}`}
+        >
           {view.target === 'swap' ? 'Swap' : 'Here'}
         </span>
       ) : null}
@@ -350,11 +356,11 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
           />
         ) : (
           <span
-            className={`flex size-8 items-center justify-center rounded-full border-2 border-dashed text-[0.5625rem] font-bold ${
+            className={`flex size-8 items-center justify-center rounded-full border-2 border-dashed text-[11px] font-bold ${
               onGrass
                 ? view.target
-                  ? 'border-white bg-white/25 text-white'
-                  : 'border-white/60 text-white/85'
+                  ? 'border-white bg-primary text-primary-foreground'
+                  : 'border-white bg-foreground text-white'
                 : view.target
                   ? 'border-brand-bar text-foreground'
                   : 'border-border text-muted-foreground'

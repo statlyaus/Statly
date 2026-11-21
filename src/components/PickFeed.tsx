@@ -221,7 +221,7 @@ export default function PickFeed({
           >
             <span
               className={cn(
-                'size-5 rounded-full bg-background shadow-sm transition-transform',
+                'size-5 rounded-full border-2 border-foreground bg-background transition-transform',
                 autoScroll ? 'translate-x-5' : 'translate-x-0'
               )}
             />

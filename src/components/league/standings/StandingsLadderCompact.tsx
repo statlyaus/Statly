@@ -26,7 +26,10 @@ export function StandingsLadderCompact({
         <caption className="sr-only">League ladder</caption>
         <thead>
           <tr className="border-b border-border text-xs text-muted-foreground">
-            <th scope="col" className="w-[3.75rem] py-2 pl-3 text-left font-semibold sm:w-[4.5rem] sm:pl-4">
+            <th
+              scope="col"
+              className="w-[3.75rem] py-2 pl-3 text-left font-semibold sm:w-[4.5rem] sm:pl-4"
+            >
               #
             </th>
             <th scope="col" className="py-2 text-left font-semibold">
@@ -41,7 +44,10 @@ export function StandingsLadderCompact({
               Last 5
             </th>
             {hasOdds ? (
-              <th scope="col" className="w-[4.5rem] py-2 pl-2 pr-3 text-right font-semibold sm:w-24 sm:pr-4">
+              <th
+                scope="col"
+                className="w-[4.5rem] py-2 pl-2 pr-3 text-right font-semibold sm:w-24 sm:pr-4"
+              >
                 Finals
               </th>
             ) : null}
@@ -58,7 +64,7 @@ export function StandingsLadderCompact({
                 >
                   <td className="pl-3 sm:pl-4">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-5 text-right font-display text-base font-bold tabular-nums text-foreground">
+                      <span className="w-5 text-right font-sans text-base font-bold tabular-nums text-foreground">
                         {team.rank}
                       </span>
                       <Movement value={team.movement} />

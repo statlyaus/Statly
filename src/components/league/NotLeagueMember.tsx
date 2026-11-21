@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { MemberLeagueOption } from '@/server/leagues/memberLeagueOptions';
 
 const actionClass =
-  'inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex min-h-10 items-center justify-center rounded-cut px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * Shown when a signed-in viewer opens a league they have no active team in. A league that does not
@@ -13,7 +13,7 @@ const actionClass =
 export function NotLeagueMember({ leagues }: { leagues: MemberLeagueOption[] }) {
   return (
     <div className="px-4 py-10">
-      <section className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-6 text-card-foreground">
+      <section className="mx-auto max-w-lg border border-border bg-card p-6 text-card-foreground">
         <h1 className="text-xl font-semibold">You&apos;re not in this league</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           This league isn&apos;t one of yours, or the link is out of date. Only a league&apos;s
@@ -25,7 +25,7 @@ export function NotLeagueMember({ leagues }: { leagues: MemberLeagueOption[] }) 
             <h2 className="text-sm font-semibold">Go to one of your leagues</h2>
             <ul
               aria-label="Your leagues"
-              className="mt-2 divide-y divide-border rounded-lg border border-border"
+              className="mt-2 divide-y divide-border border border-border"
             >
               {leagues.map((league) => (
                 <li key={league.id}>

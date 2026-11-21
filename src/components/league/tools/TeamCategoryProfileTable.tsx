@@ -23,7 +23,7 @@ export function TeamCategoryProfileTable({
 
   if (profile.categories.length === 0) {
     return (
-      <section className="rounded-lg border border-border bg-background p-6">
+      <section className="border border-border bg-background p-6">
         <h2 className="text-base font-semibold text-foreground">{profile.teamName}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Your category profile appears after your first completed round.
@@ -47,10 +47,7 @@ export function TeamCategoryProfileTable({
       : `Strongest: ${strongest.label} (${ordinal(strongest.rank)}). Weakest: ${weakest.label} (${ordinal(weakest.rank)}).`;
 
   return (
-    <section
-      aria-labelledby="team-profile-heading"
-      className="rounded-lg border border-border bg-background"
-    >
+    <section aria-labelledby="team-profile-heading" className="border border-border bg-background">
       <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 id="team-profile-heading" className="text-base font-semibold text-foreground">

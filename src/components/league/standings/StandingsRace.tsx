@@ -25,7 +25,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
 
   if (latest === null) {
     return (
-      <p className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+      <p className="border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
         The race to finals starts once the first round is final.
       </p>
     );
@@ -49,7 +49,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
   return (
     <section
       aria-labelledby="standings-race-heading"
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className="overflow-hidden border border-border bg-card"
     >
       <header className="border-b border-border px-4 py-3">
         <h3
@@ -134,7 +134,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
                     isActive ? 'bg-accent hover:bg-accent' : ''
                   }`}
                 >
-                  <span className="text-right font-display text-base font-bold tabular-nums text-foreground">
+                  <span className="text-right font-sans text-base font-bold tabular-nums text-foreground">
                     {team.rank}
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
@@ -170,7 +170,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
                     {finals && finals.gamesLeft > 0 && finals.winsHigh > wins ? (
                       <>
                         <span
-                          className={`absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full ${bandColour}`}
+                          className={`absolute top-1/2 h-2.5 -translate-y-1/2 ${bandColour}`}
                           style={{
                             left: position(wins),
                             width: `${((finals.winsHigh - wins) / scaleMax) * 100}%`,
@@ -231,7 +231,7 @@ export function StandingsRace({ data }: { data: StandingsData }): React.JSX.Elem
           </span>
           {hasOdds && roundsLeft > 0 ? (
             <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="relative h-2.5 w-6 rounded-full bg-foreground/10">
+              <span aria-hidden="true" className="relative h-2.5 w-6 bg-foreground/10">
                 <span className="absolute inset-y-[-2px] left-1/2 w-0.5 rounded-full bg-foreground/45" />
               </span>
               Likely final wins (tick: average)

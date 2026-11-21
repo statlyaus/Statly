@@ -222,7 +222,7 @@ function getSortValue(player: PlayerOption, sortBy: WaiverSortKey): string | num
 
 function WaiverOverview(): React.JSX.Element {
   return (
-    <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
+    <section className="border border-border bg-card p-4 text-card-foreground">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Waivers Overview</h1>
@@ -468,7 +468,7 @@ function WaiverPlayerTable({
                 >
                   <th scope="row" className="px-4 py-4 font-normal sm:px-5">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5 shadow-sm">
+                      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5">
                         <Image
                           src={teamLogo}
                           alt=""
@@ -633,7 +633,7 @@ function WaiverPlayerTable({
 
 function EmptyWaiverTable(): React.JSX.Element {
   return (
-    <div className="flex min-h-80 flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-12 text-center text-card-foreground">
+    <div className="flex min-h-80 flex-col items-center justify-center border border-border bg-card px-6 py-12 text-center text-card-foreground">
       <ClockIcon className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
       <h2 className="text-lg font-semibold text-foreground">No free agents available</h2>
       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
@@ -653,7 +653,7 @@ function MyClaimsPanel({
   onCancelClaim?: (id: string) => void;
 }): React.JSX.Element {
   return (
-    <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
+    <section className="border border-border bg-card p-4 text-card-foreground">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">My Claims</h2>
@@ -728,7 +728,7 @@ function ActivityPanel({
   timeZone?: string;
 }): React.JSX.Element {
   return (
-    <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
+    <section className="border border-border bg-card p-4 text-card-foreground">
       <h2 className="text-base font-semibold text-foreground">League Activity</h2>
       <p className="mt-1 text-sm text-muted-foreground">Recent waiver submissions and outcomes.</p>
 
@@ -937,7 +937,7 @@ export default function WaiverFAABSystem({
     <div className="space-y-5">
       <WaiverOverview />
 
-      <section className="rounded-lg border border-border bg-card text-card-foreground">
+      <section className="border border-border bg-card text-card-foreground">
         <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:px-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Waiver Wire</h2>

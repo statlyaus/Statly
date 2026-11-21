@@ -41,7 +41,7 @@ export default async function PlayersPageServer({
         <div
           role="alert"
           aria-live="polite"
-          className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
+          className="border border-border bg-card p-6 text-card-foreground"
         >
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Player Data
@@ -54,13 +54,13 @@ export default async function PlayersPageServer({
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/players"
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex items-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Retry
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex items-center rounded-cut border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Sign in
             </Link>
@@ -75,7 +75,7 @@ export default async function PlayersPageServer({
       <div className="mx-auto max-w-3xl px-6 py-12">
         <section
           aria-live="polite"
-          className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
+          className="border border-border bg-card p-6 text-card-foreground"
         >
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Player Data
@@ -88,13 +88,13 @@ export default async function PlayersPageServer({
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/players"
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex items-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Refresh
             </Link>
             <Link
               href="/dashboard"
-              className="inline-flex items-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex items-center rounded-cut border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Open dashboard
             </Link>

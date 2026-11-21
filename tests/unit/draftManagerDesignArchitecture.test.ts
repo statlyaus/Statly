@@ -12,7 +12,9 @@ describe('draft manager design architecture', () => {
     expect(draftManagerSource).toContain('border border-border bg-card');
     expect(draftManagerSource).toContain('text-muted-foreground');
     expect(draftManagerSource).toContain('bg-primary px-4 py-3 text-primary-foreground');
-    expect(draftManagerSource).toContain('bg-destructive/10');
+    // Errors are an alert ground (style guide, "Alerts"), not a red wash.
+    expect(draftManagerSource).toContain("alertStyles({ tone: 'error' })");
+    expect(draftManagerSource).not.toContain('bg-destructive/10');
     expect(draftManagerSource).toContain('focus-visible:ring-ring');
     expect(draftManagerSource).toContain('border border-input bg-background');
   });

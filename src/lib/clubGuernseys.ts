@@ -44,3 +44,20 @@ export function guernseyFor(club: string | null | undefined): Guernsey {
   if (!club?.trim()) return FALLBACK_GUERNSEY;
   return GUERNSEYS[getTeamName(club)] ?? GUERNSEYS[club.trim()] ?? FALLBACK_GUERNSEY;
 }
+
+function relativeLuminance(hex: string): number {
+  const channels = [1, 3, 5].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+}
+
+/**
+ * The 13px club square (style guide, "Club colours"): the guernsey's main colour; a white guernsey
+ * (Geelong, North Melbourne, Sydney) is a white square with an ink edge.
+ */
+export function clubSquare(club: string): { readonly fill: string; readonly edged: boolean } {
+  const { base } = guernseyFor(club);
+  return { fill: base, edged: relativeLuminance(base) > 0.7 };
+}

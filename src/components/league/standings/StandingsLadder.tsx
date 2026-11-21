@@ -87,7 +87,7 @@ export function StandingsLadder({
   const headerProps = { sort, onSort: toggleSort };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="overflow-hidden border border-border bg-card">
       <div className="relative overflow-x-auto">
         <table
           className="w-full min-w-[var(--ladder-min)] table-fixed text-sm sm:min-w-[var(--ladder-min-sm)]"
@@ -158,7 +158,7 @@ export function StandingsLadder({
                   >
                     <td className={`sticky left-0 z-10 pl-4 pr-2 ${rowBg}`}>
                       <span className="flex items-center gap-2">
-                        <span className="w-6 text-right font-display text-lg font-bold tabular-nums text-foreground">
+                        <span className="w-6 text-right font-sans text-lg font-bold tabular-nums text-foreground">
                           {team.rank}
                         </span>
                         <Movement value={team.movement} />

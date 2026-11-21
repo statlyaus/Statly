@@ -414,7 +414,7 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
                 ) : null}
               </th>
             ))}
-            <th scope="col" className="w-20 px-3 py-2 text-center">
+            <th scope="col" className="w-20 px-3 py-2 text-right">
               Score
             </th>
           </tr>
@@ -486,7 +486,7 @@ function CategoryTotalsRow({
           </td>
         );
       })}
-      <td className="border-l border-[color:var(--league-border)] px-3 py-3 text-center font-display text-xl font-bold tabular-nums text-[color:var(--league-text)]">
+      <td className="border-l border-[color:var(--league-border)] px-3 py-3 text-right font-sans text-xl font-bold tabular-nums text-[color:var(--league-text)]">
         {score}
       </td>
     </tr>

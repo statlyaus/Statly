@@ -10,6 +10,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
+import { badgeStyles } from '@/components/ui/controlStyles';
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Filler);
 
@@ -39,7 +40,11 @@ const PlayerChart: React.FC<Props> = ({
     (a, b) => (a.season ?? 0) - (b.season ?? 0) || a.round - b.round
   );
   const seasons = Array.from(
-    new Set(sortedMatches.map((match) => match.season).filter((season): season is number => typeof season === 'number'))
+    new Set(
+      sortedMatches
+        .map((match) => match.season)
+        .filter((season): season is number => typeof season === 'number')
+    )
   );
   const hasMultipleSeasons = seasons.length > 1;
   const seasonLabel =
@@ -56,8 +61,9 @@ const PlayerChart: React.FC<Props> = ({
       ? `${String(match.season).slice(-2)} ${roundLabel}`
       : roundLabel;
   });
-  const fullLabels = sortedMatches.map((match) =>
-    `${match.season ? `${match.season} ` : ''}${getFullRoundLabel(match.round)} vs ${match.opposition}`
+  const fullLabels = sortedMatches.map(
+    (match) =>
+      `${match.season ? `${match.season} ` : ''}${getFullRoundLabel(match.round)} vs ${match.opposition}`
   );
   const values = sortedMatches.map((match) => match.totalValue);
   const hasValueTrend = values.some((value) => value !== 0);
@@ -82,7 +88,7 @@ const PlayerChart: React.FC<Props> = ({
     .filter((category) => category.average !== null);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <div className="border border-border bg-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-card-foreground">Recent Performance</h2>
@@ -90,9 +96,7 @@ const PlayerChart: React.FC<Props> = ({
             {playerName} - Statly category value by round
           </p>
         </div>
-        <span className="w-fit rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
-          {seasonLabel}
-        </span>
+        <span className={`w-fit ${badgeStyles({ caps: false })}`}>{seasonLabel}</span>
       </div>
 
       <div className="mt-4 h-56">
@@ -166,7 +170,7 @@ const PlayerChart: React.FC<Props> = ({
             }}
           />
         ) : (
-          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 p-5 text-center">
+          <div className="flex h-full items-center justify-center border border-dashed border-border bg-muted/30 p-5 text-center">
             <div>
               <h3 className="text-base font-semibold text-card-foreground">
                 {hasAggregateStats ? 'Season profile available' : 'No performance data yet'}
@@ -195,7 +199,9 @@ const PlayerChart: React.FC<Props> = ({
               </div>
               <div>
                 <div className="text-muted-foreground">Best Value</div>
-                <div className="font-semibold text-card-foreground">{Math.max(...values).toFixed(2)}</div>
+                <div className="font-semibold text-card-foreground">
+                  {Math.max(...values).toFixed(2)}
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground">Category Avgs</div>
