@@ -226,6 +226,14 @@ export function isLocalExternalCaptureCapability(
   return value !== undefined && Object.hasOwn(CAPABILITY_PROFILES, value);
 }
 
+/** The decision key {@link loadRecordedLocalCaptureAuthority} reads for one capability and season. */
+export function localExternalCaptureDecisionKey(
+  capabilityId: LocalExternalCaptureCapability,
+  season: number
+): string {
+  return CAPABILITY_PROFILES[capabilityId].decisionKey(season);
+}
+
 export interface RecordedLocalCaptureAuthority {
   authority: LocalNarrowCaptureAuthority;
   decisionId: string;
