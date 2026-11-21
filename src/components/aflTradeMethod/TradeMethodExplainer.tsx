@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { DAWSON_SEASONS } from './dawsonExample';
 import { StepVisual } from './ExplainerVisuals';
@@ -16,27 +16,41 @@ import { REFERENCES, STAGES, STEPS } from './explainerSteps';
 const DESIGN_W = 1180;
 const DESIGN_H = 880;
 const PHONE_MAX = 768;
+/** Below this the slide's text is too small to read, so short screens get the stacked layout too. */
+const MIN_SCALE = 0.6;
 
+/**
+ * `stacked` is null until measured: the server render and first paint use the md breakpoint, so
+ * phones get the stacked layout without JavaScript.
+ */
 function useFitToScreen() {
   const ref = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState({ scale: 1, phone: false });
+  const [fit, setFit] = useState<{ scale: number; stacked: boolean | null }>({
+    scale: 1,
+    stacked: null,
+  });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const measure = () => {
-      const phone = window.innerWidth < PHONE_MAX;
+      const header = el.getBoundingClientRect().top + window.scrollY;
       const scale = Math.min(
         1.25,
         (el.clientWidth - 32) / DESIGN_W,
-        (el.clientHeight - 24) / DESIGN_H
+        (window.innerHeight - header - 24) / DESIGN_H
       );
-      setFit({ phone, scale: phone ? 1 : Math.max(0.1, scale) });
+      const stacked = window.innerWidth < PHONE_MAX || scale < MIN_SCALE;
+      setFit({ stacked, scale: stacked ? 1 : scale });
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, []);
   return { ref, ...fit };
 }
@@ -143,6 +157,27 @@ function Progress({ step, onPick }: { step: number; onPick: (n: number) => void 
   );
 }
 
+/** Layout classes by mode; each string is literal so Tailwind sees it. */
+const LAYOUT = {
+  unmeasured: {
+    outer: 'md:h-[calc(100dvh-4rem-1px)] md:overflow-hidden',
+    inner:
+      'max-md:p-4 md:absolute md:left-1/2 md:top-1/2 md:h-[880px] md:w-[1180px] md:[transform:translate(-50%,-50%)_scale(var(--fit))]',
+    footer: 'max-md:sticky max-md:bottom-0 max-md:z-10',
+    short: 'md:hidden',
+    long: 'max-md:hidden',
+  },
+  stacked: { outer: '', inner: 'p-4', footer: 'sticky bottom-0 z-10', short: '', long: 'hidden' },
+  slide: {
+    outer: 'h-[calc(100dvh-4rem-1px)] overflow-hidden',
+    inner:
+      'absolute left-1/2 top-1/2 h-[880px] w-[1180px] [transform:translate(-50%,-50%)_scale(var(--fit))]',
+    footer: '',
+    short: 'hidden',
+    long: '',
+  },
+} as const;
+
 const control =
   'rounded-cut cursor-pointer border-2 border-foreground font-display font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -150,6 +185,8 @@ export function TradeMethodExplainer() {
   const [season, setSeason] = useState(2025);
   const [step, setStep] = useState(0);
   const fit = useFitToScreen();
+  const sectionRef = useRef<HTMLElement>(null);
+  const layout = LAYOUT[fit.stacked === null ? 'unmeasured' : fit.stacked ? 'stacked' : 'slide'];
   // The arrow keys step through the story from anywhere on the page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -163,26 +200,21 @@ export function TradeMethodExplainer() {
   const d = DAWSON_SEASONS.find((x) => x.season === season) ?? DAWSON_SEASONS[0];
   const s = STEPS[step];
   if (!d || !s) return null;
-  const go = (n: number) => setStep(Math.min(STEPS.length - 1, Math.max(0, n)));
+  const go = (n: number) => {
+    setStep(Math.min(STEPS.length - 1, Math.max(0, n)));
+    // Stacked, the step can be longer than the screen: start the next one at its top.
+    const top = sectionRef.current?.getBoundingClientRect().top;
+    if (fit.stacked && top !== undefined && top < 0) sectionRef.current?.scrollIntoView?.();
+  };
+  const title = typeof s.title === 'function' ? s.title(d) : s.title;
   const last = step === STEPS.length - 1;
   const next = STEPS[step + 1];
 
   return (
-    <div
-      ref={fit.ref}
-      className={`ground-stone relative w-full font-sans ${fit.phone ? '' : 'h-[calc(100dvh-4rem)] overflow-hidden'}`}
-    >
+    <div ref={fit.ref} className={`ground-stone relative w-full font-sans ${layout.outer}`}>
       <div
-        className={`flex flex-col gap-3 ${fit.phone ? 'p-4' : 'absolute left-1/2 top-1/2'}`}
-        style={
-          fit.phone
-            ? undefined
-            : {
-                width: DESIGN_W,
-                height: DESIGN_H,
-                transform: `translate(-50%, -50%) scale(${fit.scale})`,
-              }
-        }
+        className={`flex flex-col gap-3 ${layout.inner}`}
+        style={{ '--fit': fit.scale } as CSSProperties}
       >
         <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <h1 className="font-display text-[30px] font-extrabold leading-none tracking-[-0.03em] md:text-[36px]">
@@ -209,7 +241,8 @@ export function TradeMethodExplainer() {
         </div>
 
         <section
-          className="flex min-h-0 flex-1 flex-col border-2 border-foreground bg-card"
+          ref={sectionRef}
+          className="flex min-h-0 flex-1 scroll-mt-28 flex-col border-2 border-foreground bg-card"
           aria-label="How PAV is calculated, step by step"
         >
           <Progress step={step} onPick={go} />
@@ -223,7 +256,7 @@ export function TradeMethodExplainer() {
                 {s.kicker}
               </span>
               <h2 className="font-display text-[28px] font-bold leading-[1.05] tracking-[-0.02em] [text-wrap:balance] md:text-[32px]">
-                {typeof s.title === 'function' ? s.title(d) : s.title}
+                {title}
               </h2>
               {(typeof s.copy === 'function' ? s.copy(d) : s.copy).map((c) => (
                 <p key={c} className="max-w-[52ch] text-[15px] leading-relaxed">
@@ -237,7 +270,7 @@ export function TradeMethodExplainer() {
           </div>
 
           <div
-            className={`flex shrink-0 items-center justify-between gap-4 border-t-2 border-foreground bg-card px-5 py-3 md:px-8 ${fit.phone ? 'sticky bottom-0 z-10' : ''}`}
+            className={`flex shrink-0 items-center justify-between gap-4 border-t-2 border-foreground bg-card px-5 py-3 md:px-8 ${layout.footer}`}
           >
             <button
               type="button"
@@ -247,15 +280,23 @@ export function TradeMethodExplainer() {
             >
               ← Back
             </button>
-            <span className="text-[14px] text-muted-foreground">
+            <span className="text-[14px] text-muted-foreground" aria-live="polite">
               Step {step + 1} of {STEPS.length}
+              <span className="sr-only">: {title}</span>
             </span>
             <button
               type="button"
               onClick={() => go(last ? 0 : step + 1)}
               className={`${control} bg-warning px-5 py-2 text-[15px] text-warning-foreground`}
             >
-              {last ? 'Start again' : fit.phone || !next ? 'Next →' : `Next: ${next.short} →`}
+              {last || !next ? (
+                'Start again'
+              ) : (
+                <>
+                  <span className={layout.short}>Next →</span>
+                  <span className={layout.long}>Next: {next.short} →</span>
+                </>
+              )}
             </button>
           </div>
         </section>

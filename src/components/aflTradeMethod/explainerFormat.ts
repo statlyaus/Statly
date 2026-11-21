@@ -16,8 +16,12 @@ const fmt = (n: number, dp: number) =>
 export const f0 = (n: number) => fmt(n, 0);
 export const f1 = (n: number) => fmt(n, 1);
 export const f2 = (n: number) => fmt(n, 2);
+export const f3 = (n: number) => fmt(n, 3);
+export const f4 = (n: number) => fmt(n, 4);
+/** Rounds to `dp` decimals as a number, matching what the formatters print. */
+export const round = (n: number, dp: number) => Math.round(n * 10 ** dp) / 10 ** dp;
 export const pct = (n: number) =>
-  `${(n * 100).toLocaleString('en-AU', { maximumFractionDigits: 1 })}%`;
+  `${(n * 100).toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 export const ordinal = (n: number) => {
   if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
   return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;

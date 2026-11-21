@@ -237,7 +237,7 @@ export const STEPS: readonly Step[] = [
   {
     stage: 'trade',
     id: 'expected',
-    short: 'The 67.0 still to come',
+    short: `The ${f1(DAWSON_TRADE.expected2026.total)} still to come`,
     kicker: 'The trade',
     title: 'How his expected PAV is worked out',
     copy: [

@@ -5,11 +5,14 @@ import {
   f0,
   f1,
   f2,
+  f3,
+  f4,
   ordinal,
   pct,
   POOL_FILL,
   POOL_NAME,
   POOLS,
+  round,
   roundParts,
   roundToTotal,
 } from './explainerFormat';
@@ -263,23 +266,23 @@ function Sketch({ kind }: { kind: SketchKind }) {
               strokeLinecap="round"
             />
             <text
-              x="180"
-              y="60"
-              fontSize="14"
+              x="171"
+              y="50"
+              fontSize="17"
               fontWeight="700"
               fill={COBALT}
-              transform="rotate(-8 180 60)"
+              transform="rotate(-8 171 50)"
               className="font-display"
             >
               0.82
             </text>
             <text
               x="196"
-              y="76"
-              fontSize="13"
+              y="66"
+              fontSize="17"
               fontWeight="700"
               fill={COBALT}
-              transform="rotate(6 196 76)"
+              transform="rotate(6 196 66)"
               className="font-display"
             >
               AV
@@ -508,9 +511,10 @@ function PotView({ d }: { d: DawsonSeason }) {
 
 function ClubPool({ k, d }: { k: Pool; d: DawsonSeason }) {
   const a = d.adelaide;
-  const L = f2(d.leaguePointsPerInside50);
-  const forPer50 = f2(a.pointsFor / a.inside50sFor);
-  const againstPer50 = f2(a.pointsAgainst / a.inside50sAgainst);
+  // Decimals chosen so every printed sum gives its printed answer, for every season.
+  const L = f4(d.leaguePointsPerInside50);
+  const forPer50 = f4(a.pointsFor / a.inside50sFor);
+  const againstPer50 = f4(a.pointsAgainst / a.inside50sAgainst);
   const lines: [string, string][] =
     k === 'off'
       ? [
@@ -518,13 +522,13 @@ function ClubPool({ k, d }: { k: Pool; d: DawsonSeason }) {
           ['Its inside 50s', f0(a.inside50sFor)],
           ['Its points per inside 50', forPer50],
           ['Competition points per inside 50 (all points ÷ all inside 50s)', L],
-          ['Rating', `${forPer50} ÷ ${L} = ${f2(a.rating.off)}`],
+          ['Rating', `${forPer50} ÷ ${L} = ${f3(a.rating.off)}`],
         ]
       : k === 'mid'
         ? [
             ["Adelaide's inside 50s", f0(a.inside50sFor)],
             ["Opponents' inside 50s", f0(a.inside50sAgainst)],
-            ['Rating', `${f0(a.inside50sFor)} ÷ ${f0(a.inside50sAgainst)} = ${f2(a.rating.mid)}`],
+            ['Rating', `${f0(a.inside50sFor)} ÷ ${f0(a.inside50sAgainst)} = ${f3(a.rating.mid)}`],
           ]
         : [
             ['Points opponents scored', f0(a.pointsAgainst)],
@@ -533,7 +537,7 @@ function ClubPool({ k, d }: { k: Pool; d: DawsonSeason }) {
             ['Competition points per inside 50', L],
             [
               'Rating: 2 − (theirs ÷ competition)',
-              `2 − ${againstPer50} ÷ ${L} = ${f2(a.rating.def)}`,
+              `2 − ${againstPer50} ÷ ${L} = ${f3(a.rating.def)}`,
             ],
           ];
   const done = POOLS.slice(0, POOLS.indexOf(k) + 1);
@@ -543,15 +547,16 @@ function ClubPool({ k, d }: { k: Pool; d: DawsonSeason }) {
       <Scale value={a.rating[k]} fill={POOL_FILL[k]} />
       <div className="ground-tint flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-[15px]">
         <span>
-          Its share: {f0(d.clubs * 100)} × rating {f2(a.rating[k])} ÷ all {d.clubs} ratings{' '}
-          {f2(a.allRatings[k])}
+          Its share: {f0(d.clubs * 100)} × rating {f4(a.rating[k])} ÷ all {d.clubs} ratings{' '}
+          {f3(a.allRatings[k])}
         </span>
         <strong className="font-display text-[28px] font-bold leading-none">{f1(a.pav[k])}</strong>
       </div>
       <Tally
         label={`Adelaide's value in ${d.season}`}
         items={POOLS.map((p) => ({ k: p, value: done.includes(p) ? f1(a.pav[p]) : null }))}
-        total={k === 'def' ? f1(a.pav.off + a.pav.mid + a.pav.def) : null}
+        // The total is the sum of the three shown parts, so the chips add up.
+        total={k === 'def' ? f1(POOLS.reduce((sum, p) => sum + round(a.pav[p], 1), 0)) : null}
       />
     </div>
   );
@@ -597,7 +602,6 @@ function PlayerPool({ k, d }: { k: Pool; d: DawsonSeason }) {
   const w = d.dawson;
   const name = POOL_NAME[k].toLowerCase();
   const share = w.score[k] / w.clubScore[k];
-  const parts = roundParts(w.pav, w.total);
   const done = POOLS.slice(0, POOLS.indexOf(k) + 1);
   return (
     <div className="grid gap-3">
@@ -654,14 +658,14 @@ function PlayerPool({ k, d }: { k: Pool; d: DawsonSeason }) {
       </div>
       <div className="ground-tint flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-[15px]">
         <span>
-          His share ({pct(share)}): Adelaide&apos;s {name} value {f1(d.adelaide.pav[k])} ×{' '}
+          His share ({pct(share)}): Adelaide&apos;s {name} value {f2(d.adelaide.pav[k])} ×{' '}
           {f1(w.score[k])} ÷ {f1(w.clubScore[k])}
         </span>
-        <strong className="font-display text-[28px] font-bold leading-none">{f2(parts[k])}</strong>
+        <strong className="font-display text-[28px] font-bold leading-none">{f2(w.pav[k])}</strong>
       </div>
       <Tally
         label="His value so far"
-        items={POOLS.map((q) => ({ k: q, value: done.includes(q) ? f2(parts[q]) : null }))}
+        items={POOLS.map((q) => ({ k: q, value: done.includes(q) ? f2(w.pav[q]) : null }))}
         total={null}
       />
     </div>
@@ -691,6 +695,9 @@ function SeasonView({ d }: { d: DawsonSeason }) {
           </div>
           <p className="text-[15px] text-muted-foreground">
             {f2(parts.off)} attack + {f2(parts.mid)} midfield + {f2(parts.def)} defence
+          </p>
+          <p className="text-[13px] text-muted-foreground">
+            Each part is rounded so the three add up to his total.
           </p>
         </div>
         <div className="flex h-8 border-2 border-foreground" aria-hidden="true">
