@@ -1,4 +1,5 @@
 import type { AflTradeStoryLines, AflTradeStoryNames } from './realizedTradeStoryContracts';
+import { aflTradeValueLineProjected } from './valueLineContracts';
 
 /**
  * Every chain of one club (statlyaus/Statly#1051; owner 2026-10-23: "All club chains"). Two of the
@@ -7,7 +8,8 @@ import type { AflTradeStoryLines, AflTradeStoryNames } from './realizedTradeStor
  * stint at the club that received him, so nothing cancels. A chain's net is the sum of its trades'
  * own nets for the club at the latest checkpoint (the method's "chain totals are simply additive";
  * checked on genuine 2026-10-23: 0 mismatches against the story's per-line chain net). It is
- * provisional while any of its trades is.
+ * provisional while any of its trades is, and projected while any of its trades has had no season
+ * played since it (read at the trade).
  */
 
 export interface AflTradeClubChainTrade {
@@ -17,6 +19,8 @@ export interface AflTradeClubChainTrade {
   readonly withClubs: readonly string[];
   readonly net: number;
   readonly provisional: boolean;
+  /** No season has been played since the trade, so its net is a projection. */
+  readonly projected: boolean;
 }
 
 export interface AflTradeClubChain {
@@ -24,6 +28,7 @@ export interface AflTradeClubChain {
   readonly trades: readonly AflTradeClubChainTrade[];
   readonly net: number;
   readonly provisional: boolean;
+  readonly projected: boolean;
 }
 
 export interface AflTradeClubChains {
@@ -78,7 +83,8 @@ export function buildAflTradeClubChains(
   const row = (transactionId: string): AflTradeClubChainTrade => {
     const trade = trades.find((candidate) => candidate.transactionId === transactionId)!;
     const valued = nets.get(transactionId)?.clubs.find((club) => club.clubId === clubId);
-    const last = valued?.points.at(-1);
+    // A trade no draft or season has followed yet is read at the trade.
+    const last = valued ? (valued.points.at(-1) ?? valued.atTrade) : undefined;
     if (!last)
       throw new Error(`The value lines have no net for club ${clubId} on ${transactionId}.`);
     return {
@@ -94,6 +100,7 @@ export function buildAflTradeClubChains(
         }),
       net: last.net,
       provisional: last.provisional,
+      projected: aflTradeValueLineProjected(valued!.points),
     };
   };
 
@@ -116,6 +123,7 @@ export function buildAflTradeClubChains(
       trades: rows,
       net: round(rows.reduce((total, { net }) => total + net, 0)),
       provisional: rows.some(({ provisional }) => provisional),
+      projected: rows.some(({ projected }) => projected),
     });
   }
   chains.sort((left, right) => Math.abs(right.net) - Math.abs(left.net));

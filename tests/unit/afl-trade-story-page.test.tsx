@@ -244,6 +244,27 @@ describe('private trade page: the headline', () => {
     }
   });
 
+  it('calls a trade no season has been played since a projection', () => {
+    const cameron = model(TRADE.cameron);
+    const projected: AflTradePageModel = {
+      ...cameron,
+      story: {
+        ...cameron.story,
+        nets: {
+          ...cameron.story.nets,
+          tradeAlone: cameron.story.nets.tradeAlone.map((net) => ({
+            ...net,
+            line: net.line.filter(({ checkpoint }) => checkpoint.kind !== 'season_end'),
+          })),
+        },
+      },
+    };
+    expect(headline(projected)).toBe('Geelong are ahead on projection');
+    const { container } = render(<AflTradeStoryPage model={projected} />);
+    expect(textOf(container)).toContain('No season has been played since this trade');
+    expect(headline(cameron)).toBe('Geelong are ahead so far');
+  });
+
   it('sets every net in ink, never in good and bad colours', () => {
     render(<AflTradeStoryPage model={model(TRADE.cameron)} />);
     const chips = screen.getByRole('list', { name: 'Each club’s net on this trade' });

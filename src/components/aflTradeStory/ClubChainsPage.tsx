@@ -13,8 +13,8 @@ import {
   type AflTradePageAudience,
 } from './tradePageModel';
 
-const signed = (net: number, provisional: boolean) =>
-  `${formatSigned(net)}${provisional ? '*' : ''}`;
+const signed = (net: number, provisional: boolean, projected: boolean) =>
+  `${formatSigned(net)}${provisional ? '*' : ''}${projected ? ' projected' : ''}`;
 
 function TradeRow({
   trade,
@@ -34,7 +34,7 @@ function TradeRow({
           <span className="font-medium">with {trade.withClubs.join(', ')}</span>
         </span>
         <span className="font-semibold tabular-nums text-foreground">
-          {signed(trade.net, trade.provisional)}
+          {signed(trade.net, trade.provisional, trade.projected)}
         </span>
       </Link>
     </li>
@@ -74,7 +74,8 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
         <p className="mt-2 ts-body text-muted-foreground">
           Trades linked by a pick {club} received and traded on. A chain&apos;s total is the sum of
           its trades&apos; own results for {club}, in PAV to {chains.throughSeason}. Players never
-          link trades: each trade values a player at the club that received him.
+          link trades: each trade values a player at the club that received him. A projected result
+          has had no season played since its trade.
         </p>
 
         <section aria-labelledby="chains-heading" className="mt-8">
@@ -95,7 +96,7 @@ export function ClubChainsPage({ model }: { model: AflTradeClubChainsModel }) {
                       {chain.trades.at(-1)!.year}
                     </span>
                     <b className="ts-head font-semibold tabular-nums text-foreground">
-                      {signed(chain.net, chain.provisional)}
+                      {signed(chain.net, chain.provisional, chain.projected)}
                     </b>
                   </div>
                   <ul className="divide-y divide-border">

@@ -19,7 +19,8 @@ const trade = (
   tradeId: string,
   year: number,
   clubs: [string, number][],
-  provisional = false
+  provisional = false,
+  projected = false
 ): AflTradeStorySampleSummary => ({
   tradeId,
   year,
@@ -30,6 +31,7 @@ const trade = (
     clubName,
     net,
     provisional,
+    projected,
     received: [`asset for ${clubName}`],
   })),
 });
@@ -134,6 +136,30 @@ describe('trade list query', () => {
     const geelong = ladder.find(({ slug }) => slug === 'geelong')!;
     expect([geelong.ahead, geelong.behind, geelong.provisional]).toEqual([2, 0, false]);
     expect(ladder.find(({ slug }) => slug === 'gws')!.provisional).toBe(true);
+  });
+
+  it('leaves a projected trade out of the ladder and the biggest wins, but lists it', () => {
+    const projected = trade(
+      't5',
+      2026,
+      [
+        ['Sydney', 500],
+        ['Geelong', -500],
+      ],
+      false,
+      true
+    );
+    const withProjection = [projected, ...stories];
+    expect(tradeLadder(withProjection)).toEqual(tradeLadder(stories));
+    expect(biggestWins(withProjection, 6)).toEqual(biggestWins(stories, 6));
+    expect(tradeYearSummaries(withProjection)[0]).toMatchObject({
+      year: 2026,
+      trades: 1,
+      biggest: null,
+    });
+    expect(
+      filterTrades(withProjection, { year: null, club: null, sort: 'biggest' })[0]!.tradeId
+    ).toBe('t5');
   });
 
   it('summarises each year with its trade count and biggest settled win', () => {

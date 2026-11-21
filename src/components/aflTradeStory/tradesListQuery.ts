@@ -103,7 +103,17 @@ interface TradeWin {
   readonly received: readonly string[];
 }
 
-/** The largest settled-so-far wins: one per trade, its best club, provisional results left out. */
+/**
+ * A trade no season has been played since: its results are projections, listed and labelled but
+ * never counted as a win or on the ladder.
+ */
+const projected = (story: AflTradeStorySampleSummary) =>
+  (story.results ?? []).some((result) => result.projected);
+
+/**
+ * The largest settled-so-far wins: one per trade, its best club, provisional and projected results
+ * left out.
+ */
 export function biggestWins(
   stories: readonly AflTradeStorySampleSummary[],
   count: number
@@ -111,7 +121,12 @@ export function biggestWins(
   return stories
     .flatMap((story) => {
       const results = story.results ?? [];
-      if (results.length === 0 || results.some(({ provisional }) => provisional)) return [];
+      if (
+        results.length === 0 ||
+        projected(story) ||
+        results.some(({ provisional }) => provisional)
+      )
+        return [];
       const best = results.reduce((top, result) => (result.net > top.net ? result : top));
       return [{ story, clubName: best.clubName, net: best.net, received: best.received }];
     })
@@ -131,11 +146,12 @@ export interface TradeLadderRow extends TradesListClub {
 
 /**
  * The trade ladder: every club's combined result across the list's trades, best first. A club's
- * results add up because each trade values an asset once, at the club that received it.
+ * results add up because each trade values an asset once, at the club that received it. A projected
+ * trade joins once a season has been played since it.
  */
 export function tradeLadder(stories: readonly AflTradeStorySampleSummary[]): TradeLadderRow[] {
   const rows = new Map<string, TradeLadderRow>();
-  for (const story of stories)
+  for (const story of stories.filter((candidate) => !projected(candidate)))
     for (const result of story.results ?? []) {
       const row = rows.get(result.clubId) ?? {
         clubId: result.clubId,

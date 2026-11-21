@@ -14,6 +14,7 @@ import {
   bidSharesByPickId,
   checkpointText,
   inSentence,
+  isProjection,
   netText,
   storyClubNames,
   tradeName,
@@ -117,6 +118,12 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
             <p>* Totals leave out values not in yet, so they will move.</p>
           ) : pendingAtTrade ? (
             <p>* Totals leave out values not in yet.</p>
+          ) : null}
+          {isProjection(story) ? (
+            <p>
+              No season has been played since this trade, so every value is a projection: a
+              player&apos;s from his PAV before it, a pick&apos;s from its slot.
+            </p>
           ) : null}
           <p>Players still at their club: values will move. Club colours only, no club marks.</p>
         </footer>
