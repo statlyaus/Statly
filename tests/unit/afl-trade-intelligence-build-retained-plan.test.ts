@@ -232,6 +232,14 @@ describe('createLocatedArtifactReader', () => {
         reference
       );
       expect(Array.from(read)).toEqual(Array.from(bytes));
+      // An older object can be stored under a createdAt other than the one its citation records
+      // (genuine 2026-11-21): the reader still returns its bytes, which the plan checks by hash.
+      const laterCitation = { ...reference, createdAt: '2026-10-01T00:00:00.000Z' };
+      expect(
+        Array.from(
+          await createLocatedArtifactReader(located(`${repositoryPath}/${key}`)).read(laterCitation)
+        )
+      ).toEqual(Array.from(bytes));
       await expect(
         createLocatedArtifactReader(located(`fitzroy-historical/${key}`)).read(reference)
       ).rejects.toThrow(/bytes are missing/);
