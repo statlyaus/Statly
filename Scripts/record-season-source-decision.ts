@@ -25,6 +25,7 @@ import {
 } from '../src/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import type { AflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
+import type { AflTradeSourceRightsProposal } from '../src/server/aflTradeIntelligence/source/sourceRights';
 import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
 
 /**
@@ -176,6 +177,29 @@ async function unlocatedArtifactIds(
   }
 }
 
+/**
+ * The parser is the runner's for --season: named with --parser-version, or else the predecessor's.
+ * Returns the refusal when it is not, else null.
+ */
+function refuseUnlessRunnerParser(
+  parsed: Pick<SeasonSourceDecisionArguments, 'season' | 'parserVersion'>,
+  predecessorRights: AflTradeSourceRightsProposal,
+  runnerParser: string
+): SeasonSourceDecisionOutcome | null {
+  const { acquisition } = predecessorRights.content;
+  const parserVersion =
+    parsed.parserVersion ?? ('clientVersion' in acquisition ? acquisition.clientVersion : null);
+  if (parserVersion === runnerParser) return null;
+  return refused(
+    'PARSER_NOT_RUNNER',
+    new Error(
+      parsed.parserVersion === undefined
+        ? `The runner reads ${parsed.season} at ${runnerParser}, not the predecessor's ${parserVersion ?? 'parser'}; pass --parser-version ${runnerParser}.`
+        : `--parser-version must be ${runnerParser}, the parser the runner reads ${parsed.season} at.`
+    )
+  );
+}
+
 export async function recordSeasonSourceDecision(
   sql: AflOutcomeSqlClient,
   parsed: Omit<SeasonSourceDecisionArguments, 'databaseUrl'>,
@@ -213,21 +237,13 @@ export async function recordSeasonSourceDecision(
   if (predecessorDecision === undefined) {
     return refused('PREDECESSOR_UNAVAILABLE', new Error('The Gate ledger changed while loading.'));
   }
-  // The parser is the runner's for --season: named with --parser-version, or else the predecessor's.
   const runnerParser = localExternalCaptureParserVersion(parsed.capabilityId, parsed.season);
-  const { acquisition } = predecessor.authority.sourceRights.content;
-  const parserVersion =
-    parsed.parserVersion ?? ('clientVersion' in acquisition ? acquisition.clientVersion : null);
-  if (parserVersion !== runnerParser) {
-    return refused(
-      'PARSER_NOT_RUNNER',
-      new Error(
-        parsed.parserVersion === undefined
-          ? `The runner reads ${parsed.season} at ${runnerParser}, not the predecessor's ${parserVersion ?? 'parser'}; pass --parser-version ${runnerParser}.`
-          : `--parser-version must be ${runnerParser}, the parser the runner reads ${parsed.season} at.`
-      )
-    );
-  }
+  const parserRefusal = refuseUnlessRunnerParser(
+    parsed,
+    predecessor.authority.sourceRights,
+    runnerParser
+  );
+  if (parserRefusal !== null) return parserRefusal;
   let derived: ReturnType<typeof deriveSeasonSourceDecision>;
   try {
     derived = deriveSeasonSourceDecision({
