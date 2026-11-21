@@ -252,8 +252,8 @@ One primitive per job, in `src/components/ui/`.
   an error, stone for an outage; success is white with a hairline and says so in words. Text stays
   ink. `alertStyles` in `controlStyles.ts` sets the ground; `ui/Alert.tsx` uses it, and a queued
   alert floats with the floating cut and hard shadow (done 2026-11-21 outside the area palettes).
-- **Navigation:** the app bar is cobalt with white tabs; the public header is white with the wordmark
-  and cobalt underlines. The current place is a 3px underline plus heavier type. Tabs scroll sideways
+- **Navigation:** the app bar and the public header are both cobalt with the Sherrin wordmark and
+  white tabs (owner, 2026-11-21: the public site wears the same bar as the app). The current place is a 3px underline plus heavier type. Tabs scroll sideways
   on phones with a fade at the edge.
 - **Cards:** one card, one thing, square and flat. Edges say whose: a 4px top edge for a side, the 6px
   sun left edge for yours.
