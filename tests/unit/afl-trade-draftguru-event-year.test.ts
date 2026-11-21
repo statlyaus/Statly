@@ -492,6 +492,104 @@ describe('Draftguru event year provenance', () => {
     });
   });
 
+  describe('national-year parser v7 other-club academy form (2026 page)', () => {
+    const V7 = 'draftguru-national-year-page/v7';
+    // The reduced 2020 table read as a 2026 page: v7 is reviewed for page year 2026 only.
+    const parseNational = (body = html, parserVersion = V7, draftYear = 2026) =>
+      parseDraftguruNationalYearSelections(body, {
+        capture: {
+          ...capture,
+          sourceUrl: `https://www.draftguru.com.au/years/${draftYear}`,
+          parserVersion,
+        },
+        draftYear,
+      });
+    const selection = (result: ReturnType<typeof parseNational>, number: number) =>
+      result.evidence.find(
+        ({ content }) =>
+          content.claim.kind === 'draft_selection' && content.claim.selectionNumber === number
+      )?.content.claim;
+    // Sets the category cell of national pick `number`: pick 1 is the Western Bulldogs', and pick 12
+    // is GWS's, whose club cell reads `GWS` and links `/clubs/greater-western-sydney`.
+    const withCategory = (number: number, label: string) => {
+      const $ = load(html);
+      const row = $('tbody tr').filter(
+        (_i, tr) =>
+          $(tr).find('td.draft').text().trim() === 'National' &&
+          $(tr).find('td.number').text().trim() === String(number)
+      );
+      expect(row).toHaveLength(1);
+      row.find('td.category').eq(1).text(label);
+      return $.html();
+    };
+
+    it('emits exactly the v3 claims on a page with only the v3 forms', () => {
+      const v3 = parseNational(html, 'draftguru-national-year-page/v3');
+      const v7 = parseNational();
+      expect(v7.issues).toEqual([]);
+      expect(v7.evidence.map(({ content }) => content.claim)).toEqual(
+        v3.evidence.map(({ content }) => content.claim)
+      );
+    });
+
+    it.each([
+      // The 2026 page's row 6 form: another club's academy player taken with an ordinary pick.
+      [1, 'Academy(Greater Western Sydney)', 'open'],
+      [1, 'Academy (NG)(St Kilda)', 'open'],
+      // The same form naming the selecting club is its academy nomination.
+      [1, 'Academy(Western Bulldogs)', 'academy'],
+      [12, 'Academy(GWS)', 'academy'],
+      // ` - Not Matched` keeps its v3 reading.
+      [1, 'Academy(Greater Western Sydney - Not Matched)', 'open'],
+      [1, 'Father-Son(Chris Waterman)', 'father_son'],
+    ])('reads pick %s marked %s as %s', (number, label, expected) => {
+      const result = parseNational(withCategory(number, label));
+      expect(result.issues).toEqual([]);
+      expect(result.evidence).toHaveLength(59);
+      expect(selection(result, number)).toMatchObject({
+        accessCategory: expected,
+        draftYear: 2026,
+      });
+    });
+
+    it.each([
+      // GWS's own academy player, named in full while the club cell reads `GWS`: never `open`.
+      [12, 'Academy(Greater Western Sydney)'],
+      // Any annotation other than ` - Not Matched` stays unreviewed.
+      [1, 'Academy(Greater Western Sydney - Matched)'],
+      [1, 'Academy(Greater Western Sydney - Bid)'],
+      [1, 'Academy(Western Bulldogs - Not Matched)'],
+      // The older zone and scholarship forms are not v7 forms.
+      [1, 'Zone(Western Bulldogs)'],
+      [1, 'Scholarship(NSW)'],
+      [1, 'Academy(greater western sydney)'],
+    ])('quarantines pick %s marked %s', (number, label) => {
+      expect(parseNational(withCategory(number, label)).issues).toContainEqual(
+        expect.objectContaining({ code: 'unsupported_row', detail: expect.stringContaining(label) })
+      );
+    });
+
+    it('keeps v3 refusing the other-club form', () => {
+      expect(
+        parseNational(
+          withCategory(1, 'Academy(Greater Western Sydney)'),
+          'draftguru-national-year-page/v3'
+        ).issues
+      ).toContainEqual(expect.objectContaining({ code: 'unsupported_row' }));
+    });
+
+    it.each([2016, 2025, 2027])('refuses a %s page under v7', (year) => {
+      const result = parseNational(html, V7, year);
+      expect(result.evidence).toEqual([]);
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'unsupported_row',
+          detail: expect.stringContaining('2026 page only'),
+        })
+      );
+    });
+  });
+
   it.each([
     [2020, 'https://example.com/years/2020'],
     [2020, 'https://www.draftguru.com.au/years/2021'],

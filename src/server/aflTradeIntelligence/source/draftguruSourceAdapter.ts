@@ -15,6 +15,8 @@ import {
   DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION,
   DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS,
+  DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION,
+  DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_SEASONS,
   DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION,
   createAflTradeExternalEvidenceEnvelope,
   isDraftguruNationalYearAccessParserVersion,
@@ -659,11 +661,17 @@ export function parseDraftguruYearSelections(
  * reviewed. It marks a player from the NSW scholarship scheme, which gave Sydney access to its
  * scholarship holders before the academies: on a Sydney selection it reads as `academy`, and on any
  * other club's selection as `open`, an ordinary pick. Any other scholarship text stays unreviewed.
+ *
+ * With `other_club` (parser v7, the 2026 page only), the v3 forms and the unannotated other-club
+ * academy form of `legacy` are reviewed, the latter only when the named club also differs from the
+ * selecting club's Draftguru club id (`Greater Western Sydney` is `greater-western-sydney`, though the
+ * club cell reads `GWS`). A named club matching the id but not the cell text stays unreviewed.
  */
 function accessCategoryOf(
   text: string,
   selectingClub: string,
-  forms: 'plain' | 'qualified' | 'legacy' | 'early'
+  forms: 'plain' | 'qualified' | 'legacy' | 'early' | 'other_club',
+  selectingClubId: string | null
 ): 'open' | 'academy' | 'father_son' | null {
   if (text === '') return 'open';
   if (text === 'Academy' || text === 'Academy (NG)') return 'academy';
@@ -684,12 +692,20 @@ function accessCategoryOf(
   if (match[2]) return namedClub !== selectingClub ? 'open' : null;
   if (namedClub === selectingClub) return 'academy';
   // An unannotated other club only: any ` - ` suffix other than ` - Not Matched` is unreviewed.
-  return forms === 'legacy' && !namedClub.includes(' - ') ? 'open' : null;
+  if (namedClub.includes(' - ')) return null;
+  if (forms === 'legacy') return 'open';
+  return forms === 'other_club' && selectingClubId !== null && slug(namedClub) !== selectingClubId
+    ? 'open'
+    : null;
 }
 
 /** The access forms a national-year parser version reviews. */
-function accessFormsOf(parserVersion: string): 'plain' | 'qualified' | 'legacy' | 'early' {
+function accessFormsOf(
+  parserVersion: string
+): 'plain' | 'qualified' | 'legacy' | 'early' | 'other_club' {
   if (parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION) return 'legacy';
+  if (parserVersion === DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION)
+    return 'other_club';
   if (
     parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION
@@ -770,7 +786,8 @@ function parseDraftguruYearSelectionRows(
       ? accessCategoryOf(
           normalizeText(categoryCells.eq(1).text()),
           clubName,
-          accessFormsOf(input.capture.parserVersion)
+          accessFormsOf(input.capture.parserVersion),
+          sourceNativeId(clubCell.find('a').attr('href'), '/clubs/')
         )
       : undefined;
     if (readsAccess && (categoryCells.length !== 2 || accessCategory === null)) {
@@ -888,9 +905,12 @@ export function parseDraftguruNationalYearSelections(
     input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION;
   const early =
     listings || input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION;
+  const otherClub =
+    input.capture.parserVersion === DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION;
   const outOfScope =
     (legacy && !DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_SEASONS.includes(input.draftYear)) ||
-    (early && !DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS.includes(input.draftYear));
+    (early && !DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS.includes(input.draftYear)) ||
+    (otherClub && !DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_SEASONS.includes(input.draftYear));
   if (outOfScope) {
     return {
       evidence: [],
@@ -900,7 +920,9 @@ export function parseDraftguruNationalYearSelections(
           sourceKey: 'year-table',
           detail: legacy
             ? `Parser ${DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION} is reviewed for the 2011 to 2016 pages only.`
-            : `Parser ${input.capture.parserVersion} is reviewed for the 2000 to 2010 pages only.`,
+            : otherClub
+              ? `Parser ${DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION} is reviewed for the 2026 page only.`
+              : `Parser ${input.capture.parserVersion} is reviewed for the 2000 to 2010 pages only.`,
         },
       ],
       scopeSummary: summary,

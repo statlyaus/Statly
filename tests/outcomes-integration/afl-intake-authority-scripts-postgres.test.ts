@@ -22,6 +22,7 @@ import { requireAflTradeExternalIdentityReviewerAuthority } from '@/server/aflTr
 import type { AflTradeOperationalGrant } from '@/server/aflTradeIntelligence/source/postgresOperationalGrantRepository';
 import {
   approveNarrowAuthority,
+  draftguruNationalYearAuthority,
   officialAflTradePeriodAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
@@ -372,6 +373,79 @@ describe('report-intake-authority', () => {
       at: report.at,
       current: false,
       staleTargets: [],
+    });
+  });
+});
+
+describe('record-season-source-decision with a parser change', () => {
+  const V7 = 'draftguru-national-year-page/v7';
+  const yearPageDecision = (
+    overrides: Partial<Parameters<typeof recordSeasonSourceDecision>[1]> = {}
+  ) =>
+    seasonDecision({
+      capabilityId: 'draftguru-national-year-page',
+      season: 2026,
+      fromSeason: 2019,
+      // After the predecessor below: the Gate ledger appends in time order.
+      decidedAt: instant(-0.01),
+      ...overrides,
+    });
+
+  beforeAll(async () => {
+    // The 2019 year-page decision at parser v3 that the 2026 decision is derived from.
+    const authority = draftguruNationalYearAuthority({
+      season: 2019,
+      evidenceIds,
+      // After every record the earlier blocks append: the Gate ledger appends in time order.
+      timing: { ...timing(), rightsProposedAt: instant(-0.05), proposalProposedAt: instant(-0.04) },
+    });
+    await ledger.append({
+      expectedRevision: (await ledger.load()).revision,
+      ...authority,
+      decision: approveNarrowAuthority(authority, {
+        decidedAt: instant(-0.03),
+        revalidateAt: instant(DAY * 20),
+      }),
+    });
+  });
+
+  it('refuses a parser the runner does not read for the season', async () => {
+    const before = (await ledger.load()).revision;
+    await expect(recordSeasonSourceDecision(sql, yearPageDecision())).resolves.toMatchObject({
+      status: 'refused',
+      reason: 'PARSER_NOT_RUNNER',
+      message: expect.stringContaining(`pass --parser-version ${V7}`),
+    });
+    await expect(
+      recordSeasonSourceDecision(
+        sql,
+        yearPageDecision({ parserVersion: 'draftguru-national-year-page/v4', apply: true })
+      )
+    ).resolves.toMatchObject({ status: 'refused', reason: 'PARSER_NOT_RUNNER' });
+    expect((await ledger.load()).revision).toBe(before);
+  });
+
+  it('records the 2026 parser-v7 decision the runner accepts', async () => {
+    const args = yearPageDecision({ parserVersion: V7 });
+    const dryRun = await recordSeasonSourceDecision(sql, args);
+    expect(dryRun).toMatchObject({ status: 'dry_run' });
+    const recorded = await recordSeasonSourceDecision(sql, { ...args, apply: true });
+    if (recorded.status !== 'recorded' || dryRun.status !== 'dry_run') {
+      throw new Error(`Expected a recorded decision: ${JSON.stringify(recorded)}`);
+    }
+    expect(recorded.decisionId).toBe(dryRun.decisionId);
+    const accepted = await loadRecordedLocalCaptureAuthority(
+      ledger,
+      'draftguru-national-year-page',
+      2026,
+      new Date().toISOString()
+    );
+    expect(accepted.decisionId).toBe(recorded.decisionId);
+    expect(accepted.authority.proposal.content.decisionKey).toBe(
+      'draftguru-national-year-page-issue579-private-2026-parser-v7'
+    );
+    expect(accepted.authority.sourceRights.content.acquisition).toMatchObject({
+      clientVersion: V7,
     });
   });
 });
