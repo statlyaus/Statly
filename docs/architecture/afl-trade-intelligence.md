@@ -4380,9 +4380,11 @@ code change. Top to bottom:
   trade, each draft and each season end, symmetric about zero so above the middle line is ahead. A
   point whose net leaves out a pending value is hollow. A readout above the chart is its legend: it
   rests on the latest checkpoint and follows the pointer, or the arrow keys on the chart's slider.
-  Every point is also in a values table. Each line is the club's guernsey colour, else its trim, else
-  the page ink, whichever first reaches 3:1 on the theme's surface (`valueLineChart.ts`), and a club
-  whose colour looks like an earlier club's gets its own dash pattern. The chart is drawn at its
+  Every point is also in a values table. A two-club trade draws its two sides: cobalt for the club
+  first by name, ink for the other, never by who leads. On a trade of three or four clubs each line
+  is the club's guernsey colour, else its trim, else the page ink, whichever first reaches 3:1 on the
+  theme's surface (`valueLineChart.ts`), and a club whose colour looks like an earlier club's gets
+  its own dash pattern. The chart is drawn at its
   container's width, so it never scrolls sideways.
 - **Trade details:** what each club gave, what every asset became, its value now and its value at the
   trade beside it, and each club's net on this trade with its at-trade net beside it (never subtracted).
