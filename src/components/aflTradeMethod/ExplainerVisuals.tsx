@@ -265,28 +265,6 @@ function Sketch({ kind }: { kind: SketchKind }) {
               strokeWidth={5}
               strokeLinecap="round"
             />
-            <text
-              x="171"
-              y="50"
-              fontSize="17"
-              fontWeight="700"
-              fill={COBALT}
-              transform="rotate(-8 171 50)"
-              className="font-display"
-            >
-              0.82
-            </text>
-            <text
-              x="196"
-              y="66"
-              fontSize="17"
-              fontWeight="700"
-              fill={COBALT}
-              transform="rotate(6 196 66)"
-              className="font-display"
-            >
-              AV
-            </text>
             {/* Front row of empty seats */}
             <path
               d="M2 100 h24 v14 h-24 Z M30 100 h24 v14 h-24 Z M58 100 h24 v14 h-24 Z M86 100 h24 v14 h-24 Z M114 104 h24 v10 h-24 Z M178 104 h24 v10 h-24 Z"
