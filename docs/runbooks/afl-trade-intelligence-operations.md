@@ -855,6 +855,34 @@ supersede production Gate authority, and production execution cannot reuse non-p
    An internal owner-delegated technical reviewer must be recorded as such, without asserting
    independent human review or provider permission. Withdrawn source authority blocks replay.
 
+   **Registering a season's national draftees.** National draftees who have never played have no
+   canonical player. When the owner approves creating and linking them (as for 2025), store the
+   approval first (`npm run outcomes:artifacts:store-evidence`, class `capture_metadata`), write a
+   reviewed JSONL plan with one draftee per line, and run
+   `npm run outcomes:sources:register-draftees -- --completion <completion-id> --plan <plan.jsonl> --approval-artifact <artifact:sha256> --principal <reviewer-ref> --store-id <store-id>`.
+   A plan line is
+   `{"draftguruNativeId":"max_king/3","displayName":"Max King","draftingClub":"Sydney","season":2025,"pick":49,"footyinfoNativeId":"max-king-2"}`;
+   `footyinfoNativeId`, `footyinfoRecordedName` and `distinctFromPlayerIds` are optional. A
+   Footyinfo subject links only when one of its spellings has the same normalised name as
+   `displayName`, or equals `footyinfoRecordedName` (a short form such as Cam for Cameron).
+   An earlier plan line with the same normalised name counts as a same-name player. The player id is
+   `player:` plus the SHA-256 of `draftguru/player/<draftguruNativeId>`, with an unknown birth date.
+   The dry run (the default) writes nothing and prints one line per draftee, then a summary:
+   `create` or `already_registered`, the Draftguru and Footyinfo `link`s, a `hold` listing the
+   approved players with the same normalised name that `distinctFromPlayerIds` does not yet name,
+   or `refused` with its reasons (no subject with that native id in the completion, the name or
+   season not observed on the Draftguru subject, no single current reviewer grant for the
+   provider and the work item's seasons, a subject already decided for another target, the
+   approval not located `capture_metadata`). With `--apply` each draftee is created in one
+   transaction: the canonical-target snapshot is written to the store, then its custody, location
+   and governed evidence (checked under `afl_trade_nonproduction_governance_registry_writer`), the
+   v2 `create` registration citing the approval, and the player through `registerCanonicalTarget`.
+   Each subject is then linked through the same identity review as
+   `outcomes:sources:record-external-identity-resolution`. A rerun skips a registered draftee and
+   an existing link to the same player, so a stopped run resumes. A failed link keeps the draftee
+   `created` with `linkFailed`. The command exits 2 while any draftee is held, refused or has a
+   failed link.
+
    Rerun the preparation command after review. It loads current decisions directly from the durable
    review heads and accepts no identity-resolution JSON. Reconciliation time is derived
    deterministically from the completion and latest applicable decision, so exact replay is
