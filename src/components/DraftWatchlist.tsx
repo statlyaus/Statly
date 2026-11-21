@@ -74,7 +74,7 @@ function getAvailabilityLabel(row: WatchlistRow): string {
 
 function getAvailabilityClassName(row: WatchlistRow): string {
   if (row.isDrafted) {
-    return 'border-destructive/30 bg-destructive/10 text-destructive';
+    return 'border-destructive/30 bg-destructive/10 text-destructive-text';
   }
 
   if (row.isUnavailable) {
@@ -127,7 +127,7 @@ function WatchlistPlayerSignals({ row }: { row: WatchlistRow }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
       {injuryLabel && (
-        <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive">
+        <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive-text">
           <AlertCircle className="h-3 w-3" aria-hidden="true" />
           {injuryLabel}
         </span>
@@ -236,7 +236,7 @@ function WatchlistRowActions({
           void onRemoveFromWatchlist(String(row.item.playerId));
         }}
         disabled={isWatchlistPending}
-        className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={`Remove ${row.player.name} from watchlist`}
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -447,7 +447,7 @@ export default function DraftWatchlist({
             >
               {availableCount} available
             </span>
-            <span className="rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive">
+            <span className="rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive-text">
               {draftedCount} drafted
             </span>
             {unavailableCount > 0 && (

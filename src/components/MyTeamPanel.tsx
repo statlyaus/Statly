@@ -891,7 +891,7 @@ function RosterIdentityCell({
             {getPerformanceIcon(player)}
             {player.injury && (
               <InformationCircleIcon
-                className="h-4 w-4 text-destructive"
+                className="h-4 w-4 text-destructive-text"
                 aria-label={player.injury}
               />
             )}

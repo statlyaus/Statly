@@ -25,7 +25,7 @@ const ALERT_TONES: Record<
   }
 > = {
   success: { icon: CheckCircleIcon, tone: 'success', iconClasses: 'text-success' },
-  error: { icon: XCircleIcon, tone: 'error', iconClasses: 'text-destructive' },
+  error: { icon: XCircleIcon, tone: 'error', iconClasses: 'text-destructive-text' },
   warning: { icon: ExclamationTriangleIcon, tone: 'deadline', iconClasses: 'text-foreground' },
   info: { icon: InformationCircleIcon, tone: 'info', iconClasses: 'text-foreground' },
 };

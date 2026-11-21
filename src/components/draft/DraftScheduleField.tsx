@@ -264,7 +264,7 @@ function ScheduleDetailsPane({
       </div>
 
       {errorMessage && (
-        <p id={errorId} role="alert" className="text-sm font-medium text-destructive">
+        <p id={errorId} role="alert" className="text-sm font-medium text-destructive-text">
           {errorMessage}
         </p>
       )}

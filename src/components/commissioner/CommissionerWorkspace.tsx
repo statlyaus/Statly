@@ -200,7 +200,7 @@ export default function CommissionerWorkspace({
                             disabled={pendingUserId !== null}
                             onClick={() => void removeMember(member)}
                             aria-label={`Remove ${member.teamName}`}
-                            className="inline-flex h-11 items-center rounded-md border border-destructive/40 px-3 text-sm font-semibold text-destructive hover:bg-destructive/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                            className="inline-flex h-11 items-center rounded-md border border-destructive/40 px-3 text-sm font-semibold text-destructive-text hover:bg-destructive/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                           >
                             Remove
                           </button>

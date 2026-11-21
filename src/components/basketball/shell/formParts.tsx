@@ -26,7 +26,7 @@ export function FieldHelp({ id, children }: { id: string; children?: ReactNode }
 
 export function FieldError({ id, error }: { id: string; error?: string }) {
   return error ? (
-    <p id={`${id}-error`} className="text-sm font-medium text-destructive">
+    <p id={`${id}-error`} className="text-sm font-medium text-destructive-text">
       {error}
     </p>
   ) : null;
@@ -129,7 +129,7 @@ export const ErrorSummary = forwardRef<
                 target.focus();
                 target.scrollIntoView({ block: 'center' });
               }}
-              className="font-medium text-destructive underline underline-offset-2"
+              className="font-medium text-destructive-text underline underline-offset-2"
             >
               {error.message}
             </a>

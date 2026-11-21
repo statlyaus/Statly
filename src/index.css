@@ -39,6 +39,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-success: var(--success);
   --color-result-win: var(--result-win);
   --color-result-win-foreground: var(--result-win-foreground);
@@ -136,15 +137,17 @@
   --primary-foreground: #fff;
   --secondary: var(--brand-tint);
   --secondary-foreground: var(--brand-cobalt-deep);
-  --muted: #f8f9fa; /* A light gray for muted backgrounds */
+  --muted: var(--brand-stone); /* The quiet ground: page sheets, table heads, hovers on white */
   --muted-foreground: var(--brand-secondary-text);
   --accent: var(--brand-tint);
   --accent-foreground: var(--brand-cobalt-deep);
   /* Red is for live, errors and destructive actions only. */
   --destructive: var(--brand-red);
   --destructive-foreground: #fff;
+  /* Red words: brand red is 4.60 on stone, so text and small labels use this darker red (5.97). */
+  --destructive-text: #a81919;
   /* Success keeps its own green so it stops following --result-win when results move to cobalt. */
-  --success: #15803d;
+  --success: #0e5a2b; /* 6.69 on stone, 6.25 on tint: passes the 5.5 small-label rule */
   /* Sun: deadlines, your turn, selection. A fill with ink text only; amber words use --warning-text. */
   --warning: var(--brand-sun);
   --warning-foreground: var(--brand-ink);
@@ -155,7 +158,7 @@
   --result-win-foreground: #fff;
   --result-loss: #fff;
   --result-loss-foreground: var(--brand-ink); /* The letter and the 2px edge */
-  --status-live: #c81e1e; /* LIVE is a status, not a loss: same hue, its own token */
+  --status-live: #a81919; /* LIVE is a status, not a loss: red words, 5.97 on stone; white on it 7.45 */
   --status-live-foreground: #fff;
   --result-draw: var(--brand-stone);
   --result-draw-foreground: var(--brand-ink);
@@ -196,9 +199,9 @@
   --league-accent-soft: var(--brand-tint);
   --league-success: var(--success);
   --league-success-soft: #f1f8f3;
-  --league-warning: #b45309;
+  --league-warning: var(--warning-text);
   --league-warning-soft: #fdf3e7;
-  --league-danger: var(--destructive);
+  --league-danger: var(--destructive-text);
   --league-danger-soft: #fbeaea;
 
   /* Draft broadcast palette */
@@ -208,29 +211,29 @@
    * because draft panels re-scope --card/--muted/--foreground to these tokens; aliasing back would
    * form a custom-property cycle.
    */
-  --draft-broadcast-page: #f8f9fa;
-  --draft-broadcast-canvas: #f8f9fa;
+  --draft-broadcast-page: var(--brand-stone);
+  --draft-broadcast-canvas: var(--brand-stone);
   --draft-broadcast-panel: #fff;
-  --draft-broadcast-panel-strong: #f8f9fa;
-  --draft-broadcast-muted-surface: #eef1f4;
+  --draft-broadcast-panel-strong: var(--brand-paper-deep);
+  --draft-broadcast-muted-surface: var(--brand-paper-deep);
   --draft-broadcast-table: #fff;
   --draft-broadcast-table-row: #fff;
-  --draft-broadcast-table-row-hover: #f1f4f7;
-  --draft-broadcast-field: #f1f4f7;
-  --draft-broadcast-field-strong: #e3e8ee;
+  --draft-broadcast-table-row-hover: var(--brand-paper-deep);
+  --draft-broadcast-field: var(--brand-paper-deep);
+  --draft-broadcast-field-strong: var(--brand-stone);
   --draft-broadcast-roster-filled: var(--draft-broadcast-field-strong);
   --draft-broadcast-watchlist-hit: #eef3fc;
   --draft-broadcast-watchlist-border: #a9c0ea;
   --draft-broadcast-watchlist-chip: #d9ddff;
   --draft-broadcast-watchlist-chip-text: #1220c9;
   --draft-broadcast-border: #ced4da;
-  --draft-broadcast-border-soft: #e3e8ee;
+  --draft-broadcast-border-soft: var(--brand-hairline);
   --draft-broadcast-text: #2b2c2d;
-  --draft-broadcast-muted: #6c6e6f;
+  --draft-broadcast-muted: var(--brand-secondary-text);
   /* Text on the solid cobalt action and green success fills. */
   --draft-broadcast-solid-text: #fff;
   /* Failures and lost connections read as alerts, not as the cobalt action colour. */
-  --draft-broadcast-alert: #c81e1e;
+  --draft-broadcast-alert: #a81919; /* Red words and chips on stone: 5.97, like --destructive-text */
   --draft-broadcast-alert-soft: rgba(200, 30, 30, 0.08);
   /* Dark amber that stays readable on the light panels (the yellow fill is for chips only). */
   --draft-broadcast-caution: #8a5a00;
@@ -276,7 +279,7 @@
   --trade-positive: var(--success);
   --trade-negative: var(--destructive);
   --trade-negative-soft: #fbeaea;
-  --trade-warning: #b45309;
+  --trade-warning: var(--warning-text);
   --trade-warning-soft: #fdf3e7;
   --trade-card-shadow: none;
 }
@@ -330,8 +333,8 @@
    utility on the same element still wins. Only these roles follow a ground: :root aliases such as
    --league-*, --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
    --input, --field* and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
-   .ground-white. Status words: --warning-text holds on all three light grounds; --success and
-   --destructive only on white until the stone ticket fixes them. Results: win turns white on cobalt
+   .ground-white. Status words: --warning-text, --success and --destructive-text hold on all three
+   light grounds (5.5 small-label rule). Results: win turns white on cobalt
    and ink; draw turns white on stone. */
 @layer components {
   .ground-white,

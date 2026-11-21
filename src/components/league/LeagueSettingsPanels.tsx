@@ -646,7 +646,7 @@ export function TeamSettingsPanel({
                   type="text"
                   value={teamName}
                   onChange={(event) => setTeamName(event.target.value)}
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                 />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -751,7 +751,7 @@ export function TeamSettingsPanel({
                     setPendingTeamSymbolUploadDataUrl(null);
                     setTeamSymbolUrl(event.target.value);
                   }}
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                 />
               </label>
 
@@ -1075,7 +1075,7 @@ export function LeagueSettingsPanel({
           className={`rounded-lg border px-4 py-3 text-sm ${
             message.type === 'success'
               ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
-              : 'border-destructive/20 bg-destructive/10 text-destructive'
+              : 'border-destructive/20 bg-destructive/10 text-destructive-text'
           }`}
         >
           {message.text}
@@ -1094,7 +1094,7 @@ export function LeagueSettingsPanel({
                 type="text"
                 value={settings.league.name}
                 onChange={(event) => updateLeagueSettings({ name: event.target.value })}
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:bg-[color:var(--league-surface-muted)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:bg-[color:var(--league-surface-muted)]"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
@@ -1118,7 +1118,7 @@ export function LeagueSettingsPanel({
                     maxTeams: Number.parseInt(event.target.value, 10) || MIN_LEAGUE_TEAMS,
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
             </label>
             <SeasonYearControl leagueId={league.id} currentUserId={currentUserId} />
@@ -1186,7 +1186,7 @@ export function LeagueSettingsPanel({
                 onChange={(event) =>
                   updateDraftSettings({ draftDate: fromDateTimeLocalValue(event.target.value) })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
@@ -1199,7 +1199,7 @@ export function LeagueSettingsPanel({
                     draftType: event.target.value as LeagueSettingsDraftType,
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               >
                 <option value="snake">Snake</option>
                 <option value="linear">Linear</option>
@@ -1213,7 +1213,7 @@ export function LeagueSettingsPanel({
                 onChange={(event) =>
                   updateDraftSettings({ pickOrder: event.target.value as DraftPickOrderMode })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               >
                 <option value="random">Random</option>
                 <option value="manual">Manual</option>
@@ -1228,7 +1228,7 @@ export function LeagueSettingsPanel({
                     timePerPick: Number.parseInt(event.target.value, 10),
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               >
                 {TIME_PER_PICK_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1243,7 +1243,7 @@ export function LeagueSettingsPanel({
                 type="text"
                 value={settings.draft.timeZone}
                 onChange={(event) => updateDraftSettings({ timeZone: event.target.value })}
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
             </label>
           </div>
@@ -1274,7 +1274,7 @@ export function LeagueSettingsPanel({
                   onChange={(event) =>
                     updatePositionLimit(key, Number.parseInt(event.target.value, 10) || 0)
                   }
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                 />
               </label>
             ))}
@@ -1304,7 +1304,7 @@ export function LeagueSettingsPanel({
                     strategy: event.target.value as DraftAutoPickRules['strategy'],
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               >
                 <option value="queue-first">Queue first</option>
                 <option value="best-available">Best available</option>
@@ -1324,7 +1324,7 @@ export function LeagueSettingsPanel({
                     },
                   }))
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               >
                 <option value="weekly" disabled={settings.format.leagueFormat === 'BLOODSUCKER'}>
                   Weekly
@@ -1352,7 +1352,7 @@ export function LeagueSettingsPanel({
                     },
                   }))
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
               <span className="text-xs font-normal text-[color:var(--league-text-muted)]">
                 Leave blank to use waiver priority order.

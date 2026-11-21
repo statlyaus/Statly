@@ -37,7 +37,7 @@ describe('design token contrast', () => {
     ['loss label', '--result-loss-foreground', '--result-loss', 4.5],
     ['draw label', '--result-draw-foreground', '--result-draw', 4.5],
     ['live label', '--status-live-foreground', '--status-live', 4.5],
-    ['destructive text on the page', '--destructive', '--background', 4.5],
+    ['destructive text on the page', '--destructive-text', '--background', 4.5],
     ['destructive action label', '--destructive-foreground', '--destructive', 4.5],
     ['success text on the page', '--success', '--background', 4.5],
     ['link text on a tint panel', '--primary', '--secondary', 4.5],
@@ -52,6 +52,42 @@ describe('design token contrast', () => {
     ['secondary text on the highlighter', '--muted-foreground', '--warning', 4.5],
   ])('%s holds %s on %s', (_role, foreground, background, minimum) => {
     expect(ratio(foreground, background)).toBeGreaterThanOrEqual(minimum);
+  });
+});
+
+// Stone is the quiet ground (`--muted`, ticket 03c): status words and the area tokens that sit on it
+// must hold there too, small labels (11–12px) at 5.5:1.
+describe('words on stone and tint', () => {
+  const STONE = '--muted';
+  it.each([
+    ['success words', '--success', 5.5],
+    ['red words', '--destructive-text', 5.5],
+    ['amber words', '--warning-text', 5.5],
+    ['secondary text', '--muted-foreground', 5.5],
+    ['league warning', '--league-warning', 4.5],
+    ['draft secondary text', '--draft-broadcast-muted', 4.5],
+    ['league red words', '--league-danger', 5.5],
+    ['live words', '--status-live', 5.5],
+    ['draft alert words', '--draft-broadcast-alert', 5.5],
+  ])('%s hold on stone and tint', (_role, foreground, minimum) => {
+    expect(ratio(foreground, STONE)).toBeGreaterThanOrEqual(minimum);
+    expect(ratio(foreground, '--brand-tint')).toBeGreaterThanOrEqual(minimum);
+  });
+
+  it('keeps red words readable on a 10% red chip over stone', () => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const hex = (name: string) => resolveColour(tokens, name);
+      const channel = (colour: string) => Number.parseInt(colour.slice(i, i + 2), 16);
+      return Math.round(channel(hex('--destructive')) * 0.1 + channel(hex('--brand-stone')) * 0.9);
+    });
+    const chip = `#${[r, g, b].map((value) => value!.toString(16).padStart(2, '0')).join('')}`;
+    expect(contrastRatio(resolveColour(tokens, '--destructive-text'), chip)).toBeGreaterThanOrEqual(
+      4.5
+    );
+  });
+
+  it('keeps the draft room dividers visible on its stone page', () => {
+    expect(ratio('--draft-broadcast-border-soft', '--draft-broadcast-page')).toBeGreaterThan(1.3);
   });
 });
 
