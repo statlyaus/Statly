@@ -159,11 +159,18 @@ it('holds a same-name draftee, refuses an expired reviewer and an unobserved dra
   await grant('expired-reviewer', '2020-01-01T00:00:00.000Z', '2020-06-01T00:00:00.000Z');
 
   // The snapshot store, and the stored owner approval cited as supporting evidence, located in it.
-  const storeId = 'draftee-test-store';
-  await registerLocalAflTradeArtifactStore(sql, {
-    storeId,
-    rootDirectory: await mkdtemp(join(tmpdir(), 'statly-draftee-store-')),
-  });
+  // Only one local store may exist per environment, and an earlier file in the shard may have
+  // registered it: reuse it, else register one.
+  const existingStore = await pool.query<{ store_id: string }>(
+    `SELECT store_id FROM outcome_artifact_store
+      WHERE environment='non_production' AND assurance='local_non_production_filesystem'`
+  );
+  const storeId = existingStore.rows[0]?.store_id ?? 'draftee-test-store';
+  if (existingStore.rows.length === 0)
+    await registerLocalAflTradeArtifactStore(sql, {
+      storeId,
+      rootDirectory: await mkdtemp(join(tmpdir(), 'statly-draftee-store-')),
+    });
   const approval = fixture.scopeEvidence[0]!;
   await pool.query(
     `INSERT INTO outcome_artifact_custody_location(artifact_id,store_id,object_key) VALUES($1,$2,$3)`,
