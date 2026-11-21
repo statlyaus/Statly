@@ -46,6 +46,7 @@ import { PostgresAflTradeExternalCaptureRegistry } from '../source/postgresExter
 import { PostgresAflTradeExternalEvidenceRepository } from '../source/postgresExternalEvidenceRepository';
 import {
   DRAFTGURU_TRADE_PARSER_VERSIONS,
+  draftguruTradeDecisionKey,
   type DraftguruTradeCapability,
 } from './localDraftguruTradeAuthorityProposal';
 import {
@@ -171,7 +172,7 @@ const CAPABILITY_PROFILES: Record<
     parserVersion: () => DRAFTGURU_TRADE_PARSER_VERSIONS['draftguru-trade-index'],
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
-    decisionKey: () => draftguruTradeDecisionKey('draftguru-trade-index'),
+    decisionKey: (season) => draftguruTradeDecisionKey('draftguru-trade-index', season),
   },
   'draftguru-trade-detail': {
     provider: 'draftguru',
@@ -180,8 +181,7 @@ const CAPABILITY_PROFILES: Record<
     parserVersion: () => DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
     policy: LOCAL_DRAFTGURU_TRADE_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-trade-raw',
-    decisionKey: () =>
-      `${draftguruTradeDecisionKey('draftguru-trade-detail')}-${DRAFTGURU_TRADE_EVENTUAL_SELECTION_DECISION_SUFFIX}`,
+    decisionKey: (season) => draftguruTradeDecisionKey('draftguru-trade-detail', season),
   },
   [DRAFTGURU_NATIONAL_YEAR_CAPABILITY]: {
     provider: 'draftguru',
@@ -224,16 +224,6 @@ export function isLocalExternalCaptureCapability(
   value: string | undefined
 ): value is LocalExternalCaptureCapability {
   return value !== undefined && Object.hasOwn(CAPABILITY_PROFILES, value);
-}
-
-/** Suffix of the trade-detail decision key that authorises `draftguru-trade-parser/v2`. */
-export const DRAFTGURU_TRADE_DISPOSITION_DECISION_SUFFIX = 'parser-v2';
-
-/** Suffix of the trade-detail decision key that authorises `draftguru-trade-parser/v3` (#886). */
-export const DRAFTGURU_TRADE_EVENTUAL_SELECTION_DECISION_SUFFIX = 'parser-v3';
-
-export function draftguruTradeDecisionKey(capabilityId: DraftguruTradeCapability): string {
-  return `${capabilityId}-issue-579-private-non_production`;
 }
 
 export interface RecordedLocalCaptureAuthority {

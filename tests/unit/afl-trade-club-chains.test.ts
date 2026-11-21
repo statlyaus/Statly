@@ -6,9 +6,24 @@ import {
 } from '@/server/aflTradeIntelligence/development/tradeStorySampleChain';
 import { buildAflTradeClubChains } from '@/server/aflTradeIntelligence/valuation/clubTradeChains';
 import { buildAflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
+import { aflTradeValueLineProjected } from '@/server/aflTradeIntelligence/valuation/valueLineContracts';
 
 const trades = cameronChainLines.structure.content.trades;
 const clubIds = [...cameronChainNames.clubs.keys()];
+
+describe('a projected trade', () => {
+  const at = (kind: 'season_end' | 'trade' | 'draft', season: number) => ({
+    checkpoint: { kind, season },
+  });
+  it('is one no season end has followed, however late its last point', () => {
+    expect(aflTradeValueLineProjected([])).toBe(true);
+    expect(aflTradeValueLineProjected([at('draft', 2026)])).toBe(true);
+    // A 2025 trade holding a 2026 pick ends at the 2026 draft, after the 2026 season.
+    expect(
+      aflTradeValueLineProjected([at('draft', 2025), at('season_end', 2026), at('draft', 2026)])
+    ).toBe(false);
+  });
+});
 
 describe('club trade chains (#1051)', () => {
   it("puts every one of a club's trades in exactly one chain or on its own", () => {
@@ -49,6 +64,38 @@ describe('club trade chains (#1051)', () => {
           expect(chain.trades.some(({ tradeId }) => tradeId === id)).toBe(true);
       }
     }
+  });
+
+  it('marks a trade no season has been played since as projected, read at the trade', () => {
+    const last = trades.at(-1)!;
+    const lines = {
+      ...cameronChainLines,
+      valueLines: {
+        ...cameronChainLines.valueLines,
+        content: {
+          ...cameronChainLines.valueLines.content,
+          trades: cameronChainLines.valueLines.content.trades.map((trade) =>
+            trade.transactionId === last.transactionId
+              ? { ...trade, clubs: trade.clubs.map((club) => ({ ...club, points: [] })) }
+              : trade
+          ),
+        },
+      },
+    };
+    const clubId = last.clubs[0]!.clubId;
+    const result = buildAflTradeClubChains(lines, clubId, cameronChainNames);
+    const rows = [...result.chains.flatMap(({ trades: rows }) => rows), ...result.standalone];
+    const atTrade = cameronChainLines.valueLines.content.trades
+      .find(({ transactionId }) => transactionId === last.transactionId)!
+      .clubs.find((club) => club.clubId === clubId)!.atTrade;
+    for (const row of rows)
+      expect([row.tradeId, row.projected]).toEqual([
+        row.tradeId,
+        row.tradeId === last.transactionId,
+      ]);
+    expect(rows.find(({ tradeId }) => tradeId === last.transactionId)!.net).toBe(atTrade.net);
+    for (const chain of result.chains)
+      expect(chain.projected).toBe(chain.trades.some(({ projected }) => projected));
   });
 
   it('refuses a club with no name', () => {

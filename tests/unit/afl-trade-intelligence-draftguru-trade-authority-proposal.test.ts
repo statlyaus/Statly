@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDraftguruTradeDetail } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
+import {
+  DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION,
+  DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION,
+  parseDraftguruTradeDetail,
+} from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 import { requireAflTradeExternalEvidenceFieldAuthority } from '@/server/aflTradeIntelligence/source/externalDraftTradeFieldManifest';
 import type { AflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
 
@@ -121,6 +125,42 @@ describe('createDraftguruTradeAuthorityProposal', () => {
     ]);
     expect(proposal.content.decisionKey).toBe(
       'draftguru-trade-index-issue-579-private-non_production'
+    );
+  });
+
+  it('proposes 2026 and later one season at a time, under a key of its own', () => {
+    const index = createDraftguruTradeAuthorityProposal(
+      input({ capabilityId: 'draftguru-trade-index', seasons: [2026] })
+    );
+    expect(index.proposal.content.decisionKey).toBe(
+      'draftguru-trade-index-issue-579-private-non_production-2026'
+    );
+    const detail = createDraftguruTradeAuthorityProposal(
+      input({ seasons: [2026], parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION })
+    );
+    expect(detail.proposal.content.decisionKey).toBe(
+      'draftguru-trade-detail-issue-579-private-non_production-parser-v3-2026'
+    );
+    expect(
+      detail.proposal.content.scope.dimensions.find(({ name }) => name === 'season')!.values
+    ).toEqual(['2026']);
+    // 2011-2025 keys are unchanged.
+    expect(createDraftguruTradeAuthorityProposal(input()).proposal.content.decisionKey).toBe(
+      'draftguru-trade-detail-issue-579-private-non_production'
+    );
+    expect(
+      createDraftguruTradeAuthorityProposal(
+        input({ parserVersion: DRAFTGURU_TRADE_DISPOSITION_PARSER_VERSION })
+      ).proposal.content.decisionKey
+    ).toBe('draftguru-trade-detail-issue-579-private-non_production-parser-v2');
+    // Widening the 2011-2025 decision to 2026 would supersede the decision every captured page is
+    // bound to, so it is refused.
+    expect(() => createDraftguruTradeAuthorityProposal(input({ seasons: [2025, 2026] }))).toThrow(
+      /one season/
+    );
+    // The runner captures 2026 trade detail only with the eventual-selection parser.
+    expect(() => createDraftguruTradeAuthorityProposal(input({ seasons: [2026] }))).toThrow(
+      /parser/
     );
   });
 

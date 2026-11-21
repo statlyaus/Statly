@@ -118,7 +118,8 @@ export function TowerLadder({
           <p className="tl-lede">
             Every club’s combined result from every trade since {firstYear}, in PAV. {top?.name} is{' '}
             {formatSigned(top?.net ?? 0)} in front. {bottom?.name} is{' '}
-            {formatSigned(bottom?.net ?? 0)}. Pick a club to see its trades.
+            {formatSigned(bottom?.net ?? 0)}. A trade joins once a season has been played since it.
+            Pick a club to see its trades.
           </p>
         </div>
 

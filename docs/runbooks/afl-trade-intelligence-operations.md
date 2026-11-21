@@ -1105,7 +1105,12 @@ Prerequisites:
 1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
    command loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
-     `draftguru-trade-detail-issue-579-private-non_production-parser-v3`. Trade detail is captured
+     `draftguru-trade-detail-issue-579-private-non_production-parser-v3` for 2011 to 2025, and from
+     2026 one decision per season under the same keys with `-<season>` appended (owner, 2026-11-21).
+     Never widen or supersede the 2011 to 2025 decisions to add a season: a successor makes every
+     retained target bound to them non-current (migration 0161). Prepare a season's proposals with
+     `npx tsx Scripts/prepare-draftguru-trade-authority-proposals.ts <package> <out.json> --season 2026`;
+     a detail URL's season comes from its `/trades/<year>-` path. Trade detail is captured
      with `draftguru-trade-parser/v3` (statlyaus/Statly#886). It emits v2's claims unchanged: each
      received pick's stated outcome (`pick_disposition`: the player it was used on, "traded on" or
      "not used"; never games, points or estimates). After them, for each traded pick, it emits the

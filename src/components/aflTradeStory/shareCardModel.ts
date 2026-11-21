@@ -4,7 +4,7 @@ import type {
   AflTradeStoryAsset,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
-import { formatSigned, headline, netText } from './tradePageModel';
+import { formatSigned, headline, isProjection, netText, tradeLeader } from './tradePageModel';
 
 /**
  * The share card of one trade (owner-approved design, 2026-11-21): the 1200 × 630 picture Reddit,
@@ -40,10 +40,12 @@ export type ShareCardChart =
 export interface ShareCardModel {
   readonly kicker: string;
   readonly title: string;
-  /** "Geelong are ahead" or "Level so far". */
+  /** "Geelong are ahead", "Level so far", or "… on projection" before a season is played. */
   readonly verdict: string;
   /** The leader's net on the trade, "+18.4" (starred while a value is still to come); null when level. */
   readonly lead: string | null;
+  /** What the lead is: "PAV so far", or "PAV projected" before a season is played. */
+  readonly leadUnit: string;
   readonly chart: ShareCardChart;
   readonly footer: string;
   readonly alt: string;
@@ -136,10 +138,8 @@ function heldLines(story: AflTradeStory, checkpoints: readonly Checkpoint[]) {
 export function tradeShareCardModel(model: AflTradePageModel): ShareCardModel {
   const { story, throughSeason } = model;
   const clubs = story.trade.clubs.map(({ clubName }) => clubName);
-  const nets = [...story.nets.tradeAlone].sort((left, right) => right.net - left.net);
-  const verdictText = headline(model).replace(/ so far$/u, '');
-  const level = verdictText === 'Level';
-  const leader = level ? null : nets[0]!;
+  const leader = tradeLeader(story);
+  const projection = isProjection(story);
   const summaries: ShareCardClub[] = story.sides.map(({ clubId, clubName, received }) => ({
     clubId,
     clubName,
@@ -173,17 +173,26 @@ export function tradeShareCardModel(model: AflTradePageModel): ShareCardModel {
   const what = leader
     ? `${leader.clubName} are ahead by ${formatSigned(leader.net).replace(/^\+/u, '')} PAV`
     : 'The clubs are level';
+  // Before a season is played every value is a projection, not a result to the end of a season.
+  const when = projection
+    ? ' on projection, with no season played since the trade'
+    : ` at the end of ${throughSeason}`;
   const gotText = summaries.map(({ clubName, got }) => `${clubName} got ${got}`).join('; ');
   return {
     kicker: `AFL trades · ${story.trade.year}`,
     title,
-    verdict: level ? 'Level so far' : verdictText,
+    verdict: projection
+      ? headline(model)
+      : leader
+        ? `${leader.clubName} are ahead`
+        : 'Level so far',
     lead: leadText,
+    leadUnit: projection ? 'PAV projected' : 'PAV so far',
     chart,
-    footer: `Values to the end of ${throughSeason} · statly.com.au/afl/trades`,
+    footer: `${projection ? 'Projected values' : `Values to the end of ${throughSeason}`} · statly.com.au/afl/trades`,
     alt:
       `Share card for the ${story.trade.year} ${clubs.join(' and ')} trade. ${gotText}. ` +
-      `${what} at the end of ${throughSeason}` +
+      `${what}${when}` +
       (chart.kind === 'lines' ? ', shown as the PAV value of what each club got, over time.' : '.'),
   };
 }

@@ -138,7 +138,7 @@ function Header({ card }: { card: ShareCardModel }) {
                 marginBottom: 8,
               }}
             >
-              PAV so far
+              {card.leadUnit}
             </span>
           </div>
         ) : null}

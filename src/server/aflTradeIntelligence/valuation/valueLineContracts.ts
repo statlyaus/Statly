@@ -76,6 +76,15 @@ export interface AflTradeValueLineCheckpoint {
 }
 
 /**
+ * True when no season has been played since a trade: none of its points is a season end, so every
+ * value is a projection (a player's from his PAV before the trade, a pick's from its slot). A trade
+ * of year Y reaches a season end only at Y + 1; its draft Y point comes before that.
+ */
+export const aflTradeValueLineProjected = (
+  points: readonly { readonly checkpoint: AflTradeValueLineCheckpoint }[]
+) => !points.some(({ checkpoint }) => checkpoint.kind === 'season_end');
+
+/**
  * Why a point has no value. Never 0, never estimated. `not_used_holder_matched_bid`: stated not used
  * mid-draft by a holder who matched a bid that draft, so it was likely consumed at a shifted number
  * the boards do not join. `not_used_mid_draft`: stated not used mid-draft with no bid and no onward

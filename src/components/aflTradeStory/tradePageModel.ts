@@ -201,14 +201,32 @@ export function becameText(asset: AflTradeStoryAsset, clubNames: ReadonlyMap<str
 }
 
 /**
- * "Geelong are ahead so far" on this trade alone (owner, 2026-10-21), or "Level so far" when the top
- * two nets read the same to one decimal, as the chips show them. The chain's nets are secondary and
- * never set the headline.
+ * No season has been played since the trade: every value is a projection, a player's from his PAV
+ * before it and a pick's from its slot. A trade of year Y reaches a season end only at Y + 1.
  */
-export function headline(model: AflTradePageModel): string {
-  const nets = [...model.story.nets.tradeAlone].sort((left, right) => right.net - left.net);
-  const [first, second] = nets;
+export const isProjection = (story: Pick<AflTradeStory, 'nets'>) =>
+  !story.nets.tradeAlone.some(({ line }) =>
+    line.some(({ checkpoint }) => checkpoint.kind === 'season_end')
+  );
+
+/** How sure the verdict is: "so far", or "on projection" before a season is played. */
+export const verdictTail = (story: Pick<AflTradeStory, 'nets'>) =>
+  isProjection(story) ? 'on projection' : 'so far';
+
+/**
+ * The club ahead on this trade alone (owner, 2026-10-21), or null when the top two nets read the
+ * same to one decimal, as the chips show them. The chain's nets are secondary and never lead.
+ */
+export function tradeLeader(story: Pick<AflTradeStory, 'nets'>): AflTradeStoryNet | null {
+  const [first, second] = [...story.nets.tradeAlone].sort((left, right) => right.net - left.net);
   const shown = (net: number) => Number(net.toFixed(1));
-  if (!first || (second && shown(first.net) === shown(second.net))) return 'Level so far';
-  return `${first.clubName} are ahead so far`;
+  if (!first || (second && shown(first.net) === shown(second.net))) return null;
+  return first;
+}
+
+/** "Geelong are ahead so far", "Level so far", or "… on projection" before a season is played. */
+export function headline(model: AflTradePageModel): string {
+  const leader = tradeLeader(model.story);
+  const tail = verdictTail(model.story);
+  return leader ? `${leader.clubName} are ahead ${tail}` : `Level ${tail}`;
 }
