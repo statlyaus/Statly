@@ -24,6 +24,11 @@ export interface SeasonSourceDecisionInput {
   approvalArtifactId: string;
   decidedAt: string;
   revalidateAt: string;
+  /**
+   * The parser the runner reads `season` at, when it differs from the predecessor's (for example
+   * `draftguru-national-year-page/v7` for 2026 from a v3 predecessor). Omitted, the parser is kept.
+   */
+  parserVersion?: string;
 }
 
 // A four-digit year that is not part of an id, a date (2025-10-12) or a hyphenated key (...-2025).
@@ -45,6 +50,33 @@ function rewriteSeasonText(text: string, from: number, to: number, season: numbe
   return rewritten.replace(STANDALONE_YEAR, (year) =>
     Number(year) >= from && Number(year) <= to ? String(season) : year
   );
+}
+
+const PARSER_VERSION = /^[a-z0-9-]+\/(v[1-9]\d*)$/u;
+
+/**
+ * The predecessor's parser and the rewrite that replaces it, when the derived decision changes it:
+ * the full version everywhere (the rights' `clientVersion` among them) and `parser v3` in prose. Ids
+ * and keys such as `-parser-v3` stay as recorded.
+ */
+function parserChange(rights: AflTradeSourceRightsProposal, to: string | undefined) {
+  const { acquisition } = rights.content;
+  const from = 'clientVersion' in acquisition ? acquisition.clientVersion : null;
+  if (to === undefined || to === from) return null;
+  const fromShort = PARSER_VERSION.exec(from ?? '')?.[1];
+  const toShort = PARSER_VERSION.exec(to)?.[1];
+  if (from === null || fromShort === undefined || toShort === undefined) {
+    throw new TypeError(
+      `Only a <name>/v<n> parser can be replaced by another: ${from ?? 'no parser'} to ${to}.`
+    );
+  }
+  // `parser v3` in prose, never `parser v30` or `parser v3.1`.
+  const short = new RegExp(`(?<![\\w-])(parser )${fromShort}(?!\\w|\\.\\d)`, 'giu');
+  return {
+    from,
+    to,
+    rewrite: (text: string) => text.split(from).join(to).replace(short, `$1${toShort}`),
+  };
 }
 
 function rewriteStrings<T>(value: T, rewrite: (text: string) => string): T {
@@ -102,7 +134,8 @@ function rightsSeasonTraces(
  * Derives a version-1 narrow decision for one season from the effective decision for an earlier
  * season: the same provider, parser, pacing, cache, retention and conditions, the season range
  * narrowed to the one season, and every predecessor year and rights id rewritten out of the
- * proposal. The decision cites the owner's stored approval and the predecessor's condition evidence.
+ * proposal. With `parserVersion`, the predecessor's parser is rewritten to it in the rights and the
+ * proposal (see {@link parserChange}). The decision cites the owner's stored approval and the predecessor's condition evidence.
  * It is never a successor: a successor on the predecessor's key would make every retained target
  * bound to it non-current (migration 0161).
  */
@@ -118,7 +151,11 @@ export function deriveSeasonSourceDecision(
   if (season >= range.from && season <= range.to) {
     throw new TypeError(`The predecessor already covers ${season}.`);
   }
-  const rewrite = (text: string) => rewriteSeasonText(text, range.from, range.to, season);
+  const parser = parserChange(predecessor.sourceRights, input.parserVersion);
+  const rewrite = (text: string) => {
+    const seasonText = rewriteSeasonText(text, range.from, range.to, season);
+    return parser === null ? seasonText : parser.rewrite(seasonText);
+  };
 
   const rightsContent = {
     ...rewriteStrings(predecessor.sourceRights.content, rewrite),
@@ -208,7 +245,7 @@ export function deriveSeasonSourceDecision(
         explanation: `Satisfied for ${season} on the evidence decision ${predecessor.decision.decisionId} cited, under owner approval ${input.approvalArtifactId}.`,
       };
     }),
-    rationale: `Owner approval ${input.approvalArtifactId} extends the ${predecessor.decision.content.decisionKey} authority to ${season} as its own version-1 decision.`,
+    rationale: `Owner approval ${input.approvalArtifactId} extends the ${predecessor.decision.content.decisionKey} authority to ${season} as its own version-1 decision${parser === null ? '' : ` at parser ${parser.to} (the predecessor's was ${parser.from})`}.`,
     limitations: [...proposal.content.scope.exclusions],
     decidedAt: input.decidedAt,
     effectiveAt: input.decidedAt,

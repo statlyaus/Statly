@@ -234,6 +234,14 @@ export function localExternalCaptureDecisionKey(
   return CAPABILITY_PROFILES[capabilityId].decisionKey(season);
 }
 
+/** The parser {@link loadRecordedLocalCaptureAuthority} requires the recorded rights to name. */
+export function localExternalCaptureParserVersion(
+  capabilityId: LocalExternalCaptureCapability,
+  season: number
+): string {
+  return CAPABILITY_PROFILES[capabilityId].parserVersion(season);
+}
+
 export interface RecordedLocalCaptureAuthority {
   authority: LocalNarrowCaptureAuthority;
   decisionId: string;
