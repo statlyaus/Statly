@@ -378,7 +378,7 @@ describe('report-intake-authority', () => {
 });
 
 describe('record-season-source-decision with a parser change', () => {
-  const V7 = 'draftguru-national-year-page/v7';
+  const V8 = 'draftguru-national-year-page/v8';
   const yearPageDecision = (
     overrides: Partial<Parameters<typeof recordSeasonSourceDecision>[1]> = {}
   ) =>
@@ -414,7 +414,7 @@ describe('record-season-source-decision with a parser change', () => {
     await expect(recordSeasonSourceDecision(sql, yearPageDecision())).resolves.toMatchObject({
       status: 'refused',
       reason: 'PARSER_NOT_RUNNER',
-      message: expect.stringContaining(`pass --parser-version ${V7}`),
+      message: expect.stringContaining(`pass --parser-version ${V8}`),
     });
     await expect(
       recordSeasonSourceDecision(
@@ -425,8 +425,8 @@ describe('record-season-source-decision with a parser change', () => {
     expect((await ledger.load()).revision).toBe(before);
   });
 
-  it('records the 2026 parser-v7 decision the runner accepts', async () => {
-    const args = yearPageDecision({ parserVersion: V7 });
+  it('records the 2026 parser-v8 decision the runner accepts', async () => {
+    const args = yearPageDecision({ parserVersion: V8 });
     const dryRun = await recordSeasonSourceDecision(sql, args);
     expect(dryRun).toMatchObject({ status: 'dry_run' });
     const recorded = await recordSeasonSourceDecision(sql, { ...args, apply: true });
@@ -442,10 +442,10 @@ describe('record-season-source-decision with a parser change', () => {
     );
     expect(accepted.decisionId).toBe(recorded.decisionId);
     expect(accepted.authority.proposal.content.decisionKey).toBe(
-      'draftguru-national-year-page-issue579-private-2026-parser-v7'
+      'draftguru-national-year-page-issue579-private-2026-parser-v8'
     );
     expect(accepted.authority.sourceRights.content.acquisition).toMatchObject({
-      clientVersion: V7,
+      clientVersion: V8,
     });
   });
 });

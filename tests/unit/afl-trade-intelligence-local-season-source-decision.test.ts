@@ -146,7 +146,7 @@ describe('deriveSeasonSourceDecision', () => {
 
 describe('deriveSeasonSourceDecision with a parser change', () => {
   const V3 = 'draftguru-national-year-page/v3';
-  const V7 = 'draftguru-national-year-page/v7';
+  const V8 = 'draftguru-national-year-page/v8';
   // A 2019 year-page decision worded like the recorded one: the parser named in full and as `parser v3`.
   function yearPagePredecessor(clientVersion = V3) {
     const authority = draftguruNationalYearAuthority({
@@ -186,7 +186,7 @@ describe('deriveSeasonSourceDecision with a parser change', () => {
       ),
     };
   }
-  const deriveYearPage = (predecessorRecords = yearPagePredecessor(), parserVersion = V7) =>
+  const deriveYearPage = (predecessorRecords = yearPagePredecessor(), parserVersion = V8) =>
     deriveSeasonSourceDecision({
       predecessor: predecessorRecords,
       decisionKey: draftguruNationalYearDecisionKey(2026),
@@ -202,26 +202,26 @@ describe('deriveSeasonSourceDecision with a parser change', () => {
     const { sourceRights, proposal, decision } = deriveYearPage(before);
 
     expect(proposal.content.decisionKey).toBe(
-      'draftguru-national-year-page-issue579-private-2026-parser-v7'
+      'draftguru-national-year-page-issue579-private-2026-parser-v8'
     );
     expect(sourceRights.content.acquisition).toEqual({
       ...before.sourceRights.content.acquisition,
-      clientVersion: V7,
+      clientVersion: V8,
     });
     expect(proposal.content.scope.description).toBe(
-      'Exact private 2026 national draft source review at parser v7.'
+      'Exact private 2026 national draft source review at parser v8.'
     );
     expect(proposal.content.proposal).toBe(
-      `Approve the 2026 scope at parser ${V7}; Parser v7 reads the club-qualified forms, not parser v30 or parser v3.1.`
+      `Approve the 2026 scope at parser ${V8}; Parser v8 reads the club-qualified forms, not parser v30 or parser v3.1.`
     );
     expect(JSON.stringify(sourceRights.content)).not.toContain(V3);
     // The register id is the reviewed terms' id and stays as recorded.
     expect(sourceRights.content.registerId).toBe(before.sourceRights.content.registerId);
-    expect(decision.content.rationale).toContain(`at parser ${V7} (the predecessor's was ${V3})`);
+    expect(decision.content.rationale).toContain(`at parser ${V8} (the predecessor's was ${V3})`);
   });
 
   it('keeps the predecessor parser when the runner reads the same one', () => {
-    const before = yearPagePredecessor(V7);
+    const before = yearPagePredecessor(V8);
     const { sourceRights, decision } = deriveYearPage(before);
     expect(sourceRights.content.acquisition).toEqual(before.sourceRights.content.acquisition);
     expect(decision.content.rationale).not.toContain('at parser');

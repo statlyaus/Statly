@@ -370,7 +370,7 @@ describe('recorded Draftguru national-year authority', () => {
     [2000, 'v6'],
     [2008, 'v6'],
     [2010, 'v6'],
-    [2026, 'v7'],
+    [2026, 'v8'],
     [2025, 'v3'],
   ])(
     'loads %s from its parser-%s decision and builds a capture request at that parser',

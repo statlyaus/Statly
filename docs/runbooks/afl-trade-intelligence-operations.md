@@ -1162,7 +1162,7 @@ It never records a successor and refuses a key that already has a decision. It a
 With `--apply` it writes the rights, proposal and decision in one Gate ledger batch. It then loads
 the authority the runner reads for `--season` and fails if that is not the recorded decision.
 
-A season whose runner parser differs from the predecessor's (`draftguru-national-year-page/v7` for
+A season whose runner parser differs from the predecessor's (`draftguru-national-year-page/v8` for
 2026, derived from the 2019 `-parser-v3` decision) is refused as `PARSER_NOT_RUNNER` unless
 `--parser-version` names exactly the runner's parser for `--season`; any other value is refused the
 same way. With it, the rights record that parser as `clientVersion`, and the predecessor's parser is
@@ -1304,10 +1304,14 @@ Prerequisites:
      `open` as v4 reads it (pick 6 on the 2026 page, `Academy(Greater Western Sydney)`). The named
      club must also differ from the selecting club's Draftguru club id, because the club cell writes
      `GWS` while the tag writes `Greater Western Sydney`: a GWS selection tagged that way stays an
-     `unsupported_row` issue rather than reading as `open`. Any other annotation stays an issue, and
+     `unsupported_row` issue rather than reading as `open`. That is the genuine page's pick 6 (GWS
+     taking its own academy player, checked on the stored page 2026-11-21), so the 2026 page is read by
+     `draftguru-national-year-page/v8`, decision `-2026-parser-v8`: v7 plus that one case read as
+     `academy` (the tag's slug equals the selecting club's Draftguru club id), as v3 reads a tag naming
+     the selecting club. The v7 decision stays recorded with no capture. Any other annotation stays an issue, and
      v7 refuses any page year but 2026. Record the decision with
      `outcomes:sources:record-season-decision -- --capability draftguru-national-year-page
---season 2026 --from-season 2019 --parser-version draftguru-national-year-page/v7` (see
+--season 2026 --from-season 2019 --parser-version draftguru-national-year-page/v8` (see
      "Recording a season's source decision"), then recapture the page. The 2026 `-parser-v3`
      decision of 2026-11-21 and its capture (`source-capture:16194feb…`, one issue) stay recorded;
      and
@@ -1393,7 +1397,7 @@ Prerequisites:
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
    `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v6`, earlier `/v5`;
-   2026: `draftguru-national-year-page/v7`),
+   2026: `draftguru-national-year-page/v8`),
    `official-afl-completed-draft-session/v19` (2025: `/v20`; 2026: `official-afl-completed-draft-session/v21`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
