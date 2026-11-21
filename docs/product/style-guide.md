@@ -281,6 +281,10 @@ lets club colour through there and lets its decorative (`aria-hidden`) drawing b
 fails an element whose own text sits on its own club-colour fill; text in a child of a filled
 shape is not caught yet, so check that by eye. Every other rule applies inside it.
 
+**Exception (owner, 2026-11-21):** the Google and Facebook marks on the sign-in buttons keep their
+owners' colours, as their sign-in rules require. They carry `data-provider-logo`, and the brand
+check skips only those marks, not the buttons around them.
+
 ## Content
 
 ### Voice
