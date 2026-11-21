@@ -578,6 +578,41 @@ describe('Draftguru event year provenance', () => {
       ).toContainEqual(expect.objectContaining({ code: 'unsupported_row' }));
     });
 
+    it("leaves GWS's own full-name tag unreviewed under v7 and reads it as academy under v8", () => {
+      const page = withCategory(12, 'Academy(Greater Western Sydney)');
+      expect(parseNational(page).issues).toContainEqual(
+        expect.objectContaining({ code: 'unsupported_row' })
+      );
+      const v8 = parseNational(page, 'draftguru-national-year-page/v8');
+      expect(v8.issues).toEqual([]);
+      expect(selection(v8, 12)).toMatchObject({ accessCategory: 'academy', draftYear: 2026 });
+      // v8 keeps v7's other-club reading and its refusals.
+      expect(
+        selection(
+          parseNational(
+            withCategory(1, 'Academy(Greater Western Sydney)'),
+            'draftguru-national-year-page/v8'
+          ),
+          1
+        )
+      ).toMatchObject({ accessCategory: 'open' });
+      expect(
+        parseNational(
+          withCategory(1, 'Academy(Greater Western Sydney - Bid)'),
+          'draftguru-national-year-page/v8'
+        ).issues
+      ).toContainEqual(expect.objectContaining({ code: 'unsupported_row' }));
+      expect(parseNational(html, 'draftguru-national-year-page/v8', 2025).evidence).toEqual([]);
+      // GWS cannot have declined to match its own academy player, nor carry another annotation.
+      for (const label of [
+        'Academy(Greater Western Sydney - Not Matched)',
+        'Academy(Greater - Western Sydney)',
+      ])
+        expect(
+          parseNational(withCategory(12, label), 'draftguru-national-year-page/v8').issues
+        ).toContainEqual(expect.objectContaining({ code: 'unsupported_row' }));
+    });
+
     it.each([2016, 2025, 2027])('refuses a %s page under v7', (year) => {
       const result = parseNational(html, V7, year);
       expect(result.evidence).toEqual([]);

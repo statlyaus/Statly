@@ -26,7 +26,7 @@ export interface SeasonSourceDecisionInput {
   revalidateAt: string;
   /**
    * The parser the runner reads `season` at, when it differs from the predecessor's (for example
-   * `draftguru-national-year-page/v7` for 2026 from a v3 predecessor). Omitted, the parser is kept.
+   * `draftguru-national-year-page/v8` for 2026 from a v3 predecessor). Omitted, the parser is kept.
    */
   parserVersion?: string;
 }

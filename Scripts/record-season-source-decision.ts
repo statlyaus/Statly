@@ -40,7 +40,7 @@ import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
  *     --revalidate-at <iso> [--parser-version <name>/v<n>] [--apply]
  *
  * `--parser-version` records the runner's parser for `--season` when it differs from the
- * predecessor's (for example `draftguru-national-year-page/v7` for 2026); any other value is refused.
+ * predecessor's (for example `draftguru-national-year-page/v8` for 2026); any other value is refused.
  */
 
 const VALUE_OPTIONS = new Set([
@@ -113,7 +113,7 @@ export function parseSeasonSourceDecisionArguments(
   }
   const parserVersion = values.get('--parser-version');
   if (parserVersion !== undefined && !/^[a-z0-9-]+\/v[1-9]\d*$/u.test(parserVersion)) {
-    usage('--parser-version must be a parser version such as draftguru-national-year-page/v7.');
+    usage('--parser-version must be a parser version such as draftguru-national-year-page/v8.');
   }
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),

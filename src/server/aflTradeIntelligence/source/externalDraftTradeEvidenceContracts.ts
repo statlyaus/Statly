@@ -127,6 +127,19 @@ export const DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION =
 /** The page years parser v7 is reviewed for. */
 export const DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_SEASONS: readonly number[] = [2026];
 
+/**
+ * v8 reads the 2026 page only: v7 plus the selecting club's own academy tag when the tag names it in
+ * full and the club cell abbreviates it. The genuine 2026 page's pick 6 is GWS taking its own academy
+ * player (club cell `GWS`, link `/clubs/greater-western-sydney`, tag `Academy(Greater Western
+ * Sydney)`), which v7 leaves unreviewed. v8 reads it as `academy` when the named club's slug is the
+ * selecting club's Draftguru club id, as v3 already does when the two names match. v7 stays recorded.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_OWN_CLUB_ACADEMY_PARSER_VERSION =
+  'draftguru-national-year-page/v8';
+
+/** The page years parser v8 is reviewed for. */
+export const DRAFTGURU_NATIONAL_YEAR_OWN_CLUB_ACADEMY_SEASONS: readonly number[] = [2026];
+
 /** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
 export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
   return (
@@ -135,7 +148,8 @@ export function isDraftguruNationalYearAccessParserVersion(parserVersion: string
     parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION ||
-    parserVersion === DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_OWN_CLUB_ACADEMY_PARSER_VERSION
   );
 }
 
