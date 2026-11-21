@@ -571,7 +571,7 @@ export default function LeagueTabs({
     <div className="space-y-6">
       <div className="space-y-5">
         <LeagueHeader league={league} members={members} currentUserId={currentUserId} />
-        <div className="rounded-lg border border-border bg-card">
+        <div className="border border-border bg-card">
           <nav className="max-w-full" aria-label="League sections">
             <div className="p-3 md:hidden">
               <label

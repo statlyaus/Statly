@@ -214,7 +214,7 @@ export default function PlayersPageClient({ players, seasons, season }: PlayersP
 
       {shownPlayers.length > 0 ? (
         <>
-          <div className="relative overflow-x-auto rounded-lg border border-border bg-background">
+          <div className="relative overflow-x-auto border border-border bg-background">
             <table className="w-full min-w-[760px] border-collapse text-sm tabular-nums">
               <caption className="sr-only">
                 Players with per-game averages in each scoring category
@@ -305,7 +305,7 @@ export default function PlayersPageClient({ players, seasons, season }: PlayersP
           ) : null}
         </>
       ) : (
-        <section className="rounded-lg border border-border bg-background p-8 text-center">
+        <section className="border border-border bg-background p-8 text-center">
           <h2 className="text-lg font-semibold text-foreground">No players match those filters</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
             Clear the search field or choose all clubs to see every player.

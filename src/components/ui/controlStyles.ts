@@ -125,6 +125,24 @@ export const chipStyles = cva(
   }
 );
 
+/**
+ * Alerts (style guide, "Alerts"): a square ground, never a stripe or a tinted wash. Info is tint, a
+ * deadline is sun, an error is white with a red outline, an outage is stone; success is white with
+ * a hairline and says so in words. Text stays ink on every tone. Layout is the caller's.
+ */
+export const alertStyles = cva('text-foreground', {
+  variants: {
+    tone: {
+      info: 'ground-tint',
+      deadline: 'ground-sun',
+      error: 'ground-white border-2 border-destructive',
+      outage: 'ground-stone',
+      success: 'ground-white border border-border',
+    },
+  },
+  defaultVariants: { tone: 'info' },
+});
+
 export const fieldStyles = cva(
   `w-full rounded-cut border-2 border-input bg-field px-3 text-sm text-field-foreground transition placeholder:text-field-placeholder ${focusOutline} disabled:cursor-not-allowed disabled:border-dashed disabled:border-field-placeholder disabled:bg-muted disabled:text-field-placeholder`,
   {
@@ -136,7 +154,7 @@ export const fieldStyles = cva(
 export const fieldLabelStyles = 'flex flex-col gap-1 text-sm font-medium text-foreground';
 
 export const kbdStyles =
-  'rounded-sm border border-border bg-muted px-1 font-mono text-[11px] font-semibold text-foreground';
+  'rounded-sm border border-border bg-muted px-1 font-sans text-[11px] font-semibold text-foreground';
 
 export const textLinkStyles = `font-semibold text-foreground underline decoration-transparent underline-offset-4 hover:decoration-current ${focusOutline}`;
 

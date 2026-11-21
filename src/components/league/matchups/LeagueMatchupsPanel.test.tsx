@@ -84,6 +84,18 @@ describe('LeagueMatchupsPanel category totals', () => {
     expect(table.getByTitle('Intercepts')).toHaveTextContent('ITC');
   });
 
+  it('sets the score column as a table number: Saira, right-aligned with its header', async () => {
+    authenticatedFetchMock.mockImplementation(respond('FINAL'));
+    render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);
+
+    const table = await totalsTable();
+    expect(table.getByRole('columnheader', { name: 'Score' })).toHaveClass('text-right');
+    const homeRow = table.getByRole('row', { name: /Ball Magnets/ });
+    const score = within(homeRow).getAllByRole('cell').at(-1)!;
+    expect(score).toHaveClass('text-right', 'font-sans');
+    expect(score).not.toHaveClass('font-display');
+  });
+
   it('marks a category the lower total wins, and only that one', async () => {
     authenticatedFetchMock.mockImplementation(respond('LIVE'));
     render(<LeagueMatchupsPanel leagueId="league-1" currentUserId="user-1" />);

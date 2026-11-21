@@ -14,6 +14,7 @@ import PlayerChart from './PlayerChart';
 import { PlayerLeagueAvailabilityPanel } from './PlayerLeagueAvailabilityPanel';
 import { LeagueSocialDiscussButton } from './league/LeagueSocialDiscussButton';
 import { LoadingSpinner } from './ui';
+import { alertStyles, badgeStyles } from '@/components/ui/controlStyles';
 
 type PlayerDetailProps = {
   player: Player;
@@ -187,7 +188,7 @@ function PlayerDecisionDashboard({
   ];
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <section className="border border-border bg-card p-4">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-6">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Decision Hub</h2>
@@ -195,7 +196,7 @@ function PlayerDecisionDashboard({
             Category averages are per game, over the player&apos;s match logs.
           </p>
         </div>
-        <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+        <span className={badgeStyles({ caps: false })}>
           {matchLogs.length > 0
             ? buildTrendLabel(recentStatlyValue, seasonStatlyValue)
             : 'No match data'}
@@ -279,11 +280,7 @@ function PlayerDecisionDashboard({
             ))}
           </div>
           <div
-            className={`mt-3 rounded-md border p-3 text-sm ${
-              injuryLabel
-                ? 'border-destructive/30 bg-destructive/10 text-destructive'
-                : 'border-emerald-200 bg-emerald-50 text-emerald-900'
-            }`}
+            className={`mt-3 p-3 text-sm ${alertStyles({ tone: injuryLabel ? 'info' : 'success' })}`}
           >
             <span className="font-semibold">Availability:</span> {riskLabel}
           </div>
@@ -414,12 +411,12 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_42%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
+    <div className="min-h-screen bg-muted text-foreground">
       <div className="mx-auto grid w-full max-w-[var(--app-shell-max-width)] grid-cols-1 gap-5 px-4 py-5 sm:px-5 lg:px-8 xl:grid-cols-[minmax(0,1fr)_430px]">
         <div className="min-w-0 space-y-5">
           <nav
             aria-label="Player page"
-            className="flex h-12 items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 shadow-sm"
+            className="flex h-12 items-center justify-between gap-4 border border-border bg-card px-4"
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1">
@@ -459,7 +456,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
                   },
                 }}
               />
-              <span className="rounded-full border border-border bg-muted px-3 py-1">
+              <span className={badgeStyles({ caps: false })}>
                 {loading
                   ? 'Loading match data'
                   : matchLogs.length > 0
@@ -467,9 +464,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
                     : 'No match data'}
               </span>
               {getInjuryLabel(player) ? (
-                <span className="rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-destructive">
-                  Injury flag
-                </span>
+                <span className={badgeStyles({ tone: 'warning', caps: false })}>Injury flag</span>
               ) : null}
             </div>
           </nav>
@@ -478,13 +473,11 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
 
           <section className="min-w-0">
             {loading ? (
-              <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
+              <div className="flex h-64 items-center justify-center border border-border bg-card">
                 <LoadingSpinner />
               </div>
             ) : error ? (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-                {error}
-              </div>
+              <div className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>{error}</div>
             ) : (
               <PlayerChart
                 matchData={chartData}
@@ -497,13 +490,11 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
 
           <section className="min-w-0">
             {loading ? (
-              <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
+              <div className="flex h-64 items-center justify-center border border-border bg-card">
                 <LoadingSpinner />
               </div>
             ) : error ? (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-                {error}
-              </div>
+              <div className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>{error}</div>
             ) : (
               <MatchLogTable
                 matchLogs={matchLogs}

@@ -52,7 +52,7 @@ is given.
 | Trade verdicts                    | Public trade pages show values, not letter grades or verdict labels (as built for #789).                                                                                                                                                       |
 | Two sides                         | One side cobalt, the other ink, on card edges, chart lines and bars alike. Never good and bad colours.                                                                                                                                         |
 | Match results                     | Win solid (cobalt on light grounds), loss outlined in ink, draw stone, always with W, L or D. Never green and red.                                                                                                                             |
-| Club colours                      | Only in the 13px club square beside the abbreviation. Never stripes, card edges, page-head blocks or large fills.                                                                                                                              |
+| Club colours                      | Only in the 13px club square beside the abbreviation. Never stripes, card edges, page-head blocks or large fills. The My Team field is an illustration exception (2026-11-21); text is never set on a club colour there either.                |
 | Imagery                           | Licensed black-and-white photo cutouts plus the hand marks. No generated people outside the story collage exception.                                                                                                                           |
 | Story collage                     | Permanent exception, scoped to the home hero and `/afl/stories` (owner, 2026-11-16). Its stylesheets may use literals; counted separately.                                                                                                     |
 | Time zones and stat abbreviations | AEST or AEDT by date, as `formatLeagueTime` prints. One Statly abbreviation table beside `src/types/fantasyCategories.ts` (phase 5).                                                                                                           |
@@ -185,7 +185,8 @@ A trade has two sides, not a good side and a bad side: trade charts never use gr
   dialogs, sheets, toasts, tooltips) has the one shared hand-cut edge, a set of asymmetric radii:
   `rounded-cut` on buttons and fields, `rounded-cut-float` on menus, dialogs, popovers, toasts and
   tooltips through `floatingStyles` (done 2026-11-20); chips and toggles move screen by screen.
-  Never a neat rounded corner or a pill.
+  Never a neat rounded corner or a pill. The fantasy app's core pages are square (done 2026-11-21,
+  ticket 07); the league, social, trade centre and draft room palettes square up with their tickets.
 - **Lines:** each weight means one thing. Hairline for separation; 2.5px ink for buttons and floating
   things; 2px ink for inputs and chips; 1.5px ink under table headers; 3px for the current tab; a 4px
   top edge for which side; a 6px sun left edge for "yours", the only side stripe allowed; 2px dashed
@@ -240,14 +241,17 @@ One primitive per job, in `src/components/ui/`.
   the toast and the core-token menus; area menus move with their palettes). Destructive choices
   never live in a toast or a menu without a dialog.
 - **Alerts:** a ground, not a stripe: tint for info, sun for a deadline, white with a red outline for
-  an error, stone for an outage.
+  an error, stone for an outage; success is white with a hairline and says so in words. Text stays
+  ink. `alertStyles` in `controlStyles.ts` sets the ground; `ui/Alert.tsx` uses it, and a queued
+  alert floats with the floating cut and hard shadow (done 2026-11-21 outside the area palettes).
 - **Navigation:** the app bar is cobalt with white tabs; the public header is white with the wordmark
   and cobalt underlines. The current place is a 3px underline plus heavier type. Tabs scroll sideways
   on phones with a fade at the edge.
 - **Cards:** one card, one thing, square and flat. Edges say whose: a 4px top edge for a side, the 6px
   sun left edge for yours.
 - **Tables (target, phase 5: `DataTable`):** 44px rows, 32px compact on desktop; numbers
-  right-aligned in Saira with matching headers and nothing centred; fixed decimals per column; a
+  right-aligned in Saira with matching headers and nothing centred (done 2026-11-21 for the ladder,
+  the standings race and the matchup score column); fixed decimals per column; a
   sticky header past one screen and a sticky identity column on sideways scroll; a visible overflow
   cue; hairline rules, never stripes; abbreviated headers in `<abbr title="…">`; default sort by the
   most important value; leaders tinted, not bold; your row on sun.
@@ -269,6 +273,12 @@ On the public trade pages `ClubBadge` draws the square and abbreviation, and the
 with a club square beside each club's name (done 2026-11-20). The trade page head, the scarf and the
 tower still use club colours: the owner is redesigning them (ticket 06h), so they carry
 `data-collage` and the brand check skips them, like the story collage on the home page.
+
+In the fantasy app the My Team squad list and player search show `ClubSquare` (the square and the
+abbreviation, no club logo). **Exception (owner, 2026-11-21):** the My Team field is an
+illustration: its guernseys wear club colours. It carries `data-illustration`, and the brand check
+lets club colour through there but still fails text set on a club colour, and every other rule
+applies inside it.
 
 ## Content
 
@@ -383,4 +393,10 @@ Automated design checks today:
 - `tests/e2e/public-trades-brand.test.ts` loads the front page, the trade list, a trade, a club's
   chains and the method page at 1280, 1024, 768 and 390px and fails on a pill, a rounded tile or list, a
   blurred shadow, red outside live and errors, text under 11px or under 4.5:1, a Geist sentence, a
-  side stripe, or club colour bigger than the 13px square. It skips `[data-collage]`.
+  side stripe, or club colour bigger than the 13px square. It skips `[data-collage]`. The rules live
+  in `tests/e2e/helpers/brandAudit.ts`; a radius above 2px on a tile, card or table counts.
+- `tests/e2e/app-brand.test.ts` runs the same audit, signed in, on the dashboard, a league overview,
+  My Team, standings, matchups, waivers, the players list and a player page at 1280 and 390px, and
+  on the sign-in page. It skips the league palette (`--league-*`, ticket 08) by selector, with a
+  per-page ceiling on skipped elements that may only fall; when ticket 08 lands its exclusion must go,
+  and the social, trade centre and draft room pages join with their tickets.

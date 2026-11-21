@@ -27,6 +27,7 @@ import type {
   DraftHistoryListResult,
   DraftHistorySummary,
 } from '@/server/draft/readModels/draftHistoryReadModel';
+import { alertStyles } from '@/components/ui/controlStyles';
 
 function formatDate(dateString: string | null) {
   if (!dateString) return 'Not recorded';
@@ -148,23 +149,23 @@ export default function DraftHistoryPage() {
 
   if (!user) {
     return (
-        <div className="min-h-screen bg-background px-4 py-10 text-foreground">
-          <section className="mx-auto max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-sm">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
-              <Archive className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Sign in to review completed draft rooms and archived roster outcomes.
-            </p>
-            <Link
-              href="/login"
-              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              Sign in
-            </Link>
-          </section>
-        </div>
+      <div className="min-h-screen bg-background px-4 py-10 text-foreground">
+        <section className="mx-auto max-w-md border border-border bg-card p-6 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <Archive className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Sign in to review completed draft rooms and archived roster outcomes.
+          </p>
+          <Link
+            href="/login"
+            className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Sign in
+          </Link>
+        </section>
+      </div>
     );
   }
 
@@ -177,117 +178,117 @@ export default function DraftHistoryPage() {
   };
 
   return (
-      <div className="min-h-screen bg-background text-foreground">
-        <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-          <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-            <Link
-              href="/drafts"
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              Draft center
-            </Link>
-            <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(560px,0.55fr)] xl:items-end">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Archive
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Draft history
-                </h1>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  Audit completed drafts, compare roster builds, and replay every selection by
-                  round, team, and player.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                <Metric label="Drafts" value={metrics.draftCount} />
-                <Metric label="Picks" value={metrics.pickCount} />
-                <Metric label="Teams" value={metrics.teamCount} />
-                <Metric label="Manual" value={metrics.manualPickCount} />
-                <Metric label="Auto" value={metrics.autoPickCount} />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-            <label htmlFor="draft-history-search" className="sr-only">
-              Search draft history
-            </label>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="relative md:w-[520px]">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <input
-                  id="draft-history-search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
-                  placeholder="Search leagues, teams, managers, or players"
-                />
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Showing {filteredDrafts.length} of {history?.drafts.length ?? 0} completed drafts
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+        <section className="border border-border bg-card p-5">
+          <Link
+            href="/drafts"
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            Draft center
+          </Link>
+          <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(560px,0.55fr)] xl:items-end">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Archive
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Draft history
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+                Audit completed drafts, compare roster builds, and replay every selection by round,
+                team, and player.
               </p>
             </div>
-            {selectedLeagueId ? (
-              <p className="mt-3 text-sm font-medium text-muted-foreground">
-                League scope:{' '}
-                <span className="text-foreground">
-                  {history?.drafts[0]?.name ?? selectedLeagueId}
-                </span>
-              </p>
-            ) : null}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <Metric label="Drafts" value={metrics.draftCount} />
+              <Metric label="Picks" value={metrics.pickCount} />
+              <Metric label="Teams" value={metrics.teamCount} />
+              <Metric label="Manual" value={metrics.manualPickCount} />
+              <Metric label="Auto" value={metrics.autoPickCount} />
+            </div>
+          </div>
+        </section>
+
+        <section className="border border-border bg-card p-4">
+          <label htmlFor="draft-history-search" className="sr-only">
+            Search draft history
+          </label>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="relative md:w-[520px]">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                id="draft-history-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+                placeholder="Search leagues, teams, managers, or players"
+              />
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">
+              Showing {filteredDrafts.length} of {history?.drafts.length ?? 0} completed drafts
+            </p>
+          </div>
+          {selectedLeagueId ? (
+            <p className="mt-3 text-sm font-medium text-muted-foreground">
+              League scope:{' '}
+              <span className="text-foreground">
+                {history?.drafts[0]?.name ?? selectedLeagueId}
+              </span>
+            </p>
+          ) : null}
+        </section>
+
+        {isLoading && (
+          <section className="border border-border bg-card p-8 text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+            <p className="mt-4 text-sm font-semibold">Loading draft history</p>
           </section>
+        )}
 
-          {isLoading && (
-            <section className="rounded-lg border border-border bg-card p-8 text-center">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-              <p className="mt-4 text-sm font-semibold">Loading draft history</p>
-            </section>
-          )}
+        {error && (
+          <section className={`p-5 ${alertStyles({ tone: 'error' })}`}>
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+              <p className="text-sm font-semibold">{error}</p>
+            </div>
+          </section>
+        )}
 
-          {error && (
-            <section className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-destructive">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-                <p className="text-sm font-semibold">{error}</p>
-              </div>
-            </section>
-          )}
+        {!isLoading && !error && filteredDrafts.length === 0 && (
+          <section className="border border-dashed border-border bg-card p-8 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <Archive className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold">
+              {history?.drafts.length ? 'No matching drafts' : 'No completed drafts yet'}
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+              Completed rooms will appear here with full rosters, pick counts, and round-by-round
+              selection history.
+            </p>
+          </section>
+        )}
 
-          {!isLoading && !error && filteredDrafts.length === 0 && (
-            <section className="rounded-lg border border-dashed border-border bg-card p-8 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <Archive className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <h2 className="mt-4 text-lg font-semibold">
-                {history?.drafts.length ? 'No matching drafts' : 'No completed drafts yet'}
-              </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                Completed rooms will appear here with full rosters, pick counts, and
-                round-by-round selection history.
-              </p>
-            </section>
-          )}
-
-          {!isLoading && !error && filteredDrafts.length > 0 && (
-            <section className="grid gap-4">
-              {filteredDrafts.map((draft) => (
-                <DraftHistoryCard key={draft.id} draft={draft} />
-              ))}
-            </section>
-          )}
-        </div>
+        {!isLoading && !error && filteredDrafts.length > 0 && (
+          <section className="grid gap-4">
+            {filteredDrafts.map((draft) => (
+              <DraftHistoryCard key={draft.id} draft={draft} />
+            ))}
+          </section>
+        )}
       </div>
+    </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-border bg-background px-4 py-3">
+    <div className="border border-border bg-background px-4 py-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
@@ -302,7 +303,7 @@ function DraftHistoryCard({ draft }: { draft: DraftHistorySummary }) {
     .slice(0, 4);
 
   return (
-    <article className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+    <article className="overflow-hidden border border-border bg-card">
       <div className="grid gap-5 border-b border-border p-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -345,7 +346,7 @@ function DraftHistoryCard({ draft }: { draft: DraftHistorySummary }) {
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {leaders.map((participant) => (
-              <div key={participant.id} className="rounded-lg border border-border bg-background p-3">
+              <div key={participant.id} className="border border-border bg-background p-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
                     {getInitials(participant.teamName)}
@@ -386,7 +387,7 @@ function DraftHistoryCard({ draft }: { draft: DraftHistorySummary }) {
 function PickSummary({ label, pick }: { label: string; pick: DraftHistorySummary['firstPick'] }) {
   if (!pick) {
     return (
-      <div className="rounded-lg border border-border bg-background p-3 text-muted-foreground">
+      <div className="border border-border bg-background p-3 text-muted-foreground">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">{label}</p>
         <p className="mt-1 text-sm font-medium">No pick recorded</p>
       </div>
@@ -394,7 +395,7 @@ function PickSummary({ label, pick }: { label: string; pick: DraftHistorySummary
   }
 
   return (
-    <div className="rounded-lg border border-border bg-background p-3">
+    <div className="border border-border bg-background p-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>

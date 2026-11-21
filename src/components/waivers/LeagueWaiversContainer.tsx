@@ -10,6 +10,7 @@ import WaiverFAABSystem, {
 } from '@/components/waivers/WaiverFAABSystem';
 import type { LeagueWaiverClaim, LeagueRoster, LeagueActivityItem } from '@/types/waivers';
 import type { FantasyCategoryKey, PlayerStats } from '@/types/fantasyCategories';
+import { alertStyles } from '@/components/ui/controlStyles';
 
 interface Props {
   leagueId: string;
@@ -620,7 +621,7 @@ export default function LeagueWaiversContainer({
     <>
       {waiverLoadError && (
         <div
-          className="mb-4 flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
+          className={`mb-4 flex flex-col gap-3 p-3 text-sm sm:flex-row sm:items-center sm:justify-between ${alertStyles({ tone: 'error' })}`}
           role="alert"
         >
           <span>{waiverLoadError}</span>

@@ -23,6 +23,7 @@ import type {
   DraftHistoryParticipant,
   DraftHistoryPick,
 } from '@/server/draft/readModels/draftHistoryReadModel';
+import { alertStyles } from '@/components/ui/controlStyles';
 
 type DetailTab = 'rounds' | 'rosters' | 'timeline';
 
@@ -123,153 +124,153 @@ export default function DraftHistoryDetailPage() {
 
   if (!user) {
     return (
-        <div className="min-h-screen bg-background px-4 py-10 text-foreground">
-          <section className="mx-auto max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-sm">
-            <Trophy className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-            <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Sign in to open archived draft boards.
-            </p>
-            <Link
-              href="/login"
-              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              Sign in
-            </Link>
-          </section>
-        </div>
+      <div className="min-h-screen bg-background px-4 py-10 text-foreground">
+        <section className="mx-auto max-w-md border border-border bg-card p-6 text-center">
+          <Trophy className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Sign in to open archived draft boards.
+          </p>
+          <Link
+            href="/login"
+            className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Sign in
+          </Link>
+        </section>
+      </div>
     );
   }
 
   return (
-      <div className="min-h-screen bg-background text-foreground">
-        <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-          <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-            <Link
-              href={backToHistoryHref}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Draft history
-            </Link>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+        <section className="border border-border bg-card p-5">
+          <Link
+            href={backToHistoryHref}
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Draft history
+          </Link>
 
-            {draft && (
-              <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(520px,0.48fr)] xl:items-end">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Completed draft
-                  </p>
-                  <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                    {draft.name}
-                  </h1>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                      <CalendarClock className="h-4 w-4" aria-hidden="true" />
-                      Completed {formatDate(draft.completedAt)}
-                    </span>
-                    <span>{draft.teamCount} teams</span>
-                    <span>{draft.totalRounds} rounds</span>
-                    <span>{draft.selectedCategories.length} categories</span>
-                    <span>League ID {draft.leagueId}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <Metric label="Picks" value={`${draft.picksMade}/${draft.totalPicks}`} />
-                  <Metric label="Manual" value={draft.manualPickCount} />
-                  <Metric label="Auto" value={draft.autoPickCount} />
-                  <Metric label="Complete" value={`${draft.completionPct}%`} />
+          {draft && (
+            <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(520px,0.48fr)] xl:items-end">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Completed draft
+                </p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  {draft.name}
+                </h1>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                    Completed {formatDate(draft.completedAt)}
+                  </span>
+                  <span>{draft.teamCount} teams</span>
+                  <span>{draft.totalRounds} rounds</span>
+                  <span>{draft.selectedCategories.length} categories</span>
+                  <span>League ID {draft.leagueId}</span>
                 </div>
               </div>
-            )}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Metric label="Picks" value={`${draft.picksMade}/${draft.totalPicks}`} />
+                <Metric label="Manual" value={draft.manualPickCount} />
+                <Metric label="Auto" value={draft.autoPickCount} />
+                <Metric label="Complete" value={`${draft.completionPct}%`} />
+              </div>
+            </div>
+          )}
+        </section>
+
+        {isLoading && (
+          <section className="border border-border bg-card p-8 text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+            <p className="mt-4 text-sm font-semibold">Loading completed draft</p>
           </section>
+        )}
 
-          {isLoading && (
-            <section className="rounded-lg border border-border bg-card p-8 text-center">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-              <p className="mt-4 text-sm font-semibold">Loading completed draft</p>
+        {error && (
+          <section className={`p-5 ${alertStyles({ tone: 'error' })}`}>
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+              <p className="text-sm font-semibold">{error}</p>
+            </div>
+          </section>
+        )}
+
+        {!isLoading && !error && draft && (
+          <>
+            <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <PickFeature label="First pick" pick={draft.firstPick} />
+              <PickFeature label="Final pick" pick={draft.lastPick} />
             </section>
-          )}
 
-          {error && (
-            <section className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-destructive">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-                <p className="text-sm font-semibold">{error}</p>
+            <section className="border border-border bg-card p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div
+                  className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-1"
+                  role="tablist"
+                  aria-label="Draft history views"
+                >
+                  {[
+                    { id: 'rounds' as const, label: 'Rounds', icon: TableProperties },
+                    { id: 'rosters' as const, label: 'Rosters', icon: Users },
+                    { id: 'timeline' as const, label: 'Timeline', icon: Clock3 },
+                  ].map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          activeTab === tab.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label htmlFor="draft-detail-search" className="sr-only">
+                  Search picks
+                </label>
+                <div className="relative xl:w-[420px]">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="draft-detail-search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+                    placeholder="Search players, teams, positions, clubs, rounds"
+                  />
+                </div>
               </div>
             </section>
-          )}
 
-          {!isLoading && !error && draft && (
-            <>
-              <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <PickFeature label="First pick" pick={draft.firstPick} />
-                <PickFeature label="Final pick" pick={draft.lastPick} />
-              </section>
-
-              <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <div
-                    className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-1"
-                    role="tablist"
-                    aria-label="Draft history views"
-                  >
-                    {[
-                      { id: 'rounds' as const, label: 'Rounds', icon: TableProperties },
-                      { id: 'rosters' as const, label: 'Rosters', icon: Users },
-                      { id: 'timeline' as const, label: 'Timeline', icon: Clock3 },
-                    ].map((tab) => {
-                      const Icon = tab.icon;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          role="tab"
-                          aria-selected={activeTab === tab.id}
-                          onClick={() => setActiveTab(tab.id)}
-                          className={`inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                            activeTab === tab.id
-                              ? 'bg-primary text-primary-foreground'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" aria-hidden="true" />
-                          {tab.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label htmlFor="draft-detail-search" className="sr-only">
-                    Search picks
-                  </label>
-                  <div className="relative xl:w-[420px]">
-                    <Search
-                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <input
-                      id="draft-detail-search"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
-                      placeholder="Search players, teams, positions, clubs, rounds"
-                    />
-                  </div>
-                </div>
-              </section>
-
-              {activeTab === 'rounds' && <RoundsView draft={draft} query={query} />}
-              {activeTab === 'rosters' && <RostersView participants={draft.participants} />}
-              {activeTab === 'timeline' && <TimelineView picks={filteredTimeline} />}
-            </>
-          )}
-        </div>
+            {activeTab === 'rounds' && <RoundsView draft={draft} query={query} />}
+            {activeTab === 'rosters' && <RostersView participants={draft.participants} />}
+            {activeTab === 'timeline' && <TimelineView picks={filteredTimeline} />}
+          </>
+        )}
       </div>
+    </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border border-border bg-background px-4 py-3">
+    <div className="border border-border bg-background px-4 py-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
@@ -281,7 +282,7 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 function PickFeature({ label, pick }: { label: string; pick: DraftHistoryPick | null }) {
   if (!pick) {
     return (
-      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <section className="border border-border bg-card p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           {label}
         </p>
@@ -291,7 +292,7 @@ function PickFeature({ label, pick }: { label: string; pick: DraftHistoryPick | 
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+    <section className="border border-border bg-card p-5">
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
         {label}
       </p>
@@ -334,7 +335,7 @@ function RoundsView({ draft, query }: { draft: DraftHistoryDetail; query: string
         if (picks.length === 0) return null;
 
         return (
-          <article key={round.round} className="rounded-lg border border-border bg-card shadow-sm">
+          <article key={round.round} className="border border-border bg-card">
             <div className="border-b border-border px-5 py-4">
               <h2 className="text-lg font-semibold">Round {round.round}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -371,7 +372,7 @@ function RostersView({ participants }: { participants: DraftHistoryParticipant[]
   return (
     <section className="grid gap-4 xl:grid-cols-2">
       {participants.map((participant) => (
-        <article key={participant.id} className="rounded-lg border border-border bg-card shadow-sm">
+        <article key={participant.id} className="border border-border bg-card">
           <div className="flex items-start justify-between gap-4 border-b border-border p-5">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-semibold text-muted-foreground">
@@ -418,7 +419,7 @@ function RostersView({ participants }: { participants: DraftHistoryParticipant[]
 
 function TimelineView({ picks }: { picks: DraftHistoryPick[] }) {
   return (
-    <section className="rounded-lg border border-border bg-card shadow-sm">
+    <section className="border border-border bg-card">
       <div className="border-b border-border px-5 py-4">
         <h2 className="text-lg font-semibold">Pick timeline</h2>
         <p className="mt-1 text-sm text-muted-foreground">

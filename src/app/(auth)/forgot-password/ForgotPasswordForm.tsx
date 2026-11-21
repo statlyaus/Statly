@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { buttonStyles } from '@/components/ui/controlStyles';
+import { alertStyles, buttonStyles } from '@/components/ui/controlStyles';
 import { auth } from '@/lib/firebase/clientAuth';
 import { cn } from '@/lib/utils';
 import {
@@ -50,7 +50,7 @@ export default function ForgotPasswordForm() {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
+    <div className="border border-border bg-background p-5 sm:p-6">
       <form onSubmit={onSubmit} className="space-y-6">
         <div className="space-y-2">
           <label htmlFor="email" className="block text-sm font-semibold text-foreground">
@@ -77,18 +77,21 @@ export default function ForgotPasswordForm() {
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive"
+            className={`flex items-start gap-3 p-3 text-sm font-medium ${alertStyles({ tone: 'error' })}`}
           >
-            <ExclamationTriangleIcon aria-hidden="true" className="h-5 w-5 shrink-0" />
+            <ExclamationTriangleIcon
+              aria-hidden="true"
+              className="h-5 w-5 shrink-0 text-destructive"
+            />
             <span>{error}</span>
           </div>
         )}
         {success && (
           <div
             role="status"
-            className="flex items-start gap-3 rounded-md border border-success/30 bg-success/5 p-3 text-sm font-medium text-success"
+            className={`flex items-start gap-3 p-3 text-sm font-medium ${alertStyles({ tone: 'success' })}`}
           >
-            <CheckCircleIcon aria-hidden="true" className="h-5 w-5 shrink-0" />
+            <CheckCircleIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-success" />
             <span>{success}</span>
           </div>
         )}

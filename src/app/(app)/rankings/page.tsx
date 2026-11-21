@@ -23,7 +23,7 @@ export default async function RankingsPage() {
         </p>
 
         {/* Legend */}
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+        <div className="mt-4 p-4 bg-gray-50">
           <h3 className="text-sm font-medium text-gray-900 mb-2">Stat Strength Legend:</h3>
           <div className="flex flex-wrap gap-4 text-xs">
             <div className="flex items-center gap-1">

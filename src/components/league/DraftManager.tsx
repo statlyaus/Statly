@@ -14,7 +14,7 @@ import {
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
-import { floatingStyles } from '@/components/ui/controlStyles';
+import { alertStyles, badgeStyles, floatingStyles } from '@/components/ui/controlStyles';
 import { fetchApi } from '@/lib/api';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { cn } from '@/lib/utils';
@@ -457,18 +457,16 @@ export default function DraftManager({
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
-      SCHEDULED: 'bg-primary/10 text-primary',
-      LOBBY: 'bg-muted text-muted-foreground',
-      COUNTDOWN: 'bg-primary/10 text-primary',
+      SCHEDULED: 'bg-secondary text-secondary-foreground',
+      LOBBY: '',
+      COUNTDOWN: 'bg-secondary text-secondary-foreground',
       LIVE: 'bg-primary text-primary-foreground',
-      PAUSED: 'bg-muted text-muted-foreground',
-      COMPLETED: 'bg-muted text-muted-foreground',
+      PAUSED: '',
+      COMPLETED: '',
     };
 
     return (
-      <span
-        className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[status as keyof typeof statusColors] || 'bg-muted text-muted-foreground'}`}
-      >
+      <span className={cn(badgeStyles(), statusColors[status as keyof typeof statusColors])}>
         {status}
       </span>
     );
@@ -502,11 +500,11 @@ export default function DraftManager({
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <div className="border border-border bg-card text-card-foreground">
       <div className="border-b border-border p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <div className="mb-3 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
               <PlayIcon className="h-4 w-4 text-primary" />
               Draft Management
             </div>
@@ -518,7 +516,7 @@ export default function DraftManager({
               room opens to league members.
             </p>
           </div>
-          <div className="grid min-w-0 grid-cols-3 overflow-hidden rounded-lg border border-border bg-background text-center sm:min-w-80">
+          <div className="grid min-w-0 grid-cols-3 overflow-hidden border border-border bg-background text-center sm:min-w-80">
             <div className="border-r border-border p-3">
               <p className="text-xs font-medium text-muted-foreground">Teams</p>
               <p className="mt-1 text-lg font-semibold text-foreground">{members.length}</p>
@@ -537,9 +535,12 @@ export default function DraftManager({
 
       {/* Error Message */}
       {error && (
-        <div className="mx-6 mt-6 flex items-center space-x-2 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+        <div
+          role="alert"
+          className={`mx-6 mt-6 flex items-center space-x-2 p-4 ${alertStyles({ tone: 'error' })}`}
+        >
           <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />
-          <span className="text-destructive">{error}</span>
+          <span>{error}</span>
         </div>
       )}
 
@@ -548,7 +549,7 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="m-6 rounded-lg border border-border bg-muted/50 p-4"
+          className="m-6 border border-border bg-muted/50 p-4"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -566,7 +567,7 @@ export default function DraftManager({
             </div>
             <button
               onClick={joinDraftRoom}
-              className="flex items-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center space-x-2 rounded-cut bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <PlayIcon className="h-4 w-4" />
               <span>Join Draft Room</span>
@@ -582,7 +583,7 @@ export default function DraftManager({
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               {readinessItems.map((item) => (
-                <div key={item.label} className="rounded-lg border border-border bg-background p-4">
+                <div key={item.label} className="border border-border bg-background p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-foreground">{item.label}</p>
@@ -603,7 +604,7 @@ export default function DraftManager({
               ))}
             </div>
 
-            <div className="rounded-lg border border-border bg-background p-4">
+            <div className="border border-border bg-background p-4">
               <div className="flex items-center gap-2">
                 <CogIcon className="h-5 w-5 text-primary" />
                 <h3 className="font-semibold text-foreground">Draft setup preview</h3>
@@ -629,7 +630,7 @@ export default function DraftManager({
             </div>
           </div>
 
-          <aside className="rounded-lg border border-border bg-muted/30 p-4">
+          <aside className="border border-border bg-muted/30 p-4">
             <p className="text-sm font-semibold text-foreground">Next step</p>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Review the schedule and commissioner settings, then create the draft room for league
@@ -640,7 +641,7 @@ export default function DraftManager({
             {canCreateDraft && (
               <button
                 onClick={() => setShowDraftSettings(true)}
-                className="mt-4 flex w-full items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-4 flex w-full items-center justify-center space-x-2 rounded-cut bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <CalendarIcon className="h-5 w-5" />
                 <span>Prepare draft settings</span>
@@ -648,7 +649,7 @@ export default function DraftManager({
             )}
 
             {!canCreateDraft && (
-              <div className="mt-4 rounded-lg border border-border bg-background p-3 text-center">
+              <div className="mt-4 border border-border bg-background p-3 text-center">
                 <span className="text-sm text-muted-foreground">
                   {!isCommissioner
                     ? 'Only a league commissioner can create a draft'
@@ -689,7 +690,7 @@ export default function DraftManager({
                     room opens.
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm">
+                <div className="border border-border bg-background px-4 py-3 text-sm">
                   <p className="font-medium text-foreground">{members.length} teams</p>
                   <p className="text-muted-foreground">{totalDraftPicks} total picks</p>
                 </div>
@@ -706,7 +707,7 @@ export default function DraftManager({
                 minimumInstant={getMinimumDraftStartDate()}
               />
 
-              <section className="rounded-lg border border-border bg-background p-5">
+              <section className="border border-border bg-background p-5">
                 <div className="mb-4">
                   <h4 className="text-base font-semibold text-foreground">Format and Clock</h4>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -731,7 +732,7 @@ export default function DraftManager({
                           draftType: e.target.value as 'snake' | 'linear',
                         }))
                       }
-                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="h-11 w-full rounded-cut border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="snake">Snake Draft</option>
                       <option value="linear">Linear Draft</option>
@@ -755,7 +756,7 @@ export default function DraftManager({
                           timePerPick: parseInt(e.target.value),
                         }))
                       }
-                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="h-11 w-full rounded-cut border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       {TIME_PER_PICK_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -767,7 +768,7 @@ export default function DraftManager({
                 </div>
               </section>
 
-              <section className="rounded-lg border border-border bg-background p-5">
+              <section className="border border-border bg-background p-5">
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h4 className="text-base font-semibold text-foreground">Draft Order</h4>
@@ -799,7 +800,7 @@ export default function DraftManager({
                       pickOrder: e.target.value as DraftPickOrderMode,
                     }))
                   }
-                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-11 w-full rounded-cut border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="random">Randomized order</option>
                   <option value="manual">Manual order</option>
@@ -807,7 +808,7 @@ export default function DraftManager({
                 {draftOrderRandomized && (
                   <p className="mt-2 text-xs font-medium text-primary">Draft order randomized.</p>
                 )}
-                <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border">
+                <div className="mt-3 max-h-64 overflow-y-auto border border-border">
                   {draftOrderMembers.map((member, index) => (
                     <div
                       key={member.id}
@@ -849,7 +850,7 @@ export default function DraftManager({
                 </div>
               </section>
 
-              <section className="rounded-lg border border-border bg-background p-5">
+              <section className="border border-border bg-background p-5">
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h4 className="text-base font-semibold text-foreground">Position Limits</h4>
@@ -863,7 +864,7 @@ export default function DraftManager({
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {POSITION_LIMIT_KEYS.map((key) => (
-                    <div key={key} className="rounded-lg border border-border bg-card p-3">
+                    <div key={key} className="border border-border bg-card p-3">
                       <label
                         htmlFor={`position-${key}`}
                         className="block text-xs font-semibold uppercase text-muted-foreground"
@@ -877,16 +878,16 @@ export default function DraftManager({
                         max={key === 'BENCH' ? 20 : 30}
                         value={draftSettings.positionLimits[key]}
                         onChange={(e) => updatePositionLimit(key, e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="mt-1 w-full rounded-cut border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                     </div>
                   ))}
                 </div>
               </section>
 
-              <section className="rounded-lg border border-border bg-background p-5">
+              <section className="border border-border bg-background p-5">
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-lg border border-border bg-card p-4">
+                  <div className="border border-border bg-card p-4">
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
@@ -922,7 +923,7 @@ export default function DraftManager({
                         })
                       }
                       disabled={!draftSettings.autoPickRules.enabled}
-                      className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
+                      className="mt-1 w-full rounded-cut border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
                     >
                       <option value="queue-first">Queue first, then best available</option>
                       <option value="best-available">Best available</option>
@@ -931,7 +932,7 @@ export default function DraftManager({
                   </div>
 
                   {/* Enable Reminders */}
-                  <div className="rounded-lg border border-border bg-card p-4">
+                  <div className="border border-border bg-card p-4">
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
@@ -963,14 +964,14 @@ export default function DraftManager({
               <button
                 onClick={() => setShowDraftSettings(false)}
                 disabled={savingDraft}
-                className="flex-1 rounded-lg border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="flex-1 rounded-cut border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={createDraft}
                 disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex flex-1 items-center justify-center space-x-2 rounded-cut bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingDraft ? (
                   <>

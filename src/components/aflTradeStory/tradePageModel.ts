@@ -125,14 +125,7 @@ export function clubStyle(clubName: string): ClubStyle {
   return { abbreviation: getTeamAbbreviation(clubName), fill, ink: inkOn(fill), trim };
 }
 
-/**
- * The 13px club square (style guide, "Club colours"): the guernsey's main colour; a white guernsey
- * (Geelong, North Melbourne, Sydney) is a white square with an ink edge.
- */
-export function clubSquare(clubName: string): { readonly fill: string; readonly edged: boolean } {
-  const { base } = guernseyFor(clubName);
-  return { fill: base, edged: luminance(base) > 0.7 };
-}
+export { clubSquare } from '@/lib/clubGuernseys';
 
 /** Each matched-bid share, by the story pick id it was spent as. */
 export function bidSharesByPickId(

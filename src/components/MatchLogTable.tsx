@@ -51,7 +51,7 @@ const OpponentCell = ({ opponent }: { opponent: string }) => {
 
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1 shadow-sm">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1">
         <Image
           src={logo}
           alt=""
@@ -64,7 +64,9 @@ const OpponentCell = ({ opponent }: { opponent: string }) => {
       </span>
       <span className="min-w-0">
         <span className="block truncate font-semibold text-foreground">{opponent}</span>
-        <span className="block text-xs font-medium uppercase text-muted-foreground">{abbreviation}</span>
+        <span className="block text-xs font-medium uppercase text-muted-foreground">
+          {abbreviation}
+        </span>
       </span>
     </div>
   );
@@ -126,13 +128,21 @@ const MatchLogTable = ({
 
   const quickFilterCounts = useMemo<Record<QuickFilter, number>>(() => {
     const hasCategoryData = (log: MatchLog) =>
-      [log.goals, log.disposals, log.marks, log.tackles, log.clearances, log.inside50s, log.rebound50s, log.hitouts].some(
-        (value) => typeof value === 'number' && value > 0
-      );
+      [
+        log.goals,
+        log.disposals,
+        log.marks,
+        log.tackles,
+        log.clearances,
+        log.inside50s,
+        log.rebound50s,
+        log.hitouts,
+      ].some((value) => typeof value === 'number' && value > 0);
 
     return {
       all: matchLogs.length,
-      withValue: matchLogs.filter((log) => typeof log.totalValue === 'number' && log.totalValue > 0).length,
+      withValue: matchLogs.filter((log) => typeof log.totalValue === 'number' && log.totalValue > 0)
+        .length,
       categoryData: matchLogs.filter(hasCategoryData).length,
       zeroValue: matchLogs.filter((log) => !log.totalValue).length,
     };
@@ -155,15 +165,11 @@ const MatchLogTable = ({
     }
 
     if (filters.minStatlyValue) {
-      filtered = filtered.filter(
-        (log) => (log.totalValue || 0) >= Number(filters.minStatlyValue)
-      );
+      filtered = filtered.filter((log) => (log.totalValue || 0) >= Number(filters.minStatlyValue));
     }
 
     if (filters.maxStatlyValue) {
-      filtered = filtered.filter(
-        (log) => (log.totalValue || 0) <= Number(filters.maxStatlyValue)
-      );
+      filtered = filtered.filter((log) => (log.totalValue || 0) <= Number(filters.maxStatlyValue));
     }
 
     if (filters.result !== 'all') {
@@ -182,9 +188,16 @@ const MatchLogTable = ({
       filtered = filtered.filter((log) => typeof log.totalValue === 'number' && log.totalValue > 0);
     } else if (quickFilter === 'categoryData') {
       filtered = filtered.filter((log) =>
-        [log.goals, log.disposals, log.marks, log.tackles, log.clearances, log.inside50s, log.rebound50s, log.hitouts].some(
-          (value) => typeof value === 'number' && value > 0
-        )
+        [
+          log.goals,
+          log.disposals,
+          log.marks,
+          log.tackles,
+          log.clearances,
+          log.inside50s,
+          log.rebound50s,
+          log.hitouts,
+        ].some((value) => typeof value === 'number' && value > 0)
       );
     } else if (quickFilter === 'zeroValue') {
       filtered = filtered.filter((log) => !log.totalValue);
@@ -337,7 +350,7 @@ const MatchLogTable = ({
 
   if (isLoading) {
     return (
-      <div className={`rounded-lg border border-border bg-card shadow-sm ${className}`}>
+      <div className={`border border-border bg-card ${className}`}>
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
             <ArrowPathIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-muted-foreground" />
@@ -350,15 +363,17 @@ const MatchLogTable = ({
 
   if (!matchLogs || matchLogs.length === 0) {
     return (
-      <div className={`rounded-lg border border-border bg-card p-5 shadow-sm ${className}`}>
+      <div className={`border border-border bg-card p-5 ${className}`}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-card-foreground">Match Logs</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Round-by-round AFL category records</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Round-by-round AFL category records
+            </p>
           </div>
         </div>
 
-        <div className="mt-5 rounded-lg border border-dashed border-border bg-muted/30 p-6">
+        <div className="mt-5 border border-dashed border-border bg-muted/30 p-6">
           <ChartBarIcon className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
           <h3 className="mt-4 text-base font-semibold text-card-foreground">
             No match data available
@@ -372,7 +387,7 @@ const MatchLogTable = ({
             <button
               type="button"
               onClick={onRefresh}
-              className="mt-4 inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
               Refresh Data
@@ -386,7 +401,7 @@ const MatchLogTable = ({
   return (
     <div className={`min-w-0 space-y-3 ${className}`}>
       {/* Controls */}
-      <div className="min-w-0 rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="min-w-0 border border-border bg-card p-4">
         <div className="min-w-0">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -394,13 +409,13 @@ const MatchLogTable = ({
                 {playerName ? `${playerName}'s Match Logs` : 'Match Logs'}
               </h2>
               <div className="mt-1 flex flex-wrap items-center gap-2">
-                <div className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                <span className={badgeStyles({ caps: false })}>
                   {filteredAndSortedLogs.length} matches
-                </div>
+                </span>
                 {activeFilterCount > 0 ? (
-                  <div className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                  <span className={badgeStyles({ tone: 'brand', caps: false })}>
                     {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
-                  </div>
+                  </span>
                 ) : null}
               </div>
             </div>
@@ -445,7 +460,7 @@ const MatchLogTable = ({
                   placeholder="Search season, round, opponent, or ground"
                   value={filters.searchTerm}
                   onChange={(event) => handleFilterChange('searchTerm', event.target.value)}
-                  className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -459,7 +474,7 @@ const MatchLogTable = ({
                     setSortField(event.target.value as SortField);
                     setSortDirection('desc');
                   }}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.field} value={option.field}>
@@ -470,7 +485,7 @@ const MatchLogTable = ({
                 <button
                   type="button"
                   onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
                   aria-label={`Sort ${sortDirection === 'desc' ? 'low to high' : 'high to low'}`}
                 >
                   <ArrowsUpDownIcon className="h-4 w-4" aria-hidden="true" />
@@ -483,7 +498,7 @@ const MatchLogTable = ({
                     onClick={() => setQuickFilter(filter)}
                     className={`rounded-md border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                       quickFilter === filter
-                        ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                        ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-background text-foreground hover:bg-muted'
                     }`}
                   >
@@ -616,52 +631,78 @@ const MatchLogTable = ({
                     <SortButton field="opponent">Opponent</SortButton>
                   </th>
                   <th className="border-b border-border px-3 py-3 text-left">Ground</th>
-                  {!compact && <th className="border-b border-border px-3 py-3 text-center">Result</th>}
+                  {!compact && (
+                    <th className="border-b border-border px-3 py-3 text-center">Result</th>
+                  )}
                   {!compact && (
                     <th className="border-b border-border px-3 py-3 text-center">
-                      <SortButton field="goals" align="center">Goals</SortButton>
+                      <SortButton field="goals" align="center">
+                        Goals
+                      </SortButton>
                     </th>
                   )}
                   <th className="border-b border-border px-3 py-3 text-center">
-                    <SortButton field="disposals" align="center">D</SortButton>
+                    <SortButton field="disposals" align="center">
+                      D
+                    </SortButton>
                   </th>
                   <th className="border-b border-border px-3 py-3 text-center">
-                    <SortButton field="marks" align="center">M</SortButton>
+                    <SortButton field="marks" align="center">
+                      M
+                    </SortButton>
                   </th>
                   <th className="border-b border-border px-3 py-3 text-center">
-                    <SortButton field="tackles" align="center">T</SortButton>
+                    <SortButton field="tackles" align="center">
+                      T
+                    </SortButton>
                   </th>
                   <th className="border-b border-border px-3 py-3 text-center">
-                    <SortButton field="clearances" align="center">CLR</SortButton>
+                    <SortButton field="clearances" align="center">
+                      CLR
+                    </SortButton>
                   </th>
                   {!compact && (
                     <>
                       <th className="border-b border-border px-3 py-3 text-center">
-                        <SortButton field="inside50s" align="center">I50</SortButton>
+                        <SortButton field="inside50s" align="center">
+                          I50
+                        </SortButton>
                       </th>
                       <th className="border-b border-border px-3 py-3 text-center">
-                        <SortButton field="rebound50s" align="center">R50</SortButton>
+                        <SortButton field="rebound50s" align="center">
+                          R50
+                        </SortButton>
                       </th>
                       <th className="border-b border-border px-3 py-3 text-center">
-                        <SortButton field="hitouts" align="center">HO</SortButton>
+                        <SortButton field="hitouts" align="center">
+                          HO
+                        </SortButton>
                       </th>
                     </>
                   )}
                   <th className="border-b border-border px-3 py-3 text-right">
-                    <SortButton field="totalValue" align="right">Value</SortButton>
+                    <SortButton field="totalValue" align="right">
+                      Value
+                    </SortButton>
                   </th>
                   {showAdvancedStats && !compact && (
                     <>
                       <th className="border-b border-border px-2 py-2 text-right">
-                        <SortButton field="superCoachScore" align="right">SC Score</SortButton>
+                        <SortButton field="superCoachScore" align="right">
+                          SC Score
+                        </SortButton>
                       </th>
                       <th className="border-b border-border px-2 py-2 text-right">
-                        <SortButton field="dreamTeamScore" align="right">DT Score</SortButton>
+                        <SortButton field="dreamTeamScore" align="right">
+                          DT Score
+                        </SortButton>
                       </th>
                       <th className="border-b border-border px-2 py-2 text-center">TOG%</th>
                     </>
                   )}
-                  {!compact && <th className="border-b border-border px-3 py-3 text-center">Actions</th>}
+                  {!compact && (
+                    <th className="border-b border-border px-3 py-3 text-center">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-background">
@@ -689,40 +730,66 @@ const MatchLogTable = ({
                         }
                       }}
                     >
-                      <td className="px-3 py-3 font-semibold text-foreground tabular-nums">{log.season ?? '—'}</td>
-                      <td className="px-3 py-3 font-semibold text-foreground tabular-nums">{formatRound(log.round)}</td>
+                      <td className="px-3 py-3 font-semibold text-foreground tabular-nums">
+                        {log.season ?? '—'}
+                      </td>
+                      <td className="px-3 py-3 font-semibold text-foreground tabular-nums">
+                        {formatRound(log.round)}
+                      </td>
                       <td className="px-3 py-3">
                         <OpponentCell opponent={log.opponent} />
                       </td>
                       <td className="px-3 py-3 text-sm text-muted-foreground">
                         <span className="block truncate">{formatVenue(log.venue)}</span>
                       </td>
-                      {!compact && <td className="px-3 py-3 text-center">{getResultBadge(log.result)}</td>}
-                      {!compact && <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.goals)}</td>}
-                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.disposals)}</td>
-                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.marks)}</td>
-                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.tackles)}</td>
-                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.clearances)}</td>
+                      {!compact && (
+                        <td className="px-3 py-3 text-center">{getResultBadge(log.result)}</td>
+                      )}
+                      {!compact && (
+                        <td className="px-3 py-3 text-center font-medium tabular-nums">
+                          {formatNumberCell(log.goals)}
+                        </td>
+                      )}
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">
+                        {formatNumberCell(log.disposals)}
+                      </td>
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">
+                        {formatNumberCell(log.marks)}
+                      </td>
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">
+                        {formatNumberCell(log.tackles)}
+                      </td>
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">
+                        {formatNumberCell(log.clearances)}
+                      </td>
                       {!compact && (
                         <>
-                          <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.inside50s)}</td>
-                          <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.rebound50s)}</td>
-                          <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.hitouts)}</td>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">
+                            {formatNumberCell(log.inside50s)}
+                          </td>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">
+                            {formatNumberCell(log.rebound50s)}
+                          </td>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">
+                            {formatNumberCell(log.hitouts)}
+                          </td>
                         </>
                       )}
                       <td
                         className={`px-3 py-3 text-right font-semibold tabular-nums ${
-                          stats
-                            ? getValueColor(log.totalValue, stats.avgStatlyValue)
-                            : ''
+                          stats ? getValueColor(log.totalValue, stats.avgStatlyValue) : ''
                         }`}
                       >
                         {typeof log.totalValue === 'number' ? log.totalValue.toFixed(2) : '-'}
                       </td>
                       {showAdvancedStats && !compact && (
                         <>
-                          <td className="px-3 py-3 text-right font-medium tabular-nums">{log.superCoachScore ?? '—'}</td>
-                          <td className="px-3 py-3 text-right font-medium tabular-nums">{log.dreamTeamScore ?? '—'}</td>
+                          <td className="px-3 py-3 text-right font-medium tabular-nums">
+                            {log.superCoachScore ?? '—'}
+                          </td>
+                          <td className="px-3 py-3 text-right font-medium tabular-nums">
+                            {log.dreamTeamScore ?? '—'}
+                          </td>
                           <td className="px-3 py-3 text-center font-medium tabular-nums">
                             {log.timeOnGround ? `${log.timeOnGround}%` : '-'}
                           </td>
@@ -757,7 +824,7 @@ const MatchLogTable = ({
               <button
                 type="button"
                 onClick={clearFilters}
-                className="mt-3 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-3 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Clear Filters
               </button>
@@ -783,63 +850,72 @@ const MatchLogTable = ({
             </button>
           }
         >
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 pt-4">
-              <div className="rounded-lg bg-muted p-3">
-                <div className="text-xs font-medium text-muted-foreground">Statly Value</div>
-                <div className="text-2xl font-semibold tabular-nums text-foreground">
-                  {typeof selectedMatch.totalValue === 'number'
-                    ? selectedMatch.totalValue.toFixed(2)
-                    : '-'}
-                </div>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <div className="text-xs font-medium text-muted-foreground">Goals</div>
-                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.goals ?? '-'}</div>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <div className="text-xs font-medium text-muted-foreground">Disposals</div>
-                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.disposals ?? '-'}</div>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <div className="text-xs font-medium text-muted-foreground">Marks</div>
-                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.marks ?? '-'}</div>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <div className="text-xs font-medium text-muted-foreground">Tackles</div>
-                <div className="text-2xl font-semibold tabular-nums text-foreground">{selectedMatch.tackles ?? '-'}</div>
-              </div>
-              <div className="rounded-lg bg-muted p-3">
-                <div className="text-xs font-medium text-muted-foreground">Result</div>
-                <div className="text-2xl font-semibold tabular-nums text-foreground">{getResultBadge(selectedMatch.result)}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 pt-4">
+            <div className="bg-muted p-3">
+              <div className="text-xs font-medium text-muted-foreground">Statly Value</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {typeof selectedMatch.totalValue === 'number'
+                  ? selectedMatch.totalValue.toFixed(2)
+                  : '-'}
               </div>
             </div>
-
-            {(selectedMatch.venue || selectedMatch.matchDate) && (
-              <div className="bg-muted rounded-lg p-4 mb-4">
-                <h4 className="font-semibold mb-2">Match Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                  {selectedMatch.venue && (
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-                      <span>Venue: {selectedMatch.venue}</span>
-                    </div>
-                  )}
-                  {!selectedMatch.venue && (
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-                      <span>Venue unavailable</span>
-                    </div>
-                  )}
-                  {selectedMatch.matchDate && (
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-                      <span>Date: {selectedMatch.matchDate}</span>
-                    </div>
-                  )}
-                </div>
+            <div className="bg-muted p-3">
+              <div className="text-xs font-medium text-muted-foreground">Goals</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {selectedMatch.goals ?? '-'}
               </div>
-            )}
+            </div>
+            <div className="bg-muted p-3">
+              <div className="text-xs font-medium text-muted-foreground">Disposals</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {selectedMatch.disposals ?? '-'}
+              </div>
+            </div>
+            <div className="bg-muted p-3">
+              <div className="text-xs font-medium text-muted-foreground">Marks</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {selectedMatch.marks ?? '-'}
+              </div>
+            </div>
+            <div className="bg-muted p-3">
+              <div className="text-xs font-medium text-muted-foreground">Tackles</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {selectedMatch.tackles ?? '-'}
+              </div>
+            </div>
+            <div className="bg-muted p-3">
+              <div className="text-xs font-medium text-muted-foreground">Result</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {getResultBadge(selectedMatch.result)}
+              </div>
+            </div>
+          </div>
 
+          {(selectedMatch.venue || selectedMatch.matchDate) && (
+            <div className="bg-muted p-4 mb-4">
+              <h4 className="font-semibold mb-2">Match Details</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                {selectedMatch.venue && (
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                    <span>Venue: {selectedMatch.venue}</span>
+                  </div>
+                )}
+                {!selectedMatch.venue && (
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                    <span>Venue unavailable</span>
+                  </div>
+                )}
+                {selectedMatch.matchDate && (
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                    <span>Date: {selectedMatch.matchDate}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </div>

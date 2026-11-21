@@ -277,7 +277,7 @@ export default function RealTimeMatchCenter({
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-white text-primary shadow-sm'
+                ? 'bg-warning text-warning-foreground'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >

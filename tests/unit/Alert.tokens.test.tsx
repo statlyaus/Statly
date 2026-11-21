@@ -36,6 +36,19 @@ describe('Alert', () => {
     }
   );
 
+  it.each([
+    ['info', 'ground-tint'],
+    ['warning', 'ground-sun'],
+    ['error', 'ground-white border-2 border-destructive'],
+    ['success', 'ground-white border border-border'],
+  ] as const)('sets a %s alert on its square ground (%s)', (type, ground) => {
+    render(<Alert type={type}>{type} message</Alert>);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass(...ground.split(' '));
+    expect(classesIn(alert).filter((name) => /^rounded-(?!cut)/.test(name))).toEqual([]);
+  });
+
   it('dismisses through the labelled button and reports it', async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
@@ -70,5 +83,7 @@ describe('Alert', () => {
     expect(alert).toHaveTextContent('Sign out failed');
     expect(alert).toHaveTextContent('Network down');
     expect(screen.getByRole('button', { name: 'Dismiss alert' })).toBeInTheDocument();
+    // A queued alert floats: the floating cut and the hard shadow.
+    expect(alert).toHaveClass('rounded-cut-float', 'shadow-hard');
   });
 });

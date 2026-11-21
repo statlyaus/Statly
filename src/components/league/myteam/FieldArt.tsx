@@ -88,7 +88,7 @@ export function FieldOval(): React.JSX.Element {
   return (
     <div
       aria-hidden="true"
-      className="absolute inset-0 overflow-hidden rounded-[50%] shadow-inner ring-4 ring-[#256328]"
+      className="absolute inset-0 overflow-hidden rounded-[50%] ring-4 ring-[#256328]"
       style={GRASS}
     >
       <div className="absolute inset-[3%] overflow-hidden rounded-[50%] border-2 border-white/85">

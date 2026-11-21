@@ -7,7 +7,7 @@ import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fant
 
 function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-5 text-card-foreground">
+    <section className="space-y-3 border border-border bg-card p-5 text-card-foreground">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <div className="space-y-3 text-sm leading-6 text-muted-foreground">{children}</div>
     </section>

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useNotification, NotificationToast } from '@/hooks/useNotification';
-import { buttonStyles } from '@/components/ui/controlStyles';
+import { alertStyles, buttonStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 import { toSafeRedirect } from '@/lib/safeRedirect';
 import {
@@ -411,7 +411,7 @@ const AuthForm = ({
     return (
       <section
         aria-labelledby="auth-signed-in-heading"
-        className={`rounded-lg border border-border bg-background p-5 ${className}`}
+        className={`border border-border bg-background p-5 ${className}`}
       >
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-bar text-brand-bar-foreground">
@@ -498,9 +498,9 @@ const AuthForm = ({
                 type="email"
                 autoComplete="email"
                 placeholder="Enter your email address"
-                className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
+                className={`block w-full pl-10 pr-10 py-3 border rounded-md placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showEmailError
-                    ? 'border-destructive/50 bg-destructive/5 text-destructive'
+                    ? 'border-destructive bg-field text-field-foreground'
                     : 'border-input bg-background text-foreground'
                 }`}
                 value={email}
@@ -539,9 +539,9 @@ const AuthForm = ({
                 type={showPassword ? 'text' : 'password'}
                 autoComplete={isSignup ? 'new-password' : 'current-password'}
                 placeholder="Enter your password"
-                className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
+                className={`block w-full pl-10 pr-10 py-3 border rounded-md placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                   showPasswordError
-                    ? 'border-destructive/50 bg-destructive/5 text-destructive'
+                    ? 'border-destructive bg-field text-field-foreground'
                     : 'border-input bg-background text-foreground'
                 }`}
                 value={password}
@@ -586,9 +586,9 @@ const AuthForm = ({
                     {getPasswordStrengthLabel(getPasswordStrength(password)).label}
                   </span>
                 </div>
-                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-muted h-2 overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${
+                    className={`h-full transition-all duration-500 ${
                       getPasswordStrength(password) < 25
                         ? 'bg-destructive'
                         : getPasswordStrength(password) < 50
@@ -638,9 +638,9 @@ const AuthForm = ({
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   placeholder="Confirm your password"
-                  className={`block w-full pl-10 pr-10 py-3 border rounded-md shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
+                  className={`block w-full pl-10 pr-10 py-3 border rounded-md placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 ${
                     confirmPassword && password !== confirmPassword
-                      ? 'border-destructive/50 bg-destructive/5 text-destructive'
+                      ? 'border-destructive bg-field text-field-foreground'
                       : 'border-input bg-background text-foreground'
                   }`}
                   value={confirmPassword}
@@ -677,10 +677,10 @@ const AuthForm = ({
               role="alert"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-destructive/5 border border-destructive/50 rounded-md p-4 flex items-center gap-3"
+              className={`flex items-center gap-3 p-4 ${alertStyles({ tone: 'error' })}`}
             >
               <ExclamationTriangleIcon className="w-5 h-5 text-destructive flex-shrink-0" />
-              <span className="text-sm text-destructive font-medium">{error}</span>
+              <span className="text-sm font-medium">{error}</span>
             </motion.div>
           )}
 
@@ -735,7 +735,7 @@ const AuthForm = ({
                 </>
               ) : (
                 <>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" data-provider-logo>
                     <path
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                       fill="#4285F4"
@@ -772,7 +772,7 @@ const AuthForm = ({
                 </>
               ) : (
                 <>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2" data-provider-logo>
                     <path d="M22.675 0h-21.35C.596 0 0 .593 0 1.326v21.348C0 23.406.596 24 1.325 24h11.495v-9.294H9.69V11.01h3.13V8.414c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.098 2.795.142v3.24l-1.918.001c-1.504 0-1.796.715-1.796 1.764v2.314h3.588l-.467 3.696h-3.12V24h6.116C23.404 24 24 23.406 24 22.674V1.326C24 .593 23.404 0 22.675 0z" />
                   </svg>
                   <span>Continue with Facebook</span>

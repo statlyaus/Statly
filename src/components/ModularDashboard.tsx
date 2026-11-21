@@ -358,7 +358,7 @@ function TeamCard({ league, now }: { league: ManagerHomeLeague; now: Date }) {
 
   return (
     <article
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className="overflow-hidden border border-border bg-card"
       aria-labelledby={`team-${league.leagueId}`}
     >
       <header className="flex items-center gap-3 px-4 py-3 sm:px-5">
@@ -439,10 +439,7 @@ function RailSection({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      aria-labelledby={id}
-      className="overflow-hidden rounded-lg border border-border bg-card"
-    >
+    <section aria-labelledby={id} className="overflow-hidden border border-border bg-card">
       <h2
         id={id}
         className="flex items-baseline justify-between border-b border-border px-4 py-3 font-display text-lg font-bold text-foreground"
@@ -645,7 +642,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
         {state.kind === 'error' ? (
           <div
             role="alert"
-            className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-4"
+            className="flex flex-wrap items-center gap-3 border border-border bg-card px-4 py-4"
           >
             <p className="text-sm text-foreground">{state.message}</p>
             <button
@@ -661,7 +658,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
         {state.kind === 'ready' && leagues.length === 0 ? (
           <section
             aria-labelledby="no-leagues-heading"
-            className="rounded-lg border border-border bg-card px-4 py-6"
+            className="border border-border bg-card px-4 py-6"
           >
             <h2 id="no-leagues-heading" className="font-semibold text-foreground">
               You are not in a league yet

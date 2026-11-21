@@ -50,7 +50,7 @@ export function FinalsChance({ finals }: { finals: StandingsTeam['finals'] }): R
   return (
     <span className="flex flex-col items-end gap-1">
       <span
-        className={`font-display text-base font-bold leading-none tabular-nums ${
+        className={`font-sans text-base font-bold leading-none tabular-nums ${
           finals.status === 'CLINCHED'
             ? 'text-primary'
             : finals.status === 'OUT'
@@ -60,12 +60,9 @@ export function FinalsChance({ finals }: { finals: StandingsTeam['finals'] }): R
       >
         {formatChance(finals)}
       </span>
-      <span
-        aria-hidden="true"
-        className="h-1.5 w-full max-w-16 overflow-hidden rounded-full bg-muted"
-      >
+      <span aria-hidden="true" className="h-1.5 w-full max-w-16 overflow-hidden bg-muted">
         <span
-          className="block h-full rounded-full bg-primary"
+          className="block h-full bg-primary"
           style={{ width: `${Math.round(finals.chance * 100)}%` }}
         />
       </span>

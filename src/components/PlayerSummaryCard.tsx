@@ -6,6 +6,7 @@ import React from 'react';
 import { getTeamLogo } from '@/lib/teamLogos';
 import { capitalizeWords } from '@/lib/utils';
 import type { Player } from '../types/players';
+import { badgeStyles } from '@/components/ui/controlStyles';
 
 type Props = {
   player: Player;
@@ -37,11 +38,11 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
   const teamLogo = getTeamLogo(team || '');
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-      <div className="bg-foreground px-5 py-6 text-background sm:px-7">
+    <section className="overflow-hidden border border-border bg-card">
+      <div className="ground-ink px-5 py-6 sm:px-7">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="flex min-w-0 gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-background/15 bg-background p-2 shadow-sm">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-border bg-card p-2">
               <Image
                 src={teamLogo}
                 alt={`${team || 'AFL'} logo`}
@@ -53,25 +54,19 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
               />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-background/70">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Player profile
               </p>
               <h1 className="mt-2 break-words text-3xl font-bold leading-tight sm:text-4xl">
                 {displayName}
               </h1>
               <div className="mt-4 flex flex-wrap gap-2">
-                {team && (
-                  <span className="rounded-full border border-background/20 bg-background/10 px-3 py-1 text-sm font-medium text-background">
-                    {team}
-                  </span>
-                )}
+                {team && <span className={badgeStyles({ size: 'md', caps: false })}>{team}</span>}
                 {position && (
-                  <span className="rounded-full border border-background/20 bg-background/10 px-3 py-1 text-sm font-medium text-background">
-                    {position}
-                  </span>
+                  <span className={badgeStyles({ size: 'md', caps: false })}>{position}</span>
                 )}
                 {injury && (
-                  <span className="rounded-full border border-destructive/20 bg-destructive/15 px-3 py-1 text-sm font-semibold text-background">
+                  <span className={badgeStyles({ tone: 'warning', size: 'md', caps: false })}>
                     Injured
                   </span>
                 )}
@@ -80,14 +75,14 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
           </div>
 
           <div className="grid min-w-0 grid-cols-2 gap-3 sm:min-w-56">
-            <div className="rounded-lg border border-background/15 bg-background/10 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-background/70">
+            <div className="border border-border p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Games
               </div>
               <div className="mt-1 text-3xl font-bold">{games ?? '-'}</div>
             </div>
-            <div className="rounded-lg border border-background/15 bg-background/10 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-background/70">
+            <div className="border border-border p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Position
               </div>
               <div className="mt-1 text-2xl font-bold">{displayPosition}</div>

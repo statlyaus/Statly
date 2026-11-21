@@ -11,43 +11,23 @@ import {
 } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { alertStyles, buttonStyles } from './controlStyles';
+
 type AlertType = 'success' | 'error' | 'warning' | 'info';
 
-// Colours come from the design tokens in src/index.css. The card underneath keeps the tint opaque
-// when an alert floats over the page in the AlertContainer.
+// Each type is a ground from alertStyles (style guide, "Alerts"); a warning is a deadline on sun.
 const ALERT_TONES: Record<
   AlertType,
   {
     icon: React.ComponentType<{ className?: string }>;
-    border: string;
-    surface: string;
+    tone: 'success' | 'error' | 'deadline' | 'info';
     iconClasses: string;
   }
 > = {
-  success: {
-    icon: CheckCircleIcon,
-    border: 'border-success/30',
-    surface: 'bg-success/5',
-    iconClasses: 'text-success',
-  },
-  error: {
-    icon: XCircleIcon,
-    border: 'border-destructive/30',
-    surface: 'bg-destructive/10',
-    iconClasses: 'text-destructive',
-  },
-  warning: {
-    icon: ExclamationTriangleIcon,
-    border: 'border-warning/35',
-    surface: 'bg-warning/10',
-    iconClasses: 'text-warning-text',
-  },
-  info: {
-    icon: InformationCircleIcon,
-    border: 'border-border',
-    surface: 'bg-accent',
-    iconClasses: 'text-accent-foreground',
-  },
+  success: { icon: CheckCircleIcon, tone: 'success', iconClasses: 'text-success' },
+  error: { icon: XCircleIcon, tone: 'error', iconClasses: 'text-destructive' },
+  warning: { icon: ExclamationTriangleIcon, tone: 'deadline', iconClasses: 'text-foreground' },
+  info: { icon: InformationCircleIcon, tone: 'info', iconClasses: 'text-foreground' },
 };
 
 interface AlertProps {
@@ -59,6 +39,8 @@ interface AlertProps {
   className?: string;
   actions?: ReactNode;
   autoHideDuration?: number;
+  /** Set by AlertContainer: a queued alert floats, so it takes the floating cut and hard . */
+  floating?: boolean;
 }
 
 export default function Alert({
@@ -70,6 +52,7 @@ export default function Alert({
   className = '',
   actions,
   autoHideDuration,
+  floating = false,
 }: AlertProps) {
   const [isVisible, setIsVisible] = React.useState(true);
 
@@ -101,36 +84,36 @@ export default function Alert({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -10, scale: 0.95 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className={`relative overflow-hidden rounded-lg border bg-card text-foreground ${tone.border} ${className}`}
+          className={`relative flex items-start gap-3 p-4 text-sm ${alertStyles({ tone: tone.tone })} ${
+            floating ? 'rounded-cut-float shadow-hard' : ''
+          } ${className}`}
           role="alert"
           aria-live="polite"
         >
-          <div className={`flex items-start p-4 ${tone.surface}`}>
-            <div className="flex-shrink-0">
-              <Icon className={`w-5 h-5 ${tone.iconClasses}`} />
-            </div>
-
-            <div className="ml-3 flex-1 min-w-0">
-              {title && <h3 className="text-sm font-medium mb-1">{title}</h3>}
-
-              {children && <div className="text-sm">{children}</div>}
-
-              {actions && <div className="mt-4">{actions}</div>}
-            </div>
-
-            {dismissible && (
-              <div className="flex-shrink-0 ml-4">
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  className="inline-flex rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Dismiss alert"
-                >
-                  <XMarkIcon className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+          <div className="flex-shrink-0">
+            <Icon className={`w-5 h-5 ${tone.iconClasses}`} />
           </div>
+
+          <div className="flex-1 min-w-0">
+            {title && <h3 className="text-sm font-semibold mb-1">{title}</h3>}
+
+            {children && <div className="text-sm">{children}</div>}
+
+            {actions && <div className="mt-4">{actions}</div>}
+          </div>
+
+          {dismissible && (
+            <div className="flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleDismiss}
+                className={buttonStyles({ variant: 'ghost', size: 'xs' })}
+                aria-label="Dismiss alert"
+              >
+                <XMarkIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
@@ -235,6 +218,7 @@ export function AlertContainer({ alerts, onRemove }: AlertContainerProps) {
               title={alert.title}
               dismissible={alert.dismissible}
               autoHideDuration={alert.autoHideDuration}
+              floating
               onDismiss={() => onRemove(alert.id)}
             >
               {alert.message}

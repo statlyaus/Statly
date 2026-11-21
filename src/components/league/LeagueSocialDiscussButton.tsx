@@ -4,6 +4,7 @@ import { MessageCircle } from 'lucide-react';
 
 import { useLeagueSocialWidget } from '@/components/league/social/LeagueSocialWidgetProvider';
 import type { SocialDiscussionContext } from '@/types/social';
+import { buttonStyles } from '@/components/ui/controlStyles';
 
 interface LeagueSocialDiscussButtonProps {
   context: SocialDiscussionContext;
@@ -36,7 +37,7 @@ export function LeagueSocialDiscussButton({
       }}
       title={unavailable ? 'Select a league before starting a discussion' : undefined}
       aria-label={`${label}: ${context.title}`}
-      className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`${buttonStyles({ variant: 'outline', size: 'xs' })} ${className}`}
     >
       <MessageCircle className="size-4" aria-hidden="true" />
       {label}

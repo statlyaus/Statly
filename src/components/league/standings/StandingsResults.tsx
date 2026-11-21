@@ -33,14 +33,14 @@ export function StandingsResults({
 
   if (data.rounds.length === 0) {
     return (
-      <p className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+      <p className="border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
         Results appear once the fixture is published.
       </p>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="overflow-hidden border border-border bg-card">
       <p
         aria-live="polite"
         className="min-h-10 border-b border-border px-4 py-2.5 text-sm text-foreground first-letter:uppercase"
