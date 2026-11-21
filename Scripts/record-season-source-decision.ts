@@ -7,6 +7,7 @@ import {
   LocalExternalCaptureError,
   loadRecordedLocalCaptureAuthority,
   localExternalCaptureDecisionKey,
+  localExternalCaptureParserVersion,
   type LocalExternalCaptureCapability,
 } from '../src/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
 import {
@@ -35,7 +36,10 @@ import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
  * Usage:
  *   npm run outcomes:sources:record-season-decision -- --capability <id> --season <year> \
  *     --from-season <year> --approval-artifact <artifact:...> --decided-at <iso> \
- *     --revalidate-at <iso> [--apply]
+ *     --revalidate-at <iso> [--parser-version <name>/v<n>] [--apply]
+ *
+ * `--parser-version` records the runner's parser for `--season` when it differs from the
+ * predecessor's (for example `draftguru-national-year-page/v7` for 2026); any other value is refused.
  */
 
 const VALUE_OPTIONS = new Set([
@@ -45,6 +49,7 @@ const VALUE_OPTIONS = new Set([
   '--approval-artifact',
   '--decided-at',
   '--revalidate-at',
+  '--parser-version',
 ]);
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -60,6 +65,8 @@ export interface SeasonSourceDecisionArguments {
   approvalArtifactId: string;
   decidedAt: string;
   revalidateAt: string;
+  /** The runner's parser for `season`, when it differs from the predecessor's. */
+  parserVersion?: string;
   apply: boolean;
 }
 
@@ -103,6 +110,10 @@ export function parseSeasonSourceDecisionArguments(
   if (approvalArtifactId === undefined || !/^artifact:[0-9a-f]{64}$/u.test(approvalArtifactId)) {
     usage('--approval-artifact must be the stored approval record artifact ID.');
   }
+  const parserVersion = values.get('--parser-version');
+  if (parserVersion !== undefined && !/^[a-z0-9-]+\/v[1-9]\d*$/u.test(parserVersion)) {
+    usage('--parser-version must be a parser version such as draftguru-national-year-page/v7.');
+  }
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),
     capabilityId,
@@ -111,6 +122,7 @@ export function parseSeasonSourceDecisionArguments(
     approvalArtifactId,
     decidedAt: instant('--decided-at'),
     revalidateAt: instant('--revalidate-at'),
+    ...(parserVersion === undefined ? {} : { parserVersion }),
     apply,
   };
 }
@@ -122,6 +134,7 @@ export type SeasonSourceDecisionOutcome =
         | 'REVALIDATE_NOT_FUTURE'
         | 'DECISION_KEY_EXISTS'
         | 'PREDECESSOR_UNAVAILABLE'
+        | 'PARSER_NOT_RUNNER'
         | 'DERIVATION_REFUSED'
         | 'INVALID_APPEND'
         | 'RUNNER_WOULD_REFUSE'
@@ -200,6 +213,21 @@ export async function recordSeasonSourceDecision(
   if (predecessorDecision === undefined) {
     return refused('PREDECESSOR_UNAVAILABLE', new Error('The Gate ledger changed while loading.'));
   }
+  // The parser is the runner's for --season: named with --parser-version, or else the predecessor's.
+  const runnerParser = localExternalCaptureParserVersion(parsed.capabilityId, parsed.season);
+  const { acquisition } = predecessor.authority.sourceRights.content;
+  const parserVersion =
+    parsed.parserVersion ?? ('clientVersion' in acquisition ? acquisition.clientVersion : null);
+  if (parserVersion !== runnerParser) {
+    return refused(
+      'PARSER_NOT_RUNNER',
+      new Error(
+        parsed.parserVersion === undefined
+          ? `The runner reads ${parsed.season} at ${runnerParser}, not the predecessor's ${parserVersion ?? 'parser'}; pass --parser-version ${runnerParser}.`
+          : `--parser-version must be ${runnerParser}, the parser the runner reads ${parsed.season} at.`
+      )
+    );
+  }
   let derived: ReturnType<typeof deriveSeasonSourceDecision>;
   try {
     derived = deriveSeasonSourceDecision({
@@ -209,6 +237,7 @@ export async function recordSeasonSourceDecision(
       approvalArtifactId: parsed.approvalArtifactId,
       decidedAt: parsed.decidedAt,
       revalidateAt: parsed.revalidateAt,
+      parserVersion: runnerParser,
     });
   } catch (error) {
     return refused('DERIVATION_REFUSED', error);

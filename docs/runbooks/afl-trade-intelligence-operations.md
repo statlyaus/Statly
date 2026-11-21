@@ -1139,7 +1139,8 @@ Store every approval record first (see "Storing evidence before it is cited") an
 AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
   npm run outcomes:sources:record-season-decision -- \
   --capability draftguru-trade-detail --season 2026 --from-season 2025 \
-  --approval-artifact <artifact:...> --decided-at <iso> --revalidate-at <iso> [--apply]
+  --approval-artifact <artifact:...> --decided-at <iso> --revalidate-at <iso> \
+  [--parser-version <name>/v<n>] [--apply]
 ```
 
 The command loads the effective decision the runner reads for `--from-season`
@@ -1159,8 +1160,16 @@ It never records a successor and refuses a key that already has a decision. It a
   0253 refuses the write otherwise). The predecessor's own evidence is checked too.
 
 With `--apply` it writes the rights, proposal and decision in one Gate ledger batch. It then loads
-the authority the runner reads for `--season` and fails if that is not the recorded decision. A
-season whose runner parser differs from the predecessor's needs a reviewed proposal instead.
+the authority the runner reads for `--season` and fails if that is not the recorded decision.
+
+A season whose runner parser differs from the predecessor's (`draftguru-national-year-page/v7` for
+2026, derived from the 2019 `-parser-v3` decision) is refused as `PARSER_NOT_RUNNER` unless
+`--parser-version` names exactly the runner's parser for `--season`; any other value is refused the
+same way. With it, the rights record that parser as `clientVersion`, and the predecessor's parser is
+rewritten in the rights and proposal text, both in full (`draftguru-national-year-page/v3`) and as
+`parser v3`. Ids and keys such as a `registerId` ending `-parser-v3` stay as recorded. The decision's
+rationale names both parsers. Read the dry run's proposal text before `--apply`: the rewrite changes
+the parser's name only, so a sentence describing what the old parser reads stays as written.
 
 #### Recording reviewer and promoter grants
 
@@ -1288,7 +1297,20 @@ Prerequisites:
      `draftguru-national-year-page/v6` (owner 2026-10-20, "Yes, read them"), decisions `-parser-v6`: v5 plus
      the numbered `Pre-Season` and `Rookie` rows as `pre_season` and `rookie` selections without an access
      category, career origins for veterans listed before 2011 outside the national draft. `Pre-Draft` rows
-     carry no number and stay dropped. The v5 decisions and captures stay recorded; and
+     carry no number and stay dropped. The v5 decisions and captures stay recorded. The 2026 page
+     alone is read by `draftguru-national-year-page/v7` (owner 2026-11-21, "Yes, same as 2011-2016"),
+     decision `draftguru-national-year-page-issue579-private-2026-parser-v7`: v3 plus one form,
+     `Academy(<club>)` or `Academy (NG)(<club>)` with no annotation naming another club, read as
+     `open` as v4 reads it (pick 6 on the 2026 page, `Academy(Greater Western Sydney)`). The named
+     club must also differ from the selecting club's Draftguru club id, because the club cell writes
+     `GWS` while the tag writes `Greater Western Sydney`: a GWS selection tagged that way stays an
+     `unsupported_row` issue rather than reading as `open`. Any other annotation stays an issue, and
+     v7 refuses any page year but 2026. Record the decision with
+     `outcomes:sources:record-season-decision -- --capability draftguru-national-year-page
+--season 2026 --from-season 2019 --parser-version draftguru-national-year-page/v7` (see
+     "Recording a season's source decision"), then recapture the page. The 2026 `-parser-v3`
+     decision of 2026-11-21 and its capture (`source-capture:16194feb…`, one issue) stay recorded;
+     and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the
@@ -1361,7 +1383,8 @@ Prerequisites:
      `draftBoardBidMatches`: on an earlier one the candidate is refused as unconserved.
 2. The recorded source rights name the reviewed parser (`draftguru-trade-index-parser/v1`,
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
-   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v6`, earlier `/v5`),
+   `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v6`, earlier `/v5`;
+   2026: `draftguru-national-year-page/v7`),
    `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
@@ -1533,7 +1556,7 @@ change of its own.
 
 Capture Draftguru national-draft selections for 2022 to 2024. Each `--season` is the exact page
 `https://www.draftguru.com.au/years/<season>`, parsed by the national-only parser
-(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v6 for the 2000 to 2010 pages, which also emits their pre-season and rookie rows), which keeps national selections and counts every other pathway
+(`draftguru-national-year-page/v3`; v4 for the 2011 to 2016 pages, v6 for the 2000 to 2010 pages, which also emits their pre-season and rookie rows, v7 for the 2026 page), which keeps national selections and counts every other pathway
 as excluded, and records each selection's access category from the page's category cell. An
 unreviewed category is an `unsupported_row` issue. It is never the general `draftguru-event-year` year-page parser:
 

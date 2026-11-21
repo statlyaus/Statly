@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+
 import {
   createDraftguruTradeAuthorityProposal,
   draftguruTradeDecisionKey,
@@ -11,7 +13,11 @@ import {
 } from '@/server/aflTradeIntelligence/development/localSeasonSourceDecision';
 import { validateAflTradeGateDecisionLedger } from '@/server/aflTradeIntelligence/governance/gateDecisionLedger';
 import { DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/draftguruSourceAdapter';
-import { approveNarrowAuthority } from '../testUtils/localNarrowCaptureAuthorityFixture';
+import { draftguruNationalYearDecisionKey } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
+import {
+  approveNarrowAuthority,
+  draftguruNationalYearAuthority,
+} from '../testUtils/localNarrowCaptureAuthorityFixture';
 
 const digest = (character: string) => character.repeat(64);
 const approvalArtifactId = `artifact:${digest('9')}`;
@@ -135,5 +141,95 @@ describe('deriveSeasonSourceDecision', () => {
 
   it('refuses a season the predecessor already covers', () => {
     expect(() => derive({ season: 2020 })).toThrow('already covers 2020');
+  });
+});
+
+describe('deriveSeasonSourceDecision with a parser change', () => {
+  const V3 = 'draftguru-national-year-page/v3';
+  const V7 = 'draftguru-national-year-page/v7';
+  // A 2019 year-page decision worded like the recorded one: the parser named in full and as `parser v3`.
+  function yearPagePredecessor(clientVersion = V3) {
+    const authority = draftguruNationalYearAuthority({
+      season: 2019,
+      clientVersion,
+      evidenceIds: {
+        productOwnerAuthorization: `artifact:${digest('1')}`,
+        boundedCapturePlan: `artifact:${digest('2')}`,
+        publicAccessReview: `artifact:${digest('3')}`,
+        fieldBoundaryReview: `artifact:${digest('4')}`,
+      },
+      timing: {
+        termsEffectiveAt: '2026-09-10T00:00:00.000Z',
+        termsExpireAt: '2027-09-09T00:00:00.000Z',
+        rightsProposedAt: '2026-09-24T00:00:00.000Z',
+        proposalProposedAt: '2026-09-24T00:00:01.000Z',
+      },
+    });
+    const content = {
+      ...authority.proposal.content,
+      scope: {
+        ...authority.proposal.content.scope,
+        description: 'Exact private 2019 national draft source review at parser v3.',
+      },
+      proposal: `Approve the 2019 scope at parser ${V3}; Parser v3 reads the club-qualified forms, not parser v30 or parser v3.1.`,
+    };
+    const proposal = {
+      proposalId: createAflTradeContentAddress('gate-proposal', content),
+      content,
+    };
+    return {
+      ...authority,
+      proposal,
+      decision: approveNarrowAuthority(
+        { ...authority, proposal },
+        { decidedAt: '2026-09-25T00:00:00.000Z', revalidateAt: '2027-03-25T00:00:00.000Z' }
+      ),
+    };
+  }
+  const deriveYearPage = (predecessorRecords = yearPagePredecessor(), parserVersion = V7) =>
+    deriveSeasonSourceDecision({
+      predecessor: predecessorRecords,
+      decisionKey: draftguruNationalYearDecisionKey(2026),
+      season: 2026,
+      approvalArtifactId,
+      decidedAt: '2026-11-21T00:00:00.000Z',
+      revalidateAt: '2027-05-21T00:00:00.000Z',
+      parserVersion,
+    });
+
+  it('records the new parser in the rights and rewrites it in the proposal', () => {
+    const before = yearPagePredecessor();
+    const { sourceRights, proposal, decision } = deriveYearPage(before);
+
+    expect(proposal.content.decisionKey).toBe(
+      'draftguru-national-year-page-issue579-private-2026-parser-v7'
+    );
+    expect(sourceRights.content.acquisition).toEqual({
+      ...before.sourceRights.content.acquisition,
+      clientVersion: V7,
+    });
+    expect(proposal.content.scope.description).toBe(
+      'Exact private 2026 national draft source review at parser v7.'
+    );
+    expect(proposal.content.proposal).toBe(
+      `Approve the 2026 scope at parser ${V7}; Parser v7 reads the club-qualified forms, not parser v30 or parser v3.1.`
+    );
+    expect(JSON.stringify(sourceRights.content)).not.toContain(V3);
+    // The register id is the reviewed terms' id and stays as recorded.
+    expect(sourceRights.content.registerId).toBe(before.sourceRights.content.registerId);
+    expect(decision.content.rationale).toContain(`at parser ${V7} (the predecessor's was ${V3})`);
+  });
+
+  it('keeps the predecessor parser when the runner reads the same one', () => {
+    const before = yearPagePredecessor(V7);
+    const { sourceRights, decision } = deriveYearPage(before);
+    expect(sourceRights.content.acquisition).toEqual(before.sourceRights.content.acquisition);
+    expect(decision.content.rationale).not.toContain('at parser');
+  });
+
+  it('refuses to replace a parser that is not a versioned name', () => {
+    expect(() => deriveYearPage(yearPagePredecessor('Statly client 1'))).toThrow(
+      /Only a <name>\/v<n> parser can be replaced/
+    );
   });
 });

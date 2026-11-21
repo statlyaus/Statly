@@ -113,6 +113,20 @@ export const DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_SEASONS: readonly number[] = [
  */
 export const DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION = 'draftguru-national-year-page/v6';
 
+/**
+ * v7 reads the 2026 page only (owner decision 2026-11-21: "Yes, same as 2011-2016"). On top of v3 it
+ * reviews one form: `Academy(<club>)` or `Academy (NG)(<club>)` with no annotation, naming a club other
+ * than the selecting club, read as `open` (the selecting club used an ordinary pick, as v4 reads it on
+ * the 2011 to 2016 pages). The named club must also differ from the selecting club's Draftguru club id,
+ * because the club cell can spell a club differently (`GWS` for Greater Western Sydney); a match there
+ * stays unreviewed. On a page with only the v3 forms it emits exactly what v3 emits.
+ */
+export const DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION =
+  'draftguru-national-year-page/v7';
+
+/** The page years parser v7 is reviewed for. */
+export const DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_SEASONS: readonly number[] = [2026];
+
 /** Reconciliation counts `accessCategory` as access coverage only on evidence captured at these versions. */
 export function isDraftguruNationalYearAccessParserVersion(parserVersion: string): boolean {
   return (
@@ -120,7 +134,8 @@ export function isDraftguruNationalYearAccessParserVersion(parserVersion: string
     parserVersion === DRAFTGURU_NATIONAL_YEAR_QUALIFIED_ACCESS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_LEGACY_FORMS_PARSER_VERSION ||
     parserVersion === DRAFTGURU_NATIONAL_YEAR_EARLY_FORMS_PARSER_VERSION ||
-    parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_LISTINGS_PARSER_VERSION ||
+    parserVersion === DRAFTGURU_NATIONAL_YEAR_OTHER_CLUB_ACADEMY_PARSER_VERSION
   );
 }
 
