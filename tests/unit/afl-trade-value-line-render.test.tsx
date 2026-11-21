@@ -46,8 +46,10 @@ function net(clubName: string, nets: readonly number[], pendingAt: number[] = []
 const story = (nets: AflTradeStoryTradeNet[]) =>
   ({ trade: { id: 'trade:test' }, nets: { tradeAlone: nets } }) as unknown as AflTradeStory;
 
+// The two sides of a two-club trade (`--primary`, `--foreground`) stay named, so the snapshot tells
+// cobalt from ink.
 const normalise = (markup: string) =>
-  markup.replace(/var\(--(?!vl\))[a-z0-9-]+\)/gu, 'var(--token)').replace(/ class="[^"]*"/gu, '');
+  markup.replace(/var\(--(?!(?:vl|primary|foreground)\))[a-z0-9-]+\)/gu, 'var(--token)').replace(/ class="[^"]*"/gu, '');
 
 const render = (nets: AflTradeStoryTradeNet[]) =>
   normalise(renderToStaticMarkup(<TradeValueLine story={story(nets)} />));

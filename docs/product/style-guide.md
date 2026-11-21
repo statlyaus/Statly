@@ -96,8 +96,9 @@ A card inside a cobalt, ink or sun ground carries `.ground-white`.
 The public trade pages and the front page sit on the paper surface mode (`data-surface="paper"`,
 done 2026-11-20): a warm page `#fbfaf7` (`--brand-paper`) with quiet panels `#f1efe8`
 (`--brand-paper-deep`). It redefines only `--background` and `--muted`; ink, secondary text, cobalt,
-white cards, the hairline and focus keep their root values. Every net figure on those pages is ink
-until the trade sides land. The story collage inside it keeps its own grounds.
+white cards, the hairline and focus keep their root values. Every net figure on those pages is ink.
+A two-club value line draws its sides cobalt (the club first by name) and ink, never by who leads;
+a trade of three or four clubs keeps guernsey lines (owner, 2026-11-20; done 2026-11-21). The story collage inside it keeps its own grounds.
 
 - On cobalt and ink, the primary action is sun with ink text; marks are white on cobalt and sun on
   ink.
@@ -159,7 +160,7 @@ Every pair below must hold on every ground and surface mode.
 | Results                 | Win solid, loss outlined, draw stone, always with W, L or D            | Done 2026-11-20: `resultTone` in `controlStyles.ts`; errors and success never use result tokens |
 | Live                    | `--status-live` red, always with the word "Live", never a result token | Exists                                                                                          |
 | Provisional             | Tint, always with the word "Provisional"                               | Target, phase 3                                                                                 |
-| Trade sides             | Cobalt and ink, never good/bad colours                                 | Fantasy trade centre done 2026-11-20; public trade pages target, phase 3                        |
+| Trade sides             | Cobalt and ink, never good/bad colours                                 | Fantasy trade centre 2026-11-20; public two-club value line 2026-11-21                          |
 | Selection               | Sun with ink text; ink with white text on a sun ground                 | Done                                                                                            |
 
 A trade has two sides, not a good side and a bad side: trade charts never use green and red.

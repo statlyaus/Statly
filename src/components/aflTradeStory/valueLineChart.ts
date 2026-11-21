@@ -56,6 +56,22 @@ function channels(hex: string): number[] {
   return [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
 }
 
+/**
+ * The two sides of a two-club trade (style guide, "Two sides"): cobalt for the club first by name,
+ * ink for the other, never by who leads. Trades of three or four clubs keep their guernsey lines
+ * (owner, 2026-11-20).
+ */
+export const SIDE_STROKES = ['var(--primary)', 'var(--foreground)'] as const;
+
+/** Each club's side stroke on a two-club trade, else null. */
+export function sideStrokes(
+  nets: readonly AflTradeStoryTradeNet[]
+): ReadonlyMap<string, string> | null {
+  if (nets.length !== 2) return null;
+  const byName = [...nets].sort((left, right) => left.clubName.localeCompare(right.clubName, 'en'));
+  return new Map(byName.map((net, at) => [net.clubId, SIDE_STROKES[at]!]));
+}
+
 /** Two strokes a reader could mistake for each other. */
 const alike = (left: string, right: string) =>
   Math.hypot(...channels(left).map((value, at) => value - channels(right)[at]!)) < 80;
@@ -159,13 +175,16 @@ export function valueLineChart(
   }
   const xLabels = kept.sort((l, r) => l.x - r.x).map(({ x, label }) => ({ x, label }));
 
+  const sides = sideStrokes(nets);
   const strokes: string[] = [];
   let dashes = 0;
   const series = nets.map((net): ValueLineSeries => {
-    const stroke = lineStroke(net.clubName);
-    const dash = strokes.some((other) => alike(other, stroke))
-      ? DASHES[dashes++ % DASHES.length]!
-      : null;
+    const side = sides?.get(net.clubId);
+    const stroke = side ?? lineStroke(net.clubName);
+    const dash =
+      !side && strokes.some((other) => alike(other, stroke))
+        ? DASHES[dashes++ % DASHES.length]!
+        : null;
     strokes.push(stroke);
     const points = net.line.map((point, at) => ({
       x: xs[at]!,
