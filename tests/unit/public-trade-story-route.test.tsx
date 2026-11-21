@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAflTradeStoryBundleSource } from '@/server/aflTradeIntelligence/development/tradeStoryBundle';
@@ -210,11 +210,27 @@ describe('public trade pages', () => {
     });
   });
 
-  it('explains the method, what is not final, and credits each source', () => {
+  it('walks through the method step by step, says what is not final, and credits each source', () => {
     render(TradeMethodPage());
-    for (const name of ['HPN Footy', 'AFL Tables', 'Footywire and the AFL', 'Footyinfo'])
-      expect(screen.getByText(name)).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'What is not final' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'How Statly values trades' })
+    ).toBeVisible();
+    const references = screen.getByRole('list', { name: 'References' });
+    for (const name of [
+      /^HPN/u,
+      /^AFL Tables/u,
+      /^Footywire and the AFL/u,
+      /^Draftguru/u,
+      /^Footyinfo/u,
+    ])
+      expect(within(references).getByText(name)).toBeVisible();
+    // Every step is reachable, and the trade steps say what is not final and what PAV misses.
+    const next = () => screen.getByRole('button', { name: /^Next/u });
+    for (let i = 0; i < 16; i += 1) fireEvent.click(next());
+    expect(screen.getByRole('heading', { level: 2, name: "What isn't final yet" })).toBeVisible();
+    fireEvent.click(next());
+    expect(screen.getByRole('heading', { level: 2, name: "What PAV doesn't see" })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start again' })).toBeVisible();
   });
 
   it('makes the home page the trades’ front page: ladder, biggest win and seasons', async () => {
