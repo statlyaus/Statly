@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
+import { StatlyWordmark } from '@/components/brand/StatlyWordmark';
 import { TradesFrontPage } from '@/components/aflTradesHome/TradesFrontPage';
 import { publicTradeStoryReads } from '@/server/aflTradeIntelligence/publication/publicTradeStoryReads';
 
@@ -33,6 +34,40 @@ const draftRecord = [
   },
 ] as const;
 
+/**
+ * The brand masthead, copied from the approved design system (`ds2/a-core.html`, owner 2026-11-21):
+ * a cobalt band with the giant wordmark, the sun, the promise and the hand note. The sun disc is a
+ * drawing, so it sits in `data-illustration` and may be round.
+ */
+function Masthead() {
+  return (
+    <section
+      aria-label="Statly"
+      data-illustration
+      className="ground-cobalt relative overflow-hidden px-4 sm:px-6 lg:px-10"
+    >
+      <span
+        aria-hidden="true"
+        className="absolute right-[6%] top-[16%] aspect-square w-[clamp(70px,12vw,150px)] rounded-full bg-warning"
+      />
+      <div className="relative mx-auto grid max-w-6xl gap-4 py-8">
+        <p className="m-0 justify-self-start pt-[0.3em] pb-[0.2em]">
+          <StatlyWordmark size="mast" />
+        </p>
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+          <p className="m-0 max-w-[56ch] font-sans text-base leading-normal">
+            Every AFL trade, valued by what the players and picks went on to do for the club that
+            got them.
+          </p>
+          <p className="m-0 font-hand text-[clamp(1.8rem,4vw,2.6rem)] font-bold leading-none text-warning">
+            counted to the last kick.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
@@ -50,6 +85,7 @@ export default async function HomePage(): Promise<ReactElement> {
       className={trades.available ? 'bg-background text-foreground' : 'bg-muted text-foreground'}
       data-surface={trades.available ? 'paper' : undefined}
     >
+      <Masthead />
       {trades.available ? <TradesFrontPage list={trades.value} /> : null}
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
         {trades.available ? null : (

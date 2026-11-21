@@ -22,8 +22,7 @@ const caveat = Caveat({
   subsets: ['latin'],
   weight: ['700'],
   variable: '--font-caveat',
-  // Nothing uses `font-hand` yet; preload it once the first hand note ships.
-  preload: false,
+  // The home masthead's hand note uses it above the fold.
 });
 
 export const metadata: Metadata = {
