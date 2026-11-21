@@ -69,18 +69,25 @@ import {
   parseOfficialAflDraft2025Sessions,
   reviewedOfficialAflDraft2025SessionPages,
 } from './officialAflDraft2025Sessions';
+import {
+  isReviewedOfficialAflDraft2026SessionUrl,
+  OFFICIAL_AFL_DRAFT_2026_SESSION_PARSER_VERSION,
+  parseOfficialAflDraft2026Sessions,
+  reviewedOfficialAflDraft2026SessionPages,
+} from './officialAflDraft2026Sessions';
 
 export const OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION = 'official-afl-completed-draft-session/v19';
 
 /**
- * The completed-session parser reviewed for a season: v20 for the 2025 national draft, whose night
- * reports are read from their boundary sentences (`officialAflDraft2025Sessions.ts`), and v19 for
- * every other season. A capture under the other version is refused.
+ * The completed-session parser reviewed for a season: v20 for the 2025 and v21 for the 2026 national
+ * draft, whose night reports are read from their boundary sentences
+ * (`officialAflDraft2025Sessions.ts`, `officialAflDraft2026Sessions.ts`), and v19 for every other
+ * season. A capture under another version is refused.
  */
 export function officialAflDraftSessionParserVersion(seasonYear: number): string {
-  return seasonYear === 2025
-    ? OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION
-    : OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION;
+  if (seasonYear === 2025) return OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION;
+  if (seasonYear === 2026) return OFFICIAL_AFL_DRAFT_2026_SESSION_PARSER_VERSION;
+  return OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION;
 }
 
 // afl.com.au renamed the non-AMP date wrapper (`OFFICIAL_AFL_ARTICLE_DATE`); v19 accepts either.
@@ -261,6 +268,7 @@ const reviewedSessionUrlChecks = new Map<number, (url: string) => boolean>([
   [2017, isReviewedOfficialAflDraft2017SessionFactUrl],
   [2018, isReviewedOfficialAflDraft2018SessionFactUrl],
   [2025, isReviewedOfficialAflDraft2025SessionUrl],
+  [2026, isReviewedOfficialAflDraft2026SessionUrl],
 ]);
 
 export function isReviewedOfficialAflDraftSessionUrl(url: string, seasonYear: number): boolean {
@@ -301,6 +309,7 @@ export function reviewedOfficialAflDraftSessionPages(
       .sort((left, right) => Date.parse(left.effectiveAt) - Date.parse(right.effectiveAt));
   }
   if (seasonYear === 2025) return reviewedOfficialAflDraft2025SessionPages();
+  if (seasonYear === 2026) return reviewedOfficialAflDraft2026SessionPages();
   if (seasonYear === 2019) {
     return [
       {
@@ -369,6 +378,8 @@ export function parseOfficialAflDraftSession(
     return parseOfficialAflDraft2019Sessions(html, input);
   if (isReviewedOfficialAflDraft2025SessionUrl(input.capture.sourceUrl))
     return parseOfficialAflDraft2025Sessions(html, input);
+  if (isReviewedOfficialAflDraft2026SessionUrl(input.capture.sourceUrl))
+    return parseOfficialAflDraft2026Sessions(html, input);
   const fail = (detail: string) => ({
     evidence: [],
     issues: [{ code: 'invalid_draft_session', sourceKey: input.capture.sourceUrl, detail }],

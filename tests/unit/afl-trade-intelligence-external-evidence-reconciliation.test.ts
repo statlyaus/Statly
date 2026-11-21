@@ -2258,6 +2258,22 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
       expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
     });
 
+    it.each([
+      'official-afl-completed-draft-session/v20',
+      'official-afl-completed-draft-session/v21',
+    ])(
+      'leaves the count unknown when the only session is read from night-report boundaries (%s)',
+      (parserVersion) => {
+        const [claim] = officialSession(allFourteen).content.evidence.map(
+          ({ content }) => content.claim
+        );
+        const session = batch('official_afl', '6', [claim!], undefined, { parserVersion });
+        const outcome = basisOf(reconcileDraft({ page: yearPage('academy'), session }));
+        expect(outcome).toEqual(expect.objectContaining({ nominationBasis: 'no_access_evidence' }));
+        expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
+      }
+    );
+
     it('carries no nomination basis on selected or traded-on picks', () => {
       const candidate = reconcileDraft({ page: yearPage('academy'), outcome: disposition({}) });
       expect(basisOf(candidate)).not.toHaveProperty('nominationBasis');

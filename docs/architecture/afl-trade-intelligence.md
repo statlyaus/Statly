@@ -488,7 +488,7 @@ ordinal, so corrections append versions of the same session. Existing v1 receipt
 Canonical import idempotency includes the reviewed promotion request, allowing a revised candidate
 to reuse retained captures while preserving each prior import. Other import kinds retain their
 capture/kind/parser uniqueness. The database binds new canonical imports to the exact open request.
-The bounded completed-session parser supports exact reviewed 2016–2025 sources. It verifies
+The bounded completed-session parser supports exact reviewed 2016–2026 sources. It verifies
 the contextual article date and the specific completed event statements assigned to each source.
 For the one-night 2016 national draft, the completed 25 November report supplies the event-night
 context, completion, Andrew McGrath/Essendon first boundary at pick 1, and Jake Waterman/West Coast
@@ -525,6 +525,15 @@ unchanged. This is a weaker standard than a numbered list: the range is inferred
 so these claims prove the sessions and never the membership. Reconciliation does not count a v20
 session toward a draft's membership proof, and the 2025 draft's membership stays proven by the
 Footyinfo board and the Draftguru year page (grade rule v5).
+The 2026 national draft is read the same way by parser v21 (`source/officialAflDraft2026Sessions.ts`,
+owner 2026-11-21: "Skip it, use AFL reports"), from two live afl.com.au night reports: session 1,
+19 November, selections 1 to 19 (the No.1 pick on Thursday night, 19 overall selections, the final
+selection at No.19, and night two opening at No.20 on Friday); session 2, 20 November, selections 20
+to 65 (night two on Friday, its opening pick No.20 stated only in the report's own summary, a
+65-selection draft and the final selection at No.65). `source/officialAflDraftBoundarySessions.ts`
+holds the shared reading and the boundary parser versions. Reconciliation counts neither v20 nor v21
+toward membership, and with no Footyinfo board for 2026 its membership stays unproven, so no 2026
+matched bid is counted.
 The 2018 national draft uses a combined-proof boundary because no retained Official AFL article
 asserts the complete session membership by itself. Narrow claims retain their own source ancestry:
 the 22/23 November schedule supplies calendar corroboration only; the first-night report supplies the
