@@ -322,9 +322,10 @@ describe('report-intake-authority', () => {
   });
 
   it('flags an expired revalidation, a successor and a completion that is not current', async () => {
+    // The ledger head only moves forward in time, and earlier tests decided a minute ago.
     const first = officialAflTradePeriodAuthority({ season: 2026, evidenceIds, timing: timing() });
     const firstDecision = approveNarrowAuthority(first, {
-      decidedAt: instant(-80),
+      decidedAt: instant(-0.5),
       revalidateAt: instant(DAY * 20),
     });
     await ledger.append({
@@ -342,7 +343,7 @@ describe('report-intake-authority', () => {
       expectedRevision: (await ledger.load()).revision,
       ...second,
       decision: approveNarrowAuthority(second, {
-        decidedAt: instant(-70),
+        decidedAt: instant(-0.25),
         revalidateAt: instant(DAY * 20),
         supersedes: firstDecision.decisionId,
       }),
