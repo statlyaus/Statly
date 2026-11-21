@@ -60,7 +60,7 @@ export function DeleteBasketballLeague({ leagueId, name }: { leagueId: string; n
           {pending ? 'Deleting…' : 'Delete league'}
         </button>
         {error ? (
-          <p role="alert" className="text-sm font-medium text-destructive">
+          <p role="alert" className="text-sm font-medium text-destructive-text">
             {error}
           </p>
         ) : null}

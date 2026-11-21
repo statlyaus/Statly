@@ -148,7 +148,7 @@ export default function DraftQueue({
               type="button"
               onClick={handleClearQueue}
               disabled={queueEntries.length === 0 || controlsDisabled}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-destructive-text transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Clear draft queue"
               title="Clear"
             >
@@ -231,7 +231,7 @@ export default function DraftQueue({
                                 type="button"
                                 onClick={() => handleRemovePlayer(playerId)}
                                 disabled={controlsDisabled}
-                                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                 aria-label={`Remove ${player?.name ?? 'queued player'} from queue`}
                               >
                                 <X className="h-4 w-4" />

@@ -23,7 +23,7 @@ export default function GlobalError({
       <body className="font-sans">
         <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
           <div className="max-w-md text-center">
-            <div className="mx-auto mb-4 h-12 w-12 text-destructive">
+            <div className="mx-auto mb-4 h-12 w-12 text-destructive-text">
               <ExclamationTriangleIcon aria-hidden="true" />
             </div>
             <h1 className="mb-2 text-2xl font-semibold">Something went wrong</h1>

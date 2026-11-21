@@ -212,7 +212,7 @@ export default function NewLeaguePage() {
                   }
                   placeholder="e.g. Statly Premier League"
                   className={cn(
-                    'mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20',
+                    'mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20',
                     visibleLeagueNameError &&
                       'border-[color:var(--league-danger)] focus:border-[color:var(--league-danger)] focus:ring-[color:var(--league-danger)]/20'
                   )}
@@ -246,7 +246,7 @@ export default function NewLeaguePage() {
                     id="teamCount"
                     value={String(teamCount)}
                     onChange={(e) => setTeamCount(Number(e.target.value))}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   >
                     {teamCounts.map((count) => (
                       <option key={count} value={String(count)}>
@@ -267,7 +267,7 @@ export default function NewLeaguePage() {
                     id="scoringFormat"
                     value={scoringFormat}
                     onChange={(e) => setScoringFormat(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   >
                     <option value="nine-category">9-category head-to-head</option>
                   </select>
@@ -291,7 +291,7 @@ export default function NewLeaguePage() {
                     // A Bloodsucker league runs rolling waivers with no FAAB.
                     if (nextFormat === 'BLOODSUCKER') setWaiverRule('rolling');
                   }}
-                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                 >
                   {selectableLeagueFormatOptions().map((option) => (
                     <option key={option.value} value={option.value}>
@@ -338,7 +338,7 @@ export default function NewLeaguePage() {
                     id="draftType"
                     value={draftType}
                     onChange={(e) => setDraftType(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   >
                     <option value="snake">Snake</option>
                     <option value="linear">Linear</option>
@@ -356,7 +356,7 @@ export default function NewLeaguePage() {
                     id="pickOrder"
                     value={pickOrder}
                     onChange={(e) => setPickOrder(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   >
                     <option value="random">Random</option>
                     <option value="manual">Manual</option>
@@ -374,7 +374,7 @@ export default function NewLeaguePage() {
                     id="waiverRule"
                     value={waiverRule}
                     onChange={(e) => setWaiverRule(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   >
                     <option value="weekly" disabled={leagueFormat === 'BLOODSUCKER'}>
                       Weekly reset

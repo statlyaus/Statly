@@ -508,7 +508,7 @@ function SetupChecklist({
           </div>
           {manualCopyUrl ? (
             <div className="w-full">
-              <label htmlFor="overview-invite-link" className="text-destructive">
+              <label htmlFor="overview-invite-link" className="text-destructive-text">
                 Copy failed — select and copy the link
               </label>
               <input

@@ -464,7 +464,7 @@ export function CompetitionSettingsPanel({
 
   if (!snapshot || !rules) {
     return (
-      <div role="status" aria-live="polite" className="text-sm text-destructive">
+      <div role="status" aria-live="polite" className="text-sm text-destructive-text">
         {message ?? 'Competition settings are unavailable.'}
       </div>
     );
@@ -513,7 +513,7 @@ export function CompetitionSettingsPanel({
             onChange={(event) =>
               setRules({ ...rules, seasonStartAflRound: Number(event.target.value) || 1 })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           />
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
@@ -525,7 +525,7 @@ export function CompetitionSettingsPanel({
             onChange={(event) =>
               setRules({ ...rules, regularSeasonRounds: Number(event.target.value) || 1 })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           />
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
@@ -551,7 +551,7 @@ export function CompetitionSettingsPanel({
                 finalsTeams: Number(event.target.value) as CompetitionRules['finalsTeams'],
               })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           >
             <option value={0}>No finals</option>
             <option value={4}>Top 4</option>
@@ -569,7 +569,7 @@ export function CompetitionSettingsPanel({
                 lockPolicy: event.target.value as CompetitionRules['lockPolicy'],
               })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           >
             <option value="INDIVIDUAL_GAME_START">Each player at AFL game start</option>
             <option value="THURSDAY_7PM_AEST">Thursday 7:00 pm in league timezone</option>
@@ -584,7 +584,7 @@ export function CompetitionSettingsPanel({
             onChange={(event) =>
               setRules({ ...rules, interchangeSlots: Math.max(0, Number(event.target.value) || 0) })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           />
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
@@ -597,7 +597,7 @@ export function CompetitionSettingsPanel({
                 standingsTieBreakCategory: event.target.value as FantasyCategoryKey,
               })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           >
             {snapshot.categories.map((category) => (
               <option key={category} value={category}>
@@ -612,7 +612,7 @@ export function CompetitionSettingsPanel({
             value={excludedRounds}
             onChange={(event) => setExcludedRounds(event.target.value)}
             placeholder="For example: 3, 13"
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
           />
         </label>
       </fieldset>
@@ -653,7 +653,7 @@ export function CompetitionSettingsPanel({
                 <select
                   value={fallbackRound}
                   onChange={(event) => setFallbackRound(event.target.value)}
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
                 >
                   <option value="">Choose round</option>
                   {snapshot.rounds
@@ -672,7 +672,7 @@ export function CompetitionSettingsPanel({
                   type="datetime-local"
                   value={fallbackLockAt}
                   onChange={(event) => setFallbackLockAt(event.target.value)}
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
                 />
               </label>
               <button
@@ -772,7 +772,7 @@ export function CompetitionSettingsPanel({
                                     },
                                   }))
                                 }
-                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
                               >
                                 <option value="">Unassigned</option>
                                 {snapshot.teams.map((team) => (
@@ -802,7 +802,7 @@ export function CompetitionSettingsPanel({
                                     },
                                   }))
                                 }
-                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
                               >
                                 <option value="">Unassigned</option>
                                 {snapshot.teams.map((team) => (
@@ -833,7 +833,7 @@ export function CompetitionSettingsPanel({
                                     },
                                   }))
                                 }
-                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3"
                               >
                                 <option value="">Not a bye</option>
                                 {snapshot.teams.map((team) => (
@@ -868,7 +868,7 @@ export function CompetitionSettingsPanel({
                                       void deleteFixture(competitionRound.round, matchup.id)
                                     }
                                     disabled={isSaving || isRoundReadOnly}
-                                    className="inline-flex size-10 items-center justify-center rounded-md border border-[color:var(--league-border)] text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                                    className="inline-flex size-10 items-center justify-center rounded-md border border-[color:var(--league-border)] text-destructive-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                                   >
                                     <Trash2 aria-hidden="true" className="h-4 w-4" />
                                   </button>

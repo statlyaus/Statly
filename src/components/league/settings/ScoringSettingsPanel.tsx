@@ -43,7 +43,7 @@ interface ScoringSettingsPanelProps {
 }
 
 const SELECT_CLASS =
-  'h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
+  'h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
 
 const SLOT_LABELS: Record<keyof LeagueLineupSlotSettings, string> = {
   FWD: 'Forwards',
@@ -99,7 +99,7 @@ export function ScoringSettingsPanel({
             onChange={(event) =>
               onChange({ ...value, scoringMode: event.target.value as LeagueScoringMode })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
           >
             <option value="H2H_EACH_CATEGORY">H2H Each Category</option>
             <option value="H2H_MOST_CATEGORIES">H2H Most Categories</option>
@@ -184,7 +184,7 @@ export function ScoringSettingsPanel({
                   },
                 })
               }
-              className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
             />
           </label>
         ))}
@@ -209,7 +209,7 @@ export function ScoringSettingsPanel({
                   },
                 })
               }
-              className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
             >
               <option value="HIGH_WINS">Higher wins</option>
               <option value="LOW_WINS">Lower wins</option>

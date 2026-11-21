@@ -263,7 +263,7 @@ export default function LivePickHeader({
         aria-label="Live draft status"
       >
         <div className="rounded-3xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-center">
-          <p className="text-sm font-medium text-destructive">Invalid draft data</p>
+          <p className="text-sm font-medium text-destructive-text">Invalid draft data</p>
         </div>
       </section>
     );
