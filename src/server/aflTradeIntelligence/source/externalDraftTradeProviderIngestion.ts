@@ -331,7 +331,7 @@ export function validateAflTradeExternalCaptureScope(
           ? 'mini_draft'
           : 'national') ||
       request.discoveryFromSeasonYear != null ||
-      // Each season is pinned to its own reviewed parser: v20 for 2025, v19 otherwise.
+      // Each season is pinned to its own reviewed parser: v20 for 2025, v21 for 2026, v19 otherwise.
       request.parserVersion !== officialAflDraftSessionParserVersion(request.anchorSeasonYear) ||
       !isReviewedOfficialAflDraftSessionUrl(request.sourceUrl, request.anchorSeasonYear) ||
       new Date(request.effectiveAt).getUTCFullYear() !==

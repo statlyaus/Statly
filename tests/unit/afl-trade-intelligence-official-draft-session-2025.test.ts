@@ -224,11 +224,11 @@ describe('the 2025 completed-session capture scope', () => {
     maximumBytes: 2097152,
   };
 
-  it('pins 2025 to parser v20 and every other season to v19', () => {
+  it('pins 2025 to parser v20 and every season before it to v19', () => {
     expect(officialAflDraftSessionParserVersion(2025)).toBe(
       'official-afl-completed-draft-session/v20'
     );
-    for (const season of [2010, 2019, 2024, 2026]) {
+    for (const season of [2010, 2019, 2024]) {
       expect(officialAflDraftSessionParserVersion(season)).toBe(
         'official-afl-completed-draft-session/v19'
       );

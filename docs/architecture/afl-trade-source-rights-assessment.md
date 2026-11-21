@@ -191,7 +191,8 @@ On 2026-10-12 the Statly product owner approved Footyinfo as a new provider for 
 grading (Gate 0A rights and egress, recorded in the owner's session). The decision is exactly seven
 pages, `https://www.footyinfo.com/draft/<year>` for 2019–2025, read as the national draft board with
 passed and removed picks shown. On 2026-11-21 the owner added the 2026 page on the same terms, for
-private grading with fetches from the grading VM only. It covers six fields: pick number, club, player or Passed/Removed,
+private grading with fetches from the grading VM only. The 2026 page refused capture (403) that day,
+and the owner then dropped Footyinfo for 2026 (see "Official AFL 2026 draft-night reports"). It covers six fields: pick number, club, player or Passed/Removed,
 the route (club chain), points and the note on bids, compensation and assistance. It approves three
 uses:
 
@@ -245,6 +246,28 @@ original club equals the route's first club on all 432 routed picks; on 5 unrout
 only statement of a late-pick trade. The seven `-board-v3` decisions are recorded from each season's
 v2 record with parser v3 and its 51 fields; the v1 and v2 decisions and captures stay valid as
 recorded. The egress, cache and stop rules are unchanged.
+
+### Official AFL 2026 draft-night reports
+
+On 2026-11-21, after the Footyinfo 2026 board refused capture, the owner decided "Skip it, use AFL
+reports": no Footyinfo for 2026, and the Official AFL draft-night reports confirm which numbers each
+night used. Official AFL is already approved for completed draft sessions under the issue 579
+decision; 2026 is recorded as its own season decision on the same terms (private, non-production,
+VM-only egress, 365-day raw retention, no raw redistribution). Exactly two live afl.com.au reports
+are reviewed, read by completed-session parser `official-afl-completed-draft-session/v21`
+(`source/officialAflDraft2026Sessions.ts`):
+
+1. night one, Thursday 19 November 2026, selections 1 to 19:
+   `https://www.afl.com.au/news/1642128/power-play-port-adelaide-lands-nga-talent-dougie-cochrane-as-clubs-first-ever-no1-pick`;
+2. night two, Friday 20 November 2026, selections 20 to 65:
+   `https://www.afl.com.au/news/1642270/port-adelaide-power-add-electric-forward-wil-malady-to-draft-haul-north-melbourne-kangaroos-make-move`.
+
+No Internet Archive snapshot of either existed when they were reviewed, so the capture fetches the
+live page and the parser refuses it if a reviewed sentence or the page date has changed. No Official
+AFL page lists the 2026 selections in its HTML (the club-by-club rundown loads them by script), so
+these claims prove the two sessions, never the draft's membership. With no Footyinfo board, the 2026
+membership stays unproven and no 2026 matched bid is counted: the owner's 2026 matched bids stay
+pending.
 
 ### Issue 574 admitted evidence boundary
 

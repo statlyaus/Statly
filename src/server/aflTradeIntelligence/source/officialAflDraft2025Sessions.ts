@@ -1,10 +1,9 @@
-import { load } from 'cheerio';
+import type { AflTradeExternalEvidenceContent } from './externalDraftTradeEvidenceContracts';
 import {
-  createAflTradeExternalEvidenceEnvelope,
-  type AflTradeExternalEvidenceContent,
-  type AflTradeExternalEvidenceEnvelope,
-} from './externalDraftTradeEvidenceContracts';
-import type { AflTradeExternalPageIssue } from './externalDraftTradeIngestion';
+  OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSIONS,
+  parseOfficialAflDraftBoundarySession,
+  type ReviewedBoundaryReport,
+} from './officialAflDraftBoundarySessions';
 
 /**
  * Completed-session parser v20 reads the 2025 national draft alone (issue 853, coordinator decision
@@ -17,29 +16,7 @@ import type { AflTradeExternalPageIssue } from './externalDraftTradeIngestion';
  * other season keeps parser v19.
  */
 export const OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION =
-  'official-afl-completed-draft-session/v20';
-
-const OFFICIAL_NAME = '2025 Telstra AFL Draft';
-
-interface ReviewedBoundaryStatement {
-  /** Matches once in exactly one paragraph; each capture group is one stated number. */
-  pattern: RegExp;
-  /** The numbers the statement must state, derived from the reviewed session range. */
-  states: (session: { first: number; last: number }) => readonly number[];
-}
-
-interface ReviewedBoundaryReport {
-  url: string;
-  ordinal: number;
-  /** The event date: the night the session ran. */
-  date: string;
-  /** The non-AMP template's `datetime` and the AMP template's displayed date of the same report. */
-  stamp: string;
-  displayed: string;
-  first: number;
-  last: number;
-  statements: readonly ReviewedBoundaryStatement[];
-}
+  OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSIONS[2025];
 
 // Exactly these Internet Archive snapshots (served raw, `id_`) are reviewed. The night-one snapshot
 // is the non-AMP page; the night-two snapshot is the AMP page captured the morning after the draft.
@@ -104,8 +81,6 @@ const reviewedReports: readonly ReviewedBoundaryReport[] = [
   },
 ];
 
-const ARTICLE_DATE = '.article__date > time, .article__byline-date > time, .amp-article__date';
-
 export function isReviewedOfficialAflDraft2025SessionUrl(url: string): boolean {
   return reviewedReports.some((report) => report.url === url);
 }
@@ -118,62 +93,10 @@ export function reviewedOfficialAflDraft2025SessionPages(): { url: string; compl
 export function parseOfficialAflDraft2025Sessions(
   html: string,
   input: { capture: AflTradeExternalEvidenceContent['capture']; anchorSeasonYear?: number }
-): { evidence: AflTradeExternalEvidenceEnvelope[]; issues: AflTradeExternalPageIssue[] } {
-  const fail = (detail: string) => ({
-    evidence: [],
-    issues: [{ code: 'invalid_draft_session', sourceKey: input.capture.sourceUrl, detail }],
-  });
-  const report = reviewedReports.find(({ url }) => url === input.capture.sourceUrl);
-  if (!report || (input.anchorSeasonYear !== undefined && input.anchorSeasonYear !== 2025))
-    return fail('The source is not a reviewed 2025 night report.');
-  if (input.capture.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION)
-    return fail('The 2025 night reports are read only by completed-session parser v20.');
-  const $ = load(html);
-  const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
-  const body = $('.article-body');
-  const dates = $(ARTICLE_DATE);
-  const contextualDate = dates.is('time') ? dates.attr('datetime') : clean(dates.text());
-  if (
-    body.length !== 1 ||
-    dates.length !== 1 ||
-    contextualDate !== (dates.is('time') ? report.stamp : report.displayed)
-  )
-    return fail('The reviewed article body or contextual date has changed.');
-  const paragraphs = body
-    .children('p')
-    .map((_, paragraph) => clean($(paragraph).text()))
-    .get();
-  for (const statement of report.statements) {
-    const found = paragraphs.flatMap((text) => [...text.matchAll(statement.pattern)]);
-    if (found.length !== 1)
-      return fail('A reviewed session boundary statement is missing or repeated.');
-    const stated = found[0]!.slice(1).map(Number);
-    const expected = statement.states(report);
-    if (stated.length !== expected.length || stated.some((value, i) => value !== expected[i]))
-      return fail('A reviewed session boundary statement disagrees with the session range.');
-  }
-  return {
-    evidence: [
-      createAflTradeExternalEvidenceEnvelope({
-        schemaVersion: 'afl-trade-external-evidence/v1',
-        provider: 'official_afl',
-        capture: input.capture,
-        sourceRow: { ordinal: 1, sourceKey: `national-draft:2025:session:${report.ordinal}` },
-        claim: {
-          kind: 'draft_session',
-          draftYear: 2025,
-          draftType: 'national',
-          sessionOrdinal: report.ordinal,
-          eventDate: report.date,
-          officialName: OFFICIAL_NAME,
-          selectionNumbers: Array.from(
-            { length: report.last - report.first + 1 },
-            (_, i) => report.first + i
-          ),
-        },
-        publicationEligible: false,
-      }),
-    ],
-    issues: [],
-  };
+) {
+  return parseOfficialAflDraftBoundarySession(
+    { draftYear: 2025, officialName: '2025 Telstra AFL Draft', reports: reviewedReports },
+    html,
+    input
+  );
 }
