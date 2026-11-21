@@ -1,5 +1,5 @@
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
-import { OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION } from './officialAflDraft2025Sessions';
+import { isOfficialAflDraftSessionBoundaryParserVersion } from './officialAflDraftBoundarySessions';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
@@ -2091,9 +2091,10 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
  *   club.
  *
- * A session claim read from a night report's boundary sentences (parser v20, the 2025 national
- * draft) states a number range, not a list of selections, so it proves the session and never the
- * membership: it is not counted here, and the board still proves that draft (decision 2026-10-16).
+ * A session claim read from a night report's boundary sentences (parser v20 for the 2025 and v21
+ * for the 2026 national draft) states a number range, not a list of selections, so it proves the
+ * session and never the membership: it is not counted here, and the board still proves 2025
+ * (decision 2026-10-16). 2026 has no board (owner 2026-11-21), so its membership stays unproven.
  *
  * The candidate's selections in the draft must be exactly those numbers, and every one must carry
  * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
@@ -2122,7 +2123,7 @@ function createNominatedSelectionCounter(
     if (
       row.content.provider === 'official_afl' &&
       claim.kind === 'draft_session' &&
-      row.content.capture.parserVersion !== OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSION
+      !isOfficialAflDraftSessionBoundaryParserVersion(row.content.capture.parserVersion)
     ) {
       const key = `${claim.draftYear}|${claim.draftType}`;
       const numbers = sessionNumbers.get(key) ?? new Set<number>();

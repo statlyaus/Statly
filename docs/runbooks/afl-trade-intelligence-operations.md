@@ -1332,7 +1332,16 @@ Prerequisites:
      selections 26 to 60, and the night-two total (35 that night, 60 in all) must agree. This is a
      weaker standard than a numbered list: the claims prove the sessions, not the draft's
      membership, which stays proven by the Footyinfo board and the Draftguru year page (grade rule
-     v5); and
+     v5). The 2026 national draft alone is read by parser v21, decision
+     `official-afl-completed-draft-session-issue579-private-2026-session-v21`, rights naming
+     `official-afl-completed-draft-session/v21` (owner 2026-11-21, "Skip it, use AFL reports"). v21
+     reads the two live afl.com.au night reports named in `source/officialAflDraft2026Sessions.ts`
+     the same way: night one (Thursday 19 November) is session 1, selections 1 to 19, and night two
+     (Friday 20 November) is session 2, selections 20 to 65. Night two's body never states its
+     opening pick, so v21 reads it from the report's own summary (its one `<meta name="description">`,
+     "pick No.20, the opening selection on night two"); the draft's total (65) and final selection
+     must agree. Nothing proves the 2026 membership (no Footyinfo board), so no 2026 matched bid is
+     counted; and
    - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v4` decision per
      captured season, 2019 to 2025, for example
      `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. Parser
@@ -1385,7 +1394,7 @@ Prerequisites:
    `draftguru-trade-parser/v3`, `draftguru-national-year-page/v3` (2011 to 2016:
    `draftguru-national-year-page/v4`; 2000 to 2010: `draftguru-national-year-page/v6`, earlier `/v5`;
    2026: `draftguru-national-year-page/v7`),
-   `official-afl-completed-draft-session/v19` (2025: `official-afl-completed-draft-session/v20`),
+   `official-afl-completed-draft-session/v19` (2025: `/v20`; 2026: `official-afl-completed-draft-session/v21`),
    `official-afl-draft-order-parser/v4` (2026:
    `official-afl-draft-order-parser/v5`) or
    `footyinfo-draft-board-parser/v3`), seasons inside one range, 1 request per 5 seconds
@@ -1418,6 +1427,22 @@ Seasons whose completed sessions are reviewed only through dedicated per-season 
 (2010, 2017 and 2018, and the 2011 and 2012 mini-drafts) are not enumerable here and are refused.
 `--season 2025` expands to its two night-report snapshots and needs the `-2025-session-v20`
 decision; a 2025 season in a run with other seasons still needs each season's own decision.
+`--season 2026` expands to its two live night reports and needs the `-2026-session-v21` decision.
+Record it from 2025 with the season recorder ("Recording a season's source decision"), naming the
+new parser:
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+  npm run outcomes:sources:record-season-decision -- \
+  --capability official-afl-completed-draft-session --season 2026 --from-season 2025 \
+  --parser-version official-afl-completed-draft-session/v21 \
+  --approval-artifact <artifact:...> --decided-at <iso> --revalidate-at <iso>
+```
+
+Read the dry run's derived rights before `--apply`: they are 2025's text with the season and parser
+rewritten, and 2025 was read from Internet Archive snapshots while 2026 is read from live pages. If
+either live page has changed since 2026-11-21, v21 refuses it; review the page again rather than
+loosening a sentence.
 
 The 2011 to 2016 national drafts (issue 789) are enumerable at parser v19, each needing its own
 `-<season>-session-v19` decision. Each season held one night (2011-11-24, 2012-11-22, 2013-11-21,
