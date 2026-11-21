@@ -6,7 +6,7 @@ import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { defaultLeagueSeasonYear, SEASON_CHANGE_LOCKED_MESSAGE } from '@/server/leagues/seasonYear';
 
 const SELECT_CLASS =
-  'h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
+  'h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
 
 /** The AFL season the league plays; the commissioner can change it only while in setup. */
 export function SeasonYearControl({

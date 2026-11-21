@@ -74,7 +74,14 @@ Six colours, each with one job. Ratios are WCAG 2.2 contrast ratios against whit
 
 Supporting values: secondary text `#55534e`, hairline `#c9c5bc`, red `#c81e1e` for live, errors and
 destructive actions only, and amber `#7a4a06` (`text-warning-text`) for warning words. Sun is a fill:
-`bg-warning` with `text-warning-foreground`. NEVER `text-warning`; sun text is 1.6:1 on white.
+`bg-warning` with `text-warning-foreground`. NEVER `text-warning`; sun text is 1.6:1 on white. Words
+that must hold on stone and tint at the 5.5:1 small-label rule use their own text roles: red words
+`#a81919` (`text-destructive-text`, 5.97 on stone; the destructive button fill stays `#c81e1e`, while live and league danger use `#a81919` as both words and fill) and success
+`#0e5a2b` (6.69 on stone).
+
+Stone is the quiet ground (`--muted`, done 2026-11-21): page sheets, table heads, hovers on white
+cards and the draft room page. A form field is never stone: it stays `bg-field` white, because a
+stone field reads as disabled.
 
 ### Grounds
 
@@ -145,7 +152,7 @@ Every pair below must hold on every ground and surface mode.
 | Role                    | Rule                                                                   | Status                                                                                          |
 | ----------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Body text               | At least 4.5:1                                                         | Ink on white is 18.9:1                                                                          |
-| Small labels (11–12px)  | At least 5.5:1                                                         | Secondary `#55534e` on white is 7.6:1 (target, phase 3)                                         |
+| Small labels (11–12px)  | At least 5.5:1                                                         | Secondary, success, red and amber words hold 5.5 on white, stone and tint (done 2026-11-21)     |
 | `--input` (field edge)  | At least 3:1 against its surface (WCAG 1.4.11)                         | A 2px ink edge, 18.9:1 on white (done 2026-11-20)                                               |
 | `--border` (decorative) | No minimum; never the only edge of a control                           | Hairline `#c9c5bc`                                                                              |
 | Brand and links         | Cobalt on light grounds; white on cobalt; sun on ink                   | Cobalt on light grounds done; other grounds phase 3                                             |

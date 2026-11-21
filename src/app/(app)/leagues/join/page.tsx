@@ -211,7 +211,7 @@ export default function JoinLeaguePage() {
                   onChange={(e) => setCode(normalizeInviteCode(e.target.value))}
                   placeholder="ABC123"
                   maxLength={8}
-                  className="mt-2 h-12 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-center font-mono text-lg font-semibold tracking-[0.2em] text-[color:var(--league-text)] outline-none transition placeholder:tracking-normal placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                  className="mt-2 h-12 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-center font-mono text-lg font-semibold tracking-[0.2em] text-[color:var(--league-text)] outline-none transition placeholder:tracking-normal placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   disabled={loading}
                   required
                 />
@@ -234,7 +234,7 @@ export default function JoinLeaguePage() {
                   onChange={(e) => setTeamName(e.target.value)}
                   placeholder="My Statly Team"
                   maxLength={30}
-                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                   disabled={loading}
                 />
                 <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">

@@ -539,7 +539,7 @@ export default function DraftManager({
           role="alert"
           className={`mx-6 mt-6 flex items-center space-x-2 p-4 ${alertStyles({ tone: 'error' })}`}
         >
-          <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />
+          <ExclamationTriangleIcon className="h-5 w-5 text-destructive-text" />
           <span>{error}</span>
         </div>
       )}
@@ -592,11 +592,11 @@ export default function DraftManager({
                     {item.complete ? (
                       <CheckCircleIcon className="h-5 w-5 shrink-0 text-primary" />
                     ) : (
-                      <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-destructive" />
+                      <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-destructive-text" />
                     )}
                   </div>
                   {!item.complete && (
-                    <p className="mt-3 text-xs font-medium text-destructive">
+                    <p className="mt-3 text-xs font-medium text-destructive-text">
                       {item.incompleteLabel}
                     </p>
                   )}
