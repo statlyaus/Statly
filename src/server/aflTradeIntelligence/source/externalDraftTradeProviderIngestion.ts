@@ -351,8 +351,8 @@ export function validateAflTradeExternalCaptureScope(
 }
 
 const PINNED_PARSER_VERSIONS: Readonly<Record<string, string>> = {
-  // v19 stands in for an earlier session parser. 2025 is pinned to v20 by its season, and a v20
-  // capture is never earlier than v19, so it is checked as recorded.
+  // v19 stands in for an earlier session parser. 2025 and 2026 are pinned to v20 and v21 by their
+  // season, and neither is earlier than v19, so their captures are checked as recorded.
   'official-afl-completed-draft-session': OFFICIAL_AFL_DRAFT_SESSION_PARSER_VERSION,
   'official-afl-trade-period-dates': OFFICIAL_AFL_TRADE_PERIOD_PARSER_VERSION,
   'official-afl-player-continuity': OFFICIAL_AFL_PLAYER_CONTINUITY_PARSER_VERSION,

@@ -24,7 +24,6 @@ const reviewedReports: readonly ReviewedBoundaryReport[] = [
     ordinal: 1,
     date: '2026-11-19',
     stamp: '2026-11-19T08:33:00Z',
-    displayed: 'Nov 19, 2026',
     first: 1,
     last: 19,
     statements: [
@@ -57,7 +56,6 @@ const reviewedReports: readonly ReviewedBoundaryReport[] = [
     ordinal: 2,
     date: '2026-11-20',
     stamp: '2026-11-20T08:52:00Z',
-    displayed: 'Nov 20, 2026',
     first: 20,
     last: 65,
     statements: [

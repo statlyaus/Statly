@@ -33,7 +33,7 @@ export interface ReviewedBoundaryStatement {
    * Where the statement is read: the article body's paragraphs (the default), or the report's own
    * summary, its single `<meta name="description">`.
    */
-  in?: 'body' | 'description';
+  in?: 'description';
 }
 
 export interface ReviewedBoundaryReport {
@@ -41,9 +41,12 @@ export interface ReviewedBoundaryReport {
   ordinal: number;
   /** The event date: the night the session ran. */
   date: string;
-  /** The non-AMP template's `datetime` and the AMP template's displayed date of the same report. */
+  /**
+   * The non-AMP template's `datetime` and, when an AMP page was reviewed, the AMP template's
+   * displayed date of the same report. Without `displayed` an AMP page is refused.
+   */
   stamp: string;
-  displayed: string;
+  displayed?: string;
   first: number;
   last: number;
   statements: readonly ReviewedBoundaryStatement[];
