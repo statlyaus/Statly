@@ -761,11 +761,33 @@ supersede production Gate authority, and production execution cannot reuse non-p
    IDs in every target. Use the actual plan/completion creation times; do not backdate these records
    or manufacture an index inventory or scheduler occurrence. Both initial registration and replay
    require current source authority, and plan replay verifies retained bytes again. This is a
-   repository operation under the reviewed execution runbook, not a new public CLI command. A replacement
-   retained plan may reuse unchanged finalized batches from earlier completions alongside newly
-   captured batches. Each batch appears at most once per completion; prior completions remain
+   repository operation under the reviewed execution runbook; only a successor plan has a command
+   (below). A replacement retained plan may reuse unchanged finalized batches from earlier
+   completions alongside newly captured batches. Each batch appears at most once per completion; prior completions remain
    immutable. Reuse still requires exact target evidence and current authority for every batch.
    Scheduled results retain their separate single-completion batch constraint.
+
+   **Building a successor retained plan:** to carry new captures into the plan behind a candidate
+   (the 2026 intake: re-captured 2025 trade pages plus the new 2026 pages), run
+   `npm run outcomes:sources:build-retained-plan -- --from-candidate <candidate-id> --captures <ids>`
+   (or `--captures-file <path>`, one list of source capture IDs separated by commas, spaces or new
+   lines), with `AFL_OUTCOMES_DATABASE_URL` naming the loopback outcomes database. It follows the candidate to its historical completion and reads that retained plan.
+   Each capture replaces the target with the same capability, anchor season and source URL, in its
+   place, and is otherwise added at the end; every other target is kept unchanged. The predecessor's
+   scope evidence is carried, and `--scope-evidence <artifact:...,...>` adds stored capture-metadata
+   artifacts. `plannedAt` is the database clock, read after the captures are loaded. The command
+   refuses (exit 2, nothing written) a capture that matches more than one target, a capture or batch
+   already in the plan or given twice, two captures of one page, a capture without a finalized
+   issue-free batch or outside its reviewed capture scope, and a capture, batch or scope artifact
+   created after `plannedAt`. Before anything is written it reads every source and scope artifact
+   back exactly from the registered local store named by its custody location (nested repository
+   paths included) and asks the database whether it accepts the plan as current; a failure is a
+   refusal naming the artifact or target. A dry run is the default: it prints one JSON line with the
+   kept count and each replaced and added target (capability, season, URL, previous and new
+   capture). `--apply` persists and completes the plan and prints the plan and completion IDs; if
+   completion fails, the error names the persisted plan. The plan ID differs between the dry run and
+   the apply because `plannedAt` does, and each `--apply` writes a new plan; run it once. Carry the
+   completion ID into step 6.
 
    **Migration 0163 maintenance procedure:** Before applying
    `0163_retained_completion_batch_reuse` to a populated outcomes database, the database operator
