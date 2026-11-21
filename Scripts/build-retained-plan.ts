@@ -6,10 +6,9 @@ import { pathToFileURL } from 'node:url';
 import { Pool } from 'pg';
 
 import type { AflTradeArtifactRef } from '../src/server/aflTradeIntelligence/artifacts/artifactReference';
-import type { AflTradeImmutableArtifactRepository } from '../src/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { canonicalizeAflTradeJson } from '../src/server/aflTradeIntelligence/artifacts/contentAddress';
 import { splitAflTradeStoreObjectKey } from '../src/server/aflTradeIntelligence/development/localArtifactCustodyReadback';
-import { createLocalAflTradeNonProductionArtifactRepository } from '../src/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
+import { createLocalAflTradeFileConditionalObjectStore } from '../src/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import {
   planRetainedPlanSuccessor,
   RetainedPlanRefusal,
@@ -266,7 +265,10 @@ export async function loadRetainedPlanInputs(
  * may be nested, so the key is split at the repository's own layout.
  */
 export function createLocatedArtifactReader(client: AflOutcomeSqlClient) {
-  const repositories = new Map<string, AflTradeImmutableArtifactRepository>();
+  const stores = new Map<
+    string,
+    ReturnType<typeof createLocalAflTradeFileConditionalObjectStore>
+  >();
   return {
     async read(reference: AflTradeArtifactRef): Promise<Uint8Array> {
       const located = await client.query<{
@@ -301,20 +303,31 @@ export function createLocatedArtifactReader(client: AflOutcomeSqlClient) {
       ) {
         throw new Error(`Artifact ${reference.artifactId} is located at an unexpected key.`);
       }
-      const key = JSON.stringify([row.root_locator, split.repositoryPath, row.artifact_class]);
-      let repository = repositories.get(key);
-      if (repository === undefined) {
-        repository = createLocalAflTradeNonProductionArtifactRepository({
-          rootDirectory: resolve(row.root_locator),
-          repositoryId: split.repositoryPath,
-          artifactClass: row.artifact_class,
-          maximumObjectBytes: MAXIMUM_ARTIFACT_BYTES,
-        });
-        repositories.set(key, repository);
+      // Read the stored object under its own recorded identity, as the 2025 plans were persisted;
+      // verifyRetainedPlan and persistRetainedPlan then check the bytes against the plan's reference.
+      // An older object's stored createdAt can differ from the reference that cites it, so an exact
+      // identity match would refuse bytes that hash correctly.
+      const root = resolve(row.root_locator, split.repositoryPath);
+      let store = stores.get(root);
+      if (store === undefined) {
+        store = createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root });
+        stores.set(root, store);
       }
-      const loaded = await repository.loadExact(reference, Math.max(1, reference.byteLength));
-      if (loaded === null) throw new Error(`Artifact ${reference.artifactId} bytes are missing.`);
-      return loaded.bytes;
+      const identity = await store.headExact({ objectKey: split.repositoryKey });
+      if (identity === null) throw new Error(`Artifact ${reference.artifactId} bytes are missing.`);
+      if (identity.byteLength > MAXIMUM_ARTIFACT_BYTES)
+        throw new Error(`Artifact ${reference.artifactId} exceeds the read bound.`);
+      const { bytes } = await store.readExactBounded({
+        objectKey: split.repositoryKey,
+        versionId: identity.versionId,
+        eTag: identity.eTag,
+        expectedByteLength: identity.byteLength,
+        expectedMediaType: identity.mediaType,
+        expectedChecksumSha256: identity.checksumSha256,
+        expectedMetadata: identity.metadata,
+        maximumBytes: MAXIMUM_ARTIFACT_BYTES,
+      });
+      return bytes;
     },
   };
 }
