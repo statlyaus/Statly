@@ -4470,6 +4470,14 @@ route's `GET` reports whether the approved bundle is stored. A local run sets
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (an absolute path) and reads that file instead. The go-live steps
 are in the operations runbook, "Public trade pages: go live".
 
+**Method page.** `/afl/trades/method` is "How Statly values trades" (owner, 2026-11-20): a
+click-through story in `src/components/aflTradeMethod/` that follows Jordan Dawson through PAV, from
+the season's pot of value to his trade's value line, with a 2022 to 2026 season picker and numbered
+references below it. It is laid out at a fixed 1180 × 880 and scaled to fit the screen under the
+header; phones get a stacked layout. Its numbers are fixed in `dawsonExample.ts`: his season working
+from `hpnPavCore.ts` over the genuine AFL Tables rows, and his trade from bundle 1e9e6025, so they match
+the trade page exactly. The design is first cut; the owner is iterating on it.
+
 **List filters.** `/afl/trades?year=2024&club=geelong&sort=biggest` (`tradesListQuery.ts`): the year,
 club and order live in the address, so a filtered list can be shared and works without scripts. With no
 year named the list shows the latest year, or every year once a club is chosen.
