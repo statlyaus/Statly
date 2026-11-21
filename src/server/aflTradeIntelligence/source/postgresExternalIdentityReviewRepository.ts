@@ -157,12 +157,26 @@ async function requireTarget(
   }
 }
 
-async function requireAuthority(
+/** The reviewer authority one external identity decision must hold when it is decided. */
+export interface AflTradeExternalIdentityReviewerClaim {
+  authorityEvidenceId: string;
+  principalRef: string;
+  provider: string;
+  competition: string;
+  validFromSeason: number;
+  validThroughSeason: number;
+  decidedAt: string;
+  environment: string;
+}
+
+/**
+ * Refuses unless the principal holds a current, approved external identity reviewer grant covering
+ * the provider, competition, seasons and environment, now and at the decision time.
+ */
+export async function requireAflTradeExternalIdentityReviewerAuthority(
   transaction: AflOutcomeSqlTransaction,
-  decision: AflTradeExternalIdentityReviewDecision
+  claim: AflTradeExternalIdentityReviewerClaim
 ): Promise<void> {
-  const content = decision.content;
-  const subject = content.subject.content;
   const result = await transaction.query<{ authority_evidence_id: string }>(
     `SELECT authority.authority_evidence_id
        FROM outcome_operational_principal_authority authority
@@ -190,25 +204,43 @@ async function requireAuthority(
                          WHERE successor.supersedes_decision_id=approval.decision_id)
       FOR SHARE OF authority,evidence,approval`,
     [
-      content.authorityEvidenceId,
-      content.decidedBy,
-      subject.provider,
-      subject.competition,
-      content.workItem.content.validFromSeason,
-      content.workItem.content.validThroughSeason,
-      content.decidedAt,
-      subject.environment,
+      claim.authorityEvidenceId,
+      claim.principalRef,
+      claim.provider,
+      claim.competition,
+      claim.validFromSeason,
+      claim.validThroughSeason,
+      claim.decidedAt,
+      claim.environment,
     ]
   );
   if (
     result.rows.length !== 1 ||
-    result.rows[0]?.authority_evidence_id !== content.authorityEvidenceId
+    result.rows[0]?.authority_evidence_id !== claim.authorityEvidenceId
   ) {
     throw new AflTradeExternalIdentityReviewPersistenceError(
       'AUTHORITY_UNAVAILABLE',
       'External identity reviewer lacks exact current provider, competition, season, and environment authority.'
     );
   }
+}
+
+function requireAuthority(
+  transaction: AflOutcomeSqlTransaction,
+  decision: AflTradeExternalIdentityReviewDecision
+): Promise<void> {
+  const content = decision.content;
+  const subject = content.subject.content;
+  return requireAflTradeExternalIdentityReviewerAuthority(transaction, {
+    authorityEvidenceId: content.authorityEvidenceId,
+    principalRef: content.decidedBy,
+    provider: subject.provider,
+    competition: subject.competition,
+    validFromSeason: content.workItem.content.validFromSeason,
+    validThroughSeason: content.workItem.content.validThroughSeason,
+    decidedAt: content.decidedAt,
+    environment: subject.environment,
+  });
 }
 
 async function insertOrVerifySubject(

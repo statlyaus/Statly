@@ -10,6 +10,7 @@ import type {
   CommissionerLeague,
   CommissionerLeagueMember,
 } from '@/server/leagues/commissionerReadModel';
+import { alertStyles } from '@/components/ui/controlStyles';
 
 interface CommissionerWorkspaceProps {
   leagues: CommissionerLeague[];
@@ -122,7 +123,7 @@ export default function CommissionerWorkspace({
         role="status"
         className={
           feedback?.kind === 'status'
-            ? 'rounded-md border border-success/30 bg-success/5 p-3 text-sm font-medium text-success'
+            ? `p-3 text-sm font-medium ${alertStyles({ tone: 'success' })}`
             : 'sr-only'
         }
       >
@@ -132,7 +133,7 @@ export default function CommissionerWorkspace({
         role="alert"
         className={
           feedback?.kind === 'alert'
-            ? 'rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive'
+            ? `p-3 text-sm font-medium ${alertStyles({ tone: 'error' })}`
             : 'sr-only'
         }
       >
@@ -141,7 +142,7 @@ export default function CommissionerWorkspace({
 
       <section
         aria-labelledby="commissioner-members-heading"
-        className="rounded-lg border border-border bg-background"
+        className="border border-border bg-background"
       >
         <div className="border-b border-border px-4 py-3">
           <h2 id="commissioner-members-heading" className="text-base font-semibold text-foreground">

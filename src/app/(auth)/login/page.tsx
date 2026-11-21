@@ -45,13 +45,13 @@ export default async function LoginPage({
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6">
+            <div className="border border-border bg-background p-5 sm:p-6">
               <Suspense
                 fallback={
                   <div className="animate-pulse space-y-6">
-                    <div className="h-12 rounded-lg bg-muted"></div>
-                    <div className="h-12 rounded-lg bg-muted"></div>
-                    <div className="h-12 rounded-lg bg-muted"></div>
+                    <div className="h-12 bg-muted"></div>
+                    <div className="h-12 bg-muted"></div>
+                    <div className="h-12 bg-muted"></div>
                   </div>
                 }
               >

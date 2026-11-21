@@ -51,11 +51,11 @@ export function Calendar({
           classNames?.[UI.Nav]
         ),
         [UI.PreviousMonthButton]: cn(
-          'pointer-events-auto absolute left-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:border-accent-foreground/30 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
+          'pointer-events-auto absolute left-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-cut border border-border bg-background text-foreground transition-colors hover:border-accent-foreground/30 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
           classNames?.[UI.PreviousMonthButton]
         ),
         [UI.NextMonthButton]: cn(
-          'pointer-events-auto absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-colors hover:border-accent-foreground/30 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
+          'pointer-events-auto absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-cut border border-border bg-background text-foreground transition-colors hover:border-accent-foreground/30 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
           classNames?.[UI.NextMonthButton]
         ),
         [UI.Chevron]: cn('text-foreground', classNames?.[UI.Chevron]),
@@ -68,7 +68,7 @@ export function Calendar({
         [UI.Week]: cn('border-0', classNames?.[UI.Week]),
         [UI.Day]: cn('h-11 p-0 text-center align-middle', classNames?.[UI.Day]),
         [UI.DayButton]: cn(
-          'mx-auto inline-flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-sm font-medium text-foreground transition-colors hover:border-accent-foreground/30 hover:bg-accent hover:text-accent-foreground focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-11 sm:w-11',
+          'mx-auto inline-flex h-10 w-10 items-center justify-center rounded-cut border border-transparent text-sm font-medium text-foreground transition-colors hover:border-accent-foreground/30 hover:bg-accent hover:text-accent-foreground focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-11 sm:w-11',
           classNames?.[UI.DayButton]
         ),
         [UI.Footer]: cn('sr-only', classNames?.[UI.Footer]),

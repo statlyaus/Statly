@@ -67,11 +67,11 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
   };
 
   return (
-    <div className="relative bg-white shadow-sm rounded-lg overflow-hidden">
+    <div className="relative border border-border bg-white overflow-hidden">
       <div className="overflow-auto max-h-[80vh]">
         <table className="min-w-full divide-y divide-gray-200">
           <caption className="sr-only">Nine category player rankings table</caption>
-          <thead className="bg-gray-50 sticky top-0 z-50 shadow-sm">
+          <thead className="bg-gray-50 sticky top-0 z-50 border-b-[1.5px] border-foreground">
             <tr>
               <th
                 scope="col"

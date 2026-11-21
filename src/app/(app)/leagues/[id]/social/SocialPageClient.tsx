@@ -34,7 +34,7 @@ export default function SocialPageClient({
       <div className="mx-auto max-w-6xl">
         <Link
           href={`/leagues/${encodeURIComponent(leagueId)}`}
-          className="mb-4 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mb-4 inline-flex min-h-10 items-center gap-2 rounded-cut px-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to {leagueName}

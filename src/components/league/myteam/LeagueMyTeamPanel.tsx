@@ -23,7 +23,8 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { autoFillLineup, scorePlayersByStats } from '@/lib/leagues/lineupAutoFill';
-import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
+import { ClubSquare } from '@/components/ui/ClubSquare';
+import { getTeamAbbreviation } from '@/lib/teamLogos';
 import type { LineupSlotSettings } from '@/server/leagues/scoringTypes';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
@@ -754,7 +755,7 @@ export function LeagueMyTeamPanel({
       </header>
 
       {loadError ? (
-        <div role="alert" className="rounded-lg border border-border bg-card px-4 py-3 text-sm">
+        <div role="alert" className="border border-border bg-card px-4 py-3 text-sm">
           <p className="font-semibold text-foreground">{loadError}</p>
           <button
             type="button"
@@ -769,7 +770,7 @@ export function LeagueMyTeamPanel({
       {isLoading && !data ? (
         <p
           role="status"
-          className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground"
+          className="border border-border bg-card px-4 py-6 text-sm text-muted-foreground"
         >
           Loading your team…
         </p>
@@ -779,7 +780,7 @@ export function LeagueMyTeamPanel({
         <div className={`space-y-4 ${isLoading ? 'opacity-60' : ''}`} aria-busy={isLoading}>
           <section
             aria-label="Lineup readiness"
-            className="overflow-hidden rounded-lg border border-border bg-card"
+            className="overflow-hidden border border-border bg-card"
           >
             <MatchupStrip data={data} leagueId={leagueId} />
             <ReadinessRow
@@ -809,7 +810,7 @@ export function LeagueMyTeamPanel({
           ) : null}
 
           {data.rosterPlayers.length === 0 ? (
-            <p className="rounded-lg border border-border bg-card px-4 py-4 text-sm text-muted-foreground">
+            <p className="border border-border bg-card px-4 py-4 text-sm text-muted-foreground">
               Your squad is empty. Players arrive through the draft, waivers and trades.
             </p>
           ) : (
@@ -836,7 +837,7 @@ export function LeagueMyTeamPanel({
                 <div className="min-w-0 space-y-4">
                   <section
                     aria-labelledby="my-team-lineup-heading"
-                    className="overflow-hidden rounded-lg border border-border bg-card"
+                    className="overflow-hidden border border-border bg-card"
                   >
                     <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
                       <h3
@@ -972,7 +973,7 @@ export function LeagueMyTeamPanel({
 
                   <section
                     aria-labelledby="my-team-bench-heading"
-                    className="overflow-hidden rounded-lg border border-border bg-card"
+                    className="overflow-hidden border border-border bg-card"
                   >
                     <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-4 py-3">
                       <h3
@@ -1069,7 +1070,7 @@ export function LeagueMyTeamPanel({
             <div
               role="region"
               aria-label="Unconfirmed changes"
-              className="sticky bottom-3 z-20 mr-16 flex flex-wrap items-center justify-between gap-3 rounded-lg border-2 border-brand-bar bg-card px-4 py-3"
+              className="sticky bottom-3 z-20 mr-16 flex flex-wrap items-center justify-between gap-3 border-2 border-brand-bar bg-card px-4 py-3"
             >
               <div className="min-w-0">
                 <p className="font-semibold text-foreground">
@@ -1219,15 +1220,8 @@ function PlayerCell({
   /** The slot this player is in but is not listed for. */
   outOfPosition?: string | null;
 }) {
-  const club = player.club ? getTeamAbbreviation(player.club) : null;
   return (
     <span className="flex min-w-0 items-center gap-2.5">
-      {player.club ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={getTeamLogo(player.club)} alt="" className="size-7 shrink-0 object-contain" />
-      ) : (
-        <span className="size-7 shrink-0" />
-      )}
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-1.5">
           <Link
@@ -1255,8 +1249,12 @@ function PlayerCell({
             />
           ) : null}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {[player.position, club].filter(Boolean).join(' · ')}
+        {/* The club is its 13px square and abbreviation, never a logo or a jumper (style guide,
+            "Club colours"; owner 2026-11-21). */}
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          {player.position ? <span>{player.position}</span> : null}
+          {player.position && player.club ? <span aria-hidden="true">·</span> : null}
+          {player.club ? <ClubSquare club={player.club} /> : null}
         </span>
         {/* Phones have no opponent column: the fixture (and a No Losers club record) gets its own
             line so it wraps instead of being cut off at 375 px (#1296, NFR-8). */}

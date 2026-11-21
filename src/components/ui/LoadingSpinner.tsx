@@ -4,6 +4,8 @@ import React from 'react';
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 
+import { floatingStyles } from './controlStyles';
+
 // Spinner types
 export type SpinnerType = 'circular' | 'dots' | 'pulse' | 'bars' | 'football' | 'wave';
 
@@ -251,7 +253,7 @@ export default function LoadingSpinner({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black bg-opacity-50" />
-        <div className="relative bg-white rounded-lg p-8 shadow-lg">{content}</div>
+        <div className={`relative p-8 ${floatingStyles()}`}>{content}</div>
       </div>
     );
   }
@@ -326,7 +328,7 @@ export function SectionLoading({
 }: SectionLoadingProps) {
   return (
     <div
-      className={`${height} flex items-center justify-center bg-white rounded-lg border border-gray-200 ${className}`}
+      className={`${height} flex items-center justify-center bg-white border border-gray-200 ${className}`}
     >
       <LoadingSpinner type={type} size="lg" color={color} text={title} />
     </div>
@@ -407,7 +409,7 @@ export function SkeletonText({ lines = 3, className = '' }: SkeletonTextProps) {
 // Card skeleton component
 export function SkeletonCard({ className = '' }: { className?: string }) {
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 p-6 ${className}`}>
+    <div className={`bg-white border border-gray-200 p-6 ${className}`}>
       <div className="flex items-center space-x-4 mb-4">
         <Skeleton width="w-12" height="h-12" rounded />
         <div className="flex-1">

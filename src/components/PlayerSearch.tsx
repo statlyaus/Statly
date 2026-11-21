@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 import { floatingStyles, menuItemStyles } from '@/components/ui/controlStyles';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fetchApi } from '@/lib/api';
-import { guernseyFor } from '@/lib/clubGuernseys';
+import { ClubSquare } from '@/components/ui/ClubSquare';
 import { cn } from '@/lib/utils';
 import type { PlayerSearchResult } from '@/types/players';
 
@@ -195,24 +195,9 @@ export default function PlayerSearch({
       );
     }
 
-    // Club colours come from the shared guernsey table: base fills the circle, trim draws the initials.
-    const guernsey = guernseyFor(player.team);
-
     return (
       <div className="w-full py-2">
         <div className="flex items-center space-x-3">
-          {showAvatar && (
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-              style={{ backgroundColor: guernsey.base, color: guernsey.trim }}
-            >
-              {player.name
-                .split(' ')
-                .map((n: string) => n[0])
-                .join('')
-                .slice(0, 2)}
-            </div>
-          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-foreground truncate">{player.name}</h4>
@@ -221,7 +206,12 @@ export default function PlayerSearch({
               )}
             </div>
             <div className="flex items-center space-x-2 text-sm font-normal text-muted-foreground">
-              <span>{player.team}</span>
+              {/* The club is its 13px square and abbreviation; text never sits on club colour. */}
+              {showAvatar && player.team ? (
+                <ClubSquare club={player.team} />
+              ) : (
+                <span>{player.team}</span>
+              )}
               {player.position && (
                 <>
                   <span>•</span>
@@ -262,7 +252,7 @@ export default function PlayerSearch({
           aria-activedescendant={activeOptionId}
           aria-label={ariaLabel}
           className={`
-            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent
+            w-full pl-10 pr-4 border rounded-cut focus:ring-2 focus:ring-ring focus:border-transparent
             ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
             ${sizeClasses[size]} ${inputClassName}
           `}

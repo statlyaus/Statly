@@ -8,6 +8,7 @@ import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { cn } from '@/lib/utils';
 import { LoadingSpinner } from './ui';
+import { alertStyles } from '@/components/ui/controlStyles';
 
 type AvailabilityStatus = 'owned' | 'your-roster' | 'waiver' | 'free-agent';
 type AvailabilityActionType = 'trade' | 'waiver' | 'add' | 'roster';
@@ -56,7 +57,7 @@ function isAvailabilityResponse(value: unknown): value is AvailabilityResponse {
     value !== null &&
     (value as { success?: unknown }).success === true &&
     typeof (value as { data?: unknown }).data === 'object' &&
-    Array.isArray(((value as { data: { leagues?: unknown } }).data).leagues)
+    Array.isArray((value as { data: { leagues?: unknown } }).data.leagues)
   );
 }
 
@@ -77,8 +78,10 @@ function getStatusClass(status: AvailabilityStatus): string {
 
 function getActionClass(type: AvailabilityActionType): string {
   if (type === 'trade') return 'border-border bg-foreground text-background hover:bg-foreground/90';
-  if (type === 'waiver') return 'border-primary/30 bg-primary text-primary-foreground hover:bg-primary/90';
-  if (type === 'add') return 'border-emerald-200 bg-background text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50';
+  if (type === 'waiver')
+    return 'border-primary/30 bg-primary text-primary-foreground hover:bg-primary/90';
+  if (type === 'add')
+    return 'border-emerald-200 bg-background text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50';
   return 'border-border bg-background text-foreground hover:bg-muted';
 }
 
@@ -216,32 +219,28 @@ export function PlayerLeagueAvailabilityPanel({
   }, [rows]);
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)]">
-      <div className="shrink-0 border-b border-border bg-foreground px-4 py-4 text-background">
+    <section className="flex min-h-0 flex-col overflow-hidden border border-border bg-card lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)]">
+      <div className="ground-ink shrink-0 border-b border-border px-4 py-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold leading-tight text-background">
-              League Availability
-            </h2>
-            <p className="mt-1 max-w-64 text-xs leading-5 text-background/70">
+            <h2 className="text-base font-semibold leading-tight">League Availability</h2>
+            <p className="mt-1 max-w-64 text-xs leading-5 text-muted-foreground">
               Roster status and next action by league.
             </p>
           </div>
           {loading || authLoading ? (
-            <span className="shrink-0 rounded-md border border-background/15 bg-background/10 px-2.5 py-1 text-xs font-medium text-background/80">
+            <span className="shrink-0 border border-border px-2.5 py-1 text-xs font-medium">
               Checking
             </span>
           ) : summary.total > 0 ? (
             <div className="shrink-0 text-right">
-              <div className="text-sm font-semibold tabular-nums text-background">
-                {summary.addable} available
-              </div>
-              <div className="mt-1 text-[11px] font-medium uppercase tracking-wide text-background/60">
+              <div className="text-sm font-semibold tabular-nums">{summary.addable} available</div>
+              <div className="mt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {summary.waiver} waiver / {summary.owned} owned
               </div>
             </div>
           ) : (
-            <span className="shrink-0 rounded-md border border-background/15 bg-background/10 px-2.5 py-1 text-xs font-medium text-background/80">
+            <span className="shrink-0 border border-border px-2.5 py-1 text-xs font-medium">
               No leagues
             </span>
           )}
@@ -253,7 +252,7 @@ export function PlayerLeagueAvailabilityPanel({
           <LoadingSpinner />
         </div>
       ) : error ? (
-        <div className="m-5 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <div role="alert" className={`m-5 p-4 text-sm ${alertStyles({ tone: 'error' })}`}>
           {error}
         </div>
       ) : rows.length === 0 ? (
@@ -271,92 +270,98 @@ export function PlayerLeagueAvailabilityPanel({
           )}
           <div className="divide-y divide-border">
             {rows.map((row) => {
-            const processingAt = formatProcessingAt(row.waiver?.processingAt, row.timeZone);
-            const detail = row.statusDetail
-              ? row.statusDetail
-              : row.owner
-              ? row.owner.isCurrentUser
-                ? row.owner.teamName
-                : `Owner: ${row.owner.teamName}`
-              : processingAt
-                ? `Processes ${processingAt}`
-                : row.status === 'waiver'
-                  ? `${row.waiver?.pendingClaims ?? 0} pending claim${
-                      row.waiver?.pendingClaims === 1 ? '' : 's'
-                    }`
-                  : 'Available now';
+              const processingAt = formatProcessingAt(row.waiver?.processingAt, row.timeZone);
+              const detail = row.statusDetail
+                ? row.statusDetail
+                : row.owner
+                  ? row.owner.isCurrentUser
+                    ? row.owner.teamName
+                    : `Owner: ${row.owner.teamName}`
+                  : processingAt
+                    ? `Processes ${processingAt}`
+                    : row.status === 'waiver'
+                      ? `${row.waiver?.pendingClaims ?? 0} pending claim${
+                          row.waiver?.pendingClaims === 1 ? '' : 's'
+                        }`
+                      : 'Available now';
 
-            return (
-              <article
-                key={row.leagueId}
-                className="group px-4 py-3 transition-colors hover:bg-muted/20"
-              >
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                  <div className="flex min-w-0 items-start gap-2.5">
-                    <span
-                      className={cn(
-                        'mt-2 h-2 w-2 shrink-0 rounded-full',
-                        getStatusDotClass(row.status)
-                      )}
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-baseline gap-2">
-                        <h3
-                          className="truncate text-sm font-semibold leading-5 text-foreground"
-                          title={row.leagueName}
+              return (
+                <article
+                  key={row.leagueId}
+                  className="group px-4 py-3 transition-colors hover:bg-muted/20"
+                >
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <span
+                        className={cn(
+                          'mt-2 h-2 w-2 shrink-0 rounded-full',
+                          getStatusDotClass(row.status)
+                        )}
+                        aria-hidden="true"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-baseline gap-2">
+                          <h3
+                            className="truncate text-sm font-semibold leading-5 text-foreground"
+                            title={row.leagueName}
+                          >
+                            {row.leagueName}
+                          </h3>
+                          <span
+                            className={cn(
+                              'shrink-0 text-[11px] font-semibold uppercase tracking-wide',
+                              getStatusClass(row.status)
+                            )}
+                          >
+                            {row.statusLabel}
+                          </span>
+                        </div>
+                        <p
+                          className="mt-0.5 truncate text-xs leading-4 text-muted-foreground"
+                          title={row.teamName}
                         >
-                          {row.leagueName}
-                        </h3>
-                        <span
-                          className={cn(
-                            'shrink-0 text-[11px] font-semibold uppercase tracking-wide',
-                            getStatusClass(row.status)
-                          )}
+                          {row.teamName}
+                        </p>
+                        <p
+                          className="mt-1 truncate text-xs leading-4 text-muted-foreground"
+                          title={detail}
                         >
-                          {row.statusLabel}
-                        </span>
+                          {detail}
+                        </p>
                       </div>
-                      <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground" title={row.teamName}>
-                        {row.teamName}
-                      </p>
-                      <p className="mt-1 truncate text-xs leading-4 text-muted-foreground" title={detail}>
-                        {detail}
-                      </p>
                     </div>
-                  </div>
 
-                  {row.action.type === 'add' ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleAddPlayer(row)}
-                      disabled={pendingActionLeagueId === row.leagueId}
-                      className={cn(
-                        'inline-flex h-8 min-w-16 shrink-0 items-center justify-center rounded-md border px-2.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
-                        getActionClass(row.action.type)
-                      )}
-                      aria-label={`${row.action.label} in ${row.leagueName}`}
-                    >
-                      {pendingActionLeagueId === row.leagueId
-                        ? 'Adding'
-                        : getActionLabel(row.action.type, row.action.label)}
-                    </button>
-                  ) : (
-                    <Link
-                      href={row.action.href}
-                      className={cn(
-                        'inline-flex h-8 min-w-16 shrink-0 items-center justify-center rounded-md border px-2.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        getActionClass(row.action.type)
-                      )}
-                      aria-label={`${row.action.label} in ${row.leagueName}`}
-                    >
-                      {getActionLabel(row.action.type, row.action.label)}
-                    </Link>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+                    {row.action.type === 'add' ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleAddPlayer(row)}
+                        disabled={pendingActionLeagueId === row.leagueId}
+                        className={cn(
+                          'inline-flex h-8 min-w-16 shrink-0 items-center justify-center rounded-md border px-2.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+                          getActionClass(row.action.type)
+                        )}
+                        aria-label={`${row.action.label} in ${row.leagueName}`}
+                      >
+                        {pendingActionLeagueId === row.leagueId
+                          ? 'Adding'
+                          : getActionLabel(row.action.type, row.action.label)}
+                      </button>
+                    ) : (
+                      <Link
+                        href={row.action.href}
+                        className={cn(
+                          'inline-flex h-8 min-w-16 shrink-0 items-center justify-center rounded-md border px-2.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          getActionClass(row.action.type)
+                        )}
+                        aria-label={`${row.action.label} in ${row.leagueName}`}
+                      >
+                        {getActionLabel(row.action.type, row.action.label)}
+                      </Link>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       )}

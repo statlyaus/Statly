@@ -54,7 +54,7 @@ export default function LiveStatsDemo() {
         <h1 className="text-3xl font-bold mb-4">Live AFL Player Statistics</h1>
 
         {/* Controls */}
-        <div className="bg-gray-50 p-4 rounded-lg mb-6 space-y-4">
+        <div className="bg-gray-50 p-4 mb-6 space-y-4">
           <div className="flex gap-4 items-center">
             <label htmlFor="match-uid" className="font-medium">
               Match UID:
@@ -98,11 +98,7 @@ export default function LiveStatsDemo() {
         </div>
 
         {/* Status */}
-        <div
-          className="bg-white border rounded-lg p-4 mb-6"
-          aria-live="polite"
-          aria-busy={isLoading}
-        >
+        <div className="bg-white border p-4 mb-6" aria-live="polite" aria-busy={isLoading}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
@@ -130,7 +126,7 @@ export default function LiveStatsDemo() {
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div className="bg-red-50 border border-red-200 p-4 mb-6">
           <h3 className="font-medium text-red-800 mb-2">Error</h3>
           <p className="text-red-700">{error}</p>
         </div>
@@ -138,7 +134,7 @@ export default function LiveStatsDemo() {
 
       {/* No match chosen yet */}
       {matchUid === null && (
-        <div className="mb-6 rounded-lg border border-border bg-card p-4 text-card-foreground">
+        <div className="mb-6 border border-border bg-card p-4 text-card-foreground">
           <h2 className="mb-2 font-medium">No match selected</h2>
           <p className="text-muted-foreground">
             Enter a match UID above and press Load to see its live player statistics.
@@ -148,7 +144,7 @@ export default function LiveStatsDemo() {
 
       {/* Empty State */}
       {isEmpty && !isLoading && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <div className="bg-yellow-50 border border-yellow-200 p-4 mb-6">
           <h3 className="font-medium text-yellow-800 mb-2">No Data Available</h3>
           <p className="text-yellow-700">
             No player statistics found for match &quot;{matchUid}&quot;. This could mean:
@@ -168,7 +164,7 @@ export default function LiveStatsDemo() {
 
           <div className="grid gap-4">
             {players.map((player) => (
-              <div key={player.player_uid} className="bg-white border rounded-lg p-4">
+              <div key={player.player_uid} className="bg-white border p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-lg">
                     {player.player_uid.replace('ply_', '').replace(/_/g, ' ')}

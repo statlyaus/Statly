@@ -53,7 +53,7 @@ export async function LeagueToolPage({
       {league ? (
         children({ league, userId })
       ) : (
-        <section className="rounded-lg border border-border bg-background p-6">
+        <section className="border border-border bg-background p-6">
           <h2 className="text-base font-semibold text-foreground">You are not in a league yet</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Join a league with an invite code or create your own to see this page.

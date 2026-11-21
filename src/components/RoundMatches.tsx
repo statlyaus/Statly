@@ -101,7 +101,7 @@ export const RoundMatches = ({ round, season, initialMatches }: RoundMatchesProp
           match.id ?? `${match.homeTeam}-${match.awayTeam}-${match.matchDate ?? match.round}`;
         const hasScores = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
         return (
-          <div key={key} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+          <div key={key} className="bg-white border border-gray-200 p-6">
             <div className="text-center text-lg mb-4">
               <div className="flex justify-around items-center">
                 <span className="flex items-center gap-2">

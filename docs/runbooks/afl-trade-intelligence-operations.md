@@ -761,11 +761,33 @@ supersede production Gate authority, and production execution cannot reuse non-p
    IDs in every target. Use the actual plan/completion creation times; do not backdate these records
    or manufacture an index inventory or scheduler occurrence. Both initial registration and replay
    require current source authority, and plan replay verifies retained bytes again. This is a
-   repository operation under the reviewed execution runbook, not a new public CLI command. A replacement
-   retained plan may reuse unchanged finalized batches from earlier completions alongside newly
-   captured batches. Each batch appears at most once per completion; prior completions remain
+   repository operation under the reviewed execution runbook; only a successor plan has a command
+   (below). A replacement retained plan may reuse unchanged finalized batches from earlier
+   completions alongside newly captured batches. Each batch appears at most once per completion; prior completions remain
    immutable. Reuse still requires exact target evidence and current authority for every batch.
    Scheduled results retain their separate single-completion batch constraint.
+
+   **Building a successor retained plan:** to carry new captures into the plan behind a candidate
+   (the 2026 intake: re-captured 2025 trade pages plus the new 2026 pages), run
+   `npm run outcomes:sources:build-retained-plan -- --from-candidate <candidate-id> --captures <ids>`
+   (or `--captures-file <path>`, one list of source capture IDs separated by commas, spaces or new
+   lines), with `AFL_OUTCOMES_DATABASE_URL` naming the loopback outcomes database. It follows the candidate to its historical completion and reads that retained plan.
+   Each capture replaces the target with the same capability, anchor season and source URL, in its
+   place, and is otherwise added at the end; every other target is kept unchanged. The predecessor's
+   scope evidence is carried, and `--scope-evidence <artifact:...,...>` adds stored capture-metadata
+   artifacts. `plannedAt` is the database clock, read after the captures are loaded. The command
+   refuses (exit 2, nothing written) a capture that matches more than one target, a capture or batch
+   already in the plan or given twice, two captures of one page, a capture without a finalized
+   issue-free batch or outside its reviewed capture scope, and a capture, batch or scope artifact
+   created after `plannedAt`. Before anything is written it reads every source and scope artifact
+   back exactly from the registered local store named by its custody location (nested repository
+   paths included) and asks the database whether it accepts the plan as current; a failure is a
+   refusal naming the artifact or target. A dry run is the default: it prints one JSON line with the
+   kept count and each replaced and added target (capability, season, URL, previous and new
+   capture). `--apply` persists and completes the plan and prints the plan and completion IDs; if
+   completion fails, the error names the persisted plan. The plan ID differs between the dry run and
+   the apply because `plannedAt` does, and each `--apply` writes a new plan; run it once. Carry the
+   completion ID into step 6.
 
    **Migration 0163 maintenance procedure:** Before applying
    `0163_retained_completion_batch_reuse` to a populated outcomes database, the database operator
@@ -1102,6 +1124,89 @@ supersede production Gate authority, and production execution cannot reuse non-p
     calculate a grade, use the workbook, or publish unreviewed facts. Canonical promotion remains a
     reviewed private-corpus operation; factual and valuation activation remain separate milestones.
 
+### Recording intake authority
+
+A new season's intake needs a recorded narrow decision for each capture capability, an external
+identity reviewer grant per provider and a canonical promoter grant. Three commands record and
+check them against the loopback outcomes database (`requireLoopbackDatabaseUrl`). The two recorders
+are dry runs unless given `--apply`. Each command prints one JSON line and exits 2 on a refusal.
+Store every approval record first (see "Storing evidence before it is cited") and cite its
+`artifact:` id.
+
+#### Recording a season's source decision
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+  npm run outcomes:sources:record-season-decision -- \
+  --capability draftguru-trade-detail --season 2026 --from-season 2025 \
+  --approval-artifact <artifact:...> --decided-at <iso> --revalidate-at <iso> [--apply]
+```
+
+The command loads the effective decision the runner reads for `--from-season`
+(`loadRecordedLocalCaptureAuthority`) and derives a version-1 decision on the key the runner reads
+for `--season` (`localExternalCaptureDecisionKey`). It keeps the predecessor's provider, parser,
+pacing, cache, retention, terms and conditions, and narrows the season range to `--season`. In the
+proposal it rewrites the scope key and the `season` and `source_rights_artifact` dimensions, and
+rewrites the predecessor's years in the description, exclusions and conditions. The decision cites
+the approval as its authority evidence and carries the predecessor's condition evidence.
+
+It never records a successor and refuses a key that already has a decision. It also refuses:
+
+- a `--revalidate-at` that is not in the future;
+- a proposal that still names a predecessor year or rights id;
+- records the runner would not accept for `--season`;
+- any cited `artifact:` without a custody location, listed in `unlocatedArtifactIds` (migration
+  0253 refuses the write otherwise). The predecessor's own evidence is checked too.
+
+With `--apply` it writes the rights, proposal and decision in one Gate ledger batch. It then loads
+the authority the runner reads for `--season` and fails if that is not the recorded decision. A
+season whose runner parser differs from the predecessor's needs a reviewed proposal instead.
+
+#### Recording reviewer and promoter grants
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+  npm run outcomes:sources:record-reviewer-grant -- \
+  --role afl_trade_external_identity_reviewer --principal <ref> --provider draftguru \
+  --from-season 2026 --through-season 2026 --valid-through <iso> \
+  --approval-artifact <artifact:...> --decided-by <ref> --decided-at <iso> \
+  --store-id <store-id> [--apply]
+```
+
+`--role afl_trade_external_identity_reviewer` takes `--provider draftguru` or `footyinfo`
+(capability `external_identity_resolution`). `--role afl_trade_canonical_promoter` takes
+`--provider multi_source` (capability `external_candidate_promotion`). The scope is always
+`public-afl-draft-trade-outcomes` and the competition `AFLM`. The term runs from `--decided-at` to
+`--valid-through`.
+
+With `--apply` the command stores the grant's canonical reviewer-authority evidence JSON in the
+store first. Then, in one transaction, it records the owner's approval of that evidence, the
+governed evidence reference and the `outcome_operational_principal_authority` row. The transaction
+commits as `afl_trade_nonproduction_governance_registry_writer`
+(`PostgresAflTradeOperationalGrantRepository`). It refuses a `--valid-through` that is not in the
+future, a `--decided-at` in the future and an unlocated approval record. An identical grant prints
+`already_recorded`.
+
+#### Checking intake authority
+
+```sh
+AFL_OUTCOMES_DATABASE_URL='<loopback-outcomes-database-url>' \
+  npm run outcomes:sources:report-intake-authority -- \
+  --capability draftguru-trade-detail:2026 --capability footyinfo-national-draft-board:2026 \
+  [--completion <external-historical-capture-completion:...>] [--at <iso>]
+```
+
+The command is read-only. For each `--capability <id>:<season>` it reports whether the runner
+accepts the recorded decision at `--at` (default now), and why not. It also reports the decision
+id, version, `revalidateAt`, the source terms' `termsExpireAt`, and `successorPresent` (a later
+version on the same key, which makes retained targets bound to the earlier one non-current). It
+lists every current reviewer and promoter grant with its provider, seasons, term and whether it is
+in force at `--at`. With `--completion` it calls
+`outcome_external_retained_completion_is_current(id, at)`. Only when that is false does it list each
+non-current target with its reasons: `decision_superseded`, `decision_revalidation_due`,
+`raw_retention_expired`, `terms_expired` or `other`. It exits 2 when a requested capability or the
+completion is not current.
+
 ### Capturing reviewed provider pages locally
 
 The owner's machine can capture `draftguru-trade-index`, `draftguru-trade-detail`,
@@ -1130,8 +1235,10 @@ custody and admission adapters differ:
 
 Prerequisites:
 
-1. The owner's decisions are recorded and effective in the target loopback outcomes database. The
-   command loads, and never records, widens or supersedes:
+1. The owner's decisions are recorded and effective in the target loopback outcomes database
+   (record a new season's with `outcomes:sources:record-season-decision` and check them with
+   `outcomes:sources:report-intake-authority`, see "Recording intake authority"). The command
+   loads, and never records, widens or supersedes:
    - `draftguru-trade-index-issue-579-private-non_production` and
      `draftguru-trade-detail-issue-579-private-non_production-parser-v3` for 2011 to 2025, and from
      2026 one decision per season under the same keys with `-<season>` appended (owner, 2026-11-21).

@@ -122,7 +122,7 @@ export function LeagueStandingsPanel({ leagueId, currentUserId }: LeagueStanding
       </div>
 
       {message ? (
-        <div role="alert" className="rounded-lg border border-border bg-card px-4 py-3 text-sm">
+        <div role="alert" className="border border-border bg-card px-4 py-3 text-sm">
           {message}
         </div>
       ) : null}
@@ -131,13 +131,13 @@ export function LeagueStandingsPanel({ leagueId, currentUserId }: LeagueStanding
         {!data && !message ? (
           <p
             role="status"
-            className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground"
+            className="border border-border bg-card px-4 py-6 text-sm text-muted-foreground"
           >
             Loading standings…
           </p>
         ) : null}
         {data && data.teams.length === 0 ? (
-          <p className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+          <p className="border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
             Standings appear once teams join the league.
           </p>
         ) : null}
