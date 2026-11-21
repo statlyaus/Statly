@@ -16,8 +16,8 @@ function isPublicLinkActive(pathname: string, section: string): boolean {
 }
 
 /**
- * Text tabs: grey labels, the current section in bold ink with a 3px cobalt underline the width of
- * the word, sitting on the header's bottom divider. Phones put the tabs on their own row under the
+ * Text tabs on the cobalt bar: tint labels, the current section in bold white with a 3px white
+ * underline the width of the word, sitting on the bar's bottom edge. Phones put the tabs on their own row under the
  * logo; from `sm` up they sit beside it.
  */
 export function PublicNavigation() {
@@ -41,7 +41,7 @@ export function PublicNavigation() {
             {active ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-x-0 -bottom-px h-[3px] bg-primary"
+                className="absolute inset-x-0 bottom-0 h-[3px] bg-foreground"
               />
             ) : null}
           </Link>

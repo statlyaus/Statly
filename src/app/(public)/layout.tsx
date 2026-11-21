@@ -34,17 +34,25 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
         Skip to content
       </a>
       <div className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-40 border-b border-border bg-background">
+        {/* The cobalt bar with the Sherrin wordmark, the same as the app's (owner, 2026-11-21). */}
+        <header className="ground-cobalt sticky top-0 z-40">
           <nav
             aria-label="Primary"
             className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-7 px-4 pt-2 sm:h-16 sm:flex-nowrap sm:px-6 sm:pt-0 lg:px-10"
           >
             <Link
               href="/"
-              className="inline-flex min-h-11 shrink-0 items-center rounded-md text-2xl font-extrabold tracking-[-0.045em] text-foreground transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-11 shrink-0 items-center transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Statly home"
             >
-              Statly<span className="text-primary">.</span>
+              <Image
+                src="/brand/statly-hero-logo-overlay.png"
+                alt=""
+                width={122}
+                height={36}
+                loading="eager"
+                className="h-auto w-24 sm:w-28"
+              />
             </Link>
             <span aria-hidden="true" className="hidden h-6 w-px bg-border sm:block" />
             <PublicNavigation />
