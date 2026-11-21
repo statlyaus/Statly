@@ -76,7 +76,7 @@ Supporting values: secondary text `#55534e`, hairline `#c9c5bc`, red `#c81e1e` f
 destructive actions only, and amber `#7a4a06` (`text-warning-text`) for warning words. Sun is a fill:
 `bg-warning` with `text-warning-foreground`. NEVER `text-warning`; sun text is 1.6:1 on white. Words
 that must hold on stone and tint at the 5.5:1 small-label rule use their own text roles: red words
-`#a81919` (`text-destructive-text`, 5.97 on stone; the red fill stays `#c81e1e`) and success
+`#a81919` (`text-destructive-text`, 5.97 on stone; the destructive button fill stays `#c81e1e`, while live and league danger use `#a81919` as both words and fill) and success
 `#0e5a2b` (6.69 on stone).
 
 Stone is the quiet ground (`--muted`, done 2026-11-21): page sheets, table heads, hovers on white
