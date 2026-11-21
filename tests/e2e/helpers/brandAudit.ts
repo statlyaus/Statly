@@ -10,7 +10,7 @@ import { expect, type Page } from '@playwright/test';
  * owner is redesigning, ticket 06h), and anything inside an element matching one of `exclusions`
  * (area palettes a later ticket still owns). Inside `[data-illustration]` (the My Team field, owner
  * 2026-11-21) club-colour fills are allowed but text on one is not, and the drawing itself (its
- * `aria-hidden` parts) may be round; every other rule still applies there. A `[data-provider-logo]` (Google and Facebook
+ * `aria-hidden` parts) may be round; text on a club fill fails only when one element carries both. A `[data-provider-logo]` (Google and Facebook
  * on the sign-in page) keeps its owner's colours.
  */
 
@@ -103,7 +103,7 @@ function audit(exclusions: readonly string[]): AuditResult {
   };
   const isRed = (colour: string) => {
     const [r, g, b, a] = rgba(colour);
-    return a >= 0.5 && r > 150 && g < 90 && b < 90;
+    return a > 0 && r > 150 && g < 90 && b < 90;
   };
   const name = (element: Element) => {
     const classes =

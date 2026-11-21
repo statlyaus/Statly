@@ -252,7 +252,9 @@ export function PlayerLeagueAvailabilityPanel({
           <LoadingSpinner />
         </div>
       ) : error ? (
-        <div className={`m-5 p-4 text-sm ${alertStyles({ tone: 'error' })}`}>{error}</div>
+        <div role="alert" className={`m-5 p-4 text-sm ${alertStyles({ tone: 'error' })}`}>
+          {error}
+        </div>
       ) : rows.length === 0 ? (
         <div className="p-5 text-sm text-muted-foreground">
           {isSignedOut

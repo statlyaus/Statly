@@ -251,7 +251,7 @@ export default function DraftHistoryPage() {
         )}
 
         {error && (
-          <section className={`p-5 ${alertStyles({ tone: 'error' })}`}>
+          <section role="alert" className={`p-5 ${alertStyles({ tone: 'error' })}`}>
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-5 w-5" aria-hidden="true" />
               <p className="text-sm font-semibold">{error}</p>

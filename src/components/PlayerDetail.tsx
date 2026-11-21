@@ -280,7 +280,7 @@ function PlayerDecisionDashboard({
             ))}
           </div>
           <div
-            className={`mt-3 p-3 text-sm ${alertStyles({ tone: injuryLabel ? 'info' : 'success' })}`}
+            className={`mt-3 p-3 text-sm ${alertStyles({ tone: injuryLabel ? 'deadline' : 'success' })}`}
           >
             <span className="font-semibold">Availability:</span> {riskLabel}
           </div>
@@ -477,7 +477,9 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
                 <LoadingSpinner />
               </div>
             ) : error ? (
-              <div className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>{error}</div>
+              <div role="alert" className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>
+                {error}
+              </div>
             ) : (
               <PlayerChart
                 matchData={chartData}
@@ -494,7 +496,9 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
                 <LoadingSpinner />
               </div>
             ) : error ? (
-              <div className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>{error}</div>
+              <div role="alert" className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>
+                {error}
+              </div>
             ) : (
               <MatchLogTable
                 matchLogs={matchLogs}

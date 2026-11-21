@@ -277,8 +277,9 @@ tower still use club colours: the owner is redesigning them (ticket 06h), so the
 In the fantasy app the My Team squad list and player search show `ClubSquare` (the square and the
 abbreviation, no club logo). **Exception (owner, 2026-11-21):** the My Team field is an
 illustration: its guernseys wear club colours. It carries `data-illustration`, and the brand check
-lets club colour through there but still fails text set on a club colour, and every other rule
-applies inside it.
+lets club colour through there and lets its decorative (`aria-hidden`) drawing be round. It still
+fails an element whose own text sits on its own club-colour fill; text in a child of a filled
+shape is not caught yet, so check that by eye. Every other rule applies inside it.
 
 ## Content
 

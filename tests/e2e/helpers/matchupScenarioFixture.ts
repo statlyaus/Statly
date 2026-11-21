@@ -98,6 +98,10 @@ async function removeRows(prisma: PrismaClient) {
   await prisma.leagueMatchupScore.deleteMany({ where: { matchupId: MATCHUP_ID } });
   await prisma.leagueMatchup.deleteMany({ where: { id: MATCHUP_ID } });
   await prisma.leagueStanding.deleteMany({
-    where: { leagueId: E2E_LEAGUE_ID, seasonId: E2E_SEASON_ID },
+    where: {
+      leagueId: E2E_LEAGUE_ID,
+      seasonId: E2E_SEASON_ID,
+      memberId: { in: [E2E_HUMAN_MEMBER_ID, E2E_BOT_MEMBER_ID] },
+    },
   });
 }

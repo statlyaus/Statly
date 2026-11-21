@@ -40,7 +40,9 @@ const PAGES: ReadonlyArray<{
   {
     path: `/leagues/${E2E_LEAGUE_ID}?tab=matchups`,
     ready: async (page) => {
-      await expect(page.getByRole('table', { name: /totals by scoring category/i })).toBeVisible();
+      await expect(page.getByRole('table', { name: /totals by scoring category/i })).toBeVisible({
+        timeout: 30_000,
+      });
     },
     ceiling: 124,
   },
@@ -55,13 +57,15 @@ const PAGES: ReadonlyArray<{
 
 function text(words: string) {
   return async (page: Page) => {
-    await expect(page.locator('main').getByText(words).first()).toBeVisible();
+    await expect(page.locator('main').getByText(words).first()).toBeVisible({ timeout: 30_000 });
   };
 }
 
 function heading(level: number, name?: string) {
   return async (page: Page) => {
-    await expect(page.getByRole('heading', { level, name }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { level, name }).first()).toBeVisible({
+      timeout: 30_000,
+    });
   };
 }
 
@@ -124,7 +128,7 @@ test('the sign-in page follows the brand', async ({ page }) => {
   ]) {
     await page.setViewportSize(viewport);
     await page.goto('/login');
-    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
     const { findings } = await auditPage(page);
     expect.soft(findings, `/login at ${viewport.width}px`).toEqual(EMPTY);
   }

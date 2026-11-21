@@ -15,7 +15,9 @@ export function ClubSquare({ club }: { club: string }): React.JSX.Element {
         className={`size-[13px] flex-none ${square.edged ? 'border-[1.5px] border-foreground' : ''}`}
         style={{ background: square.fill }}
       />
-      <span>{getTeamAbbreviation(club)}</span>
+      <abbr title={club} className="no-underline">
+        {getTeamAbbreviation(club)}
+      </abbr>
     </span>
   );
 }
