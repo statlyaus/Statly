@@ -69,6 +69,28 @@ describe('tradeShareCardModel', () => {
     ]);
   });
 
+  it('says a trade no season has been played since is a projection', () => {
+    const page = sample('trade:2021-gee-wbd');
+    const card = tradeShareCardModel({
+      ...page,
+      story: {
+        ...page.story,
+        nets: {
+          ...page.story.nets,
+          tradeAlone: page.story.nets.tradeAlone.map((net) => ({
+            ...net,
+            line: net.line.filter(({ checkpoint }) => checkpoint.kind !== 'season_end'),
+          })),
+        },
+      },
+    });
+    expect(card.verdict).toBe('Western Bulldogs are ahead on projection');
+    expect(card.leadUnit).toBe('PAV projected');
+    expect(card.footer).toBe('Projected values · statly.com.au/afl/trades');
+    expect(card.alt).toContain('on projection, with no season played since the trade');
+    expect(tradeShareCardModel(page).leadUnit).toBe('PAV so far');
+  });
+
   it('describes the card in alt text', () => {
     const card = tradeShareCardModel(sample('trade:2021-gee-wbd'));
     expect(card.alt).toMatch(/^Share card for the 2021 Geelong and Western Bulldogs trade\./u);

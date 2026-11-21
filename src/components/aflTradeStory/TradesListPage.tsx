@@ -47,6 +47,9 @@ export function TradeRow({ story }: { story: AflTradeStorySampleSummary }) {
                 <b className="ts-body font-semibold tabular-nums text-foreground">
                   {formatSigned(result.net)}
                   {result.provisional ? '*' : ''}
+                  {result.projected ? (
+                    <span className="ts-small font-normal text-muted-foreground"> projected</span>
+                  ) : null}
                 </b>
               </li>
             ))}
@@ -101,6 +104,7 @@ export function TradesListPage({
   const anyProvisional = shown.some((story) =>
     story.results?.some(({ provisional }) => provisional)
   );
+  const anyProjected = shown.some((story) => story.results?.some(({ projected }) => projected));
   const summary = [
     `${shown.length} trade${shown.length === 1 ? '' : 's'}`,
     query.year === null ? `${years.at(-1)} to ${years[0]}` : String(query.year),
@@ -224,6 +228,12 @@ export function TradesListPage({
         {anyProvisional ? (
           <p className="mt-8 ts-small text-muted-foreground">
             * A value is not in yet, so this result will change.
+          </p>
+        ) : null}
+        {anyProjected ? (
+          <p className="mt-2 ts-small text-muted-foreground">
+            Projected: no season has been played since the trade, so each player is valued from his
+            PAV before it and each pick from its slot.
           </p>
         ) : null}
       </div>

@@ -4,7 +4,16 @@ import { STORY_COLLAGE_CLASS } from '@/components/aflStories/CameronMasthead';
 import { GUERNSEY_SKETCH, GUERNSEY_VIEW_BOX } from '@/components/aflStories/guernseySketch';
 import type { AflTradeStory } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
-import { clubStyle, formatSigned, inSentence, netText, tradeName } from './tradePageModel';
+import {
+  clubStyle,
+  formatSigned,
+  inSentence,
+  isProjection,
+  netText,
+  tradeLeader,
+  tradeName,
+  verdictTail,
+} from './tradePageModel';
 
 /**
  * The top of a public trade page (owner, 2026-11-16: every trade gets a collage). It is drawn from
@@ -100,8 +109,7 @@ function LeadBand({ story }: { story: AflTradeStory }) {
 
 export function TradeCollage({ story, headline }: { story: AflTradeStory; headline: string }) {
   const nets = story.nets.tradeAlone;
-  const leader = [...nets].sort((left, right) => right.net - left.net)[0];
-  const tied = headline === 'Level so far' || !leader;
+  const leader = tradeLeader(story);
   const leaderStyle = leader ? clubStyle(leader.clubName) : null;
   return (
     // data-collage: the head is a story collage the owner is redesigning (ticket 06h); the brand
@@ -112,7 +120,7 @@ export function TradeCollage({ story, headline }: { story: AflTradeStory; headli
         <span>{tradeName(story.trade.clubs)}</span>
       </div>
       <h1 className="sc-marker tc-title">
-        {tied || !leaderStyle ? (
+        {!leader || !leaderStyle ? (
           headline
         ) : (
           <>
@@ -120,9 +128,9 @@ export function TradeCollage({ story, headline }: { story: AflTradeStory; headli
               className="sc-tornB"
               style={{ background: leaderStyle.fill, color: leaderStyle.ink }}
             >
-              {leader!.clubName}
+              {leader.clubName}
             </span>{' '}
-            are ahead so far
+            are ahead {verdictTail(story)}
           </>
         )}
       </h1>
@@ -141,7 +149,9 @@ export function TradeCollage({ story, headline }: { story: AflTradeStory; headli
                 {net ? (
                   <div className="sc-note tc-note">
                     <b className="sc-label">{netText(net)}</b>
-                    <p className="sc-hand sc-hand-sm">PAV so far</p>
+                    <p className="sc-hand sc-hand-sm">
+                      {isProjection(story) ? 'PAV projected' : 'PAV so far'}
+                    </p>
                   </div>
                 ) : null}
                 <div className="tc-got">

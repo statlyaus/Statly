@@ -4471,6 +4471,13 @@ hand-written story, not bundle data: its facts are in `cameronChapters.tsx` with
 the foot of the page, and a change to them needs a source. Story components never import the private
 trade modules.
 
+**Projected trades.** A trade no season has been played since (no `season_end` point in its value
+lines, `aflTradeValueLineProjected`; the 2026 trades until 2027 is played) is a projection (owner,
+2026-11-21): each player is valued from his PAV before the trade, each pick from its slot. Its page
+says "ahead on projection" (headline, collage, share card), the list and club chains label its result
+"projected", and the ladder and biggest wins leave it out until a season has been played. It is read
+at request time, so no stored bundle changes.
+
 **Trade collage.** Every public trade page opens with `TradeCollage.tsx`, drawn only from that trade's
 story: each club's guernsey sketch in its colours (`aflStories/guernseySketch.ts`), its net on a taped
 note, what it received, and a band of who was ahead at each checkpoint of the net line. It adds no

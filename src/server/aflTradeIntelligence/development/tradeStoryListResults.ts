@@ -1,9 +1,12 @@
 import type { AflTradeStructure } from '../valuation/tradeStructureContracts';
-import type { AflTradeValueLines } from '../valuation/valueLineContracts';
+import {
+  aflTradeValueLineProjected,
+  type AflTradeValueLines,
+} from '../valuation/valueLineContracts';
 
 /**
  * One club's line in the trade list: its net on this trade at the trade's latest checkpoint, whether
- * that net is still provisional, and what it received. Read straight from the sealed value lines and
+ * that net is still provisional or a projection, and what it received. Read straight from the sealed value lines and
  * structure, so the list of every trade does not build every trade's full story.
  */
 export interface AflTradeStoryListResult {
@@ -12,6 +15,8 @@ export interface AflTradeStoryListResult {
   readonly net: number;
   /** A value is not in yet, so the net will change. */
   readonly provisional: boolean;
+  /** No season has been played since the trade, so the net is a projection. */
+  readonly projected: boolean;
   readonly received: readonly string[];
 }
 
@@ -53,6 +58,7 @@ export function aflTradeStoryListResults(
           clubName: names.clubs.get(club.clubId) ?? club.clubId,
           net: latest.net,
           provisional: latest.provisional || latest.pending.length > 0,
+          projected: aflTradeValueLineProjected(club.points),
           received: trade.legs
             .filter((leg) => leg.receivingClubId === club.clubId)
             .map((leg) => label(leg.transferId)),
