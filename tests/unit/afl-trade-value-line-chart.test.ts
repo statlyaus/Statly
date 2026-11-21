@@ -11,6 +11,7 @@ import {
   checkpointName,
   lineStroke,
   nearestCheckpoint,
+  SIDE_STROKES,
   valueLineChart,
 } from '@/components/aflTradeStory/valueLineChart';
 import type {
@@ -119,8 +120,31 @@ describe('value line chart: colours', () => {
     );
     // Collingwood, St Kilda and Essendon are all black. Each dashed line gets its own pattern.
     expect(chart.series.map(({ dash }) => dash)).toEqual([null, '6 4', '2 3']);
-    const distinct = valueLineChart(pair('Geelong', 'Gold Coast', RISING), 720);
-    expect(distinct.series.map(({ dash }) => dash)).toEqual([null, null]);
+  });
+
+  it('draws a two-club trade as its two sides: cobalt first by name, ink the other', () => {
+    // Order in the story and who leads never change a side: Richmond is listed first and leads.
+    const chart = valueLineChart(pair('Richmond', 'Carlton', RISING), 720);
+    expect(chart.series.map(({ clubName, stroke, dash }) => [clubName, stroke, dash])).toEqual([
+      ['Richmond', SIDE_STROKES[1], null],
+      ['Carlton', SIDE_STROKES[0], null],
+    ]);
+    // Two black guernseys would otherwise need a dash; as sides they are cobalt and ink.
+    const black = valueLineChart(pair('Collingwood', 'St Kilda', RISING), 720);
+    expect(black.series.map(({ stroke, dash }) => [stroke, dash])).toEqual([
+      [SIDE_STROKES[0], null],
+      [SIDE_STROKES[1], null],
+    ]);
+  });
+
+  it('keeps guernsey lines on trades of three or more clubs', () => {
+    const chart = valueLineChart(
+      [net('Geelong', RISING), net('Gold Coast', RISING), net('Sydney', RISING)],
+      720
+    );
+    expect(chart.series.map(({ stroke }) => stroke)).toEqual(
+      ['Geelong', 'Gold Coast', 'Sydney'].map(lineStroke)
+    );
   });
 });
 
