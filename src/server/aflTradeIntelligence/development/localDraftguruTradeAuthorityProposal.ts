@@ -125,6 +125,25 @@ function contiguousSeasons(seasons: readonly number[]): { from: number; to: numb
   return { from: ordered[0]!, to: ordered.at(-1)! };
 }
 
+/**
+ * The first trade season with a decision of its own. A decision's season range is fixed, and a
+ * successor on the 2011-2025 key would leave every retained target bound to it non-current
+ * (migration 0161), so 2026 and each later season get a new key instead (owner, 2026-11-21).
+ */
+export const DRAFTGURU_TRADE_SEASON_DECISIONS_FROM = 2026;
+
+/** The decision key the runner reads for one trade season: per season from 2026. */
+export function draftguruTradeDecisionKey(
+  capabilityId: DraftguruTradeCapability,
+  season: number,
+  parserSuffix: '' | '-parser-v2' | '-parser-v3' = capabilityId === 'draftguru-trade-detail'
+    ? '-parser-v3'
+    : ''
+): string {
+  const key = `${capabilityId}-issue-579-private-non_production${parserSuffix}`;
+  return season >= DRAFTGURU_TRADE_SEASON_DECISIONS_FROM ? `${key}-${season}` : key;
+}
+
 /** The decision is the owner's to record; this builder deliberately produces proposals only. */
 export function createDraftguruTradeAuthorityProposal(
   input: DraftguruTradeAuthorityProposalInput
@@ -158,8 +177,22 @@ export function createDraftguruTradeAuthorityProposal(
       : 'Draftguru AFL trade detail';
   const date = input.timing.termsEffectiveAt.slice(0, 10);
   const issue = 579;
+  if (to >= DRAFTGURU_TRADE_SEASON_DECISIONS_FROM) {
+    if (from !== to)
+      throw new TypeError(
+        `From ${DRAFTGURU_TRADE_SEASON_DECISIONS_FROM} each Draftguru trade season has its own decision: propose one season.`
+      );
+    if (input.capabilityId === 'draftguru-trade-detail' && !eventualSelections)
+      throw new TypeError(
+        `The runner captures ${from} trade detail only with ${DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION}; propose that parser.`
+      );
+  }
   // v2 and v3 are separate decisions, so earlier decisions and their captures stay valid as recorded.
-  const decisionKey = `${input.capabilityId}-issue-${issue}-private-non_production${eventualSelections ? '-parser-v3' : dispositions ? '-parser-v2' : ''}`;
+  const decisionKey = draftguruTradeDecisionKey(
+    input.capabilityId,
+    from,
+    eventualSelections ? '-parser-v3' : dispositions ? '-parser-v2' : ''
+  );
 
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,

@@ -4,8 +4,10 @@ import { join, resolve } from 'node:path';
 import { createAflTradeByteArtifactRef } from '../src/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   createDraftguruTradeAuthorityProposal,
+  DRAFTGURU_TRADE_SEASON_DECISIONS_FROM,
   type DraftguruTradeCapability,
 } from '../src/server/aflTradeIntelligence/development/localDraftguruTradeAuthorityProposal';
+import { DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION } from '../src/server/aflTradeIntelligence/source/draftguruSourceAdapter';
 
 /**
  * Prepares the narrow source-rights and Gate **proposals** for the Draftguru trade capabilities.
@@ -14,9 +16,28 @@ import {
  * so this script never sets `decidedBy` and never emits a decision record.
  *
  * Usage: npx tsx Scripts/prepare-draftguru-trade-authority-proposals.ts <source-package-dir> [out.json]
+ *          [--season <year>]
+ *
+ * Without `--season` it prepares the 2011-2025 proposals. From 2026 each season is its own decision
+ * under its own key (`--season 2026`), with trade detail on the eventual-selection parser the runner
+ * uses: widening the 2011-2025 decision would supersede the one every captured page is bound to.
  */
-const sourcePackage = resolve(process.argv[2] ?? '');
-if (process.argv[2] === undefined) {
+const args = process.argv.slice(2);
+const seasonAt = args.indexOf('--season');
+const season = seasonAt === -1 ? null : Number(args.splice(seasonAt, 2)[1]);
+if (
+  season !== null &&
+  !(Number.isInteger(season) && season >= DRAFTGURU_TRADE_SEASON_DECISIONS_FROM)
+) {
+  throw new TypeError(
+    `--season takes one year from ${DRAFTGURU_TRADE_SEASON_DECISIONS_FROM}; earlier seasons share the 2011-2025 decision.`
+  );
+}
+if (args.length > 2 || args.some((arg) => arg.startsWith('--'))) {
+  throw new TypeError(`Unknown arguments: ${args.join(' ')}. Use --season <year> as two words.`);
+}
+const sourcePackage = resolve(args[0] ?? '');
+if (args[0] === undefined) {
   throw new TypeError('Pass the source-package directory as the first argument.');
 }
 
@@ -48,11 +69,12 @@ const evidenceById = Object.fromEntries(
   evidence.map(({ role, reference }) => [role, reference.artifactId])
 ) as Record<keyof typeof evidenceDocuments, string>;
 
-// The cohort-relevant trade seasons measured from the archive: the owner's 2000-2025 decision, and 2026
-// added by the owner on 2026-11-21 on the same terms.
-const seasons = [
-  2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
-];
+// The cohort-relevant trade seasons measured from the archive (the owner's 2000-2025 decision), or one
+// later season on the same terms (2026 added by the owner on 2026-11-21).
+const seasons =
+  season === null
+    ? [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+    : [season];
 const latestEvidenceAt = Math.max(...evidence.map(({ recordedAt }) => recordedAt.getTime()));
 const timing = {
   termsEffectiveAt: '2026-09-10T00:00:00.000Z',
@@ -68,6 +90,9 @@ const prepared = (
   capabilityId,
   ...createDraftguruTradeAuthorityProposal({
     capabilityId,
+    ...(season !== null && capabilityId === 'draftguru-trade-detail'
+      ? { parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION }
+      : {}),
     seasons,
     evidenceIds: evidenceById,
     timing,
@@ -106,8 +131,8 @@ const packet = {
 };
 
 const serialized = `${JSON.stringify(packet, null, 2)}\n`;
-if (process.argv[3] !== undefined) {
-  writeFileSync(resolve(process.argv[3]), serialized);
+if (args[1] !== undefined) {
+  writeFileSync(resolve(args[1]), serialized);
 }
 process.stdout.write(
   `${JSON.stringify(
@@ -123,7 +148,7 @@ process.stdout.write(
           ?.values,
         fields: sourceRights.content.fields.length,
       })),
-      wroteTo: process.argv[3] ?? null,
+      wroteTo: args[1] ?? null,
     },
     null,
     1

@@ -57,14 +57,17 @@ import { DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION } from '@/server/aflT
 const digest = (character: string) => character.repeat(64);
 const evaluatedAt = '2026-09-25T00:00:00.000Z';
 
-function recorded(capabilityId: DraftguruTradeCapability) {
+function recorded(
+  capabilityId: DraftguruTradeCapability,
+  seasons: readonly number[] = Array.from({ length: 15 }, (_, index) => 2011 + index)
+) {
   const { sourceRights, proposal } = createDraftguruTradeAuthorityProposal({
     capabilityId,
     // The runner captures trade detail with v3 under its own decision.
     ...(capabilityId === 'draftguru-trade-detail'
       ? { parserVersion: DRAFTGURU_TRADE_EVENTUAL_SELECTION_PARSER_VERSION }
       : {}),
-    seasons: Array.from({ length: 15 }, (_, index) => 2011 + index),
+    seasons,
     evidenceIds: {
       productOwnerAuthorization: `artifact:${digest('1')}`,
       boundedCapturePlan: `artifact:${digest('2')}`,
@@ -147,6 +150,36 @@ describe('recorded Draftguru trade authority', () => {
       expect(loaded.authority.proposal.proposalId).toBe(record.proposal.proposalId);
       // The bounded capture plan is the reviewed egress control for the five-second pacing.
       expect(loaded.egressPolicyEvidenceId).toBe(`artifact:${digest('2')}`);
+    }
+  );
+
+  it.each(['draftguru-trade-index', 'draftguru-trade-detail'] as const)(
+    'reads 2026 %s from its own decision, and 2025 from the 2011-2025 one',
+    async (capabilityId) => {
+      const earlier = recorded(capabilityId);
+      const season2026 = recorded(capabilityId, [2026]);
+      const ledger = {
+        proposals: [earlier.proposal, season2026.proposal],
+        decisions: [earlier.decision, season2026.decision],
+      };
+      const both = {
+        load: async () => ({ revision: 1, ledger }),
+        resolveAuthorization: async (rightsArtifactId: string) => ({
+          revision: 1,
+          ledger,
+          sourceRights: [earlier, season2026].find(
+            ({ sourceRights }) => sourceRights.rightsArtifactId === rightsArtifactId
+          )!.sourceRights,
+        }),
+      };
+      const at2025 = await loadRecordedLocalCaptureAuthority(both, capabilityId, 2025, evaluatedAt);
+      const at2026 = await loadRecordedLocalCaptureAuthority(both, capabilityId, 2026, evaluatedAt);
+      expect(at2025.decisionId).toBe(earlier.decision.decisionId);
+      expect(at2026.decisionId).toBe(season2026.decision.decisionId);
+      // The 2011-2025 decision alone does not cover 2026.
+      await expect(
+        loadRecordedLocalCaptureAuthority(ledgerOf(earlier), capabilityId, 2026, evaluatedAt)
+      ).rejects.toMatchObject({ code: 'AUTHORITY_MISMATCH' });
     }
   );
 
