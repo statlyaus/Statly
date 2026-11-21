@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
-import Image from 'next/image';
 import Link from 'next/link';
 
+import { StatlyWordmark } from '@/components/brand/StatlyWordmark';
 import { PublicNavigation } from '@/components/navigation/PublicNavigation';
 
 /** Footer: logo, then secondary navigation, then legal pages, each its own labelled group. */
@@ -45,14 +45,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
               className="inline-flex min-h-11 shrink-0 items-center transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Statly home"
             >
-              <Image
-                src="/brand/statly-hero-logo-overlay.png"
-                alt=""
-                width={122}
-                height={36}
-                loading="eager"
-                className="h-auto w-24 sm:w-28"
-              />
+              <StatlyWordmark className="mr-4 py-3" />
             </Link>
             <span aria-hidden="true" className="hidden h-6 w-px bg-border sm:block" />
             <PublicNavigation />
@@ -64,13 +57,9 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
         <footer className="ground-cobalt pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-12 sm:px-6 lg:px-10">
             <div className="flex flex-col gap-3">
-              <Image
-                src="/brand/statly-hero-logo-overlay.png"
-                alt="Statly"
-                width={136}
-                height={40}
-                className="h-auto w-28"
-              />
+              <p aria-label="Statly">
+                <StatlyWordmark />
+              </p>
               <p className="text-muted-foreground">&copy; {new Date().getFullYear()} Statly</p>
             </div>
             {footerGroups.map((group) => (

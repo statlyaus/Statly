@@ -2,13 +2,13 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { useAuth } from '@/AuthContext';
+import { StatlyWordmark } from '@/components/brand/StatlyWordmark';
 import PlayerSearch from '@/components/PlayerSearch';
 import { AlertContainer, useAlert } from '@/components/ui/Alert';
 import StatlyIcon from '@/components/ui/StatlyIcon';
@@ -404,15 +404,8 @@ export default function MainNavigation({
           }`}
         >
           <div className="min-w-0">
-            <Link href={brandHref} className="flex min-w-0 items-center">
-              <Image
-                src="/brand/statly-hero-logo-overlay.png"
-                alt="Statly"
-                width={122}
-                height={36}
-                loading="eager"
-                className="h-auto w-24 sm:w-28"
-              />
+            <Link href={brandHref} aria-label="Statly" className="flex min-w-0 items-center">
+              <StatlyWordmark className="mr-4" />
             </Link>
           </div>
 
