@@ -189,6 +189,24 @@ describe('getDraftRoomTimerState', () => {
     });
   });
 
+  it('marks the pick overdue once the grace after the deadline has passed', () => {
+    const timer = (seconds: number) =>
+      getDraftRoomTimerState({
+        status: 'LIVE',
+        timePerPick: 120,
+        pickDeadlineAt: '2026-06-13T10:00:00.000Z',
+        nowMs: Date.parse('2026-06-13T10:00:00.000Z') + seconds * 1000,
+      });
+
+    expect(timer(14)).toMatchObject({ phase: 'FINALIZING', label: 'Finalizing pick' });
+    expect(timer(16)).toMatchObject({
+      phase: 'OVERDUE',
+      remainingSeconds: 0,
+      label: 'Overdue',
+      isRunning: false,
+    });
+  });
+
   it('interpolates from the server anchor without trusting browser wall-clock skew', () => {
     expect(
       getDraftRoomTimerState({

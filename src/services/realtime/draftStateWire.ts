@@ -107,6 +107,8 @@ export const DraftRoomSnapshotPayloadSchema = z
        * list it had.
        */
       managerUserIds: z.array(z.string()).optional(),
+      /** The league lets a manager auto-pick an overdue pick. Optional for the same reason. */
+      autoPickAllowed: z.boolean().optional(),
       picks: z.array(DraftRoomSnapshotPickSchema),
     }),
   })

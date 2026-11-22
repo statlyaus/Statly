@@ -41,8 +41,26 @@ export async function POST(
     return commonErrors.unauthorized();
   }
 
+  // A manager may only make a pick whose clock has run out, and only the one they were looking at.
+  const body: unknown = await request.json().catch(() => null);
+  const expectedSchedulingVersion =
+    body && typeof body === 'object' && 'expectedSchedulingVersion' in body
+      ? body.expectedSchedulingVersion
+      : undefined;
+  if (
+    typeof expectedSchedulingVersion !== 'number' ||
+    !Number.isInteger(expectedSchedulingVersion)
+  ) {
+    return commonErrors.badRequest('expectedSchedulingVersion must be an integer');
+  }
+
   try {
-    const result = await draftApplicationService.autoPick({ draftId, actorUserId });
+    const result = await draftApplicationService.autoPick({
+      draftId,
+      actorUserId,
+      expectedSchedulingVersion,
+      requireExpired: true,
+    });
 
     void draftRealtimePublisher.publishCommandResult(result).catch((publishError) => {
       logger.warn('Failed to publish draft auto-pick side effects', {

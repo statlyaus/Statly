@@ -346,3 +346,22 @@ export async function seedDraftLifecycleFixture(): Promise<DraftLifecycleFixture
     await prisma.$disconnect();
   }
 }
+
+/**
+ * Runs the current pick's clock out, as if no expiry job made the pick, and returns the draft's
+ * scheduling version so a manager can make that overdue pick.
+ */
+export async function expireCurrentPick(draftId: string): Promise<number> {
+  const prisma = new PrismaClient();
+
+  try {
+    const draft = await prisma.draft.update({
+      where: { id: draftId },
+      data: { pickDeadlineAt: new Date(Date.now() - 60_000) },
+      select: { schedulingVersion: true },
+    });
+    return draft.schedulingVersion;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
