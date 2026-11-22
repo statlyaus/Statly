@@ -1344,8 +1344,16 @@ Prerequisites:
      (Friday 20 November) is session 2, selections 20 to 65. Night two's body never states its
      opening pick, so v21 reads it from the report's own summary (its one `<meta name="description">`,
      "pick No.20, the opening selection on night two"); the draft's total (65) and final selection
-     must agree. Nothing proves the 2026 membership (no Footyinfo board), so no 2026 matched bid is
-     counted; and
+     must agree. 2026 has no Footyinfo board, so its membership is proven only by the two night
+     ranges together with the reviewed re-listings in `source/reviewedDraftRelistings.ts` (owner
+     2026-11-22, "New rule, then ship"): Gold Coast used picks 63 and 64 to re-list its delisted
+     Himmelberg and Ugle-Hagan, which the night-two report states and the Draftguru year page prints
+     no row for. While the night-two v21 row the list cites is in the candidate's source set, those
+     two numbers count as reached in session 2 (no `selection_conflict`); they are never
+     selections, so never anyone's nominee. The ranges must run 1 to 65 with no gap and no
+     overlap, and every other number must be a candidate selection with exactly one stated access
+     category; the outcome then records `draftProvenBy: official_afl_sessions`. Any other gap still
+     blocks the session and leaves the count unknown. No 2026 matched bid is counted (no board); and
    - one `official-afl-indicative-draft-order-issue579-private-<season>-order-v4` decision per
      captured season, 2019 to 2025, for example
      `official-afl-indicative-draft-order-issue579-private-2022-order-v4`. Parser

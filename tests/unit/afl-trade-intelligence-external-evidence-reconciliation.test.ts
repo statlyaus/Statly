@@ -1,4 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// The reviewed re-listings cite genuine evidence ids; a test names its own fixture's row instead.
+const reviewedRelistings = vi.hoisted(() => ({
+  list: [] as {
+    draftYear: number;
+    draftType: string;
+    selectionNumbers: number[];
+    evidenceId: string;
+    note: string;
+  }[],
+}));
+vi.mock('@/server/aflTradeIntelligence/source/reviewedDraftRelistings', () => ({
+  AFL_TRADE_REVIEWED_DRAFT_RELISTINGS: reviewedRelistings.list,
+}));
 
 import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
@@ -2273,6 +2287,223 @@ describe('provider-stated pick outcomes (draftguru-trade-parser/v2)', () => {
         expect(outcome).not.toHaveProperty('receivingClubNominatedSelections');
       }
     );
+
+    describe('the 2026 night ranges and the reviewed re-listings prove the draft (owner 2026-11-22)', () => {
+      type Claim = AflTradeExternalEvidenceContent['claim'];
+      const in2026 = (claims: Claim[]) =>
+        claims.map((claim): Claim => {
+          if (claim.kind === 'directed_transfer' && claim.asset.kind === 'current_pick')
+            return { ...claim, asset: { ...claim.asset, draftYear: 2026 } };
+          return 'draftYear' in claim ? ({ ...claim, draftYear: 2026 } as Claim) : claim;
+        });
+      // Selections 1 to 65 less the omitted numbers; Gold Coast's re-listed 63 and 64 have no row
+      // unless `relistedRows` (a page that printed them, only for the enumerated-session case).
+      const page2026 = (bulldogsAccess: Access, omit: number[] = [], relistedRows = false) =>
+        in2026(
+          Array.from({ length: 65 }, (_, index) => index + 1)
+            .filter((number) => ![...(relistedRows ? [] : [63, 64]), ...omit].includes(number))
+            .map((number): Claim =>
+              number === 14
+                ? { ...harryKyle, accessCategory: bulldogsAccess }
+                : {
+                    kind: 'draft_selection',
+                    draftYear: 2025,
+                    draftType: 'national',
+                    selectionNumber: number,
+                    roundNumber: null,
+                    player: { nativeId: null, recordedName: `Synthetic Player ${number}` },
+                    selectedByClub: { nativeId: null, recordedName: 'GWS' },
+                    accessCategory: 'open',
+                  }
+            )
+        );
+      const range = (first: number, last: number) =>
+        Array.from({ length: last - first + 1 }, (_, index) => first + index);
+      const sessionClaim = (sessionOrdinal: number, selectionNumbers: number[]): Claim => ({
+        kind: 'draft_session',
+        draftYear: 2026,
+        draftType: 'national',
+        sessionOrdinal,
+        eventDate: `2026-11-${18 + sessionOrdinal}`,
+        officialName: '2026 Telstra AFL Draft',
+        selectionNumbers,
+      });
+      const nights = (
+        claims: Claim[],
+        parserVersion = 'official-afl-completed-draft-session/v21'
+      ) => batch('official_afl', '6', claims, undefined, { parserVersion });
+      const twoNights = [sessionClaim(1, range(1, 19)), sessionClaim(2, range(20, 65))];
+      const reviewEntry = (evidenceId: string) =>
+        reviewedRelistings.list.splice(0, reviewedRelistings.list.length, {
+          draftYear: 2026,
+          draftType: 'national',
+          selectionNumbers: [63, 64],
+          evidenceId,
+          note: 'Test entry.',
+        });
+      // The reviewed list cites the night-two row; `cite: false` cites a row not in the source set.
+      const reconcile2026 = (
+        page: Claim[],
+        {
+          claims = twoNights,
+          cite = true,
+          extra = null,
+        }: { claims?: Claim[]; cite?: boolean; extra?: ReturnType<typeof batch> | null } = {}
+      ) => {
+        const session = nights(claims);
+        const nightTwo = session.content.evidence.find(
+          ({ content: { claim } }) => claim.kind === 'draft_session' && claim.sessionOrdinal === 2
+        )!;
+        reviewEntry(cite ? nightTwo.evidenceId : `external-evidence:${'0'.repeat(64)}`);
+        return reconcileDraft({
+          page,
+          trade: in2026(tradeClaims),
+          outcome: in2026([notUsed])[0]!,
+          session,
+          board: extra,
+        });
+      };
+      const sessionIssues = (candidate: ReturnType<typeof reconcileDraft>) =>
+        candidate.content.issues
+          .filter(({ subjectKey }) => subjectKey.startsWith('draft-session:'))
+          .map(({ code, severity, subjectKey }) => ({ code, severity, subjectKey }));
+      const nightTwoBlocks = [
+        {
+          code: 'selection_conflict',
+          severity: 'blocking',
+          subjectKey: 'draft-session:2026:national:2',
+        },
+      ];
+
+      it('names Gold Coast’s 63 and 64 with the night-two evidence in the reviewed list', async () => {
+        const actual = await vi.importActual<
+          typeof import('@/server/aflTradeIntelligence/source/reviewedDraftRelistings')
+        >('@/server/aflTradeIntelligence/source/reviewedDraftRelistings');
+        expect(actual.AFL_TRADE_REVIEWED_DRAFT_RELISTINGS).toEqual([
+          expect.objectContaining({
+            draftYear: 2026,
+            draftType: 'national',
+            selectionNumbers: [63, 64],
+            evidenceId:
+              'external-evidence:59ab104af5b67fc7edd4d192d63f67397f71e745c973e32a6e21ce13a7536041',
+          }),
+        ]);
+      });
+
+      it('resolves a not-used pick with no nominee as not used, citing the night ranges', () => {
+        const candidate = reconcile2026(page2026('open'));
+        const outcome = basisOf(candidate);
+        expect(outcome).toEqual(
+          expect.objectContaining({
+            disposition: 'not_used',
+            nominationBasis: 'club_took_no_nominated_player',
+            receivingClubNominatedSelections: 0,
+            draftProvenBy: 'official_afl_sessions',
+          })
+        );
+        // The disposition row, the Bulldogs' year-page row and the night-2 session row.
+        expect(outcome.evidenceIds).toHaveLength(3);
+        expect(sessionIssues(candidate)).toEqual([]);
+        expect(basisOf(reconcile2026(page2026('academy')))).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_nominated_player',
+            receivingClubNominatedSelections: 1,
+            draftProvenBy: 'official_afl_sessions',
+          })
+        );
+      });
+
+      it.each<[string, () => ReturnType<typeof reconcileDraft>]>([
+        ['a number off the reviewed list has no row', () => reconcile2026(page2026('open', [30]))],
+        [
+          'the reviewed list cites a row not in the source set',
+          () => reconcile2026(page2026('open'), { cite: false }),
+        ],
+        [
+          'the night ranges overlap',
+          () =>
+            reconcile2026(page2026('open'), {
+              claims: [sessionClaim(1, range(1, 20)), sessionClaim(2, range(20, 65))],
+            }),
+        ],
+        [
+          'the night ranges skip a number',
+          () =>
+            reconcile2026(page2026('open', [20]), {
+              claims: [sessionClaim(1, range(1, 19)), sessionClaim(2, range(21, 65))],
+            }),
+        ],
+        [
+          'two claims state different ranges for one night',
+          () =>
+            reconcile2026(page2026('open'), {
+              claims: [...twoNights, sessionClaim(1, range(1, 18))],
+            }),
+        ],
+      ])('leaves the count unknown when %s', (_label, candidate) => {
+        const outcome = basisOf(candidate());
+        expect(outcome).toEqual(expect.objectContaining({ nominationBasis: 'no_access_evidence' }));
+        expect(outcome).not.toHaveProperty('draftProvenBy');
+      });
+
+      it('keeps a session gap blocking off the reviewed list or without its cited row', () => {
+        expect(sessionIssues(reconcile2026(page2026('open', [30])))).toEqual(nightTwoBlocks);
+        expect(sessionIssues(reconcile2026(page2026('open'), { cite: false }))).toEqual(
+          nightTwoBlocks
+        );
+      });
+
+      it('waives no gap for a boundary parser the registry does not name for the draft', () => {
+        const session = nights(twoNights, 'official-afl-completed-draft-session/v20');
+        reviewEntry(session.content.evidence[1]!.evidenceId);
+        const candidate = reconcileDraft({
+          page: page2026('open'),
+          trade: in2026(tradeClaims),
+          outcome: in2026([notUsed])[0]!,
+          session,
+        });
+        expect(sessionIssues(candidate)).toEqual(nightTwoBlocks);
+        expect(basisOf(candidate)).toEqual(
+          expect.objectContaining({ nominationBasis: 'no_access_evidence' })
+        );
+      });
+
+      it('never reads a reviewed re-listing into an enumerated session', () => {
+        const enumerated = batch('official_afl', '7', [sessionClaim(2, range(20, 65))]);
+        reviewEntry(enumerated.content.evidence[0]!.evidenceId);
+        const candidate = reconcileDraft({
+          page: page2026('open'),
+          trade: in2026(tradeClaims),
+          outcome: in2026([notUsed])[0]!,
+          session: enumerated,
+        });
+        expect(sessionIssues(candidate)).toEqual(nightTwoBlocks);
+      });
+
+      it('lets an enumerated session prove the draft over the night ranges', () => {
+        const enumerated = batch('official_afl', '7', [sessionClaim(1, range(1, 65))]);
+        const outcome = basisOf(reconcile2026(page2026('open', [], true), { extra: enumerated }));
+        expect(outcome).toEqual(
+          expect.objectContaining({
+            nominationBasis: 'club_took_no_nominated_player',
+            receivingClubNominatedSelections: 0,
+          })
+        );
+        expect(outcome).not.toHaveProperty('draftProvenBy');
+      });
+
+      it('the contract accepts the range proof only behind a count', () => {
+        const candidate = reconcile2026(page2026('open'));
+        const { receivingClubNominatedSelections: _count, ...withoutCount } =
+          candidate.content.pickOutcomes![0]!;
+        expect(() =>
+          createAflTradeExternalReconciliationCandidate({
+            ...candidate.content,
+            pickOutcomes: [{ ...withoutCount, nominationBasis: 'no_access_evidence' }],
+          })
+        ).toThrow();
+      });
+    });
 
     it('carries no nomination basis on selected or traded-on picks', () => {
       const candidate = reconcileDraft({ page: yearPage('academy'), outcome: disposition({}) });

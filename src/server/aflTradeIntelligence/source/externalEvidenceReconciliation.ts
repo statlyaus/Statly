@@ -1,6 +1,10 @@
 import { OFFICIAL_AFL_2010_REPORT } from './officialAflDraft2010PdfFacts';
-import { isOfficialAflDraftSessionBoundaryParserVersion } from './officialAflDraftBoundarySessions';
+import {
+  isOfficialAflDraftSessionBoundaryParserVersion,
+  OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSIONS,
+} from './officialAflDraftBoundarySessions';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
+import { AFL_TRADE_REVIEWED_DRAFT_RELISTINGS } from './reviewedDraftRelistings';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -396,9 +400,11 @@ interface CanonicalPickOutcome {
   /**
    * With a `club_took_*` basis only: present when a reviewed Footyinfo board, not an official AFL
    * completed session, proved which selections the draft had (owner decision 2026-10-14, issue
-   * 789). Absent, an official session proved it, so earlier outcomes and candidate ids are unchanged.
+   * 789). `official_afl_sessions` when the night reports' boundary ranges with the reviewed
+   * re-listings proved it (owner 2026-11-22, the 2026 national draft). Absent, an enumerated official
+   * session proved it, so earlier outcomes and candidate ids are unchanged.
    */
-  draftProvenBy?: 'footyinfo';
+  draftProvenBy?: 'footyinfo' | 'official_afl_sessions';
   /**
    * With `club_took_nominated_player` only (issue 789, 2026-10-16): the reviewed Footyinfo board
    * picks that record a receiving-club selection Draftguru's year page marks open as that club's
@@ -2068,7 +2074,7 @@ type NominatedSelectionCount = {
   count: number;
   evidenceIds: string[];
   /** The source that proved the draft's membership. */
-  provenBy: 'official_afl' | 'footyinfo';
+  provenBy: 'official_afl' | 'footyinfo' | 'official_afl_sessions';
   /** The board picks that alone make a counted selection a nominee; see `CanonicalPickOutcome`. */
   matchedBidBoardPickIds: string[];
 };
@@ -2082,6 +2088,57 @@ type NominatedSelectionCount = {
 const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|national']);
 
 /**
+ * Drafts whose membership the Official AFL night reports' boundary sessions may prove together with
+ * the reviewed re-listings (`reviewedDraftRelistings.ts`), when no enumerated session lists their
+ * selections. Owner decision 2026-11-22 ("New rule, then ship"): 2026 has no Footyinfo board, and its
+ * night ranges with Gold Coast's re-listed 63 and 64 account for every number. Another draft needs a
+ * new owner decision, never just a new entry here.
+ */
+const OFFICIAL_SESSION_RANGE_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2026|national']);
+
+/**
+ * Whether a row is an Official AFL session claim read by the boundary parser the registry names for
+ * its own draft (`OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSIONS`: v20 for 2025, v21 for 2026).
+ */
+function isDraftBoundarySession(
+  row: Evidence
+): row is Evidence & { content: { claim: Extract<Claim, { kind: 'draft_session' }> } } {
+  const claim = row.content.claim;
+  return (
+    row.content.provider === 'official_afl' &&
+    claim.kind === 'draft_session' &&
+    claim.draftType === 'national' &&
+    (OFFICIAL_AFL_DRAFT_SESSION_BOUNDARY_PARSER_VERSIONS as Readonly<Record<number, string>>)[
+      claim.draftYear
+    ] === row.content.capture.parserVersion
+  );
+}
+
+/**
+ * The reviewed re-listed numbers (`reviewedDraftRelistings.ts`) whose cited evidence is in this
+ * source set: that row must be its draft's boundary session and its range must state every listed
+ * number. Keys are `<draftYear>|<draftType>|<number>`. Without the cited row nothing is waived.
+ */
+function aflTradeReviewedRelistedNumbers(evidence: readonly Evidence[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const relisting of AFL_TRADE_REVIEWED_DRAFT_RELISTINGS) {
+    const row = evidence.find(({ evidenceId }) => evidenceId === relisting.evidenceId);
+    if (row === undefined || !isDraftBoundarySession(row)) continue;
+    const claim = row.content.claim;
+    if (
+      claim.draftYear !== relisting.draftYear ||
+      claim.draftType !== relisting.draftType ||
+      !relisting.selectionNumbers.every((number) => claim.selectionNumbers.includes(number))
+    )
+      continue;
+    relisting.selectionNumbers.forEach((number) =>
+      keys.add(`${relisting.draftYear}|${relisting.draftType}|${number}`)
+    );
+  }
+  return keys;
+}
+
+/**
  * Counts a club's selections in one draft that a Draftguru national-year page read at parser v2 or
  * later states were reached through academy or father-son access, with the evidence it read. Returns
  * null unless the draft's membership is proven independently of that page, by either:
@@ -2089,16 +2146,22 @@ const FOOTYINFO_BOARD_PROVEN_DRAFTS: ReadonlySet<string> = new Set(['2025|nation
  * - the reviewed official AFL completed-session claims, which must list selections 1 to N with no gap;
  * - or, only for a draft in `FOOTYINFO_BOARD_PROVEN_DRAFTS` with no such official session claim, a
  *   reviewed Footyinfo board whose selected picks run 1 to N with no gap, each held by one resolved
- *   club.
+ *   club;
+ * - or, only for a draft in `OFFICIAL_SESSION_RANGE_PROVEN_DRAFTS` with neither, the night reports'
+ *   boundary sessions, whose ranges together run 1 to N with no gap and no overlap, where every
+ *   number is a candidate selection or a reviewed re-listing (`reviewedDraftRelistings.ts`).
  *
  * A session claim read from a night report's boundary sentences (parser v20 for the 2025 and v21
- * for the 2026 national draft) states a number range, not a list of selections, so it proves the
- * session and never the membership: it is not counted here, and the board still proves 2025
- * (decision 2026-10-16). 2026 has no board (owner 2026-11-21), so its membership stays unproven.
+ * for the 2026 national draft) states a number range, not a list of selections, so on its own it
+ * proves the session and never the membership: the board still proves 2025 (decision 2026-10-16).
+ * 2026 has no board (owner 2026-11-21), so its ranges prove it only with the reviewed re-listings
+ * accounting for the numbers no selection holds (owner 2026-11-22). A re-listed number is never a
+ * selection, so never a nominee of any club.
  *
- * The candidate's selections in the draft must be exactly those numbers, and every one must carry
- * exactly one stated category: the rule before 2026-10-14, which alone decides an official-proven
- * draft, so its outcomes are unchanged. A board-proven draft may instead have every selection name a
+ * The candidate's selections in the draft must be exactly those numbers (less a range-proven draft's
+ * re-listed numbers no selection holds), and every one must carry exactly one stated category: the
+ * rule before 2026-10-14, which alone decides an official-proven or range-proven draft, so its
+ * outcomes are unchanged. A board-proven draft may instead have every selection name a
  * resolved club and each of the receiving club's carry exactly one. A board makes no completeness
  * claim of its own: only the 1-to-N run and the equality with the candidate's selections guard it.
  * A partial or disputed year page therefore proves nothing about a club whose rows it omits.
@@ -2118,8 +2181,31 @@ function createNominatedSelectionCounter(
   const sessionNumbers = new Map<string, Set<number>>();
   const sessionEvidence = new Set<string>();
   const boardSelectionEvidence = new Set<string>();
+  // Boundary-session ranges by draft and session ordinal, for a range-proven draft only; a number
+  // list is null once two claims state different ranges for one session.
+  const rangeSessions = new Map<string, Map<number, string | null>>();
+  const rangeSessionEvidence = new Set<string>();
+  const relisted = aflTradeReviewedRelistedNumbers(evidence);
   for (const row of evidence) {
     const claim = row.content.claim;
+    if (
+      row.content.provider === 'official_afl' &&
+      claim.kind === 'draft_session' &&
+      isDraftBoundarySession(row) &&
+      OFFICIAL_SESSION_RANGE_PROVEN_DRAFTS.has(`${claim.draftYear}|${claim.draftType}`)
+    ) {
+      const key = `${claim.draftYear}|${claim.draftType}`;
+      const sessions = rangeSessions.get(key) ?? new Map<number, string | null>();
+      const numbers = claim.selectionNumbers.join(',');
+      const stated = sessions.get(claim.sessionOrdinal);
+      sessions.set(
+        claim.sessionOrdinal,
+        stated === undefined || stated === numbers ? numbers : null
+      );
+      rangeSessions.set(key, sessions);
+      rangeSessionEvidence.add(row.evidenceId);
+      continue;
+    }
     if (
       row.content.provider === 'official_afl' &&
       claim.kind === 'draft_session' &&
@@ -2168,6 +2254,28 @@ function createNominatedSelectionCounter(
     const numbers = [...holders.keys()].sort((left, right) => left - right);
     return runsFromOne(numbers) ? numbers : null;
   };
+  // The numbers a range-proven draft's selections must be: its boundary sessions' ranges, which
+  // together run 1 to N with no overlap, less the reviewed re-listed numbers no selection holds.
+  const rangeNumbers = (
+    draftYear: number,
+    draftType: string,
+    inDraft: readonly number[]
+  ): number[] | null => {
+    const key = `${draftYear}|${draftType}`;
+    const sessions = rangeSessions.get(key);
+    if (sessions === undefined || sessionNumbers.has(key) || FOOTYINFO_BOARD_PROVEN_DRAFTS.has(key))
+      return null;
+    const numbers: number[] = [];
+    for (const stated of sessions.values()) {
+      if (stated === null) return null;
+      numbers.push(...stated.split(',').map(Number));
+    }
+    numbers.sort((left, right) => left - right);
+    if (!runsFromOne(numbers)) return null;
+    return numbers.filter(
+      (number) => inDraft.includes(number) || !relisted.has(`${draftYear}|${draftType}|${number}`)
+    );
+  };
   const provenMembership = (
     draftYear: number,
     draftType: string,
@@ -2177,7 +2285,9 @@ function createNominatedSelectionCounter(
     const official = [...(sessionNumbers.get(key) ?? [])].sort((left, right) => left - right);
     const [numbers, provenBy] = sessionNumbers.has(key)
       ? [runsFromOne(official) ? official : null, 'official_afl' as const]
-      : [boardNumbers(key), 'footyinfo' as const];
+      : OFFICIAL_SESSION_RANGE_PROVEN_DRAFTS.has(key)
+        ? [rangeNumbers(draftYear, draftType, inDraft), 'official_afl_sessions' as const]
+        : [boardNumbers(key), 'footyinfo' as const];
     return numbers !== null &&
       inDraft.length === numbers.length &&
       inDraft.every((number, index) => number === numbers[index])
@@ -2203,7 +2313,11 @@ function createNominatedSelectionCounter(
         clubs.every((selection) => accessOf(selection) !== null));
     if (provenBy === null || !accessComplete) return null;
     const membershipEvidence =
-      provenBy === 'official_afl' ? sessionEvidence : boardSelectionEvidence;
+      provenBy === 'official_afl'
+        ? sessionEvidence
+        : provenBy === 'official_afl_sessions'
+          ? rangeSessionEvidence
+          : boardSelectionEvidence;
     // The board pick recording an open selection as this club's matched bid, when there is one.
     const matchedBidOf = (selection: CanonicalDraftSelection) => {
       if (accessOf(selection) !== 'open') return null;
@@ -2293,7 +2407,7 @@ function classifyNotUsedPick(
       nominationBasis:
         counted.count > 0 ? 'club_took_nominated_player' : 'club_took_no_nominated_player',
       receivingClubNominatedSelections: counted.count,
-      ...(counted.provenBy === 'footyinfo' ? { draftProvenBy: 'footyinfo' as const } : {}),
+      ...(counted.provenBy === 'official_afl' ? {} : { draftProvenBy: counted.provenBy }),
       ...(counted.matchedBidBoardPickIds.length > 0
         ? { matchedBidBoardPickIds: counted.matchedBidBoardPickIds }
         : {}),
@@ -2954,8 +3068,12 @@ export function reconcileAflTradeExternalEvidence(input: {
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'draft_session' }> } } =>
       row.content.claim.kind === 'draft_session'
   );
+  // A boundary session states a range; a number in it that a reviewed re-listing holds (Draftguru
+  // prints no row for it) is reached, not missing. An enumerated session lists its selections.
+  const relistedNumbers = aflTradeReviewedRelistedNumbers(evidence);
   for (const session of sessionClaims) {
     const claim = session.content.claim;
+    const boundary = isDraftBoundarySession(session);
     if (
       claim.selectionNumbers.some(
         (number) =>
@@ -2964,7 +3082,7 @@ export function reconcileAflTradeExternalEvidence(input: {
               content.claim.draftYear === claim.draftYear &&
               content.claim.draftType === claim.draftType &&
               content.claim.selectionNumber === number
-          )
+          ) && !(boundary && relistedNumbers.has(`${claim.draftYear}|${claim.draftType}|${number}`))
       )
     ) {
       issues.push({
