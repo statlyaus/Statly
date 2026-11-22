@@ -39,7 +39,7 @@ describe('trades-only mode', () => {
     '/privacy',
     '/terms',
     '/data-deletion',
-    '/brand/statly-hero-logo-overlay.png',
+    '/brand/statly-sherrin-icon-180.png',
     '/favicon.svg',
     '/robots.txt',
     '/sitemap.xml',

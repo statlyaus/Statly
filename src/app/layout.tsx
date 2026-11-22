@@ -28,7 +28,14 @@ const caveat = Caveat({
 export const metadata: Metadata = {
   title: 'Statly',
   description: 'AFL trades, valued by what the players and picks went on to do.',
-  icons: { icon: '/brand/statly-app-icon.png', apple: '/brand/statly-app-icon.png' },
+  // The brand board's Sherrin tile. The PNG is the fallback for browsers without SVG favicons.
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/brand/statly-sherrin-icon-180.png', type: 'image/png', sizes: '180x180' },
+    ],
+    apple: '/brand/statly-sherrin-icon-180.png',
+  },
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
