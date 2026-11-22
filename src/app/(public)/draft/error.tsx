@@ -21,10 +21,10 @@ export default function DraftRouteError({
     <section
       role="alert"
       aria-live="assertive"
-      className="rounded-lg border border-border bg-card p-8 text-card-foreground shadow-sm"
+      className="border border-border bg-card p-8 text-card-foreground"
     >
       <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
-        <span className="inline-flex rounded-full bg-destructive px-3 py-1 text-xs font-semibold text-destructive-foreground">
+        <span className="inline-flex rounded-cut bg-destructive px-3 py-1 text-xs font-semibold text-destructive-foreground">
           Load issue
         </span>
         <h2 className="mt-4 text-2xl font-semibold tracking-tight text-card-foreground">
@@ -41,7 +41,7 @@ export default function DraftRouteError({
         <button
           type="button"
           onClick={() => retry()}
-          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Try again
         </button>

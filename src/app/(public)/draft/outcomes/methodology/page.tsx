@@ -38,7 +38,7 @@ const checkStates = [
 export default function AflDraftTradeOutcomeMethodologyPage() {
   return (
     <div className="space-y-8" aria-labelledby="outcome-methodology-heading">
-      <section className="rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
+      <section className="border border-border bg-card p-6 text-card-foreground sm:p-8">
         <p className="text-xs font-semibold text-muted-foreground">
           Factual outcomes · release status
         </p>
@@ -54,7 +54,7 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
           definition, one club-custody scope, exact source evidence, and one reviewed factual
           release.
         </p>
-        <div className="mt-5 inline-flex rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-foreground">
+        <div className="mt-5 inline-flex rounded-cut border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-foreground">
           Release status is shown on every outcome response
         </div>
       </section>
@@ -67,7 +67,7 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
           {checkStates.map((state) => (
             <article
               key={state.title}
-              className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm"
+              className="border border-border bg-card p-5 text-card-foreground"
             >
               <h3 className="font-semibold text-foreground">{state.title}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{state.description}</p>
@@ -78,7 +78,7 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
 
       <section
         aria-labelledby="source-boundary-heading"
-        className="rounded-2xl border border-border bg-muted/35 p-6 sm:p-8"
+        className="border border-border bg-muted/35 p-6 sm:p-8"
       >
         <h2 id="source-boundary-heading" className="text-2xl font-bold text-foreground">
           Source, fitzRoy, and database roles
@@ -111,7 +111,7 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
 
       <section
         aria-labelledby="ownership-heading"
-        className="rounded-xl border border-border bg-card p-6 text-card-foreground"
+        className="border border-border bg-card p-6 text-card-foreground"
       >
         <h2 id="ownership-heading" className="text-xl font-semibold text-foreground">
           Separate from Statly Fantasy
@@ -126,13 +126,13 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
       <div className="flex flex-wrap gap-3">
         <Link
           href="/draft/outcomes"
-          className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 items-center justify-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Return to outcome checks
         </Link>
         <Link
           href="/draft/trades/methodology"
-          className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-11 items-center justify-center rounded-cut border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Read trade-value methodology
         </Link>
