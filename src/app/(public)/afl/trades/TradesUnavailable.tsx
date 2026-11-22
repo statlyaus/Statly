@@ -11,7 +11,7 @@ export function TradesUnavailable() {
       <p className="mt-6">
         <Link
           href="/afl"
-          className="inline-flex min-h-11 items-center rounded-lg border border-border bg-card px-4 text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-11 items-center rounded-cut border border-border bg-card px-4 text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Back to AFL
         </Link>

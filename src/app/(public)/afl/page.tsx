@@ -30,7 +30,7 @@ export default function AflHubPage() {
           <li key={product.href}>
             <Link
               href={product.href}
-              className="block rounded-xl border border-border bg-card px-4 py-4 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="block border border-border bg-card px-4 py-4 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="text-lg font-semibold text-foreground">{product.title}</span>
               <span className="mt-1 block text-muted-foreground">{product.description}</span>

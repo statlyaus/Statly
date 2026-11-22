@@ -77,7 +77,7 @@ export default async function AflTradeMethodologyPage() {
             </span>
             <Link
               href="/draft/trades"
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="inline-flex min-h-11 items-center justify-center rounded-cut border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               Return to trade explorer
             </Link>
@@ -98,7 +98,7 @@ export default async function AflTradeMethodologyPage() {
         </div>
         <dl className="grid gap-3 p-5 sm:grid-cols-2 md:p-6">
           {plannedViews.map((view) => (
-            <div key={view.title} className="rounded-xl border border-border bg-background p-4">
+            <div key={view.title} className="border border-border bg-background p-4">
               <dt className="font-semibold text-foreground">{view.title}</dt>
               <dd className="mt-2 text-sm leading-6 text-muted-foreground">{view.description}</dd>
             </div>
@@ -218,7 +218,7 @@ export default async function AflTradeMethodologyPage() {
             {releaseRequirements.map((requirement, index) => (
               <li
                 key={requirement}
-                className="rounded-xl border border-border bg-background p-4 text-sm leading-6 text-muted-foreground"
+                className="border border-border bg-background p-4 text-sm leading-6 text-muted-foreground"
               >
                 <span className="mb-2 block font-semibold text-foreground">Step {index + 1}</span>
                 {requirement}

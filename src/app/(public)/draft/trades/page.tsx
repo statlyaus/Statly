@@ -22,8 +22,8 @@ type DraftTradeAssetType = 'player' | 'pick' | 'future_pick';
 function DraftTradesExplorerFallback() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading trades explorer">
-      <div className="h-52 animate-pulse rounded-[1.75rem] bg-muted md:h-56" />
-      <div className="h-[min(28rem,55vh)] animate-pulse rounded-2xl bg-muted" />
+      <div className="h-52 animate-pulse bg-muted md:h-56" />
+      <div className="h-[min(28rem,55vh)] animate-pulse bg-muted" />
     </div>
   );
 }
