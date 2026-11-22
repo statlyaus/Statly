@@ -160,7 +160,6 @@ export function TradeLadder({
                 <Link
                   href={tradesListHref({ year: onlyYear, club: row.slug, sort: 'newest' })}
                   prefetch={false}
-                  aria-label={`${index + 1}. ${row.name}: ${row.ahead}–${row.behind} so far, ${winShare(row) === null ? 'no trades decided' : `${percent(row)} won`}, ${signed} PAV${row.provisional ? ', part not valued yet' : ''}. See its trades.`}
                   className={`${ROW} hover:bg-muted focus-visible:outline-[3px] focus-visible:outline-offset-[-3px] focus-visible:outline-ring focus-visible:outline-dashed`}
                 >
                   <span className="text-right text-muted-foreground">{index + 1}</span>
@@ -176,8 +175,14 @@ export function TradeLadder({
                   </span>
                   <span className="text-center whitespace-nowrap">
                     {row.ahead}–{row.behind}
+                    <span className="sr-only"> so far,</span>
                   </span>
-                  <span className="text-center">{percent(row)}</span>
+                  <span className="text-center">
+                    {percent(row)}
+                    <span className="sr-only">
+                      {winShare(row) === null ? ' (no trades decided),' : ' won,'}
+                    </span>
+                  </span>
                   <span className="relative col-[2/-1] row-start-2 h-1.5 sm:col-auto sm:row-auto sm:h-3">
                     <span
                       className="absolute -inset-y-1 w-[1.5px] bg-foreground sm:-inset-y-2"
@@ -190,7 +195,12 @@ export function TradeLadder({
                       style={{ left: `${left}%`, width: `${width}%` }}
                     />
                   </span>
-                  <span className="text-right font-semibold whitespace-nowrap">{signed}</span>
+                  <span className="text-right font-semibold whitespace-nowrap">
+                    {signed}
+                    <span className="sr-only">
+                      {` PAV${row.provisional ? ', part not valued yet' : ''}. See its trades.`}
+                    </span>
+                  </span>
                 </Link>
               </li>
             );
