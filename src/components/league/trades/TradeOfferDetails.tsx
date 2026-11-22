@@ -69,7 +69,7 @@ export function TradeOfferDetails({
       : trade.memberTwo.teamName;
 
   return (
-    <div id={id} className="border-t border-[color:var(--trade-border)]">
+    <div id={id} className="border-t border-border">
       <div className="grid min-w-0 gap-x-6 gap-y-4 px-4 pt-4 sm:px-5 lg:grid-cols-2">
         <TradeOfferAssets
           heading={sendingHeading}
@@ -88,17 +88,17 @@ export function TradeOfferDetails({
       </div>
 
       {offer.message && (
-        <figure className="mx-4 mt-4 border-l-2 border-[color:var(--trade-border-strong)] pl-3 sm:mx-5">
-          <figcaption className="text-xs font-semibold text-[color:var(--trade-text-muted)]">
+        <figure className="mx-4 mt-4 border-l-2 border-muted-foreground pl-3 sm:mx-5">
+          <figcaption className="text-xs font-semibold text-muted-foreground">
             Note from {proposerTeamName}
           </figcaption>
-          <blockquote className="mt-0.5 text-sm leading-5 text-[color:var(--trade-text)]">
+          <blockquote className="mt-0.5 text-sm leading-5 text-foreground">
             {offer.message}
           </blockquote>
         </figure>
       )}
 
-      <div className="mx-4 mt-4 grid min-w-0 gap-x-10 gap-y-5 border-t border-[color:var(--trade-border)] pt-4 sm:mx-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
+      <div className="mx-4 mt-4 grid min-w-0 gap-x-10 gap-y-5 border-t border-border pt-4 sm:mx-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
         <TradeVerdictStrip
           verdict={verdict}
           otherSide={opponentTeamName}
@@ -114,7 +114,7 @@ export function TradeOfferDetails({
           />
         ) : null}
       </div>
-      <p className="mx-4 mt-3 text-xs text-[color:var(--trade-text-muted)] sm:mx-5">
+      <p className="mx-4 mt-3 text-xs text-muted-foreground sm:mx-5">
         Per-game averages, {playerStats.context.season} season. Dual-position players count in both.
       </p>
 
@@ -124,7 +124,7 @@ export function TradeOfferDetails({
           aria-expanded={showBreakdown}
           aria-controls={breakdownId}
           onClick={() => setShowBreakdown((current) => !current)}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-semibold text-[color:var(--trade-text)] hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-cut px-2 text-sm font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {showBreakdown ? (
             <ChevronDown aria-hidden="true" className="size-4" />
@@ -148,7 +148,7 @@ export function TradeOfferDetails({
 
       {(offer.reviewEndsAt ||
         (trade.status === 'ACCEPTED_PENDING_REVIEW' && offer.reviewMode === 'veto')) && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 pb-4 text-xs font-medium text-[color:var(--trade-text-muted)] sm:px-5">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 pb-4 text-xs font-medium text-muted-foreground sm:px-5">
           {offer.reviewEndsAt && (
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden="true" className="size-3.5" />
@@ -164,19 +164,19 @@ export function TradeOfferDetails({
       )}
 
       {trade.heldReason === 'BITE_PENDING' && (
-        <p className="px-4 pb-4 text-xs font-medium text-[color:var(--trade-text)] sm:px-5">
+        <p className="px-4 pb-4 text-xs font-medium text-foreground sm:px-5">
           On hold: the Bloodsucker has a bite waiting on a team in this trade. It can go ahead once
           the bite is done.
         </p>
       )}
       {trade.heldReason === 'BLOODSUCKER_RESULT_PENDING' && (
-        <p className="px-4 pb-4 text-xs font-medium text-[color:var(--trade-text)] sm:px-5">
+        <p className="px-4 pb-4 text-xs font-medium text-foreground sm:px-5">
           On hold: a team in this trade has just played the Bloodsucker and the result is not final.
           It can go ahead once it is, or once the bite is done if the Bloodsucker won.
         </p>
       )}
 
-      <footer className="flex flex-wrap items-center gap-2 border-t border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-2 sm:px-5">
+      <footer className="flex flex-wrap items-center gap-2 border-t border-border bg-muted px-4 py-2 sm:px-5">
         <LeagueSocialDiscussButton
           leagueId={leagueId}
           label="Discuss trade"
@@ -187,7 +187,7 @@ export function TradeOfferDetails({
             subtitle: TRADE_STATUS_LABELS[trade.status],
             metadata: { offerId: offer.id, status: trade.status },
           }}
-          className="!min-h-11 !rounded-md !border-transparent !bg-transparent !px-3 !text-sm !text-[color:var(--trade-text)] hover:!bg-[color:var(--trade-action-soft)] focus-visible:!ring-2 focus-visible:!ring-[color:var(--trade-focus)]"
+          className="!min-h-11 !rounded-cut !border-transparent !bg-transparent !px-3 !text-sm !text-foreground hover:!bg-accent focus-visible:!ring-2 focus-visible:!ring-ring"
         />
       </footer>
 
@@ -200,25 +200,25 @@ function TradeHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
   const offers = [...trade.offerHistory].sort((left, right) => left.sequence - right.sequence);
 
   return (
-    <details className="border-t border-[color:var(--trade-border)] px-4 py-3 sm:px-5">
-      <summary className="cursor-pointer rounded text-sm font-semibold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]">
+    <details className="border-t border-border px-4 py-3 sm:px-5">
+      <summary className="cursor-pointer text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         Trade history
       </summary>
       {offers.length > 1 && (
         <section aria-label="Previous offer terms" className="mt-4">
-          <h4 className="text-sm font-semibold text-[color:var(--trade-text)]">Offer terms</h4>
-          <ol className="mt-2 divide-y divide-[color:var(--trade-border)] border-y border-[color:var(--trade-border)]">
+          <h4 className="text-sm font-semibold text-foreground">Offer terms</h4>
+          <ol className="mt-2 divide-y divide-border border-y border-border">
             {offers.map((offer) => (
               <li key={offer.id} className="py-2.5 text-xs">
-                <p className="font-semibold text-[color:var(--trade-text)]">
+                <p className="font-semibold text-foreground">
                   Offer {offer.sequence} · {formatLifecycleLabel(offer.status)} ·{' '}
                   {formatTradeDateTime(offer.createdAt)}
                 </p>
-                <p className="mt-1 text-[color:var(--trade-text-muted)]">
+                <p className="mt-1 text-muted-foreground">
                   {offer.players.map((player) => player.name).join(', ')}
                 </p>
                 {offer.message && (
-                  <blockquote className="mt-2 border-l-2 border-[color:var(--trade-border-strong)] pl-2 text-[color:var(--trade-text-muted)]">
+                  <blockquote className="mt-2 border-l-2 border-muted-foreground pl-2 text-muted-foreground">
                     {offer.message}
                   </blockquote>
                 )}
@@ -229,17 +229,15 @@ function TradeHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
       )}
       {trade.events.length > 0 && (
         <section aria-label="Trade decisions" className="mt-4">
-          <h4 className="text-sm font-semibold text-[color:var(--trade-text)]">Decisions</h4>
-          <ol className="mt-2 space-y-2 border-l border-[color:var(--trade-border)] pl-4 text-xs text-[color:var(--trade-text-muted)]">
+          <h4 className="text-sm font-semibold text-foreground">Decisions</h4>
+          <ol className="mt-2 space-y-2 border-l border-border pl-4 text-xs text-muted-foreground">
             {trade.events.map((event) => (
               <li key={event.id}>
-                <span className="font-semibold text-[color:var(--trade-text)]">
+                <span className="font-semibold text-foreground">
                   {formatLifecycleLabel(event.type)}
                 </span>{' '}
                 · {formatTradeDateTime(event.createdAt)}
-                {event.reason && (
-                  <p className="mt-1 text-[color:var(--trade-text)]">Reason: {event.reason}</p>
-                )}
+                {event.reason && <p className="mt-1 text-foreground">Reason: {event.reason}</p>}
               </li>
             ))}
           </ol>

@@ -90,7 +90,7 @@ ground sets the colours of everything on it: text, secondary text, rules, marks,
 focus, win and provisional. Components read those roles, so a button or badge is correct on any ground
 by construction. The `.ground-white`, `.ground-stone`, `.ground-tint`, `.ground-cobalt`, `.ground-ink`
 and `.ground-sun` classes in `src/index.css` do this (done 2026-11-20); surfaces move onto them screen by
-screen. Only the core roles follow a ground: area aliases such as `--trade-*` keep their root values.
+screen. Only the core roles follow a ground: aliases such as `--brand-bar` keep their root values.
 A card inside a cobalt, ink or sun ground carries `.ground-white`.
 
 The public trade pages and the front page sit on the paper surface mode (`data-surface="paper"`,
@@ -140,11 +140,12 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
   ink text on every ground; no ground redefines them (done 2026-11-20).
 - **Grounds and surface modes, not namespaces.** A ground or the paper mode redefines the semantic
   roles on its root element; components inside it use the same utilities as everywhere else.
-- **Area palettes collapse (phase 3).** A `--trade-*` or `--social-*` token that only aliases a core
+- **Area palettes collapse (phase 3).** An area token (`--league-*`, `--social-*`, `--trade-*`) that only aliases a core
   role is deleted and its call sites use the core utility. The league palette went first (ticket 08,
   2026-11-22): its soft status fills are now the semantic roles `--success-soft`, `--warning-soft` and
   `--destructive-soft` (fills behind status words), and its button hover is `--brand-bar-hover`. The social palette followed (ticket 09): your own chat
-  messages sit on the cobalt ground, so their quiet words and focus ring come from the ground. Tokens with a recorded reason stay and are registered in `@theme`.
+  messages sit on the cobalt ground, so their quiet words and focus ring come from the ground. The trade centre palette went
+  third (ticket 10a); only `--draft-broadcast-*` is left. Tokens with a recorded reason stay and are registered in `@theme`.
 - **No JSON token pipeline.** The CSS file is the only source. Revisit only if a second consumer
   (native app, Figma, generated images) needs the values.
 
@@ -199,8 +200,8 @@ A trade has two sides, not a good side and a bad side: trade charts never use gr
   ticket 07). The public draft, methodology and AFL index route files are square (2026-11-22); the
   shared draft hub components (`draftHubChrome.ts`, `DraftHubNav`, `DraftHubState`, the two
   explorers) are not yet. The league and social pages are square (tickets 08 and 09, 2026-11-22); the chat
-  launcher, chat panel, drawer and menus have the cut edge and the hard shadow. The trade centre and
-  draft room palettes square up with their tickets.
+  launcher, chat panel, drawer and menus have the cut edge and the hard shadow. The trade centre is
+  square too (ticket 10a); only the draft room palette squares up with its ticket.
 - **Lines:** each weight means one thing. Hairline for separation; 2.5px ink for buttons and floating
   things; 2px ink for inputs and chips; 1.5px ink under table headers; 3px for the current tab; a 4px
   top edge for which side; a 6px sun left edge for "yours", the only side stripe allowed; 2px dashed
@@ -418,6 +419,6 @@ Automated design checks today:
   side stripe, or club colour bigger than the 13px square. It skips `[data-collage]`. The rules live
   in `tests/e2e/helpers/brandAudit.ts`; a radius above 2px on a tile, card or table counts.
 - `tests/e2e/app-brand.test.ts` runs the same audit, signed in, on the dashboard, a league overview,
-  My Team, standings, matchups, waivers, the players list, a player page and the three social views
-  at 1280 and 390px, on the open chat panel, and on the sign-in page, skipping nothing. The trade
-  centre and draft room pages join with their tickets.
+  My Team, standings, matchups, waivers, the players list, a player page and the three social views and
+  the trades tab at 1280 and 390px, on the open chat panel and trade composer, and on the sign-in page,
+  skipping nothing. The draft room pages join with their ticket.

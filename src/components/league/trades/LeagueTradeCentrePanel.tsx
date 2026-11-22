@@ -287,21 +287,15 @@ export function LeagueTradeCentrePanel({
 
   if (!snapshot) {
     return (
-      <section
-        aria-labelledby="trade-centre-heading"
-        className="league-trade-centre text-[color:var(--trade-text)]"
-      >
+      <section aria-labelledby="trade-centre-heading" className="text-foreground">
         <div className="space-y-4">
           <div>
             <h2 id="trade-centre-heading" className="font-display text-2xl font-bold leading-tight">
               Trades
             </h2>
           </div>
-          <div
-            role="alert"
-            className="rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-4"
-          >
-            <p className="text-sm font-semibold text-[color:var(--trade-text)]">
+          <div role="alert" className="border border-warning-text bg-warning-soft p-4">
+            <p className="text-sm font-semibold text-foreground">
               {initialError ?? "Trades can't load right now."}
             </p>
             <button
@@ -324,17 +318,14 @@ export function LeagueTradeCentrePanel({
     : null;
 
   return (
-    <section
-      aria-labelledby="trade-centre-heading"
-      className="league-trade-centre text-[color:var(--trade-text)]"
-    >
+    <section aria-labelledby="trade-centre-heading" className="text-foreground">
       <div className="space-y-5">
         {confirmDialog}
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <h2
               id="trade-centre-heading"
-              className="font-display text-2xl font-bold leading-tight text-[color:var(--trade-text)]"
+              className="font-display text-2xl font-bold leading-tight text-foreground"
             >
               Trades
             </h2>
@@ -366,7 +357,7 @@ export function LeagueTradeCentrePanel({
                   id="trade-composer-heading"
                   ref={composerHeadingRef}
                   tabIndex={-1}
-                  className="text-lg font-bold text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]"
+                  className="text-lg font-bold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {counterTrade ? 'Counteroffer' : 'New trade'}
                 </h3>
@@ -384,12 +375,12 @@ export function LeagueTradeCentrePanel({
           </section>
         ) : (
           <section aria-labelledby="trade-offers-heading" className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b border-[color:var(--trade-border)]">
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b border-border">
               <h3
                 id="trade-offers-heading"
                 ref={offersHeadingRef}
                 tabIndex={-1}
-                className="pb-2.5 text-lg font-bold leading-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]"
+                className="pb-2.5 text-lg font-bold leading-tight text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Offers
               </h3>
@@ -405,18 +396,18 @@ export function LeagueTradeCentrePanel({
                         aria-current={isActive ? 'page' : undefined}
                         disabled={isNavigating}
                         onClick={() => navigateToView(view)}
-                        className={`inline-flex h-11 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)] disabled:cursor-wait disabled:opacity-60 ${
+                        className={`inline-flex h-11 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60 ${
                           isActive
-                            ? 'border-[color:var(--trade-brand)] text-[color:var(--trade-text)]'
-                            : 'border-transparent text-[color:var(--trade-text-muted)] hover:border-[color:var(--trade-border-strong)] hover:text-[color:var(--trade-text)]'
+                            ? 'border-brand-bar text-foreground'
+                            : 'border-transparent text-muted-foreground hover:border-muted-foreground hover:text-foreground'
                         }`}
                       >
                         {VIEW_LABELS[view]}
                         <span
-                          className={`min-w-5 rounded-sm px-1.5 text-center text-xs font-bold leading-5 tabular-nums ${
+                          className={`min-w-5 px-1.5 text-center text-xs font-bold leading-5 tabular-nums ${
                             count > 0
-                              ? 'bg-[color:var(--trade-brand)] text-white'
-                              : 'text-[color:var(--trade-text-muted)]'
+                              ? 'bg-brand-bar text-brand-bar-foreground'
+                              : 'text-muted-foreground'
                           }`}
                         >
                           {count}
@@ -431,7 +422,7 @@ export function LeagueTradeCentrePanel({
             {mutationError && (
               <p
                 role="alert"
-                className="rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-3 text-sm font-semibold text-[color:var(--trade-text)]"
+                className="border border-warning-text bg-warning-soft p-3 text-sm font-semibold text-foreground"
               >
                 {mutationError}
               </p>
@@ -485,7 +476,7 @@ function TradeRuleSummary({
     { label: 'Offer expiry', value: getTradeOfferExpirySummary(rules.offerExpiryHours) },
   ];
   return (
-    <dl className="mt-1 text-sm leading-6 text-[color:var(--trade-text-muted)]">
+    <dl className="mt-1 text-sm leading-6 text-muted-foreground">
       {items.map((item, index) => (
         <div key={item.label} className="inline">
           <dt className="sr-only">{item.label}</dt>
@@ -545,8 +536,8 @@ function describeTradeOutcome(action: TradeActionName | 'propose', status?: stri
 }
 
 const secondaryButtonClasses =
-  'mt-3 inline-flex h-11 items-center justify-center rounded-md border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+  'mt-3 inline-flex h-11 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
 const workspacePrimaryButtonClasses =
-  'inline-flex h-11 items-center justify-center rounded-md bg-[color:var(--trade-action)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[color:var(--trade-action-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2';
+  'inline-flex h-11 items-center justify-center rounded-cut bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const workspaceSecondaryButtonClasses =
-  'inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2';
+  'inline-flex h-11 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';

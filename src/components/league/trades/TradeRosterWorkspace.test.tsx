@@ -100,7 +100,7 @@ describe('TradeRosterWorkspace', () => {
 
     expect(sendButton).toHaveAttribute('type', 'button');
     expect(sendButton).toHaveAttribute('aria-pressed', 'true');
-    expect(sendButton).toHaveClass('h-12', 'border-[color:var(--trade-brand)]');
+    expect(sendButton).toHaveClass('h-12', 'border-brand-bar');
     expect(receiveButton).toHaveAttribute('type', 'button');
     expect(receiveButton).toHaveAttribute('aria-pressed', 'false');
     expect(receiveButton).toHaveClass('h-12', 'border-transparent');

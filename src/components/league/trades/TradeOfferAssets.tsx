@@ -20,14 +20,14 @@ export function TradeOfferAssets({
 }: TradeOfferAssetsProps): React.JSX.Element {
   return (
     <section aria-label={`${heading} package from ${teamName}`} className="min-w-0">
-      <div className="flex items-baseline gap-2 border-b border-[color:var(--trade-border)] pb-2">
-        <h4 className="text-sm font-semibold text-[color:var(--trade-text)]">{heading}</h4>
-        <p className="truncate text-xs text-[color:var(--trade-text-muted)]">{teamName}</p>
+      <div className="flex items-baseline gap-2 border-b border-border pb-2">
+        <h4 className="text-sm font-semibold text-foreground">{heading}</h4>
+        <p className="truncate text-xs text-muted-foreground">{teamName}</p>
       </div>
       {players.length === 0 ? (
-        <p className="py-3 text-sm text-[color:var(--trade-text-muted)]">No players</p>
+        <p className="py-3 text-sm text-muted-foreground">No players</p>
       ) : (
-        <ul className="divide-y divide-[color:var(--trade-border)]">
+        <ul className="divide-y divide-border">
           {players.map((player) => (
             <li key={player.id}>
               <TradePlayerChip player={player} playerStats={playerStats} bare />

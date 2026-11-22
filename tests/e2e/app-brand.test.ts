@@ -10,8 +10,8 @@ import { E2E_LEAGUE_ID, E2E_PLAYER_ID } from './global.setup';
  * Brand conformance of the signed-in fantasy app (docs/product/style-guide.md), with the same
  * element-by-element audit as the public trade pages (`helpers/brandAudit.ts`).
  *
- * Nothing is skipped: the league (ticket 08) and social (09) palettes are gone. The trade centre (10a)
- * and draft room (10b) pages join PAGES when those tickets land.
+ * Nothing is skipped: the league (ticket 08), social (09) and trade centre (10a) palettes are gone.
+ * The draft room (10b) pages join PAGES when that ticket lands.
  */
 const PAGES: ReadonlyArray<{
   path: string;
@@ -43,6 +43,8 @@ const PAGES: ReadonlyArray<{
   { path: `/leagues/${E2E_LEAGUE_ID}/social`, ready: heading(1) },
   { path: `/leagues/${E2E_LEAGUE_ID}/social?view=board`, ready: heading(2, 'Message board') },
   { path: `/leagues/${E2E_LEAGUE_ID}/social?view=activity`, ready: heading(2) },
+  // Trade centre (ticket 10a): the offers list.
+  { path: `/leagues/${E2E_LEAGUE_ID}?tab=trades`, ready: heading(2, 'Trades') },
 ];
 
 function text(words: string) {
@@ -75,7 +77,7 @@ for (const viewport of [
   test.describe(`the fantasy app follows the brand at ${viewport.width}px`, () => {
     test.use({ viewport });
 
-    test('dashboard, league, My Team, standings, matchups, waivers, players and social', async ({
+    test('dashboard, league, My Team, standings, matchups, waivers, players, social and trades', async ({
       page,
     }) => {
       test.setTimeout(480_000);
@@ -137,4 +139,18 @@ test('the league chat launcher and panel follow the brand', async ({ page }) => 
   await expect(page.getByLabel('League chat panel')).toBeVisible({ timeout: 30_000 });
   const { findings } = await auditPage(page);
   expect.soft(findings, 'league chat panel').toEqual(EMPTY);
+});
+
+// The trade composer: both rosters, the selection tray and the sticky summary.
+test('the trade composer follows the brand', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await authenticateAsDevelopmentUser(page);
+  await page.goto(`/leagues/${E2E_LEAGUE_ID}?tab=trades`);
+  await heading(2, 'Trades')(page);
+  await page.getByRole('button', { name: 'Propose trade' }).click();
+  await expect(page.getByLabel('Trade with')).toBeVisible({ timeout: 30_000 });
+  const { findings } = await auditPage(page);
+  expect.soft(findings, 'trade composer').toEqual(EMPTY);
 });

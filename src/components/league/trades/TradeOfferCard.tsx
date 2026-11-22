@@ -80,10 +80,10 @@ export function TradeOfferCard({
     teams.find((team) => team.memberId === perspectiveMemberId)?.players ?? null;
 
   return (
-    <article className="bg-[color:var(--trade-surface)] text-[color:var(--trade-text)]">
+    <article className="bg-card text-foreground">
       <header
         className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-3 px-3 py-3 transition-colors sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center ${
-          isExpanded ? '' : 'hover:bg-[color:var(--trade-surface-subtle)]'
+          isExpanded ? '' : 'hover:bg-muted'
         }`}
       >
         <button
@@ -92,7 +92,7 @@ export function TradeOfferCard({
           aria-controls={detailsId}
           aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${displayTitle}`}
           onClick={onExpandedChange}
-          className="inline-flex size-11 items-center justify-center self-start rounded-md text-[color:var(--trade-text-muted)] transition-colors hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] lg:self-auto"
+          className="inline-flex size-11 items-center justify-center self-start rounded-cut text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:self-auto"
         >
           {isExpanded ? (
             <ChevronDown aria-hidden="true" className="size-5" />
@@ -104,32 +104,32 @@ export function TradeOfferCard({
         <div className="flex min-w-0 items-start gap-3">
           <TeamMark teamName={opponentParty.teamName} logoUrl={null} />
           <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-[color:var(--trade-text-muted)]">
+            <p className="truncate text-xs font-semibold text-muted-foreground">
               {`${opponentParty.teamName} · Offer ${offer.sequence}`}
             </p>
-            <h3 className="truncate font-display text-lg font-bold leading-tight text-[color:var(--trade-text)]">
+            <h3 className="truncate font-display text-lg font-bold leading-tight text-foreground">
               {displayTitle}
             </h3>
-            <p className="truncate text-xs text-[color:var(--trade-text-muted)]">
+            <p className="truncate text-xs text-muted-foreground">
               {sendingHeading}{' '}
-              <span className="font-semibold text-[color:var(--trade-text)]">
+              <span className="font-semibold text-foreground">
                 {formatPackageSummary(sendingPlayers)}
               </span>{' '}
               · {receivingHeading}{' '}
-              <span className="font-semibold text-[color:var(--trade-text)]">
+              <span className="font-semibold text-foreground">
                 {formatPackageSummary(receivingPlayers)}
               </span>
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               <span
-                className={`rounded-full border border-current px-2 py-0.5 font-bold ${VERDICT_TONE_CLASS[verdict.tone]}`}
+                className={`border border-current px-2 py-0.5 font-bold ${VERDICT_TONE_CLASS[verdict.tone]}`}
               >
                 {verdict.short}
               </span>
               <TradeOfferStatus status={trade.status} />
-              <span className="text-[color:var(--trade-text-muted)]">
+              <span className="text-muted-foreground">
                 Expires{' '}
-                <span className="font-semibold text-[color:var(--trade-text)]">
+                <span className="font-semibold text-foreground">
                   {formatTradeDateTime(offer.expiresAt)}
                 </span>
               </span>

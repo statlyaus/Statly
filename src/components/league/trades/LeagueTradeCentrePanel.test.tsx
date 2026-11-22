@@ -209,7 +209,7 @@ describe('LeagueTradeCentrePanel', () => {
     const offersHeading = screen.getByRole('heading', { name: 'Offers' });
     const inboxButton = screen.getByRole('button', { name: /Inbox/ });
     expect(offersHeading).toHaveClass('text-lg');
-    expect(inboxButton).toHaveClass('h-11', 'border-b-2', 'border-[color:var(--trade-brand)]');
+    expect(inboxButton).toHaveClass('h-11', 'border-b-2', 'border-brand-bar');
     expect(screen.getByRole('button', { name: /Sent/ })).toHaveClass('border-transparent');
     expect(inboxButton).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Propose trade' })).toBeInTheDocument();
@@ -314,7 +314,7 @@ describe('LeagueTradeCentrePanel', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Trades' })).toHaveClass('font-display', 'text-2xl');
-    expect(screen.getByRole('alert')).toHaveClass('bg-[color:var(--trade-warning-soft)]');
+    expect(screen.getByRole('alert')).toHaveClass('bg-warning-soft');
   });
 
   it('keeps offer filters in the canonical league tab URL', async () => {
@@ -571,8 +571,7 @@ describe('LeagueTradeCentrePanel', () => {
     const submissionAlert = await screen.findByRole('alert');
 
     expect(submissionAlert).toHaveTextContent('Temporary response failure');
-    expect(submissionAlert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
-    expect(submissionAlert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
+    expect(submissionAlert).toHaveClass('bg-warning-soft');
     expect(screen.getByRole('heading', { name: 'Send to Beta FC?' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Note (optional)' })).toHaveValue('Retry me');
     expect(screen.getByRole('region', { name: 'You send package' })).toHaveTextContent(
@@ -790,8 +789,7 @@ describe('LeagueTradeCentrePanel', () => {
     await user.click(screen.getByRole('button', { name: 'Accept' }));
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
     const actionAlert = await screen.findByRole('alert');
-    expect(actionAlert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
-    expect(actionAlert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
+    expect(actionAlert).toHaveClass('bg-warning-soft');
     await user.click(screen.getByRole('button', { name: 'Accept' }));
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
 

@@ -86,10 +86,7 @@ export function TradeReviewStep({
           changes={squadPositionImpact(viewerTeam.players, sendingPlayers, receivingPlayers)}
         />
         <div>
-          <label
-            htmlFor={messageId}
-            className="text-sm font-semibold text-[color:var(--trade-text)]"
-          >
+          <label htmlFor={messageId} className="text-sm font-semibold text-foreground">
             Note (optional)
           </label>
           <textarea
@@ -100,9 +97,9 @@ export function TradeReviewStep({
             disabled={isSubmitting}
             aria-describedby={`${messageHelpId} ${messageCountId}`}
             onChange={(event) => onMessageChange(event.target.value)}
-            className="mt-1.5 w-full resize-y rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-3 py-2 text-sm text-[color:var(--trade-text)] outline-none placeholder:text-[color:var(--trade-text-muted)] focus:border-[color:var(--trade-focus)] focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]/20 disabled:cursor-not-allowed disabled:bg-[color:var(--trade-surface-subtle)] disabled:opacity-60"
+            className="mt-1.5 w-full resize-y rounded-cut border border-input bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60"
           />
-          <div className="mt-1 flex justify-between gap-3 text-xs text-[color:var(--trade-text-muted)]">
+          <div className="mt-1 flex justify-between gap-3 text-xs text-muted-foreground">
             <p id={messageHelpId}>They’ll see this with the offer.</p>
             <p id={messageCountId} className="shrink-0 tabular-nums">
               {message.length} / 1000
@@ -111,13 +108,13 @@ export function TradeReviewStep({
         </div>
       </TradeSendCheckpoint>
 
-      <div className="border-t border-[color:var(--trade-border)] px-4 py-2">
+      <div className="border-t border-border px-4 py-2">
         <button
           type="button"
           aria-expanded={showBreakdown}
           aria-controls={breakdownId}
           onClick={() => setShowBreakdown((current) => !current)}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-sm font-semibold text-[color:var(--trade-text)] hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-cut px-1 text-sm font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {showBreakdown ? (
             <ChevronDown aria-hidden="true" className="size-4" />

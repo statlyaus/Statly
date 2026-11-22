@@ -264,8 +264,7 @@ describe('TradeReviewStep', () => {
 
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('The roster changed. Review the proposal again.');
-    expect(alert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
-    expect(alert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
+    expect(alert).toHaveClass('bg-warning-soft');
     expect(screen.getByRole('textbox', { name: 'Note (optional)' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Send offer to AFL Legends' })).toBeEnabled();
