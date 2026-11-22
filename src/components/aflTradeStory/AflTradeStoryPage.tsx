@@ -28,7 +28,7 @@ export { headline };
 
 /**
  * The trade page (statlyaus/Statly#789): values, not letter grades. A scarf timeline, the trade's
- * details and players, and the lineage map. It is private unless the model's source says public,
+ * details and players, and the lineage map (on public pages, directly under the hero). It is private unless the model's source says public,
  * which only the public reader's owner-approved bundle does.
  */
 export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
@@ -55,7 +55,13 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
           / {story.trade.year} / {tradeName(story.trade.clubs)}
         </nav>
 
-        {audience === 'public' ? <TradeCollage story={story} headline={headline(model)} /> : null}
+        {audience === 'public' ? (
+          <>
+            <TradeCollage story={story} headline={headline(model)} />
+            {/* Public pages lead with where the trade went, straight under the hero. */}
+            <TradeLineage story={story} bidMatches={bidMatches} audience={audience} />
+          </>
+        ) : null}
         <header>
           {audience === 'public' ? null : (
             <>
@@ -106,7 +112,9 @@ export function AflTradeStoryPage({ model }: { model: AflTradePageModel }) {
         <TradeValueLine key={story.trade.id} story={story} />
         <TradeDetails story={story} clubNames={clubNames} shares={shares} audience={audience} />
         <TradePlayerCards story={story} clubNames={clubNames} shares={shares} />
-        <TradeLineage story={story} bidMatches={bidMatches} audience={audience} />
+        {audience === 'public' ? null : (
+          <TradeLineage story={story} bidMatches={bidMatches} audience={audience} />
+        )}
 
         <footer className="mt-10 max-w-[80ch] space-y-1 ts-small text-muted-foreground">
           <p>
