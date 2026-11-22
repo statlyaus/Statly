@@ -56,7 +56,7 @@ export function SherrinMark({
 }: {
   className?: string;
   style?: CSSProperties;
-  /** Fill the ball white under the outline (the board's `sherrin-solid`), for light grounds. */
+  /** Fill the ball with the page ground under the outline (the board's white `sherrin-solid`), for light grounds. */
   solid?: boolean;
 }) {
   return (
@@ -82,7 +82,7 @@ export function SherrinMark({
       >
         {solid ? (
           <path
-            fill="#fff"
+            fill="var(--background)"
             stroke="none"
             d="M10 42 C 22 14, 92 6, 110 36 C 98 66, 30 72, 10 42 Z"
           />
