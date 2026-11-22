@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 const secondaryButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-social-border bg-social-surface px-3 text-xs font-semibold text-social-text transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text';
+  'inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground';
 const primaryButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-social-action bg-social-action px-3 text-xs font-semibold text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text';
+  'inline-flex min-h-9 items-center rounded-cut border border-brand-bar bg-brand-bar px-3 text-xs font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground';
 const dangerButton =
-  'inline-flex min-h-9 items-center rounded-lg border border-social-error bg-social-error px-3 text-xs font-semibold text-social-error-foreground transition-colors hover:bg-social-error-soft hover:text-social-error active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text';
+  'inline-flex min-h-9 items-center rounded-cut border border-destructive bg-destructive px-3 text-xs font-semibold text-destructive-foreground transition-colors hover:bg-destructive-soft hover:text-destructive-text active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground';
 
 /** Inline editor for the member's own message. Enter saves, Shift+Enter breaks, Escape cancels. */
 export function MessageEditForm({
@@ -78,10 +78,10 @@ export function MessageEditForm({
             void save();
           }
         }}
-        className="block w-full resize-y rounded-lg border border-social-border bg-social-surface px-2 py-1.5 text-sm text-social-text focus-visible:border-social-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+        className="block w-full resize-y rounded-cut border border-border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:border-brand-bar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       {error ? (
-        <p role="alert" className="mt-1 text-xs font-medium text-social-error">
+        <p role="alert" className="mt-1 text-xs font-medium text-destructive-text">
           {error}
         </p>
       ) : null}
@@ -133,13 +133,13 @@ export function MessageDeleteConfirm({
     <div
       role="group"
       aria-label="Delete your message"
-      className="mt-2 rounded-lg border border-social-border bg-social-surface p-2"
+      className="mt-2 border border-border bg-card p-2"
     >
-      <p className="text-xs text-social-text">
+      <p className="text-xs text-foreground">
         Delete this message? The league will see “Message removed”.
       </p>
       {error ? (
-        <p role="alert" className="mt-1 text-xs font-medium text-social-error">
+        <p role="alert" className="mt-1 text-xs font-medium text-destructive-text">
           {error}
         </p>
       ) : null}

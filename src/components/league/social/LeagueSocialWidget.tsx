@@ -25,7 +25,7 @@ function LeagueSocialShellLoading(): React.JSX.Element {
     <div
       role="status"
       aria-live="polite"
-      className="flex h-full min-h-0 flex-1 items-center justify-center gap-2 bg-social-canvas px-4 text-sm text-social-text-muted"
+      className="flex h-full min-h-0 flex-1 items-center justify-center gap-2 bg-muted px-4 text-sm text-muted-foreground"
     >
       <MessageCircle
         className="size-5 animate-pulse motion-reduce:animate-none"
@@ -333,11 +333,11 @@ export default function LeagueSocialWidget({
           }
           aria-expanded="false"
           title="League chat"
-          className="league-social fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-full border border-social-brand-strong bg-social-brand-strong text-social-brand-foreground shadow-lg transition-colors hover:bg-social-action-hover active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface"
+          className="fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-cut-float border-[2.5px] border-foreground bg-brand-bar text-brand-bar-foreground shadow-hard transition-colors hover:bg-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         >
           <MessageCircle className="size-7" aria-hidden="true" />
           {totalUnread > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-social-action px-1.5 text-xs font-bold text-social-action-foreground ring-2 ring-social-surface">
+            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center bg-brand-bar px-1.5 text-xs font-bold text-brand-bar-foreground ring-2 ring-card">
               <span className="sr-only">{totalUnread} unread</span>
               <span aria-hidden="true">{formatUnread(totalUnread)}</span>
             </span>
@@ -351,24 +351,24 @@ export default function LeagueSocialWidget({
           aria-label="League chat panel"
           aria-hidden={!isOpen}
           inert={!isOpen}
-          className={`league-social fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-social-canvas text-social-text shadow-2xl transition-[translate,scale,opacity] duration-200 motion-reduce:transition-none sm:inset-auto sm:bottom-6 sm:right-6 sm:origin-bottom-right sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-3xl sm:border sm:border-social-border ${
+          className={`fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-muted text-foreground sm:shadow-hard transition-[translate,scale,opacity] duration-200 motion-reduce:transition-none sm:inset-auto sm:bottom-6 sm:right-6 sm:origin-bottom-right sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-cut-float sm:border-[2.5px] sm:border-foreground ${
             isOpen
               ? 'translate-y-0 opacity-100 sm:scale-100'
               : 'pointer-events-none translate-y-full opacity-0 sm:translate-y-4 sm:scale-95'
           }`}
         >
-          <div className="flex min-h-[4.5rem] shrink-0 items-center gap-3 bg-social-canvas px-4 pt-[env(safe-area-inset-top)] text-social-text">
+          <div className="flex min-h-[4.5rem] shrink-0 items-center gap-3 bg-muted px-4 pt-[env(safe-area-inset-top)] text-foreground">
             <span
               aria-hidden="true"
-              className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-social-brand-strong text-sm font-bold tracking-wide text-social-brand-foreground"
+              className="flex size-11 shrink-0 items-center justify-center bg-brand-bar text-sm font-bold tracking-wide text-brand-bar-foreground"
             >
               {leagueInitials(displayLeagueName) || <MessageCircle className="size-5" />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xl font-semibold leading-tight text-social-text">
+              <p className="truncate text-xl font-semibold leading-tight text-foreground">
                 {displayLeagueName ?? 'Current league'}
               </p>
-              <div className="flex min-w-0 items-center gap-1.5 text-sm text-social-text-muted">
+              <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
                 <span className="truncate">League chat</span>
                 {connectionNotice !== 'hidden' ? (
                   <span
@@ -387,7 +387,7 @@ export default function LeagueSocialWidget({
                 ref={minimizeButtonRef}
                 type="button"
                 onClick={handleMinimize}
-                className="inline-flex size-10 items-center justify-center rounded-full text-social-text-muted transition-colors hover:bg-social-bubble hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+                className="inline-flex size-10 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-card hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Minimize league chat"
                 title="Minimize"
               >

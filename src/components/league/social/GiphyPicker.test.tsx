@@ -127,9 +127,9 @@ describe('GiphyPicker', () => {
 
     expect(screen.getByRole('button', { name: 'Add a GIF' })).toHaveClass(
       'size-11',
-      'rounded-lg',
-      'text-social-text-muted',
-      'hover:bg-social-brand-soft'
+      'rounded-cut',
+      'text-muted-foreground',
+      'hover:bg-secondary'
     );
   });
 

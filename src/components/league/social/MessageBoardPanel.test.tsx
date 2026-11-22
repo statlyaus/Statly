@@ -62,23 +62,23 @@ describe('MessageBoardPanel colour hierarchy', () => {
     renderBoard();
 
     expect(screen.getByRole('button', { name: /open discussion/i })).toHaveClass(
-      'border-l-social-brand-strong',
-      'bg-social-surface'
+      'border-l-primary',
+      'bg-card'
     );
     expect(screen.getByText('Announcement')).toHaveClass(
-      'bg-social-brand-strong',
-      'text-social-brand-foreground'
+      'bg-brand-bar',
+      'text-brand-bar-foreground'
     );
-    expect(screen.getByText('Pinned')).toHaveClass('bg-social-brand-soft');
-    expect(screen.getByText('Locked')).toHaveClass('bg-social-surface-subtle');
+    expect(screen.getByText('Pinned')).toHaveClass('bg-secondary');
+    expect(screen.getByText('Locked')).toHaveClass('bg-accent');
   });
 
   it('gives unavailable publishing an explicit disabled colour state', () => {
     renderBoard({ canPublish: false });
 
     expect(screen.getByRole('button', { name: 'New post' })).toHaveClass(
-      'disabled:bg-social-disabled-bg',
-      'disabled:text-social-disabled-text'
+      'disabled:bg-muted',
+      'disabled:text-muted-foreground'
     );
   });
 });

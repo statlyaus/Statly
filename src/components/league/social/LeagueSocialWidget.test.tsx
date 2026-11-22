@@ -99,12 +99,12 @@ describe('LeagueSocialWidget', () => {
     const launcher = await screen.findByRole('button', { name: /open league chat/i });
     expect(launcher).toHaveAttribute('title', 'League chat');
     expect(launcher).toHaveClass(
-      'league-social',
       'size-14',
-      'rounded-full',
+      'rounded-cut-float',
+      'shadow-hard',
       'bottom-6',
       'right-6',
-      'bg-social-brand-strong'
+      'bg-brand-bar'
     );
     expect(launcher.querySelector('svg')).toHaveClass('size-7');
     await waitFor(() =>
@@ -115,13 +115,9 @@ describe('LeagueSocialWidget', () => {
     const panel = screen.getByLabelText('League chat panel');
     const shellControl = screen.getByTestId('social-shell-control');
     expect(await screen.findByText('League chat')).toBeInTheDocument();
-    expect(screen.getByText('League chat').closest('.bg-social-canvas')).toHaveClass(
-      'text-social-text'
-    );
     expect(screen.getByText('Premier League')).toBeInTheDocument();
     expect(panel).toHaveClass(
-      'league-social',
-      'bg-social-canvas',
+      'bg-muted',
       'inset-0',
       'h-[100dvh]',
       'w-full',

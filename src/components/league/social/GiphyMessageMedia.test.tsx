@@ -47,16 +47,13 @@ describe('GiphyMessageMedia', () => {
       'https://media.giphy.com/celebration.gif'
     );
     expect(container.querySelector('.max-h-60')).toBeInTheDocument();
-    expect(expand).toHaveClass(
-      'bg-social-surface',
-      'hover:bg-social-brand-soft',
-      'active:bg-social-surface-subtle'
-    );
+    expect(expand).toHaveClass('bg-card', 'hover:bg-secondary', 'active:bg-accent');
 
     await user.click(expand);
     expect(screen.getByRole('dialog', { name: 'GIF preview' })).toHaveClass(
-      'bg-social-surface',
-      'border-social-border'
+      'bg-card',
+      'border-foreground',
+      'shadow-hard'
     );
 
     await user.click(screen.getByRole('button', { name: 'Close GIF preview' }));

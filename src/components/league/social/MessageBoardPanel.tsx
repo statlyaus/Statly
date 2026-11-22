@@ -115,22 +115,20 @@ export default function MessageBoardPanel({
     <section
       aria-labelledby="message-board-heading"
       className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
-        compact
-          ? 'bg-social-canvas text-social-text'
-          : 'rounded-2xl border border-social-border bg-social-canvas text-social-text'
+        compact ? 'bg-muted text-foreground' : ' border border-border bg-muted text-foreground'
       }`}
     >
       <header
-        className={`flex flex-wrap items-center justify-between gap-3 border-b border-social-border bg-social-surface ${
+        className={`flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card ${
           compact ? 'px-3 py-2.5' : 'px-4 py-3'
         }`}
       >
         <div>
-          <h2 id="message-board-heading" className="text-base font-semibold text-social-text">
+          <h2 id="message-board-heading" className="text-base font-semibold text-foreground">
             {compact ? 'Discussions' : 'Message board'}
           </h2>
           {!compact ? (
-            <p className="text-xs text-social-text-muted">
+            <p className="text-xs text-muted-foreground">
               Announcements and persistent league discussions
             </p>
           ) : null}
@@ -141,7 +139,7 @@ export default function MessageBoardPanel({
           disabled={!canPublish || muted}
           aria-expanded={showForm}
           aria-controls="create-social-post"
-          className={`inline-flex items-center justify-center rounded-lg border border-social-action bg-social-action text-sm font-semibold text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text ${
+          className={`inline-flex items-center justify-center rounded-cut border border-brand-bar bg-brand-bar text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground ${
             compact ? 'min-h-9 px-3' : 'min-h-10 px-4'
           }`}
         >
@@ -152,7 +150,7 @@ export default function MessageBoardPanel({
       {muted ? (
         <p
           role="status"
-          className="border-b border-social-warning bg-social-warning-soft px-4 py-3 text-sm text-social-warning-text"
+          className="border-b border-warning-text bg-warning-soft px-4 py-3 text-sm text-warning-text"
         >
           Posting is unavailable until{' '}
           <time dateTime={mutedUntil ?? undefined}>
@@ -166,11 +164,11 @@ export default function MessageBoardPanel({
         <form
           id="create-social-post"
           onSubmit={(event) => void handleCreate(event)}
-          className="space-y-4 border-b border-social-border bg-social-surface-subtle p-4"
+          className="space-y-4 border-b border-border bg-accent p-4"
         >
           <div className={compact ? 'grid gap-4' : 'grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem]'}>
             <div>
-              <label htmlFor={titleId} className="text-sm font-medium text-social-text">
+              <label htmlFor={titleId} className="text-sm font-medium text-foreground">
                 Post title
               </label>
               <input
@@ -179,13 +177,13 @@ export default function MessageBoardPanel({
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={150}
                 required
-                className="mt-1 block h-11 w-full rounded-xl border border-social-border bg-social-surface px-3 text-sm text-social-text outline-none placeholder:text-social-text-muted focus-visible:border-social-action focus-visible:ring-2 focus-visible:ring-social-focus"
+                className="mt-1 block h-11 w-full rounded-cut border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-brand-bar focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="What should the league discuss?"
               />
-              <p className="mt-1 text-xs text-social-text-muted">{title.length} / 150</p>
+              <p className="mt-1 text-xs text-muted-foreground">{title.length} / 150</p>
             </div>
             <div>
-              <label htmlFor={categoryId} className="text-sm font-medium text-social-text">
+              <label htmlFor={categoryId} className="text-sm font-medium text-foreground">
                 Category
               </label>
               <select
@@ -193,7 +191,7 @@ export default function MessageBoardPanel({
                 value={selectedCategoryId}
                 onChange={(event) => setSelectedCategoryId(event.target.value)}
                 required
-                className="mt-1 block h-11 w-full rounded-xl border border-social-border bg-social-surface px-3 text-sm text-social-text outline-none focus-visible:border-social-action focus-visible:ring-2 focus-visible:ring-social-focus"
+                className="mt-1 block h-11 w-full rounded-cut border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:border-brand-bar focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">Choose category</option>
                 {categories.map((category) => (
@@ -205,7 +203,7 @@ export default function MessageBoardPanel({
             </div>
           </div>
           <div>
-            <label htmlFor={bodyId} className="text-sm font-medium text-social-text">
+            <label htmlFor={bodyId} className="text-sm font-medium text-foreground">
               Post body
             </label>
             <textarea
@@ -215,20 +213,20 @@ export default function MessageBoardPanel({
               maxLength={10000}
               rows={compact ? 5 : 7}
               required
-              className="mt-1 block w-full resize-y rounded-xl border border-social-border bg-social-surface px-3 py-2 text-sm text-social-text outline-none placeholder:text-social-text-muted focus-visible:border-social-action focus-visible:ring-2 focus-visible:ring-social-focus"
+              className="mt-1 block w-full resize-y rounded-cut border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-brand-bar focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="Add the details league members will need…"
             />
-            <p className="mt-1 text-xs text-social-text-muted">
+            <p className="mt-1 text-xs text-muted-foreground">
               {body.length.toLocaleString()} / 10,000
             </p>
           </div>
           {canManage ? (
-            <label className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-social-text">
+            <label className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-foreground">
               <input
                 type="checkbox"
                 checked={isAnnouncement}
                 onChange={(event) => setIsAnnouncement(event.target.checked)}
-                className="size-4 rounded border-social-border text-social-action focus:ring-social-focus"
+                className="size-4 border-border text-brand-bar focus:ring-ring"
               />
               Publish as an official announcement
             </label>
@@ -237,19 +235,19 @@ export default function MessageBoardPanel({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-action bg-social-action px-4 text-sm font-semibold text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+              className="inline-flex min-h-10 items-center justify-center rounded-cut border border-brand-bar bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
             >
               {creating ? 'Publishing…' : 'Publish post'}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-border bg-social-surface px-4 text-sm font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+              className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Cancel
             </button>
             {submitError ? (
-              <p role="alert" className="text-sm font-medium text-social-error">
+              <p role="alert" className="text-sm font-medium text-destructive-text">
                 {submitError}
               </p>
             ) : null}
@@ -263,12 +261,12 @@ export default function MessageBoardPanel({
         onScroll={(event) => onLatestVisibleChange?.(event.currentTarget.scrollTop <= 72)}
       >
         <div className="mb-3 flex justify-end">
-          <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-social-text">
+          <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-foreground">
             {compact ? 'Sort' : 'Sort discussions'}
             <select
               value={sort}
               onChange={(event) => onSortChange(event.target.value as SocialPostSort)}
-              className="h-10 rounded-lg border border-social-border bg-social-surface px-3 text-sm text-social-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+              className="h-10 rounded-cut border border-border bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="latestActivity">Latest activity</option>
               <option value="createdAt">Creation date</option>
@@ -276,32 +274,32 @@ export default function MessageBoardPanel({
           </label>
         </div>
         {loading && posts.length === 0 ? (
-          <p role="status" className="py-10 text-center text-sm text-social-text-muted">
+          <p role="status" className="py-10 text-center text-sm text-muted-foreground">
             Loading message board…
           </p>
         ) : error && posts.length === 0 ? (
-          <div className="mx-auto max-w-sm rounded-xl border border-social-error bg-social-error-soft p-4 text-center">
-            <p role="alert" className="text-sm font-medium text-social-error">
+          <div className="mx-auto max-w-sm border border-destructive bg-destructive-soft p-4 text-center">
+            <p role="alert" className="text-sm font-medium text-destructive-text">
               {error}
             </p>
             <button
               type="button"
               onClick={() => void onRetry()}
-              className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-social-border bg-social-surface px-3 text-sm font-semibold text-social-text transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+              className="mt-3 inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Retry
             </button>
           </div>
         ) : posts.length === 0 ? (
           <div className="py-10 text-center">
-            <p className="text-sm font-semibold text-social-text">No discussions yet</p>
-            <p className="mt-1 text-sm text-social-text-muted">
+            <p className="text-sm font-semibold text-foreground">No discussions yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
               Create the first post for your league.
             </p>
           </div>
         ) : (
           <ol
-            className={compact ? 'divide-y divide-social-border' : 'space-y-3'}
+            className={compact ? 'divide-y divide-border' : 'space-y-3'}
             aria-label="League message board posts"
           >
             {sortedPosts.map((post) => (
@@ -309,45 +307,45 @@ export default function MessageBoardPanel({
                 <button
                   type="button"
                   onClick={() => onSelectPost(post)}
-                  className={`block w-full border-l-4 text-left transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus ${
+                  className={`block w-full border-l-4 text-left transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     compact
                       ? `px-2 py-3 ${
                           post.isAnnouncement
-                            ? 'border-l-social-brand-strong bg-social-surface'
-                            : 'border-l-transparent bg-social-surface'
+                            ? 'border-l-primary bg-card'
+                            : 'border-l-transparent bg-card'
                         }`
-                      : `rounded-xl border p-4 ${
+                      : ` border p-4 ${
                           post.isAnnouncement
-                            ? 'border-social-border border-l-social-brand-strong bg-social-surface'
-                            : 'border-social-border border-l-transparent bg-social-surface'
+                            ? 'border-border border-l-primary bg-card'
+                            : 'border-border border-l-transparent bg-card'
                         }`
                   }`}
                   aria-label={`Open discussion: ${post.title}`}
                 >
                   <span className="flex flex-wrap items-center gap-2">
                     {post.isAnnouncement ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-social-brand-strong px-2.5 py-1 text-xs font-semibold text-social-brand-foreground">
+                      <span className="inline-flex items-center gap-1 bg-brand-bar px-2.5 py-1 text-xs font-semibold text-brand-bar-foreground">
                         <Megaphone className="size-3.5" aria-hidden="true" />
                         Announcement
                       </span>
                     ) : null}
                     {post.isPinned ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-social-action bg-social-brand-soft px-2.5 py-1 text-xs font-semibold text-social-action-pressed">
+                      <span className="inline-flex items-center gap-1 border border-brand-bar bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
                         <Pin className="size-3.5" aria-hidden="true" />
                         Pinned
                       </span>
                     ) : null}
                     {post.isLocked ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-social-border bg-social-surface-subtle px-2.5 py-1 text-xs font-semibold text-social-text-muted">
+                      <span className="inline-flex items-center gap-1 border border-border bg-accent px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                         <Lock className="size-3.5" aria-hidden="true" />
                         Locked
                       </span>
                     ) : null}
-                    <span className="rounded-full border border-social-border bg-social-surface-subtle px-2.5 py-1 text-xs font-medium text-social-text-muted">
+                    <span className="border border-border bg-accent px-2.5 py-1 text-xs font-medium text-muted-foreground">
                       {post.category.name}
                     </span>
                   </span>
-                  <span className="mt-3 block text-base font-semibold text-social-text">
+                  <span className="mt-3 block text-base font-semibold text-foreground">
                     {post.title}
                   </span>
                   <span className="mt-3 block">
@@ -358,7 +356,7 @@ export default function MessageBoardPanel({
                       compact
                     />
                   </span>
-                  <span className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-social-text-muted">
+                  <span className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <MessageSquare className="size-3.5" aria-hidden="true" />
                       {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
@@ -381,7 +379,7 @@ export default function MessageBoardPanel({
               type="button"
               onClick={() => void onLoadMore()}
               disabled={loadingMore}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-border bg-social-surface px-4 text-sm font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+              className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
             >
               {loadingMore ? 'Loading…' : 'Load more discussions'}
             </button>

@@ -26,9 +26,7 @@ export default function SafeSocialText({
   const parts = value.split(URL_PATTERN);
 
   return (
-    <p
-      className={`whitespace-pre-wrap break-words text-sm leading-6 text-social-text ${className}`}
-    >
+    <p className={`whitespace-pre-wrap break-words text-sm leading-6 text-foreground ${className}`}>
       {parts.map((part, index) => {
         const href = safeExternalUrl(part);
         if (!href) {
@@ -40,7 +38,7 @@ export default function SafeSocialText({
                   <span
                     key={pieceIndex}
                     data-mention
-                    className="rounded-md bg-social-mention-pill px-1 font-semibold text-social-mention-pill-text"
+                    className="rounded-cut bg-brand-bar px-1 font-semibold text-brand-bar-foreground"
                   >
                     {piece}
                   </span>
@@ -57,7 +55,7 @@ export default function SafeSocialText({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-social-link underline decoration-social-link underline-offset-2 transition-colors hover:text-social-action-hover active:text-social-action-pressed focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+            className="font-medium text-primary underline decoration-primary underline-offset-2 transition-colors hover:text-brand-bar-hover active:text-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {part}
           </a>

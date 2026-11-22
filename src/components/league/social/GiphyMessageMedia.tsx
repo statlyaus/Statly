@@ -9,8 +9,6 @@ import { getGiphyClient, type GiphyGif } from './giphyClient';
 
 interface GiphyMessageMediaProps {
   gif: SocialGif;
-  /** True inside your own cobalt chat bubble, where the attribution switches to the bubble's colours. */
-  onFilledBubble?: boolean;
 }
 
 function getGifImage(gif: GiphyGif): { url: string; width: number; height: number } | null {
@@ -24,10 +22,7 @@ function getGifImage(gif: GiphyGif): { url: string; width: number; height: numbe
   };
 }
 
-export default function GiphyMessageMedia({
-  gif,
-  onFilledBubble = false,
-}: GiphyMessageMediaProps): React.JSX.Element {
+export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): React.JSX.Element {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const [resolvedGif, setResolvedGif] = useState<GiphyGif | null>(null);
@@ -81,7 +76,7 @@ export default function GiphyMessageMedia({
     <div className="mt-2 max-w-[22.5rem]">
       {resolvedGif && resolvedImage ? (
         <>
-          <div className="relative max-h-60 overflow-hidden rounded-xl bg-social-surface-subtle">
+          <div className="ground-white relative max-h-60 overflow-hidden bg-accent">
             <img
               src={resolvedImage.url}
               alt={imageAlt}
@@ -95,7 +90,7 @@ export default function GiphyMessageMedia({
               ref={expandButtonRef}
               type="button"
               onClick={() => setExpanded(true)}
-              className="absolute bottom-2 right-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-social-border bg-social-surface px-3 text-xs font-semibold text-social-text shadow-sm transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+              className="ground-white absolute bottom-2 right-2 inline-flex min-h-9 items-center gap-1.5 rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Expand GIF"
             >
               <Expand className="size-3.5" aria-hidden="true" />
@@ -110,23 +105,23 @@ export default function GiphyMessageMedia({
               setExpanded(false);
               expandButtonRef.current?.focus();
             }}
-            className="m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-2rem))] max-w-none rounded-2xl border border-social-border bg-social-surface p-0 text-social-text shadow-2xl backdrop:bg-overlay backdrop:backdrop-blur-sm"
+            className="ground-white m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-2rem))] max-w-none rounded-cut-float border-[2.5px] border-foreground bg-card p-0 text-foreground shadow-hard backdrop:bg-overlay"
           >
-            <div className="flex min-h-14 items-center justify-between gap-3 border-b border-social-border px-4">
+            <div className="flex min-h-14 items-center justify-between gap-3 border-b border-border px-4">
               <h2 id={`giphy-preview-${gif.id}`} className="text-sm font-semibold">
                 GIF preview
               </h2>
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
-                className="inline-flex size-10 items-center justify-center rounded-full text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+                className="inline-flex size-10 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Close GIF preview"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
             </div>
             <div className="max-h-[calc(90dvh-3.5rem)] overflow-auto p-4">
-              <div className="mx-auto max-w-2xl overflow-hidden rounded-xl bg-social-surface-subtle">
+              <div className="mx-auto max-w-2xl overflow-hidden bg-accent">
                 <img
                   src={resolvedImage.url}
                   alt={imageAlt}
@@ -140,7 +135,7 @@ export default function GiphyMessageMedia({
                 href="https://giphy.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 block text-right text-xs font-bold tracking-wide text-social-text-muted underline-offset-4 hover:text-social-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+                className="mt-2 block text-right text-xs font-bold tracking-wide text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Powered by GIPHY
               </a>
@@ -152,14 +147,14 @@ export default function GiphyMessageMedia({
           href={giphyUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-10 items-center rounded-lg border border-social-border bg-social-surface-subtle px-3 text-sm font-semibold text-social-text underline-offset-4 transition-colors hover:bg-social-brand-soft hover:underline active:bg-social-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+          className="ground-white inline-flex min-h-10 items-center rounded-cut border border-border bg-accent px-3 text-sm font-semibold text-foreground underline-offset-4 transition-colors hover:bg-secondary hover:underline active:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           View GIF on GIPHY
         </a>
       ) : (
         <div
           role="status"
-          className="flex aspect-video items-center justify-center rounded-xl bg-social-surface-subtle text-sm text-social-text-muted"
+          className="ground-white flex aspect-video items-center justify-center bg-accent text-sm text-muted-foreground"
         >
           Loading GIF…
         </div>
@@ -169,11 +164,7 @@ export default function GiphyMessageMedia({
           href="https://giphy.com/"
           target="_blank"
           rel="noopener noreferrer"
-          className={`mt-1 block text-right text-[10px] font-bold tracking-wide underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 ${
-            onFilledBubble
-              ? 'text-social-bubble-own-muted hover:text-social-bubble-own-text focus-visible:ring-social-bubble-own-text'
-              : 'text-social-text-muted hover:text-social-text focus-visible:ring-social-focus'
-          }`}
+          className="mt-1 block text-right text-[11px] font-bold tracking-wide underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 text-muted-foreground hover:text-foreground focus-visible:ring-ring"
         >
           Powered by GIPHY
         </a>
