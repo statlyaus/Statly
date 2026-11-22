@@ -75,22 +75,28 @@ describe('trade list query', () => {
   });
 
   it('shows the latest year by default, and every year once a club is chosen', () => {
-    expect(parseTradesListQuery({}, stories)).toEqual({ year: 2025, club: null, sort: 'newest' });
+    expect(parseTradesListQuery({}, stories)).toEqual({
+      year: 2025,
+      club: null,
+      sort: 'newest',
+      trade: null,
+    });
     expect(parseTradesListQuery({ club: 'geelong' }, stories)).toEqual({
       year: null,
       club: 'geelong',
       sort: 'newest',
+      trade: null,
     });
     expect(parseTradesListQuery({ year: 'all' }, stories).year).toBeNull();
     expect(
       parseTradesListQuery({ year: '2024', club: 'Geelong', sort: 'biggest' }, stories)
-    ).toEqual({ year: 2024, club: 'geelong', sort: 'biggest' });
+    ).toEqual({ year: 2024, club: 'geelong', sort: 'biggest', trade: null });
   });
 
   it('ignores a year, club or sort it does not know', () => {
-    expect(parseTradesListQuery({ year: '1999', club: 'fitzroy', sort: 'worst' }, stories)).toEqual(
-      { year: 2025, club: null, sort: 'newest' }
-    );
+    expect(
+      parseTradesListQuery({ year: '1999', club: 'fitzroy', sort: 'worst', trade: 'nope' }, stories)
+    ).toEqual({ year: 2025, club: null, sort: 'newest', trade: null });
     expect(parseTradesListQuery({ year: ['2024', '2025'] }, stories).year).toBe(2024);
   });
 
@@ -106,15 +112,25 @@ describe('trade list query', () => {
 
   it('writes an address that reads back as the same query', () => {
     for (const query of [
-      { year: 2024, club: 'geelong', sort: 'biggest' },
-      { year: null, club: null, sort: 'newest' },
-      { year: 2025, club: 'western-bulldogs', sort: 'newest' },
+      { year: 2024, club: 'geelong', sort: 'biggest', trade: null },
+      { year: null, club: null, sort: 'newest', trade: 't3' },
+      { year: 2025, club: 'western-bulldogs', sort: 'newest', trade: 't2' },
     ] as const) {
       const href = tradesListHref(query);
       expect(href.startsWith('/afl/trades?')).toBe(true);
       const params = Object.fromEntries(new URLSearchParams(href.split('?')[1]));
       expect(parseTradesListQuery(params, stories)).toEqual(query);
     }
+  });
+
+  it('keeps the previewed trade in the address, and leaves it out when none is chosen', () => {
+    expect(parseTradesListQuery({ year: '2024', trade: 't3' }, stories).trade).toBe('t3');
+    expect(tradesListHref({ year: 2024, club: null, sort: 'newest' })).toBe(
+      '/afl/trades?year=2024'
+    );
+    expect(tradesListHref({ year: 2024, club: null, sort: 'newest', trade: 't3' })).toBe(
+      '/afl/trades?year=2024&trade=t3'
+    );
   });
 
   it('ranks the biggest wins, one per trade, leaving out provisional results', () => {

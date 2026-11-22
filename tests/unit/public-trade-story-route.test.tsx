@@ -58,28 +58,55 @@ beforeEach(() => {
 });
 
 describe('public trade pages', () => {
-  const tradeLinksOnPage = () =>
-    screen
-      .getAllByRole('link')
-      .filter((a) => /^\/afl\/trades\/(?!clubs\/|method$)[^?]/u.test(a.getAttribute('href') ?? ''));
+  /** The list's rows: each opens its trade in the preview beside the list. */
+  const tradeLinksOnPage = () => [
+    ...document.querySelectorAll<HTMLAnchorElement>(
+      'section[aria-labelledby="results-heading"] li > a'
+    ),
+  ];
   const listPage = (searchParams: Record<string, string> = {}) =>
     PublicTradesPage({ searchParams: Promise.resolve(searchParams) });
+  /** A rail link by the words before its count ("2025 3" is the 2025 link). */
+  const railLink = (words: string) =>
+    within(screen.getByRole('navigation', { name: 'Filter the trades' })).getByRole('link', {
+      name: new RegExp(`^${words}\\b`, 'u'),
+    });
 
-  it('lists every year’s trades with each club’s result, and no private wording', async () => {
+  beforeEach(() => {
+    loadStoryMock.mockImplementation(async (tradeId: string) => available(source.load(tradeId)));
+  });
+
+  it('lists every year’s trades, one row each, and no private wording', async () => {
     listStoriesMock.mockResolvedValue(available(list));
     render(await listPage({ year: 'all' }));
     expect(screen.getByRole('heading', { level: 1, name: 'AFL trades, valued' })).toBeVisible();
     const tradeLinks = tradeLinksOnPage();
     expect(tradeLinks).toHaveLength(list.stories.length);
     expect(document.body.innerHTML).not.toMatch(/\/dev\/afl-trade-stories|Private/u);
-    const row = tradeLinks.find((a) =>
-      a.getAttribute('href')?.endsWith(encodeURIComponent(first.tradeId))
+    const row = tradeLinks.find(
+      (a) =>
+        new URLSearchParams(a.getAttribute('href')!.split('?')[1]).get('trade') === first.tradeId
     )!;
-    for (const result of first.results!) {
-      expect(row).toHaveTextContent(result.clubName);
-      expect(row).toHaveTextContent(`got ${result.received.join(', ')}`);
-    }
+    for (const result of first.results!) expect(row).toHaveTextContent(result.clubName);
+    const lead = [...first.results!].sort((left, right) => right.net - left.net)[0]!;
+    expect(row).toHaveTextContent(`${lead.clubName} got ${lead.received.join(', ')}`);
     expect(document.querySelector('main')).toBeNull();
+  });
+
+  it('opens the first row in the preview, or the trade the address names', async () => {
+    listStoriesMock.mockResolvedValue(available(list));
+    render(await listPage({ year: 'all' }));
+    const [top] = tradeLinksOnPage();
+    expect(top).toHaveAttribute('aria-current', 'true');
+    expect(loadStoryMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('link', { name: 'Open the full trade' })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/afl\/trades\/[^?]/u)
+    );
+
+    const other = list.stories.at(-1)!;
+    render(await listPage({ year: 'all', trade: other.tradeId }));
+    expect(loadStoryMock).toHaveBeenLastCalledWith(other.tradeId);
   });
 
   it('shows the latest year by default and marks the current filter choices', async () => {
@@ -89,15 +116,9 @@ describe('public trade pages', () => {
     expect(tradeLinksOnPage()).toHaveLength(
       list.stories.filter(({ year }) => year === latest).length
     );
-    expect(screen.getByRole('link', { name: String(latest) })).toHaveAttribute(
-      'aria-current',
-      'true'
-    );
-    expect(screen.getByRole('link', { name: 'All clubs' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('link', { name: 'All years' })).toHaveAttribute(
-      'href',
-      '/afl/trades?year=all'
-    );
+    expect(railLink(String(latest))).toHaveAttribute('aria-current', 'true');
+    expect(railLink('All clubs')).toHaveAttribute('aria-current', 'true');
+    expect(railLink('All years')).toHaveAttribute('href', '/afl/trades?year=all');
   });
 
   it('filters by club and year together, and offers that club’s chains', async () => {
@@ -114,10 +135,7 @@ describe('public trade pages', () => {
       expect.stringContaining('/afl/trades/clubs/')
     );
     // Choosing another year keeps the club.
-    expect(screen.getByRole('link', { name: 'All years' })).toHaveAttribute(
-      'href',
-      `/afl/trades?year=all&club=${slug}`
-    );
+    expect(railLink('All years')).toHaveAttribute('href', `/afl/trades?year=all&club=${slug}`);
   });
 
   it('shows one trade without private wording or private links', async () => {
