@@ -143,6 +143,11 @@ interface DraftContextValue extends DraftState {
   userId: string;
   makePick: (playerId: string) => Promise<void>;
   startDraft: () => Promise<void>;
+  /**
+   * A commissioner makes the pick whose clock ran out with no expiry job to make it. Throws the
+   * server's reason when it refuses (not overdue, already made, auto-pick off).
+   */
+  forceAutoPick: () => Promise<void>;
   updateQueue: (queue: string[]) => Promise<void>;
   addToWatchlist: (playerId: string) => Promise<void>;
   removeFromWatchlist: (playerId: string) => Promise<void>;
@@ -383,7 +388,7 @@ function normalizeDraftCore(raw: unknown): DraftCore | null {
           : {},
       benchSize: Number(source.settings?.benchSize ?? 0),
       allowTrades: Boolean(source.settings?.allowTrades ?? false),
-      autoPickEnabled: Boolean(source.settings?.autoPickEnabled ?? true),
+      autoPickEnabled: Boolean(source.settings?.autoPickEnabled ?? source.autoPickAllowed ?? true),
       pauseOnDisconnect: Boolean(source.settings?.pauseOnDisconnect ?? false),
       maxPauseDuration: Number(source.settings?.maxPauseDuration ?? 0),
     },
@@ -466,6 +471,9 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       pausedRemainingSeconds: clock.status === 'PAUSED' ? clock.remainingSeconds : null,
       participants: snapshot.state.participants,
       ...(snapshot.state.managerUserIds ? { managerUserIds: snapshot.state.managerUserIds } : {}),
+      ...(snapshot.state.autoPickAllowed !== undefined
+        ? { autoPickAllowed: snapshot.state.autoPickAllowed }
+        : {}),
       timePerPick: clock.durationSeconds,
     });
 
@@ -2182,6 +2190,24 @@ export function DraftProvider({
     }
   }, [draftId, forceRefresh]);
 
+  const clockRevision = state.liveState.clock?.revision ?? state.liveState.revision;
+  const forceAutoPick = useCallback(async () => {
+    if (clockRevision === undefined) {
+      throw new Error('The draft clock is still syncing. Try again in a moment.');
+    }
+    // The server makes the pick only if this is still the expired pick the room is showing.
+    // Made or refused, the board is read back: a refusal usually means the pick moved on.
+    try {
+      await fetchApi(`drafts/${draftId}/auto-pick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedSchedulingVersion: clockRevision }),
+      });
+    } finally {
+      await fetchPersistedPickBackfill();
+    }
+  }, [clockRevision, draftId, fetchPersistedPickBackfill]);
+
   const makePick = useCallback(
     async (playerId: string) => {
       const failPick = (
@@ -2545,6 +2571,7 @@ export function DraftProvider({
       ...state,
       makePick,
       startDraft,
+      forceAutoPick,
       updateQueue,
       addToWatchlist,
       removeFromWatchlist,
@@ -2566,6 +2593,7 @@ export function DraftProvider({
       dismissStartFeedback,
       draftId,
       forceRefresh,
+      forceAutoPick,
       isInWatchlist,
       liveUpdatesDown,
       makePick,

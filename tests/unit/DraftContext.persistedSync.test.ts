@@ -111,3 +111,53 @@ describe('draft reducer persisted sync', () => {
     expect(next.connection.lastPersistedSyncAt).toBeUndefined();
   });
 });
+
+describe('draft snapshot auto-pick rule', () => {
+  const serverNow = '2026-06-07T00:00:00.000Z';
+  const canonical = (autoPickAllowed?: boolean) => ({
+    schemaVersion: 1,
+    draftId: 'draft-1',
+    leagueId: 'league-1',
+    revision: 3,
+    throughSequence: 0,
+    serverNow,
+    state: {
+      name: 'Draft',
+      status: 'LIVE',
+      currentPick: 1,
+      totalPicks: 2,
+      round: 1,
+      direction: 'FORWARD',
+      clock: {
+        status: 'LIVE',
+        revision: 3,
+        durationSeconds: 120,
+        serverNow,
+        startedAt: serverNow,
+        deadlineAt: '2026-06-07T00:02:00.000Z',
+      },
+      onClockMemberId: null,
+      participants: [],
+      ...(autoPickAllowed === undefined ? {} : { autoPickAllowed }),
+      picks: [],
+    },
+  });
+
+  it.each([
+    ['a live snapshot', canonical(false)],
+    [
+      'the draft read',
+      {
+        draft: { id: 'draft-1', status: 'LIVE', currentPick: 1, autoPickAllowed: false },
+        participants: [],
+        picks: [],
+      },
+    ],
+  ])("carries a league's auto-pick off from %s", (_source, raw) => {
+    expect(normalizeDraftSnapshot(raw as never).draft?.settings.autoPickEnabled).toBe(false);
+  });
+
+  it('assumes auto-pick is on when an older snapshot leaves the rule out', () => {
+    expect(normalizeDraftSnapshot(canonical() as never).draft?.settings.autoPickEnabled).toBe(true);
+  });
+});

@@ -228,6 +228,7 @@ export class DraftProjectionService {
           draftOrder: order.slot,
         })),
         managerUserIds: leagueManagerUserIds(draft.league),
+        autoPickAllowed: draft.league.settings.allowAutoPick,
         picks: draft.picks.map((pick) => ({
           id: pick.id,
           overall: pick.overall,

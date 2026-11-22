@@ -12,7 +12,7 @@ vi.mock('@/server/draft/services/DraftApplicationService', () => ({
   draftApplicationService: service,
 }));
 vi.mock('@/server/draft/services/DraftRealtimePublisher', () => ({
-  draftRealtimePublisher: { publishCommandResult: vi.fn() },
+  draftRealtimePublisher: { publishCommandResult: vi.fn(async () => undefined) },
 }));
 vi.mock('@/server/players/playerIdentityService', () => ({
   resolveCanonicalPlayerId: vi.fn(),
@@ -34,9 +34,14 @@ const routes = [
   ['auto-pick', autoPick, service.autoPick],
 ] as const;
 
-function command(name: string) {
-  return new NextRequest(`http://localhost/api/drafts/draft-1/${name}`, { method: 'POST' });
+function command(name: string, body: unknown = { expectedSchedulingVersion: 7 }) {
+  return new NextRequest(`http://localhost/api/drafts/draft-1/${name}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
+
+const params = { params: Promise.resolve({ id: 'draft-1' }) };
 
 describe('pick room lifecycle route errors', () => {
   beforeEach(() => {
@@ -68,6 +73,34 @@ describe('pick room lifecycle route errors', () => {
 
       expect(response.status).toBe(403);
       expect(body.error.message).toBe('Commissioner access required to pause drafts');
+    }
+  );
+
+  it('auto-pick acts only on the expired pick the caller saw', async () => {
+    service.autoPick.mockResolvedValue({
+      data: { pick: { id: 'pick-3' } },
+      currentPick: 4,
+      isComplete: false,
+    });
+
+    const response = await autoPick(command('auto-pick'), params);
+
+    expect(response.status).toBe(200);
+    expect(service.autoPick).toHaveBeenCalledWith({
+      draftId: 'draft-1',
+      actorUserId: 'commissioner',
+      expectedSchedulingVersion: 7,
+      requireExpired: true,
+    });
+  });
+
+  it.each([{}, { expectedSchedulingVersion: '7' }, null])(
+    'auto-pick refuses a body without the scheduling version (%j)',
+    async (body) => {
+      const response = await autoPick(command('auto-pick', body), params);
+
+      expect(response.status).toBe(400);
+      expect(service.autoPick).not.toHaveBeenCalled();
     }
   );
 });

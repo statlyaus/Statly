@@ -127,13 +127,14 @@ timer job validates the current draft version and turn before doing anything.
 
 ### Who manages the draft
 
-Start, pause, resume and forced auto-pick belong to the league's managers: the owner and
+Start, pause, resume and auto-picking an overdue pick belong to the league's managers: the owner and
 co-commissioners, while each is an active member (`leagueManagerUserIds` in
 `src/server/leagues/activeMembership.ts`, the same rule as `getLeagueMembershipAccess().canManage`).
 The draft order does not grant or remove these rights, so a commissioner who is not in the order, such
 as the Bloodsucker (#1279), keeps the controls and still never picks. The draft aggregate carries
 `managerUserIds` for the server check, and the room snapshot and `GET /api/drafts/[id]` carry it so
-the room shows the controls to the same users.
+the room shows the controls to the same users. Both also carry `autoPickAllowed` (the league's
+`allowAutoPick`), so the room offers the overdue-pick button only where the server would accept it.
 
 ### Live clock contract
 
@@ -141,6 +142,11 @@ Prisma `pickStartedAt`, `pickDeadlineAt`, `pausedRemainingSeconds`, and `schedul
 durable clock state. BullMQ is a wake-up mechanism: an expiry job must pass its scheduling version and
 `requireExpired` guard into the transactional auto-pick command. Socket.IO must not run a second
 countdown or accept a client request to start one.
+
+`POST /api/drafts/[id]/auto-pick` is a manager's way to make an overdue pick when no expiry job made
+it. Its JSON body must carry `expectedSchedulingVersion` (the clock revision the room is showing), and
+the route always passes `requireExpired: true`, so it answers 400 without the version, 409 when the
+clock has not run out or the draft has moved on, and 403 for anyone who does not manage the draft.
 
 `clockDurationSeconds` is captured for the current turn and is immutable for that scheduling revision.
 Changing league settings affects a later turn; it cannot stretch or reset the clock already on the
@@ -158,7 +164,13 @@ HTTP hydration and Socket.IO reconnects expose the same discriminated clock payl
 - every payload includes the scheduling revision and a server-time anchor.
 
 The browser interpolates a LIVE deadline once per second for display. Missing clock anchors render as
-syncing, local zero renders as finalizing, and neither state initiates an auto-pick. The board may be
+syncing, local zero renders as finalizing, and neither state initiates an auto-pick. Fifteen seconds
+after the deadline (`OVERDUE_GRACE_MS`) with the same pick still current, the clock shows "Pick
+overdue": the manager on the clock reads "Your pick is still open. Choose a player now." while the room
+would take their pick, a manager gets "Make the pick now" (only when the league allows auto-pick),
+which calls the auto-pick route and then reads the board back from the database, and everyone else is
+told the commissioner can make it, or that the room is waiting for the manager on the clock when
+auto-pick is off. The board may be
 out of date while a resync is pending, or while the live socket is not `connected` and no database read
 (a snapshot or the 5-second persisted-pick poll) has landed in the last two poll intervals. Then the
 room treats the clock anchors as missing, so the clock renders as syncing rather than counting, and it

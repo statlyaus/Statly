@@ -266,6 +266,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     PERSISTED_PICK_BACKFILL_INTERVAL_MS
   );
   const canMakePick = draft.canMakePick && !isBoardStale;
+  // A pick nobody made by its deadline is the commissioner's to make, when the league allows it.
+  const autoPickAllowed = draft.draft?.settings?.autoPickEnabled !== false;
 
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
@@ -665,6 +667,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             timePerPick={timePerPick}
             isYourTurn={Boolean(draft.isYourTurn)}
             yourSlot={yourSlot}
+            canMakePick={canMakePick}
+            autoPickAllowed={autoPickAllowed}
+            onMakeOverduePick={isOwner && autoPickAllowed ? draft.forceAutoPick : undefined}
           />
         </div>
 

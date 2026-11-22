@@ -73,7 +73,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 name: true,
                 ownerId: true,
                 categoriesJson: true,
-                settings: { select: { draftType: true, pickSeconds: true } },
+                settings: { select: { draftType: true, pickSeconds: true, allowAutoPick: true } },
                 members: { select: LEAGUE_MANAGER_MEMBER_SELECT },
               },
             },
@@ -138,6 +138,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       draftReadiness.playerPool.availableCount,
       draftReadiness.status,
       managerUserIds.join(','),
+      draftTimes.league?.settings?.allowAutoPick ?? '',
     ].join('|');
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
@@ -235,6 +236,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         },
       })),
       managerUserIds,
+      autoPickAllowed: draft.league?.settings?.allowAutoPick ?? true,
       // Summaries instead of heavy arrays
       picksSummary: {
         count: picksCount,

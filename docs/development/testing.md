@@ -650,7 +650,9 @@ intentional cross-browser coverage rather than an unused browser download.
 
 `npm run test:e2e` keeps Socket.IO enabled, leaves the draft worker disabled, and excludes
 `@draft-worker` tests. The representative browser lifecycle intentionally stops at four picks: one
-manual pick, one queued auto-pick, one fallback auto-pick, and completion. The full 12-team by
+manual pick, one queued auto-pick, one fallback auto-pick, and completion. Each auto-pick first runs
+the pick's clock out in the database (`expireCurrentPick`), because the route only makes an overdue
+pick. The full 12-team by
 22-player, 264-pick contract runs through the persisted application boundary in integration tests so
 browser, dev-server, and database transport pressure cannot masquerade as a product failure.
 

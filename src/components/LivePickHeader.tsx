@@ -55,6 +55,12 @@ interface LivePickHeaderProps {
   yourSlot?: number;
   onAudioAlert?: (type: 'warning' | 'your-turn' | 'next-up') => void;
   className?: string;
+  /** The room would take a pick from this viewer right now (on the clock, board up to date). */
+  canMakePick?: boolean;
+  /** The league lets a manager auto-pick an overdue pick. */
+  autoPickAllowed?: boolean;
+  /** Given only to a commissioner: makes the overdue pick; a rejection's message is shown. */
+  onMakeOverduePick?: () => Promise<void>;
 }
 
 const TIME_UP = 'Time is up.';
@@ -85,8 +91,16 @@ export default function LivePickHeader({
   yourSlot,
   onAudioAlert,
   className = '',
+  canMakePick = false,
+  autoPickAllowed = true,
+  onMakeOverduePick,
 }: LivePickHeaderProps): ReactElement {
   const [timeLeft, setTimeLeft] = useState(timePerPick);
+  // The clock keeps ticking through finalizing so the room notices when the pick becomes overdue.
+  const [, setTickedPhase] = useState<string>();
+  const [overduePickPending, setOverduePickPending] = useState(false);
+  // Kept with its pick so a refusal never shows under a later overdue pick.
+  const [overduePickError, setOverduePickError] = useState<{ pick: number; message: string }>();
   const [isFlashing, setIsFlashing] = useState(false);
   const [hasAlerted, setHasAlerted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -161,10 +175,12 @@ export default function LivePickHeader({
 
   // The browser interpolates a persisted deadline for display only. Expiry actions remain server-owned.
   useEffect(() => {
+    const keepsTicking = (state: ReturnType<typeof getTimerState>) =>
+      state.isRunning || state.phase === 'FINALIZING';
     const initialTimerState = getTimerState();
     setTimeLeft(initialTimerState.remainingSeconds);
 
-    if (!initialTimerState.isRunning) {
+    if (!keepsTicking(initialTimerState)) {
       return;
     }
 
@@ -175,7 +191,8 @@ export default function LivePickHeader({
     intervalRef.current = setInterval(() => {
       const nextTimerState = getTimerState();
       setTimeLeft(nextTimerState.remainingSeconds);
-      if (!nextTimerState.isRunning && intervalRef.current) {
+      setTickedPhase(nextTimerState.phase);
+      if (!keepsTicking(nextTimerState) && intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -358,25 +375,55 @@ export default function LivePickHeader({
     title: 'Draft room',
     detail: 'The room is loading the latest draft state.',
   };
+  const overdueDetail =
+    canMakePick && isYourTurn
+      ? 'Your pick is still open. Choose a player now.'
+      : onMakeOverduePick
+        ? 'This pick is overdue.'
+        : autoPickAllowed
+          ? 'This pick is overdue. The commissioner can make it.'
+          : 'This pick is overdue. Waiting for the manager on the clock to pick.';
+  const showOverduePickButton =
+    timerState.phase === 'OVERDUE' && Boolean(onMakeOverduePick) && !(canMakePick && isYourTurn);
+  const makeOverduePick = async () => {
+    if (!onMakeOverduePick) return;
+    const pick = draftData.currentPick;
+    setOverduePickPending(true);
+    setOverduePickError(undefined);
+    try {
+      await onMakeOverduePick();
+    } catch (error) {
+      setOverduePickError({
+        pick,
+        message: error instanceof Error ? error.message : 'The pick could not be made.',
+      });
+    } finally {
+      setOverduePickPending(false);
+    }
+  };
   const statusCopy =
-    timerState.phase === 'FINALIZING'
-      ? {
-          title: 'Finalizing pick',
-          detail: 'The deadline has passed. Waiting for the server to persist the selection.',
-        }
-      : timerState.phase === 'SYNCING'
+    timerState.phase === 'OVERDUE'
+      ? { title: 'Pick overdue', detail: overdueDetail }
+      : timerState.phase === 'FINALIZING'
         ? {
-            title: 'Syncing clock',
-            detail: 'Refreshing the authoritative draft clock before showing a countdown.',
+            title: 'Finalizing pick',
+            detail: 'The deadline has passed. Waiting for the server to persist the selection.',
           }
-        : statusCopyByStatus;
+        : timerState.phase === 'SYNCING'
+          ? {
+              title: 'Syncing clock',
+              detail: 'Refreshing the authoritative draft clock before showing a countdown.',
+            }
+          : statusCopyByStatus;
   const timerDisplay = timerState.phase === 'SYNCING' ? '—' : formatTime(timeLeft);
   const timerAriaLabel =
     timerState.phase === 'SYNCING'
       ? 'Draft clock is syncing'
       : timerState.phase === 'FINALIZING'
         ? 'Draft pick is being finalized'
-        : `Time remaining: ${formatTime(timeLeft)}`;
+        : timerState.phase === 'OVERDUE'
+          ? 'Draft pick is overdue'
+          : `Time remaining: ${formatTime(timeLeft)}`;
   const effectiveDuration = draftData.clock?.durationSeconds ?? timePerPick;
 
   return (
@@ -420,6 +467,24 @@ export default function LivePickHeader({
                 Live pick clock
               </p>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{statusCopy.detail}</p>
+              {showOverduePickButton && (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void makeOverduePick()}
+                    disabled={overduePickPending}
+                    aria-busy={overduePickPending}
+                    className="rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+                  >
+                    Make the pick now
+                  </button>
+                  {overduePickError?.pick === draftData.currentPick && (
+                    <p role="alert" className="text-sm text-destructive-text">
+                      {overduePickError.message}
+                    </p>
+                  )}
+                </div>
+              )}
               <div
                 className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-foreground"
                 role="timer"

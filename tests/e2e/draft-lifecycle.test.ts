@@ -5,7 +5,7 @@ import {
   collectRuntimeErrors,
   expectNoAppErrorBoundary,
 } from './helpers/devAuth';
-import { seedDraftLifecycleFixture } from './helpers/draftLifecycleFixture';
+import { expireCurrentPick, seedDraftLifecycleFixture } from './helpers/draftLifecycleFixture';
 
 const MAX_DRAFT_INTERACTION_MS = 10_000;
 const MAX_RENDERED_AVAILABLE_PLAYER_ROWS = 120;
@@ -58,9 +58,14 @@ test('completes a representative draft and recovers history and roster state', a
   const firstPickPayload = await readOkDraftResponse(firstPickResponse, 'Read manual pick');
   const firstPickedPlayerId = firstPickPayload.data.picks[0].player.id;
 
-  const secondPickResponse = await page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
-    headers: { authorization: 'Bearer dev:statly-dev-tester' },
-  });
+  // The commissioner can only make a pick whose clock has run out.
+  const makeOverduePick = async () =>
+    page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
+      headers: { authorization: 'Bearer dev:statly-dev-tester' },
+      data: { expectedSchedulingVersion: await expireCurrentPick(fixture.draftId) },
+    });
+
+  const secondPickResponse = await makeOverduePick();
   const secondPickPayload = await readOkDraftResponse(secondPickResponse, 'Queued auto-pick');
   expect(secondPickPayload.data).toMatchObject({
     currentPick: 3,
@@ -69,9 +74,7 @@ test('completes a representative draft and recovers history and roster state', a
     pick: { player: { id: fixture.queuedBotPlayerId } },
   });
 
-  const thirdPickResponse = await page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
-    headers: { authorization: 'Bearer dev:statly-dev-tester' },
-  });
+  const thirdPickResponse = await makeOverduePick();
   const thirdPickPayload = await readOkDraftResponse(thirdPickResponse, 'Fallback auto-pick');
   expect(thirdPickPayload.data).toMatchObject({
     currentPick: 4,
@@ -82,9 +85,7 @@ test('completes a representative draft and recovers history and roster state', a
     thirdPickPayload.data.pick.player.id
   );
 
-  const finalPickResponse = await page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
-    headers: { authorization: 'Bearer dev:statly-dev-tester' },
-  });
+  const finalPickResponse = await makeOverduePick();
   const finalPickPayload = await readOkDraftResponse(finalPickResponse, 'Completing auto-pick');
   expect(finalPickPayload.data).toMatchObject({
     currentPick: 5,

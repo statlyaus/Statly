@@ -26,6 +26,7 @@ const makePickSpy = vi.hoisted(() => vi.fn());
 const dismissPickFeedbackSpy = vi.hoisted(() => vi.fn());
 const forceRefreshSpy = vi.hoisted(() => vi.fn());
 const startDraftSpy = vi.hoisted(() => vi.fn());
+const forceAutoPickSpy = vi.hoisted(() => vi.fn());
 const dismissStartFeedbackSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
@@ -223,6 +224,7 @@ vi.mock('@/contexts/DraftContext', () => ({
     startFeedback: draftContext.startFeedback,
     dismissStartFeedback: dismissStartFeedbackSpy,
     startDraft: startDraftSpy,
+    forceAutoPick: forceAutoPickSpy,
     connection: {
       status: draftContext.connectionStatus,
       needsResync: draftContext.needsResync,
@@ -733,8 +735,19 @@ describe('UnifiedDraftRoom live shell composition', () => {
       expect(playerGridSpy.mock.calls.at(-1)?.[0].canMakePick).toBe(false);
       expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].canDraft).toBe(false);
       expect(renderedClockPhase()).toBe('SYNCING');
+      expect(livePickHeaderSpy.mock.calls.at(-1)?.[0].canMakePick).toBe(false);
     }
   );
+
+  it('offers the overdue pick to commissioners only', () => {
+    const { unmount } = render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+    expect(livePickHeaderSpy.mock.calls.at(-1)?.[0].onMakeOverduePick).toBe(forceAutoPickSpy);
+    unmount();
+
+    draftContext.firstSlotCanManage = false;
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+    expect(livePickHeaderSpy.mock.calls.at(-1)?.[0].onMakeOverduePick).toBeUndefined();
+  });
 
   it('lets the manager pick without the live socket while database reads keep the board current', () => {
     draftContext.canMakePick = true;
