@@ -36,7 +36,7 @@ export type Step = {
 export const REFERENCES: readonly { n: number; text: string; href: string | null }[] = [
   {
     n: 1,
-    text: 'HPN, "Introducing Player Approximate Value (PAV)", 31 August 2017. The method, its history, its testing and its limits.',
+    text: 'HPN, "Introducing Player Approximate Value (PAV)", 31 August 2017. The method, its history, its testing and its limits. HPN invites others to use it, with credit.',
     href: 'https://www.hpnfooty.com/?p=21810',
   },
   {
@@ -77,9 +77,8 @@ export const STEPS: readonly Step[] = [
     kicker: 'The idea',
     title: "PAV puts one number on a player's season",
     copy: [
-      "PAV stands for Player Approximate Value. It answers an old footy question: what was a player's season really worth to his club?",
-      'It was created in 2017 by HPN, a group of independent footy analysts, and named after Fremantle great Matthew Pavlich.[1]',
-      "If you've seen Moneyball, you know the idea. Baseball writer Bill James, whose stats thinking Moneyball made famous, came up with approximate value in 1982.[1][7] Pro-Football-Reference adapted it for the NFL in 2008, and HPN rebuilt it for the AFL.[1]",
+      "PAV, short for Player Approximate Value, measures what a player's season was worth to his club.",
+      'HPN, a group of independent footy analysts, built it in 2017 and named it after Fremantle great Matthew Pavlich.[1] The idea goes back to Bill James, the baseball writer whose stats thinking Moneyball made famous.[1][7]',
     ],
   },
   {
@@ -87,11 +86,10 @@ export const STEPS: readonly Step[] = [
     id: 'why',
     short: 'Why it works',
     kicker: 'The idea',
-    title: 'It starts with the team, not the stat sheet',
+    title: 'PAV rates the team first',
     copy: [
-      "Raw stats show how often a player was involved. They don't show how much that helped his team.",
-      'PAV measures the club first: how well it attacked, won the ball forward and defended. Then it shares that value between the players by what each one did.',
-      "HPN checked the results against Brownlow votes, All-Australian teams, club best and fairests and Champion Data's player ratings. PAV largely agreed with them.[1]",
+      'Stats count how often a player was involved. PAV asks how much that helped his team.',
+      "It rates the club's attack, midfield and defence, then shares that value between the players by what each one did.[1]",
     ],
   },
   {
@@ -100,11 +98,7 @@ export const STEPS: readonly Step[] = [
     short: 'Why we use it',
     kicker: 'The idea',
     title: 'We use it to measure what a trade delivered',
-    copy: [
-      'A trade swaps players and picks. To judge one, we need a single measure that works for any player, in any position, in any year.',
-      'PAV is built from public stats with a published formula, so anyone can check our numbers. HPN invites others to use it, with credit.[1]',
-      'The best way to see how it works is to follow one real player through it.',
-    ],
+    copy: ['To judge a trade, we need one measure that works for every player in it.'],
   },
   {
     stage: 'meet',
@@ -113,9 +107,7 @@ export const STEPS: readonly Step[] = [
     kicker: 'Our example',
     title: 'Follow one real player: Jordan Dawson',
     copy: [
-      `In the ${DAWSON_TRADE.tradeYear} trade period, Sydney traded Jordan Dawson to Adelaide for ${DAWSON_TRADE.pickLabel}.[3]`,
-      'He has played five seasons for Adelaide since. Every number from here on is his.',
-      'Pick a season at the top to follow. In 2022 he had 150 rebound 50s and 15 clearances. In 2023 he had 52 rebound 50s and 88 clearances.[2]',
+      `Sydney traded him to Adelaide in ${DAWSON_TRADE.tradeYear}, and he has played five seasons there since.[3] Pick a season at the top to follow.`,
     ],
   },
   {
@@ -125,9 +117,8 @@ export const STEPS: readonly Step[] = [
     kicker: 'The pot',
     title: 'Every season starts with the same pot of value',
     copy: (d) => [
-      'Here is how the number is built. It starts with the whole competition: each season has a pot of value, split into attack, midfield and defence.',
-      `Each part holds 100 PAV for every club. In ${d.season} there were ${d.clubs} clubs, so each part held ${f0(d.clubs * 100)} PAV and the pot ${f0(d.clubs * 300)}.`,
-      'The pot only changes when clubs join, so seasons from different years can be compared.[1]',
+      'Each season has a pot of value, split into attack, midfield and defence.',
+      `Each part holds 100 PAV per club. In ${d.season}, ${d.clubs} clubs made ${f0(d.clubs * 100)} a part and ${f0(d.clubs * 300)} in all. The pot grows only when clubs join, so seasons from different years can be compared.[1]`,
     ],
   },
   {
@@ -137,9 +128,9 @@ export const STEPS: readonly Step[] = [
     kicker: "Adelaide's share · Attack",
     title: 'Clubs that attack well get more of the attack value',
     copy: (d) => [
-      `Next, each part is shared between the ${d.clubs} clubs. Clubs that did that part better get a bigger share.`,
-      'For attack, we ask how many points the club scored each time it went inside 50, compared with the whole competition. Matching the competition is a rating of 1.00. Better is above, worse is below.[1]',
-      `The club's share is its rating out of all ${d.clubs} ratings added together. The ratings add up to about ${d.clubs}, so a club rated 1.00 gets close to 100.`,
+      `Each part is then shared between the ${d.clubs} clubs by how well each one did it.`,
+      "For attack, we divide the club's points per inside 50 by the competition's. Matching the competition gives a rating of 1.00.[1]",
+      `Its share is its rating out of all ${d.clubs} ratings added together. Those add up to about ${d.clubs}, so a rating of 1.00 earns close to 100.`,
     ],
   },
   {
@@ -149,9 +140,7 @@ export const STEPS: readonly Step[] = [
     kicker: "Adelaide's share · Midfield",
     title: 'Clubs that win the ball forward get more of the midfield value',
     copy: [
-      'For midfield, we ask whether the club got the ball inside 50 more often than its opponents.',
-      "Its inside 50s divided by its opponents' inside 50s gives the rating. More entries than the opposition means a rating above 1.00.",
-      'Its share of the midfield value is worked out the same way as attack.',
+      "For midfield, we divide the club's inside 50s by its opponents'. Getting the ball inside 50 more often than the opposition rates above 1.00, and the share is worked out as for attack.",
     ],
   },
   {
@@ -161,8 +150,7 @@ export const STEPS: readonly Step[] = [
     kicker: "Adelaide's share · Defence",
     title: 'Clubs that stop scores get more of the defence value',
     copy: [
-      'For defence, we ask how many points opponents scored each time they went inside 50, compared with the whole competition.',
-      'Conceding less per entry than the competition rates above 1.00; conceding more rates below. The exact sum is on the right.',
+      'For defence, we compare the points opponents scored per inside 50 with the competition. Conceding less rates above 1.00.',
       "Add the three shares and you have the club's value for the season. The average club gets 300.",
     ],
   },
@@ -173,9 +161,8 @@ export const STEPS: readonly Step[] = [
     kicker: "Dawson's share · Attack",
     title: "Players share their club's value by what they did",
     copy: [
-      "Now Adelaide's value is shared between its players, one part at a time.",
-      'Each part has a score sheet. Every stat a player records adds to his score, and some stats are worth more than others. On the right is his attack sheet.[1][2]',
-      "His share of the club's attack score is his share of the club's attack value.",
+      "Adelaide's value is then shared between its players, one part at a time.",
+      "Each part has its own score sheet. Each stat is worth a set amount, and some count for more than others.[1][2][4] His share of the club's score is his share of the club's value.",
     ],
   },
   {
@@ -184,10 +171,7 @@ export const STEPS: readonly Step[] = [
     short: "Dawson's midfield",
     kicker: "Dawson's share · Midfield",
     title: 'Clearances and inside 50s count most in midfield',
-    copy: [
-      'Two stats are worth far more than the rest here. A clearance adds 20 and an inside 50 adds 15.',
-      "Same rule as attack: his share of the club's midfield score is his share of the club's midfield value.",
-    ],
+    copy: ['A clearance adds 20 and an inside 50 adds 15, far more than any other midfield stat.'],
   },
   {
     stage: 'player',
@@ -196,8 +180,7 @@ export const STEPS: readonly Step[] = [
     kicker: "Dawson's share · Defence",
     title: 'Rebound 50s and one-percenters count most in defence',
     copy: [
-      'Two stats take score away: marks inside 50 and hitouts. A player whose defence score falls below zero gets a negative share of the defence value.',
-      'Same rule again: his share of the score is his share of the value.',
+      'Marks inside 50 and hitouts take score away, so a player can finish below zero and get a negative share of the defence value.',
     ],
   },
   {
@@ -207,8 +190,8 @@ export const STEPS: readonly Step[] = [
     kicker: 'His season',
     title: (d) => `His ${d.season} season in one number`,
     copy: (d) => [
-      "Add his attack, midfield and defence value together. That's his PAV for the season.",
-      `To see where it sits, compare it with every player who played 10 or more games in ${d.season}: ${f0(d.rank.of)} of them. Dawson played ${d.games}.[2]`,
+      'Add his attack, midfield and defence value and you have his PAV for the season.',
+      `Dawson played ${d.games} games.[2]`,
     ],
   },
   {
@@ -218,8 +201,7 @@ export const STEPS: readonly Step[] = [
     kicker: 'The trade',
     title: 'A trade is judged on the seasons it delivered',
     copy: [
-      'When a club trades for a player, we add up his PAV for that club in every season from the one after the trade until he leaves.',
-      "If he later comes back to the same club, that second stint doesn't count for the original trade.",
+      'We add up his PAV for the club that traded for him, from the season after the trade until he leaves. A second stint after coming back does not count for the original trade.',
     ],
   },
   {
@@ -229,9 +211,8 @@ export const STEPS: readonly Step[] = [
     kicker: 'The trade',
     title: "His trade isn't finished yet",
     copy: [
-      'Dawson is still at Adelaide, so the trade page shows a value line: the PAV he has produced there so far, plus the PAV he is expected to add before he leaves.[3]',
-      'The expected part starts from what traded players at the same career stage usually produce. Each season his own games and PAV per game move it up or down, and it allows for the chance he leaves. The longer he plays, the more his own record counts.',
-      `The pick Adelaide gave up works the same way. Before the draft it was valued at its expected slot. It ended up with ${pick.club}, who used it at pick ${pick.selection} on ${pick.player}, so its value now follows his time there.`,
+      'Dawson is still at Adelaide. His value line adds the PAV he has produced there to the PAV he is expected to add before he leaves.[3]',
+      `The pick Adelaide gave up became ${pick.player} at ${pick.club}, and it has a value line too.`,
     ],
   },
   {
@@ -241,22 +222,20 @@ export const STEPS: readonly Step[] = [
     kicker: 'The trade',
     title: 'How his expected PAV is worked out',
     copy: [
-      "For each future season we multiply three things: the chance he's still playing for Adelaide, the games he's expected to play, and the PAV he's expected to earn a game.",
-      `For 2027, a typical traded player at his career stage would expect ${f1(DAWSON_TRADE.expected2026.typical.games)} games at ${f2(DAWSON_TRADE.expected2026.typical.pavPerGame)} PAV a game. Dawson's own record adds about ${f1(DAWSON_TRADE.expected2026.hisEdge.games)} games and ${f2(DAWSON_TRADE.expected2026.hisEdge.pavPerGame)} PAV a game.`,
-      "The chance he's still there falls each year as players retire or move on. Add up every season and you get the expected part of his value line.[3]",
+      "For each future season we multiply three things: the chance he's still at Adelaide, his expected games and his expected PAV a game.",
+      `For 2027, a typical traded player at his career stage would expect ${f1(DAWSON_TRADE.expected2026.typical.games)} games at ${f2(DAWSON_TRADE.expected2026.typical.pavPerGame)} PAV a game. Dawson's own record adds about ${f1(DAWSON_TRADE.expected2026.hisEdge.games)} games and ${f2(DAWSON_TRADE.expected2026.hisEdge.pavPerGame)} PAV a game, and counts for more the longer he plays.`,
+      'The chance he stays falls each year. Adding up every season gives the expected part of his value line.[3]',
     ],
   },
   {
     stage: 'trade',
     id: 'picks',
-    short: 'Picks, bids and chains',
+    short: 'Picks and bids',
     kicker: 'The trade',
     title: 'Picks follow the player they became',
     copy: [
-      "A pick that hasn't been used yet is valued at what its draft position has usually been worth.",
-      `Once it's used, it's worth what the drafted player gives the club that took him, during his first stint there. Adelaide's pick ended up with ${pick.club}, who took ${pick.player} with it.[3][5]`,
-      'A pick spent matching a bid for an academy or father-son player takes a share of that player, by the draft points it covered.[6]',
-      'Every trade balances: what one club gains, the others give up. When a pick is traded on, the trades are linked in a chain.',
+      'An unused pick is worth what its draft slot has usually been worth. Once used, it is worth what the drafted player gives the club that took him, in his first stint there.[5]',
+      'A pick spent matching an academy or father-son bid owns a share of that player.[6]',
     ],
   },
   {
@@ -266,19 +245,16 @@ export const STEPS: readonly Step[] = [
     kicker: 'The trade',
     title: "What isn't final yet",
     copy: [
-      "Dawson's numbers will move every season he stays at Adelaide. A trade only settles once every player in it has left the club that got him.",
-      'The expected part is an estimate from how similar stints have gone. It is not a prediction about any one player.',
+      "Dawson's numbers will move every season he stays at Adelaide. A trade settles only once every player in it has left the club that got him.",
     ],
   },
   {
     stage: 'trade',
     id: 'misses',
     short: 'What PAV misses',
-    kicker: 'Fair warning',
+    kicker: 'The limits',
     title: "What PAV doesn't see",
-    copy: [
-      "PAV is approximate, and HPN says so. It is a strong guide over a season, but it isn't the last word.[1]",
-    ],
+    copy: ['HPN names the first three of these limits itself.[1]'],
   },
 ];
 
