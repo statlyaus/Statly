@@ -81,16 +81,16 @@ function ScheduleCalendarPane({
   onSelectDate,
 }: ScheduleCalendarPaneProps) {
   return (
-    <div className="min-w-0 rounded-xl border border-[color:var(--league-accent)]/30 bg-[color:var(--league-accent-soft)]/65 p-2 sm:p-3">
-      <div className="mb-3 flex items-start gap-3 rounded-lg bg-[color:var(--league-surface)] px-3 py-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--league-accent)] text-xs font-bold text-white">
+    <div className="min-w-0 rounded-xl border border-brand-bar/30 bg-brand-tint/65 p-2 sm:p-3">
+      <div className="mb-3 flex items-start gap-3 rounded-lg bg-card px-3 py-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-bar text-xs font-bold text-white">
           1
         </span>
         <div>
-          <p id={instructionId} className="text-sm font-semibold text-[color:var(--league-text)]">
+          <p id={instructionId} className="text-sm font-semibold text-foreground">
             Choose a draft date
           </p>
-          <p className="mt-0.5 text-xs leading-5 text-[color:var(--league-text-muted)]">
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             Select one available day from the calendar.
           </p>
         </div>
@@ -106,7 +106,7 @@ function ScheduleCalendarPane({
         disabled={minimumDate ? { before: minimumDate } : undefined}
         timeZone={timeZone}
         footer={summary ? `Selected ${summary}` : 'Choose a draft date.'}
-        className="rounded-lg bg-[color:var(--league-surface)] p-2 [--accent-foreground:var(--league-accent)] [--accent:var(--league-accent-soft)] [--background:var(--league-surface)] [--border:var(--league-border)] [--foreground:var(--league-text)] [--muted-foreground:var(--league-text-muted)] [--primary-foreground:var(--league-primary-foreground)] [--primary:var(--league-primary)] [--ring:var(--league-primary)]"
+        className="ground-white rounded-lg bg-card p-2"
       />
     </div>
   );
@@ -149,23 +149,21 @@ function ScheduleDetailsPane({
   const hasResolvedSchedule = Boolean(summary && !errorMessage);
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+    <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-muted p-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-xs font-bold text-[color:var(--league-primary-foreground)]">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-bar text-xs font-bold text-brand-bar-foreground">
           2
         </span>
         <div>
-          <p className="text-sm font-semibold text-[color:var(--league-text)]">
-            Set the local start time
-          </p>
-          <p className="mt-0.5 text-xs leading-5 text-[color:var(--league-text-muted)]">
+          <p className="text-sm font-semibold text-foreground">Set the local start time</p>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             Confirm the clock time and league time zone.
           </p>
         </div>
       </div>
 
       <div>
-        <label htmlFor={timeId} className="text-sm font-semibold text-[color:var(--league-text)]">
+        <label htmlFor={timeId} className="text-sm font-semibold text-foreground">
           Start time
         </label>
         <div className="relative mt-2">
@@ -180,16 +178,13 @@ function ScheduleDetailsPane({
             onChange={(event) => onChange({ time: event.target.value })}
             aria-describedby={fieldDescription}
             aria-invalid={Boolean(errorMessage)}
-            className="h-11 w-full rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] pl-10 pr-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/25"
+            className="h-11 w-full rounded-lg border border-border bg-card pl-10 pr-3 text-sm font-medium text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/25"
           />
         </div>
       </div>
 
       <div>
-        <label
-          htmlFor={timeZoneId}
-          className="text-sm font-semibold text-[color:var(--league-text)]"
-        >
+        <label htmlFor={timeZoneId} className="text-sm font-semibold text-foreground">
           League time zone
         </label>
         <select
@@ -198,7 +193,7 @@ function ScheduleDetailsPane({
           onChange={(event) => onChange({ timeZone: event.target.value })}
           aria-describedby={fieldDescription}
           aria-invalid={Boolean(errorMessage)}
-          className="mt-2 h-11 w-full rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/25"
+          className="mt-2 h-11 w-full rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/25"
         >
           {timeZoneOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -206,13 +201,13 @@ function ScheduleDetailsPane({
             </option>
           ))}
         </select>
-        <p className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]">
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
           The saved draft time will use this league time zone.
         </p>
       </div>
 
       <div>
-        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--league-text-muted)]">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           Quick choices
         </p>
@@ -223,7 +218,7 @@ function ScheduleDetailsPane({
               type="button"
               aria-label={preset.ariaLabel}
               onClick={() => onApplyPreset(preset)}
-              className="min-h-10 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-2 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:border-[color:var(--league-accent)]/50 hover:bg-[color:var(--league-accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+              className="min-h-10 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-brand-bar/50 hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
             >
               {preset.label}
             </button>
@@ -236,28 +231,21 @@ function ScheduleDetailsPane({
         aria-live="polite"
         className={cn(
           'mt-auto rounded-xl border px-4 py-3',
-          hasResolvedSchedule
-            ? 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)]'
-            : 'border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)]'
+          hasResolvedSchedule ? 'border-success/30 bg-success-soft' : 'border-border bg-muted'
         )}
       >
         {hasResolvedSchedule ? (
           <div className="flex gap-3">
-            <CheckCircle2
-              className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--league-success)]"
-              aria-hidden="true"
-            />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--league-success)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-success">
                 Draft starts
               </p>
-              <p className="mt-1 text-sm font-semibold leading-6 text-[color:var(--league-text)]">
-                {summary}
-              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-foreground">{summary}</p>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-[color:var(--league-text-muted)]">
+          <p className="text-sm text-muted-foreground">
             Choose a date and time to confirm the league schedule.
           </p>
         )}
@@ -369,24 +357,24 @@ export function DraftScheduleField({
       aria-describedby={descriptionId}
       aria-invalid={Boolean(errorMessage)}
       className={cn(
-        'rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] text-[color:var(--league-text)] shadow-sm',
+        'rounded-2xl border border-border bg-card text-foreground shadow-sm',
         className
       )}
     >
       <legend className="sr-only">{heading}</legend>
 
-      <div className="flex flex-col gap-4 border-b border-[color:var(--league-border)] p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+      <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
         <div className="flex min-w-0 gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-bar">
             <CalendarDays className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-            <h3 id={headingId} className="text-base font-semibold text-[color:var(--league-text)]">
+            <h3 id={headingId} className="text-base font-semibold text-foreground">
               {heading}
             </h3>
             <p
               id={descriptionId}
-              className="mt-1 max-w-2xl text-sm leading-6 text-[color:var(--league-text-muted)]"
+              className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground"
             >
               {description}
             </p>
@@ -398,7 +386,7 @@ export function DraftScheduleField({
             ref={scheduleLaterButtonRef}
             type="button"
             onClick={clearSchedule}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
           >
             <X className="h-4 w-4" aria-hidden="true" />
             Schedule later
@@ -408,12 +396,10 @@ export function DraftScheduleField({
 
       {!isExpanded ? (
         <div className="p-4 sm:p-5">
-          <div className="flex flex-col gap-4 rounded-xl border border-dashed border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-xl border border-dashed border-border bg-muted p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-[color:var(--league-text)]">
-                Draft not scheduled
-              </p>
-              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+              <p className="text-sm font-semibold text-foreground">Draft not scheduled</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 You can set the date now or schedule it later from commissioner tools.
               </p>
             </div>
@@ -421,7 +407,7 @@ export function DraftScheduleField({
               ref={addScheduleButtonRef}
               type="button"
               onClick={expandSchedule}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition-colors hover:bg-[color:var(--league-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-cobalt-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               Add draft schedule

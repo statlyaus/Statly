@@ -67,7 +67,7 @@ describe('DraftScheduleField', () => {
     const summary = screen.getByText('Thursday 30 July 2026 at 7:00 pm AEST');
     expect(summary).toBeInTheDocument();
     expect(summary.closest('[aria-live="polite"]')).toHaveClass(
-      'bg-[color:var(--league-success-soft)]'
+      'bg-success-soft'
     );
 
     const selectedDate = container.querySelector('[data-day="2026-07-30"]');

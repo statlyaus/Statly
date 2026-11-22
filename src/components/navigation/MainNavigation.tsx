@@ -248,15 +248,11 @@ function NavDropdown({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
-            className="ground-white absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
+            className="ground-white absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md border border-border bg-card shadow-md"
           >
-            <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
-              <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
-                {item.name}
-              </p>
-              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                {item.description}
-              </p>
+            <div className="border-b border-border bg-muted px-4 py-3">
+              <p className="text-xs font-semibold text-muted-foreground">{item.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
             </div>
             <div className="p-2">
               {item.submenu?.map((subItem) => {
@@ -269,8 +265,8 @@ function NavDropdown({
                     aria-current={isSubActive ? 'page' : undefined}
                     className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                       isSubActive
-                        ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
-                        : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                        ? 'bg-brand-tint text-brand-bar'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
                     <span className="mt-0.5">{subItem.icon}</span>
@@ -484,32 +480,30 @@ export default function MainNavigation({
                 {isAccountMenuOpen ? (
                   <div
                     id="account-menu"
-                    className="ground-white absolute right-0 mt-2 w-56 overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-md"
+                    className="ground-white absolute right-0 mt-2 w-56 overflow-hidden rounded-md border border-border bg-card shadow-md"
                   >
-                    <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
-                      <p className="font-semibold text-[color:var(--league-text)]">Signed in</p>
-                      <p className="truncate text-[color:var(--league-text-muted)]">
-                        {accountLabel}
-                      </p>
+                    <div className="border-b border-border bg-muted px-4 py-3 text-sm">
+                      <p className="font-semibold text-foreground">Signed in</p>
+                      <p className="truncate text-muted-foreground">{accountLabel}</p>
                     </div>
                     <div className="p-2">
                       <Link
                         href="/dashboard"
-                        className="flex rounded-md px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        className="flex rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
                         Dashboard
                       </Link>
                       <Link
                         href="/help"
-                        className="flex rounded-md px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        className="flex rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         onClick={() => setIsAccountMenuOpen(false)}
                       >
                         Help
                       </Link>
                       <button
                         type="button"
-                        className="flex w-full rounded-md px-3 py-2 text-left text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         onClick={() => {
                           setIsAccountMenuOpen(false);
                           void handleLogout();
@@ -573,25 +567,23 @@ export default function MainNavigation({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className={`ground-white border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] ${
+              className={`ground-white border-t border-border bg-card ${
                 user ? '2xl:hidden' : 'lg:hidden'
               }`}
             >
               <div className="space-y-4 px-4 py-4">
                 {user ? (
                   <>
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                      <p className="text-xs font-semibold text-[color:var(--league-text-muted)]">
-                        Quick actions
-                      </p>
+                    <div className="rounded-lg border border-border bg-muted p-4">
+                      <p className="text-xs font-semibold text-muted-foreground">Quick actions</p>
                       <div className="mt-3 space-y-3">
                         <PlayerSearch placeholder="Search players" size="md" variant="default" />
                         {showLeagueSwitcher ? <LeagueSwitcher /> : null}
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2 lg:hidden">
-                      <p className="px-3 pt-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
+                    <div className="rounded-lg border border-border bg-card p-2 lg:hidden">
+                      <p className="px-3 pt-2 text-xs font-semibold text-muted-foreground">
                         Navigate
                       </p>
                       <div className="mt-2 space-y-1">
@@ -605,8 +597,8 @@ export default function MainNavigation({
                               aria-current={isActive ? 'page' : undefined}
                               className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                                 isActive
-                                  ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
-                                  : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                                  ? 'bg-brand-tint text-brand-bar'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               }`}
                             >
                               <span className="mt-0.5">{item.icon}</span>
@@ -622,10 +614,8 @@ export default function MainNavigation({
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2 lg:hidden">
-                      <p className="px-3 pt-2 text-xs font-semibold text-[color:var(--league-text-muted)]">
-                        Tools
-                      </p>
+                    <div className="rounded-lg border border-border bg-card p-2 lg:hidden">
+                      <p className="px-3 pt-2 text-xs font-semibold text-muted-foreground">Tools</p>
                       <div className="mt-2 space-y-1">
                         {toolsNavigationItem.submenu?.map((item) => {
                           const isActive = isNavActive(pathname, item.href);
@@ -637,8 +627,8 @@ export default function MainNavigation({
                               aria-current={isActive ? 'page' : undefined}
                               className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                                 isActive
-                                  ? 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]'
-                                  : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                                  ? 'bg-brand-tint text-brand-bar'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               }`}
                             >
                               <span className="mt-0.5">{item.icon}</span>
@@ -654,23 +644,23 @@ export default function MainNavigation({
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4 lg:hidden">
+                    <div className="rounded-lg border border-border bg-muted p-4 lg:hidden">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-sm font-semibold text-white">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-bar text-sm font-semibold text-white">
                           {accountInitial}
                         </span>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                          <p className="truncate text-sm font-semibold text-foreground">
                             {accountLabel}
                           </p>
-                          <p className="text-xs text-[color:var(--league-text-muted)]">Signed in</p>
+                          <p className="text-xs text-muted-foreground">Signed in</p>
                         </div>
                       </div>
                       <div className="mt-4 grid gap-2">
                         <Link
                           href="/dashboard"
                           onClick={() => setIsMobileOpen(false)}
-                          className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                          className="rounded-md border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         >
                           Dashboard
                         </Link>
@@ -681,7 +671,7 @@ export default function MainNavigation({
                             void handleLogout();
                           }}
                           disabled={isLoggingOut || loading}
-                          className="rounded-md bg-[color:var(--league-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
+                          className="rounded-md bg-brand-bar px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-cobalt-deep disabled:opacity-50"
                         >
                           {isLoggingOut ? 'Signing out…' : 'Sign out'}
                         </button>
@@ -689,7 +679,7 @@ export default function MainNavigation({
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                  <div className="rounded-lg border border-border bg-card p-2">
                     {publicNavigationItems.map((item) => {
                       const isActive = isNavActive(pathname, item.href);
                       return (
@@ -700,8 +690,8 @@ export default function MainNavigation({
                           aria-current={isActive ? 'page' : undefined}
                           className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                             isActive
-                              ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
-                              : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                              ? 'bg-brand-tint text-brand-bar'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                           }`}
                         >
                           <span className="mt-0.5">{item.icon}</span>
@@ -718,14 +708,14 @@ export default function MainNavigation({
                       <Link
                         href="/dashboard"
                         onClick={() => setIsMobileOpen(false)}
-                        className="mb-2 block rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                        className="mb-2 block rounded-md border border-border bg-card px-4 py-3 text-center text-sm font-semibold text-foreground transition hover:bg-muted"
                       >
                         Open Fantasy
                       </Link>
                       <Link
                         href="/login"
                         onClick={() => setIsMobileOpen(false)}
-                        className="block rounded-md bg-[color:var(--league-primary)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                        className="block rounded-md bg-brand-bar px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-brand-cobalt-deep"
                       >
                         Sign in
                       </Link>

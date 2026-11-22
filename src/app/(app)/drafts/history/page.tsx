@@ -47,12 +47,12 @@ function formatStatus(status: string) {
 
 function getStatusClasses(status: string) {
   if (status === 'COMPLETED') {
-    return 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]';
+    return 'bg-success-soft text-success';
   }
   if (status === 'PAUSED') {
-    return 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]';
+    return 'bg-warning-soft text-warning-text';
   }
-  return 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]';
+  return 'bg-brand-tint text-brand-bar';
 }
 
 function getInitials(value: string) {

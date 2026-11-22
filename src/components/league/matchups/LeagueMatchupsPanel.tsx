@@ -207,7 +207,7 @@ export function LeagueMatchupsPanel({
       <div
         role="status"
         aria-busy="true"
-        className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]"
+        className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
       >
         Loading matchups…
       </div>
@@ -220,22 +220,22 @@ export function LeagueMatchupsPanel({
         <div>
           <h2
             id="league-matchups-heading"
-            className="font-display text-2xl font-bold leading-tight text-[color:var(--league-text)]"
+            className="font-display text-2xl font-bold leading-tight text-foreground"
           >
             Matchups
           </h2>
-          <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+          <p className="mt-1 text-sm text-muted-foreground">
             Weekly head-to-head Match Centre across the league scoring categories.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {data?.availableRounds?.length ? (
-            <label className="flex items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
               Round
               <select
                 value={data.round}
                 onChange={(event) => setSelectedRound(Number(event.target.value))}
-                className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-2 text-sm font-medium text-[color:var(--league-text)]"
+                className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
               >
                 {data.availableRounds.map((round) => (
                   <option key={round} value={round}>
@@ -258,10 +258,10 @@ export function LeagueMatchupsPanel({
           {data.matchups.map((matchup, index) => (
             <article
               key={matchup.id ?? `matchup-${index}`}
-              className="min-w-0 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4"
+              className="min-w-0 border border-border bg-card p-4"
             >
               {matchup.byeMember ? (
-                <div className="text-sm font-medium text-[color:var(--league-text)]">
+                <div className="text-sm font-medium text-foreground">
                   {matchup.byeMember.teamName ?? 'Team'} has a bye
                 </div>
               ) : (
@@ -296,7 +296,7 @@ export function LeagueMatchupsPanel({
           ))}
         </div>
       ) : (
-        <div className="space-y-4 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]">
+        <div className="space-y-4 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
           <p>
             No weekly matchups are available yet. They appear once the league has at least two teams
             and the commissioner has set up the fixture.
@@ -306,7 +306,7 @@ export function LeagueMatchupsPanel({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="min-h-11 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] hover:bg-[color:var(--league-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              className="min-h-11 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
             >
               Open league settings
             </button>
@@ -352,8 +352,8 @@ function MatchupHeadToHeadCard({
   timeZone?: string;
 }) {
   return (
-    <div className="border-b border-[color:var(--league-border)] pb-4">
-      <p className="mb-3 flex items-center gap-2 text-xs text-[color:var(--league-text-muted)]">
+    <div className="border-b border-border pb-4">
+      <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
         {matchup.status === 'LIVE' ? (
           <span aria-hidden="true" className="size-2 rounded-full bg-status-live" />
         ) : null}
@@ -364,7 +364,7 @@ function MatchupHeadToHeadCard({
         </span>
       </p>
       {matchup.waitingOnResults?.map((line) => (
-        <p key={line} className="mb-2 text-xs text-[color:var(--league-text-muted)]">
+        <p key={line} className="mb-2 text-xs text-muted-foreground">
           {line}
         </p>
       ))}
@@ -390,10 +390,10 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
   const hasStarted = matchup.status === 'LIVE' || matchup.status === 'FINAL';
 
   return (
-    <div className="relative overflow-x-auto rounded-md border border-[color:var(--league-border)]">
+    <div className="relative overflow-x-auto rounded-md border border-border">
       <table className="min-w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">Match-up totals by scoring category.</caption>
-        <thead className="bg-[color:var(--league-surface-muted)] text-xs font-medium text-[color:var(--league-text-muted)]">
+        <thead className="bg-muted text-xs font-medium text-muted-foreground">
           <tr>
             <th scope="col" className="w-64 px-3 py-2 text-left">
               Team
@@ -419,7 +419,7 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[color:var(--league-border)]">
+        <tbody className="divide-y divide-border">
           <CategoryTotalsRow
             team={matchup.homeMember}
             side="home"
@@ -454,8 +454,8 @@ function CategoryTotalsRow({
   started: boolean;
 }) {
   return (
-    <tr className="bg-[color:var(--league-surface)]">
-      <th scope="row" className="px-3 py-3 text-left font-semibold text-[color:var(--league-text)]">
+    <tr className="bg-card">
+      <th scope="row" className="px-3 py-3 text-left font-semibold text-foreground">
         {team?.teamName ?? (side === 'home' ? 'Home' : 'Away')}
       </th>
       {categoryRows.map((row) => {
@@ -467,10 +467,10 @@ function CategoryTotalsRow({
             key={row.category}
             className={`px-3 py-3 text-center tabular-nums ${
               isWinner
-                ? 'font-bold text-[color:var(--league-text)]'
+                ? 'font-bold text-foreground'
                 : isDraw
-                  ? 'font-semibold text-[color:var(--league-text)]'
-                  : 'text-[color:var(--league-text-muted)]'
+                  ? 'font-semibold text-foreground'
+                  : 'text-muted-foreground'
             }`}
           >
             <span className="inline-flex items-center justify-center gap-1.5">
@@ -486,7 +486,7 @@ function CategoryTotalsRow({
           </td>
         );
       })}
-      <td className="border-l border-[color:var(--league-border)] px-3 py-3 text-right font-sans text-xl font-bold tabular-nums text-[color:var(--league-text)]">
+      <td className="border-l border-border px-3 py-3 text-right font-sans text-xl font-bold tabular-nums text-foreground">
         {score}
       </td>
     </tr>
@@ -499,8 +499,8 @@ function TeamBoxScores({ matchup }: { matchup: MatchupModel }) {
 
   if (!homePlayers.length && !awayPlayers.length) {
     return (
-      <div className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-5 text-sm text-[color:var(--league-text-muted)]">
-        <div className="font-semibold text-[color:var(--league-text)]">Set your lineup</div>
+      <div className="rounded-md border border-border bg-card px-4 py-5 text-sm text-muted-foreground">
+        <div className="font-semibold text-foreground">Set your lineup</div>
         <p className="mt-1">
           No players are set for this matchup yet. Open the My Team tab to pick your lineup.
         </p>
@@ -511,10 +511,10 @@ function TeamBoxScores({ matchup }: { matchup: MatchupModel }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-display text-lg font-bold text-[color:var(--league-text)]">
+        <h3 className="font-display text-lg font-bold text-foreground">
           Player stats · Round {matchup.round ?? ''}
         </h3>
-        <p className="text-xs text-[color:var(--league-text-muted)]">
+        <p className="text-xs text-muted-foreground">
           On-field and interchange players · – means no stats yet
         </p>
       </div>
@@ -531,16 +531,16 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
   const teamName = team?.teamName ?? (side === 'home' ? 'Home' : 'Away');
 
   return (
-    <div className="overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
+    <div className="overflow-hidden rounded-md border border-border bg-card">
       <div className="relative overflow-x-auto">
         <table
           className="w-full min-w-[720px] border-collapse text-left text-sm"
           aria-label={`${teamName} box score`}
         >
-          <caption className="border-b border-[color:var(--league-border)] px-4 py-2.5 text-left font-display text-base font-bold text-[color:var(--league-text)]">
+          <caption className="border-b border-border px-4 py-2.5 text-left font-display text-base font-bold text-foreground">
             {teamName}
           </caption>
-          <thead className="bg-[color:var(--league-surface-muted)] text-xs font-medium text-[color:var(--league-text-muted)]">
+          <thead className="bg-muted text-xs font-medium text-muted-foreground">
             <tr>
               <th scope="col" className="w-16 px-4 py-2 text-left">
                 Slot
@@ -561,7 +561,7 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
               <th scope="col" className="w-4" aria-hidden="true" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-[color:var(--league-border)]">
+          <tbody className="divide-y divide-border">
             {players.length ? (
               players.map((player) => (
                 <tr key={`${player.slot}-${player.slotIndex}-${player.playerId}`}>
@@ -569,12 +569,8 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
                     <BoxScoreSlot slot={player.slot} />
                   </td>
                   <th scope="row" className="px-2 py-2 text-left font-normal">
-                    <span className="font-semibold text-[color:var(--league-text)]">
-                      {player.name}
-                    </span>
-                    <span className="ml-2 text-xs text-[color:var(--league-text-muted)]">
-                      {player.position}
-                    </span>
+                    <span className="font-semibold text-foreground">{player.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{player.position}</span>
                     {player.noLosers ? (
                       <span className="mt-0.5 block sm:ml-2 sm:mt-0 sm:inline">
                         <NoLosersResultBadge result={player.noLosers} />
@@ -595,7 +591,7 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
               <tr>
                 <td
                   colSpan={categoryHeaders.length + 3}
-                  className="px-4 py-4 text-sm text-[color:var(--league-text-muted)]"
+                  className="px-4 py-4 text-sm text-muted-foreground"
                 >
                   No lineup set for this round.
                 </td>
@@ -603,7 +599,7 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
             )}
           </tbody>
           {players.length ? (
-            <tfoot className="border-t-2 border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-[color:var(--league-text)]">
+            <tfoot className="border-t-2 border-border bg-muted text-foreground">
               <tr>
                 <th scope="row" colSpan={2} className="px-4 py-2 text-left text-xs font-semibold">
                   Team total
@@ -613,7 +609,7 @@ function TeamBoxScoreTable({ matchup, side }: { matchup: MatchupModel; side: 'ho
                   return (
                     <td
                       key={row.category}
-                      className={`px-2 py-2 text-right tabular-nums ${won ? 'font-bold' : 'font-medium text-[color:var(--league-text-muted)]'}`}
+                      className={`px-2 py-2 text-right tabular-nums ${won ? 'font-bold' : 'font-medium text-muted-foreground'}`}
                     >
                       {formatCategoryValue(
                         side === 'home' ? row.homeValue : row.awayValue,
@@ -638,9 +634,7 @@ function BoxScoreSlot({ slot }: { slot: string }) {
   return (
     <span
       className={`inline-flex h-6 w-11 items-center justify-center rounded-sm text-[11px] font-bold ${
-        isInterchange
-          ? 'border border-[color:var(--league-border)] text-[color:var(--league-text)]'
-          : 'bg-[color:var(--league-primary)] text-white'
+        isInterchange ? 'border border-border text-foreground' : 'bg-brand-bar text-white'
       }`}
     >
       {label}
@@ -663,13 +657,13 @@ function PlayerCategoryCell({
 
   return (
     <td
-      className={`px-2 py-2 text-right tabular-nums ${hasValue ? 'font-medium text-[color:var(--league-text)]' : 'text-[color:var(--league-text-muted)]'}`}
+      className={`px-2 py-2 text-right tabular-nums ${hasValue ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
     >
       {hasValue ? formatCategoryValue(value, category.category) : '–'}
       {rawValue !== undefined ? (
         // BR-40: the raw line stays visible; a zeroed value is struck through, a halved one is
         // shown as "of" its raw value.
-        <span className="block text-[11px] font-normal text-[color:var(--league-text-muted)]">
+        <span className="block text-[11px] font-normal text-muted-foreground">
           <span aria-hidden="true">
             {zeroed ? (
               <s>{formatCategoryValue(rawValue, category.category)}</s>

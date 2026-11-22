@@ -374,7 +374,7 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
             aria-hidden="true"
             className={`absolute -right-1.5 top-0 size-2.5 rounded-full ring-2 ${
               onGrass ? 'ring-white' : 'ring-card'
-            } ${view.flagged === 'bad' ? 'bg-destructive' : 'bg-[color:var(--league-warning)]'}`}
+            } ${view.flagged === 'bad' ? 'bg-destructive' : 'bg-warning-text'}`}
           />
         ) : null}
       </span>
