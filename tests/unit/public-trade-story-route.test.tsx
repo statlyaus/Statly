@@ -167,6 +167,16 @@ describe('public trade pages', () => {
     expect(band.getAllByRole('listitem')).toHaveLength(model.story.nets.tradeAlone[0]!.line.length);
   });
 
+  it('puts where the trade went straight under the collage, ahead of what each club gave', async () => {
+    loadStoryMock.mockResolvedValue(available(source.load(first.tradeId)!));
+    render(await PublicTradeStoryPage(params({ tradeId: encodeURIComponent(first.tradeId) })));
+    const collage = screen.getByRole('list', { name: 'Who was ahead, point by point' });
+    const tree = screen.getByRole('region', { name: 'Where the trade went' });
+    const gave = screen.getByRole('list', { name: 'What each club gave' });
+    expect(collage.compareDocumentPosition(tree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tree.compareDocumentPosition(gave) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows a club’s chains with public links', async () => {
     loadClubChainsMock.mockResolvedValue(available(source.loadClub(first.clubIds[0]!)));
     render(await PublicClubChainsPage(params({ clubId: encodeURIComponent(first.clubIds[0]!) })));

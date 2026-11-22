@@ -190,12 +190,10 @@ function claimStatusLabel(status: WaiverClaimStatus): string {
 
 function ClaimStatusIcon({ status }: { status: WaiverClaimStatus }): React.JSX.Element {
   if (status === 'successful') {
-    return (
-      <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" aria-hidden="true" />
-    );
+    return <CheckCircleIcon className="h-5 w-5 text-success" aria-hidden="true" />;
   }
   if (status === 'failed') {
-    return <XCircleIcon className="h-5 w-5 text-[color:var(--league-danger)]" aria-hidden="true" />;
+    return <XCircleIcon className="h-5 w-5 text-destructive-text" aria-hidden="true" />;
   }
   if (status === 'outbid') {
     return <ExclamationTriangleIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />;
@@ -205,10 +203,10 @@ function ClaimStatusIcon({ status }: { status: WaiverClaimStatus }): React.JSX.E
 
 function getClaimStatusClass(status: WaiverClaimStatus): string {
   if (status === 'successful') {
-    return 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]';
+    return 'border-success/30 bg-success-soft text-success';
   }
   if (status === 'failed') {
-    return 'border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]';
+    return 'border-destructive-text/30 bg-destructive-soft text-destructive-text';
   }
   return 'border-border bg-muted text-muted-foreground';
 }
@@ -605,7 +603,7 @@ function WaiverPlayerTable({
                           <p className="text-xs text-muted-foreground">{bidBlockedReason}</p>
                         )}
                         {submitError && (
-                          <p role="alert" className="text-xs text-[color:var(--league-danger)]">
+                          <p role="alert" className="text-xs text-destructive-text">
                             {submitError}
                           </p>
                         )}
@@ -966,7 +964,7 @@ export default function WaiverFAABSystem({
         {confirmation && (
           <p
             role="status"
-            className="border-b border-border bg-[color:var(--league-success-soft)] px-4 py-3 text-sm font-medium text-[color:var(--league-success)] sm:px-5"
+            className="border-b border-border bg-success-soft px-4 py-3 text-sm font-medium text-success sm:px-5"
           >
             {confirmation}
           </p>

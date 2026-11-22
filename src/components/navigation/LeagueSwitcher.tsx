@@ -161,10 +161,10 @@ export default function LeagueSwitcher() {
         Select league
       </label>
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger className="flex items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-2 text-sm font-semibold text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <PopoverTrigger className="ground-stone flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 text-sm font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar-foreground">
           <span className="max-w-[240px] truncate">{buttonLabel}</span>
           <ChevronDown
-            className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
           />
         </PopoverTrigger>
         <PopoverContent aria-label="Select league" className="min-w-[20rem] p-0">
@@ -182,11 +182,11 @@ export default function LeagueSwitcher() {
                 <CommandEmpty>Loading leagues…</CommandEmpty>
               ) : loadFailed ? (
                 <div role="alert" className="space-y-2 px-3 py-4 text-sm">
-                  <p className="text-[color:var(--league-text)]">Could not load your leagues.</p>
+                  <p className="text-foreground">Could not load your leagues.</p>
                   <button
                     type="button"
                     onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-                    className="rounded-md border border-[color:var(--league-border)] px-3 py-1.5 font-semibold text-[color:var(--league-text)] hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                    className="rounded-md border border-border px-3 py-1.5 font-semibold text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                   >
                     Try again
                   </button>

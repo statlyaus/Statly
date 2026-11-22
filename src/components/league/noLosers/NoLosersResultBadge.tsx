@@ -6,7 +6,7 @@ import { noLosersResultLabel, type NoLosersPlayerResult } from './noLosersDispla
 export function NoLosersResultBadge({ result }: { result: NoLosersPlayerResult }) {
   const label = noLosersResultLabel(result);
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-[color:var(--league-text-muted)]">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
       <span
         aria-hidden="true"
         className={`inline-flex size-4 items-center justify-center rounded-sm text-[10px] font-bold ${resultStyle[label.tone].className}`}
