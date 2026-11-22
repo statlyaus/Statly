@@ -114,7 +114,7 @@ export default function JoinLeaguePage() {
     return (
         <div className="min-h-screen bg-muted px-4 py-10 text-foreground">
           <section className="mx-auto max-w-md rounded-[28px] border border-border bg-card p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-tint text-brand-bar">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-brand-bar">
               <UserPlus className="h-5 w-5" aria-hidden="true" />
             </div>
             <h1 className="mt-4 text-2xl font-semibold tracking-tight">Join league</h1>
@@ -123,7 +123,7 @@ export default function JoinLeaguePage() {
             </p>
             <Link
               href={loginHref}
-              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
             >
               Log in
             </Link>
@@ -160,7 +160,7 @@ export default function JoinLeaguePage() {
               <button
                 type="button"
                 onClick={() => router.push(`/leagues/${joinedLeague.id}`)}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
               >
                 Go to league
               </button>
@@ -251,7 +251,7 @@ export default function JoinLeaguePage() {
               <button
                 type="submit"
                 disabled={loading || !code.trim()}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {loading ? 'Joining league' : 'Join league'}
@@ -261,7 +261,7 @@ export default function JoinLeaguePage() {
 
           <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-[24px] border border-border bg-card p-5 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-tint text-brand-bar">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-brand-bar">
                 <KeyRound className="h-5 w-5" aria-hidden="true" />
               </div>
               <h2 className="mt-4 text-base font-semibold text-foreground">

@@ -101,8 +101,8 @@ dashboard patterns.
   `destructive` and success uses `success`, never a result token.
 - Show real state only. Omit a module rather than fill it with estimates or placeholder numbers.
 - One palette. Area tokens such as `--trade-*` alias the core tokens (the league palette was folded
-  into the core tokens on 2026-11-22); no area gets its own colour scheme, card shadow or accent. Primary actions and focus use the brand
-  colour (navy `brand-bar` today, cobalt from phase 3 of the style guide). The one exception is
+  into the core tokens on 2026-11-22); no area gets its own colour scheme, card shadow or accent.
+  Primary actions and focus use the brand colour (cobalt `brand-bar`). The one exception is
   the warm paper surface mode on public trade pages (owner, 2026-11-19), which redefines the core
   roles rather than adding a palette.
 - Section navigation is one row of underlined tabs with a thin divider between groups, never pills

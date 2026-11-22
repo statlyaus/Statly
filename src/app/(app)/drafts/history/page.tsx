@@ -52,7 +52,7 @@ function getStatusClasses(status: string) {
   if (status === 'PAUSED') {
     return 'bg-warning-soft text-warning-text';
   }
-  return 'bg-brand-tint text-brand-bar';
+  return 'bg-accent text-brand-bar';
 }
 
 function getInitials(value: string) {

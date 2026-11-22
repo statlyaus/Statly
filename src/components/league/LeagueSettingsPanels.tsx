@@ -675,7 +675,7 @@ export function TeamSettingsPanel({
                   type="button"
                   onClick={() => void saveTeamSettings()}
                   disabled={isSavingTeamSettings}
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
                 >
                   {isSavingTeamSettings ? 'Saving...' : 'Save team settings'}
                 </button>
@@ -766,7 +766,7 @@ export function TeamSettingsPanel({
                     type="button"
                     onClick={() => void saveTeamSymbol(teamSymbolUrl)}
                     disabled={isSavingTeamSymbol}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                    className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
                   >
                     {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
                   </button>
@@ -1345,7 +1345,7 @@ export function LeagueSettingsPanel({
             type="button"
             onClick={() => void handleSaveSettings()}
             disabled={isSaving}
-            className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
           >
             {isSaving ? 'Saving...' : 'Save league settings'}
           </button>
