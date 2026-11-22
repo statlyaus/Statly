@@ -4454,7 +4454,8 @@ page (`/`), header and footer are about AFL trades and the draft record only. No
 the fantasy app (`/login`, `/dashboard`, leagues); those routes still exist and are reached by address.
 Putting fantasy back in the public navigation is an owner decision at fantasy go-live.
 
-**Pages.** `/afl` (hub), `/afl/trades` (every trade by year, and each club), `/afl/trades/<trade>`,
+**Pages.** `/afl` (hub), `/afl/trades` (every trade by year and club, with one open beside the list),
+`/afl/trades/<trade>`,
 `/afl/trades/clubs/<club>` and `/afl/trades/method`. The trade and club pages are the private pages'
 components: the bundle source marks its models `audience: public`, which swaps the private notice for
 the public one, points every link at `/afl/trades`, and drops the component's own `<main>` (the public
@@ -4478,9 +4479,24 @@ header; phones get a stacked layout. Its numbers are fixed in `dawsonExample.ts`
 from `hpnPavCore.ts` over the genuine AFL Tables rows, and his trade from bundle 1e9e6025, so they match
 the trade page exactly. The design is first cut; the owner is iterating on it.
 
-**List filters.** `/afl/trades?year=2024&club=geelong&sort=biggest` (`tradesListQuery.ts`): the year,
-club and order live in the address, so a filtered list can be shared and works without scripts. With no
-year named the list shows the latest year, or every year once a club is chosen.
+**List filters and preview.** `/afl/trades?year=2024&club=geelong&sort=biggest&trade=<id>`
+(`tradesListQuery.ts`): the year, club, order and the trade open in the preview live in the address,
+so a list and its open trade can be shared and work without scripts. With no year named the list shows
+the latest year, or every year once a club is chosen; with no trade named (or one the list does not
+show) the preview opens the first row. The layout is the owner's F6 design (2026-11-22):
+
+- **Rail** (`TradesRail.tsx`): from 1280px a rail of years, clubs and order, each with its trade count
+  under the other filter; narrower, a plain form of two selects. The current choice is heavier type
+  with a cobalt underline; sun marks only the open trade's row.
+- **List** (`TradesListPage.tsx`): one row per trade, led by the chosen club's side or else the club
+  ahead, so a two-club margin is never shown twice.
+- **Preview** (`TradePreview.tsx`, `tradesPreviewModel.ts`): the headline and nets, the trade tree in
+  its compact layout (680 units, no notes or end labels, sparser column labels), the basis line, and
+  "Where next": the same player's other trades, the linked trades on the trade page, and every trade of
+  each club. The preview's story is one `loadStory` lookup in the already loaded bundle (about 80 ms).
+
+From 1024px the list and preview sit side by side and scroll on their own; narrower, a chosen trade
+shows alone with a link back to the list. Every list link has `prefetch={false}` (Netlify credits).
 
 **Home page and stories.** While the reader is available the home page (`components/aflTradesHome/`)
 is the trade pages' front page: the owner's "Every October, footy goes to market" collage, the Jeremy
