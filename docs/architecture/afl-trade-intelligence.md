@@ -4507,7 +4507,9 @@ facts of its own. The private page keeps the plain header.
 per asset, running through time to the player it became. A lane is the receiving club's colour, an
 outline while still a pick, and hatched ink at another club; its thickness and end number are PAV.
 Each lineage asset carries its leg's value line (`line`, at-trade view then every checkpoint) for this.
-Below 768px it is a list, which is also the screen-reader text. The private page keeps the lineage map.
+Below 768px it is a list, which is also the screen-reader text. It sits directly under the hero
+collage, before the club summary and the scarf (owner, 2026-11-22). The private page keeps the lineage
+map at the foot of the page.
 
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from
