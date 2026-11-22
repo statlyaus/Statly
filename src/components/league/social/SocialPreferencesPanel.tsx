@@ -76,19 +76,19 @@ export default function SocialPreferencesPanel({
   return (
     <section
       aria-labelledby="social-preferences-heading"
-      className="border-b border-social-border bg-social-surface p-4 text-social-text"
+      className="border-b border-border bg-card p-4 text-foreground"
     >
-      <h2 id="social-preferences-heading" className="text-base font-semibold text-social-text">
+      <h2 id="social-preferences-heading" className="text-base font-semibold text-foreground">
         Social notifications
       </h2>
-      <p className="mt-1 text-sm text-social-text-muted">
+      <p className="mt-1 text-sm text-muted-foreground">
         Choose which league conversations contribute to your notifications.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {preferenceLabels.map((preference) => (
           <div
             key={preference.key}
-            className="flex min-h-16 items-start gap-3 rounded-xl border border-social-border bg-social-surface p-3"
+            className="flex min-h-16 items-start gap-3 border border-border bg-card p-3"
           >
             <input
               id={`${fieldPrefix}-${preference.key}`}
@@ -101,13 +101,13 @@ export default function SocialPreferencesPanel({
                   [preference.key]: event.target.checked,
                 }))
               }
-              className="mt-1 size-4 rounded border-social-border text-social-action focus:ring-social-focus"
+              className="mt-1 size-4 border-border text-brand-bar focus:ring-ring"
             />
             <span>
-              <span className="block text-sm font-semibold text-social-text">
+              <span className="block text-sm font-semibold text-foreground">
                 {preference.label}
               </span>
-              <span className="mt-0.5 block text-xs leading-5 text-social-text-muted">
+              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
                 {preference.description}
               </span>
             </span>
@@ -115,7 +115,7 @@ export default function SocialPreferencesPanel({
         ))}
       </div>
       {error ? (
-        <p role="alert" className="mt-3 text-sm font-medium text-social-error">
+        <p role="alert" className="mt-3 text-sm font-medium text-destructive-text">
           {error}
         </p>
       ) : null}
@@ -124,7 +124,7 @@ export default function SocialPreferencesPanel({
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-action bg-social-action px-4 text-sm font-semibold text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+          className="inline-flex min-h-10 items-center justify-center rounded-cut border border-brand-bar bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
         >
           {saving ? 'Saving…' : 'Save preferences'}
         </button>
@@ -132,7 +132,7 @@ export default function SocialPreferencesPanel({
           type="button"
           onClick={onClose}
           disabled={saving}
-          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-border bg-social-surface px-4 text-sm font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+          className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           Cancel
         </button>

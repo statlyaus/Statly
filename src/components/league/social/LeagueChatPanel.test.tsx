@@ -108,10 +108,10 @@ describe('LeagueChatPanel', () => {
 
     const [mention, ownMessage] = screen.getAllByRole('article');
     expect(mention).toHaveAccessibleName('Message containing a mention from Alex Smith');
-    expect(mention).toHaveClass('border-social-link', 'bg-social-bubble');
+    expect(mention).toHaveClass('border-primary', 'bg-card');
     expect(screen.getByText('Mention')).toBeInTheDocument();
-    expect(screen.getByText('@Alex')).toHaveClass('bg-social-mention-pill');
-    expect(ownMessage).toHaveClass('bg-social-bubble-own', 'text-social-bubble-own-text');
+    expect(screen.getByText('@Alex')).toHaveClass('bg-brand-bar');
+    expect(ownMessage).toHaveClass('ground-cobalt');
   });
 
   it('renders a durable GIPHY fallback when the Web SDK key is not configured', async () => {

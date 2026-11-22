@@ -101,18 +101,16 @@ export function memberColourStyle(colourIndex: number): React.CSSProperties {
 export function SocialAvatar({
   author,
   compact = false,
-  shape = 'circle',
   colourIndex,
 }: {
   author: SocialAuthorIdentity | null;
   compact?: boolean;
-  shape?: 'circle' | 'square';
   /** The colour this author has in the conversation; defaults to their preferred colour. */
   colourIndex?: number;
 }): React.JSX.Element {
   return (
     <span
-      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden ${shape === 'square' ? 'rounded-xl' : 'rounded-full'} text-xs font-bold tracking-wide text-white`}
+      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden text-xs font-bold tracking-wide text-white`}
       style={
         author?.avatarUrl
           ? undefined
@@ -156,10 +154,10 @@ export default function SocialAuthor({
       <SocialAvatar author={author} compact={compact} />
       <span className="min-w-0">
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="truncate text-sm font-semibold text-social-text">{displayName}</span>
-          <span className="truncate text-xs text-social-text-muted">{teamName}</span>
+          <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+          <span className="truncate text-xs text-muted-foreground">{teamName}</span>
         </span>
-        <span className="block text-xs text-social-text-muted">
+        <span className="block text-xs text-muted-foreground">
           <time dateTime={timestamp}>{formattedTimestamp}</time>
           {editedAt ? <span aria-label="Edited"> · Edited</span> : null}
         </span>

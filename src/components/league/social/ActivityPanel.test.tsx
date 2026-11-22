@@ -37,7 +37,7 @@ describe('ActivityPanel', () => {
     renderPanel({ compact: true });
 
     const region = screen.getByRole('region', { name: 'League activity' });
-    expect(region).not.toHaveClass('rounded-2xl', 'border');
+    expect(region).not.toHaveClass('border');
   });
 
   it('renders an empty state and earlier-activity pagination', async () => {
@@ -84,20 +84,20 @@ describe('ActivityPanel', () => {
     renderPanel({ activity: events });
 
     const expectations = [
-      ['Draft selection', 'draft', 'border-l-social-action'],
-      ['Player added', 'addition', 'border-l-social-success'],
-      ['Player removed', 'removal', 'border-l-social-border-strong'],
-      ['Trade completed', 'trade', 'border-l-social-brand-strong'],
-      ['Waiver pending', 'waiver', 'border-l-social-warning'],
-      ['Transaction issue', 'error', 'border-l-social-error'],
-      ['Commissioner change', 'commissioner', 'border-l-social-action'],
+      ['Draft selection', 'draft', 'border-l-brand-bar'],
+      ['Player added', 'addition', 'border-l-success'],
+      ['Player removed', 'removal', 'border-l-muted-foreground'],
+      ['Trade completed', 'trade', 'border-l-primary'],
+      ['Waiver pending', 'waiver', 'border-l-warning-text'],
+      ['Transaction issue', 'error', 'border-l-destructive-text'],
+      ['Commissioner change', 'commissioner', 'border-l-brand-bar'],
     ] as const;
 
     for (const [label, kind, accent] of expectations) {
       const labelElement = screen.getByText(label);
       expect(labelElement.parentElement?.querySelector('svg')).toBeInTheDocument();
       expect(labelElement.closest('article')).toHaveAttribute('data-activity-kind', kind);
-      expect(labelElement.closest('article')).toHaveClass(accent, 'bg-social-surface');
+      expect(labelElement.closest('article')).toHaveClass(accent, 'bg-card');
     }
   });
 });
