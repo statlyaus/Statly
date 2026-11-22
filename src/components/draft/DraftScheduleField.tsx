@@ -81,7 +81,7 @@ function ScheduleCalendarPane({
   onSelectDate,
 }: ScheduleCalendarPaneProps) {
   return (
-    <div className="min-w-0 rounded-xl border border-brand-bar/30 bg-brand-tint/65 p-2 sm:p-3">
+    <div className="min-w-0 rounded-xl border border-brand-bar/30 bg-accent/65 p-2 sm:p-3">
       <div className="mb-3 flex items-start gap-3 rounded-lg bg-card px-3 py-3">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-bar text-xs font-bold text-white">
           1
@@ -106,7 +106,7 @@ function ScheduleCalendarPane({
         disabled={minimumDate ? { before: minimumDate } : undefined}
         timeZone={timeZone}
         footer={summary ? `Selected ${summary}` : 'Choose a draft date.'}
-        className="ground-white rounded-lg bg-card p-2"
+        className="ground-white rounded-lg bg-card p-2 [--accent-foreground:var(--brand-bar)]"
       />
     </div>
   );
@@ -218,7 +218,7 @@ function ScheduleDetailsPane({
               type="button"
               aria-label={preset.ariaLabel}
               onClick={() => onApplyPreset(preset)}
-              className="min-h-10 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-brand-bar/50 hover:bg-brand-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+              className="min-h-10 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-brand-bar/50 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
             >
               {preset.label}
             </button>
@@ -365,7 +365,7 @@ export function DraftScheduleField({
 
       <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
         <div className="flex min-w-0 gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-brand-bar">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-brand-bar">
             <CalendarDays className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
@@ -407,7 +407,7 @@ export function DraftScheduleField({
               ref={addScheduleButtonRef}
               type="button"
               onClick={expandSchedule}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-cobalt-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               Add draft schedule

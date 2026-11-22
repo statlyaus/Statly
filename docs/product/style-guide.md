@@ -142,8 +142,8 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
   roles on its root element; components inside it use the same utilities as everywhere else.
 - **Area palettes collapse (phase 3).** A `--trade-*` or `--social-*` token that only aliases a core
   role is deleted and its call sites use the core utility. The league palette went first (ticket 08,
-  2026-11-22): its soft status fills are now core `--success-soft`, `--warning-soft` and
-  `--destructive-soft`. Tokens with a recorded reason stay and are registered in `@theme`.
+  2026-11-22): its soft status fills are now the semantic roles `--success-soft`, `--warning-soft` and
+  `--destructive-soft` (fills behind status words), and its button hover is `--brand-bar-hover`. Tokens with a recorded reason stay and are registered in `@theme`.
 - **No JSON token pipeline.** The CSS file is the only source. Revisit only if a second consumer
   (native app, Figma, generated images) needs the values.
 

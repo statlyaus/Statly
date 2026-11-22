@@ -161,7 +161,7 @@ export default function LeagueSwitcher() {
         Select league
       </label>
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger className="flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 text-sm font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <PopoverTrigger className="ground-stone flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 text-sm font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar-foreground">
           <span className="max-w-[240px] truncate">{buttonLabel}</span>
           <ChevronDown
             className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}

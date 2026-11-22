@@ -414,7 +414,7 @@ export default function NewLeaguePage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                   {isLoading ? 'Creating league' : 'Create league'}
@@ -449,7 +449,7 @@ export default function NewLeaguePage() {
                   className="rounded-[24px] border border-border bg-card p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-tint text-brand-bar">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-brand-bar">
                       <Icon className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div>
