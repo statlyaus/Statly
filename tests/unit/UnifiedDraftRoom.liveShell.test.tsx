@@ -339,7 +339,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute('href', '/drafts');
     // Leaving the room is a quiet secondary action, never the loudest control on the page.
     expect(screen.getByRole('link', { name: 'Back to drafts' }).className).not.toMatch(
-      /draft-broadcast-red|rounded-full|shadow-\[0_0/
+      /bg-brand-bar\b|rounded-full|shadow-\[0_0/
     );
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
@@ -361,9 +361,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
 
     expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('h-full');
     expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('min-h-[30rem]');
-    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain(
-      'bg-[color:var(--draft-broadcast-table)]'
-    );
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('bg-card');
     expect(pickFeedSpy.mock.calls.at(0)?.[0].className).toContain('h-full');
 
     expect(screen.queryByText('Current snake or linear cycle.')).not.toBeInTheDocument();

@@ -149,10 +149,6 @@ function buildRosterSlots({
   });
 }
 
-/** Remaps the base tokens to the broadcast palette for banners that sit directly on the draft page. */
-const DRAFT_BROADCAST_TOKEN_SCOPE =
-  '[--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--foreground:var(--draft-broadcast-text)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]';
-
 function PickStatusBanner({
   feedback,
   canRetry,
@@ -168,7 +164,7 @@ function PickStatusBanner({
 }): React.JSX.Element {
   const playerLabel = feedback.playerName ?? 'selected player';
   const buttonClass =
-    'inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+    'inline-flex h-10 shrink-0 items-center justify-center rounded-cut border border-foreground bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   if (feedback.status === 'submitting') {
     return (
@@ -177,7 +173,7 @@ function PickStatusBanner({
         aria-label="Pick status"
         aria-live="polite"
         aria-atomic="true"
-        className="mt-4 rounded-lg border border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)] px-4 py-3 text-sm font-medium text-foreground"
+        className="mt-4 border border-warning bg-warning/20 px-4 py-3 text-sm font-medium text-foreground"
       >
         Submitting your pick: {playerLabel}. Waiting for the server to confirm.
       </div>
@@ -188,7 +184,7 @@ function PickStatusBanner({
     <div
       role="alert"
       aria-label="Pick status"
-      className="mt-4 flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-alert-soft)] px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
+      className="mt-4 flex flex-col gap-3 border border-destructive-text bg-destructive-soft px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
     >
       <p>
         <span className="font-semibold">Pick not made: {playerLabel}.</span> {feedback.message}
@@ -396,21 +392,14 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   }, [draftState, participants.length, picks, userId, userMemberId]);
   const statusTone =
     {
-      SCHEDULED:
-        'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
-      LOBBY:
-        'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]',
-      COUNTDOWN:
-        'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
+      SCHEDULED: 'bg-warning text-warning-foreground ring-1 ring-warning',
+      LOBBY: 'bg-muted text-muted-foreground ring-1 ring-border',
+      COUNTDOWN: 'bg-warning text-warning-foreground ring-1 ring-warning',
       LIVE: 'bg-status-live text-status-live-foreground ring-1 ring-status-live',
-      PAUSED:
-        'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
-      COMPLETED:
-        'bg-[color:var(--draft-broadcast-green)] text-white ring-1 ring-[color:var(--draft-broadcast-green)]',
-      CANCELLED:
-        'bg-[color:var(--draft-broadcast-alert-soft)] text-[color:var(--draft-broadcast-alert)] ring-1 ring-[color:var(--draft-broadcast-alert)]',
-    }[draftStatus] ??
-    'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]';
+      PAUSED: 'bg-warning text-warning-foreground ring-1 ring-warning',
+      COMPLETED: 'bg-success text-brand-bar-foreground ring-1 ring-success',
+      CANCELLED: 'bg-destructive-soft text-destructive-text ring-1 ring-destructive-text',
+    }[draftStatus] ?? 'bg-muted text-muted-foreground ring-1 ring-border';
 
   useEffect(() => {
     const leagueId = draft.draft?.leagueId;
@@ -440,7 +429,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center bg-destructive/10">
             <svg
               className="h-8 w-8 text-destructive-text"
               fill="none"
@@ -460,13 +449,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           <p className="mb-6 text-muted-foreground">{draft.error}</p>
           <button
             onClick={() => draft.forceRefresh()}
-            className="mr-2 rounded-md bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mr-2 rounded-cut bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Retry
           </button>
           <button
             onClick={() => window.location.reload()}
-            className="rounded-md border border-border bg-background px-4 py-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-cut border border-border bg-background px-4 py-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Refresh Page
           </button>
@@ -570,7 +559,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   return (
     <DraftErrorBoundary>
-      <div className="min-h-screen bg-[color:var(--draft-broadcast-page)] text-[color:var(--draft-broadcast-text)]">
+      <div className="ground-stone min-h-screen">
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
@@ -594,7 +583,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             <div
               role="alert"
               aria-label="Draft start status"
-              className="flex flex-col gap-3 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-alert-soft)] px-4 py-3 text-sm text-[color:var(--draft-broadcast-text)] sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 border border-destructive-text bg-destructive-soft px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
             >
               <p>
                 <span className="font-semibold">The draft did not start.</span>{' '}
@@ -606,7 +595,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   onClick={() => void draft.startDraft()}
                   disabled={draft.isSaving}
                   aria-label="Try starting again"
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)] disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground disabled:cursor-wait disabled:opacity-60"
                 >
                   Try again
                 </button>
@@ -614,7 +603,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   type="button"
                   onClick={draft.dismissStartFeedback}
                   aria-label="Dismiss draft start message"
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-muted-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)]"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 >
                   Dismiss
                 </button>
@@ -665,24 +654,24 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {isCompletedDraft ? (
             <section
               aria-label="Draft complete next steps"
-              className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:p-6"
+              className="border border-border bg-card p-5 text-foreground sm:p-6"
             >
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(36rem,48rem)] xl:items-end">
                 <div className="min-w-0">
                   <span
-                    className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
+                    className={`inline-flex px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
                   >
                     Completed
                   </span>
-                  <h1 className="mt-4 text-2xl font-semibold tracking-tight text-[color:var(--draft-broadcast-text)] sm:text-3xl">
+                  <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                     Draft complete
                   </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--draft-broadcast-muted)] sm:text-base">
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                     {displayDraftTitle} is finalized with {displayCurrentPick} of{' '}
                     {activeDraft.totalPicks} picks complete. Choose where to go next; the draft room
                     remains below as a read-only reference.
                   </p>
-                  <p className="mt-3 text-sm font-medium text-[color:var(--draft-broadcast-text)]">
+                  <p className="mt-3 text-sm font-medium text-foreground">
                     Your roster: {filledRosterSlots} of {rosterSlots.length} slots filled.
                   </p>
                 </div>
@@ -690,34 +679,34 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={leagueHubHref}
                     aria-label="Go back to league hub"
-                    className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-cut border border-foreground bg-card p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
+                    <span className="block text-sm font-semibold text-foreground">
                       Go back to league hub
                     </span>
-                    <span className="mt-2 block text-xs leading-5 text-[color:var(--draft-broadcast-muted)]">
+                    <span className="mt-2 block text-xs leading-5 text-muted-foreground">
                       Return to league command, settings, fixtures, and season tools.
                     </span>
                   </Link>
                   <Link
                     href={historyHref}
                     aria-label="Review completed draft"
-                    className="rounded-lg border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-4 text-left text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-cut border border-brand-bar bg-brand-bar p-4 text-left text-brand-bar-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <span className="block text-sm font-semibold">Review completed draft</span>
-                    <span className="mt-2 block text-xs leading-5 text-white/80">
+                    <span className="mt-2 block text-xs leading-5 text-brand-bar-foreground/80">
                       Open the final pick timeline, round tables, and every team result.
                     </span>
                   </Link>
                   <Link
                     href={rosterHref}
                     aria-label="Review my roster"
-                    className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-cut border border-border bg-muted p-4 text-left transition-colors hover:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
+                    <span className="block text-sm font-semibold text-foreground">
                       Review my roster
                     </span>
-                    <span className="mt-2 block text-xs leading-5 text-[color:var(--draft-broadcast-muted)]">
+                    <span className="mt-2 block text-xs leading-5 text-muted-foreground">
                       Inspect your drafted squad inside the league roster view.
                     </span>
                   </Link>
@@ -725,22 +714,20 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
             </section>
           ) : (
-            <section className="rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:px-5">
+            <section className="border border-border bg-card px-4 py-3 text-foreground sm:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <span
-                      className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
+                      className={` px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusTone}`}
                     >
                       {draftStatus}
                     </span>
-                    <span className="text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
+                    <span className="text-sm font-semibold text-foreground">
                       {displayDraftTitle}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-[color:var(--draft-broadcast-muted)]">
-                    {displayDraftSubtitle}
-                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">{displayDraftSubtitle}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -748,7 +735,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     <button
                       type="button"
                       onClick={() => openLeagueSocial({ view: 'chat' })}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <MessagesSquare className="size-4" aria-hidden="true" />
                       League chat
@@ -756,13 +743,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   ) : null}
                   <Link
                     href="/drafts"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Back to drafts
                   </Link>
                   <Link
                     href={historyHref}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-panel-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {historyLinkLabel}
                   </Link>
@@ -771,13 +758,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             </section>
           )}
 
-          <div className={DRAFT_BROADCAST_TOKEN_SCOPE}>
+          <div>
             {isBoardStale && activeDraft.status === 'LIVE' ? (
               <p
                 role="status"
                 aria-label="Pick availability"
                 aria-live="polite"
-                className="mt-4 rounded-lg border border-[color:var(--draft-broadcast-caution)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-3 text-sm font-medium text-[color:var(--draft-broadcast-text)]"
+                className="mt-4 border border-warning-text bg-card px-4 py-3 text-sm font-medium text-foreground"
               >
                 Reconnecting. Picks are paused until the board is up to date.
               </p>
@@ -798,10 +785,10 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
             {!isCompletedDraft && queueMutationFeedback ? (
               <div
-                className={`mt-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+                className={`mt-4 flex flex-col gap-3 border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
                   queueMutationFeedback.kind === 'error'
                     ? 'border-destructive/40 bg-destructive/10 text-foreground'
-                    : 'border-border bg-muted/30 text-foreground'
+                    : 'border-border bg-card text-foreground'
                 }`}
               >
                 <p
@@ -833,7 +820,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     }
                   }}
                   aria-disabled={isQueueMutationPending}
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-cut border border-foreground bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
                 >
                   {queueMutationFeedback.kind === 'error' ? 'Retry queue update' : 'Dismiss'}
                 </button>
@@ -843,7 +830,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
-                className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-foreground"
+                className="mt-4 border border-border bg-card px-4 py-3 text-sm font-medium text-foreground"
               >
                 Saving queue…
               </div>
@@ -871,12 +858,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 watchlistCount={watchlistItems.length}
                 queuePanel={queuePanel}
                 watchlistPanel={watchlistPanel}
-                className="h-full min-h-[30rem] border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--input:var(--draft-broadcast-border)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
+                className="ground-white h-full min-h-[30rem] border-border bg-card text-foreground lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
               />
 
               <div className="flex min-h-0 min-w-0 overflow-x-auto">
                 <PlayerGrid
-                  className="h-full min-h-[30rem] border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-table)] text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] [--accent:var(--draft-broadcast-muted-surface)] [--accent-foreground:var(--draft-broadcast-text)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-table)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--input:var(--draft-broadcast-border)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)] [--primary:var(--draft-broadcast-red)] [--primary-foreground:#fff]"
+                  className="ground-white h-full min-h-[30rem] border-border bg-card text-foreground"
                   players={filteredPlayers}
                   totalPlayers={playersList.length}
                   onPlayerSelect={handlePlayerSelect}
@@ -907,7 +894,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
 
               <aside className="hidden min-h-0 lg:block" aria-label="Desktop pick feed">
-                <div className="sticky top-4 flex h-full min-h-[30rem] max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--input:var(--draft-broadcast-border)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]">
+                <div className="ground-white sticky top-4 flex h-full min-h-[30rem] max-h-[calc(100vh-2rem)] flex-col overflow-hidden border border-border bg-card p-3 text-foreground">
                   {desktopPickFeed}
                 </div>
               </aside>
@@ -919,7 +906,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         <button
           type="button"
           onClick={() => setIsPickFeedOpen(true)}
-          className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="fixed bottom-4 right-4 z-40 rounded-cut border-[2.5px] border-foreground bg-brand-bar p-3 text-brand-bar-foreground shadow-hard transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -935,7 +922,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         {/* Mobile Pick Feed Modal */}
         {isPickFeedOpen && (
           <div
-            className="fixed inset-0 z-50 bg-[color:var(--draft-broadcast-overlay)] lg:hidden"
+            className="fixed inset-0 z-50 bg-overlay lg:hidden"
             role="presentation"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
@@ -950,7 +937,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           >
             <div
               ref={pickFeedDialogRef}
-              className="absolute right-0 top-0 h-full w-80 overflow-y-auto border-l border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-30px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]"
+              className="ground-white absolute right-0 top-0 h-full w-80 overflow-y-auto border-l-[2.5px] border-foreground bg-card p-4 text-foreground"
               role="dialog"
               aria-modal="true"
               aria-labelledby="pickFeedTitle"
@@ -960,7 +947,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 <button
                   type="button"
                   onClick={() => setIsPickFeedOpen(false)}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] hover:text-[color:var(--draft-broadcast-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-cut border border-border bg-muted text-muted-foreground transition-colors hover:bg-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Close Pick Feed"
                 >
                   <svg

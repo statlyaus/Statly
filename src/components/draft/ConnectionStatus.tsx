@@ -35,19 +35,17 @@ const WARNING_ICON = (
 
 const STATUS_CONFIG = {
   connecting: {
-    accent:
-      'border-[color:var(--draft-broadcast-border)] text-[color:var(--draft-broadcast-muted)]',
+    accent: 'border-border text-muted-foreground',
     icon: SPINNER,
     message: 'Connecting to the live draft…',
   },
   reconnecting: {
-    accent:
-      'border-[color:var(--draft-broadcast-caution)] text-[color:var(--draft-broadcast-caution)]',
+    accent: 'border-warning-text text-warning-text',
     icon: SPINNER,
     message: 'Reconnecting to the live draft. Picks made meanwhile will catch up.',
   },
   disconnected: {
-    accent: 'border-[color:var(--draft-broadcast-alert)] text-[color:var(--draft-broadcast-alert)]',
+    accent: 'border-destructive-text text-destructive-text',
     icon: WARNING_ICON,
     message: 'Connection lost. The board may be out of date.',
   },
@@ -65,16 +63,16 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
       role="status"
       aria-label="Live draft connection"
       aria-live="polite"
-      className={`flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 border-b-2 bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm ${config.accent}`}
+      className={`flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 border-b-2 bg-card px-4 py-2 text-sm ${config.accent}`}
     >
       {config.icon}
-      <span className="font-medium text-[color:var(--draft-broadcast-text)]">{config.message}</span>
+      <span className="font-medium text-foreground">{config.message}</span>
       {status === 'disconnected' && onRefresh ? (
         <button
           type="button"
           onClick={onRefresh}
           aria-label="Refresh draft room"
-          className="inline-flex min-h-11 items-center rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-muted-surface)] px-3 font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-text)]"
+          className="inline-flex min-h-11 items-center rounded-cut border border-foreground bg-card px-3 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
         >
           Refresh
         </button>

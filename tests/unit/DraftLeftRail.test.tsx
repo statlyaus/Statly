@@ -65,7 +65,7 @@ describe('DraftLeftRail', () => {
     if (!filledSlot || !emptySlot) throw new Error('Expected filled and empty roster slots');
 
     expect(filledSlot).toHaveAttribute('data-roster-state', 'filled');
-    expect(filledSlot).toHaveClass('bg-[color:var(--draft-broadcast-roster-filled)]');
+    expect(filledSlot).toHaveClass('bg-muted');
     expect(within(filledSlot).getByText('Bench 1')).toBeInTheDocument();
     expect(within(filledSlot).getByText('Caleb Daniel')).toBeInTheDocument();
     expect(emptySlot).toHaveAttribute('data-roster-state', 'empty');

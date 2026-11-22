@@ -399,7 +399,7 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('w-[var(--draft-player-col)] sm:w-[var(--draft-player-col-sm)]');
     expect(source).toContain('w-[var(--draft-actions-col)] sm:w-[var(--draft-actions-col-sm)]');
     expect(source).toContain('sticky right-0 z-[1] bg-card');
-    expect(source).toContain('sticky right-0 z-20 bg-[color:var(--draft-broadcast-panel)]');
+    expect(source).toContain('sticky right-0 z-20 bg-card');
     expect(source).toContain('grid grid-cols-[44px_44px_1fr] items-center gap-2 sm:grid-cols-3');
   });
 
@@ -418,11 +418,11 @@ describe('PlayerGrid accessibility', () => {
     expect(within(row).getByText('Watch')).toHaveClass('sr-only', 'sm:not-sr-only');
   });
 
-  it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
+  it('keeps the draft player table aligned to semantic tokens with square panels', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
     expect(source).toContain('border border-border bg-card text-card-foreground');
-    expect(source).toContain('bg-[color:var(--draft-broadcast-panel)]');
+    expect(source).toContain('bg-card');
     expect(source).toContain('text-muted-foreground');
     expect(source).toContain('focus-visible:ring-ring');
     expect(source).toContain('const PLAYER_COLUMN_WIDTH = 340');
@@ -431,13 +431,11 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 236');
     expect(source).toContain('className?: string;');
     expect(source).toContain(
-      'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm'
+      'flex h-full min-h-0 flex-col overflow-hidden border border-border bg-card text-card-foreground'
     );
     expect(source).toContain('className="relative min-h-0 flex-1"');
-    expect(source).toContain(
-      'className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"'
-    );
-    expect(source).toContain('sticky left-0 z-20 bg-[color:var(--draft-broadcast-panel)]');
+    expect(source).toContain('className="h-full overflow-auto bg-card"');
+    expect(source).toContain('sticky left-0 z-20 bg-card');
     expect(source).toContain('sticky left-0 z-[1] bg-card');
     expect(source).toContain("onClick={() => onSortChange('statlyZ')}");
     expect(source).toContain('onClick={() => onSortChange(getCategorySortKey(category))}');

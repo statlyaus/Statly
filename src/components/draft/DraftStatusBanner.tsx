@@ -45,7 +45,7 @@ export default function DraftStatusBanner({
       description: onStartDraft
         ? 'Participants can join now. Start manually or wait for the scheduled launch.'
         : 'Participants can join now. The commissioner can start early, or it starts at the scheduled time.',
-      tone: 'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
+      tone: 'border-warning bg-warning text-warning-foreground',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -61,7 +61,7 @@ export default function DraftStatusBanner({
       label: 'Live',
       title: 'Draft is in progress',
       description: 'The clock is active and picks, queues, and auto-picks are live.',
-      tone: 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-solid-text)]',
+      tone: 'border-success bg-success text-brand-bar-foreground',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -77,7 +77,7 @@ export default function DraftStatusBanner({
       label: 'Completed',
       title: 'Draft is complete',
       description: 'All picks have been finalized and the room is now read-only.',
-      tone: 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-solid-text)]',
+      tone: 'border-success bg-success text-brand-bar-foreground',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -99,7 +99,7 @@ export default function DraftStatusBanner({
     label: status,
     title: `Draft status: ${status}`,
     description: 'The draft room is active, but this state does not yet have dedicated messaging.',
-    tone: 'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-text)]',
+    tone: 'border-border bg-muted text-foreground',
     icon: (
       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -114,26 +114,22 @@ export default function DraftStatusBanner({
 
   return (
     <section className="w-full px-4 pt-4 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-5 py-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border border-border bg-card px-5 py-4 text-foreground sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div
-            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${config.tone}`}
+            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center border ${config.tone}`}
           >
             {config.icon}
           </div>
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--draft-broadcast-muted)]">
+              <span className="inline-flex items-center rounded-cut border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 {config.label}
               </span>
             </div>
             <div>
-              <p className="text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
-                {config.title}
-              </p>
-              <p className="text-sm text-[color:var(--draft-broadcast-muted)]">
-                {config.description}
-              </p>
+              <p className="text-sm font-semibold text-foreground">{config.title}</p>
+              <p className="text-sm text-muted-foreground">{config.description}</p>
             </div>
           </div>
         </div>
@@ -143,7 +139,7 @@ export default function DraftStatusBanner({
             type="button"
             onClick={handleStartDraft}
             disabled={isActuallyLoading}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-solid-text)] shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center rounded-cut bg-brand-bar px-4 py-2 text-sm font-semibold text-brand-bar-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isActuallyLoading ? 'Starting draft...' : 'Start draft now'}
           </button>

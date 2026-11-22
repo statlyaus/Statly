@@ -4,14 +4,14 @@ import { auditPage, EMPTY } from './helpers/brandAudit';
 import { authenticateAsDevelopmentUser } from './helpers/devAuth';
 import { removeFinishedRound, seedFinishedRound } from './helpers/matchupScenarioFixture';
 import { seedWaiverScenario, WAIVER_SCENARIO } from './helpers/waiverScenarioFixture';
-import { E2E_LEAGUE_ID, E2E_PLAYER_ID } from './global.setup';
+import { E2E_DRAFT_ID, E2E_LEAGUE_ID, E2E_PLAYER_ID } from './global.setup';
 
 /**
  * Brand conformance of the signed-in fantasy app (docs/product/style-guide.md), with the same
  * element-by-element audit as the public trade pages (`helpers/brandAudit.ts`).
  *
- * Nothing is skipped: the league (ticket 08), social (09) and trade centre (10a) palettes are gone.
- * The draft room (10b) pages join PAGES when that ticket lands.
+ * Nothing is skipped: the league (08), social (09), trade centre (10a) and draft room (10b) palettes
+ * are gone.
  */
 const PAGES: ReadonlyArray<{
   path: string;
@@ -45,6 +45,16 @@ const PAGES: ReadonlyArray<{
   { path: `/leagues/${E2E_LEAGUE_ID}/social?view=activity`, ready: heading(2) },
   // Trade centre (ticket 10a): the offers list.
   { path: `/leagues/${E2E_LEAGUE_ID}?tab=trades`, ready: heading(2, 'Trades') },
+  // Draft room (ticket 10b): the seeded draft, live or complete.
+  {
+    path: `/drafts/${E2E_DRAFT_ID}`,
+    ready: async (page) => {
+      await expect(page.locator('body')).toContainText(
+        /Pick \d+ of \d+|Draft is complete|Draft room is ready/,
+        { timeout: 30_000 }
+      );
+    },
+  },
 ];
 
 function text(words: string) {
@@ -77,7 +87,7 @@ for (const viewport of [
   test.describe(`the fantasy app follows the brand at ${viewport.width}px`, () => {
     test.use({ viewport });
 
-    test('dashboard, league, My Team, standings, matchups, waivers, players, social and trades', async ({
+    test('dashboard, league, My Team, standings, matchups, waivers, players, social, trades and the draft room', async ({
       page,
     }) => {
       test.setTimeout(480_000);

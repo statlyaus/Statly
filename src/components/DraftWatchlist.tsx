@@ -78,10 +78,10 @@ function getAvailabilityClassName(row: WatchlistRow): string {
   }
 
   if (row.isUnavailable) {
-    return 'border-[color:var(--draft-broadcast-yellow)]/50 bg-[color:var(--draft-broadcast-yellow-soft)] text-foreground';
+    return 'border-warning/50 bg-warning/20 text-foreground';
   }
 
-  return 'border-[color:var(--draft-broadcast-green)]/40 bg-[color:var(--draft-broadcast-green-soft)] text-foreground';
+  return 'border-success/40 bg-success-soft text-foreground';
 }
 
 function getInjuryLabel(player: WatchlistRow['player']): string | null {
@@ -102,7 +102,7 @@ function WatchlistPlayerMeta({ row }: { row: WatchlistRow }) {
 
   return (
     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-      <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+      <span className="bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
         {row.player.position}
       </span>
       <span className="truncate">{row.player.club}</span>
@@ -111,7 +111,7 @@ function WatchlistPlayerMeta({ row }: { row: WatchlistRow }) {
         Statly Z {statlyZ.value}
       </span>
       {statlyZ.state === 'partial' && (
-        <span className="shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-medium uppercase">
+        <span className="shrink-0 border border-border bg-muted px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase">
           Partial
         </span>
       )}
@@ -127,13 +127,13 @@ function WatchlistPlayerSignals({ row }: { row: WatchlistRow }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
       {injuryLabel && (
-        <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive-text">
+        <span className="inline-flex items-center gap-1 rounded-cut border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive-text">
           <AlertCircle className="h-3 w-3" aria-hidden="true" />
           {injuryLabel}
         </span>
       )}
       {row.item.notes && (
-        <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5">
+        <span className="inline-flex items-center gap-1 rounded-cut border border-border bg-muted px-1.5 py-0.5">
           <Clock className="h-3 w-3" aria-hidden="true" />
           {row.item.notes}
         </span>
@@ -180,7 +180,7 @@ function WatchlistRowActions({
             if (row.draftablePlayer) void onAddToQueue(row.draftablePlayer);
           }}
           disabled={!canActOnPlayer || row.isQueued || isQueueMutationPending}
-          className="inline-flex h-11 items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center gap-1 rounded-cut border border-primary/20 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={
             row.isQueued
               ? `${row.player.name} is already in your draft queue`
@@ -205,7 +205,7 @@ function WatchlistRowActions({
           }
         }}
         disabled={draftDisabled}
-        className="inline-flex h-11 items-center justify-center gap-1 rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-3 text-xs font-semibold text-white shadow-[0_0_18px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-11 items-center justify-center gap-1 rounded-cut border border-brand-bar bg-brand-bar px-3 text-xs font-semibold text-brand-bar-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={
           isArmed
             ? `Confirm pick: ${row.player.name}`
@@ -222,7 +222,7 @@ function WatchlistRowActions({
         <button
           type="button"
           onClick={() => onArm(null)}
-          className="inline-flex h-11 items-center justify-center gap-1 rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-11 items-center justify-center gap-1 rounded-cut border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Cancel pick: ${row.player.name}`}
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -236,7 +236,7 @@ function WatchlistRowActions({
           void onRemoveFromWatchlist(String(row.item.playerId));
         }}
         disabled={isWatchlistPending}
-        className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={`Remove ${row.player.name} from watchlist`}
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -277,13 +277,13 @@ function WatchlistPlayerRow({
   return (
     <li
       className={cn(
-        'rounded-md border border-border bg-card px-3 py-2 text-card-foreground transition-colors',
+        ' border border-border bg-card px-3 py-2 text-card-foreground transition-colors',
         canActOnPlayer && 'hover:bg-muted/60',
         !canActOnPlayer && 'opacity-75'
       )}
     >
       <div className="flex items-start gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-muted text-xs font-semibold text-muted-foreground">
           {row.order}
         </span>
 
@@ -296,7 +296,7 @@ function WatchlistPlayerRow({
 
             <span
               className={cn(
-                'shrink-0 rounded-md border px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase',
+                'shrink-0 border px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase',
                 getAvailabilityClassName(row)
               )}
             >
@@ -426,7 +426,7 @@ export default function DraftWatchlist({
 
   return (
     <section className={cn('flex min-h-0 flex-1 flex-col gap-3', className)} aria-label="Watchlist">
-      <div className="rounded-md border border-border bg-background p-3">
+      <div className="border border-border bg-background p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -441,17 +441,17 @@ export default function DraftWatchlist({
           <div className="flex shrink-0 flex-wrap justify-end gap-1 text-[0.6875rem] font-semibold">
             <span
               className={cn(
-                'rounded-md border px-1.5 py-0.5',
-                'border-[color:var(--draft-broadcast-green)]/40 bg-[color:var(--draft-broadcast-green-soft)] text-foreground'
+                ' border px-1.5 py-0.5',
+                'border-success/40 bg-success-soft text-foreground'
               )}
             >
               {availableCount} available
             </span>
-            <span className="rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive-text">
+            <span className="border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive-text">
               {draftedCount} drafted
             </span>
             {unavailableCount > 0 && (
-              <span className="rounded-md border border-[color:var(--draft-broadcast-yellow)]/50 bg-[color:var(--draft-broadcast-yellow-soft)] px-1.5 py-0.5 text-foreground">
+              <span className="border border-warning/50 bg-warning/20 px-1.5 py-0.5 text-foreground">
                 {unavailableCount} unavailable
               </span>
             )}
@@ -470,7 +470,7 @@ export default function DraftWatchlist({
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search watchlist..."
-              className="h-10 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-10 w-full rounded-cut border border-input bg-field py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
 
@@ -487,7 +487,7 @@ export default function DraftWatchlist({
       </div>
 
       {filteredRows.length === 0 ? (
-        <div className="flex min-h-52 flex-1 flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
+        <div className="flex min-h-52 flex-1 flex-col items-center justify-center border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
           <Bookmark className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold text-foreground">{emptyTitle}</p>
           <p className="mt-1 max-w-52 text-xs leading-5 text-muted-foreground">{emptyDetail}</p>

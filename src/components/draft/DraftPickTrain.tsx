@@ -29,60 +29,60 @@ function getStatusLabel(slot: DraftPickTrainSlot): string {
 
 function getSlotClasses(slot: DraftPickTrainSlot): string {
   if (slot.status === 'current') {
-    return 'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-text)] shadow-[0_0_22px_var(--draft-broadcast-red-glow)] ring-1 ring-[color:var(--draft-broadcast-red)]/40';
+    return 'border-brand-bar bg-muted text-foreground';
   }
 
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-text)] shadow-[0_0_14px_var(--draft-broadcast-yellow-glow)] ring-1 ring-[color:var(--draft-broadcast-yellow)]/35';
+    return 'border-warning bg-muted text-foreground';
   }
 
   if (slot.status === 'completed') {
-    return 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-success bg-muted text-foreground';
   }
 
-  return 'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-text)]';
+  return 'border-border bg-muted text-foreground';
 }
 
 function getSlotAccentClass(slot: DraftPickTrainSlot): string {
-  if (slot.status === 'current') return 'bg-[color:var(--draft-broadcast-red)]';
+  if (slot.status === 'current') return 'bg-brand-bar';
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'bg-[color:var(--draft-broadcast-yellow)]';
+    return 'bg-warning';
   }
-  if (slot.status === 'completed') return 'bg-[color:var(--draft-broadcast-green)]';
+  if (slot.status === 'completed') return 'bg-success';
 
-  return 'bg-[color:var(--draft-broadcast-border)]';
+  return 'bg-border';
 }
 
 function getStatusBadgeClasses(slot: DraftPickTrainSlot): string {
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-warning bg-warning/20 text-foreground';
   }
 
   if (slot.status === 'current') {
-    return 'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-brand-bar bg-accent text-foreground';
   }
 
   if (slot.status === 'completed') {
-    return 'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green-soft)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-success bg-success-soft text-foreground';
   }
 
-  return 'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-field)] text-[color:var(--draft-broadcast-text)]';
+  return 'border-border bg-field text-foreground';
 }
 
 function getResultPanelClasses(slot: DraftPickTrainSlot): string {
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'border-[color:var(--draft-broadcast-yellow)]/50 bg-[color:var(--draft-broadcast-field)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-warning/50 bg-field text-foreground';
   }
 
   if (slot.status === 'current') {
-    return 'border-[color:var(--draft-broadcast-red)]/50 bg-[color:var(--draft-broadcast-field)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-brand-bar/50 bg-field text-foreground';
   }
 
   if (slot.status === 'completed') {
-    return 'border-[color:var(--draft-broadcast-green)]/50 bg-[color:var(--draft-broadcast-field)] text-[color:var(--draft-broadcast-text)]';
+    return 'border-success/50 bg-field text-foreground';
   }
 
-  return 'border-[color:var(--draft-broadcast-border-soft)] bg-[color:var(--draft-broadcast-field)] text-[color:var(--draft-broadcast-text)]';
+  return 'border-border bg-field text-foreground';
 }
 
 function StatusIcon({ slot }: { slot: DraftPickTrainSlot }) {
@@ -109,21 +109,21 @@ export default function DraftPickTrain({
       role="region"
       aria-label="Draft pick train"
       className={cn(
-        'overflow-hidden rounded-lg border border-t-4 border-[color:var(--draft-broadcast-border)] border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)] text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)]',
+        'overflow-hidden border border-t-4 border-border border-t-brand-bar bg-card text-foreground',
         className
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--draft-broadcast-border)] px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-normal text-[color:var(--draft-broadcast-muted)]">
+          <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
             Draft pick train
           </p>
-          <p className="mt-1 text-sm font-medium text-[color:var(--draft-broadcast-text)]">
+          <p className="mt-1 text-sm font-medium text-foreground">
             Pick {state.currentPick} of {state.totalPicks}
           </p>
         </div>
         {typeof timeLeft === 'number' && (
-          <p className="shrink-0 rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2 py-1 text-xs font-medium text-[color:var(--draft-broadcast-muted)]">
+          <p className="shrink-0 border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
             {formatTime(timeLeft)}
           </p>
         )}
@@ -141,7 +141,7 @@ export default function DraftPickTrain({
             <li
               key={`${slot.round}-${slot.overall}-${slot.slot}`}
               className={cn(
-                'relative flex min-h-[11rem] min-w-[13.5rem] flex-col gap-3 overflow-hidden rounded-lg border p-3',
+                'relative flex min-h-[11rem] min-w-[13.5rem] flex-col gap-3 overflow-hidden border p-3',
                 getSlotClasses(slot)
               )}
             >
@@ -151,7 +151,7 @@ export default function DraftPickTrain({
               />
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 pt-1">
-                  <p className="text-[0.6875rem] font-semibold uppercase leading-5 text-[color:var(--draft-broadcast-muted)]">
+                  <p className="text-[0.6875rem] font-semibold uppercase leading-5 text-muted-foreground">
                     Round {slot.round} / Pick {slot.overall}
                   </p>
                   <p className="mt-0.5 truncate text-sm font-semibold leading-5">
@@ -160,7 +160,7 @@ export default function DraftPickTrain({
                 </div>
                 <span
                   className={cn(
-                    'inline-flex max-w-[8.5rem] shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[0.6875rem] font-semibold leading-4 backdrop-blur',
+                    'inline-flex max-w-[8.5rem] shrink-0 items-center gap-1 rounded-cut border px-2 py-1 text-[0.6875rem] font-semibold leading-4',
                     getStatusBadgeClasses(slot)
                   )}
                 >
@@ -179,7 +179,7 @@ export default function DraftPickTrain({
               {slot.player ? (
                 <div
                   className={cn(
-                    'mt-auto flex min-h-14 items-center gap-3 rounded-md border p-2 backdrop-blur',
+                    'mt-auto flex min-h-14 items-center gap-3 border p-2',
                     getResultPanelClasses(slot)
                   )}
                 >
@@ -201,7 +201,7 @@ export default function DraftPickTrain({
               ) : (
                 <p
                   className={cn(
-                    'mt-auto rounded-md border px-3 py-2 text-sm font-medium backdrop-blur',
+                    'mt-auto border px-3 py-2 text-sm font-medium',
                     getResultPanelClasses(slot)
                   )}
                 >

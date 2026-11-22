@@ -262,7 +262,7 @@ export default function LivePickHeader({
         role="banner"
         aria-label="Live draft status"
       >
-        <div className="rounded-3xl border border-destructive/20 bg-destructive/5 px-5 py-4 text-center">
+        <div className="border border-destructive/20 bg-destructive/5 px-5 py-4 text-center">
           <p className="text-sm font-medium text-destructive-text">Invalid draft data</p>
         </div>
       </section>
@@ -291,33 +291,29 @@ export default function LivePickHeader({
         }
       : timerState.tone === 'warning'
         ? {
-            badge:
-              'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
-            bar: 'bg-[color:var(--draft-broadcast-yellow)]',
-            rail: 'bg-[color:var(--draft-broadcast-yellow-soft)]',
+            badge: 'border-warning bg-warning text-warning-foreground',
+            bar: 'bg-warning',
+            rail: 'bg-warning/20',
             label: timerState.label,
           }
         : timerState.tone === 'complete'
           ? {
-              badge:
-                'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-white',
-              bar: 'bg-[color:var(--draft-broadcast-green)]',
-              rail: 'bg-[color:var(--draft-broadcast-green-soft)]',
+              badge: 'border-success bg-success text-brand-bar-foreground',
+              bar: 'bg-success',
+              rail: 'bg-success-soft',
               label: timerState.label,
             }
           : timerState.tone === 'neutral'
             ? {
-                badge:
-                  'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)]',
-                bar: 'bg-[color:var(--draft-broadcast-muted)]',
-                rail: 'bg-[color:var(--draft-broadcast-panel-strong)]',
+                badge: 'border-border bg-muted text-muted-foreground',
+                bar: 'bg-muted-foreground',
+                rail: 'bg-muted',
                 label: timerState.label,
               }
             : {
-                badge:
-                  'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
-                bar: 'bg-[color:var(--draft-broadcast-red)]',
-                rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
+                badge: 'border-brand-bar bg-accent text-foreground',
+                bar: 'bg-brand-bar',
+                rail: 'bg-accent',
                 label: timerState.label,
               };
   const statusCopyByStatus = {
@@ -391,57 +387,49 @@ export default function LivePickHeader({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <div
-          className={`rounded-lg border border-t-4 border-[color:var(--draft-broadcast-border)] p-4 text-[color:var(--draft-broadcast-text)] ${
-            isYourTurn
-              ? 'border-t-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow-soft)]'
-              : 'border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)]'
+          className={` border border-t-4 border-border p-4 text-foreground ${
+            isYourTurn ? 'border-t-warning bg-warning/20' : 'border-t-brand-bar bg-card'
           }`}
           role="region"
           aria-label="Draft clock"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-2.5 py-1 text-xs font-semibold text-[color:var(--draft-broadcast-text)]">
+              <span className="inline-flex items-center rounded-cut border border-brand-bar bg-accent px-2.5 py-1 text-xs font-semibold text-foreground">
                 {statusCopy.title}
               </span>
-              <span className="rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2.5 py-1 text-xs font-medium text-[color:var(--draft-broadcast-muted)]">
+              <span className="border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 Round {draftData.round} / {draftData.direction}
               </span>
               {isYourTurn && (
-                <span className="rounded-md border border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] px-3 py-1 text-sm font-bold text-[color:var(--draft-broadcast-yellow-text)]">
+                <span className="border border-warning bg-warning px-3 py-1 text-sm font-bold text-warning-foreground">
                   {/* Visual only: the pick clock announcer speaks the turn once. */}
                   Your turn
                 </span>
               )}
             </div>
 
-            <span
-              className={`rounded-md border px-2 py-1 text-xs font-semibold ${timerTone.badge}`}
-            >
+            <span className={` border px-2 py-1 text-xs font-semibold ${timerTone.badge}`}>
               {timerTone.label}
             </span>
           </div>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-normal text-[color:var(--draft-broadcast-muted)]">
+              <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
                 Live pick clock
               </p>
-              <p className="mt-1 max-w-2xl text-sm text-[color:var(--draft-broadcast-muted)]">
-                {statusCopy.detail}
-              </p>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{statusCopy.detail}</p>
               <div
-                className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-[color:var(--draft-broadcast-text)]"
+                className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-foreground"
                 role="timer"
                 aria-label={timerAriaLabel}
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-[color:var(--draft-broadcast-alert)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'text-destructive-text' : 'text-muted-foreground'}`}
                   aria-hidden="true"
                 />
-                <span
-                  className={timerState.phase === 'LIVE' && timeLeft <= 10 ? 'animate-pulse' : ''}
-                >
+                <span className={timerState.phase === 'LIVE' && timeLeft <= 10 ? 'font-bold' : ''}>
                   {timerDisplay}
                 </span>
               </div>
@@ -458,10 +446,10 @@ export default function LivePickHeader({
 
             {!isYourTurn && picksUntilYourTurn > 0 && (
               <div
-                className={`inline-flex rounded-md border px-3 py-2 text-sm font-medium transition-opacity ${
+                className={`inline-flex rounded-cut border px-3 py-2 text-sm font-medium transition-opacity ${
                   picksUntilYourTurn === 1
-                    ? `border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
-                    : 'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)]'
+                    ? `border-warning bg-warning text-warning-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'}`
+                    : 'border-border bg-muted text-muted-foreground'
                 }`}
                 role="status"
                 aria-live="polite"
@@ -472,7 +460,7 @@ export default function LivePickHeader({
             )}
           </div>
 
-          <div className={`mt-4 h-2 overflow-hidden rounded-full ${timerTone.rail}`}>
+          <div className={`mt-4 h-2 overflow-hidden ${timerTone.rail}`}>
             <div
               className={`h-full transition-all duration-1000 ${timerTone.bar}`}
               style={{ width: `${timerPercent}%` }}
