@@ -29,7 +29,7 @@ export function BloodsuckerMatchupWarning({
     <div
       role="note"
       aria-label="Bloodsucker matchup"
-      className="rounded-md border border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)] p-3 text-sm text-[color:var(--league-text)]"
+      className="rounded-md border border-destructive-text bg-destructive-soft p-3 text-sm text-foreground"
     >
       <p className="font-semibold">You play the Bloodsucker, {bloodsuckerTeamName}, this round.</p>
       <p className="mt-1">

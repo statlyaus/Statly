@@ -58,7 +58,7 @@ function LeaguePanelLoading({ label }: { label: string }) {
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className="min-h-48 rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-sm text-[color:var(--league-text-muted)]"
+      className="min-h-48 rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground"
     >
       Loading {label}…
     </div>
@@ -91,29 +91,26 @@ function LeaguePanelError({
     <section
       role="alert"
       aria-labelledby="league-panel-error-heading"
-      className="flex min-h-48 flex-col justify-center rounded-xl border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] p-6"
+      className="flex min-h-48 flex-col justify-center rounded-xl border border-destructive-text/30 bg-destructive-soft p-6"
     >
-      <h2
-        id="league-panel-error-heading"
-        className="text-lg font-semibold text-[color:var(--league-text)]"
-      >
+      <h2 id="league-panel-error-heading" className="text-lg font-semibold text-foreground">
         This league section could not be loaded
       </h2>
-      <p className="mt-2 max-w-2xl text-sm text-[color:var(--league-text-muted)]">
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         Your league navigation is still available. Retry this section or return to the overview.
       </p>
       <div className="mt-5 flex flex-wrap gap-3">
         <button
           type="button"
           onClick={requiresReload ? () => window.location.reload() : resetError}
-          className="inline-flex h-10 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--league-danger-soft)]"
+          className="inline-flex h-10 items-center justify-center rounded-full bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 focus-visible:ring-offset-destructive-soft"
         >
           {requiresReload ? 'Reload page' : 'Try section again'}
         </button>
         <button
           type="button"
           onClick={onReturnToOverview}
-          className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--league-danger-soft)]"
+          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 focus-visible:ring-offset-destructive-soft"
         >
           Return to overview
         </button>
@@ -713,39 +710,39 @@ export default function LeagueTabs({
                 <section className="space-y-5">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Team registry
                       </p>
-                      <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[color:var(--league-text)]">
+                      <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
                         League Teams
                       </h2>
-                      <p className="mt-1 max-w-2xl text-sm text-[color:var(--league-text-muted)]">
+                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                         Active ownership and team access for {league.name}. Commissioner actions are
                         available only where the team can be managed.
                       </p>
                     </div>
-                    <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)]">
-                      <div className="border-r border-[color:var(--league-border)] px-4 py-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                    <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-muted">
+                      <div className="border-r border-border px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           Active
                         </p>
-                        <p className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                        <p className="mt-1 text-xl font-semibold text-foreground">
                           {members.length}
                         </p>
                       </div>
-                      <div className="border-r border-[color:var(--league-border)] px-4 py-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                      <div className="border-r border-border px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           Capacity
                         </p>
-                        <p className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                        <p className="mt-1 text-xl font-semibold text-foreground">
                           {league.maxTeams}
                         </p>
                       </div>
                       <div className="px-4 py-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           Open
                         </p>
-                        <p className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                        <p className="mt-1 text-xl font-semibold text-foreground">
                           {Math.max(league.maxTeams - members.length, 0)}
                         </p>
                       </div>
@@ -756,14 +753,14 @@ export default function LeagueTabs({
                       role={teamActionMessage.type === 'error' ? 'alert' : 'status'}
                       className={`rounded-lg border px-3 py-2 text-sm ${
                         teamActionMessage.type === 'error'
-                          ? 'border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]'
-                          : 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]'
+                          ? 'border-destructive-text/30 bg-destructive-soft text-destructive-text'
+                          : 'border-success/30 bg-success-soft text-success'
                       }`}
                     >
                       {teamActionMessage.text}
                     </div>
                   )}
-                  <div className="overflow-hidden rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
+                  <div className="overflow-hidden rounded-lg border border-border bg-card">
                     <table className="min-w-full table-fixed border-collapse text-left">
                       <colgroup>
                         <col className="w-[34%]" />
@@ -772,26 +769,26 @@ export default function LeagueTabs({
                         <col className="w-[18%]" />
                         <col className="w-[14%]" />
                       </colgroup>
-                      <thead className="bg-[color:var(--league-page)]">
-                        <tr className="border-b border-[color:var(--league-border)]">
-                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                      <thead className="bg-muted">
+                        <tr className="border-b border-border">
+                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Team
                           </th>
-                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Access
                           </th>
-                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Status
                           </th>
-                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Joined
                           </th>
-                          <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Actions
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[color:var(--league-border)]">
+                      <tbody className="divide-y divide-border">
                         {members.map((member) => {
                           const roleLabel = getLeagueMemberRoleLabel(member, league);
                           const canRemoveMember =
@@ -800,41 +797,39 @@ export default function LeagueTabs({
                           return (
                             <tr
                               key={member.id}
-                              className="bg-[color:var(--league-surface)] transition-colors hover:bg-[color:var(--league-page)]"
+                              className="bg-card transition-colors hover:bg-muted"
                             >
                               <td className="px-4 py-4">
                                 <div className="flex min-w-0 items-center gap-3">
-                                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] text-sm font-semibold text-[color:var(--league-text)]">
+                                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-sm font-semibold text-foreground">
                                     {getTeamInitials(member.teamName)}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                                    <p className="truncate text-sm font-semibold text-foreground">
                                       {member.teamName || 'Unnamed team'}
                                     </p>
-                                    <p className="mt-0.5 truncate text-xs text-[color:var(--league-text-muted)]">
+                                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
                                       {member.userId}
                                     </p>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <span className="inline-flex h-7 items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-xs font-semibold text-[color:var(--league-text)]">
+                                <span className="inline-flex h-7 items-center rounded-full border border-border bg-muted px-3 text-xs font-semibold text-foreground">
                                   {roleLabel}
                                 </span>
                               </td>
                               <td className="px-4 py-4">
-                                <span className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                                <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
                                   <span
                                     className={`size-2 rounded-full ${
-                                      member.isActive
-                                        ? 'bg-[color:var(--league-success)]'
-                                        : 'bg-[color:var(--league-text-muted)]'
+                                      member.isActive ? 'bg-success' : 'bg-muted-foreground'
                                     }`}
                                   />
                                   {member.isActive ? 'Active' : 'Inactive'}
                                 </span>
                               </td>
-                              <td className="px-4 py-4 text-sm text-[color:var(--league-text-muted)]">
+                              <td className="px-4 py-4 text-sm text-muted-foreground">
                                 {formatLeagueMemberJoinedAt(member.joinedAt)}
                               </td>
                               <td className="px-4 py-4">
@@ -847,7 +842,7 @@ export default function LeagueTabs({
                                           onClick={() => void handleRemoveMember(member)}
                                           disabled={removingUserId === member.userId}
                                           aria-label={`Confirm remove ${member.teamName}`}
-                                          className="inline-flex h-9 items-center justify-center rounded-md bg-[color:var(--league-danger)] px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)] disabled:cursor-not-allowed disabled:opacity-60"
+                                          className="inline-flex h-9 items-center justify-center rounded-md bg-destructive-text px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                           {removingUserId === member.userId
                                             ? 'Removing'
@@ -857,7 +852,7 @@ export default function LeagueTabs({
                                           type="button"
                                           onClick={() => setPendingRemoveUserId(null)}
                                           disabled={removingUserId === member.userId}
-                                          className="inline-flex h-9 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-xs font-semibold text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                                          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                           Cancel
                                         </button>
@@ -867,13 +862,13 @@ export default function LeagueTabs({
                                         type="button"
                                         onClick={() => setPendingRemoveUserId(member.userId)}
                                         aria-label={`Remove ${member.teamName}`}
-                                        className="inline-flex h-9 items-center justify-center rounded-md border border-[color:var(--league-danger)]/30 bg-[color:var(--league-surface)] px-3 text-xs font-semibold text-[color:var(--league-danger)] transition-colors hover:bg-[color:var(--league-danger-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)]"
+                                        className="inline-flex h-9 items-center justify-center rounded-md border border-destructive-text/30 bg-card px-3 text-xs font-semibold text-destructive-text transition-colors hover:bg-destructive-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text"
                                       >
                                         Remove
                                       </button>
                                     )
                                   ) : (
-                                    <span className="text-xs font-medium text-[color:var(--league-text-muted)]">
+                                    <span className="text-xs font-medium text-muted-foreground">
                                       -
                                     </span>
                                   )}

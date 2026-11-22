@@ -45,9 +45,8 @@ type Command =
 
 const REASON_MAX = 500;
 const FIELD =
-  'mt-1 w-full rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-2 text-base text-[color:var(--league-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)]';
-const CARD =
-  'rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm';
+  'mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground';
+const CARD = 'rounded-lg border border-border bg-card p-4 text-sm';
 
 const invalid = (message: string): Command => ({
   status: 'failed',
@@ -144,7 +143,7 @@ export function BiteCommissionerPanel({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 text-[color:var(--league-text)] sm:px-6">
+    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 text-foreground sm:px-6">
       <Link
         href={`/leagues/${encodeURIComponent(leagueId)}`}
         className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-2"
@@ -152,7 +151,7 @@ export function BiteCommissionerPanel({
         Back to the league
       </Link>
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-danger)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-destructive-text">
           Round {review.round} bite · commissioner
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
@@ -165,7 +164,7 @@ export function BiteCommissionerPanel({
       {review.refusal && review.actions.length === 0 ? (
         <p
           role="status"
-          className="rounded-md border border-[color:var(--league-warning)] bg-[color:var(--league-warning-soft)] p-3 text-sm"
+          className="rounded-md border border-warning-text bg-warning-soft p-3 text-sm"
         >
           <span className="font-semibold">
             {refusalHeading(review.refusal.code)} ({review.refusal.code}).
@@ -231,7 +230,7 @@ export function BiteCommissionerPanel({
               aria-describedby={`${ids}-reason-hint`}
               className={FIELD}
             />
-            <p id={`${ids}-reason-hint`} className="mt-1 text-[color:var(--league-text-muted)]">
+            <p id={`${ids}-reason-hint`} className="mt-1 text-muted-foreground">
               Required, up to {REASON_MAX} characters ({reason.length} used). It is posted to league
               activity and kept in the audit.
             </p>
@@ -240,7 +239,7 @@ export function BiteCommissionerPanel({
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[color:var(--league-danger)] px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-destructive-text px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {saving ? 'Saving…' : chosen === 'cancel' ? 'Cancel the bite' : 'Redo the bite'}
           </button>
@@ -263,9 +262,7 @@ function BiteStanding({ review, executed }: { review: BiteReviewView; executed: 
         </p>
       ) : null}
       {review.cancelledReason ? (
-        <p className="mt-1 text-[color:var(--league-text-muted)]">
-          Reason given: {review.cancelledReason}
-        </p>
+        <p className="mt-1 text-muted-foreground">Reason given: {review.cancelledReason}</p>
       ) : null}
     </section>
   );
@@ -295,9 +292,7 @@ function ActionChoice({
           <label
             key={option}
             className={`grid min-h-11 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 rounded-md border px-3 py-2 ${
-              chosen === option
-                ? 'border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)]'
-                : 'border-[color:var(--league-border)]'
+              chosen === option ? 'border-destructive-text bg-destructive-soft' : 'border-border'
             }`}
           >
             <input
@@ -306,12 +301,12 @@ function ActionChoice({
               value={option}
               checked={chosen === option}
               onChange={() => onChoose(option)}
-              className="mt-1 h-4 w-4 shrink-0 accent-[color:var(--league-danger)]"
+              className="mt-1 h-4 w-4 shrink-0 accent-destructive-text"
             />
             <span className="font-medium">
               {option === 'cancel' ? 'Cancel the bite' : 'Redo it with different players'}
             </span>
-            <span className="col-start-2 text-[color:var(--league-text-muted)]">
+            <span className="col-start-2 text-muted-foreground">
               {actionHint(option, executed)}
             </span>
           </label>
@@ -327,7 +322,7 @@ function CommandOutcome({ command }: { command: Command }) {
     <>
       <div aria-live="polite">
         {command.status === 'saved' ? (
-          <p className="rounded-md border border-[color:var(--league-success)] bg-[color:var(--league-success-soft)] p-3 text-sm font-medium">
+          <p className="rounded-md border border-success bg-success-soft p-3 text-sm font-medium">
             {command.action === 'cancel'
               ? 'Done. The bite is cancelled and the league has been told.'
               : 'Done. The bite is redone and the league has been told.'}
@@ -337,7 +332,7 @@ function CommandOutcome({ command }: { command: Command }) {
       {command.status === 'failed' ? (
         <p
           role="alert"
-          className="rounded-md border border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)] p-3 text-sm"
+          className="rounded-md border border-destructive-text bg-destructive-soft p-3 text-sm"
         >
           <span className="font-semibold">
             {command.refusal.code === 'NETWORK_ERROR' ? '' : 'Not saved. '}

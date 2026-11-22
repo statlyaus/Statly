@@ -68,10 +68,8 @@ export function ClubResultStrip({
   return (
     <section aria-label="AFL results this round" className="space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="font-display text-base font-bold text-[color:var(--league-text)]">
-          AFL results
-        </h3>
-        <p className="text-xs text-[color:var(--league-text-muted)]">
+        <h3 className="font-display text-base font-bold text-foreground">AFL results</h3>
+        <p className="text-xs text-muted-foreground">
           Counted players: {homeTeamName} · {awayTeamName}
         </p>
       </div>
@@ -90,7 +88,7 @@ export function ClubResultStrip({
           return (
             <li
               key={game.matchUid}
-              className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-2 text-sm"
+              className="rounded-md border border-border bg-muted px-3 py-2 text-sm"
             >
               <span className="sr-only">{summary}</span>
               <div aria-hidden="true">
@@ -102,9 +100,7 @@ export function ClubResultStrip({
                     <div
                       key={side}
                       className={`flex items-center gap-2 tabular-nums ${
-                        winner === side
-                          ? 'font-bold text-[color:var(--league-text)]'
-                          : 'text-[color:var(--league-text-muted)]'
+                        winner === side ? 'font-bold text-foreground' : 'text-muted-foreground'
                       }`}
                     >
                       <span className="w-10 font-semibold">{getTeamAbbreviation(club)}</span>
@@ -115,7 +111,7 @@ export function ClubResultStrip({
                     </div>
                   );
                 })}
-                <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">{status}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{status}</p>
               </div>
             </li>
           );

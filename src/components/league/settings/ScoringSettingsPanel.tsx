@@ -43,7 +43,7 @@ interface ScoringSettingsPanelProps {
 }
 
 const SELECT_CLASS =
-  'h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
+  'h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar';
 
 const SLOT_LABELS: Record<keyof LeagueLineupSlotSettings, string> = {
   FWD: 'Forwards',
@@ -68,30 +68,28 @@ export function ScoringSettingsPanel({
     Boolean(formatLockReason) || (isLocked && format.leagueFormat === 'NO_LOSERS');
 
   return (
-    <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+    <section className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-            Scoring Settings
-          </h3>
-          <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+          <h3 className="text-base font-semibold text-foreground">Scoring Settings</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
             Configure H2H mode, active lineup slots, and category directions before fixtures lock.
           </p>
           {isLocked && (
-            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+            <p className="mt-1 text-sm text-muted-foreground">
               {lockReason ?? 'Scoring settings are locked because the competition was published.'}
             </p>
           )}
         </div>
         {isLocked && (
-          <span className="rounded-full border border-[color:var(--league-border)] px-3 py-1 text-xs font-semibold text-[color:var(--league-text-muted)]">
+          <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
             Locked
           </span>
         )}
       </div>
 
       <div className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+        <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
           Scoring mode
           <select
             value={value.scoringMode}
@@ -99,13 +97,13 @@ export function ScoringSettingsPanel({
             onChange={(event) =>
               onChange({ ...value, scoringMode: event.target.value as LeagueScoringMode })
             }
-            className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+            className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
           >
             <option value="H2H_EACH_CATEGORY">H2H Each Category</option>
             <option value="H2H_MOST_CATEGORIES">H2H Most Categories</option>
           </select>
         </label>
-        <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+        <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
           League format
           <select
             value={format.leagueFormat}
@@ -132,12 +130,12 @@ export function ScoringSettingsPanel({
           </select>
         </label>
         {format.leagueFormat === 'NO_LOSERS' && (
-          <p className="text-xs font-normal leading-5 text-[color:var(--league-text-muted)] sm:col-span-2">
+          <p className="text-xs font-normal leading-5 text-muted-foreground sm:col-span-2">
             {NO_LOSERS_EXPLANATION}
           </p>
         )}
         {format.leagueFormat === 'BLOODSUCKER' && (
-          <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)] sm:col-span-2">
+          <label className="flex flex-col gap-2 text-sm font-medium text-foreground sm:col-span-2">
             Bloodsucker
             <select
               value={format.bloodsuckerMemberId ?? ''}
@@ -154,7 +152,7 @@ export function ScoringSettingsPanel({
                 </option>
               ))}
             </select>
-            <span className="text-xs font-normal text-[color:var(--league-text-muted)]">
+            <span className="text-xs font-normal text-muted-foreground">
               {formatLockReason ??
                 'Skips the draft and takes a player from each team it beats. Needs at least 8 teams (12 recommended), rolling waivers and no FAAB.'}
             </span>
@@ -164,10 +162,7 @@ export function ScoringSettingsPanel({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {(Object.keys(SLOT_LABELS) as Array<keyof LeagueLineupSlotSettings>).map((slot) => (
-          <label
-            key={slot}
-            className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]"
-          >
+          <label key={slot} className="flex flex-col gap-2 text-sm font-medium text-foreground">
             {SLOT_LABELS[slot]}
             <input
               type="number"
@@ -184,7 +179,7 @@ export function ScoringSettingsPanel({
                   },
                 })
               }
-              className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
             />
           </label>
         ))}
@@ -192,10 +187,7 @@ export function ScoringSettingsPanel({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {value.categories.map((category) => (
-          <label
-            key={category}
-            className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]"
-          >
+          <label key={category} className="flex flex-col gap-2 text-sm font-medium text-foreground">
             {FANTASY_CATEGORIES[category]?.label ?? category}
             <select
               value={value.categoryDirections[category] ?? 'HIGH_WINS'}
@@ -209,7 +201,7 @@ export function ScoringSettingsPanel({
                   },
                 })
               }
-              className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
             >
               <option value="HIGH_WINS">Higher wins</option>
               <option value="LOW_WINS">Lower wins</option>

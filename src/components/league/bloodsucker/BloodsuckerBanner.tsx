@@ -7,9 +7,9 @@ import type { BloodsuckerSummaryView } from './useBloodsuckerSummary';
 
 type Bite = BloodsuckerSummaryView['bites'][number];
 
-const MUTED = 'text-sm text-[color:var(--league-text-muted)]';
+const MUTED = 'text-sm text-muted-foreground';
 const FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2';
 
 /**
  * The Bloodsucker banner (BR-40, #1343): who the Bloodsucker is, its record, and every bite this
@@ -32,7 +32,7 @@ export function BloodsuckerBanner({
     return failed && !compact ? (
       <section
         aria-label="Bloodsucker"
-        className={`rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 ${MUTED}`}
+        className={`rounded-lg border border-border bg-card p-4 ${MUTED}`}
       >
         The Bloodsucker&apos;s record could not load. Refresh to try again.
       </section>
@@ -50,11 +50,11 @@ export function BloodsuckerBanner({
   return (
     <section
       aria-labelledby="bloodsucker-banner-title"
-      className={`rounded-lg border border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)] text-[color:var(--league-text)] ${compact ? 'p-3' : 'p-4 sm:p-5'}`}
+      className={`rounded-lg border border-destructive-text bg-destructive-soft text-foreground ${compact ? 'p-3' : 'p-4 sm:p-5'}`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-danger)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-destructive-text">
             Bloodsucker league
           </p>
           <h2
@@ -93,7 +93,7 @@ export function BloodsuckerBanner({
           <Link
             key={bite.biteId}
             href={biteHref(bite)}
-            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-[color:var(--league-danger)] px-4 text-sm font-semibold text-white ${FOCUS}`}
+            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-destructive-text px-4 text-sm font-semibold text-white ${FOCUS}`}
           >
             Bite {bite.victim.teamName} (round {bite.round})
           </Link>
@@ -106,7 +106,7 @@ export function BloodsuckerBanner({
           {bites.length === 0 ? (
             <p className={`mt-1 ${MUTED}`}>No bites yet.</p>
           ) : (
-            <ul className="mt-2 divide-y divide-[color:var(--league-border)] text-sm">
+            <ul className="mt-2 divide-y divide-border text-sm">
               {bites.map((bite) => (
                 <li
                   key={bite.biteId}
@@ -119,9 +119,7 @@ export function BloodsuckerBanner({
                       : `${bite.victim.teamName}: ${biteStatusLabel(bite.status).toLowerCase()}`}
                   </span>
                   {bite.takenPlayer ? (
-                    <span className="text-[color:var(--league-text-muted)]">
-                      {biteStatusLabel(bite.status)}
-                    </span>
+                    <span className="text-muted-foreground">{biteStatusLabel(bite.status)}</span>
                   ) : null}
                   {bite.commissionerActions.length > 0 ? (
                     <CommissionerLink href={biteHref(bite)} bite={bite} />

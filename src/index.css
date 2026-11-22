@@ -40,7 +40,9 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-text: var(--destructive-text);
+  --color-destructive-soft: var(--destructive-soft);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-result-win: var(--result-win);
   --color-result-win-foreground: var(--result-win-foreground);
   --color-result-loss: var(--result-loss);
@@ -51,9 +53,12 @@
   --color-result-draw-foreground: var(--result-draw-foreground);
   --color-brand-bar: var(--brand-bar);
   --color-brand-bar-foreground: var(--brand-bar-foreground);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-cobalt-deep: var(--brand-cobalt-deep);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-text: var(--warning-text);
+  --color-warning-soft: var(--warning-soft);
   --color-overlay: var(--overlay);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -146,12 +151,15 @@
   --destructive-foreground: #fff;
   /* Red words: brand red is 4.60 on stone, so text and small labels use this darker red (5.97). */
   --destructive-text: #a81919;
+  --destructive-soft: #fbeaea;
   /* Success keeps its own green so it stops following --result-win when results move to cobalt. */
   --success: #0e5a2b; /* 6.69 on stone, 6.25 on tint: passes the 5.5 small-label rule */
+  --success-soft: #f1f8f3;
   /* Sun: deadlines, your turn, selection. A fill with ink text only; amber words use --warning-text. */
   --warning: var(--brand-sun);
   --warning-foreground: var(--brand-ink);
   --warning-text: #7a4a06;
+  --warning-soft: #fdf3e7;
   /* Results: win solid cobalt, loss a white chip with an ink edge and ink letter, draw stone. Never
      green and red; always with W, L or D. Grounds redefine win (and draw on stone). */
   --result-win: var(--brand-cobalt);
@@ -182,27 +190,6 @@
   --sidebar-ring: oklch(0.708 0 0);
   --app-toolbar-height: 4rem;
   --app-shell-max-width: 2100px;
-
-  /* League workspace palette. Aliases of the core tokens: one palette app-wide, no
-     per-area colour schemes (see docs/product/design-principles.md). */
-  --league-page: var(--muted);
-  --league-surface: var(--card);
-  --league-surface-muted: var(--muted);
-  --league-border: var(--border);
-  --league-text: var(--foreground);
-  --league-text-muted: var(--muted-foreground);
-  --league-primary: var(--brand-bar);
-  --league-primary-foreground: var(--brand-bar-foreground);
-  --league-primary-hover: var(--brand-cobalt-deep);
-  --league-primary-soft: var(--brand-tint);
-  --league-accent: var(--brand-bar);
-  --league-accent-soft: var(--brand-tint);
-  --league-success: var(--success);
-  --league-success-soft: #f1f8f3;
-  --league-warning: var(--warning-text);
-  --league-warning-soft: #fdf3e7;
-  --league-danger: var(--destructive-text);
-  --league-danger-soft: #fbeaea;
 
   /* Draft broadcast palette */
   /*
@@ -286,21 +273,21 @@
 
 .league-social {
   --social-brand-strong: var(--brand-cobalt);
-  --social-brand-foreground: var(--league-primary-foreground);
+  --social-brand-foreground: var(--brand-bar-foreground);
   --social-header-muted: var(--brand-tint);
   --social-header-control-hover: rgb(255 255 255 / 12%);
   --social-header-control-pressed: rgb(255 255 255 / 20%);
   --social-action: var(--brand-cobalt);
   --social-action-hover: var(--brand-cobalt-deep);
   --social-action-pressed: var(--brand-ink);
-  --social-action-foreground: var(--league-primary-foreground);
+  --social-action-foreground: var(--brand-bar-foreground);
   /* Ink, not cobalt: your own bubbles and the header are cobalt, so a cobalt ring would vanish on
      them. Ink holds 18.9:1 on white; rings drawn on a cobalt fill use the bubble's own text colour. */
   --social-focus: var(--brand-ink);
   --social-brand-soft: var(--secondary);
   --social-canvas: #eef2f6;
   --social-surface: var(--background);
-  --social-surface-subtle: var(--league-primary-soft);
+  --social-surface-subtle: var(--brand-tint);
   --social-border: var(--border);
   --social-border-strong: #aeb7c7;
   --social-text: var(--foreground);
@@ -308,14 +295,14 @@
   --social-text-muted: #545b64;
   --social-disabled-bg: var(--muted);
   --social-disabled-text: var(--muted-foreground);
-  --social-success: var(--league-success);
-  --social-success-soft: var(--league-success-soft);
-  --social-warning: var(--league-warning);
+  --social-success: var(--success);
+  --social-success-soft: var(--success-soft);
+  --social-warning: var(--warning-text);
   --social-warning-text: #684100;
-  --social-warning-soft: var(--league-warning-soft);
-  --social-error: var(--league-danger);
-  --social-error-foreground: var(--league-primary-foreground);
-  --social-error-soft: var(--league-danger-soft);
+  --social-warning-soft: var(--warning-soft);
+  --social-error: var(--destructive-text);
+  --social-error-foreground: var(--brand-bar-foreground);
+  --social-error-soft: var(--destructive-soft);
   /* A mention is a cobalt outline (--social-link) and the @name in a cobalt pill. */
   --social-mention-pill: var(--brand-cobalt);
   --social-mention-pill-text: #fff;
@@ -331,7 +318,7 @@
 /* Grounds (docs/product/style-guide.md, "Grounds"). A ground sets the roles components read, so a
    button, link or focus ring inside it is right by construction. In the components layer so a
    utility on the same element still wins. Only these roles follow a ground: :root aliases such as
-   --league-*, --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
+   --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
    --input, --field* and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
    .ground-white. Status words: --warning-text, --success and --destructive-text hold on all three
    light grounds (5.5 small-label rule). Results: win turns white on cobalt

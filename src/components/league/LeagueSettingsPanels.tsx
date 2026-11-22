@@ -605,7 +605,7 @@ export function TeamSettingsPanel({
 
   if (!currentMember) {
     return (
-      <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 text-sm text-[color:var(--league-text-muted)]">
+      <div className="rounded-lg border border-border bg-card p-5 text-sm text-muted-foreground">
         Join this league to manage team settings.
       </div>
     );
@@ -614,8 +614,8 @@ export function TeamSettingsPanel({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold text-[color:var(--league-text)]">Team Settings</h2>
-        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+        <h2 className="text-xl font-semibold text-foreground">Team Settings</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Manage your team name, identity, and league notifications.
         </p>
       </div>
@@ -625,7 +625,7 @@ export function TeamSettingsPanel({
           role="status"
           className={`rounded-lg border px-4 py-3 text-sm ${
             teamSettingsMessage.type === 'success'
-              ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+              ? 'border-border bg-muted text-foreground'
               : 'border-red-200 bg-red-50 text-red-700'
           }`}
         >
@@ -633,20 +633,18 @@ export function TeamSettingsPanel({
         </div>
       )}
 
-      <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+      <section className="rounded-lg border border-border bg-card p-5">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
           <div>
-            <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-              Team details
-            </h3>
+            <h3 className="text-base font-semibold text-foreground">Team details</h3>
             <div className="mt-4 grid gap-4">
-              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
                 Team name
                 <input
                   type="text"
                   value={teamName}
                   onChange={(event) => setTeamName(event.target.value)}
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                 />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -660,13 +658,13 @@ export function TeamSettingsPanel({
                 ).map(([key, label]) => (
                   <label
                     key={key}
-                    className="flex min-h-10 items-center gap-3 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)]"
+                    className="flex min-h-10 items-center gap-3 rounded-md border border-border bg-muted px-3 text-sm font-medium text-foreground"
                   >
                     <input
                       type="checkbox"
                       checked={notificationSettings[key]}
                       onChange={(event) => updateNotificationSetting(key, event.target.checked)}
-                      className="size-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
+                      className="size-4 rounded border-border text-brand-bar focus:ring-brand-bar"
                     />
                     {label}
                   </label>
@@ -677,7 +675,7 @@ export function TeamSettingsPanel({
                   type="button"
                   onClick={() => void saveTeamSettings()}
                   disabled={isSavingTeamSettings}
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
                 >
                   {isSavingTeamSettings ? 'Saving...' : 'Save team settings'}
                 </button>
@@ -685,7 +683,7 @@ export function TeamSettingsPanel({
             </div>
           </div>
 
-          <div className="relative flex aspect-square w-full max-w-sm items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] shadow-sm">
+          <div className="relative flex aspect-square w-full max-w-sm items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted shadow-sm">
             {teamSymbolUrl ? (
               <img
                 src={teamSymbolUrl}
@@ -699,7 +697,7 @@ export function TeamSettingsPanel({
                 className="h-full w-full object-cover will-change-transform"
               />
             ) : (
-              <span className="text-5xl font-semibold text-[color:var(--league-text)]">
+              <span className="text-5xl font-semibold text-foreground">
                 {getTeamInitials(currentMember.teamName)}
               </span>
             )}
@@ -715,13 +713,11 @@ export function TeamSettingsPanel({
         </div>
       </section>
 
-      <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+      <section className="rounded-lg border border-border bg-card p-5">
         <div className="grid gap-6 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:items-start">
           <div>
-            <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-              Team identity
-            </h3>
-            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+            <h3 className="text-base font-semibold text-foreground">Team identity</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
               Position the image used for your team across {league.name}.
             </p>
           </div>
@@ -732,7 +728,7 @@ export function TeamSettingsPanel({
                 role="status"
                 className={`rounded-lg border px-4 py-3 text-sm ${
                   teamSymbolMessage.type === 'success'
-                    ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+                    ? 'border-border bg-muted text-foreground'
                     : 'border-red-200 bg-red-50 text-red-700'
                 }`}
               >
@@ -741,7 +737,7 @@ export function TeamSettingsPanel({
             )}
 
             <div className="grid gap-4">
-              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
                 Team symbol URL
                 <input
                   type="url"
@@ -751,18 +747,18 @@ export function TeamSettingsPanel({
                     setPendingTeamSymbolUploadDataUrl(null);
                     setTeamSymbolUrl(event.target.value);
                   }}
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                 />
               </label>
 
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
                   Upload team symbol
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     onChange={(event) => void handleTeamSymbolUpload(event.target.files?.[0])}
-                    className="block w-full text-sm text-[color:var(--league-text-muted)] file:mr-4 file:rounded-md file:border-0 file:bg-[color:var(--league-page)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--league-text)]"
+                    className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground"
                   />
                 </label>
                 <div className="flex gap-2">
@@ -770,7 +766,7 @@ export function TeamSettingsPanel({
                     type="button"
                     onClick={() => void saveTeamSymbol(teamSymbolUrl)}
                     disabled={isSavingTeamSymbol}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                    className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
                   >
                     {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
                   </button>
@@ -778,7 +774,7 @@ export function TeamSettingsPanel({
                     type="button"
                     onClick={() => void saveTeamSymbol('')}
                     disabled={isSavingTeamSymbol}
-                    className="inline-flex h-10 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-muted px-4 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
                   >
                     Clear
                   </button>
@@ -787,10 +783,10 @@ export function TeamSettingsPanel({
             </div>
 
             <div className="grid gap-4">
-              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
                 Zoom
                 <div className="flex items-center gap-3">
-                  <span className="w-10 text-xs text-[color:var(--league-text-muted)]">1x</span>
+                  <span className="w-10 text-xs text-muted-foreground">1x</span>
                   <input
                     type="range"
                     min={MIN_TEAM_SYMBOL_ZOOM}
@@ -800,17 +796,17 @@ export function TeamSettingsPanel({
                     onChange={(event) =>
                       setTeamSymbolZoom(getTeamLogoZoomValue(Number(event.target.value)))
                     }
-                    className="w-full accent-[color:var(--league-primary)]"
+                    className="w-full accent-brand-bar"
                   />
-                  <span className="w-12 text-right text-xs text-[color:var(--league-text-muted)]">
+                  <span className="w-12 text-right text-xs text-muted-foreground">
                     {teamSymbolZoom.toFixed(2)}x
                   </span>
                 </div>
               </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
                 Horizontal centre
                 <div className="flex items-center gap-3">
-                  <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Left</span>
+                  <span className="w-10 text-xs text-muted-foreground">Left</span>
                   <input
                     type="range"
                     min="0"
@@ -820,17 +816,15 @@ export function TeamSettingsPanel({
                     onChange={(event) =>
                       setTeamSymbolPositionX(getTeamLogoPositionValue(Number(event.target.value)))
                     }
-                    className="w-full accent-[color:var(--league-primary)]"
+                    className="w-full accent-brand-bar"
                   />
-                  <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
-                    Right
-                  </span>
+                  <span className="w-10 text-right text-xs text-muted-foreground">Right</span>
                 </div>
               </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
                 Vertical centre
                 <div className="flex items-center gap-3">
-                  <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Top</span>
+                  <span className="w-10 text-xs text-muted-foreground">Top</span>
                   <input
                     type="range"
                     min="0"
@@ -840,11 +834,9 @@ export function TeamSettingsPanel({
                     onChange={(event) =>
                       setTeamSymbolPositionY(getTeamLogoPositionValue(Number(event.target.value)))
                     }
-                    className="w-full accent-[color:var(--league-primary)]"
+                    className="w-full accent-brand-bar"
                   />
-                  <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
-                    Bottom
-                  </span>
+                  <span className="w-10 text-right text-xs text-muted-foreground">Bottom</span>
                 </div>
               </label>
             </div>
@@ -1057,13 +1049,13 @@ export function LeagueSettingsPanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[color:var(--league-text)]">League Settings</h2>
-          <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+          <h2 className="text-xl font-semibold text-foreground">League Settings</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             {isAdmin ? 'Commissioner controls' : 'Read-only league settings'}
           </p>
         </div>
         {isLoading && (
-          <span className="rounded-full border border-[color:var(--league-border)] px-3 py-1 text-sm text-[color:var(--league-text-muted)]">
+          <span className="rounded-full border border-border px-3 py-1 text-sm text-muted-foreground">
             Loading
           </span>
         )}
@@ -1074,7 +1066,7 @@ export function LeagueSettingsPanel({
           role="status"
           className={`rounded-lg border px-4 py-3 text-sm ${
             message.type === 'success'
-              ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+              ? 'border-border bg-muted text-foreground'
               : 'border-destructive/20 bg-destructive/10 text-destructive-text'
           }`}
         >
@@ -1083,30 +1075,28 @@ export function LeagueSettingsPanel({
       )}
 
       <fieldset disabled={!isAdmin || isSaving} className="flex flex-col gap-6 disabled:opacity-75">
-        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-            Basic Information
-          </h3>
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h3 className="text-base font-semibold text-foreground">Basic Information</h3>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               League Name
               <input
                 type="text"
                 value={settings.league.name}
                 onChange={(event) => updateLeagueSettings({ name: event.target.value })}
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:bg-[color:var(--league-surface-muted)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:bg-muted"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               League Code
               <input
                 type="text"
                 value={settings.league.code}
                 readOnly
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 font-mono text-[color:var(--league-text-muted)]"
+                className="h-10 rounded-md border border-border bg-muted px-3 font-mono text-muted-foreground"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Max Teams
               <input
                 type="number"
@@ -1118,20 +1108,20 @@ export function LeagueSettingsPanel({
                     maxTeams: Number.parseInt(event.target.value, 10) || MIN_LEAGUE_TEAMS,
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               />
             </label>
             <SeasonYearControl leagueId={league.id} currentUserId={currentUserId} />
-            <div className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <div className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Team Count
-              <div className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-3">
+              <div className="rounded-md border border-border bg-muted p-3">
                 <div className="flex items-center justify-between text-sm">
                   <span>{memberCount} teams filled</span>
                   <span>{settings.league.maxTeams} max</span>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-[color:var(--league-surface-muted)]">
+                <div className="mt-3 h-2 rounded-full bg-muted">
                   <div
-                    className="h-2 rounded-full bg-[color:var(--league-primary)]"
+                    className="h-2 rounded-full bg-brand-bar"
                     style={{ width: `${teamFillPercent}%` }}
                   />
                 </div>
@@ -1168,17 +1158,13 @@ export function LeagueSettingsPanel({
           onFixtureGenerationModeChange={updateFixtureGenerationMode}
         />
 
-        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-            Draft Settings
-          </h3>
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h3 className="text-base font-semibold text-foreground">Draft Settings</h3>
           {draftStructureLock && (
-            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-              {draftStructureLock}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{draftStructureLock}</p>
           )}
           <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Draft Date
               <input
                 type="datetime-local"
@@ -1186,10 +1172,10 @@ export function LeagueSettingsPanel({
                 onChange={(event) =>
                   updateDraftSettings({ draftDate: fromDateTimeLocalValue(event.target.value) })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Draft Type
               <select
                 value={settings.draft.draftType}
@@ -1199,13 +1185,13 @@ export function LeagueSettingsPanel({
                     draftType: event.target.value as LeagueSettingsDraftType,
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               >
                 <option value="snake">Snake</option>
                 <option value="linear">Linear</option>
               </select>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Pick Order
               <select
                 value={settings.draft.pickOrder}
@@ -1213,13 +1199,13 @@ export function LeagueSettingsPanel({
                 onChange={(event) =>
                   updateDraftSettings({ pickOrder: event.target.value as DraftPickOrderMode })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               >
                 <option value="random">Random</option>
                 <option value="manual">Manual</option>
               </select>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Time Per Pick
               <select
                 value={settings.draft.timePerPick}
@@ -1228,7 +1214,7 @@ export function LeagueSettingsPanel({
                     timePerPick: Number.parseInt(event.target.value, 10),
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               >
                 {TIME_PER_PICK_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1237,33 +1223,26 @@ export function LeagueSettingsPanel({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Time Zone
               <input
                 type="text"
                 value={settings.draft.timeZone}
                 onChange={(event) => updateDraftSettings({ timeZone: event.target.value })}
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               />
             </label>
           </div>
         </section>
 
-        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-            Roster Settings
-          </h3>
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h3 className="text-base font-semibold text-foreground">Roster Settings</h3>
           {draftStructureLock && (
-            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-              {draftStructureLock}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{draftStructureLock}</p>
           )}
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {POSITION_LIMIT_KEYS.map((key) => (
-              <label
-                key={key}
-                className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]"
-              >
+              <label key={key} className="flex flex-col gap-2 text-sm font-medium text-foreground">
                 {POSITION_LIMIT_LABELS[key]}
                 <input
                   type="number"
@@ -1274,28 +1253,26 @@ export function LeagueSettingsPanel({
                   onChange={(event) =>
                     updatePositionLimit(key, Number.parseInt(event.target.value, 10) || 0)
                   }
-                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                 />
               </label>
             ))}
           </div>
         </section>
 
-        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-            Auto-Pick And Waivers
-          </h3>
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h3 className="text-base font-semibold text-foreground">Auto-Pick And Waivers</h3>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <label className="flex min-h-10 items-center gap-3 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex min-h-10 items-center gap-3 text-sm font-medium text-foreground">
               <input
                 type="checkbox"
                 checked={settings.draft.autoPickRules.enabled}
                 onChange={(event) => updateAutoPickRules({ enabled: event.target.checked })}
-                className="size-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
+                className="size-4 rounded border-border text-brand-bar focus:ring-brand-bar"
               />
               Enable Auto-Pick
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Auto-Pick Strategy
               <select
                 value={settings.draft.autoPickRules.strategy}
@@ -1304,14 +1281,14 @@ export function LeagueSettingsPanel({
                     strategy: event.target.value as DraftAutoPickRules['strategy'],
                   })
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               >
                 <option value="queue-first">Queue first</option>
                 <option value="best-available">Best available</option>
                 <option value="fill-positions">Fill positions</option>
               </select>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               Waiver Rule
               <select
                 value={settings.waiver.waiverRule}
@@ -1324,7 +1301,7 @@ export function LeagueSettingsPanel({
                     },
                   }))
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               >
                 <option value="weekly" disabled={settings.format.leagueFormat === 'BLOODSUCKER'}>
                   Weekly
@@ -1332,7 +1309,7 @@ export function LeagueSettingsPanel({
                 <option value="rolling">Rolling</option>
               </select>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
               FAAB budget
               <input
                 type="number"
@@ -1352,9 +1329,9 @@ export function LeagueSettingsPanel({
                     },
                   }))
                 }
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                className="h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
               />
-              <span className="text-xs font-normal text-[color:var(--league-text-muted)]">
+              <span className="text-xs font-normal text-muted-foreground">
                 Leave blank to use waiver priority order.
               </span>
             </label>
@@ -1368,7 +1345,7 @@ export function LeagueSettingsPanel({
             type="button"
             onClick={() => void handleSaveSettings()}
             disabled={isSaving}
-            className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
           >
             {isSaving ? 'Saving...' : 'Save league settings'}
           </button>

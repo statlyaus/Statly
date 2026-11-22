@@ -42,7 +42,7 @@ export default async function BitePage({
         select: { timeZone: true },
       });
       return (
-        <div className="min-h-screen bg-[color:var(--league-page)]">
+        <div className="min-h-screen bg-muted">
           <BitePicker
             leagueId={leagueId}
             userId={userId}
@@ -54,7 +54,7 @@ export default async function BitePage({
     }
     const review = await loadBiteReview({ leagueId, biteId, userId });
     return (
-      <div className="min-h-screen bg-[color:var(--league-page)]">
+      <div className="min-h-screen bg-muted">
         <BiteCommissionerPanel
           leagueId={leagueId}
           userId={userId}
@@ -66,7 +66,7 @@ export default async function BitePage({
     if (isRefusal(error, 'NOT_FOUND')) notFound();
     if (error instanceof BloodsuckerReadError) {
       return (
-        <div className="mx-auto max-w-xl px-4 py-10 text-[color:var(--league-text)]">
+        <div className="mx-auto max-w-xl px-4 py-10 text-foreground">
           <h1 className="text-xl font-semibold">This bite is not yours to change</h1>
           <p className="mt-2 text-sm">
             Only the Bloodsucker can make a bite, and only a commissioner can cancel or redo one (

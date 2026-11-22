@@ -154,26 +154,26 @@ export default function NewLeaguePage() {
   };
 
   return (
-      <div className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
+      <div className="min-h-screen bg-muted text-foreground">
         <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
-          <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
+          <section className="rounded-[28px] border border-border bg-card p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
             <button
               type="button"
               onClick={() => router.push('/dashboard#leagues')}
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-muted px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               Dashboard leagues
             </button>
 
             <header className="mt-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Commissioner setup
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                 Create a new league
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--league-text-muted)] sm:text-base">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                 Define the competition format, draft controls, and waiver defaults before you invite
                 managers.
               </p>
@@ -183,10 +183,10 @@ export default function NewLeaguePage() {
               <div>
                 <label
                   htmlFor="leagueName"
-                  className="flex items-center gap-2 text-sm font-semibold text-[color:var(--league-text)]"
+                  className="flex items-center gap-2 text-sm font-semibold text-foreground"
                 >
                   League name
-                  <span className="text-xs font-medium text-[color:var(--league-text-muted)]">
+                  <span className="text-xs font-medium text-muted-foreground">
                     Required
                   </span>
                 </label>
@@ -212,14 +212,14 @@ export default function NewLeaguePage() {
                   }
                   placeholder="e.g. Statly Premier League"
                   className={cn(
-                    'mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20',
+                    'mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20',
                     visibleLeagueNameError &&
-                      'border-[color:var(--league-danger)] focus:border-[color:var(--league-danger)] focus:ring-[color:var(--league-danger)]/20'
+                      'border-destructive-text focus:border-destructive-text focus:ring-destructive-text/20'
                   )}
                 />
                 <p
                   id="leagueName-help"
-                  className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]"
+                  className="mt-2 text-xs leading-5 text-muted-foreground"
                 >
                   Use 3 to {LEAGUE_NAME_MAX_LENGTH} characters so managers can recognise the league.
                 </p>
@@ -227,7 +227,7 @@ export default function NewLeaguePage() {
                   <p
                     id="leagueName-error"
                     role="alert"
-                    className="mt-1 text-sm font-medium text-[color:var(--league-danger)]"
+                    className="mt-1 text-sm font-medium text-destructive-text"
                   >
                     {visibleLeagueNameError}
                   </p>
@@ -238,7 +238,7 @@ export default function NewLeaguePage() {
                 <div>
                   <label
                     htmlFor="teamCount"
-                    className="text-sm font-semibold text-[color:var(--league-text)]"
+                    className="text-sm font-semibold text-foreground"
                   >
                     Number of teams
                   </label>
@@ -246,7 +246,7 @@ export default function NewLeaguePage() {
                     id="teamCount"
                     value={String(teamCount)}
                     onChange={(e) => setTeamCount(Number(e.target.value))}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                   >
                     {teamCounts.map((count) => (
                       <option key={count} value={String(count)}>
@@ -259,7 +259,7 @@ export default function NewLeaguePage() {
                 <div>
                   <label
                     htmlFor="scoringFormat"
-                    className="text-sm font-semibold text-[color:var(--league-text)]"
+                    className="text-sm font-semibold text-foreground"
                   >
                     Scoring format
                   </label>
@@ -267,7 +267,7 @@ export default function NewLeaguePage() {
                     id="scoringFormat"
                     value={scoringFormat}
                     onChange={(e) => setScoringFormat(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                   >
                     <option value="nine-category">9-category head-to-head</option>
                   </select>
@@ -277,7 +277,7 @@ export default function NewLeaguePage() {
               <div>
                 <label
                   htmlFor="leagueFormat"
-                  className="text-sm font-semibold text-[color:var(--league-text)]"
+                  className="text-sm font-semibold text-foreground"
                 >
                   League format
                 </label>
@@ -291,7 +291,7 @@ export default function NewLeaguePage() {
                     // A Bloodsucker league runs rolling waivers with no FAAB.
                     if (nextFormat === 'BLOODSUCKER') setWaiverRule('rolling');
                   }}
-                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                 >
                   {selectableLeagueFormatOptions().map((option) => (
                     <option key={option.value} value={option.value}>
@@ -301,7 +301,7 @@ export default function NewLeaguePage() {
                 </select>
                 <p
                   id="leagueFormat-help"
-                  className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]"
+                  className="mt-2 text-xs leading-5 text-muted-foreground"
                 >
                   {leagueFormat === 'BLOODSUCKER'
                     ? 'One manager skips the draft and takes a player from each team it beats. Needs at least 8 teams (12 recommended) and rolling waivers. Choose the Bloodsucker in league settings once managers join.'
@@ -330,7 +330,7 @@ export default function NewLeaguePage() {
                 <div>
                   <label
                     htmlFor="draftType"
-                    className="text-sm font-semibold text-[color:var(--league-text)]"
+                    className="text-sm font-semibold text-foreground"
                   >
                     Draft type
                   </label>
@@ -338,7 +338,7 @@ export default function NewLeaguePage() {
                     id="draftType"
                     value={draftType}
                     onChange={(e) => setDraftType(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                   >
                     <option value="snake">Snake</option>
                     <option value="linear">Linear</option>
@@ -348,7 +348,7 @@ export default function NewLeaguePage() {
                 <div>
                   <label
                     htmlFor="pickOrder"
-                    className="text-sm font-semibold text-[color:var(--league-text)]"
+                    className="text-sm font-semibold text-foreground"
                   >
                     Pick order
                   </label>
@@ -356,7 +356,7 @@ export default function NewLeaguePage() {
                     id="pickOrder"
                     value={pickOrder}
                     onChange={(e) => setPickOrder(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                   >
                     <option value="random">Random</option>
                     <option value="manual">Manual</option>
@@ -366,7 +366,7 @@ export default function NewLeaguePage() {
                 <div>
                   <label
                     htmlFor="waiverRule"
-                    className="text-sm font-semibold text-[color:var(--league-text)]"
+                    className="text-sm font-semibold text-foreground"
                   >
                     Waiver rule
                   </label>
@@ -374,7 +374,7 @@ export default function NewLeaguePage() {
                     id="waiverRule"
                     value={waiverRule}
                     onChange={(e) => setWaiverRule(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-field px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                   >
                     <option value="weekly" disabled={leagueFormat === 'BLOODSUCKER'}>
                       Weekly reset
@@ -387,7 +387,7 @@ export default function NewLeaguePage() {
               {validationIssue && (
                 <div
                   role="alert"
-                  className="flex items-start gap-3 rounded-2xl border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] px-4 py-3 text-sm text-[color:var(--league-danger)]"
+                  className="flex items-start gap-3 rounded-2xl border border-destructive-text/30 bg-destructive-soft px-4 py-3 text-sm text-destructive-text"
                 >
                   <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
                   <div>
@@ -404,17 +404,17 @@ export default function NewLeaguePage() {
               {error && (
                 <div
                   role="alert"
-                  className="rounded-2xl border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] px-4 py-3 text-sm font-medium text-[color:var(--league-danger)]"
+                  className="rounded-2xl border border-destructive-text/30 bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive-text"
                 >
                   {error}
                 </div>
               )}
 
-              <div className="flex flex-col gap-3 border-t border-[color:var(--league-border)] pt-5 sm:flex-row">
+              <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                   {isLoading ? 'Creating league' : 'Create league'}
@@ -422,7 +422,7 @@ export default function NewLeaguePage() {
                 <button
                   type="button"
                   onClick={() => router.push('/dashboard#leagues')}
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-border bg-muted px-5 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
                 >
                   Cancel
                 </button>
@@ -446,19 +446,19 @@ export default function NewLeaguePage() {
               return (
                 <div
                   key={item.label}
-                  className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]"
+                  className="rounded-[24px] border border-border bg-card p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-tint text-brand-bar">
                       <Icon className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)]">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         {item.label}
                       </p>
                       <p
                         className={cn(
-                          'mt-1 text-sm font-semibold text-[color:var(--league-text)]',
+                          'mt-1 text-sm font-semibold text-foreground',
                           !item.preserveCase && 'capitalize'
                         )}
                       >

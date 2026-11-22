@@ -916,7 +916,7 @@ export function LeagueMyTeamPanel({
                                         Player no longer in squad
                                       </span>
                                     ) : (
-                                      <span className="text-sm font-semibold text-[color:var(--league-warning)]">
+                                      <span className="text-sm font-semibold text-warning-text">
                                         Empty
                                       </span>
                                     )}
@@ -1314,7 +1314,7 @@ function OpponentText({ player, locked }: { player: SquadPlayer; locked: boolean
 
 function OpponentCell({ player, locked }: { player: SquadPlayer; locked: boolean }) {
   if (player.bye) {
-    return <span className="text-xs font-bold text-[color:var(--league-warning)]">BYE</span>;
+    return <span className="text-xs font-bold text-warning-text">BYE</span>;
   }
   const opponent = player.opponent ? getTeamAbbreviation(player.opponent) : null;
   const when = formatGameTime(player.gameStartsAt);
@@ -1532,7 +1532,7 @@ function ReadinessRow({
           {saveText ? (
             <p
               role="status"
-              className={`text-xs ${dirty ? 'font-semibold text-[color:var(--league-warning)]' : 'text-muted-foreground'}`}
+              className={`text-xs ${dirty ? 'font-semibold text-warning-text' : 'text-muted-foreground'}`}
             >
               {saveText}
             </p>
@@ -1570,11 +1570,7 @@ function ReadinessRow({
 
 function StatusDot({ tone, label }: { tone: 'good' | 'warn' | 'neutral'; label: string }) {
   const dot =
-    tone === 'good'
-      ? 'bg-success'
-      : tone === 'warn'
-        ? 'bg-[color:var(--league-warning)]'
-        : 'bg-muted-foreground';
+    tone === 'good' ? 'bg-success' : tone === 'warn' ? 'bg-warning-text' : 'bg-muted-foreground';
   return (
     <span className="inline-flex items-center gap-2 font-display text-lg font-bold text-foreground">
       <span aria-hidden="true" className={`size-2.5 rounded-full ${dot}`} />
