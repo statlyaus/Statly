@@ -28,4 +28,26 @@ describe('ConnectionStatus', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh draft room' }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
+
+  it('tells the manager picks still work once live updates stop retrying on a fresh board', () => {
+    const onReload = vi.fn();
+    render(
+      <ConnectionStatus status="reconnecting" liveUpdatesDown picksStillWork onReload={onReload} />
+    );
+
+    expect(screen.getByRole('status', { name: 'Live draft connection' })).toHaveTextContent(
+      'Live updates are down. Picks still work and the board refreshes every few seconds.'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reload to reconnect' }));
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not claim picks work when live updates are down and the board is out of date', () => {
+    render(<ConnectionStatus status="disconnected" liveUpdatesDown onReload={vi.fn()} />);
+
+    const status = screen.getByRole('status', { name: 'Live draft connection' });
+    expect(status).toHaveTextContent('Live updates are down. The board may be out of date.');
+    expect(status).not.toHaveTextContent('Picks still work');
+    expect(screen.getByRole('button', { name: 'Reload to reconnect' })).toBeInTheDocument();
+  });
 });

@@ -10,8 +10,9 @@ import React, {
   useRef,
 } from 'react';
 
-import { useSocket } from '@/contexts/SocketContext';
+import { useSocket, useSocketReconnectExhausted } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
+import { PERSISTED_PICK_BACKFILL_INTERVAL_MS } from '@/lib/draftBoardFreshness';
 import { getDraftPickCoordinate } from '@/lib/draftOrder';
 import {
   DraftClockPayloadSchema,
@@ -113,6 +114,8 @@ interface DraftState {
     generation?: number;
     draftId?: string;
     needsResync?: boolean;
+    /** When a database read (snapshot or persisted-pick backfill) last brought the board up to date. */
+    lastPersistedSyncAt?: number;
   };
   isLoading: boolean;
   isSaving: boolean;
@@ -146,6 +149,8 @@ interface DraftContextValue extends DraftState {
   toggleWatchlist: (playerId: string) => Promise<void>;
   isInWatchlist: (playerId: string) => boolean;
   forceRefresh: () => Promise<void>;
+  /** Live updates keep failing or are switched off, so the room offers a reload. */
+  liveUpdatesDown: boolean;
   setStatSeason: (season: number) => Promise<void>;
   canMakePick: boolean;
   /** On the clock in a live draft; unlike canMakePick it stays true while a pick is submitting. */
@@ -155,8 +160,10 @@ interface DraftContextValue extends DraftState {
 }
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
-const PERSISTED_PICK_BACKFILL_INTERVAL_MS = 5000;
 const PERSISTED_PICK_PAGE_SIZE = 200;
+// Without the socket, a scheduled room reads the draft back this often so a start made elsewhere
+// reaches it.
+const SCHEDULED_DRAFT_POLL_INTERVAL_MS = 15_000;
 
 /* -------------------------------- Utilities -------------------------------- */
 
@@ -1330,9 +1337,14 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
-    case 'SET_SNAPSHOT':
-      if (state.connection.protocol === 2) return state;
-      return applySnapshotState(state, action.snapshot);
+    case 'SET_SNAPSHOT': {
+      // A connected v2 socket owns the room. Once it drops, a database snapshot is the only way to
+      // clear a pending resync, so it applies like a persisted pick does.
+      if (state.connection.protocol === 2 && state.connection.status === 'connected') return state;
+      if (shouldIgnoreSnapshot(state, action.snapshot)) return { ...state, isLoading: false };
+      const next = mergeSnapshotState(state, action.snapshot);
+      return { ...next, connection: { ...next.connection, lastPersistedSyncAt: Date.now() } };
+    }
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,
@@ -1390,7 +1402,19 @@ function reducer(state: DraftState, action: Action): DraftState {
       const deltas = acceptsAllDeltas
         ? action.deltas
         : action.deltas.filter((delta) => delta.type === 'QUEUE_UPDATED');
-      for (const d of deltas) next = applyDelta(next, d);
+      // A persisted state patch that lands without opening a revision gap proves the board matches
+      // the database now, which keeps picks open while the socket is down.
+      let syncedFromDatabase = false;
+      for (const d of deltas) {
+        const applied = applyDelta(next, d);
+        if (action.source === 'persisted' && d.type === 'STATE_PATCH' && applied !== next) {
+          syncedFromDatabase = true;
+        }
+        next = applied;
+      }
+      if (syncedFromDatabase && !next.connection.needsResync) {
+        return { ...next, connection: { ...next.connection, lastPersistedSyncAt: Date.now() } };
+      }
       return next;
     }
     case 'APPLY_V2_COMMIT': {
@@ -1692,6 +1716,7 @@ export function DraftProvider({
   children: React.ReactNode;
 }) {
   const socket = useSocket();
+  const liveUpdatesDown = useSocketReconnectExhausted();
   const isMounted = useRef(true);
   const deltaQueueRef = useRef<DraftDelta[]>([]);
   const rafScheduledRef = useRef(false);
@@ -2001,35 +2026,53 @@ export function DraftProvider({
 
   /* ------------------------------- Action APIs ------------------------------ */
 
-  const forceRefresh = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', loading: true });
-    try {
-      const res = await fetchApi(`drafts/${draftId}`);
-      const snap = normalizeSnapshot(res?.data ?? res);
-      if (!isMounted.current) return;
-      dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
-      if (
-        snap.draft &&
-        shouldStartAvailablePlayerHydration(
-          snap.availablePlayers,
-          availablePlayersHydratingRef.current
-        )
-      ) {
-        await hydrateAvailablePlayers(state.statSeason);
+  // A silent refresh is a background poll: it keeps the room on screen, skips the player pool and
+  // the private queue and watchlist reloads, and leaves a failure to the next poll.
+  const refreshSnapshot = useCallback(
+    async (silent: boolean) => {
+      if (!silent) dispatch({ type: 'SET_LOADING', loading: true });
+      try {
+        const res = await fetchApi(`drafts/${draftId}`);
+        const snap = normalizeSnapshot(res?.data ?? res);
+        if (!isMounted.current) return;
+        dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
+        if (
+          !silent &&
+          snap.draft &&
+          shouldStartAvailablePlayerHydration(
+            snap.availablePlayers,
+            availablePlayersHydratingRef.current
+          )
+        ) {
+          await hydrateAvailablePlayers(state.statSeason);
+        }
+        if (memberId && !silent) {
+          await hydratePrivateDraftState(memberId);
+        }
+      } catch (err: any) {
+        if (!isMounted.current || silent) return;
+        dispatch({
+          type: 'SET_ERROR',
+          error: err?.message ?? 'Failed to refresh draft state',
+        });
+      } finally {
+        if (isMounted.current && !silent) dispatch({ type: 'SET_LOADING', loading: false });
       }
-      if (memberId) {
-        await hydratePrivateDraftState(memberId);
-      }
-    } catch (err: any) {
-      if (!isMounted.current) return;
-      dispatch({
-        type: 'SET_ERROR',
-        error: err?.message ?? 'Failed to refresh draft state',
-      });
-    } finally {
-      if (isMounted.current) dispatch({ type: 'SET_LOADING', loading: false });
-    }
-  }, [draftId, hydrateAvailablePlayers, hydratePrivateDraftState, memberId, state.statSeason]);
+    },
+    [draftId, hydrateAvailablePlayers, hydratePrivateDraftState, memberId, state.statSeason]
+  );
+
+  const forceRefresh = useCallback(() => refreshSnapshot(false), [refreshSnapshot]);
+
+  const isScheduled = String(state.draft?.status ?? '').toUpperCase() === 'SCHEDULED';
+  const socketConnected = state.connection.status === 'connected';
+  useEffect(() => {
+    if (!isScheduled || socketConnected) return;
+    const intervalId = window.setInterval(() => {
+      void refreshSnapshot(true);
+    }, SCHEDULED_DRAFT_POLL_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [isScheduled, refreshSnapshot, socketConnected]);
 
   useEffect(() => {
     if (!state.connection.needsResync) return;
@@ -2508,6 +2551,7 @@ export function DraftProvider({
       toggleWatchlist,
       isInWatchlist,
       forceRefresh,
+      liveUpdatesDown,
       setStatSeason,
       canMakePick,
       isYourTurn,
@@ -2523,6 +2567,7 @@ export function DraftProvider({
       draftId,
       forceRefresh,
       isInWatchlist,
+      liveUpdatesDown,
       makePick,
       removeFromWatchlist,
       setStatSeason,
@@ -2538,6 +2583,9 @@ export function DraftProvider({
 }
 
 /* ---------------------------------- Hook ----------------------------------- */
+
+// Exported for reducer tests.
+export { reducer as draftReducer, normalizeSnapshot as normalizeDraftSnapshot };
 
 export function useDraft(): DraftContextValue {
   const ctx = useContext(DraftContext);

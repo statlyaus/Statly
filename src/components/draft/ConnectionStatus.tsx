@@ -3,6 +3,11 @@
 interface ConnectionStatusProps {
   status: 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
   onRefresh?: () => void;
+  /** Live updates keep failing (or are switched off), so the room offers a reload. */
+  liveUpdatesDown?: boolean;
+  /** The board is kept current by database reads, so picking is still safe. */
+  picksStillWork?: boolean;
+  onReload?: () => void;
 }
 
 const SPINNER = (
@@ -51,9 +56,45 @@ const STATUS_CONFIG = {
   },
 } as const;
 
-export default function ConnectionStatus({ status, onRefresh }: ConnectionStatusProps) {
+const BUTTON_CLASS =
+  'inline-flex min-h-11 items-center rounded-cut border border-foreground bg-card px-3 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground';
+
+export default function ConnectionStatus({
+  status,
+  onRefresh,
+  liveUpdatesDown = false,
+  picksStillWork = false,
+  onReload,
+}: ConnectionStatusProps) {
   if (status === 'connected') {
     return null;
+  }
+
+  if (liveUpdatesDown) {
+    return (
+      <div
+        role="status"
+        aria-label="Live draft connection"
+        aria-live="polite"
+        className={`flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 border-b-2 bg-card px-4 py-2 text-sm ${
+          picksStillWork
+            ? 'border-warning-text text-warning-text'
+            : 'border-destructive-text text-destructive-text'
+        }`}
+      >
+        {WARNING_ICON}
+        <span className="font-medium text-foreground">
+          {picksStillWork
+            ? 'Live updates are down. Picks still work and the board refreshes every few seconds.'
+            : 'Live updates are down. The board may be out of date.'}
+        </span>
+        {onReload ? (
+          <button type="button" onClick={onReload} className={BUTTON_CLASS}>
+            Reload to reconnect
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   const config = STATUS_CONFIG[status];
@@ -72,7 +113,7 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
           type="button"
           onClick={onRefresh}
           aria-label="Refresh draft room"
-          className="inline-flex min-h-11 items-center rounded-cut border border-foreground bg-card px-3 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+          className={BUTTON_CLASS}
         >
           Refresh
         </button>

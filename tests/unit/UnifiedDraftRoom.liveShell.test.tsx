@@ -32,6 +32,7 @@ const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
   connectionStatus: 'connected' | 'reconnecting' | 'disconnected';
   needsResync: boolean;
+  lastPersistedSyncAt?: number;
   availablePlayers: DraftRoomPlayerFixture[];
   isSaving: boolean;
   canMakePick: boolean;
@@ -222,7 +223,11 @@ vi.mock('@/contexts/DraftContext', () => ({
     startFeedback: draftContext.startFeedback,
     dismissStartFeedback: dismissStartFeedbackSpy,
     startDraft: startDraftSpy,
-    connection: { status: draftContext.connectionStatus, needsResync: draftContext.needsResync },
+    connection: {
+      status: draftContext.connectionStatus,
+      needsResync: draftContext.needsResync,
+      lastPersistedSyncAt: draftContext.lastPersistedSyncAt,
+    },
     draft: {
       id: 'draft-1',
       name: 'Test AFL Champions League - LIVE',
@@ -308,6 +313,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
     draftContext.status = 'LIVE';
     draftContext.connectionStatus = 'connected';
     draftContext.needsResync = false;
+    draftContext.lastPersistedSyncAt = undefined;
     draftContext.isSaving = false;
     draftContext.canMakePick = false;
     draftContext.isYourTurn = false;
@@ -729,6 +735,19 @@ describe('UnifiedDraftRoom live shell composition', () => {
       expect(renderedClockPhase()).toBe('SYNCING');
     }
   );
+
+  it('lets the manager pick without the live socket while database reads keep the board current', () => {
+    draftContext.canMakePick = true;
+    draftContext.isYourTurn = true;
+    draftContext.connectionStatus = 'disconnected';
+    draftContext.lastPersistedSyncAt = Date.now();
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.queryByRole('status', { name: 'Pick availability' })).not.toBeInTheDocument();
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].canMakePick).toBe(true);
+    expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].canDraft).toBe(true);
+    expect(renderedClockPhase()).toBe('LIVE');
+  });
 
   it('does not offer Retry pick while the board is resyncing', () => {
     draftContext.canMakePick = true;
