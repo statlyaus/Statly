@@ -4842,10 +4842,17 @@ The remaining work proceeds through these independently verifiable gates:
    lists its selections (its v20 session claims are read from night-report boundaries and never
    count toward membership), a reviewed Footyinfo board may prove it instead (owner decision
    2026-10-14, issue 789; see
-   "Footyinfo national draft boards"); the outcome then names `draftProvenBy: footyinfo`. Another draft
-   needs a new owner decision. Within a draft an official session proves, every selection must carry
-   exactly one stated category: the rule before 2026-10-14, applied alone, so every official-proven
-   outcome is unchanged by construction. Within a board-proven draft, it is enough instead that every
+   "Footyinfo national draft boards"); the outcome then names `draftProvenBy: footyinfo`. For the
+   2026 national draft only, which has neither a listing page nor a board, its v21 night-report
+   ranges prove it when together they run 1 to N with no gap and no overlap and every number is a
+   candidate selection or an owner-reviewed re-listing (`source/reviewedDraftRelistings.ts`: Gold
+   Coast's 63 and 64, owner 2026-11-22). A re-listed number counts only while the night-two row the
+   list cites is in the source set; it is never a selection, so never a nominee, and it also closes
+   that number's gap in the session check for the boundary parser the registry names for the draft.
+   The outcome names `draftProvenBy: official_afl_sessions`. Another draft needs a new owner
+   decision. Within a draft an official session proves (or the night ranges prove), every selection
+   must carry exactly one stated category: the rule before 2026-10-14, applied alone, so every
+   official-proven outcome is unchanged by construction. Within a board-proven draft, it is enough instead that every
    selection names a resolved club and each of the receiving club's selections carries exactly one.
    A partial or disputed page therefore never yields a negative for a club whose rows it omits. The outcome cites
    the receiving club's year-page rows and, for the proof, its official session rows or its Footyinfo

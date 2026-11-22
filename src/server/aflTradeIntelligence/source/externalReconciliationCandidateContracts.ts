@@ -172,9 +172,11 @@ const pickOutcomeSchema = z
     boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
     /**
      * A reviewed Footyinfo board, not an official session, proved the draft's membership behind a
-     * count (owner decision 2026-10-14, issue 789). Absent when an official session proved it.
+     * count (owner decision 2026-10-14, issue 789); `official_afl_sessions` when the night reports'
+     * boundary ranges with the reviewed re-listings proved it (owner 2026-11-22). Absent when an
+     * enumerated official session proved it.
      */
-    draftProvenBy: z.literal('footyinfo').optional(),
+    draftProvenBy: z.enum(['footyinfo', 'official_afl_sessions']).optional(),
     /**
      * Issue 789 (2026-10-16): the board picks recording a receiving-club selection Draftguru marks
      * open as that club's matched bid, each counted as a nominee.
