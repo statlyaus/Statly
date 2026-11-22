@@ -79,8 +79,8 @@ const focusRing =
 export default async function HomePage(): Promise<ReactElement> {
   const trades = await publicTradeStoryReads.listStories();
   return (
-    // The paper surface (style guide, "Grounds") changes only the page and quiet panels; the hero,
-    // record deal and tower paint their own story collage grounds over it.
+    // The paper surface (style guide, "Grounds") changes only the page and quiet panels; the hero
+    // and record deal paint their own story collage grounds over it.
     <div
       className={trades.available ? 'bg-background text-foreground' : 'bg-muted text-foreground'}
       data-surface={trades.available ? 'paper' : undefined}
