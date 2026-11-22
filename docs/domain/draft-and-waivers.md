@@ -158,11 +158,13 @@ HTTP hydration and Socket.IO reconnects expose the same discriminated clock payl
 - every payload includes the scheduling revision and a server-time anchor.
 
 The browser interpolates a LIVE deadline once per second for display. Missing clock anchors render as
-syncing, local zero renders as finalizing, and neither state initiates an auto-pick. While the room's
-connection is not `connected` or a resync is pending, the board may be out of date: the room treats the
-clock anchors as missing, so the clock renders as syncing rather than counting, and it disables Select
-and Draft with the reason "Reconnecting. Picks are paused until the board is up to date." The server
-clock is unaffected and keeps running. Pause freezes the
+syncing, local zero renders as finalizing, and neither state initiates an auto-pick. The board may be
+out of date while a resync is pending, or while the live socket is not `connected` and no database read
+(a snapshot or the 5-second persisted-pick poll) has landed in the last two poll intervals. Then the
+room treats the clock anchors as missing, so the clock renders as syncing rather than counting, and it
+disables Select and Draft with the reason "Reconnecting. Picks are paused until the board is up to
+date." A room kept current by those reads stays pickable without the socket: the server still rejects
+an out-of-turn or taken pick. The server clock is unaffected and keeps running. Pause freezes the
 persisted remainder. A reconnect snapshot is applied by revision without clearing an already hydrated
 player catalogue, then events after the snapshot boundary are replayed. Revision gaps force a fresh
 persisted snapshot.
@@ -177,7 +179,12 @@ its acknowledgement. Current turn, drafted players, roster projection, queue sta
 converge without relying on the previously open tab.
 
 Persisted reconciliation remains active in both LIVE and PAUSED states so a missed resume event cannot
-strand the room on a frozen clock. Because shared snapshots omit private strategy state, every winning
+strand the room on a frozen clock. Without the socket, a SCHEDULED room also reads the draft back every 15
+seconds, in the background, so a start made elsewhere reaches it. A v2 room whose socket dropped
+accepts a database snapshot, so a pending resync can clear. While live updates keep failing (five failed
+attempts in a row, a handshake refused after a token refresh, or realtime switched off), the room says
+"Live updates are down" with a "Reload to reconnect" button, and adds that picks still work only while
+the board is current. Because shared snapshots omit private strategy state, every winning
 socket baseline also refreshes the authenticated member's queue and watchlist through scoped HTTP
 routes. Hydration requests are generation-ordered and cancellable: an older response cannot overwrite
 a newer reconnect, visibility refresh, or successful mutation.

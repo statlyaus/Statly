@@ -13,6 +13,9 @@ interface Props {
 }
 
 const SocketContext = createContext<Socket | null>(null);
+// True while live updates keep failing: realtime is switched off, the connection failed five
+// times in a row, or the server refused the handshake after a token refresh. Cleared on connect.
+const SocketReconnectExhaustedContext = createContext(false);
 const SOCKET_AUTH_RETRY_DELAY_MS = 250;
 const SOCKET_AUTH_RETRY_ATTEMPTS = 16;
 // Socket.IO retries transport failures itself; report only a connection that keeps failing.
@@ -62,12 +65,15 @@ async function resolveSocketAuthTokenWithRetry(
 
 export function SocketProvider({ uid, children }: Props): React.JSX.Element {
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [reconnectExhausted, setReconnectExhausted] = useState(false);
 
   useEffect(() => {
     if (isSocketDisabled()) {
       setSocket(null);
+      setReconnectExhausted(true);
       return;
     }
+    setReconnectExhausted(false);
 
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3002';
     let cancelled = false;
@@ -83,6 +89,7 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
 
         if (!token) {
           captureException(new Error('Socket auth token unavailable'));
+          setReconnectExhausted(true);
           return;
         }
 
@@ -116,6 +123,7 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
           consecutiveFailures = 0;
           refreshedAfterRejection = false;
           failureReported = false;
+          setReconnectExhausted(false);
         });
 
         s.on('connect_error', (err) => {
@@ -129,12 +137,14 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
               return;
             }
             reportPersistentFailure(err);
+            setReconnectExhausted(true);
             return;
           }
 
           consecutiveFailures += 1;
           if (consecutiveFailures >= SOCKET_FAILURES_BEFORE_REPORT) {
             reportPersistentFailure(err);
+            setReconnectExhausted(true);
           }
         });
 
@@ -151,6 +161,7 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
         };
       } catch (err) {
         captureException(err);
+        setReconnectExhausted(true);
       }
     };
 
@@ -164,11 +175,21 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
     };
   }, [uid]);
 
-  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
+  return (
+    <SocketContext.Provider value={socket}>
+      <SocketReconnectExhaustedContext.Provider value={reconnectExhausted}>
+        {children}
+      </SocketReconnectExhaustedContext.Provider>
+    </SocketContext.Provider>
+  );
 }
 
 export function useSocket(): Socket | null {
   return useContext(SocketContext);
+}
+
+export function useSocketReconnectExhausted(): boolean {
+  return useContext(SocketReconnectExhaustedContext);
 }
 
 export function useSocketChannel<T>(channel: string, handler: (data: T) => void): void {

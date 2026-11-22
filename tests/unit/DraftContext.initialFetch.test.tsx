@@ -11,6 +11,7 @@ const { fetchApi, socketState } = vi.hoisted(() => ({
 
 vi.mock('@/contexts/SocketContext', () => ({
   useSocket: () => socketState.current,
+  useSocketReconnectExhausted: () => false,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -2301,6 +2302,91 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
     expect(screen.getByTestId('player-count')).toHaveTextContent('0');
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
+  });
+
+  it('polls a scheduled draft without the socket so a start made elsewhere arrives, without blanking the room', async () => {
+    vi.useFakeTimers();
+    let resolveRefresh: (value: unknown) => void = () => {};
+    fetchApi.mockImplementation((endpoint: string) => {
+      if (endpoint === 'drafts/draft-1') {
+        return new Promise((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Scheduled Draft',
+            leagueId: 'league-1',
+            status: 'SCHEDULED',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          picks: [],
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              statlyZScore: 0,
+            },
+          ] as any,
+          ts: Date.parse('2026-06-07T00:00:00.000Z'),
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(14_999);
+    });
+    expect(fetchApi).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(fetchApi).toHaveBeenCalledWith('drafts/draft-1');
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+
+    await act(async () => {
+      resolveRefresh({
+        success: true,
+        data: {
+          id: 'draft-1',
+          name: 'Started Draft',
+          leagueId: 'league-1',
+          status: 'LIVE',
+          currentPick: 1,
+          totalPicks: 2,
+          round: 1,
+          direction: 'FORWARD',
+          participants: [],
+          picks: [],
+          ts: Date.parse('2026-06-07T00:01:00.000Z'),
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('Started Draft');
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    // A background poll does not reload the player pool the manager is browsing.
+    expect(fetchApi).not.toHaveBeenCalledWith(
+      expect.stringContaining('/players'),
+      expect.anything()
+    );
   });
 
   it('applies persisted pick backfill after a v2 socket drops', async () => {
