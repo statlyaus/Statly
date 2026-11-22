@@ -14,15 +14,15 @@ export const TRADE_STATUS_LABELS: Record<LeagueTradeDto['status'], string> = {
 
 /** Status dot colour. The label always carries the meaning; the dot only reinforces it. */
 const STATUS_DOT: Record<LeagueTradeDto['status'], string> = {
-  PENDING: 'bg-[color:var(--trade-warning)]',
-  ACCEPTED_PENDING_REVIEW: 'bg-[color:var(--trade-warning)]',
-  COMPLETED: 'bg-[color:var(--trade-positive)]',
-  DECLINED: 'bg-[color:var(--trade-text-muted)]',
-  WITHDRAWN: 'bg-[color:var(--trade-text-muted)]',
-  COMMISSIONER_REJECTED: 'bg-[color:var(--trade-negative)]',
-  VETOED: 'bg-[color:var(--trade-negative)]',
-  EXPIRED: 'bg-[color:var(--trade-text-muted)]',
-  FAILED: 'bg-[color:var(--trade-negative)]',
+  PENDING: 'bg-warning-text',
+  ACCEPTED_PENDING_REVIEW: 'bg-warning-text',
+  COMPLETED: 'bg-success',
+  DECLINED: 'bg-muted-foreground',
+  WITHDRAWN: 'bg-muted-foreground',
+  COMMISSIONER_REJECTED: 'bg-destructive',
+  VETOED: 'bg-destructive',
+  EXPIRED: 'bg-muted-foreground',
+  FAILED: 'bg-destructive',
 };
 
 export function TradeOfferStatus({
@@ -31,7 +31,7 @@ export function TradeOfferStatus({
   status: LeagueTradeDto['status'];
 }): React.JSX.Element {
   return (
-    <span className="inline-flex w-fit shrink-0 items-center gap-1.5 text-xs font-semibold text-[color:var(--trade-text)]">
+    <span className="inline-flex w-fit shrink-0 items-center gap-1.5 text-xs font-semibold text-foreground">
       <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
       {TRADE_STATUS_LABELS[status]}
     </span>

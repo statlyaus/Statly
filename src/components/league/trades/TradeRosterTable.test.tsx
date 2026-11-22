@@ -161,8 +161,8 @@ describe('TradeRosterTable', () => {
     const aliceHeader = within(aliceRow).getByRole('rowheader');
     expect(aliceRow).toHaveClass('cursor-default');
     expect(aliceRow).not.toHaveClass('cursor-pointer');
-    expect(aliceHeader).not.toHaveClass('group-hover:bg-[color:var(--trade-surface-subtle)]');
-    expect(aliceRow).not.toHaveClass('hover:bg-[color:var(--trade-surface-subtle)]');
+    expect(aliceHeader).not.toHaveClass('group-hover:bg-muted');
+    expect(aliceRow).not.toHaveClass('hover:bg-muted');
 
     await user.click(aliceRow);
     await user.click(screen.getByRole('checkbox', { name: /Alice Able/ }));
@@ -252,13 +252,10 @@ describe('TradeRosterTable', () => {
     const aliceCheckbox = within(aliceRow).getByRole('checkbox', { name: /Alice Able/ });
     const playerSort = screen.getByRole('button', { name: /Player.*sorted A to Z/i });
 
-    expect(aliceRow).toHaveClass('bg-[color:var(--trade-selection-soft)]');
-    expect(aliceHeader).toHaveClass(
-      'border-l-[color:var(--trade-selection)]',
-      'bg-[color:var(--trade-selection-soft)]'
-    );
-    expect(aliceCheckbox).toHaveClass('accent-[var(--trade-selection)]');
-    expect(playerSort.querySelector('svg')).toHaveClass('text-[color:var(--trade-selection)]');
+    expect(aliceRow).toHaveClass('bg-accent');
+    expect(aliceHeader).toHaveClass('bg-accent');
+    expect(aliceCheckbox).toHaveClass('accent-primary');
+    expect(playerSort.querySelector('svg')).toHaveClass('text-primary');
   });
 
   it('preserves controlled selection through sorting and filtering', async () => {

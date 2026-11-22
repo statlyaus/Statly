@@ -103,15 +103,12 @@ describe('TradeComparisonTable', () => {
       within(within(table).getByRole('row', { name: /Goals/ })).getByText('+2.0')
     ).toBeInTheDocument();
     const gained = within(within(table).getByRole('row', { name: /Goals/ })).getByText('Up');
-    expect(gained.previousElementSibling).toHaveClass(
-      'font-bold',
-      'text-[color:var(--trade-text)]'
-    );
+    expect(gained.previousElementSibling).toHaveClass('font-bold', 'text-foreground');
     expect(
       within(within(table).getByRole('row', { name: /Clangers/ })).getByText('−2.0')
     ).toBeInTheDocument();
     const lost = within(within(table).getByRole('row', { name: /Clangers/ })).getByText('Down');
-    expect(lost.previousElementSibling).toHaveClass('font-bold', 'text-[color:var(--trade-text)]');
+    expect(lost.previousElementSibling).toHaveClass('font-bold', 'text-foreground');
     expect(
       within(within(table).getByRole('row', { name: /Marks/ })).getByText('Level')
     ).toBeInTheDocument();

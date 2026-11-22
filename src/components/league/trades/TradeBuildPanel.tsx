@@ -59,11 +59,11 @@ export function TradeBuildPanel({
         aria-expanded={sheetOpen}
         aria-controls="trade-build-panel-body"
         onClick={onToggleSheet}
-        className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-sm font-semibold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)] lg:hidden"
+        className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring lg:hidden"
       >
         <span>
           Your trade{' '}
-          <span className="font-normal text-[color:var(--trade-text-muted)]">
+          <span className="font-normal text-muted-foreground">
             · give {give.length} · get {get.length}
           </span>
         </span>
@@ -78,11 +78,11 @@ export function TradeBuildPanel({
         id="trade-build-panel-body"
         className={`${sheetOpen ? 'block' : 'hidden'} min-h-0 overflow-y-auto lg:block`}
       >
-        <header className="hidden h-12 items-center border-b border-[color:var(--trade-border)] px-4 lg:flex">
-          <h4 className="text-sm font-semibold text-[color:var(--trade-text)]">Your trade</h4>
+        <header className="hidden h-12 items-center border-b border-border px-4 lg:flex">
+          <h4 className="text-sm font-semibold text-foreground">Your trade</h4>
         </header>
 
-        <div className="divide-y divide-[color:var(--trade-border)]">
+        <div className="divide-y divide-border">
           <DealList
             title="You give"
             empty="Tick players on the You give tab."
@@ -112,7 +112,7 @@ export function TradeBuildPanel({
               <div className="px-4 py-3">
                 <TradeSquadImpact changes={squadChanges} showBasis={false} />
               </div>
-              <p className="px-4 py-2.5 text-xs text-[color:var(--trade-text-muted)]">
+              <p className="px-4 py-2.5 text-xs text-muted-foreground">
                 Per-game averages, {playerStats.context.season} season. Dual-position players count
                 in both.
               </p>
@@ -151,18 +151,18 @@ function DealList({
 }): React.JSX.Element {
   return (
     <section aria-label={title} className="min-w-0 px-4 py-3">
-      <h5 className="text-sm font-semibold text-[color:var(--trade-text)]">
+      <h5 className="text-sm font-semibold text-foreground">
         {title}
         {players.length > 0 ? (
-          <span className="ml-1.5 font-normal tabular-nums text-[color:var(--trade-text-muted)]">
+          <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
             {players.length}
           </span>
         ) : null}
       </h5>
       {players.length === 0 ? (
-        <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">{empty}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="mt-0.5 divide-y divide-[color:var(--trade-border)]">
+        <ul className="mt-0.5 divide-y divide-border">
           {players.map((player) => (
             <li key={player.id}>
               <TradePlayerChip

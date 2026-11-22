@@ -90,13 +90,11 @@ describe('persisted trade offer presentation', () => {
     });
 
     expect(within(outgoing).getByRole('heading', { name: 'You send' })).toHaveClass(
-      'text-[color:var(--trade-text)]'
+      'text-foreground'
     );
     expect(within(incoming).getByRole('heading', { name: 'You receive' })).toHaveClass(
-      'text-[color:var(--trade-text)]'
+      'text-foreground'
     );
-    expect(outgoing.outerHTML).not.toMatch(/trade-(?:send|receive)/);
-    expect(incoming.outerHTML).not.toMatch(/trade-(?:send|receive)/);
   });
 
   it.each([
@@ -107,10 +105,8 @@ describe('persisted trade offer presentation', () => {
     render(<TradeOfferStatus status={status} />);
 
     const label = screen.getByText(labelText);
-    expect(label).toHaveClass('text-[color:var(--trade-text)]');
+    expect(label).toHaveClass('text-foreground');
     const dot = label.querySelector('[aria-hidden="true"]');
-    expect(dot).toHaveClass(
-      status === 'FAILED' ? 'bg-[color:var(--trade-negative)]' : 'bg-[color:var(--trade-warning)]'
-    );
+    expect(dot).toHaveClass(status === 'FAILED' ? 'bg-destructive' : 'bg-warning-text');
   });
 });

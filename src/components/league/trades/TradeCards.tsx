@@ -38,9 +38,9 @@ export function TradeCards({
 
   if (trades.length === 0) {
     return (
-      <div className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] px-5 py-8 text-center">
-        <p className="text-sm font-bold text-[color:var(--trade-text)]">No offers</p>
-        <p className="mx-auto mt-1 max-w-md text-sm text-[color:var(--trade-text-muted)]">
+      <div className="border border-border bg-card px-5 py-8 text-center">
+        <p className="text-sm font-bold text-foreground">No offers</p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
           Offers you send or receive show here.
         </p>
       </div>
@@ -48,7 +48,7 @@ export function TradeCards({
   }
 
   return (
-    <div className="divide-y divide-[color:var(--trade-border)] overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]">
+    <div className="divide-y divide-border overflow-hidden border border-border bg-card">
       {trades.map((trade) => (
         <TradeOfferCard
           key={trade.id}

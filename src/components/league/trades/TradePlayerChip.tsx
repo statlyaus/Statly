@@ -33,9 +33,7 @@ export function TradePlayerChip({
       className={`flex min-w-0 items-center gap-2.5 ${
         bare
           ? 'py-2'
-          : `rounded-md border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] ${
-              compact ? 'py-1 pl-1.5 pr-1' : 'px-2.5 py-2'
-            }`
+          : ` border border-border bg-card ${compact ? 'py-1 pl-1.5 pr-1' : 'px-2.5 py-2'}`
       }`}
     >
       <GuernseyIcon
@@ -43,21 +41,19 @@ export function TradePlayerChip({
         className={compact ? 'h-7 w-6 shrink-0' : 'h-9 w-8 shrink-0'}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-[color:var(--trade-text)]">
+        <span className="block truncate text-sm font-semibold text-foreground">
           {compact ? (player.name.trim().split(/\s+/).at(-1) ?? player.name) : player.name}
         </span>
-        <span className="block truncate text-xs text-[color:var(--trade-text-muted)]">
+        <span className="block truncate text-xs text-muted-foreground">
           {[player.position, club].filter(Boolean).join(' · ')}
         </span>
       </span>
       {standout ? (
         <span className="shrink-0 text-right" title={`${standout.label} per game`}>
-          <span className="block text-sm font-bold tabular-nums text-[color:var(--trade-text)]">
+          <span className="block text-sm font-bold tabular-nums text-foreground">
             {standout.formatted}
           </span>
-          <span className="block text-[0.6875rem] text-[color:var(--trade-text-muted)]">
-            {standout.label}
-          </span>
+          <span className="block text-[0.6875rem] text-muted-foreground">{standout.label}</span>
         </span>
       ) : null}
       {onRemove ? (
@@ -65,7 +61,7 @@ export function TradePlayerChip({
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${player.name}`}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded text-[color:var(--trade-text-muted)] hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)]"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-cut text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X aria-hidden="true" className="size-4" />
         </button>
