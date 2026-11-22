@@ -61,11 +61,8 @@ type SketchKind = 'moneyball' | 'gridiron' | 'oval' | 'trade';
 
 function IntroWhat() {
   const facts: [string, string][] = [
-    ['Stands for', 'Player Approximate Value'],
-    ['Made by', 'HPN (Hurling People Now)'],
     ['First published', 'August 2017'],
     ['Built from', 'Public AFL stats'],
-    ['Named after', 'Matthew Pavlich, Fremantle'],
   ];
   const roots: [string, string, string, SketchKind, string][] = [
     [
@@ -73,7 +70,7 @@ function IntroWhat() {
       '1982 · Bill James, baseball',
       '',
       'moneyball',
-      'The stats thinking Moneyball made famous. James tried to put one rough number on what a player was worth.',
+      'James put one rough number on what a player was worth.',
     ],
     ['2008', 'Pro-Football-Reference', 'NFL', 'gridiron', 'Value split by position'],
     ['2017', 'HPN', 'AFL', 'oval', 'Rebuilt for footy'],
@@ -330,14 +327,6 @@ function Sketch({ kind }: { kind: SketchKind }) {
 function IntroWhy() {
   const points: [string, string][] = [
     [
-      'Team first',
-      "A player's value comes out of his club's value, so it is harder to earn value in a weak team than in a strong one.",
-    ],
-    [
-      'Same pot every season',
-      'The pot is always 100 per club for each part, so seasons from different years can sit side by side.',
-    ],
-    [
       'Checked against the experts',
       "HPN compared it with Brownlow votes, All-Australian teams, best and fairests and Champion Data's ratings. It largely agreed.",
     ],
@@ -383,9 +372,9 @@ function IntroUse() {
       head="What it does well"
       ground="ground-tint"
       items={[
-        'One measure for every player, position and year',
-        'Anyone can check it: public stats and a published formula',
-        'It counts a whole season, not one highlight',
+        'Works the same for every position and season',
+        'Public stats and a published formula, so anyone can check our numbers',
+        'Adds up every game of a season',
       ]}
     />
   );
@@ -917,9 +906,8 @@ function FinalView() {
       head="Keep in mind"
       ground="ground-stone"
       items={[
-        'A value marked * is not in yet, usually a pick whose path through the draft Statly has not confirmed. Totals leave it out, so they will change.',
+        'A value marked * is not in yet, usually a pick Statly has not traced through the draft. Totals leave it out until it is.',
         "These are Statly's numbers. No club or the AFL has endorsed them.",
-        'Club colours only: Statly does not use club logos.',
       ]}
     />
   );
@@ -931,7 +919,7 @@ function Misses() {
       head="Where it falls short"
       ground="ground-stone"
       items={[
-        'It is approximate: close calls between two players can go either way.',
+        'Close calls between two players can go either way.',
         "Pure shutdown defenders can be underrated. HPN's own example is Darren Glass.",
         'It is harder to earn value in a weak team than a strong one.',
         "It only sees the stats in its formula. Things like pressure acts and leadership aren't in it.",
