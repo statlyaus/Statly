@@ -198,9 +198,9 @@ A trade has two sides, not a good side and a bad side: trade charts never use gr
   `rounded-cut` on buttons and fields, `rounded-cut-float` on menus, dialogs, popovers, toasts and
   tooltips through `floatingStyles` (done 2026-11-20); chips and toggles move screen by screen.
   Never a neat rounded corner or a pill. The fantasy app's core pages are square (done 2026-11-21,
-  ticket 07). The public draft, methodology and AFL index route files are square (2026-11-22); the
-  shared draft hub components (`draftHubChrome.ts`, `DraftHubNav`, `DraftHubState`, the two
-  explorers) are not yet. The league and social pages are square (tickets 08 and 09, 2026-11-22); the chat
+  ticket 07). The public draft, methodology and AFL index route files and the shared draft hub components
+  (`draftHubChrome.ts`, `DraftHubNav`, `DraftHubState`, the explorers, the clubs directory, the club
+  history and the trade detail) are square (ticket 07p, 2026-11-22). The league and social pages are square (tickets 08 and 09, 2026-11-22); the chat
   launcher, chat panel, drawer and menus have the cut edge and the hard shadow. The trade centre
   and draft room are square too (tickets 10a and 10b).
 - **Lines:** each weight means one thing. Hairline for separation; 2.5px ink for buttons and floating

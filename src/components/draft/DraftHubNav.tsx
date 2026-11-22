@@ -51,7 +51,7 @@ export function DraftHubNav() {
           <Link
             key={section.href}
             href={section.href}
-            className={`flex min-h-11 min-w-0 items-center justify-center rounded-md px-3 py-2 text-center text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+            className={`flex min-h-11 min-w-0 items-center justify-center rounded-cut px-3 py-2 text-center text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
               section.active
                 ? 'bg-accent text-accent-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'

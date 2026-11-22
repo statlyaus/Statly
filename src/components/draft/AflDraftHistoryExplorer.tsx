@@ -73,7 +73,7 @@ function Lineage({ selection }: { selection: AflDraftHistorySelection }) {
         <Link
           key={trade.tradeId}
           href={`/draft/trades/${encodeURIComponent(trade.tradeId)}`}
-          className="block text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {trade.title}
         </Link>
@@ -90,7 +90,7 @@ function Lineage({ selection }: { selection: AflDraftHistorySelection }) {
 
 function MobileSelectionCard({ selection }: { selection: AflDraftHistorySelection }) {
   return (
-    <article className="rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm md:hidden">
+    <article className="border border-border bg-card p-4 text-card-foreground md:hidden">
       <div className="flex items-start justify-between gap-4">
         <div>
           <span className="text-xs font-semibold text-muted-foreground">
@@ -105,7 +105,7 @@ function MobileSelectionCard({ selection }: { selection: AflDraftHistorySelectio
           </p>
         </div>
         <span
-          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+          className={`border px-2.5 py-1 text-xs font-semibold ${
             selection.player.identityStatus === 'resolved'
               ? 'border-primary/25 bg-primary/10 text-foreground'
               : 'border-border bg-muted text-muted-foreground'
@@ -150,7 +150,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
     <div className="space-y-6">
       <section
         aria-labelledby="draft-history-overview-heading"
-        className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
+        className="overflow-hidden border border-border bg-card text-card-foreground"
       >
         <div className="border-b border-border bg-muted/40 px-5 py-5 sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -188,14 +188,14 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
           {filterNotice ? (
             <p
               role="status"
-              className="mb-5 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-foreground"
+              className="mb-5 border border-border bg-muted px-4 py-3 text-sm text-foreground"
             >
               {filterNotice}
             </p>
           ) : null}
 
           {!isActive ? (
-            <div role="status" className="rounded-xl border border-border bg-muted/40 p-5">
+            <div role="status" className="border border-border bg-muted/40 p-5">
               <h3 className="font-semibold text-foreground">Draft history is not activated</h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                 Statly will show selections only from one reviewed factual release. Missing or
@@ -206,7 +206,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
             <form
               action={`/draft/drafts/${query.year}`}
               method="get"
-              className="grid gap-4 rounded-xl border border-border bg-background p-4 sm:grid-cols-2 lg:grid-cols-5"
+              className="grid gap-4 border border-border bg-background p-4 sm:grid-cols-2 lg:grid-cols-5"
               aria-label="Filter AFL draft history"
             >
               <label className="text-sm font-medium text-foreground lg:col-span-2">
@@ -217,7 +217,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                   maxLength={160}
                   defaultValue={query.q}
                   placeholder="Search Harry Kyle or pick 14"
-                  className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-2 min-h-11 w-full rounded-cut border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </label>
               <label className="text-sm font-medium text-foreground">
@@ -225,7 +225,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                 <select
                   name="club"
                   defaultValue={query.club}
-                  className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-2 min-h-11 w-full rounded-cut border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">All clubs</option>
                   {response.availableFilters.clubs.map((club) => (
@@ -240,7 +240,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                 <select
                   name="draftKind"
                   defaultValue={query.draftKind ?? ''}
-                  className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-2 min-h-11 w-full rounded-cut border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">All drafts</option>
                   {response.availableFilters.draftKinds.map((kind) => (
@@ -253,13 +253,13 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
               <div className="flex items-end gap-2">
                 <button
                   type="submit"
-                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   Apply
                 </button>
                 <Link
                   href={`/draft/drafts/${query.year}`}
-                  className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-11 items-center justify-center rounded-cut border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Clear
                 </Link>
@@ -285,7 +285,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                   key={year}
                   href={filterHref(query, { year })}
                   aria-current={year === query.year ? 'page' : undefined}
-                  className={`inline-flex min-h-11 items-center rounded-full border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  className={`inline-flex min-h-11 items-center rounded-cut border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     year === query.year
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-card text-foreground hover:bg-accent'

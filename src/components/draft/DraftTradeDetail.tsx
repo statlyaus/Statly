@@ -221,7 +221,7 @@ function TradeModuleHeader({
   return (
     <div className={`flex gap-3 border-b border-border bg-muted/50 ${pad}`}>
       <div className="flex shrink-0 flex-col pt-0.5" aria-hidden="true">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-border bg-background text-sm font-bold tabular-nums text-foreground/80 shadow-sm">
+        <span className="flex h-9 w-9 items-center justify-center border-2 border-border bg-background text-sm font-bold tabular-nums text-foreground/80">
           {step}
         </span>
       </div>
@@ -279,7 +279,7 @@ export function DraftTradeDetail({
       <section
         id="trade-detail-summary"
         aria-labelledby="trade-detail-heading"
-        className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm"
+        className="overflow-hidden border border-border bg-background"
       >
         <TradeModuleHeader
           step={1}
@@ -367,7 +367,7 @@ export function DraftTradeDetail({
               {summaryTiles.map((tile) => (
                 <div
                   key={tile.label}
-                  className={`min-w-0 rounded-2xl px-2.5 py-2 shadow-sm sm:px-3 ${tile.className} ${isInline ? '' : 'sm:py-3'}`}
+                  className={`min-w-0 px-2.5 py-2 sm:px-3 ${tile.className} ${isInline ? '' : 'sm:py-3'}`}
                 >
                   <p className="text-xs font-semibold text-muted-foreground sm:text-xs">
                     {tile.label}
@@ -386,7 +386,7 @@ export function DraftTradeDetail({
 
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">
-        <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div className="overflow-hidden border border-border bg-background">
           <TradeModuleHeader
             step={2}
             eyebrow="Parties"
@@ -398,7 +398,7 @@ export function DraftTradeDetail({
             isInline={isInline}
           />
           <div className="bg-background px-2 pb-2 pt-2 sm:px-3 sm:pb-3">
-            <div className="relative overflow-hidden rounded-xl bg-background shadow-sm ring-1 ring-border/50">
+            <div className="relative overflow-hidden bg-background ring-1 ring-border/50">
               <TradeModuleAccent tone="parties" />
               <p className="px-4 pb-3 pt-4 text-sm leading-6 text-muted-foreground sm:px-5">
                 At trade uses information available at the time. Current combines observed
@@ -415,7 +415,7 @@ export function DraftTradeDetail({
                     key={party.id}
                     role="listitem"
                     aria-label={party.clubName}
-                    className="rounded-xl border border-border bg-background p-3"
+                    className="border border-border bg-background p-3"
                   >
                     <div className="flex items-center gap-2.5">
                       <DraftTeamLogo team={party.clubName} size={24} withCircle decorative />
@@ -513,7 +513,7 @@ export function DraftTradeDetail({
 
       {/* Receives: same card language — part three of the same story */}
       <section id="trade-detail-receives" aria-labelledby="trade-receives-heading">
-        <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div className="overflow-hidden border border-border bg-background">
           <TradeModuleHeader
             step={3}
             eyebrow="Club receives"
@@ -530,7 +530,7 @@ export function DraftTradeDetail({
               {groupedAssets.map((group) => (
                 <article
                   key={`${detail.trade.tradeId}-${group.displayClubName}`}
-                  className={`rounded-xl border border-border bg-background ${isInline ? 'p-3' : 'p-4'}`}
+                  className={`border border-border bg-background ${isInline ? 'p-3' : 'p-4'}`}
                 >
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
                     <h4 className="flex min-w-0 items-center gap-2.5 text-base font-semibold text-foreground sm:text-lg">
@@ -569,7 +569,7 @@ export function DraftTradeDetail({
                                 ({block.assets.length})
                               </span>
                             </h5>
-                            <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-muted/25">
+                            <ul className="mt-2 divide-y divide-border border border-border bg-muted/25">
                               {block.assets.map((asset) => (
                                 <li
                                   key={asset.id}

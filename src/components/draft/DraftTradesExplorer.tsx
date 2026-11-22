@@ -691,7 +691,7 @@ export function DraftTradesExplorer({
         </div>
 
         <div
-          className="rounded-xl bg-background/60 p-3 shadow-sm ring-1 ring-border backdrop-blur-[2px] md:p-3.5"
+          className="bg-background/60 p-3 ring-1 ring-border md:p-3.5"
           aria-label="AFL club marks referenced in historical exchange data"
         >
           <p className="sr-only">
@@ -713,7 +713,7 @@ export function DraftTradesExplorer({
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+          <div className="border border-border bg-card/85 p-4">
             <p className="text-xs font-semibold text-muted-foreground">Trades in view</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredTrades.length}
@@ -722,7 +722,7 @@ export function DraftTradesExplorer({
               Current result set after filters and search.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+          <div className="border border-border bg-card/85 p-4">
             <p className="text-xs font-semibold text-muted-foreground">Clubs represented</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredClubCount}
@@ -731,7 +731,7 @@ export function DraftTradesExplorer({
               Distinct clubs appearing across the visible trades.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+          <div className="border border-border bg-card/85 p-4">
             <p className="text-xs font-semibold text-muted-foreground">Club sides</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredSummary.parties}
@@ -740,7 +740,7 @@ export function DraftTradesExplorer({
               Total participating sides across the visible deals.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card/85 p-4 shadow-sm">
+          <div className="border border-border bg-card/85 p-4">
             <p className="text-xs font-semibold text-muted-foreground">Assets moved</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {filteredSummary.assets}
@@ -813,7 +813,7 @@ export function DraftTradesExplorer({
                 <div className="relative">
                   <ListboxButton
                     aria-labelledby="draft-trades-club-filter-label"
-                    className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 text-left text-sm shadow-sm transition hover:border-foreground/25 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 data-[open]:border-primary/60 data-[open]:ring-2 data-[open]:ring-primary/20"
+                    className="flex h-8 w-full items-center justify-between gap-2 rounded-cut border border-border bg-background px-2.5 text-left text-sm transition hover:border-foreground/25 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 data-[open]:border-primary/60 data-[open]:ring-2 data-[open]:ring-primary/20"
                   >
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {selectedClub ? (
@@ -851,7 +851,7 @@ export function DraftTradesExplorer({
                       {({ selected }) => (
                         <>
                           <span
-                            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-muted/50 text-xs font-semibold text-muted-foreground"
+                            className="inline-flex size-5 shrink-0 items-center justify-center border border-dashed border-border bg-muted/50 text-xs font-semibold text-muted-foreground"
                             aria-hidden
                           >
                             —
@@ -983,7 +983,7 @@ export function DraftTradesExplorer({
             <p className="text-xs font-semibold text-muted-foreground">Mobile trade index</p>
             <h3 className="text-lg font-semibold text-foreground">Browse and expand in place</h3>
           </div>
-          <div className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
+          <div className="border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
             {`${filteredTrades.length} visible`}
           </div>
         </div>
@@ -1002,7 +1002,7 @@ export function DraftTradesExplorer({
             <article
               key={`mobile-${trade.tradeId}`}
               id={`mobile-trade-row-${trade.tradeId}`}
-              className={`rounded-xl border border-border bg-background p-3 shadow-sm transition motion-safe:duration-200 ${
+              className={`border border-border bg-background p-3 transition motion-safe:duration-200 ${
                 isExpanded ? 'ring-1 ring-primary/30' : ''
               } ${activeTradeId === trade.tradeId ? 'border-primary/50' : ''}`}
               onMouseEnter={() => setActiveTradeId(trade.tradeId)}
@@ -1070,7 +1070,7 @@ export function DraftTradesExplorer({
                   ) : null}
                 </div>
               ) : null}
-              <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/35 p-2">
+              <div className="mt-2 space-y-1 border border-border bg-muted/35 p-2">
                 {renderReceiveSummary(receives, `mobile-receives-${trade.tradeId}`)}
               </div>
 
@@ -1080,7 +1080,7 @@ export function DraftTradesExplorer({
                   return (
                     <span
                       key={`mobile-${trade.tradeId}-${clubName}`}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs"
+                      className="inline-flex items-center gap-1 border border-border bg-background px-2 py-1 text-xs"
                     >
                       <DraftTeamLogo team={clubName} size={12} withCircle />
                       <Link href={`/draft/clubs/${clubSlug}`} className={textLinkStyles}>
@@ -1100,9 +1100,9 @@ export function DraftTradesExplorer({
                       aria-live="polite"
                       aria-label="Loading trade details"
                     >
-                      <div className="h-4 w-1/3 animate-pulse rounded bg-border" />
-                      <div className="h-4 w-2/3 animate-pulse rounded bg-border" />
-                      <div className="h-24 animate-pulse rounded bg-border" />
+                      <div className="h-4 w-1/3 animate-pulse bg-border" />
+                      <div className="h-4 w-2/3 animate-pulse bg-border" />
+                      <div className="h-24 animate-pulse bg-border" />
                     </div>
                   )}
                   {!isLoadingDetail && detailError && (
@@ -1111,7 +1111,7 @@ export function DraftTradesExplorer({
                     </p>
                   )}
                   {!isLoadingDetail && !detailError && expandedDetail?.trade && (
-                    <div className="rounded-lg border border-border bg-muted/30 p-2 motion-safe:transition-all motion-safe:duration-200 motion-reduce:transition-none">
+                    <div className="border border-border bg-muted/30 p-2 motion-safe:transition-all motion-safe:duration-200 motion-reduce:transition-none">
                       <DraftTradeDetail
                         detail={expandedDetail}
                         showOpenFullPageLink
@@ -1130,7 +1130,7 @@ export function DraftTradesExplorer({
           );
         })}
         {filteredTrades.length === 0 && (
-          <div className="rounded-lg border border-border py-10 text-center text-sm text-muted-foreground">
+          <div className="border border-border py-10 text-center text-sm text-muted-foreground">
             No trades match the selected filters.
           </div>
         )}
@@ -1150,7 +1150,7 @@ export function DraftTradesExplorer({
               </p>
             </div>
             <div
-              className="rounded-full border border-border bg-background px-3 py-1 text-sm text-muted-foreground shadow-sm"
+              className="border border-border bg-background px-3 py-1 text-sm text-muted-foreground"
               suppressHydrationWarning
             >
               {`${filteredTrades.length} visible`}
@@ -1158,7 +1158,7 @@ export function DraftTradesExplorer({
           </div>
 
           {filteredTrades.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-background py-14 text-center text-sm text-muted-foreground shadow-sm">
+            <div className="border border-border bg-background py-14 text-center text-sm text-muted-foreground">
               <div className="space-y-2">
                 <p>No trades match the selected filters.</p>
                 <button
@@ -1188,7 +1188,7 @@ export function DraftTradesExplorer({
                   <article
                     key={`desktop-card-${trade.tradeId}`}
                     id={`desktop-trade-row-${trade.tradeId}`}
-                    className={`rounded-2xl border bg-card p-4 shadow-sm transition duration-200 ${
+                    className={`border bg-card p-4 transition duration-200 ${
                       isExpanded
                         ? 'border-primary/60 ring-2 ring-primary/20'
                         : isActive
@@ -1203,7 +1203,7 @@ export function DraftTradesExplorer({
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                          <span className="border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                             Trade #{trade.seqInYear}
                           </span>
                           {tradeTypeBadges(trade).map((badge) => (
@@ -1268,7 +1268,7 @@ export function DraftTradesExplorer({
                         return (
                           <span
                             key={`desktop-card-${trade.tradeId}-${clubName}`}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+                            className="inline-flex items-center gap-1.5 border border-border bg-muted px-2.5 py-1 text-xs text-muted-foreground"
                           >
                             <DraftTeamLogo team={clubName} size={14} withCircle />
                             <Link href={`/draft/clubs/${clubSlug}`} className={textLinkStyles}>
@@ -1280,7 +1280,7 @@ export function DraftTradesExplorer({
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-                      <div className="rounded-xl border border-border bg-muted/70 p-3">
+                      <div className="border border-border bg-muted/70 p-3">
                         <p className="text-xs font-semibold text-muted-foreground">
                           Receive snapshot
                         </p>
@@ -1289,13 +1289,13 @@ export function DraftTradesExplorer({
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-center">
-                        <div className="rounded-xl border border-border bg-background px-3 py-2">
+                        <div className="border border-border bg-background px-3 py-2">
                           <p className="text-xs text-muted-foreground">Parties</p>
                           <p className="text-lg font-semibold text-foreground">
                             {trade.partyCount}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-border bg-background px-3 py-2">
+                        <div className="border border-border bg-background px-3 py-2">
                           <p className="text-xs text-muted-foreground">Assets</p>
                           <p className="text-lg font-semibold text-foreground">
                             {trade.assetCount}
@@ -1314,7 +1314,7 @@ export function DraftTradesExplorer({
           className="min-w-0 lg:sticky lg:top-4 lg:z-10 lg:flex lg:max-h-[calc(100dvh-2rem)] lg:flex-col lg:overflow-hidden lg:self-start"
           aria-label="Trade detail panel"
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-xl shadow-primary/10">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-border bg-card">
             {!selectedTrade ? (
               <div className="p-4 md:p-5">
                 <div className="border-b border-border pb-4">
@@ -1328,18 +1328,18 @@ export function DraftTradesExplorer({
                   </p>
                 </div>
                 <div className="space-y-4 pt-6">
-                  <div className="rounded-2xl border border-dashed border-border bg-muted p-4 text-sm text-muted-foreground">
+                  <div className="border border-dashed border-border bg-muted p-4 text-sm text-muted-foreground">
                     After you open a trade, use Prev / Next in the rail header to step through the
                     filtered list without returning to the index.
                   </div>
                   <div className="grid grid-cols-1 gap-3">
-                    <div className="rounded-xl border border-border bg-muted p-3">
+                    <div className="border border-border bg-muted p-3">
                       <p className="text-xs font-semibold text-foreground">Filter fast</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Use season, club, type, and search together.
                       </p>
                     </div>
-                    <div className="rounded-xl border border-border bg-muted p-3">
+                    <div className="border border-border bg-muted p-3">
                       <p className="text-xs font-semibold text-foreground">
                         Scroll inside the rail
                       </p>
@@ -1347,7 +1347,7 @@ export function DraftTradesExplorer({
                         Long trades scroll inside this panel so the list stays in view.
                       </p>
                     </div>
-                    <div className="rounded-xl border border-border bg-muted p-3">
+                    <div className="border border-border bg-muted p-3">
                       <p className="text-xs font-semibold text-foreground">Deep dive</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Open the full page or export CSV from the loaded detail.
@@ -1435,20 +1435,20 @@ export function DraftTradesExplorer({
                 >
                   {loadingTradeId === selectedTrade.tradeId ? (
                     <div
-                      className="space-y-2 rounded-2xl border border-border bg-background p-4"
+                      className="space-y-2 border border-border bg-background p-4"
                       role="status"
                       aria-live="polite"
                       aria-label="Loading trade details"
                     >
-                      <div className="h-4 w-1/3 animate-pulse rounded bg-border" />
-                      <div className="h-4 w-2/3 animate-pulse rounded bg-border" />
-                      <div className="h-40 animate-pulse rounded bg-border" />
+                      <div className="h-4 w-1/3 animate-pulse bg-border" />
+                      <div className="h-4 w-2/3 animate-pulse bg-border" />
+                      <div className="h-40 animate-pulse bg-border" />
                     </div>
                   ) : null}
 
                   {loadingTradeId !== selectedTrade.tradeId && detailError ? (
                     <div
-                      className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive-text"
+                      className="border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive-text"
                       role="alert"
                     >
                       Could not load trade details: {detailError}

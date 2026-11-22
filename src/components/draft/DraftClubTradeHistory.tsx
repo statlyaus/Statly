@@ -53,7 +53,7 @@ function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) 
   }
   return (
     <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
-      <span className="rounded-md border border-border bg-background px-2 py-0.5 font-semibold text-foreground shadow-sm">
+      <span className="border border-border bg-background px-2 py-0.5 font-semibold text-foreground">
         {grade.grade}
       </span>
       {grade.state === 'provisional' ? (
@@ -143,7 +143,7 @@ export function DraftClubTradeHistory({
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <div className="border border-border bg-card p-4">
             <p className="text-xs font-semibold text-muted-foreground">Trades on file</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {refs.length}
@@ -152,14 +152,14 @@ export function DraftClubTradeHistory({
               Rows in this club&apos;s history (newest year first).
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <div className="border border-border bg-card p-4">
             <p className="text-xs font-semibold text-muted-foreground">Year span</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {yearSpan ? `${yearSpan.min}–${yearSpan.max}` : '—'}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">Coverage in the current dataset.</p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <div className="border border-border bg-card p-4">
             <p className="text-xs font-semibold text-muted-foreground">Export anchor year</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {exportYear ?? '—'}
@@ -170,7 +170,7 @@ export function DraftClubTradeHistory({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-4">
+        <div className="mt-4 grid gap-3 border border-border bg-card p-4">
           <label className={cn(fieldLabelStyles, 'w-full max-w-2xl')} htmlFor={searchId}>
             <span className="text-sm font-medium">Search</span>
             <input
@@ -210,7 +210,7 @@ export function DraftClubTradeHistory({
       <aside
         id="statly-trade-grade-note"
         aria-label="Statly grade note"
-        className="rounded-2xl border border-border bg-card p-4 text-sm leading-6 text-muted-foreground shadow-sm md:p-5"
+        className="border border-border bg-card p-4 text-sm leading-6 text-muted-foreground md:p-5"
       >
         <p>
           At-trade grades use information available when the deal occurred. Current grades reflect
@@ -230,10 +230,10 @@ export function DraftClubTradeHistory({
         {filtered.map((ref) => (
           <article
             key={`card-${ref.tradeId}`}
-            className="rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-border hover:bg-muted"
+            className="border border-border bg-card p-4 transition hover:border-border hover:bg-muted"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground tabular-nums">
+              <span className="border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground tabular-nums">
                 {ref.year}
               </span>
               <span className={badgeStyles({ tone: 'muted', size: 'sm' })}>#{ref.seqInYear}</span>
@@ -267,7 +267,7 @@ export function DraftClubTradeHistory({
           </article>
         ))}
         {filtered.length === 0 && refs.length > 0 && (
-          <div className="rounded-2xl border border-border bg-background py-10 text-center text-sm text-muted-foreground shadow-sm">
+          <div className="border border-border bg-background py-10 text-center text-sm text-muted-foreground">
             No rows match your search.
           </div>
         )}
@@ -282,17 +282,17 @@ export function DraftClubTradeHistory({
               Newest season first. Click a trade title for the full page.
             </p>
           </div>
-          <div className="rounded-full border border-border bg-background px-3 py-1 text-sm text-muted-foreground shadow-sm">
+          <div className="border border-border bg-background px-3 py-1 text-sm text-muted-foreground">
             {filtered.length} visible
           </div>
         </div>
 
         {filtered.length === 0 && refs.length > 0 ? (
-          <div className="rounded-2xl border border-border bg-background py-14 text-center text-sm text-muted-foreground shadow-sm">
+          <div className="border border-border bg-background py-14 text-center text-sm text-muted-foreground">
             <p>No rows match your search.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
+          <div className="overflow-x-auto border border-border bg-card">
             <table
               aria-describedby="statly-trade-grade-note"
               className="table w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"

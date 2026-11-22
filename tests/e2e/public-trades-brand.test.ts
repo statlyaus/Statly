@@ -46,3 +46,22 @@ for (const viewport of [
     });
   });
 }
+
+// The public draft hub (ticket 07p). With no outcomes database here, each route shows the hub's
+// unavailable state, so this audits the hub header, its nav and that state; the explorers and the
+// clubs directory render only against real data and are checked on production after deploy.
+for (const viewport of [
+  { width: 1280, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test.describe(`the public draft hub follows the brand at ${viewport.width}px`, () => {
+    test.use({ viewport });
+
+    test('drafts, trades and clubs', async ({ page }) => {
+      test.setTimeout(240_000);
+      for (const path of ['/draft/drafts', '/draft/trades', '/draft/clubs']) {
+        await test.step(path, () => expectConformant(page, path));
+      }
+    });
+  });
+}

@@ -66,7 +66,7 @@ function clubLinkLabel(club: DraftClubListItem): string {
 }
 
 const sortThBtnClass =
-  'inline-flex min-h-10 w-full items-center justify-end gap-1 rounded-md px-2 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:min-h-0';
+  'inline-flex min-h-10 w-full items-center justify-end gap-1 rounded-cut px-2 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:min-h-0';
 
 export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
   const [view, setView] = useState<ViewMode>('table');
@@ -148,12 +148,12 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
           {sortedClubs.map((club) => (
             <article
               key={club.clubSlug}
-              className="rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-border hover:bg-muted"
+              className="border border-border bg-card p-4 transition hover:border-border hover:bg-muted"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <Link
                   href={`/draft/clubs/${club.clubSlug}`}
-                  className="group flex min-w-0 items-center gap-2 rounded-lg text-base font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="group flex min-w-0 items-center gap-2 text-base font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   aria-label={clubLinkLabel(club)}
                 >
                   <DraftTeamLogo team={club.clubName} size={20} withCircle />
@@ -168,20 +168,20 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                       {club.firstYear}–{club.lastYear}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
+                    <span className="inline-flex items-center border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
                       Years TBC
                     </span>
                   )}
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-2xl border border-border bg-background p-3 text-center shadow-sm">
+                <div className="border border-border bg-background p-3 text-center">
                   <p className="text-xs font-semibold text-muted-foreground">Assets</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-foreground">
                     {club.assetCount}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border bg-background p-3 text-center shadow-sm">
+                <div className="border border-border bg-background p-3 text-center">
                   <p className="text-xs font-semibold text-muted-foreground">Club sides</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-foreground">
                     {club.partyCount}
@@ -197,7 +197,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
       ) : (
         <div
           id={tablePanelId}
-          className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm"
+          className="overflow-x-auto border border-border bg-card"
           role="region"
           aria-label="Club directory as a table"
         >
