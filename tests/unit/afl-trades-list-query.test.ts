@@ -7,7 +7,9 @@ import {
   parseTradesListQuery,
   tradesListClubs,
   tradesListHref,
+  combineLadders,
   tradeLadder,
+  tradeLadderByYear,
   tradesListYears,
   tradeYearSummaries,
 } from '@/components/aflTradeStory/tradesListQuery';
@@ -136,6 +138,19 @@ describe('trade list query', () => {
     const geelong = ladder.find(({ slug }) => slug === 'geelong')!;
     expect([geelong.ahead, geelong.behind, geelong.provisional]).toEqual([2, 0, false]);
     expect(ladder.find(({ slug }) => slug === 'gws')!.provisional).toBe(true);
+  });
+
+  it('splits the ladder by trade year, and the years add back up to the whole ladder', () => {
+    const byYear = tradeLadderByYear(stories);
+    expect(byYear.map(({ year }) => year)).toEqual([2024, 2025]);
+    expect(byYear[0]!.rows.map(({ name, net }) => [name, net])).toEqual([
+      ['GWS', 200],
+      ['Geelong', 40],
+      ['Carlton', -40],
+      ['Sydney', -200],
+    ]);
+    expect(combineLadders(byYear.map(({ rows }) => rows))).toEqual(tradeLadder(stories));
+    expect(combineLadders([byYear[1]!.rows])).toEqual(byYear[1]!.rows);
   });
 
   it('leaves a projected trade out of the ladder and the biggest wins, but lists it', () => {

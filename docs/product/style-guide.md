@@ -275,12 +275,15 @@ One primitive per job, in `src/components/ui/`.
 ### Club colours
 
 `src/lib/clubGuernseys.ts` is the source. Club colour appears only in the 13px club square, always
-beside the club abbreviation; white clubs (Geelong, North, Sydney) get an ink-edged square. Text is
-never set on a club colour. A unit test checks the squares against every ground (target, phase 2).
-On the public trade pages `ClubBadge` draws the square and abbreviation, and the trade tree is ink
-with a club square beside each club's name (done 2026-11-20). The trade page head, the scarf and the
-tower still use club colours: the owner is redesigning them (ticket 06h), so they carry
-`data-collage` and the brand check skips them, like the story collage on the home page.
+beside the club abbreviation. The square shows both guernsey colours split on the diagonal, main
+colour top left, inside a 1px ink edge (owner, 2026-11-22), so the black clubs (Essendon, Richmond,
+Port Adelaide, Collingwood) tell apart; white guernseys (Geelong, North, Sydney) lead with their
+trim. `clubSquareBackground` gives the CSS. Text is never set on a club colour. A unit test checks
+the squares against every ground (target, phase 2). On the public trade pages `ClubBadge` draws the
+square and abbreviation, the trade tree is ink with a club square beside each club's name (done
+2026-11-20), and the home page trade ladder uses the same square. The trade page head and the scarf
+still use club colours: the owner is redesigning them (ticket 06h), so they carry `data-collage` and
+the brand check skips them, like the story collage on the home page.
 
 In the fantasy app the My Team squad list and player search show `ClubSquare` (the square and the
 abbreviation, no club logo). **Exception (owner, 2026-11-21):** the My Team field is an

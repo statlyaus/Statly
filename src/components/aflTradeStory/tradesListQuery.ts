@@ -171,9 +171,38 @@ export function tradeLadder(stories: readonly AflTradeStorySampleSummary[]): Tra
         provisional: row.provisional || result.provisional,
       });
     }
-  return [...rows.values()].sort(
-    (left, right) => right.net - left.net || left.name.localeCompare(right.name)
-  );
+  return byResult([...rows.values()]);
+}
+
+const byResult = (rows: TradeLadderRow[]) =>
+  rows.sort((left, right) => right.net - left.net || left.name.localeCompare(right.name));
+
+/** The ladder of each trade year, oldest first, for picking years on the front page. */
+export const tradeLadderByYear = (stories: readonly AflTradeStorySampleSummary[]) =>
+  [...tradesListYears(stories)]
+    .reverse()
+    .map((year) => ({ year, rows: tradeLadder(stories.filter((story) => story.year === year)) }))
+    .filter(({ rows }) => rows.length > 0);
+
+/** Several years' ladders as one: each club's results add up, as they do across trades. */
+export function combineLadders(ladders: readonly (readonly TradeLadderRow[])[]): TradeLadderRow[] {
+  const rows = new Map<string, TradeLadderRow>();
+  for (const row of ladders.flat()) {
+    const sum = rows.get(row.clubId);
+    rows.set(
+      row.clubId,
+      sum
+        ? {
+            ...sum,
+            net: sum.net + row.net,
+            ahead: sum.ahead + row.ahead,
+            behind: sum.behind + row.behind,
+            provisional: sum.provisional || row.provisional,
+          }
+        : row
+    );
+  }
+  return byResult([...rows.values()]);
 }
 
 interface TradeYearSummary {

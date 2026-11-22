@@ -54,10 +54,20 @@ function relativeLuminance(hex: string): number {
 }
 
 /**
- * The 13px club square (style guide, "Club colours"): the guernsey's main colour; a white guernsey
- * (Geelong, North Melbourne, Sydney) is a white square with an ink edge.
+ * The 13px club square (style guide, "Club colours"): the guernsey's two colours split on the
+ * diagonal, its main colour top left, inside a 1px ink edge. A near-white guernsey (Geelong, North
+ * Melbourne, Sydney) leads with its trim, so the club reads as a colour and black clubs (Essendon,
+ * Richmond, Port Adelaide, Collingwood) tell apart by their second colour.
  */
-export function clubSquare(club: string): { readonly fill: string; readonly edged: boolean } {
-  const { base } = guernseyFor(club);
-  return { fill: base, edged: relativeLuminance(base) > 0.7 };
+export function clubSquare(club: string): { readonly main: string; readonly second: string } {
+  const { base, trim } = guernseyFor(club);
+  return relativeLuminance(base) > 0.7
+    ? { main: trim, second: base }
+    : { main: base, second: trim };
+}
+
+/** The club square as a CSS background. */
+export function clubSquareBackground(club: string): string {
+  const { main, second } = clubSquare(club);
+  return `linear-gradient(135deg, ${main} 50%, ${second} 50%)`;
 }

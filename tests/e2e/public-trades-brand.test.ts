@@ -5,8 +5,8 @@ import { auditPage, EMPTY } from './helpers/brandAudit';
 /**
  * Brand conformance of the public trade pages (docs/product/style-guide.md), element by element: see
  * `helpers/brandAudit.ts` for the rules. Anything inside `[data-collage]` is skipped: the story
- * collage exception (home hero, the Cameron story teaser) and the trade page head, scarf and tower
- * that the owner is redesigning (ticket 06h).
+ * collage exception (home hero, the Cameron story teaser) and the trade page head and scarf that
+ * the owner is redesigning (ticket 06h).
  */
 
 async function expectConformant(page: Page, path: string) {

@@ -439,14 +439,16 @@ export function TradeTree({ story }: { story: AflTradeStory }) {
               <g key={group.clubId}>
                 {/* Two short lines in Geist left of the knot; a name too long for the space is
                     its abbreviation. The square is 14 units, about 12-13px as the chart scales. */}
+                <path d={`M0.75 ${labelY - 15.25}h14L0.75 ${labelY - 1.25}Z`} fill={square.main} />
+                <path d={`M14.75 ${labelY - 15.25}v14H0.75Z`} fill={square.second} />
                 <rect
                   x="0.75"
                   y={labelY - 15.25}
                   width="14"
                   height="14"
-                  fill={square.fill}
-                  stroke={square.edged ? INK : 'none'}
-                  strokeWidth="1.5"
+                  fill="none"
+                  stroke={INK}
+                  strokeWidth="1"
                 />
                 <text
                   x="21"
