@@ -71,7 +71,7 @@ export default async function DraftsPage() {
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Link
                 href="/leagues/join"
-                className="inline-flex h-10 items-center rounded-full bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-cobalt-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+                className="inline-flex h-10 items-center rounded-full bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
               >
                 Join a league
               </Link>

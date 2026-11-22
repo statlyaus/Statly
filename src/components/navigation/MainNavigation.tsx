@@ -265,7 +265,7 @@ function NavDropdown({
                     aria-current={isSubActive ? 'page' : undefined}
                     className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                       isSubActive
-                        ? 'bg-brand-tint text-brand-bar'
+                        ? 'bg-accent text-brand-bar'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     }`}
                   >
@@ -597,7 +597,7 @@ export default function MainNavigation({
                               aria-current={isActive ? 'page' : undefined}
                               className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                                 isActive
-                                  ? 'bg-brand-tint text-brand-bar'
+                                  ? 'bg-accent text-brand-bar'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               }`}
                             >
@@ -627,7 +627,7 @@ export default function MainNavigation({
                               aria-current={isActive ? 'page' : undefined}
                               className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                                 isActive
-                                  ? 'bg-brand-tint text-brand-bar'
+                                  ? 'bg-accent text-brand-bar'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               }`}
                             >
@@ -671,7 +671,7 @@ export default function MainNavigation({
                             void handleLogout();
                           }}
                           disabled={isLoggingOut || loading}
-                          className="rounded-md bg-brand-bar px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-cobalt-deep disabled:opacity-50"
+                          className="rounded-md bg-brand-bar px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-bar-hover disabled:opacity-50"
                         >
                           {isLoggingOut ? 'Signing out…' : 'Sign out'}
                         </button>
@@ -690,7 +690,7 @@ export default function MainNavigation({
                           aria-current={isActive ? 'page' : undefined}
                           className={`flex items-start gap-3 rounded-md px-3 py-3 transition ${
                             isActive
-                              ? 'bg-brand-tint text-brand-bar'
+                              ? 'bg-accent text-brand-bar'
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                           }`}
                         >
@@ -715,7 +715,7 @@ export default function MainNavigation({
                       <Link
                         href="/login"
                         onClick={() => setIsMobileOpen(false)}
-                        className="block rounded-md bg-brand-bar px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-brand-cobalt-deep"
+                        className="block rounded-md bg-brand-bar px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-brand-bar-hover"
                       >
                         Sign in
                       </Link>

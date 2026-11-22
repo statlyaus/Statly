@@ -53,8 +53,7 @@
   --color-result-draw-foreground: var(--result-draw-foreground);
   --color-brand-bar: var(--brand-bar);
   --color-brand-bar-foreground: var(--brand-bar-foreground);
-  --color-brand-tint: var(--brand-tint);
-  --color-brand-cobalt-deep: var(--brand-cobalt-deep);
+  --color-brand-bar-hover: var(--brand-bar-hover);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-text: var(--warning-text);
@@ -151,15 +150,15 @@
   --destructive-foreground: #fff;
   /* Red words: brand red is 4.60 on stone, so text and small labels use this darker red (5.97). */
   --destructive-text: #a81919;
-  --destructive-soft: #fbeaea;
+  --destructive-soft: #fbeaea; /* Fill behind --destructive-text words */
   /* Success keeps its own green so it stops following --result-win when results move to cobalt. */
   --success: #0e5a2b; /* 6.69 on stone, 6.25 on tint: passes the 5.5 small-label rule */
-  --success-soft: #f1f8f3;
+  --success-soft: #f1f8f3; /* Fill behind --success words */
   /* Sun: deadlines, your turn, selection. A fill with ink text only; amber words use --warning-text. */
   --warning: var(--brand-sun);
   --warning-foreground: var(--brand-ink);
   --warning-text: #7a4a06;
-  --warning-soft: #fdf3e7;
+  --warning-soft: #fdf3e7; /* Fill behind --warning-text words */
   /* Results: win solid cobalt, loss a white chip with an ink edge and ink letter, draw stone. Never
      green and red; always with W, L or D. Grounds redefine win (and draw on stone). */
   --result-win: var(--brand-cobalt);
@@ -172,6 +171,7 @@
   --result-draw-foreground: var(--brand-ink);
   --brand-bar: var(--brand-cobalt);
   --brand-bar-foreground: #fff;
+  --brand-bar-hover: var(--brand-cobalt-deep); /* Hover on a brand-bar fill; no ground redefines it */
   --overlay: color-mix(in srgb, var(--brand-ink) 60%, transparent); /* Scrim behind dialogs */
   --border: var(--brand-hairline); /* Decorative only; never the only edge of a control */
   --input: var(--brand-ink); /* Field edge: 2px ink, 18.9:1 on white (WCAG 1.4.11 needs 3:1) */

@@ -90,6 +90,22 @@ for (const viewport of [
   });
 }
 
+// The league switcher sits in the cobalt header only from 1536px (`2xl`), so neither width above shows it.
+test('the wide desktop header, with the league switcher, follows the brand', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1536, height: 900 });
+  await authenticateAsDevelopmentUser(page);
+  await page.goto('/dashboard');
+  await heading(1)(page);
+  // The switcher is a stone chip on the cobalt bar: it must carry ink words, not the bar's white.
+  const switcher = page.getByRole('banner').locator('[aria-haspopup="dialog"]').first();
+  await expect(switcher).toBeVisible({ timeout: 30_000 });
+  await expect(switcher).toHaveCSS('color', 'rgb(17, 17, 17)');
+  const { findings } = await auditPage(page);
+  expect.soft(findings, '/dashboard at 1536px').toEqual(EMPTY);
+});
+
 test('the sign-in page follows the brand', async ({ page }) => {
   test.setTimeout(120_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
