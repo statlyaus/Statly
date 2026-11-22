@@ -31,16 +31,11 @@ export function TradeComparisonTable({
 
   if (!selectionComplete) {
     return (
-      <section
-        aria-labelledby={headingId}
-        className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] p-4"
-      >
-        <Heading id={headingId} className="text-base font-bold text-[color:var(--trade-text)]">
+      <section aria-labelledby={headingId} className="border border-border bg-card p-4">
+        <Heading id={headingId} className="text-base font-bold text-foreground">
           Category comparison
         </Heading>
-        <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
-          Pick from both teams to compare.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Pick from both teams to compare.</p>
       </section>
     );
   }
@@ -53,20 +48,17 @@ export function TradeComparisonTable({
   const receivingSample = formatPackageSample(receivingPlayerIds, playerStats);
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]"
-    >
-      <div className="border-b border-[color:var(--trade-border)] px-4 py-3">
-        <Heading id={headingId} className="text-base font-bold text-[color:var(--trade-text)]">
+    <section aria-labelledby={headingId} className="overflow-hidden border border-border bg-card">
+      <div className="border-b border-border px-4 py-3">
+        <Heading id={headingId} className="text-base font-bold text-foreground">
           Category comparison
         </Heading>
-        <p className="mt-0.5 text-sm text-[color:var(--trade-text)]">
+        <p className="mt-0.5 text-sm text-foreground">
           For {sendingTeamName}: {summary.gained} up · {summary.lost} down · {summary.even} level
           {unavailableSummary}
         </p>
         {isHistorical && (
-          <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-[color:var(--trade-warning)]">
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-warning-text">
             <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />
             Based on {playerStats.context.season} stats, not this season.
           </p>
@@ -77,15 +69,15 @@ export function TradeComparisonTable({
       <div
         tabIndex={0}
         aria-label="Category comparison, horizontally scrollable"
-        className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
+        className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <table className="w-full border-collapse text-left text-sm sm:min-w-[36rem]">
           <caption className="sr-only">
             Per-game category comparison of the players {sendingTeamName} and {receivingTeamName}
             each give up.
           </caption>
-          <thead className="bg-[color:var(--trade-surface-subtle)] text-xs text-[color:var(--trade-text-muted)]">
-            <tr className="h-10 border-b border-[color:var(--trade-border)]">
+          <thead className="bg-muted text-xs text-muted-foreground">
+            <tr className="h-10 border-b border-border">
               <th scope="col" className="px-3 py-2 font-semibold sm:px-4">
                 Category
               </th>
@@ -107,11 +99,11 @@ export function TradeComparisonTable({
               return (
                 <tr
                   key={comparison.column.key}
-                  className="h-11 border-b border-[color:var(--trade-border)] last:border-0"
+                  className="h-11 border-b border-border last:border-0"
                 >
                   <th
                     scope="row"
-                    className="px-3 py-2 text-sm font-semibold text-[color:var(--trade-text)] sm:px-4"
+                    className="px-3 py-2 text-sm font-semibold text-foreground sm:px-4"
                   >
                     <abbr
                       title={`${comparison.column.label}, ${direction} is better`}
@@ -121,10 +113,10 @@ export function TradeComparisonTable({
                       {comparison.column.label}
                     </abbr>
                   </th>
-                  <td className="px-2 py-2 text-right text-sm tabular-nums text-[color:var(--trade-text)] sm:px-3">
+                  <td className="px-2 py-2 text-right text-sm tabular-nums text-foreground sm:px-3">
                     {formatComparisonValue(comparison.sendingAverage, comparison.column.key)}
                   </td>
-                  <td className="px-2 py-2 text-right text-sm tabular-nums text-[color:var(--trade-text)] sm:px-3">
+                  <td className="px-2 py-2 text-right text-sm tabular-nums text-foreground sm:px-3">
                     {formatComparisonValue(comparison.receivingAverage, comparison.column.key)}
                   </td>
                   <td className="px-3 py-2 sm:px-4">
@@ -144,7 +136,7 @@ export function TradeComparisonTable({
         </table>
       </div>
 
-      <p className="border-t border-[color:var(--trade-border)] px-4 py-2.5 text-xs leading-5 text-[color:var(--trade-text-muted)]">
+      <p className="border-t border-border px-4 py-2.5 text-xs leading-5 text-muted-foreground">
         Per-game averages per player, {playerStats.context.season} season. {sendingTeamName}:{' '}
         {sendingSample}. {receivingTeamName}: {receivingSample}. For low-is-better categories a drop
         counts as up.
@@ -158,16 +150,16 @@ const OUTCOME_STYLE: Record<
   { valueClassName: string; label: string }
 > = {
   favourable: {
-    valueClassName: 'font-bold text-[color:var(--trade-text)]',
+    valueClassName: 'font-bold text-foreground',
     label: 'Up',
   },
   unfavourable: {
-    valueClassName: 'font-bold text-[color:var(--trade-text)]',
+    valueClassName: 'font-bold text-foreground',
     label: 'Down',
   },
-  even: { valueClassName: 'font-semibold text-[color:var(--trade-text)]', label: 'Level' },
+  even: { valueClassName: 'font-semibold text-foreground', label: 'Level' },
   unavailable: {
-    valueClassName: 'font-semibold text-[color:var(--trade-text-muted)]',
+    valueClassName: 'font-semibold text-muted-foreground',
     label: 'No data',
   },
 };
@@ -184,9 +176,7 @@ function PackageDifferenceLabel({
   return (
     <span className="inline-flex items-baseline gap-2 text-sm">
       <span className={`min-w-10 tabular-nums ${style.valueClassName}`}>{value}</span>
-      <span className="sr-only text-[color:var(--trade-text-muted)] sm:not-sr-only">
-        {style.label}
-      </span>
+      <span className="sr-only text-muted-foreground sm:not-sr-only">{style.label}</span>
     </span>
   );
 }

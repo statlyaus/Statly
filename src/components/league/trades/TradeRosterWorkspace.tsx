@@ -51,7 +51,7 @@ export function TradeRosterWorkspace({
       <button
         type="button"
         onClick={() => onActiveRosterChange(onSending ? 'receiving' : 'sending')}
-        className="inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-sm font-semibold text-[color:var(--trade-action)] hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+        className="inline-flex h-9 items-center gap-1.5 rounded-cut px-2 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
       >
         {onSending ? `Next: pick from ${partnerTeam.teamName}` : 'Next: pick who you give'}
         <ArrowRight aria-hidden="true" className="size-4" />
@@ -61,11 +61,11 @@ export function TradeRosterWorkspace({
     );
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]">
+    <div className="min-w-0 overflow-hidden border border-border bg-card">
       <div
         role="group"
         aria-label="Choose roster"
-        className="flex overflow-x-auto border-b border-[color:var(--trade-border)] px-2"
+        className="flex overflow-x-auto border-b border-border px-2"
       >
         <RosterSideButton
           direction="You give"
@@ -131,22 +131,20 @@ function RosterSideButton({
       aria-pressed={pressed}
       aria-controls={controls}
       onClick={onClick}
-      className={`-mb-px inline-flex h-12 min-w-0 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)] ${
+      className={`-mb-px inline-flex h-12 min-w-0 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
         pressed
-          ? 'border-[color:var(--trade-brand)] text-[color:var(--trade-text)]'
-          : 'border-transparent text-[color:var(--trade-text-muted)] hover:border-[color:var(--trade-border-strong)] hover:text-[color:var(--trade-text)]'
+          ? 'border-brand-bar text-foreground'
+          : 'border-transparent text-muted-foreground hover:border-muted-foreground hover:text-foreground'
       }`}
     >
       <span className="font-semibold">{direction}</span>
-      <span aria-hidden="true" className="hidden text-[color:var(--trade-text-muted)] sm:inline">
+      <span aria-hidden="true" className="hidden text-muted-foreground sm:inline">
         ·
       </span>
       <span className="hidden max-w-[12rem] truncate sm:inline">{teamName}</span>
       <span
-        className={`min-w-5 rounded-sm px-1.5 text-center text-xs font-bold leading-5 tabular-nums ${
-          selectedCount > 0
-            ? 'bg-[color:var(--trade-brand)] text-white'
-            : 'text-[color:var(--trade-text-muted)]'
+        className={`min-w-5 px-1.5 text-center text-xs font-bold leading-5 tabular-nums ${
+          selectedCount > 0 ? 'bg-brand-bar text-brand-bar-foreground' : 'text-muted-foreground'
         }`}
       >
         {selectedCount}

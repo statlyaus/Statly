@@ -79,18 +79,18 @@ export function TradeRosterTable({
   }
 
   return (
-    <section aria-labelledby={`${id}-heading`} className="min-w-0 bg-[color:var(--trade-surface)]">
+    <section aria-labelledby={`${id}-heading`} className="min-w-0 bg-card">
       <h4 id={`${id}-heading`} className="sr-only">
         {heading}
       </h4>
-      <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--trade-border)] px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
         <label htmlFor={`${id}-search`} className="sr-only">
           Search {team.teamName} roster
         </label>
         <div className="relative min-w-0 flex-1 basis-44">
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--trade-text-muted)]"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <input
             id={`${id}-search`}
@@ -98,14 +98,14 @@ export function TradeRosterTable({
             value={query}
             disabled={disabled}
             onChange={(event) => setQuery(event.target.value)}
-            className="h-11 w-full rounded-md border sm:h-9 border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] pl-9 pr-3 text-sm text-[color:var(--trade-text)] outline-none placeholder:text-[color:var(--trade-text-muted)] focus:border-[color:var(--trade-focus)] focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]/20 disabled:opacity-60"
+            className="h-11 w-full rounded-cut border sm:h-9 border-input bg-card pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring disabled:opacity-60"
             placeholder="Search players"
           />
         </div>
         <div
           role="group"
           aria-label={`Filter ${team.teamName} by position`}
-          className="flex h-11 items-stretch rounded-md sm:h-9 border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] p-0.5"
+          className="flex h-11 items-stretch rounded-cut sm:h-9 border border-input bg-card p-0.5"
         >
           {POSITION_FILTERS.map((option) => (
             <button
@@ -114,10 +114,10 @@ export function TradeRosterTable({
               aria-pressed={position === option}
               disabled={disabled}
               onClick={() => setPosition(option)}
-              className={`rounded px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--trade-focus)] disabled:opacity-60 ${
+              className={`px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 ${
                 position === option
-                  ? 'bg-[color:var(--trade-selection)] text-white'
-                  : 'text-[color:var(--trade-text-muted)] hover:text-[color:var(--trade-text)]'
+                  ? 'bg-brand-bar text-brand-bar-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {option === 'ALL' ? 'All' : option}
@@ -126,7 +126,7 @@ export function TradeRosterTable({
         </div>
         <div className="ml-auto flex shrink-0 items-center">
           {toolbarEnd ?? (
-            <span className="text-xs font-semibold tabular-nums text-[color:var(--trade-text-muted)]">
+            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
               {selectedIds.length} selected
             </span>
           )}
@@ -137,19 +137,19 @@ export function TradeRosterTable({
       <div
         tabIndex={0}
         aria-label={`${team.teamName} roster table, horizontally scrollable`}
-        className="relative max-h-[min(36rem,65dvh)] overflow-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
+        className="relative max-h-[min(36rem,65dvh)] overflow-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring"
       >
         <table className="w-full min-w-max border-collapse text-left">
           <caption className="sr-only">
             {heading}. Season {playerStats.context.season} per-game averages. {selectedIds.length}{' '}
             selected.
           </caption>
-          <thead className="sticky top-0 z-20 bg-[color:var(--trade-surface-subtle)]">
-            <tr className="border-b border-[color:var(--trade-border)]">
+          <thead className="sticky top-0 z-20 bg-muted">
+            <tr className="border-b border-border">
               <th
                 scope="col"
                 aria-sort={sortKey === 'player' ? sortDirection : 'none'}
-                className="sticky left-0 z-30 min-w-56 border-l-[3px] border-l-transparent bg-[color:var(--trade-surface-subtle)] px-3"
+                className="sticky left-0 z-30 min-w-56 bg-muted px-3"
               >
                 <SortButton
                   label="Player"
@@ -199,24 +199,14 @@ export function TradeRosterTable({
                     }
                     onTogglePlayer(player.id);
                   }}
-                  className={`group h-12 border-b border-[color:var(--trade-border)] transition-colors last:border-0 ${
+                  className={`group h-12 border-b border-border transition-colors last:border-0 ${
                     disabled ? 'cursor-default' : 'cursor-pointer'
-                  } ${
-                    selected
-                      ? 'bg-[color:var(--trade-selection-soft)]'
-                      : disabled
-                        ? 'bg-[color:var(--trade-surface)]'
-                        : 'bg-[color:var(--trade-surface)] hover:bg-[color:var(--trade-surface-subtle)]'
-                  }`}
+                  } ${selected ? 'bg-accent' : disabled ? 'bg-card' : 'bg-card hover:bg-muted'}`}
                 >
                   <th
                     scope="row"
-                    className={`sticky left-0 z-10 border-l-[3px] px-3 py-1.5 font-normal transition-colors ${
-                      selected
-                        ? 'border-l-[color:var(--trade-selection)] bg-[color:var(--trade-selection-soft)]'
-                        : disabled
-                          ? 'border-l-transparent bg-[color:var(--trade-surface)]'
-                          : 'border-l-transparent bg-[color:var(--trade-surface)] group-hover:bg-[color:var(--trade-surface-subtle)]'
+                    className={`sticky left-0 z-10 px-3 py-1.5 font-normal transition-colors ${
+                      selected ? 'bg-accent' : disabled ? 'bg-card' : 'bg-card group-hover:bg-muted'
                     }`}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -226,7 +216,7 @@ export function TradeRosterTable({
                         checked={selected}
                         disabled={disabled}
                         onChange={() => onTogglePlayer(player.id)}
-                        className="size-5 shrink-0 rounded border-[color:var(--trade-border-strong)] accent-[var(--trade-selection)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-1"
+                        className="size-5 shrink-0 border-muted-foreground accent-primary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-1"
                       />
                       <label
                         htmlFor={`${id}-player-${player.id}`}
@@ -243,10 +233,10 @@ export function TradeRosterTable({
                           className="size-6 shrink-0 object-contain"
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-[color:var(--trade-text)]">
+                          <span className="block truncate text-sm font-semibold text-foreground">
                             {player.name}
                           </span>
-                          <span className="block truncate text-xs text-[color:var(--trade-text-muted)]">
+                          <span className="block truncate text-xs text-muted-foreground">
                             <span className="font-semibold">{player.position}</span>
                             <span aria-hidden="true"> · </span>
                             <span>{teamAbbreviation}</span>
@@ -258,7 +248,7 @@ export function TradeRosterTable({
                   {playerStats.columns.map((column) => (
                     <td
                       key={column.key}
-                      className="px-2 py-2 text-right text-sm tabular-nums text-[color:var(--trade-text)]"
+                      className="px-2 py-2 text-right text-sm tabular-nums text-foreground"
                     >
                       {formatStatValue(
                         playerStats.playersById[player.id]?.values[column.key],
@@ -273,7 +263,7 @@ export function TradeRosterTable({
               <tr>
                 <td
                   colSpan={playerStats.columns.length + 1}
-                  className="bg-[color:var(--trade-surface-subtle)] p-6 text-center text-sm text-[color:var(--trade-text-muted)]"
+                  className="bg-muted p-6 text-center text-sm text-muted-foreground"
                 >
                   {team.players.length === 0 ? 'No players on this roster.' : 'No players match.'}
                 </td>
@@ -313,16 +303,16 @@ function SortButton({
       title={`${completeLabel}. ${accessibleState}.`}
       onClick={onClick}
       aria-label={actionLabel}
-      className={`inline-flex h-10 w-full items-center gap-1 rounded p-0 text-xs font-semibold text-[color:var(--trade-text-muted)] hover:text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] ${
+      className={`inline-flex h-10 w-full items-center gap-1 rounded-cut p-0 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring ${
         kind === 'player' ? 'justify-start' : 'justify-end'
       }`}
     >
       <span aria-hidden="true">{label}</span>
       {active &&
         (direction === 'ascending' ? (
-          <ArrowUp aria-hidden="true" className="size-3.5 text-[color:var(--trade-selection)]" />
+          <ArrowUp aria-hidden="true" className="size-3.5 text-primary" />
         ) : (
-          <ArrowDown aria-hidden="true" className="size-3.5 text-[color:var(--trade-selection)]" />
+          <ArrowDown aria-hidden="true" className="size-3.5 text-primary" />
         ))}
     </button>
   );

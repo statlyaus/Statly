@@ -9,10 +9,10 @@ import type { SquadPositionChange, TradeVerdict, TradeVerdictTone } from './trad
 // Ink for both directions: the W, L or D mark and the words carry the verdict, never good and bad
 // colours (style guide "Two sides").
 export const VERDICT_TONE_CLASS: Record<TradeVerdictTone, string> = {
-  good: 'text-[color:var(--trade-text)]',
-  bad: 'text-[color:var(--trade-text)]',
-  even: 'text-[color:var(--trade-text)]',
-  unknown: 'text-[color:var(--trade-text-muted)]',
+  good: 'text-foreground',
+  bad: 'text-foreground',
+  even: 'text-foreground',
+  unknown: 'text-muted-foreground',
 };
 
 const TONE_RESULT: Record<TradeVerdictTone, CategoryResult | null> = {
@@ -39,7 +39,7 @@ export function TradeVerdictHeadline({
       {style ? (
         <span
           aria-hidden="true"
-          className={`inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-xs ${style.className}`}
+          className={`inline-flex size-5 shrink-0 items-center justify-center text-xs ${style.className}`}
         >
           {style.letter}
         </span>
@@ -83,20 +83,16 @@ export function TradeVerdictStrip({
   return (
     <section
       aria-labelledby={headingId}
-      className={
-        compact
-          ? 'min-w-0'
-          : 'overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]'
-      }
+      className={compact ? 'min-w-0' : 'overflow-hidden border border-border bg-card'}
     >
       <div
         className={
           compact
             ? 'space-y-1'
-            : 'flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-[color:var(--trade-border)] px-4 py-3'
+            : 'flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-4 py-3'
         }
       >
-        <Heading id={headingId} className="text-sm font-semibold text-[color:var(--trade-text)]">
+        <Heading id={headingId} className="text-sm font-semibold text-foreground">
           Verdict
         </Heading>
         <TradeVerdictHeadline verdict={verdict} />
@@ -105,7 +101,7 @@ export function TradeVerdictStrip({
         <>
           <div
             aria-hidden="true"
-            className={`grid ${grid} ${inset} gap-x-2 pb-1 pt-3 text-[0.6875rem] font-medium text-[color:var(--trade-text-muted)]`}
+            className={`grid ${grid} ${inset} gap-x-2 pb-1 pt-3 text-[0.6875rem] font-medium text-muted-foreground`}
           >
             <span />
             <span className="flex min-w-0 justify-between gap-2">
@@ -146,24 +142,24 @@ export function TradeVerdictStrip({
                   aria-label={`${comparison.column.label}: ${meaning}${comparison.outcome === 'even' ? '' : ` by ${magnitude} per game`}`}
                   className={`grid min-h-7 ${grid} items-stretch gap-x-2`}
                 >
-                  <span className="self-center text-xs leading-tight text-[color:var(--trade-text)]">
+                  <span className="self-center text-xs leading-tight text-foreground">
                     {comparison.column.label}
                   </span>
                   {/* Rows sit flush, so the halves meet at one continuous centre line. The other
                       side's half is ink, yours cobalt: two sides, not good and bad. */}
                   <span className="grid grid-cols-2">
-                    <span className="flex items-center justify-end border-r border-[color:var(--trade-border-strong)]">
+                    <span className="flex items-center justify-end border-r border-muted-foreground">
                       {comparison.outcome === 'unfavourable' ? (
-                        <span className="h-2 rounded-l-[2px] bg-foreground" style={{ width }} />
+                        <span className="h-2 bg-foreground" style={{ width }} />
                       ) : null}
                     </span>
                     <span className="flex items-center">
                       {comparison.outcome === 'favourable' ? (
-                        <span className="h-2 rounded-r-[2px] bg-primary" style={{ width }} />
+                        <span className="h-2 bg-primary" style={{ width }} />
                       ) : null}
                     </span>
                   </span>
-                  <span className="self-center text-right text-xs font-semibold tabular-nums text-[color:var(--trade-text)]">
+                  <span className="self-center text-right text-xs font-semibold tabular-nums text-foreground">
                     {signed}
                   </span>
                 </li>
@@ -171,7 +167,7 @@ export function TradeVerdictStrip({
             })}
           </ul>
           {compact ? null : (
-            <p className="border-t border-[color:var(--trade-border)] px-4 py-2 text-xs text-[color:var(--trade-text-muted)]">
+            <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
               Per-game averages, {season} season.
             </p>
           )}
@@ -195,23 +191,18 @@ export function TradeSquadImpact({
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="min-w-0">
-      <h4 id={headingId} className="text-sm font-semibold text-[color:var(--trade-text)]">
+      <h4 id={headingId} className="text-sm font-semibold text-foreground">
         {teamLabel} after trade
       </h4>
       {changes.length === 0 ? (
-        <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
-          No change to position depth.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">No change to position depth.</p>
       ) : (
-        <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums text-[color:var(--trade-text)]">
+        <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums text-foreground">
           {changes.map((change) => (
             <li key={change.position} className="inline-flex items-center gap-1">
               <span className="font-semibold">{change.position}</span>
-              <span className="text-[color:var(--trade-text-muted)]">{change.before}</span>
-              <ArrowRight
-                aria-hidden="true"
-                className="size-3 text-[color:var(--trade-text-muted)]"
-              />
+              <span className="text-muted-foreground">{change.before}</span>
+              <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground" />
               <span className="sr-only">to</span>
               <span
                 className={`font-bold ${change.after < change.before ? VERDICT_TONE_CLASS.bad : VERDICT_TONE_CLASS.good}`}
@@ -223,9 +214,7 @@ export function TradeSquadImpact({
         </ul>
       )}
       {showBasis ? (
-        <p className="mt-1 text-xs text-[color:var(--trade-text-muted)]">
-          Dual-position players count in both.
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Dual-position players count in both.</p>
       ) : null}
     </section>
   );

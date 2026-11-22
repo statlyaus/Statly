@@ -241,7 +241,7 @@ export function TradeComposer({
 
   if (!viewerTeam) {
     return (
-      <div className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-4 text-sm text-[color:var(--trade-text-muted)]">
+      <div className="border border-border bg-muted p-4 text-sm text-muted-foreground">
         You need a roster before you can trade.
       </div>
     );
@@ -249,12 +249,10 @@ export function TradeComposer({
 
   if (isCounter && !counterPartner) {
     return (
-      <div className="flex flex-col gap-4 rounded-xl border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border border-warning-text bg-warning-soft p-4 sm:flex-row sm:items-center sm:justify-between">
         <div role="alert">
-          <p className="text-base font-bold text-[color:var(--trade-text)]">
-            Can’t counter this offer
-          </p>
-          <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
+          <p className="text-base font-bold text-foreground">Can’t counter this offer</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             The other team is no longer in the league.
           </p>
         </div>
@@ -263,7 +261,7 @@ export function TradeComposer({
             type="button"
             disabled={isSubmitting}
             onClick={onCancelCounter}
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
             Cancel counter
           </button>
@@ -274,7 +272,7 @@ export function TradeComposer({
 
   if (partners.length === 0) {
     return (
-      <div className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-5 text-sm text-[color:var(--trade-text-muted)]">
+      <div className="border border-border bg-muted p-5 text-sm text-muted-foreground">
         No other teams to trade with yet.
       </div>
     );
@@ -285,10 +283,10 @@ export function TradeComposer({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[color:var(--trade-border)] pb-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-3">
         <div className="order-1">{heading}</div>
         <div className="order-3 flex w-full min-w-0 items-center gap-2.5 sm:order-2 sm:w-auto">
-          <span aria-hidden="true" className="text-lg text-[color:var(--trade-text-muted)]">
+          <span aria-hidden="true" className="text-lg text-muted-foreground">
             with
           </span>
           <div className="relative min-w-0 flex-1 sm:flex-none">
@@ -304,7 +302,7 @@ export function TradeComposer({
               onChange={(event) =>
                 dispatch({ type: 'selectPartner', partnerId: event.target.value })
               }
-              className="h-11 w-full cursor-pointer sm:h-10 sm:w-auto appearance-none truncate rounded-md border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] pl-10 pr-9 text-base font-semibold text-[color:var(--trade-text)] transition-colors hover:border-[color:var(--trade-text-muted)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] disabled:cursor-not-allowed disabled:bg-[color:var(--trade-surface-subtle)] disabled:opacity-80"
+              className="h-11 w-full cursor-pointer sm:h-10 sm:w-auto appearance-none truncate rounded-cut border border-input bg-card pl-10 pr-9 text-base font-semibold text-foreground transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-80"
             >
               {partners.map((team) => (
                 <option key={team.memberId} value={team.memberId}>
@@ -314,7 +312,7 @@ export function TradeComposer({
             </select>
             <ChevronDown
               aria-hidden="true"
-              className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-[color:var(--trade-text-muted)]"
+              className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             />
           </div>
         </div>
@@ -324,7 +322,7 @@ export function TradeComposer({
               type="button"
               disabled={isSubmitting}
               onClick={onCancelCounter}
-              className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             >
               Cancel counter
             </button>
@@ -362,7 +360,7 @@ export function TradeComposer({
             <p
               id={errorId}
               role="alert"
-              className="rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] px-3 py-2 text-sm font-semibold text-[color:var(--trade-text)]"
+              className="border border-warning-text bg-warning-soft px-3 py-2 text-sm font-semibold text-foreground"
             >
               {validationError ?? error}
             </p>
@@ -372,7 +370,7 @@ export function TradeComposer({
         {/* The trade panel: a sticky side column on wide screens, a bottom sheet on phones. */}
         <aside
           aria-label={reviewing ? 'Confirm trade' : 'Your trade'}
-          className={`fixed inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-2xl border-t border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] shadow-[0_-8px_24px_rgb(0_0_0/0.14)] lg:sticky lg:top-20 lg:z-auto lg:max-h-[calc(100dvh-11rem)] lg:rounded-lg lg:border lg:shadow-none ${
+          className={`fixed inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden border-t-[2.5px] border-foreground bg-card lg:sticky lg:top-20 lg:z-auto lg:max-h-[calc(100dvh-11rem)] lg:border lg:border-border ${
             reviewing ? 'max-h-[85dvh] overflow-y-auto' : 'max-h-[75dvh]'
           }`}
         >

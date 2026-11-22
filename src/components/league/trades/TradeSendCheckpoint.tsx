@@ -63,19 +63,19 @@ export function TradeSendCheckpoint({
       aria-busy={isSubmitting}
       className="min-w-0"
     >
-      <header className="border-b border-[color:var(--trade-border)] px-4 py-3">
+      <header className="border-b border-border px-4 py-3">
         <h4
           ref={headingRef}
           id={headingId}
           tabIndex={-1}
-          className="text-lg font-bold leading-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+          className="text-lg font-bold leading-tight text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
         >
           Send to {recipientTeamName}?
         </h4>
       </header>
 
       <div className="space-y-4 px-4 py-3">
-        <dl className="divide-y divide-[color:var(--trade-border)] text-sm">
+        <dl className="divide-y divide-border text-sm">
           <CheckpointRow label="You send">
             <PlayerList label="You send package" players={sendingPlayers} />
           </CheckpointRow>
@@ -94,7 +94,7 @@ export function TradeSendCheckpoint({
 
         <p
           id={consequenceId}
-          className="rounded-md bg-[color:var(--trade-surface-subtle)] px-3 py-2 text-xs leading-5 text-[color:var(--trade-text-muted)]"
+          className="bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground"
         >
           {getTradeAcceptanceConsequence(rules, recipientTeamName)}
         </p>
@@ -102,11 +102,11 @@ export function TradeSendCheckpoint({
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-3 text-sm font-semibold text-[color:var(--trade-text)]"
+            className="flex items-start gap-2 border border-warning-text bg-warning-soft p-3 text-sm font-semibold text-foreground"
           >
             <AlertTriangle
               aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0 text-[color:var(--trade-warning)]"
+              className="mt-0.5 size-4 shrink-0 text-warning-text"
             />
             <p>{error}</p>
           </div>
@@ -125,7 +125,7 @@ export function TradeSendCheckpoint({
             type="button"
             disabled={isSubmitting}
             onClick={onSubmit}
-            className="order-first inline-flex h-11 min-w-0 items-center justify-center rounded-lg bg-[color:var(--trade-action)] px-4 text-center text-sm font-bold text-white shadow-sm transition-colors hover:bg-[color:var(--trade-action-hover)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[color:var(--trade-border-strong)] disabled:text-[color:var(--trade-text-muted)]"
+            className="order-first inline-flex h-11 min-w-0 items-center justify-center rounded-cut bg-brand-bar px-4 text-center text-sm font-bold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:border-2 disabled:border-dashed disabled:border-muted-foreground disabled:bg-transparent disabled:text-muted-foreground"
           >
             {actionLabel}
           </button>
@@ -154,8 +154,8 @@ function CheckpointRow({
 }): React.JSX.Element {
   return (
     <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 py-2">
-      <dt className="font-semibold text-[color:var(--trade-text-muted)]">{label}</dt>
-      <dd className="min-w-0 font-semibold text-[color:var(--trade-text)]">{children}</dd>
+      <dt className="font-semibold text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 font-semibold text-foreground">{children}</dd>
     </div>
   );
 }
@@ -175,7 +175,7 @@ function PlayerList({
             <GuernseyIcon guernsey={guernseyFor(player.club)} className="h-6 w-5 shrink-0" />
             <span className="min-w-0">
               <span className="block truncate font-bold">{player.name}</span>
-              <span className="block text-xs font-medium text-[color:var(--trade-text-muted)]">
+              <span className="block text-xs font-medium text-muted-foreground">
                 {getTeamAbbreviation(player.club)} · {player.position}
               </span>
             </span>
@@ -187,4 +187,4 @@ function PlayerList({
 }
 
 const secondaryButtonClasses =
-  'inline-flex h-11 min-w-0 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-center text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+  'inline-flex h-11 min-w-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-center text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';

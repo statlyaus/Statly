@@ -205,40 +205,10 @@
   --draft-broadcast-shadow-deep: rgba(17, 17, 17, 0.12);
 }
 
-/* Trade Centre tokens. Aliases of the core tokens so the Trade Centre matches every other
-   surface: cobalt for primary actions and focus, success and destructive for gains and losses. */
-.league-trade-centre {
-  --trade-canvas: transparent;
-  --trade-surface: var(--card);
-  --trade-surface-subtle: var(--muted);
-  --trade-text: var(--foreground);
-  --trade-text-muted: var(--muted-foreground);
-  --trade-border: var(--border);
-  --trade-border-strong: #aab4bf;
-  --trade-brand: var(--brand-bar);
-  --trade-brand-hover: var(--brand-cobalt-deep);
-  --trade-action: var(--brand-bar);
-  --trade-action-hover: var(--brand-cobalt-deep);
-  --trade-action-soft: var(--brand-tint);
-  --trade-focus: var(--brand-bar);
-  --trade-selection: var(--brand-bar);
-  --trade-selection-soft: var(--brand-tint);
-  --trade-send: var(--foreground);
-  --trade-send-soft: var(--muted);
-  --trade-receive: var(--foreground);
-  --trade-receive-soft: var(--muted);
-  --trade-positive: var(--success);
-  --trade-negative: var(--destructive);
-  --trade-negative-soft: #fbeaea;
-  --trade-warning: var(--warning-text);
-  --trade-warning-soft: #fdf3e7;
-  --trade-card-shadow: none;
-}
-
 /* Grounds (docs/product/style-guide.md, "Grounds"). A ground sets the roles components read, so a
    button, link or focus ring inside it is right by construction. In the components layer so a
    utility on the same element still wins. Only these roles follow a ground: :root aliases such as
-   --trade-* and --brand-bar keep their root values, and --muted, --accent, --secondary,
+   --brand-bar keep their root values, and --muted, --accent, --secondary,
    --input, --field* and --popover are not redefined. A card inside a cobalt, ink or sun ground carries
    .ground-white. Status words: --warning-text, --success and --destructive-text hold on all three
    light grounds (5.5 small-label rule). Results: win turns white on cobalt
