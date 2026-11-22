@@ -55,9 +55,7 @@ export function DraftTeamLogo({
   if (!withCircle) return img;
 
   return (
-    <span className="inline-flex items-center justify-center rounded-full bg-muted ring-1 ring-ring">
-      {img}
-    </span>
+    <span className="inline-flex items-center justify-center bg-muted ring-1 ring-ring">{img}</span>
   );
 }
 
@@ -71,12 +69,12 @@ export function DraftHubState({
   return (
     <section
       role={variant === 'error' ? 'alert' : 'status'}
-      className="rounded-lg border border-border bg-card p-8 text-card-foreground shadow-sm"
+      className="border border-border bg-card p-8 text-card-foreground"
       aria-live={variant === 'error' ? 'assertive' : 'polite'}
     >
       <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
         <span
-          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${variantLabelClass[variant]}`}
+          className={`inline-flex px-3 py-1 text-xs font-semibold ${variantLabelClass[variant]}`}
         >
           {variantLabel[variant]}
         </span>
@@ -85,7 +83,7 @@ export function DraftHubState({
         {actionHref && actionLabel ? (
           <Link
             href={actionHref}
-            className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="mt-6 inline-flex items-center justify-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {actionLabel}
           </Link>
