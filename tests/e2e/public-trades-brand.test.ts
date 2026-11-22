@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { auditPage, EMPTY } from './helpers/brandAudit';
+import { axeViolations } from './helpers/axe';
 
 /**
  * Brand conformance of the public trade pages (docs/product/style-guide.md), element by element: see
@@ -13,6 +14,7 @@ async function expectConformant(page: Page, path: string) {
   await page.goto(path);
   const { findings } = await auditPage(page);
   expect.soft(findings, path).toEqual(EMPTY);
+  expect.soft(await axeViolations(page), `${path} (axe)`).toEqual([]);
 }
 
 for (const viewport of [

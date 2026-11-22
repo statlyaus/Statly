@@ -65,14 +65,6 @@
   --color-field-foreground: var(--field-foreground);
   --color-field-placeholder: var(--field-placeholder);
   --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 :root {
@@ -92,8 +84,6 @@
   --brand-paper-deep: #f1efe8;
 
   /* Old brand names, kept as cobalt aliases until the area palettes are collapsed. */
-  --statly-navy: var(--brand-cobalt);
-  --statly-blue: var(--brand-cobalt);
   --radius: 4px; /* From --border-radius-default */
   --background: #fff; /* From --base-background-content */
   --foreground: var(--brand-ink);
@@ -144,15 +134,6 @@
   --field-foreground: var(--brand-ink);
   --field-placeholder: var(--brand-secondary-text);
   --ring: var(--brand-bar); /* Focus is cobalt on light grounds */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --app-toolbar-height: 4rem;
   --app-shell-max-width: 2100px;
 }
 

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { auditPage, EMPTY } from './helpers/brandAudit';
+import { axeViolations } from './helpers/axe';
 import { authenticateAsDevelopmentUser } from './helpers/devAuth';
 import { removeFinishedRound, seedFinishedRound } from './helpers/matchupScenarioFixture';
 import { seedWaiverScenario, WAIVER_SCENARIO } from './helpers/waiverScenarioFixture';
@@ -100,6 +101,11 @@ for (const viewport of [
           await ready(page);
           const { findings } = await auditPage(page);
           expect.soft(findings, path).toEqual(EMPTY);
+          // axe gates the dashboard only (ticket 11); the other app pages have open findings, listed
+          // in the ticket 11 PR, and join as those are fixed.
+          if (path === '/dashboard') {
+            expect.soft(await axeViolations(page), `${path} (axe)`).toEqual([]);
+          }
         });
       }
     });
