@@ -4165,7 +4165,10 @@ priced matched-bid pick is valued and counted in the trade's nets.
   that draft, whose trade stated the board's number (`trade_entitlement`; owner, 2026-10-21). Else, a
   spent pick on the owner-reviewed list (`valuation/assetLedgerReviewedBidSpends.ts`, five spends
   approved 2026-10-21, keyed by bid match and board pick) joins its listed pick (`reviewed`), which the
-  bidding club must hold at the draft or the ledger refuses. A spent
+  bidding club must hold at the draft or the ledger refuses. A listed pick may carry more than one id:
+  a recaptured trade page can re-key a pick (the parser-v3 eventual-selection join gave two 2025
+  Brisbane spends and the Petracca trade's same-pick link new ids in the 2026 intake, 2026-11-22), so
+  the spend joins whichever id the bidding club held, and an earlier candidate keeps its old id. A spent
   pick with no number (a leftover pick an earlier bid created), an unresolved original club, two
   custody pick ids, or none or two traded picks does not join, and a pick no bid lists stays pending. Only a pending matched-bid
   outcome takes a share; every other outcome is unchanged.
