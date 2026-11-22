@@ -73,11 +73,11 @@ function PlayerGroups({
   const hintId = `${name}-hint`;
   return (
     <fieldset
-      className="min-w-0 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4"
+      className="min-w-0 border border-border bg-card p-4"
       aria-describedby={[hintId, disabled ? disabledReasonId : null].filter(Boolean).join(' ')}
     >
       <legend className="px-1 text-base font-semibold">{legend}</legend>
-      <p id={hintId} className="text-sm text-[color:var(--league-text-muted)]">
+      <p id={hintId} className="text-sm text-muted-foreground">
         {hint}
       </p>
       {players.length === 0 ? (
@@ -88,7 +88,7 @@ function PlayerGroups({
           if (inGroup.length === 0) return null;
           return (
             <div key={group} className="mt-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--league-text-muted)]">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {SLOT_GROUP_LABELS[group]}
               </h3>
               <ul className="mt-1 grid gap-1">
@@ -97,8 +97,8 @@ function PlayerGroups({
                     <label
                       className={`flex min-h-11 items-center gap-3 rounded-md border px-3 py-2 text-sm ${
                         selected === player.id
-                          ? 'border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)]'
-                          : 'border-[color:var(--league-border)]'
+                          ? 'border-destructive-text bg-destructive-soft'
+                          : 'border-border'
                       } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                     >
                       <input
@@ -108,16 +108,16 @@ function PlayerGroups({
                         checked={selected === player.id}
                         onChange={() => onSelect(player.id)}
                         disabled={disabled}
-                        className="h-4 w-4 shrink-0 accent-[color:var(--league-danger)]"
+                        className="h-4 w-4 shrink-0 accent-destructive-text"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{player.name}</span>
-                        <span className="block text-xs text-[color:var(--league-text-muted)]">
+                        <span className="block text-xs text-muted-foreground">
                           {[player.position, player.club].filter(Boolean).join(' · ')}
                         </span>
                         <span className="sr-only">, {SLOT_GROUP_LABELS[group]}</span>
                       </span>
-                      <span className="shrink-0 text-xs tabular-nums text-[color:var(--league-text-muted)]">
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                         {player.z === null ? 'No stats' : `Z ${player.z.toFixed(2)}`}
                       </span>
                     </label>
@@ -217,7 +217,7 @@ export function BitePicker({
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-[color:var(--league-text)] sm:px-6">
+    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 text-foreground sm:px-6">
       <Link
         href={`/leagues/${encodeURIComponent(leagueId)}`}
         className="inline-block text-sm font-medium underline underline-offset-2"
@@ -225,13 +225,13 @@ export function BitePicker({
         Back to the league
       </Link>
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-danger)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-destructive-text">
           Round {picker.round} bite
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           You beat {picker.victim.teamName} {picker.score}
         </h1>
-        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+        <p className="mt-1 text-sm text-muted-foreground">
           Take one player from {picker.victim.teamName} and send one of yours back. The player you
           send back takes your pick&apos;s place in their lineup, and your pick takes his in yours.
         </p>
@@ -249,7 +249,7 @@ export function BitePicker({
         <p
           id="bite-blocked-reason"
           role="status"
-          className="rounded-md border border-[color:var(--league-warning)] bg-[color:var(--league-warning-soft)] p-3 text-sm"
+          className="rounded-md border border-warning-text bg-warning-soft p-3 text-sm"
         >
           <span className="font-semibold">
             {refusalHeading(blocked.code)} ({blocked.code}).
@@ -287,11 +287,11 @@ export function BitePicker({
             />
           </div>
 
-          <div className="sticky bottom-0 -mx-4 border-t border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
+          <div className="sticky bottom-0 -mx-4 border-t border-border bg-muted px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0">
             <button
               type="submit"
               disabled={disabled}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[color:var(--league-danger)] px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-text)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-destructive-text px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {submitLabel(
                 command.status === 'saving',
@@ -326,8 +326,7 @@ function BiteState({
   deadlineText: string;
   nameOf: (id: string | null) => string;
 }) {
-  const card =
-    'rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm';
+  const card = 'rounded-lg border border-border bg-card p-4 text-sm';
   if (!open) {
     return (
       <section role="status" className={card}>
@@ -351,7 +350,7 @@ function BiteState({
           : 'The deadline has passed. The system makes the pick within 5 minutes.'}
       </p>
       {picker.autoBitePreview ? (
-        <p className="mt-1 text-[color:var(--league-text-muted)]">
+        <p className="mt-1 text-muted-foreground">
           If you do not choose by then, the system takes{' '}
           <strong>{nameOf(picker.autoBitePreview.takenPlayerId)}</strong> (their highest Statly Z)
           and sends back <strong>{nameOf(picker.autoBitePreview.returnedPlayerId)}</strong> (your
@@ -368,7 +367,7 @@ function BiteFeedback({ command }: { command: Command }) {
     <>
       <div aria-live="polite">
         {command.status === 'saved' ? (
-          <p className="rounded-md border border-[color:var(--league-success)] bg-[color:var(--league-success-soft)] p-3 text-sm font-medium">
+          <p className="rounded-md border border-success bg-success-soft p-3 text-sm font-medium">
             Done. You took {command.taken} and sent back {command.returned}.
           </p>
         ) : null}
@@ -376,7 +375,7 @@ function BiteFeedback({ command }: { command: Command }) {
       {command.status === 'failed' ? (
         <p
           role="alert"
-          className="rounded-md border border-[color:var(--league-danger)] bg-[color:var(--league-danger-soft)] p-3 text-sm"
+          className="rounded-md border border-destructive-text bg-destructive-soft p-3 text-sm"
         >
           <span className="font-semibold">
             The bite did not save. {refusalHeading(command.code)} ({command.code}).

@@ -64,9 +64,7 @@ describe('words on stone and tint', () => {
     ['red words', '--destructive-text', 5.5],
     ['amber words', '--warning-text', 5.5],
     ['secondary text', '--muted-foreground', 5.5],
-    ['league warning', '--league-warning', 4.5],
     ['draft secondary text', '--draft-broadcast-muted', 4.5],
-    ['league red words', '--league-danger', 5.5],
     ['live words', '--status-live', 5.5],
     ['draft alert words', '--draft-broadcast-alert', 5.5],
   ])('%s hold on stone and tint', (_role, foreground, minimum) => {

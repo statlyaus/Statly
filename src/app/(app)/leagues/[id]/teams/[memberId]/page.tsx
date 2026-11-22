@@ -27,31 +27,29 @@ export default async function LeagueTeamRosterPage({
   const standingsHref = `/leagues/${encodeURIComponent(leagueId)}?tab=standings`;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-muted px-4 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[var(--app-shell-max-width)]">
         <Link
           href={standingsHref}
-          className="inline-flex min-h-10 items-center text-sm font-semibold text-[color:var(--league-primary)] underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+          className="inline-flex min-h-10 items-center text-sm font-semibold text-brand-bar underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-brand-bar"
         >
           Back to standings
         </Link>
 
-        <header className="mt-5 border-b border-[color:var(--league-border)] pb-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+        <header className="mt-5 border-b border-border pb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Team roster
           </p>
-          <h1 className="mt-2 text-3xl font-semibold text-[color:var(--league-text)]">
-            {roster.teamName}
-          </h1>
-          <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
+          <h1 className="mt-2 text-3xl font-semibold text-foreground">{roster.teamName}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
             {roster.players.length} rostered {roster.players.length === 1 ? 'player' : 'players'}
           </p>
         </header>
 
-        <section className="mt-6 overflow-x-auto rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
+        <section className="mt-6 overflow-x-auto rounded-lg border border-border bg-card">
           {roster.players.length > 0 ? (
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]">
+              <thead className="bg-muted text-muted-foreground">
                 <tr>
                   <th scope="col" className="px-4 py-3 font-semibold">
                     Player
@@ -64,24 +62,18 @@ export default async function LeagueTeamRosterPage({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[color:var(--league-border)]">
+              <tbody className="divide-y divide-border">
                 {roster.players.map((player) => (
                   <tr key={player.id}>
-                    <td className="px-4 py-3 font-medium text-[color:var(--league-text)]">
-                      {player.name}
-                    </td>
-                    <td className="px-4 py-3 text-[color:var(--league-text-muted)]">
-                      {player.club}
-                    </td>
-                    <td className="px-4 py-3 text-[color:var(--league-text-muted)]">
-                      {player.position}
-                    </td>
+                    <td className="px-4 py-3 font-medium text-foreground">{player.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{player.club}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{player.position}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p className="px-4 py-8 text-sm text-[color:var(--league-text-muted)]">
+            <p className="px-4 py-8 text-sm text-muted-foreground">
               This team has no rostered players yet.
             </p>
           )}

@@ -6,7 +6,7 @@ import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { defaultLeagueSeasonYear, SEASON_CHANGE_LOCKED_MESSAGE } from '@/server/leagues/seasonYear';
 
 const SELECT_CLASS =
-  'h-10 rounded-md border border-[color:var(--league-border)] bg-field px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]';
+  'h-10 rounded-md border border-border bg-field px-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar';
 
 /** The AFL season the league plays; the commissioner can change it only while in setup. */
 export function SeasonYearControl({
@@ -74,7 +74,7 @@ export function SeasonYearControl({
   };
 
   return (
-    <div className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+    <div className="flex flex-col gap-2 text-sm font-medium text-foreground">
       <label htmlFor={`season-year-${leagueId}`}>Season</label>
       <select
         id={`season-year-${leagueId}`}
@@ -91,12 +91,12 @@ export function SeasonYearControl({
         ))}
       </select>
       {year !== null && !inSetup && (
-        <span className="text-xs font-normal text-[color:var(--league-text-muted)]">
+        <span className="text-xs font-normal text-muted-foreground">
           {SEASON_CHANGE_LOCKED_MESSAGE}
         </span>
       )}
       {message && (
-        <span role="status" className="text-xs font-normal text-[color:var(--league-text-muted)]">
+        <span role="status" className="text-xs font-normal text-muted-foreground">
           {message}
         </span>
       )}
