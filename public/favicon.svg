@@ -1,3 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 197 210" role="img" aria-label="Statly">
-  <image href="/brand/statly-app-icon.png" width="197" height="210"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Statly">
+  <!-- The brand board's icon tile (statly-brand-board.html, "Sherrin alone for app icons and
+       favicons"): the hand-drawn Sherrin in white at 84% width on a cobalt square. -->
+  <defs>
+    <filter id="rough">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.4"/>
+    </filter>
+  </defs>
+  <rect width="120" height="120" fill="#1a2cff"/>
+  <g transform="translate(9.6 26.4) scale(0.84)" filter="url(#rough)" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="3" d="M10 42 C 22 14, 92 6, 110 36 C 98 66, 30 72, 10 42 Z"/>
+    <path stroke-width="2" d="M48 24 L 74 22 M52 19 l2 9 M58 18 l1 9 M64 18 l1 9 M70 18 l0 8"/>
+    <path stroke-width="2" d="M24 46 C 46 52, 76 50, 98 40"/>
+    <circle cx="46" cy="38" r="2.6" fill="#fff" stroke="none"/>
+    <circle cx="58" cy="37" r="2.6" fill="#fff" stroke="none"/>
+  </g>
 </svg>

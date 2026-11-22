@@ -28,7 +28,7 @@ const caveat = Caveat({
 export const metadata: Metadata = {
   title: 'Statly',
   description: 'AFL trades, valued by what the players and picks went on to do.',
-  icons: { icon: '/brand/statly-app-icon.png', apple: '/brand/statly-app-icon.png' },
+  icons: { icon: '/favicon.svg', apple: '/brand/statly-sherrin-icon-180.png' },
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {

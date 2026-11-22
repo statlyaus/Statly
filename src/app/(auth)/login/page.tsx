@@ -1,9 +1,9 @@
 import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
+import { StatlyWordmark } from '@/components/brand/StatlyWordmark';
 import { toSafeRedirect, withSafeNext } from '@/lib/safeRedirect';
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import { Suspense } from 'react';
 
 export const revalidate = 0;
@@ -29,14 +29,9 @@ export default async function LoginPage({
         <section className="w-full py-8 sm:py-10">
           <div className="mx-auto w-full max-w-xl">
             <div className="mb-10 text-center">
-              <Image
-                src="/brand/statly-primary-logo.png"
-                alt="Statly"
-                width={312}
-                height={118}
-                preload
-                className="mx-auto mb-8 h-auto w-64 max-w-full sm:w-80"
-              />
+              <p aria-label="Statly" className="mb-8 pr-[0.9em] text-[clamp(4.2rem,11vw,8.5rem)]">
+                <StatlyWordmark size="lockup" className="text-foreground" />
+              </p>
               <h1 className="text-3xl font-semibold tracking-normal text-foreground">
                 Sign in to Statly
               </h1>
