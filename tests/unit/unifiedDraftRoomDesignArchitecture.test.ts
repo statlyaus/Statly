@@ -6,25 +6,20 @@ describe('unified draft room design architecture', () => {
   const source = () =>
     readFileSync(join(process.cwd(), 'src/components/draft/UnifiedDraftRoom.tsx'), 'utf8');
 
-  it('uses broadcast theme tokens for the draft room shell', () => {
+  it('paints the draft room with the core roles on the stone and white grounds', () => {
     const roomSource = source();
 
-    expect(roomSource).toContain('bg-[color:var(--draft-broadcast-page)]');
-    expect(roomSource).toContain('text-[color:var(--draft-broadcast-text)]');
-    expect(roomSource).toContain('border-[color:var(--draft-broadcast-border)]');
-    expect(roomSource).toContain('bg-[color:var(--draft-broadcast-panel)]');
-    expect(roomSource).toContain('[--card:var(--draft-broadcast-panel)]');
-    expect(roomSource).toContain('bg-[color:var(--draft-broadcast-overlay)]');
+    // The page sits on stone; the panels and the side drawer are white grounds on it.
+    expect(roomSource).toContain('className="ground-stone min-h-screen"');
+    expect(roomSource).toContain('ground-white');
+    expect(roomSource).not.toContain('draft-broadcast');
+    expect(roomSource).toContain('bg-overlay');
     expect(roomSource).toContain('aria-label="Draft complete next steps"');
-    expect(roomSource).toContain(
-      'border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5'
-    );
-    expect(roomSource).toContain(
-      'className="absolute right-0 top-0 h-full w-80 overflow-y-auto border-l border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)]'
+    expect(roomSource).toMatch(
+      /className="ground-white absolute right-0 top-0 h-full w-80 overflow-y-auto/
     );
     expect(roomSource).toContain('text-muted-foreground');
     expect(roomSource).toContain('focus-visible:ring-ring');
-    expect(roomSource).not.toContain('border border-border bg-card');
     expect(roomSource).not.toContain('bg-primary text-primary-foreground');
     expect(roomSource).not.toContain('bg-foreground/50');
     expect(roomSource).not.toContain('bg-card p-4 text-card-foreground');
@@ -74,10 +69,8 @@ describe('unified draft room design architecture', () => {
     expect(roomSource).toContain('className="flex min-h-0 min-w-0 overflow-x-auto"');
     expect(roomSource).toContain('max-w-[2100px]');
     expect(roomSource).toContain('min-h-[30rem]');
-    expect(roomSource).toContain('bg-[color:var(--draft-broadcast-table)]');
-    expect(roomSource).toContain('[--card:var(--draft-broadcast-table)]');
-    expect(roomSource).toContain(
-      'className="sticky top-4 flex h-full min-h-[30rem] max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-3 text-[color:var(--draft-broadcast-text)]'
+    expect(roomSource).toMatch(
+      /className="ground-white sticky top-4 flex h-full min-h-\[30rem\] max-h-\[calc\(100vh-2rem\)\] flex-col overflow-hidden/
     );
     expect(roomSource).toContain('2xl:grid-cols-[20rem_minmax(0,1fr)_22rem]');
     expect(roomSource).toContain('hidden min-h-0 lg:block');

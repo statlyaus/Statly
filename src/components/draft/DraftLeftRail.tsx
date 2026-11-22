@@ -87,7 +87,7 @@ function RosterPanel({ rosterSlots }: { rosterSlots: DraftLeftRailRosterSlot[] }
       </div>
 
       {rosterSlots.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+        <p className="border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
           No roster slots available.
         </p>
       ) : (
@@ -97,10 +97,8 @@ function RosterPanel({ rosterSlots }: { rosterSlots: DraftLeftRailRosterSlot[] }
               key={slot.id}
               data-roster-state={slot.player ? 'filled' : 'empty'}
               className={cn(
-                'rounded-md border border-border px-3 py-2 text-sm',
-                slot.player
-                  ? 'bg-[color:var(--draft-broadcast-roster-filled)]'
-                  : 'border-dashed bg-background'
+                ' border border-border px-3 py-2 text-sm',
+                slot.player ? 'bg-muted' : 'border-dashed bg-background'
               )}
             >
               <div className="flex items-start justify-between gap-3">
@@ -111,7 +109,7 @@ function RosterPanel({ rosterSlots }: { rosterSlots: DraftLeftRailRosterSlot[] }
                   )}
                 </div>
                 {!slot.player && (
-                  <span className="shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                  <span className="shrink-0 border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                     Empty slot
                   </span>
                 )}
@@ -200,7 +198,7 @@ export default function DraftLeftRail({
   return (
     <aside
       className={cn(
-        'flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground',
+        'flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border border-border bg-card text-card-foreground',
         className
       )}
       aria-label="Draft side panel"
@@ -225,13 +223,13 @@ export default function DraftLeftRail({
               onClick={() => selectMode(tab.mode)}
               onKeyDown={handleTabKeyDown}
               className={cn(
-                'inline-flex min-w-0 items-center justify-center gap-1 rounded-md px-2 py-2 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                isActive && 'bg-background text-foreground shadow-sm'
+                'inline-flex min-w-0 items-center justify-center gap-1 rounded-cut px-2 py-2 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                isActive && 'bg-background text-foreground'
               )}
             >
               <span className="truncate">{tab.label}</span>
               {typeof tab.count === 'number' && (
-                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[0.6875rem] font-semibold text-muted-foreground">
+                <span className="bg-muted px-1.5 py-0.5 text-[0.6875rem] font-semibold text-muted-foreground">
                   {tab.count}
                 </span>
               )}

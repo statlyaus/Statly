@@ -64,9 +64,7 @@ describe('words on stone and tint', () => {
     ['red words', '--destructive-text', 5.5],
     ['amber words', '--warning-text', 5.5],
     ['secondary text', '--muted-foreground', 5.5],
-    ['draft secondary text', '--draft-broadcast-muted', 4.5],
     ['live words', '--status-live', 5.5],
-    ['draft alert words', '--draft-broadcast-alert', 5.5],
   ])('%s hold on stone and tint', (_role, foreground, minimum) => {
     expect(ratio(foreground, STONE)).toBeGreaterThanOrEqual(minimum);
     expect(ratio(foreground, '--brand-tint')).toBeGreaterThanOrEqual(minimum);
@@ -84,8 +82,8 @@ describe('words on stone and tint', () => {
     );
   });
 
-  it('keeps the draft room dividers visible on its stone page', () => {
-    expect(ratio('--draft-broadcast-border-soft', '--draft-broadcast-page')).toBeGreaterThan(1.3);
+  it('keeps hairline dividers visible on the stone page', () => {
+    expect(ratio('--border', STONE)).toBeGreaterThan(1.3);
   });
 });
 

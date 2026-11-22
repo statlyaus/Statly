@@ -85,10 +85,10 @@ describe('DraftPickTrain', () => {
       expect(pickItem).toHaveClass('min-h-[11rem]');
     }
 
-    expect(pickItems[1]).toHaveClass('bg-[color:var(--draft-broadcast-panel-strong)]');
-    expect(pickItems[1]).toHaveClass('border-[color:var(--draft-broadcast-red)]');
-    expect(pickItems[3]).toHaveClass('bg-[color:var(--draft-broadcast-panel-strong)]');
-    expect(pickItems[3]).toHaveClass('border-[color:var(--draft-broadcast-yellow)]');
+    expect(pickItems[1]).toHaveClass('bg-muted');
+    expect(pickItems[1]).toHaveClass('border-brand-bar');
+    expect(pickItems[3]).toHaveClass('bg-muted');
+    expect(pickItems[3]).toHaveClass('border-warning');
     expect(pickItems[3]).not.toHaveClass('bg-accent');
   });
 });

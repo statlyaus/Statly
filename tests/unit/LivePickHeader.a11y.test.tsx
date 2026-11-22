@@ -93,7 +93,7 @@ describe('LivePickHeader', () => {
     expect(screen.queryByText('Latest pick')).not.toBeInTheDocument();
     const nextPickStatus = screen.getByRole('status', { name: 'Your next pick is pick 2' });
     expect(nextPickStatus).toHaveTextContent('Your next pick: Pick 2');
-    expect(nextPickStatus).toHaveClass('bg-[color:var(--draft-broadcast-yellow)]');
+    expect(nextPickStatus).toHaveClass('bg-warning');
     expect(nextPickStatus).not.toHaveClass('bg-accent');
     expect(screen.getByText('On the clock')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();
@@ -125,20 +125,14 @@ describe('LivePickHeader', () => {
       <LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />
     );
     const clock = screen.getByRole('region', { name: 'Draft clock' });
-    expect(clock).not.toHaveClass('border-t-[color:var(--draft-broadcast-yellow)]');
+    expect(clock).not.toHaveClass('border-t-warning');
 
     rerender(<LivePickHeader draftData={draftData} isYourTurn={true} yourSlot={1} />);
 
     const onClock = screen.getByRole('region', { name: 'Draft clock' });
-    expect(onClock).toHaveClass(
-      'border-t-[color:var(--draft-broadcast-yellow)]',
-      'bg-[color:var(--draft-broadcast-yellow-soft)]'
-    );
-    expect(onClock).not.toHaveClass('bg-[color:var(--draft-broadcast-panel)]');
-    expect(screen.getByText('Your turn')).toHaveClass(
-      'bg-[color:var(--draft-broadcast-yellow)]',
-      'text-[color:var(--draft-broadcast-yellow-text)]'
-    );
+    expect(onClock).toHaveClass('border-t-warning', 'bg-warning/20');
+    expect(onClock).not.toHaveClass('bg-card');
+    expect(screen.getByText('Your turn')).toHaveClass('bg-warning', 'text-warning-foreground');
     expect(screen.getByText('Your turn').className).not.toMatch(/shadow-\[0_0/);
   });
 

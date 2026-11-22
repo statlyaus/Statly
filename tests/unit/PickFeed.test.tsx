@@ -162,8 +162,8 @@ describe('PickFeed', () => {
       .closest<HTMLElement>('[data-pick-state]');
     if (!watchlistCard) throw new Error('Expected the watchlist pick card');
     expect(watchlistCard).toHaveAttribute('data-pick-state', 'watchlist');
-    expect(watchlistCard).toHaveClass('border-[color:var(--draft-broadcast-watchlist-border)]');
-    expect(watchlistCard).toHaveClass('bg-[color:var(--draft-broadcast-watchlist-hit)]');
+    expect(watchlistCard).toHaveClass('border-primary');
+    expect(watchlistCard).toHaveClass('bg-accent');
     expect(within(watchlistCard).getByText('Watchlist').querySelector('svg')).toHaveAttribute(
       'aria-hidden',
       'true'

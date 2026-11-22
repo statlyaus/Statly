@@ -131,12 +131,12 @@ export function BloodsuckerDrawPanel({
   return (
     <section
       aria-labelledby="bloodsucker-draw-title"
-      className="mx-4 rounded-lg border border-[color:var(--draft-broadcast-alert)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] sm:mx-6 sm:p-5 lg:mx-8"
+      className="mx-4 border border-destructive-text bg-card p-4 text-foreground sm:mx-6 sm:p-5 lg:mx-8"
     >
       <h2 id="bloodsucker-draw-title" className="text-base font-semibold sm:text-lg">
         The Bloodsucker
       </h2>
-      <p className="mt-1 text-sm text-[color:var(--draft-broadcast-muted)]">
+      <p className="mt-1 text-sm text-muted-foreground">
         One team skips the draft, builds from free agents, and takes a player from every team it
         beats.
       </p>
@@ -210,7 +210,7 @@ function DrawStatus({
           {frame.done ? `The Bloodsucker is ${winnerTeam}.` : 'Drawing the Bloodsucker.'}
         </p>
         {frame.done ? (
-          <p className="mt-1 text-sm text-[color:var(--draft-broadcast-muted)]">
+          <p className="mt-1 text-sm text-muted-foreground">
             Drawn at random from {draw.candidates.length} teams
             {switched
               ? `. The commissioner has since chosen ${state.bloodsucker?.teamName} instead.`
@@ -224,7 +224,7 @@ function DrawStatus({
     return (
       <p className="mt-4 text-lg font-semibold">
         {state.bloodsucker.teamName}
-        <span className="block text-sm font-normal text-[color:var(--draft-broadcast-muted)]">
+        <span className="block text-sm font-normal text-muted-foreground">
           Chosen by the commissioner.
         </span>
       </p>
@@ -262,11 +262,11 @@ function DrawControls({
             type="button"
             onClick={onDraw}
             disabled={saving}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-[color:var(--draft-broadcast-text)] px-5 font-semibold text-[color:var(--draft-broadcast-page)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--draft-broadcast-alert)] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center rounded-cut bg-foreground px-5 font-semibold text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           >
             {saving ? 'Drawing…' : 'Draw the Bloodsucker'}
           </button>
-          <p className="text-xs text-[color:var(--draft-broadcast-muted)]">
+          <p className="text-xs text-muted-foreground">
             The draw happens once and everyone in the lobby sees it.
           </p>
         </div>

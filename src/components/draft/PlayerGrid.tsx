@@ -59,11 +59,11 @@ const FALLBACK_VIRTUALIZED_ROW_HEIGHT = 112;
 const VIRTUALIZED_ROW_OVERSCAN = 6;
 const VIRTUALIZED_ROW_THRESHOLD = 120;
 const ACTION_BUTTON_BASE_CLASS =
-  'inline-flex h-11 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'inline-flex h-11 w-full justify-center items-center gap-1 rounded-cut px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ACTION_BUTTON_DISABLED_CLASS =
   'cursor-not-allowed border border-border bg-muted/70 text-muted-foreground';
 const ACTION_BUTTON_OUTLINE_CLASS =
-  'border border-border bg-[color:var(--draft-broadcast-field)] text-foreground hover:bg-[color:var(--draft-broadcast-field-strong)]';
+  'border border-foreground bg-field text-foreground hover:bg-muted';
 
 interface VisibleRowRange {
   start: number;
@@ -127,7 +127,7 @@ function getSelectActionClass(isDisabled: boolean, isArmed = false): string {
 
   return `${ACTION_BUTTON_BASE_CLASS} font-semibold ${
     isArmed
-      ? 'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] hover:bg-[color:var(--draft-broadcast-yellow)]/90'
+      ? 'bg-warning text-warning-foreground hover:bg-warning/90'
       : 'bg-primary text-primary-foreground hover:bg-primary/90'
   }`;
 }
@@ -160,10 +160,10 @@ function PlayerIdentityCell({
   return (
     <th
       scope="row"
-      className="sticky left-0 z-[1] bg-card px-4 py-4 font-normal shadow-[1px_0_0_0_var(--draft-broadcast-border-soft)] transition-colors group-hover:bg-[color:var(--draft-broadcast-table-row-hover)] sm:px-5"
+      className="sticky left-0 z-[1] bg-card px-4 py-4 font-normal transition-colors group-hover:bg-muted sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-[color:var(--draft-broadcast-field)] p-1.5 shadow-sm sm:flex">
+        <span className="hidden h-11 w-11 flex-shrink-0 items-center justify-center border border-border bg-muted p-1.5 sm:flex">
           <Image
             src={teamLogo}
             alt=""
@@ -178,28 +178,26 @@ function PlayerIdentityCell({
         <div className="min-w-0">
           <div className="truncate font-semibold text-foreground">{player.name}</div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="rounded-md border border-border bg-[color:var(--draft-broadcast-field)] px-2 py-0.5 font-semibold text-foreground">
+            <span className="border border-border bg-field px-2 py-0.5 font-semibold text-foreground">
               {player.position}
             </span>
-            <span className="rounded-md border border-border bg-[color:var(--draft-broadcast-field)] px-2 py-0.5 font-medium text-foreground">
+            <span className="border border-border bg-field px-2 py-0.5 font-medium text-foreground">
               {teamAbbreviation}
             </span>
             <span>{player.club}</span>
-            {player.adp && (
-              <span className="rounded-md bg-muted px-2 py-0.5">ADP {player.adp}</span>
-            )}
+            {player.adp && <span className="bg-muted px-2 py-0.5">ADP {player.adp}</span>}
             {isQueued && (
-              <span className="rounded-md border border-primary/30 bg-primary/15 px-2 py-0.5 font-medium text-primary">
+              <span className="border border-primary/30 bg-primary/15 px-2 py-0.5 font-medium text-primary">
                 Queued
               </span>
             )}
             {isWatched && (
-              <span className="rounded-md border border-border bg-accent px-2 py-0.5 font-medium text-accent-foreground">
+              <span className="border border-border bg-accent px-2 py-0.5 font-medium text-accent-foreground">
                 Watchlist
               </span>
             )}
             {showInjury && (
-              <span className="rounded-md border border-warning/40 bg-warning/15 px-2 py-0.5 font-medium text-warning-foreground">
+              <span className="border border-warning/40 bg-warning/15 px-2 py-0.5 font-medium text-warning-foreground">
                 {getInjuryLabel(player.injuryStatus)}
               </span>
             )}
@@ -229,7 +227,7 @@ function PlayerStatlyZCell({ player }: { player: DraftPlayer }): React.JSX.Eleme
           {statlyZ.value}
         </span>
         {statlyZ.state === 'partial' && (
-          <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-medium uppercase text-muted-foreground">
+          <span className="border border-border bg-muted px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase text-muted-foreground">
             Partial
           </span>
         )}
@@ -308,7 +306,7 @@ function PlayerRowActions({
   const selectDisabled = !canMakePick || actionDisabled;
 
   return (
-    <td className="sticky right-0 z-[1] bg-card border-l border-border/60 px-3 py-4 align-middle shadow-[-1px_0_0_0_var(--draft-broadcast-border-soft)] transition-colors group-hover:bg-[color:var(--draft-broadcast-table-row-hover)]">
+    <td className="sticky right-0 z-[1] bg-card border-l border-border/60 px-3 py-4 align-middle transition-colors group-hover:bg-muted">
       <div className="grid grid-cols-[44px_44px_1fr] items-center gap-2 sm:grid-cols-3">
         {isArmed ? (
           <button
@@ -428,8 +426,8 @@ function PlayerTableRow({
 }: PlayerTableRowProps): React.JSX.Element {
   const teamLogo = getTeamLogo(player.club);
   const teamAbbreviation = getTeamAbbreviation(player.club);
-  const rowClassName = `group cursor-pointer bg-[color:var(--draft-broadcast-table)] transition-colors [content-visibility:auto] hover:bg-[color:var(--draft-broadcast-table-row-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-    isFocused ? 'bg-[color:var(--draft-broadcast-table-row-hover)] ring-2 ring-inset ring-ring' : ''
+  const rowClassName = `group cursor-pointer bg-card transition-colors [content-visibility:auto] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+    isFocused ? 'bg-muted ring-2 ring-inset ring-ring' : ''
   } ${isSelected ? 'bg-primary/15' : ''}`;
 
   return (
@@ -508,7 +506,7 @@ function PlayerGridControls({
   hasActiveFilters,
 }: PlayerGridControlsProps): React.JSX.Element {
   return (
-    <div className="border-b border-border bg-[color:var(--draft-broadcast-panel)] px-4 py-4 sm:px-5">
+    <div className="border-b border-border bg-card px-4 py-4 sm:px-5">
       <div className="flex flex-col gap-3 xl:flex-row">
         <div className="flex-1">
           <label htmlFor="player-search" className="sr-only">
@@ -538,7 +536,7 @@ function PlayerGridControls({
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Search players by name, position, or club..."
-              className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] py-2.5 pl-10 pr-3 text-sm leading-5 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              className="block h-12 w-full rounded-cut border border-input bg-field py-2.5 pl-10 pr-3 text-sm leading-5 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>
@@ -552,7 +550,7 @@ function PlayerGridControls({
             value={statSeason ?? ''}
             onChange={(event) => onStatSeasonChange?.(Number(event.target.value))}
             disabled={!onStatSeasonChange || statSeasons.length === 0}
-            className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="block h-12 w-full rounded-cut border border-input bg-field px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           >
             {statSeasons.length === 0 ? (
               <option value="">Stats season</option>
@@ -574,7 +572,7 @@ function PlayerGridControls({
             id="position-filter"
             value={positionFilter}
             onChange={(event) => onPositionFilterChange(event.target.value)}
-            className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="block h-12 w-full rounded-cut border border-input bg-field px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             {availablePositions.map((position) => (
               <option key={position} value={position}>
@@ -592,7 +590,7 @@ function PlayerGridControls({
             id="sort-by"
             value={sortBy}
             onChange={(event) => onSortChange(event.target.value as PlayerGridSortKey)}
-            className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="block h-12 w-full rounded-cut border border-input bg-field px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="statlyZ">Sort by Statly Z</option>
             <option value="adp">Sort by ADP</option>
@@ -633,11 +631,11 @@ function PlayerGridEmptyState({
   return (
     <div
       className={cn(
-        'flex h-full min-h-[28rem] flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-12 text-center text-card-foreground',
+        'flex h-full min-h-[28rem] flex-col items-center justify-center border border-border bg-card px-6 py-12 text-center text-card-foreground',
         className
       )}
     >
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--draft-broadcast-field)] text-2xl">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center bg-field text-2xl">
         🔍
       </div>
       <h3 className="text-lg font-semibold text-foreground">
@@ -654,14 +652,14 @@ function PlayerGridEmptyState({
           <button
             type="button"
             onClick={onClearFilters}
-            className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex items-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Clear filters
           </button>
           <button
             type="button"
             onClick={onScrollToTop}
-            className="inline-flex items-center rounded-full border border-border bg-[color:var(--draft-broadcast-field)] px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex items-center rounded-cut border border-foreground bg-field px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Scroll to top
           </button>
@@ -736,7 +734,7 @@ function PlayerGridTable({
     <div className="relative min-h-0 flex-1">
       <div
         ref={scrollContainerRef}
-        className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"
+        className="h-full overflow-auto bg-card"
         onScroll={(event) => {
           if (shouldWindowRows) {
             setScrollTop(event.currentTarget.scrollTop);
@@ -773,12 +771,12 @@ function PlayerGridTable({
             )}
             <col className="w-[var(--draft-actions-col)] sm:w-[var(--draft-actions-col-sm)]" />
           </colgroup>
-          <thead className="sticky top-0 z-10 border-b border-border bg-[color:var(--draft-broadcast-panel)] text-sm font-medium text-muted-foreground backdrop-blur">
+          <thead className="sticky top-0 z-10 border-b border-border bg-card text-sm font-medium text-muted-foreground">
             <tr>
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="sticky left-0 z-20 bg-[color:var(--draft-broadcast-panel)] px-4 py-3 font-semibold shadow-[1px_0_0_0_var(--draft-broadcast-border-soft)] sm:px-5"
+                className="sticky left-0 z-20 bg-card px-4 py-3 font-semibold sm:px-5"
               >
                 Player
               </th>
@@ -792,7 +790,7 @@ function PlayerGridTable({
                   <button
                     type="button"
                     onClick={() => onSortChange('statlyZ')}
-                    className="inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="inline-flex items-center justify-center rounded-cut px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     aria-label="Sort by Statly Z"
                   >
                     Statly Z
@@ -806,7 +804,7 @@ function PlayerGridTable({
                   >
                     <button
                       type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       aria-label="About Statly Z"
                     >
                       <Info className="h-3.5 w-3.5" aria-hidden="true" />
@@ -824,7 +822,7 @@ function PlayerGridTable({
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="sticky right-0 z-20 bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-center font-semibold shadow-[-1px_0_0_0_var(--draft-broadcast-border-soft)] sm:px-5"
+                className="sticky right-0 z-20 bg-card px-4 py-3 text-center font-semibold sm:px-5"
               >
                 Actions
               </th>
@@ -852,7 +850,7 @@ function PlayerGridTable({
                       <button
                         type="button"
                         onClick={() => onSortChange(getCategorySortKey(category))}
-                        className="mx-auto inline-flex min-h-7 min-w-10 items-center justify-center rounded-md px-2 text-[11px] font-semibold uppercase text-muted-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className="mx-auto inline-flex min-h-7 min-w-10 items-center justify-center rounded-cut px-2 text-[11px] font-semibold uppercase text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         aria-label={`Sort by ${categoryData.label}`}
                       >
                         {categoryData.abbrev}
@@ -863,7 +861,7 @@ function PlayerGridTable({
               </tr>
             )}
           </thead>
-          <tbody className="divide-y divide-[color:var(--draft-broadcast-border-soft)]">
+          <tbody className="divide-y divide-border">
             {shouldWindowRows && visibleRange.topSpacerHeight > 0 && (
               <tr aria-hidden="true" role="presentation">
                 <td
@@ -915,13 +913,13 @@ function PlayerGridTable({
       </div>
 
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--draft-broadcast-overlay)]">
+        <div className="absolute inset-0 flex items-center justify-center bg-card/85">
           <div className="text-center">
             <div
               className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"
               aria-hidden="true"
             />
-            <p className="text-sm text-muted-foreground">Processing...</p>
+            <p className="text-sm text-foreground">Processing...</p>
           </div>
         </div>
       )}
@@ -1227,7 +1225,7 @@ export default function PlayerGrid({
   return (
     <div
       className={cn(
-        'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        'flex h-full min-h-0 flex-col overflow-hidden border border-border bg-card text-card-foreground',
         className
       )}
     >

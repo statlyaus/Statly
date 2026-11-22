@@ -9,12 +9,12 @@ describe('ConnectionStatus', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('announces reconnecting as a status on the broadcast palette', () => {
+  it('announces reconnecting as a status on the core roles', () => {
     render(<ConnectionStatus status="reconnecting" />);
 
     const status = screen.getByRole('status', { name: 'Live draft connection' });
     expect(status).toHaveTextContent('Reconnecting to the live draft');
-    expect(status.className).toContain('--draft-broadcast-');
+    expect(status.className).toContain('text-warning-text');
     expect(status.className).not.toMatch(/bg-(blue|yellow|red|gray)-\d/);
   });
 

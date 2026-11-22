@@ -97,7 +97,7 @@ export default function PickFeed({
     }
 
     if (isWatchlistPick(pick)) {
-      return 'border-[color:var(--draft-broadcast-watchlist-border)] bg-[color:var(--draft-broadcast-watchlist-hit)]';
+      return 'border-primary bg-accent';
     }
 
     return 'border-border bg-card hover:bg-accent/50';
@@ -153,7 +153,7 @@ export default function PickFeed({
   return (
     <aside
       className={cn(
-        'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        'flex h-full min-h-0 flex-col overflow-hidden border border-border bg-card text-card-foreground',
         className
       )}
       aria-label="Pick feed"
@@ -170,8 +170,8 @@ export default function PickFeed({
               Latest selections, auto-picks, and your watchlist hits.
             </p>
           </div>
-          <div className="rounded-lg bg-primary px-3 py-2 text-right text-primary-foreground">
-            <div className="text-[10px] uppercase tracking-normal opacity-80">Visible</div>
+          <div className="bg-primary px-3 py-2 text-right text-primary-foreground">
+            <div className="text-[0.6875rem] uppercase tracking-normal opacity-80">Visible</div>
             <div className="text-lg font-semibold leading-none">{filteredPicks.length}</div>
           </div>
         </div>
@@ -185,7 +185,7 @@ export default function PickFeed({
                 type="button"
                 onClick={() => setFilter(key)}
                 className={cn(
-                  'rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  'rounded-cut border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   selected
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-card text-card-foreground hover:bg-accent hover:text-accent-foreground'
@@ -206,13 +206,13 @@ export default function PickFeed({
           })}
         </div>
 
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+        <div className="mt-4 flex items-center justify-between border border-border bg-card px-3 py-2">
           <span className="text-xs font-medium text-card-foreground">Auto-scroll on new picks</span>
           <button
             type="button"
             onClick={() => setAutoScroll((value) => !value)}
             className={cn(
-              'inline-flex h-7 w-12 items-center rounded-full px-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'inline-flex h-7 w-12 items-center rounded-cut px-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               autoScroll ? 'bg-primary' : 'bg-muted'
             )}
             role="switch"
@@ -221,7 +221,7 @@ export default function PickFeed({
           >
             <span
               className={cn(
-                'size-5 rounded-full border-2 border-foreground bg-background transition-transform',
+                'size-5 border-2 border-foreground bg-background transition-transform',
                 autoScroll ? 'translate-x-5' : 'translate-x-0'
               )}
             />
@@ -232,7 +232,7 @@ export default function PickFeed({
       <div id={contentId} className="min-h-0 flex-1 overflow-y-auto">
         {filteredPicks.length === 0 ? (
           <div className="flex min-h-full flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
-            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <div className="mx-auto mb-4 flex size-14 items-center justify-center bg-muted text-muted-foreground">
               <Sparkles className="size-7" />
             </div>
             <p className="mb-1 text-lg font-semibold text-foreground">No picks yet</p>
@@ -252,11 +252,11 @@ export default function PickFeed({
                 data-pick-state={
                   isMyPick(pick) ? 'mine' : isWatchlistPick(pick) ? 'watchlist' : 'standard'
                 }
-                className={cn('rounded-lg border p-4 transition-colors', getPickCardClasses(pick))}
+                className={cn(' border p-4 transition-colors', getPickCardClasses(pick))}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
+                    <div className="flex size-10 flex-shrink-0 items-center justify-center bg-primary text-sm font-semibold text-primary-foreground">
                       {pick.overall}
                     </div>
                     <div className="min-w-0">
@@ -273,22 +273,22 @@ export default function PickFeed({
                             {pick.player.name}
                           </h4>
                         </div>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        <span className="bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {pick.player.position}
                         </span>
                         {pick.auto && (
-                          <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive-text">
+                          <span className="bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive-text">
                             Auto
                           </span>
                         )}
                         {isMyPick(pick) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+                          <span className="inline-flex items-center gap-1 rounded-cut bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
                             <User className="size-3" aria-hidden="true" />
                             Mine
                           </span>
                         )}
                         {isWatchlistPick(pick) && !isMyPick(pick) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--draft-broadcast-watchlist-border)] bg-[color:var(--draft-broadcast-watchlist-chip)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--draft-broadcast-watchlist-chip-text)]">
+                          <span className="inline-flex items-center gap-1 rounded-cut border border-primary bg-accent px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
                             <Star className="size-3" aria-hidden="true" />
                             Watchlist
                           </span>
@@ -312,7 +312,7 @@ export default function PickFeed({
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                <div className="mt-3 bg-muted px-3 py-2 text-xs text-muted-foreground">
                   <span>
                     Slot {pick.slot}
                     <span className="mx-1.5 text-muted-foreground">/</span>
