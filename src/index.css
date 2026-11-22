@@ -400,7 +400,7 @@
   /* Paper surface mode (style guide, "Grounds"): the warm page of the public trade pages, replacing
      their old --ts-* palette. Only the page and the quiet panels change; ink, secondary text,
      cobalt, white cards, the hairline and focus keep their root values, so a component reads the
-     same roles here as anywhere else. The story collage and tower inside it keep their own grounds. */
+     same roles here as anywhere else. The story collage inside it keeps its own grounds. */
   [data-surface='paper'] {
     --background: var(--brand-paper);
     --muted: var(--brand-paper-deep);

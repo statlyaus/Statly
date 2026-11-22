@@ -5,7 +5,7 @@ import { ClubBadge } from '@/components/aflTradeStory/ClubBadge';
 import { formatSigned, tradeStoryHref } from '@/components/aflTradeStory/tradePageModel';
 import {
   biggestWins,
-  tradeLadder,
+  tradeLadderByYear,
   tradesListHref,
   tradeYearSummaries,
 } from '@/components/aflTradeStory/tradesListQuery';
@@ -15,7 +15,7 @@ import {
   CameronTitle,
   STORY_COLLAGE_CLASS,
 } from '@/components/aflStories/CameronMasthead';
-import { TowerLadder } from './TowerLadder';
+import { TradeLadder } from './TradeLadder';
 import { RecordBanner } from './RecordBanner';
 import { TradeMarketHero } from './TradeMarketHero';
 import { CameronTimeline } from '@/components/aflStories/CameronTimeline';
@@ -24,7 +24,7 @@ import type { AflTradeStorySampleList } from '@/server/aflTradeIntelligence/deve
 /**
  * The home page while the trade pages are live (owner, 2026-11-16: "a home page that draws someone
  * in"). It opens on the owner's paper collage of one trade, the Jeremy Cameron story, which leads to
- * that story and, through the record strip under the hero, to the trade itself; then the trade ladder drawn as ground light towers, the biggest wins and each season. Real
+ * that story and, through the record strip under the hero, to the trade itself; then the trade ladder with years to pick, the biggest wins and each season. Real
  * numbers only, club colours only, original sketches, and no player or club imagery.
  */
 
@@ -34,7 +34,7 @@ const container = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10';
 const sectionTitle = 'font-display text-5xl font-extrabold leading-none sm:text-6xl';
 export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const { stories } = list;
-  const ladder = tradeLadder(stories);
+  const ladderYears = tradeLadderByYear(stories);
   const years = tradeYearSummaries(stories);
   const nextWins = biggestWins(stories, 6);
   // The trade the lead story is about: the one that sent Jeremy Cameron to Geelong.
@@ -44,7 +44,6 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const cameron = received.find(({ result }) =>
     result.received.some((name) => name.includes('Jeremy Cameron'))
   );
-  const firstYear = years.at(-1)?.year;
 
   return (
     <>
@@ -96,9 +95,8 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
         </div>
       </section>
 
-      <TowerLadder ladder={ladder} firstYear={firstYear} />
-
       <div className={`${container} grid grid-cols-[minmax(0,1fr)] gap-14 py-12 lg:py-16`}>
+        {ladderYears.length > 0 ? <TradeLadder years={ladderYears} /> : null}
         {nextWins.length > 0 ? (
           <section aria-labelledby="next-wins">
             <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 border-b-4 border-foreground pb-3">

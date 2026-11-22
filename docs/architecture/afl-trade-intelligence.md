@@ -4503,7 +4503,8 @@ shows alone with a link back to the list. Every list link has `prefetch={false}`
 
 **Home page and stories.** While the reader is available the home page (`components/aflTradesHome/`)
 is the trade pages' front page: the owner's "Every October, footy goes to market" collage, the Jeremy
-Cameron year band, the trade ladder (every club's combined net), the next biggest wins and each season,
+Cameron year band, the trade ladder (every club's combined net, W–L so far and Win %, for the trade
+years picked on its strip in the browser, sortable by column), the next biggest wins and each season,
 all from the same reader's list. `/afl/stories/jeremy-cameron` (`components/aflStories/`) is a
 hand-written story, not bundle data: its facts are in `cameronChapters.tsx` with the sources named at
 the foot of the page, and a change to them needs a source. Story components never import the private

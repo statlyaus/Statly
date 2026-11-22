@@ -4,7 +4,7 @@ import type { AflTradeStorySampleSummary } from '@/server/aflTradeIntelligence/d
 
 import { buttonStyles, fieldStyles } from '@/components/ui/controlStyles';
 
-import { clubSquare } from './tradePageModel';
+import { clubSquareBackground } from '@/lib/clubGuernseys';
 import {
   tradesListClubs,
   tradesListHref,
@@ -117,7 +117,6 @@ export function TradesRail({
               All clubs
             </RailLink>
             {clubs.map(({ slug, name }) => {
-              const square = clubSquare(name);
               return (
                 <RailLink
                   key={slug}
@@ -127,8 +126,8 @@ export function TradesRail({
                 >
                   <span
                     aria-hidden="true"
-                    className={`size-[13px] flex-none ${square.edged ? 'border-[1.5px] border-foreground' : ''}`}
-                    style={{ background: square.fill }}
+                    className="size-[13px] flex-none border border-foreground"
+                    style={{ background: clubSquareBackground(name) }}
                   />
                   <span className="truncate">{name}</span>
                 </RailLink>
