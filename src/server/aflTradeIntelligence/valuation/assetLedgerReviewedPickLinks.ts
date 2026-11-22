@@ -43,6 +43,13 @@ export const AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS: readonly AflTradeAssetL
       samePickId: 'draft-pick:1f33de70d85287bed31f2eb0684093925bac2361471a07f777f4b66bf2bed22f',
       note: '2025 Melbourne→Gold Coast "pick 24" (the Petracca trade) is West Coast\'s R2 pick 24; Gold Coast spent "R2 (WCE) - Pick 24" on Zeke Uwland (owner, 2026-10-23).',
     },
+    {
+      // The same pending pick under the id the parser-v3 eventual-selection join gives it once its
+      // trade page is recaptured (2026 intake, 2026-11-22); the owner's 2026-10-23 link, re-keyed.
+      pickId: 'draft-pick:93048557e468cdcdb3bc0b014ebea1251f0908e29719ddde509019e774b8dda2',
+      samePickId: 'draft-pick:1f33de70d85287bed31f2eb0684093925bac2361471a07f777f4b66bf2bed22f',
+      note: '2025 Melbourne→Gold Coast "pick 24" (the Petracca trade), re-keyed by its recaptured page: West Coast\'s R2 pick 24; Gold Coast spent "R2 (WCE) - Pick 24" on Zeke Uwland (owner, 2026-10-23).',
+    },
     // Owner, 2026-10-25: "Approve all 7". Each is a stated not-used draft-night id (rule R2: mid-draft,
     // holder matched a bid) whose holder's board spend joins the order pick named here.
     {
