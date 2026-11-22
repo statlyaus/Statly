@@ -29,7 +29,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
     <>
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-cut focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       >
         Skip to content
       </a>
@@ -72,7 +72,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="-mx-2 inline-flex min-h-11 items-center rounded-md px-2 font-medium underline-offset-4 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="-mx-2 inline-flex min-h-11 items-center rounded-cut px-2 font-medium underline-offset-4 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {link.label}
                       </Link>

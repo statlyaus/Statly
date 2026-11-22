@@ -143,7 +143,8 @@ All tokens live in `src/index.css` (Tailwind v4, `@theme inline`, no JavaScript 
 - **Area palettes collapse (phase 3).** A `--trade-*` or `--social-*` token that only aliases a core
   role is deleted and its call sites use the core utility. The league palette went first (ticket 08,
   2026-11-22): its soft status fills are now the semantic roles `--success-soft`, `--warning-soft` and
-  `--destructive-soft` (fills behind status words), and its button hover is `--brand-bar-hover`. Tokens with a recorded reason stay and are registered in `@theme`.
+  `--destructive-soft` (fills behind status words), and its button hover is `--brand-bar-hover`. The social palette followed (ticket 09): your own chat
+  messages sit on the cobalt ground, so their quiet words and focus ring come from the ground. Tokens with a recorded reason stay and are registered in `@theme`.
 - **No JSON token pipeline.** The CSS file is the only source. Revisit only if a second consumer
   (native app, Figma, generated images) needs the values.
 
@@ -195,7 +196,11 @@ A trade has two sides, not a good side and a bad side: trade charts never use gr
   `rounded-cut` on buttons and fields, `rounded-cut-float` on menus, dialogs, popovers, toasts and
   tooltips through `floatingStyles` (done 2026-11-20); chips and toggles move screen by screen.
   Never a neat rounded corner or a pill. The fantasy app's core pages are square (done 2026-11-21,
-  ticket 07); the league, social, trade centre and draft room palettes square up with their tickets.
+  ticket 07). The public draft, methodology and AFL index route files are square (2026-11-22); the
+  shared draft hub components (`draftHubChrome.ts`, `DraftHubNav`, `DraftHubState`, the two
+  explorers) are not yet. The league and social pages are square (tickets 08 and 09, 2026-11-22); the chat
+  launcher, chat panel, drawer and menus have the cut edge and the hard shadow. The trade centre and
+  draft room palettes square up with their tickets.
 - **Lines:** each weight means one thing. Hairline for separation; 2.5px ink for buttons and floating
   things; 2px ink for inputs and chips; 1.5px ink under table headers; 3px for the current tab; a 4px
   top edge for which side; a 6px sun left edge for "yours", the only side stripe allowed; 2px dashed
@@ -276,12 +281,15 @@ One primitive per job, in `src/components/ui/`.
 ### Club colours
 
 `src/lib/clubGuernseys.ts` is the source. Club colour appears only in the 13px club square, always
-beside the club abbreviation; white clubs (Geelong, North, Sydney) get an ink-edged square. Text is
-never set on a club colour. A unit test checks the squares against every ground (target, phase 2).
-On the public trade pages `ClubBadge` draws the square and abbreviation, and the trade tree is ink
-with a club square beside each club's name (done 2026-11-20). The trade page head, the scarf and the
-tower still use club colours: the owner is redesigning them (ticket 06h), so they carry
-`data-collage` and the brand check skips them, like the story collage on the home page.
+beside the club abbreviation. The square shows both guernsey colours split on the diagonal, main
+colour top left, inside a 1px ink edge (owner, 2026-11-22), so the black clubs (Essendon, Richmond,
+Port Adelaide, Collingwood) tell apart; white guernseys (Geelong, North, Sydney) lead with their
+trim. `clubSquareBackground` gives the CSS. Text is never set on a club colour. A unit test checks
+the squares against every ground (target, phase 2). On the public trade pages `ClubBadge` draws the
+square and abbreviation, the trade tree is ink with a club square beside each club's name (done
+2026-11-20), and the home page trade ladder uses the same square. The trade page head and the scarf
+still use club colours: the owner is redesigning them (ticket 06h), so they carry `data-collage` and
+the brand check skips them, like the story collage on the home page.
 
 In the fantasy app the My Team squad list and player search show `ClubSquare` (the square and the
 abbreviation, no club logo). **Exception (owner, 2026-11-21):** the My Team field is an
@@ -410,6 +418,6 @@ Automated design checks today:
   side stripe, or club colour bigger than the 13px square. It skips `[data-collage]`. The rules live
   in `tests/e2e/helpers/brandAudit.ts`; a radius above 2px on a tile, card or table counts.
 - `tests/e2e/app-brand.test.ts` runs the same audit, signed in, on the dashboard, a league overview,
-  My Team, standings, matchups, waivers, the players list and a player page at 1280 and 390px, and
-  on the sign-in page, skipping nothing (the league palette exclusion went with ticket 08). The
-  social, trade centre and draft room pages join with their tickets.
+  My Team, standings, matchups, waivers, the players list, a player page and the three social views
+  at 1280 and 390px, on the open chat panel, and on the sign-in page, skipping nothing. The trade
+  centre and draft room pages join with their tickets.

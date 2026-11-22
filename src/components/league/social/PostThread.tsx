@@ -106,23 +106,21 @@ export default function PostThread({
     <section
       aria-labelledby="social-thread-heading"
       className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
-        compact
-          ? 'bg-social-canvas text-social-text'
-          : 'rounded-2xl border border-social-border bg-social-canvas text-social-text'
+        compact ? 'bg-muted text-foreground' : ' border border-border bg-muted text-foreground'
       }`}
     >
-      <header className="flex items-center justify-between gap-3 border-b border-social-border bg-social-surface px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-social-text transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+          className="inline-flex min-h-10 items-center gap-2 rounded-cut px-2 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to discussions
         </button>
         <Link
           href={`/leagues/${encodeURIComponent(post.leagueId)}/social/posts/${encodeURIComponent(post.id)}`}
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+          className="inline-flex min-h-10 items-center gap-2 rounded-cut px-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <LinkIcon className="size-4" aria-hidden="true" />
           Link
@@ -135,32 +133,30 @@ export default function PostThread({
         onScroll={(event) => onLatestVisibleChange?.(isNearBottom(event.currentTarget))}
       >
         <article
-          className={`border-b border-l-4 border-social-border ${compact ? 'p-3' : 'p-4 sm:p-5'} ${
-            post.isAnnouncement
-              ? 'border-l-social-brand-strong bg-social-surface'
-              : 'border-l-transparent bg-social-surface'
+          className={`border-b border-l-4 border-border ${compact ? 'p-3' : 'p-4 sm:p-5'} ${
+            post.isAnnouncement ? 'border-l-primary bg-card' : 'border-l-transparent bg-card'
           }`}
         >
           <div className="flex flex-wrap items-center gap-2">
             {post.isAnnouncement ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-social-brand-strong px-2.5 py-1 text-xs font-semibold text-social-brand-foreground">
+              <span className="inline-flex items-center gap-1 bg-brand-bar px-2.5 py-1 text-xs font-semibold text-brand-bar-foreground">
                 <Megaphone className="size-3.5" aria-hidden="true" />
                 Announcement
               </span>
             ) : null}
             {post.isPinned ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-social-action bg-social-brand-soft px-2.5 py-1 text-xs font-semibold text-social-action-pressed">
+              <span className="inline-flex items-center gap-1 border border-brand-bar bg-secondary px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
                 <Pin className="size-3.5" aria-hidden="true" />
                 Pinned
               </span>
             ) : null}
             {post.isLocked ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-social-border bg-social-surface-subtle px-2.5 py-1 text-xs font-semibold text-social-text-muted">
+              <span className="inline-flex items-center gap-1 border border-border bg-accent px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                 <Lock className="size-3.5" aria-hidden="true" />
                 Locked
               </span>
             ) : null}
-            <span className="rounded-full border border-social-border bg-social-surface-subtle px-2.5 py-1 text-xs font-medium text-social-text-muted">
+            <span className="border border-border bg-accent px-2.5 py-1 text-xs font-medium text-muted-foreground">
               {post.category.name}
             </span>
           </div>
@@ -175,7 +171,7 @@ export default function PostThread({
                 onClick={() =>
                   void handleModeration(() => onUpdatePost({ isPinned: !post.isPinned }))
                 }
-                className="inline-flex min-h-9 items-center rounded-lg border border-social-border bg-social-surface px-3 text-xs font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+                className="inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >
                 {post.isPinned ? 'Unpin' : 'Pin'} discussion
               </button>
@@ -185,7 +181,7 @@ export default function PostThread({
                 onClick={() =>
                   void handleModeration(() => onUpdatePost({ isLocked: !post.isLocked }))
                 }
-                className="inline-flex min-h-9 items-center rounded-lg border border-social-border bg-social-surface px-3 text-xs font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+                className="inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >
                 {post.isLocked ? 'Unlock' : 'Lock'} discussion
               </button>
@@ -199,7 +195,7 @@ export default function PostThread({
           ) : null}
           <h2
             id="social-thread-heading"
-            className="mt-3 text-xl font-semibold tracking-tight text-social-text"
+            className="mt-3 text-xl font-semibold tracking-tight text-foreground"
           >
             {post.title}
           </h2>
@@ -211,7 +207,7 @@ export default function PostThread({
             />
           </div>
           {post.moderationStatus === 'removed' || post.deletedAt ? (
-            <p className="mt-4 text-sm italic text-social-text-muted">Post removed</p>
+            <p className="mt-4 text-sm italic text-muted-foreground">Post removed</p>
           ) : (
             <SafeSocialText value={post.body} className="mt-4" />
           )}
@@ -226,46 +222,40 @@ export default function PostThread({
         </article>
 
         <div className={compact ? 'p-3' : 'p-4 sm:p-5'}>
-          <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-social-text">
+          <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
             <MessageSquare className="size-4" aria-hidden="true" />
             {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
           </h3>
 
           {loading && replies.length === 0 ? (
-            <p role="status" className="py-8 text-center text-sm text-social-text-muted">
+            <p role="status" className="py-8 text-center text-sm text-muted-foreground">
               Loading replies…
             </p>
           ) : error && replies.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-social-error bg-social-error-soft p-4 text-center">
-              <p role="alert" className="text-sm font-medium text-social-error">
+            <div className="mt-4 border border-destructive bg-destructive-soft p-4 text-center">
+              <p role="alert" className="text-sm font-medium text-destructive-text">
                 {error}
               </p>
               <button
                 type="button"
                 onClick={() => void onRetry()}
-                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-social-border bg-social-surface px-3 text-sm font-semibold text-social-text transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Retry
               </button>
             </div>
           ) : replies.length === 0 ? (
-            <p className="mt-4 rounded-xl border border-dashed border-social-border bg-social-surface-subtle px-4 py-6 text-center text-sm text-social-text-muted">
+            <p className="mt-4 border border-dashed border-border bg-accent px-4 py-6 text-center text-sm text-muted-foreground">
               No replies yet.
             </p>
           ) : (
             <ol
-              className={compact ? 'mt-3 divide-y divide-social-border' : 'mt-4 space-y-3'}
+              className={compact ? 'mt-3 divide-y divide-border' : 'mt-4 space-y-3'}
               aria-label="Discussion replies"
             >
               {replies.map((reply) => (
                 <li key={reply.id}>
-                  <article
-                    className={
-                      compact
-                        ? 'py-3'
-                        : 'rounded-xl border border-social-border bg-social-surface p-3'
-                    }
-                  >
+                  <article className={compact ? 'py-3' : ' border border-border bg-card p-3'}>
                     <SocialAuthor
                       author={reply.author}
                       timestamp={reply.createdAt}
@@ -273,7 +263,7 @@ export default function PostThread({
                       compact
                     />
                     {reply.moderationStatus === 'removed' || reply.deletedAt ? (
-                      <p className="mt-2 text-sm italic text-social-text-muted">Reply removed</p>
+                      <p className="mt-2 text-sm italic text-muted-foreground">Reply removed</p>
                     ) : (
                       <>
                         <SafeSocialText value={reply.body} className="mt-2" />
@@ -309,7 +299,7 @@ export default function PostThread({
                 type="button"
                 onClick={() => void onLoadMore()}
                 disabled={loading}
-                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-border bg-social-surface px-4 text-sm font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+                className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >
                 {loading ? 'Loading…' : 'Load more replies'}
               </button>
@@ -318,18 +308,18 @@ export default function PostThread({
         </div>
       </div>
 
-      <footer className="border-t border-social-border bg-social-surface p-3">
+      <footer className="border-t border-border bg-card p-3">
         {post.isLocked ? (
-          <p className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-social-text-muted">
+          <p className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-muted-foreground">
             <Lock className="size-4" aria-hidden="true" />
             This discussion is locked and cannot receive replies.
           </p>
         ) : !canPublish && !muted ? (
-          <p role="status" className="py-2 text-center text-sm font-medium text-social-text-muted">
+          <p role="status" className="py-2 text-center text-sm font-medium text-muted-foreground">
             Accept the community standards above before replying.
           </p>
         ) : muted ? (
-          <p role="status" className="py-2 text-center text-sm font-medium text-social-text-muted">
+          <p role="status" className="py-2 text-center text-sm font-medium text-muted-foreground">
             You can read this discussion, but cannot reply until{' '}
             <time dateTime={mutedUntil ?? undefined}>
               {mutedUntil ? new Date(mutedUntil).toLocaleString() : 'the mute ends'}

@@ -91,11 +91,12 @@ function linkSpentPick(
     (row) => row.bidMatchId === bid.bidMatchId && row.nativePickId === pick.nativePickId
   );
   if (reviewed === undefined) return { pickId: null, link: 'no_custody' };
-  if (holders.get(reviewed.pickId) !== bid.clubId)
+  const held = reviewed.pickIds.find((pickId) => holders.get(pickId) === bid.clubId);
+  if (held === undefined)
     throw new Error(
-      `Reviewed bid spend ${pick.nativePickId} names ${reviewed.pickId}, which the bidding club did not hold at the draft.`
+      `Reviewed bid spend ${pick.nativePickId} names ${reviewed.pickIds.join(' or ')}, which the bidding club did not hold at the draft.`
     );
-  return { pickId: reviewed.pickId, link: 'reviewed' };
+  return { pickId: held, link: 'reviewed' };
 }
 
 /**

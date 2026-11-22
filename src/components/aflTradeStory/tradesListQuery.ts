@@ -1,8 +1,9 @@
 import type { AflTradeStorySampleSummary } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
 
 /**
- * The public trade list's filters (/afl/trades?year=2024&club=geelong&sort=biggest). They live in the
- * address so a filtered list can be shared, bookmarked and read without scripts.
+ * The public trade list's filters and its previewed trade
+ * (/afl/trades?year=2024&club=geelong&sort=biggest&trade=<id>). They live in the address so a list
+ * and the trade open beside it can be shared, bookmarked and read without scripts.
  */
 
 type TradesListSort = 'newest' | 'biggest';
@@ -13,7 +14,12 @@ export interface TradesListQuery {
   /** One club's slug, or null for every club. */
   readonly club: string | null;
   readonly sort: TradesListSort;
+  /** The trade open in the preview, or null for the list's first row. */
+  readonly trade: string | null;
 }
+
+/** A query without a preview: what filtering and every link from outside the list need. */
+type TradesListFilter = Omit<TradesListQuery, 'trade'> & { readonly trade?: string | null };
 
 interface TradesListClub {
   readonly clubId: string;
@@ -48,7 +54,8 @@ export const tradesListYears = (stories: readonly AflTradeStorySampleSummary[]) 
 
 /**
  * Reads the address. With no year named the list shows the latest year, or every year once a club is
- * chosen (a club's trades are few enough to read together). An unknown year, club or sort is ignored.
+ * chosen (a club's trades are few enough to read together). An unknown year, club, sort or trade is
+ * ignored.
  */
 export function parseTradesListQuery(
   params: Readonly<Record<string, Param>>,
@@ -66,14 +73,17 @@ export function parseTradesListQuery(
         : club === null
           ? (years[0] ?? null)
           : null;
-  return { year, club, sort: first(params.sort) === 'biggest' ? 'biggest' : 'newest' };
+  const tradeId = first(params.trade);
+  const trade = stories.some((story) => story.tradeId === tradeId) ? tradeId : null;
+  return { year, club, sort: first(params.sort) === 'biggest' ? 'biggest' : 'newest', trade };
 }
 
 /** The address of the list under a query, always naming the year so a link means what it shows. */
-export function tradesListHref(query: TradesListQuery): string {
+export function tradesListHref(query: TradesListFilter): string {
   const params = new URLSearchParams({ year: query.year === null ? 'all' : String(query.year) });
   if (query.club !== null) params.set('club', query.club);
   if (query.sort === 'biggest') params.set('sort', 'biggest');
+  if (query.trade) params.set('trade', query.trade);
   return `/afl/trades?${params.toString()}`;
 }
 
@@ -84,7 +94,7 @@ const tradeSwing = (story: AflTradeStorySampleSummary) =>
 /** The trades a query shows, in its order. "Newest" keeps the list's own order within a year. */
 export function filterTrades(
   stories: readonly AflTradeStorySampleSummary[],
-  query: TradesListQuery
+  query: TradesListFilter
 ): AflTradeStorySampleSummary[] {
   const shown = stories.filter(
     (story) =>
@@ -171,9 +181,38 @@ export function tradeLadder(stories: readonly AflTradeStorySampleSummary[]): Tra
         provisional: row.provisional || result.provisional,
       });
     }
-  return [...rows.values()].sort(
-    (left, right) => right.net - left.net || left.name.localeCompare(right.name)
-  );
+  return byResult([...rows.values()]);
+}
+
+const byResult = (rows: TradeLadderRow[]) =>
+  rows.sort((left, right) => right.net - left.net || left.name.localeCompare(right.name));
+
+/** The ladder of each trade year, oldest first, for picking years on the front page. */
+export const tradeLadderByYear = (stories: readonly AflTradeStorySampleSummary[]) =>
+  [...tradesListYears(stories)]
+    .reverse()
+    .map((year) => ({ year, rows: tradeLadder(stories.filter((story) => story.year === year)) }))
+    .filter(({ rows }) => rows.length > 0);
+
+/** Several years' ladders as one: each club's results add up, as they do across trades. */
+export function combineLadders(ladders: readonly (readonly TradeLadderRow[])[]): TradeLadderRow[] {
+  const rows = new Map<string, TradeLadderRow>();
+  for (const row of ladders.flat()) {
+    const sum = rows.get(row.clubId);
+    rows.set(
+      row.clubId,
+      sum
+        ? {
+            ...sum,
+            net: sum.net + row.net,
+            ahead: sum.ahead + row.ahead,
+            behind: sum.behind + row.behind,
+            provisional: sum.provisional || row.provisional,
+          }
+        : row
+    );
+  }
+  return byResult([...rows.values()]);
 }
 
 interface TradeYearSummary {

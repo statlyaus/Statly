@@ -115,7 +115,7 @@ export default function LeagueSocialShell({
       type="button"
       onClick={() => setShowPreferences((preferencesVisible) => !preferencesVisible)}
       aria-expanded={showPreferences}
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Settings className="size-4" aria-hidden="true" />
       <span className="sr-only">Social notification preferences</span>
@@ -124,23 +124,19 @@ export default function LeagueSocialShell({
 
   return (
     <section
-      className={`league-social flex min-w-0 flex-col overflow-hidden rounded-2xl border border-social-border bg-social-canvas text-social-text shadow-sm ${
+      className={`flex min-w-0 flex-col overflow-hidden border border-border bg-muted text-foreground ${
         compact ? 'min-h-0' : 'min-h-[36rem]'
       } ${className}`}
       aria-label={title}
     >
-      <div
-        className={
-          compact ? 'bg-social-canvas' : 'border-b border-social-border bg-social-surface px-3 pt-3'
-        }
-      >
+      <div className={compact ? 'bg-muted' : 'border-b border-border bg-card px-3 pt-3'}>
         {showHeader ? (
           <div className="flex items-start justify-between gap-3 px-1 pb-3">
             <div>
-              <h1 className="font-display text-3xl font-bold leading-none text-social-text">
+              <h1 className="font-display text-3xl font-bold leading-none text-foreground">
                 {title}
               </h1>
-              <p className="mt-1 text-sm text-social-text-muted">{VIEW_DESCRIPTIONS[activeView]}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{VIEW_DESCRIPTIONS[activeView]}</p>
             </div>
             {settingsButton}
           </div>
@@ -157,13 +153,9 @@ export default function LeagueSocialShell({
           </div>
         ) : null}
         {controller.summary && !controller.summary.standardsAccepted ? (
-          <div
-            className={`rounded-xl border border-social-action bg-social-brand-soft p-3 ${
-              compact ? 'm-3' : 'mb-3'
-            }`}
-          >
-            <p className="text-sm font-semibold text-social-text">Community standards</p>
-            <p className="mt-1 text-sm text-social-text-muted">
+          <div className={` border border-brand-bar bg-secondary p-3 ${compact ? 'm-3' : 'mb-3'}`}>
+            <p className="text-sm font-semibold text-foreground">Community standards</p>
+            <p className="mt-1 text-sm text-muted-foreground">
               Keep league discussion respectful, safe, and relevant. You can read league social
               content now, but must accept these standards before posting.
             </p>
@@ -183,12 +175,12 @@ export default function LeagueSocialShell({
                   setAcceptingStandards(false);
                 }
               }}
-              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-social-action bg-social-action px-4 text-sm font-semibold text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-cut border border-brand-bar bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
             >
               {acceptingStandards ? 'Saving…' : 'I accept the community standards'}
             </button>
             {standardsError ? (
-              <p role="alert" className="mt-2 text-sm font-medium text-social-error">
+              <p role="alert" className="mt-2 text-sm font-medium text-destructive-text">
                 {standardsError}
               </p>
             ) : null}
@@ -198,7 +190,7 @@ export default function LeagueSocialShell({
 
       <div
         hidden={activeView !== 'chat'}
-        className={`${activeView === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-social-canvas ${
+        className={`${activeView === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-muted ${
           compact ? 'p-0' : 'p-3'
         }`}
       >
@@ -254,7 +246,7 @@ export default function LeagueSocialShell({
 
       <div
         hidden={activeView !== 'board'}
-        className={`${activeView === 'board' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-social-canvas ${
+        className={`${activeView === 'board' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-muted ${
           compact ? 'p-0' : 'p-3'
         }`}
       >
@@ -322,7 +314,7 @@ export default function LeagueSocialShell({
 
       <div
         hidden={activeView !== 'activity'}
-        className={`${activeView === 'activity' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-social-canvas ${
+        className={`${activeView === 'activity' ? 'flex' : 'hidden'} min-h-0 flex-1 bg-muted ${
           compact ? 'p-0' : 'p-3'
         }`}
       >

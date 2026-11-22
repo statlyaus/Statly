@@ -14,7 +14,7 @@ import SocialRemoveButton from './SocialRemoveButton';
 import SocialReportButton from './SocialReportButton';
 
 const quietButton =
-  'inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus';
+  'inline-flex min-h-8 items-center gap-1 rounded-cut px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export function containsSocialMention(value: string): boolean {
   return /(^|\s)@[a-z0-9][a-z0-9._-]*/i.test(value);
@@ -73,18 +73,18 @@ export default function ChatMessageRow({
 
   // The editor is a form: it sits on a plain surface, not on the filled bubble.
   const filled = own && !removed && !editing;
-  // Another member's message that names someone: blue outline (your own stays filled navy).
+  // Another member's message that names someone: blue outline (your own stays filled cobalt).
   const mentionOutline = containsMention && !own && !editing;
 
   const tone = removed
-    ? 'border-dashed border-social-border bg-transparent'
+    ? 'border-dashed border-border bg-transparent'
     : mentionOutline
-      ? 'border-2 border-social-link border-l-4 border-l-[color:var(--member)] bg-social-bubble shadow-sm'
+      ? 'border-2 border-primary border-l-4 border-l-[color:var(--member)] bg-card'
       : filled
-        ? 'border-transparent bg-social-bubble-own text-social-bubble-own-text'
+        ? 'ground-cobalt border-transparent'
         : editing
-          ? 'border-social-border bg-social-surface'
-          : 'border-social-bubble-edge border-l-4 border-l-[color:var(--member)] bg-social-bubble shadow-sm';
+          ? 'border-border bg-card'
+          : 'border-border border-l-4 border-l-[color:var(--member)] bg-card';
 
   function closeOptions(): void {
     setOptionsOpen(false);
@@ -98,7 +98,7 @@ export default function ChatMessageRow({
     >
       {day ? (
         <div className="mb-3 flex justify-center">
-          <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-social-text-muted">
+          <time className="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground">
             {day}
           </time>
         </div>
@@ -106,19 +106,17 @@ export default function ChatMessageRow({
 
       <div className={`group flex items-start gap-2 ${own ? 'flex-row-reverse' : ''}`}>
         {!continuation ? (
-          <SocialAvatar author={message.author} shape="square" colourIndex={colourIndex} />
+          <SocialAvatar author={message.author} colourIndex={colourIndex} />
         ) : (
           <span className="w-10 shrink-0" aria-hidden="true" />
         )}
 
         <article
           aria-label={`${containsMention ? 'Message containing a mention' : 'Message'} from ${authorName}`}
-          className={`min-w-0 rounded-2xl border px-3.5 py-2 ${
-            editing ? 'flex-1' : 'max-w-[75%]'
-          } ${tone}`}
+          className={`min-w-0 border px-3.5 py-2 ${editing ? 'flex-1' : 'max-w-[75%]'} ${tone}`}
         >
           {removed ? (
-            <p className="text-sm italic text-social-text-muted">Message removed</p>
+            <p className="text-sm italic text-muted-foreground">Message removed</p>
           ) : (
             <>
               {continuation ? null : own ? (
@@ -128,13 +126,13 @@ export default function ChatMessageRow({
                   <span className="truncate font-semibold text-[color:var(--member)]">
                     {message.author?.displayName || 'Former member'}
                   </span>
-                  <span className="truncate text-social-text-muted">
+                  <span className="truncate text-muted-foreground">
                     {message.author?.teamName || 'Team unavailable'}
                   </span>
                 </p>
               )}
               {mentionOutline ? (
-                <span className="mb-0.5 inline-flex items-center gap-1 text-xs font-bold text-social-link">
+                <span className="mb-0.5 inline-flex items-center gap-1 text-xs font-bold text-primary">
                   <AtSign className="size-3" aria-hidden="true" />
                   Mention
                 </span>
@@ -156,18 +154,14 @@ export default function ChatMessageRow({
                   highlightMentions
                   className={
                     filled
-                      ? '!text-social-bubble-own-text [&_a]:!text-social-bubble-own-text [&_a]:!decoration-social-bubble-own-text [&_a]:focus-visible:!ring-social-bubble-own-text [&_[data-mention]]:!bg-social-bubble-own-text [&_[data-mention]]:!text-social-bubble-own'
+                      ? '!text-brand-bar-foreground [&_a]:!text-brand-bar-foreground [&_a]:!decoration-brand-bar-foreground [&_a]:focus-visible:!ring-brand-bar-foreground [&_[data-mention]]:!bg-brand-bar-foreground [&_[data-mention]]:!text-brand-bar'
                       : ''
                   }
                 />
               ) : null}
-              {message.gif ? <GiphyMessageMedia gif={message.gif} onFilledBubble={filled} /> : null}
+              {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
               {editing ? null : (
-                <p
-                  className={`mt-0.5 flex justify-end gap-1.5 text-[0.6875rem] tabular-nums ${
-                    filled ? 'text-social-bubble-own-muted' : 'text-social-text-muted'
-                  }`}
-                >
+                <p className="mt-0.5 flex justify-end gap-1.5 text-[0.6875rem] tabular-nums text-muted-foreground">
                   {message.editedAt ? <span>Edited</span> : null}
                   <time dateTime={message.createdAt}>{formatSocialTime(message.createdAt)}</time>
                 </p>
@@ -183,7 +177,7 @@ export default function ChatMessageRow({
             aria-expanded={optionsOpen}
             aria-controls={optionsId}
             onClick={() => (optionsOpen ? closeOptions() : setOptionsOpen(true))}
-            className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full text-social-text-muted transition-[opacity,background-color,color] hover:bg-social-brand-soft hover:text-social-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
+            className={`inline-flex size-9 shrink-0 items-center justify-center rounded-cut text-muted-foreground transition-[opacity,background-color,color] hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media(hover:none)]:opacity-100 ${
               optionsOpen ? 'opacity-100' : 'opacity-0'
             }`}
           >

@@ -10,8 +10,8 @@ import { E2E_LEAGUE_ID, E2E_PLAYER_ID } from './global.setup';
  * Brand conformance of the signed-in fantasy app (docs/product/style-guide.md), with the same
  * element-by-element audit as the public trade pages (`helpers/brandAudit.ts`).
  *
- * Nothing is skipped: the league palette is gone (ticket 08). The social (09), trade centre (10a) and
- * draft room (10b) pages join PAGES when those tickets land.
+ * Nothing is skipped: the league (ticket 08) and social (09) palettes are gone. The trade centre (10a)
+ * and draft room (10b) pages join PAGES when those tickets land.
  */
 const PAGES: ReadonlyArray<{
   path: string;
@@ -39,6 +39,10 @@ const PAGES: ReadonlyArray<{
   },
   { path: '/players', ready: heading(1) },
   { path: `/players/${E2E_PLAYER_ID}`, ready: heading(1) },
+  // League social (ticket 09): chat, the message board and activity.
+  { path: `/leagues/${E2E_LEAGUE_ID}/social`, ready: heading(1) },
+  { path: `/leagues/${E2E_LEAGUE_ID}/social?view=board`, ready: heading(2, 'Message board') },
+  { path: `/leagues/${E2E_LEAGUE_ID}/social?view=activity`, ready: heading(2) },
 ];
 
 function text(words: string) {
@@ -71,10 +75,10 @@ for (const viewport of [
   test.describe(`the fantasy app follows the brand at ${viewport.width}px`, () => {
     test.use({ viewport });
 
-    test('dashboard, league, My Team, standings, matchups, waivers and players', async ({
+    test('dashboard, league, My Team, standings, matchups, waivers, players and social', async ({
       page,
     }) => {
-      test.setTimeout(300_000);
+      test.setTimeout(480_000);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await authenticateAsDevelopmentUser(page);
 
@@ -119,4 +123,18 @@ test('the sign-in page follows the brand', async ({ page }) => {
     const { findings } = await auditPage(page);
     expect.soft(findings, `/login at ${viewport.width}px`).toEqual(EMPTY);
   }
+});
+
+// The chat launcher and the panel it opens float over every league page.
+test('the league chat launcher and panel follow the brand', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await authenticateAsDevelopmentUser(page);
+  await page.goto(`/leagues/${E2E_LEAGUE_ID}`);
+  await heading(1)(page);
+  await page.getByRole('button', { name: /open league chat/i }).click();
+  await expect(page.getByLabel('League chat panel')).toBeVisible({ timeout: 30_000 });
+  const { findings } = await auditPage(page);
+  expect.soft(findings, 'league chat panel').toEqual(EMPTY);
 });

@@ -796,12 +796,13 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
       {
         bidMatchId: darcyBid().bidMatchId,
         nativePickId: '6042',
-        pickId: PICK_MATCHED,
+        pickIds: ['draft-pick:earlier-id', PICK_MATCHED],
         note: 'test',
       },
     ];
     const held = new Map([[PICK_MATCHED, 'western_bulldogs']]);
     const [bid] = aflTradeAssetLedgerBidMatches(base.candidate, stintValue, [], held, reviewed);
+    // Named under an earlier id too (a recaptured page re-keyed it): the held id is the one joined.
     expect(bid!.spentPicks[1]).toMatchObject({ link: 'reviewed', pickId: PICK_MATCHED });
     expect(() =>
       aflTradeAssetLedgerBidMatches(
@@ -929,9 +930,10 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
         ...AFL_TRADE_ASSET_LEDGER_REVIEWED_PASSED.map(({ pickId }) => pickId),
         ...AFL_TRADE_ASSET_LEDGER_REVIEWED_SELECTED.map(({ pickId }) => pickId),
       ];
-      // 4 same picks (2026-10-23) + 7 (2026-10-25), 1 passed, 1 reviewed selection.
-      expect(ids).toHaveLength(13);
-      expect(new Set(ids).size).toBe(13);
+      // 4 same picks (2026-10-23) + 7 (2026-10-25) + 1 re-keyed (2026-11-22), 1 passed, 1 reviewed
+      // selection.
+      expect(ids).toHaveLength(14);
+      expect(new Set(ids).size).toBe(14);
       // A same pick never names itself or another reviewed pick as the pick it is.
       for (const { pickId, samePickId } of AFL_TRADE_ASSET_LEDGER_REVIEWED_SAME_PICKS)
         expect(samePickId).not.toBe(pickId);

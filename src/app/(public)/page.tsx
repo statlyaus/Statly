@@ -79,8 +79,8 @@ const focusRing =
 export default async function HomePage(): Promise<ReactElement> {
   const trades = await publicTradeStoryReads.listStories();
   return (
-    // The paper surface (style guide, "Grounds") changes only the page and quiet panels; the hero,
-    // record deal and tower paint their own story collage grounds over it.
+    // The paper surface (style guide, "Grounds") changes only the page and quiet panels; the hero
+    // and record deal paint their own story collage grounds over it.
     <div
       className={trades.available ? 'bg-background text-foreground' : 'bg-muted text-foreground'}
       data-surface={trades.available ? 'paper' : undefined}
@@ -100,14 +100,14 @@ export default async function HomePage(): Promise<ReactElement> {
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1">
               <Link
                 href="/afl/trades"
-                className={`inline-flex min-h-11 items-center gap-2 rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar/90 ${focusRing}`}
+                className={`inline-flex min-h-11 items-center gap-2 rounded-cut bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar/90 ${focusRing}`}
               >
                 See every trade
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
               <Link
                 href="/afl/trades/method"
-                className={`inline-flex min-h-11 items-center rounded-md text-sm font-semibold text-foreground underline decoration-muted-foreground/50 underline-offset-4 transition hover:decoration-foreground ${focusRing}`}
+                className={`inline-flex min-h-11 items-center rounded-cut text-sm font-semibold text-foreground underline decoration-muted-foreground/50 underline-offset-4 transition hover:decoration-foreground ${focusRing}`}
               >
                 How this works
               </Link>

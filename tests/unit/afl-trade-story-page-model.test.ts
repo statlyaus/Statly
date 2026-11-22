@@ -71,10 +71,11 @@ describe('trade page model helpers', () => {
     expect(clubStyle('North Melbourne').fill).toBe('#1a3b8e');
   });
 
-  it('draws a white guernsey as a white club square with an ink edge, others in their colour', () => {
-    expect(clubSquare('Geelong')).toEqual({ fill: '#ffffff', edged: true });
-    expect(clubSquare('Sydney')).toEqual({ fill: '#ffffff', edged: true });
-    expect(clubSquare('Essendon')).toEqual({ fill: '#000000', edged: false });
+  it('draws a club square in both guernsey colours, a white guernsey leading with its trim', () => {
+    expect(clubSquare('Geelong')).toEqual({ main: '#001f3d', second: '#ffffff' });
+    expect(clubSquare('Sydney')).toEqual({ main: '#e1251b', second: '#ffffff' });
+    expect(clubSquare('Essendon')).toEqual({ main: '#000000', second: '#cc2031' });
+    expect(clubSquare('Richmond')).not.toEqual(clubSquare('Essendon'));
   });
 
   it('round-trips a trade id through its hash, and keeps pages on the private path', () => {

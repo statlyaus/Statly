@@ -87,23 +87,20 @@ describe('SocialComposer', () => {
 
     const send = screen.getByRole('button', { name: 'Send message' });
     expect(send).toBeDisabled();
-    expect(send).toHaveClass(
-      'disabled:bg-social-disabled-bg',
-      'disabled:text-social-disabled-text'
-    );
+    expect(send).toHaveClass('disabled:bg-muted', 'disabled:text-muted-foreground');
 
     await user.type(screen.getByRole('textbox', { name: 'League message' }), 'State check');
     expect(send).toBeEnabled();
-    expect(send).toHaveClass('bg-social-action', 'text-social-action-foreground');
+    expect(send).toHaveClass('bg-brand-bar', 'text-brand-bar-foreground');
 
     await user.click(send);
     const loading = screen.getByRole('button', { name: 'Sending message' });
     expect(loading).toBeDisabled();
-    expect(loading).toHaveClass('cursor-wait', 'bg-social-action');
+    expect(loading).toHaveClass('cursor-wait', 'bg-brand-bar');
 
     await act(async () => rejectSubmission?.(new Error('Connection interrupted')));
     const retry = await screen.findByRole('button', { name: 'Retry sending message' });
-    expect(retry).toHaveClass('border-social-error', 'bg-social-surface', 'text-social-error');
+    expect(retry).toHaveClass('border-destructive', 'bg-card', 'text-destructive-text');
   });
 
   it('does not submit empty, touch-return, or active IME composition events', async () => {
@@ -142,7 +139,7 @@ describe('SocialComposer', () => {
     expect(input).toHaveStyle({ height: '96px' });
 
     fireEvent.change(input, { target: { value: 'a'.repeat(1000) } });
-    expect(screen.getByText('1,000 / 1,000 · Limit reached')).toHaveClass('text-social-error');
+    expect(screen.getByText('1,000 / 1,000 · Limit reached')).toHaveClass('text-destructive-text');
   });
 
   it('preserves scoped drafts across unmounts and isolates Draft Room drafts', async () => {

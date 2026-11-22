@@ -12,6 +12,23 @@
   color: var(--foreground);
   font-family: var(--font-saira), ui-sans-serif, system-ui, sans-serif;
 }
+/* The trade list's preview: the chart alone, inside the preview's own card. */
+.tt-compact {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+}
+.tt-compact .tt-key {
+  margin-top: 0;
+  font-size: 12px;
+}
+.tt-compact .tt-chart {
+  margin-top: 0.5rem;
+}
+/* Drawn no larger than 1:1, so its 14-unit text stays 14px on a wide screen. */
+.tt-compact .tt-chart svg {
+  max-width: 680px;
+}
 .tt-title {
   margin: 0;
   font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
