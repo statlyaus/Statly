@@ -277,7 +277,7 @@ export default function PickFeed({
                           {pick.player.position}
                         </span>
                         {pick.auto && (
-                          <span className="bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive-text">
+                          <span className="border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                             Auto
                           </span>
                         )}
