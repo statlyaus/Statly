@@ -57,7 +57,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
         <footer className="ground-cobalt pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-12 sm:px-6 lg:px-10">
             <div className="flex flex-col gap-3">
-              <p aria-label="Statly">
+              <p>
                 <StatlyWordmark />
               </p>
               <p className="text-muted-foreground">&copy; {new Date().getFullYear()} Statly</p>

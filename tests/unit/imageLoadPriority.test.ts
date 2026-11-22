@@ -35,9 +35,9 @@ describe('image load priority', () => {
 
 describe('site icons', () => {
   it('points the tab and home-screen icons at the brand board Sherrin tile', () => {
-    expect(read('src/app/layout.tsx')).toContain(
-      "icons: { icon: '/favicon.svg', apple: '/brand/statly-sherrin-icon-180.png' }"
-    );
+    const layout = read('src/app/layout.tsx');
+    expect(layout).toContain("{ url: '/favicon.svg', type: 'image/svg+xml' }");
+    expect(layout).toContain("apple: '/brand/statly-sherrin-icon-180.png'");
     expect(existsSync(join(root, 'public/brand/statly-sherrin-icon-180.png'))).toBe(true);
     const favicon = read('public/favicon.svg');
     expect(favicon).toContain('fill="#1a2cff"');

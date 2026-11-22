@@ -29,7 +29,7 @@ export default async function LoginPage({
         <section className="w-full py-8 sm:py-10">
           <div className="mx-auto w-full max-w-xl">
             <div className="mb-10 text-center">
-              <p aria-label="Statly" className="mb-8 pr-[0.9em] text-[clamp(4.2rem,11vw,8.5rem)]">
+              <p className="mb-8 pr-[0.9em] text-[clamp(4.2rem,11vw,8.5rem)] leading-none">
                 <StatlyWordmark size="lockup" className="text-foreground" />
               </p>
               <h1 className="text-3xl font-semibold tracking-normal text-foreground">
