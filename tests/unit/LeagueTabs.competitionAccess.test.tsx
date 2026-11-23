@@ -70,8 +70,7 @@ describe('LeagueTabs co-commissioner competition access', () => {
     mocks.authenticatedFetch.mockImplementation(async (url: string) => ({
       ok: true,
       status: 200,
-      json: async () =>
-        url.endsWith('/settings') ? { success: true, data: {} } : { trades: [] },
+      json: async () => (url.endsWith('/settings') ? { success: true, data: {} } : { trades: [] }),
     }));
     vi.stubGlobal(
       'fetch',
