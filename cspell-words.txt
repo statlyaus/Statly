@@ -38,7 +38,6 @@ boxshall
 brodie
 brownlow
 cabe
-canonicalizer
 carji
 cartin
 chee
@@ -58,8 +57,6 @@ estimands
 fairests
 fanout
 fantrax
-finalizer
-finalizers
 finlayson
 firestore
 footscray
@@ -103,8 +100,6 @@ lockfiles
 logit
 maginness
 matchups
-materializer
-materializers
 merrett
 mintable
 misalign
@@ -132,7 +127,6 @@ reauthentication
 rebuildable
 recalibrated
 rederives
-rematerializing
 renv
 reparses
 reparsing
@@ -141,7 +135,6 @@ rescanned
 rescores
 rescoring
 rescrapes
-reserialize
 retargeted
 retargets
 reweighting
@@ -179,14 +172,12 @@ uncont
 undeferred
 underspecified
 undrafted
-unfinalized
 unmigrated
 unmute
 unmuted
 unnormalised
 unpairable
 unparseable
-unpenalized
 unpromoted
 unreviewed
 unrouted

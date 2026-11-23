@@ -58,7 +58,7 @@ export default async function RankingsPage() {
           </div>
           <p className="text-xs text-gray-500 mt-2">
             Numbers show per-game averages over the games that reported the stat; a dash means the
-            stat was not reported. Icons and colors indicate strength relative to league average
+            stat was not reported. Icons and colours indicate strength relative to league average
             (Z-score), adjusted for how many games the player has played.
           </p>
         </div>

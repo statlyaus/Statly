@@ -16,7 +16,7 @@ const VIEW_LABELS = {
 const VIEW_DESCRIPTIONS = {
   atTrade: 'Last reviewed season at or before the trade year.',
   realized: 'Reviewed post-trade seasons for the receiving club.',
-  remaining: 'Future value requires an authorized predictive model.',
+  remaining: 'Future value requires an authorised predictive model.',
   current: 'Latest reviewed post-trade season for the receiving club.',
 } as const;
 
@@ -30,7 +30,7 @@ function unavailableReason(reason: string): string {
     post_trade_season_unavailable: 'No full reviewed post-trade league season is loaded yet.',
     no_reviewed_receiving_club_allocation:
       'The reviewed seasons contain no allocation for this player at the receiving club.',
-    predictive_model_not_authorized: 'No authorized predictive model exists for remaining value.',
+    predictive_model_not_authorized: 'No authorised predictive model exists for remaining value.',
     player_identity_unavailable: 'The workbook player name has no exact reviewed player identity.',
     player_identity_ambiguous: 'The workbook player name maps to more than one reviewed identity.',
     selection_lineage_not_reviewed:

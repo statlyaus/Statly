@@ -190,7 +190,7 @@ describe('private local workbook evaluation archive page', () => {
     ).toBeVisible();
     expect(screen.getByText('Required next authority')).toBeVisible();
     expect(screen.getByText('Private non-production calculation authority')).toBeVisible();
-    expect(screen.getByText('Not authorized')).toBeVisible();
+    expect(screen.getByText('Not authorised')).toBeVisible();
     expect(screen.getByText('Not a factual release')).toBeVisible();
     expect(
       screen.getByText('783', { selector: '[data-metric="selected-year-trades"]' })

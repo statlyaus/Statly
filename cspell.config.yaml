@@ -22,9 +22,13 @@ patterns:
   # ('finalized', 'bg-muted') is a code value, not copy. An opening quote follows a space or
   # punctuation, so the gap between two strings ("', realized: '") is never read as one.
   # A JSX tag's `>` follows a word, quote, `}` or `/`, or starts a line; `=>`, `a > b` and
-  # `Foo[]>` do not count, and text with `=` in it is code.
+  # `Foo[]>` do not count, and text with `=` or a `;` outside an entity in it is code.
   - name: jsx-text
-    pattern: '/(?<=(?:^[ \t]*|[\w"''}\/])>)[^<>{}=]*[A-Za-z][^<>{}=]*(?=<|\{)/gm'
+    pattern: '/(?<=(?:^[ \t]*|[\w"''}\/<])>)(?:[^<>{}=;]|&\w+;)*[A-Za-z](?:[^<>{}=;]|&\w+;)*(?=<|\{)/gm'
+  # Text after an expression on the same line: `{title} is finalised with`. Text with `;`, `(`
+  # or `=` in it is code (`} from '…';`, `} else if (`).
+  - name: jsx-text-after-expression
+    pattern: '/(?<=\})[ \t]+[A-Za-z][^<>{}=;()\n]*(?=<|\{|$)/gm'
   - name: template-expression
     pattern: '/\$\{[^}]*\}/g'
   # `doesn&apos;t` would otherwise be read as "doesn" and "apos".
@@ -37,7 +41,7 @@ patterns:
 languageSettings:
   # Components: check only what a reader sees, in Australian English.
   - languageId: typescriptreact
-    includeRegExpList: [jsx-text, prose-string]
+    includeRegExpList: [jsx-text, jsx-text-after-expression, prose-string]
     ignoreRegExpList: [template-expression, html-entity]
 overrides:
   # Engineering docs name tables, statuses and APIs spelt the US way (finalized, materialization),
@@ -45,3 +49,39 @@ overrides:
   - filename: 'docs/**/*.md'
     language: en-AU,en
     ignoreRegExpList: [markdown-code]
+    words: [canonicalizer, finalizer, finalizers, materializer, materializers, rematerializing, reserialize, unfinalized, unpenalized]
+  # Code dictionaries (CSS, npm, software terms) stay on for class names, and they accept some
+  # US spellings. Flag the common ones in copy; none is a Tailwind class.
+  - filename: 'src/**/*.tsx'
+    flagWords:
+      - analyze
+      - analyzed
+      - authorize
+      - authorized
+      - behavior
+      - customize
+      - customized
+      - favorite
+      - favorites
+      - finalize
+      - finalized
+      - finalizing
+      - minimize
+      - minimized
+      - normalize
+      - normalized
+      - optimize
+      - optimized
+      - organize
+      - organized
+      - organization
+      - personalize
+      - personalized
+      - prioritize
+      - realize
+      - realized
+      - recognize
+      - recognized
+      - summarize
+      - summarized
+      - unauthorized
