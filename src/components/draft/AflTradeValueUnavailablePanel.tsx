@@ -21,7 +21,7 @@ const availabilityLabels = {
 
 const viewLabels = {
   at_trade: 'At-trade',
-  realized: 'Realized outcome',
+  realized: 'Realised outcome',
   remaining: 'Remaining outcome',
   current: 'Current outcome',
 } as const satisfies Record<AflTradeValueUnavailable['view'], string>;

@@ -20,7 +20,7 @@ const VIEW_DEFINITIONS: Record<View, string> = {
   at_trade: 'The expected package value using evidence available at the transaction cutoff.',
   realized: 'The observed contribution credited through the evidence cutoff.',
   remaining: 'The authenticated contribution forecast still ahead.',
-  current: 'Realized contribution plus remaining forecast for the same exchange.',
+  current: 'Realised contribution plus remaining forecast for the same exchange.',
 };
 
 function formatted(value: number): string {

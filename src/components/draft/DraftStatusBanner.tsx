@@ -76,7 +76,7 @@ export default function DraftStatusBanner({
     COMPLETED: {
       label: 'Completed',
       title: 'Draft is complete',
-      description: 'All picks have been finalized and the room is now read-only.',
+      description: 'All picks have been finalised and the room is now read-only.',
       tone: 'border-success bg-success text-brand-bar-foreground',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

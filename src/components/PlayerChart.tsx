@@ -204,7 +204,7 @@ const PlayerChart: React.FC<Props> = ({
                 </div>
               </div>
               <div>
-                <div className="text-muted-foreground">Category Avgs</div>
+                <div className="text-muted-foreground">Category averages</div>
                 <div className="font-semibold text-card-foreground">
                   {categoryAverages.length || '-'}
                 </div>

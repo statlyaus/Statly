@@ -399,7 +399,7 @@ Rules an agent reads are the first layer; tests are the backstop. Phases land in
 | 1. Write the rules    | This guide, linked from `AGENTS.md` and [design principles](design-principles.md); the cobalt brand and Marker controls written in on 2026-11-20                                                                                                                                                                                                                                              | Done        |
 | 2. Freeze drift       | `Scripts/design/raw-colour-baseline.json` holds each file's raw-colour count and `tests/unit/designTokenColours.test.ts` fails on any rise; `tests/unit/designContrast.test.ts` checks the core token pairs and the club squares on the light grounds. `@axe-core/playwright` (`tests/e2e/helpers/axe.ts`, WCAG 2.0 to 2.2 A and AA tags) runs on every page the brand e2e audits (ticket 11) | Done        |
 | 3. Restructure tokens | Primitives and semantic tiers, the brand colours and six grounds, Geist and Caveat, the control cut, tape, field roles and `--input` at 3:1 or more (done 2026-11-20), the floating cut and hard shadow tokens (done 2026-11-20), paper surface mode (done 2026-11-20; dead dark code removed 2026-11-20). `src/index.css` is over 300 lines, so it needs an approved edit plan               | In progress |
-| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English, Vale on docs                                                                                                                                                                                                                              | Planned     |
+| 4. Lint gates         | `eslint-plugin-better-tailwindcss` (after a spike), Tailwind's default palette removed once raw colours reach zero, cspell with Australian English (done 2026-11-24; Vale cut)                                                                                                                                                                                                                | Planned     |
 | 5. Consolidate        | `DataTable`, `StatValue`, `EmptyState`, one spinner, buttons on `buttonStyles`, the redrawn marker icon set, a shared formatter, copy rewrites, one logo source                                                                                                                                                                                                                               | Planned     |
 | 6. Living style guide | A gated `/styleguide` route rendering every token, ground and primitive, with axe and screenshot checks; screenshot baselines generated in CI only                                                                                                                                                                                                                                            | Planned     |
 
@@ -410,6 +410,11 @@ Automated design checks today:
   file is allowed none). After a clean-up, lower the baseline with
   `node Scripts/design/count-raw-colours.mjs --write-baseline`; never raise it.
   `node Scripts/design/count-raw-colours.mjs --top 15` lists what is left.
+- `npm run spell` (CI's Docs job) runs cspell from `cspell.config.yaml`. In `src/**/*.tsx` it reads
+  only what a reader sees, text between JSX tags and quoted strings with a space in them, in
+  Australian English, so `Randomize` or `finalized` in copy fails. Docs get a typo check that also
+  accepts US spellings, because they name US-spelt code. A correct word cspell does not know goes in
+  `cspell-words.txt`; a US spelling in copy gets fixed, not listed.
 - `tests/unit/designContrast.test.ts` checks the core token pairs that exist today (see [Colour roles](#colour-roles))
   against the values in `src/index.css`, the six grounds and the paper surface, and each club square
   against the light grounds and paper. `designTokenColours.test.ts` also fails if the retired `--ts-*`

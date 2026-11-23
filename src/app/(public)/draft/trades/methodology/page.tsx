@@ -23,7 +23,7 @@ const plannedViews = [
       'Assesses the decision using only evidence that was available when the trade occurred.',
   },
   {
-    title: 'Realized outcome',
+    title: 'Realised outcome',
     description:
       'Describes contribution already delivered while each asset was in the receiving AFL club’s custody.',
   },
@@ -35,7 +35,7 @@ const plannedViews = [
   {
     title: 'Current outcome',
     description:
-      'Combines realized and remaining outcomes under one approved, current model publication.',
+      'Combines realised and remaining outcomes under one approved, current model publication.',
   },
 ] as const;
 
@@ -192,7 +192,7 @@ export default async function AflTradeMethodologyPage() {
               How Statly assigns a grade
             </h3>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              Grades run from A+ to D and summarize each club&apos;s position in the validated trade
+              Grades run from A+ to D and summarise each club&apos;s position in the validated trade
               outcome distribution. They use an equal-party baseline and account for outcomes that
               are practically indistinguishable instead of forcing a winner.
             </p>

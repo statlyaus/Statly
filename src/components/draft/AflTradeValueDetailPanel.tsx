@@ -18,7 +18,7 @@ type AflTradeValueDetailPanelProps = {
 
 const viewLabels = {
   at_trade: 'At the time',
-  realized: 'Realized value',
+  realized: 'Realised value',
   remaining: 'Remaining value',
   current: 'Outcome today',
 } as const satisfies Record<AflTradeValueResult['view'], string>;

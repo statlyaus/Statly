@@ -32,6 +32,7 @@ jobs:
       - run: npm ci
       - run: npm run skills:check
       - run: npm run docs:check
+      - run: npm run spell
       - name: Quarantine entries reference open issues
         env:
           GH_TOKEN: ${{ github.token }}

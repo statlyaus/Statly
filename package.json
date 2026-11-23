@@ -50,6 +50,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docs:check": "node Scripts/check-docs.mjs && npm run ontology:check",
+    "spell": "cspell --no-progress",
     "ontology:check": "node Scripts/check-ontology.mjs",
     "skills:check": "node Scripts/check-agent-skills.mjs",
     "infra:afl-trade:validate-plan": "tsx Scripts/infra/validate-afl-trade-nonproduction-plan.ts",
@@ -184,6 +185,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
+    "@cspell/dict-en-au": "1.1.31",
     "@electric-sql/pglite": "0.5.16",
     "@electric-sql/pglite-socket": "0.2.19",
     "@eslint/compat": "^1.4.1",
@@ -205,6 +207,7 @@
     "@vitest/ui": "^4.1.11",
     "autoprefixer": "^10.6.2",
     "cross-env": "^10.1.0",
+    "cspell": "10.4.1",
     "esbuild": "0.28.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.6",

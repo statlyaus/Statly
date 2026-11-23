@@ -681,7 +681,7 @@ export function CompetitionSettingsPanel({
                 <h4 className="font-semibold text-foreground">Fixtures</h4>
                 <p className="mt-1">
                   Inspect every published round. Commissioners can add, replace, and remove
-                  regular-season fixtures before finalization. Finals participants advance
+                  regular-season fixtures before finalisation. Finals participants advance
                   automatically from results.
                 </p>
               </div>
