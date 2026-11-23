@@ -129,8 +129,11 @@ export default function DraftPickTrain({
         )}
       </div>
 
+      {/* The picks scroll sideways below xl, so the list takes focus for keyboard scrolling. */}
       <ol
-        className="grid auto-cols-[minmax(13.5rem,1fr)] grid-flow-col gap-3 overflow-x-auto px-4 py-4 xl:grid-flow-row xl:grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]"
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- A sideways list needs a keyboard-scroll target.
+        tabIndex={0}
+        className="grid auto-cols-[minmax(13.5rem,1fr)] grid-flow-col gap-3 overflow-x-auto px-4 py-4 focus-visible:outline-[3px] focus-visible:outline-offset-[-3px] focus-visible:outline-dashed focus-visible:outline-ring xl:grid-flow-row xl:grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]"
         aria-label="Draft picks"
       >
         {state.slots.map((slot) => {

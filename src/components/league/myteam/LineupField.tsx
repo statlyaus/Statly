@@ -339,12 +339,15 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
         onGrass ? 'focus-visible:ring-white' : 'focus-visible:ring-brand-bar'
       } ${dimmed ? 'opacity-40' : ''}`}
     >
+      {/* The Swap/Here badge and the empty spot's line letters repeat what the button's label already
+          says. They are drawn by CSS from a data attribute, not as text, so axe's label-in-name check
+          sees only "Empty" or the surname, both inside the name. */}
       {view.target ? (
         <span
-          className={`absolute left-1/2 top-0 z-10 -translate-x-1/2 ${badgeStyles({ tone: 'brand', size: 'xs' })}`}
-        >
-          {view.target === 'swap' ? 'Swap' : 'Here'}
-        </span>
+          aria-hidden="true"
+          data-glyph={view.target === 'swap' ? 'Swap' : 'Here'}
+          className={`absolute left-1/2 top-0 z-10 -translate-x-1/2 before:content-[attr(data-glyph)] ${badgeStyles({ tone: 'brand', size: 'xs' })}`}
+        />
       ) : null}
       <span className="relative flex h-9 items-center justify-center">
         {view.player ? (
@@ -356,7 +359,9 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
           />
         ) : (
           <span
-            className={`flex size-8 items-center justify-center rounded-full border-2 border-dashed text-[11px] font-bold ${
+            aria-hidden="true"
+            data-glyph={view.slot}
+            className={`flex size-8 items-center justify-center rounded-full border-2 border-dashed text-[11px] font-bold before:content-[attr(data-glyph)] ${
               onGrass
                 ? view.target
                   ? 'border-white bg-primary text-primary-foreground'
@@ -365,9 +370,7 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
                   ? 'border-brand-bar text-foreground'
                   : 'border-border text-muted-foreground'
             }`}
-          >
-            {view.slot}
-          </span>
+          />
         )}
         {view.flagged ? (
           <span

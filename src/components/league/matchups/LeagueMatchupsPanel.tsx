@@ -390,7 +390,14 @@ function CategoryTotalsGrid({ matchup }: { matchup: MatchupModel }) {
   const hasStarted = matchup.status === 'LIVE' || matchup.status === 'FINAL';
 
   return (
-    <div className="relative overflow-x-auto rounded-md border border-border">
+    // The table scrolls sideways on narrow screens, so the region takes focus for keyboard scrolling.
+    <div
+      role="region"
+      aria-label="Match-up totals by scoring category"
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- A wide table needs a keyboard-scroll target.
+      tabIndex={0}
+      className="relative overflow-x-auto border border-border focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-dashed focus-visible:outline-ring"
+    >
       <table className="min-w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">Match-up totals by scoring category.</caption>
         <thead className="bg-muted text-xs font-medium text-muted-foreground">
