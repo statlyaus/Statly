@@ -145,6 +145,7 @@ describe('team action drop commit', () => {
       leagueId: 'league-1',
       memberId: 'member-1',
       playerIds: ['player-1'],
+      now: expect.any(Date),
     });
   });
 

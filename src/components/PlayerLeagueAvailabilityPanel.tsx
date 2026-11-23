@@ -47,6 +47,37 @@ interface AvailabilityResponse {
   };
 }
 
+/** A player the add route says the manager could drop to make room (ROSTER_FULL). */
+interface DropCandidate {
+  playerId: string;
+  name: string;
+  position: string | null;
+  club: string | null;
+}
+
+interface DropChoice {
+  leagueId: string;
+  candidates: DropCandidate[];
+  selectedPlayerId: string | null;
+}
+
+function readDropCandidates(error: unknown): DropCandidate[] | null {
+  const candidates = (error as { details?: { dropCandidates?: unknown } } | undefined)?.details
+    ?.dropCandidates;
+  if (!Array.isArray(candidates)) return null;
+  return candidates.filter(
+    (candidate): candidate is DropCandidate =>
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      typeof (candidate as { playerId?: unknown }).playerId === 'string' &&
+      typeof (candidate as { name?: unknown }).name === 'string'
+  );
+}
+
+function myTeamHref(leagueId: string): string {
+  return `/leagues/${encodeURIComponent(leagueId)}?tab=lineup`;
+}
+
 interface PlayerLeagueAvailabilityPanelProps {
   playerId: string;
 }
@@ -109,6 +140,7 @@ export function PlayerLeagueAvailabilityPanel({
   const [error, setError] = useState<string | null>(null);
   const [pendingActionLeagueId, setPendingActionLeagueId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [dropChoice, setDropChoice] = useState<DropChoice | null>(null);
   const isSignedOut = !authLoading && !user?.uid;
 
   useEffect(() => {
@@ -177,7 +209,8 @@ export function PlayerLeagueAvailabilityPanel({
     setRows(body.data.leagues);
   };
 
-  const handleAddPlayer = async (row: PlayerLeagueAvailability) => {
+  /** Adds the player; with `drop`, the server drops that player in the same transaction. */
+  const handleAddPlayer = async (row: PlayerLeagueAvailability, drop?: DropCandidate) => {
     if (!user?.uid) return;
 
     try {
@@ -188,7 +221,7 @@ export function PlayerLeagueAvailabilityPanel({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ playerId }),
+          body: JSON.stringify(drop ? { playerId, dropPlayerId: drop.playerId } : { playerId }),
         },
         user.uid
       );
@@ -199,11 +232,27 @@ export function PlayerLeagueAvailabilityPanel({
         const error = (body as { error?: unknown })?.error;
         const reason =
           typeof error === 'string' ? error : (error as { message?: unknown } | undefined)?.message;
+        // A full roster comes with the players the manager could drop: let him choose one.
+        const candidates =
+          (error as { code?: unknown } | undefined)?.code === 'ROSTER_FULL'
+            ? readDropCandidates(error)
+            : null;
+        if (candidates) {
+          setDropChoice({ leagueId: row.leagueId, candidates, selectedPlayerId: null });
+        }
         throw new Error(typeof reason === 'string' && reason ? reason : 'Failed to add player.');
       }
 
-      await refreshAvailability();
-      setActionMessage(`Added to ${row.teamName}.`);
+      setDropChoice(null);
+      // Say only what the server reports it committed.
+      const dropped = (body as { data?: { dropped?: { playerId?: unknown } | null } })?.data
+        ?.dropped;
+      await refreshAvailability().catch(() => undefined);
+      setActionMessage(
+        drop && dropped?.playerId
+          ? `Added to ${row.teamName}. ${drop.name} dropped to waivers.`
+          : `Added to ${row.teamName}.`
+      );
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : 'Failed to add player.');
     } finally {
@@ -359,6 +408,14 @@ export function PlayerLeagueAvailabilityPanel({
                       </Link>
                     )}
                   </div>
+                  {dropChoice?.leagueId === row.leagueId &&
+                    renderDropPicker(
+                      row,
+                      dropChoice,
+                      setDropChoice,
+                      pendingActionLeagueId,
+                      (drop) => void handleAddPlayer(row, drop)
+                    )}
                 </article>
               );
             })}
@@ -366,5 +423,82 @@ export function PlayerLeagueAvailabilityPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function renderDropPicker(
+  row: PlayerLeagueAvailability,
+  choice: DropChoice,
+  setChoice: (choice: DropChoice | null) => void,
+  pendingLeagueId: string | null,
+  onConfirm: (drop: DropCandidate) => void
+): React.JSX.Element {
+  const selected = choice.candidates.find(
+    (candidate) => candidate.playerId === choice.selectedPlayerId
+  );
+  const pending = pendingLeagueId === row.leagueId;
+  const myTeamLink = (
+    <Link href={myTeamHref(row.leagueId)} className="font-semibold text-primary underline">
+      My Team
+    </Link>
+  );
+
+  if (choice.candidates.length === 0) {
+    return (
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        No player on your roster can be dropped right now. Manage your roster in {myTeamLink}.
+      </p>
+    );
+  }
+
+  return (
+    <fieldset className="mt-3 border border-border p-3">
+      <legend className="px-1 text-xs font-semibold text-foreground">
+        Choose a player to drop
+      </legend>
+      <div className="max-h-56 space-y-1 overflow-y-auto">
+        {choice.candidates.map((candidate) => (
+          <label
+            key={candidate.playerId}
+            className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+          >
+            <input
+              type="radio"
+              name={`drop-${row.leagueId}`}
+              value={candidate.playerId}
+              checked={choice.selectedPlayerId === candidate.playerId}
+              onChange={() => setChoice({ ...choice, selectedPlayerId: candidate.playerId })}
+            />
+            <span className="truncate">{candidate.name}</span>
+            {(candidate.position || candidate.club) && (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {[candidate.position, candidate.club].filter(Boolean).join(', ')}
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        The dropped player goes on waivers. You can also drop from {myTeamLink}.
+      </p>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          disabled={!selected || pending}
+          onClick={() => selected && onConfirm(selected)}
+          className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-foreground px-2.5 text-xs font-semibold text-background transition hover:bg-foreground/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {pending ? 'Adding' : selected ? `Add and drop ${selected.name}` : 'Add and drop'}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setChoice(null)}
+          className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-2.5 text-xs font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancel
+        </button>
+      </div>
+    </fieldset>
   );
 }

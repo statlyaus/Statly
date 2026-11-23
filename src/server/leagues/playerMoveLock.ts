@@ -118,7 +118,7 @@ export async function findPlayersLockedForMove({
 
 export function describeLockedPlayers(
   lockedPlayers: readonly LockedPlayer[],
-  move: 'moved' | 'picked up' = 'moved'
+  move: 'moved' | 'picked up' | 'dropped' = 'moved'
 ): string {
   if (lockedPlayers.length === 1) {
     return `${lockedPlayers[0]!.name}'s game has started; he can be ${move} after the round ends.`;

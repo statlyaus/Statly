@@ -216,7 +216,17 @@ from Prisma. Its player list leaves out only rostered players: a waiver-only pla
 or a drop since the last run or still inside its waiver period; see `docs/domain/fantasy-model.md`)
 is listed and claimable there, because free-agent Add refuses him. Free-agent Add also refuses (409)
 a player whose AFL game has started in the round in progress, until the round ends, and refuses (503)
-when match timing cannot be read (see [league competition rules](../product/league-competition-rules.md)). `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
+when match timing cannot be read (see [league competition rules](../product/league-competition-rules.md)).
+On a full roster, free-agent Add is "add and drop": `POST /api/leagues/[id]/roster/add` without a
+`dropPlayerId` refuses with 422 `ROSTER_FULL` and `details.dropCandidates` (the manager's players
+whose game has not started this round), and the player page offers them in a drop picker, with a
+link to My Team. With `dropPlayerId`, `src/server/rosters/freeAgentAdd.ts` drops that player and
+adds the free agent in one transaction under the League row lock, the lock plain drops and bites
+take: the drop player must be on the caller's roster in this league (409
+`DROP_PLAYER_NOT_ON_ROSTER`) and his game must not have started (409 `DROP_PLAYER_LOCKED`). The drop
+goes through `src/server/rosters/rosterDrop.ts`, shared with the plain drop route, so it gets the
+same lineup cleanup and 24-hour waiver hold. A refused add drops nothing, and the response reports
+the drop that committed (`dropped`). `/waivers`, linked from the main navigation and the dashboard, redirects to that tab for
 the requested league (`?league=`) or the viewer's most recently joined one, and to the dashboard when
 the viewer has no league. `/rosters` does the same for the league's Roster tab; it no longer reads
 Firestore free agents or offers its own claim buttons.
