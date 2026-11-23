@@ -119,36 +119,6 @@ export async function createDraftReminders(
 }
 
 /**
- * Update reminders when draft is rescheduled
- */
-export async function updateDraftReminders(
-  draftId: string,
-  newStartTime: Date,
-  participantIds: string[]
-): Promise<void> {
-  try {
-    // Delete existing reminders
-    // TODO: Implement DraftReminder model in Prisma schema
-    // await prisma.draftReminder.deleteMany({
-    //   where: { draftId, sent: false },
-    // });
-
-    // Create new reminders
-    await createDraftReminders(draftId, newStartTime, participantIds);
-
-    logger.info('Draft reminders updated', {
-      draftId,
-      newStartTime: newStartTime.toISOString(),
-    });
-  } catch (error) {
-    logger.error('Failed to update draft reminders', {
-      draftId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
  * Process pending reminders (called by cron job)
  */
 export async function processPendingReminders(): Promise<void> {
