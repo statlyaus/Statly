@@ -1,1 +1,5 @@
-export { useSocket, useSocketChannel } from '@/providers/SocketProvider';
+export {
+  useSocket,
+  useSocketChannel,
+  useSocketReconnectExhausted,
+} from '@/providers/SocketProvider';

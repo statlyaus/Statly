@@ -59,8 +59,14 @@ export type DraftRoomSequence = {
   slots: DraftRoomSequenceSlot[];
 };
 
+/**
+ * How long after the deadline the room shows "Finalizing pick" while the server's expiry job runs.
+ * Past it the pick is overdue: no job made it, so a person has to.
+ */
+export const OVERDUE_GRACE_MS = 15_000;
+
 export type DraftRoomTimerState = {
-  phase: 'LIVE' | 'PAUSED' | 'FINALIZING' | 'SYNCING' | 'COMPLETED' | 'WAITING';
+  phase: 'LIVE' | 'PAUSED' | 'FINALIZING' | 'OVERDUE' | 'SYNCING' | 'COMPLETED' | 'WAITING';
   remainingSeconds: number;
   percentRemaining: number;
   tone: 'neutral' | 'healthy' | 'warning' | 'urgent' | 'complete';
@@ -285,6 +291,17 @@ export function getDraftRoomTimerState(input: {
     0,
     Math.min(100, Math.round((remainingSeconds / timePerPick) * 100))
   );
+
+  if (remainingMs <= -OVERDUE_GRACE_MS) {
+    return {
+      phase: 'OVERDUE',
+      remainingSeconds,
+      percentRemaining,
+      tone: 'urgent',
+      label: 'Overdue',
+      isRunning: false,
+    };
+  }
 
   if (remainingSeconds === 0) {
     return {

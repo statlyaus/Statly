@@ -13,6 +13,7 @@ import { useConfirmation } from '@/components/ui/Modal';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useDraft, type DraftPickFeedback } from '@/contexts/DraftContext';
 import { useFocusTrap } from '@/hooks/useAccessibility';
+import { isDraftBoardStale, PERSISTED_PICK_BACKFILL_INTERVAL_MS } from '@/lib/draftBoardFreshness';
 import {
   toLivePickHeaderData,
   toFeedPicks,
@@ -249,10 +250,24 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const isOwner = draft.draft?.managerUserIds?.includes(userId) === true;
 
   // While the room may be showing an out-of-date board, the server may already have moved on: picks
-  // pause and the clock shows as syncing until a persisted baseline is applied.
-  const isBoardStale =
-    draft.connection.status !== 'connected' || draft.connection.needsResync === true;
+  // pause and the clock shows as syncing. Without the live socket, database reads every few seconds
+  // keep the board current, so a 1 s tick re-checks how recent the last one was.
+  const socketConnected = draft.connection.status === 'connected';
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (socketConnected) return;
+    setNowMs(Date.now());
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [socketConnected]);
+  const isBoardStale = isDraftBoardStale(
+    draft.connection,
+    nowMs,
+    PERSISTED_PICK_BACKFILL_INTERVAL_MS
+  );
   const canMakePick = draft.canMakePick && !isBoardStale;
+  // A pick nobody made by its deadline is the commissioner's to make, when the league allows it.
+  const autoPickAllowed = draft.draft?.settings?.autoPickEnabled !== false;
 
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
@@ -561,7 +576,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     <DraftErrorBoundary>
       <div className="ground-stone min-h-screen">
         {/* Connection Status */}
-        <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
+        <ConnectionStatus
+          status={draft.connection.status}
+          onRefresh={() => draft.forceRefresh()}
+          liveUpdatesDown={draft.liveUpdatesDown}
+          picksStillWork={!isBoardStale}
+          onReload={() => window.location.reload()}
+        />
 
         <div className="mx-auto max-w-[2100px] space-y-4 pb-4">
           {/* Draft Controls (for league owners) */}
@@ -640,6 +661,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             timePerPick={timePerPick}
             isYourTurn={Boolean(draft.isYourTurn)}
             yourSlot={yourSlot}
+            canMakePick={canMakePick}
+            autoPickAllowed={autoPickAllowed}
+            onMakeOverduePick={isOwner && autoPickAllowed ? draft.forceAutoPick : undefined}
           />
         </div>
 

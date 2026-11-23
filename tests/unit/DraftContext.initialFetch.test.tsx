@@ -11,6 +11,7 @@ const { fetchApi, socketState } = vi.hoisted(() => ({
 
 vi.mock('@/contexts/SocketContext', () => ({
   useSocket: () => socketState.current,
+  useSocketReconnectExhausted: () => false,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -147,6 +148,9 @@ function DraftStateProbe() {
       </button>
       <button type="button" onClick={() => void draft.makePick('player-1')}>
         Pick player 1
+      </button>
+      <button type="button" onClick={() => void draft.forceAutoPick()}>
+        Make the overdue pick
       </button>
       <button type="button" onClick={() => void draft.toggleWatchlist('player-2')}>
         Toggle player 2 watchlist
@@ -2303,6 +2307,91 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
   });
 
+  it('polls a scheduled draft without the socket so a start made elsewhere arrives, without blanking the room', async () => {
+    vi.useFakeTimers();
+    let resolveRefresh: (value: unknown) => void = () => {};
+    fetchApi.mockImplementation((endpoint: string) => {
+      if (endpoint === 'drafts/draft-1') {
+        return new Promise((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Scheduled Draft',
+            leagueId: 'league-1',
+            status: 'SCHEDULED',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          picks: [],
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              statlyZScore: 0,
+            },
+          ] as any,
+          ts: Date.parse('2026-06-07T00:00:00.000Z'),
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(14_999);
+    });
+    expect(fetchApi).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(fetchApi).toHaveBeenCalledWith('drafts/draft-1');
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+
+    await act(async () => {
+      resolveRefresh({
+        success: true,
+        data: {
+          id: 'draft-1',
+          name: 'Started Draft',
+          leagueId: 'league-1',
+          status: 'LIVE',
+          currentPick: 1,
+          totalPicks: 2,
+          round: 1,
+          direction: 'FORWARD',
+          participants: [],
+          picks: [],
+          ts: Date.parse('2026-06-07T00:01:00.000Z'),
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('Started Draft');
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    // A background poll does not reload the player pool the manager is browsing.
+    expect(fetchApi).not.toHaveBeenCalledWith(
+      expect.stringContaining('/players'),
+      expect.anything()
+    );
+  });
+
   it('applies persisted pick backfill after a v2 socket drops', async () => {
     const handlers = new Map<string, (...args: any[]) => void>();
     const emit = createV2AcknowledgingEmit(2);
@@ -2469,6 +2558,70 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('pick-order')).toHaveTextContent('');
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
     expect(screen.getByTestId('pick-deadline')).toHaveTextContent('2026-06-07T00:02:00.000Z');
+  });
+
+  it('makes the overdue pick the room saw, then reads the result back from the database', async () => {
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'drafts/draft-1/auto-pick') {
+        return { success: true, data: { currentPick: 2, isComplete: false } };
+      }
+      if (endpoint.startsWith('drafts/draft-1/picks?')) {
+        return {
+          success: true,
+          data: {
+            draftState: { currentPick: 2, status: 'LIVE', round: 1, direction: 'FORWARD' },
+            picks: [],
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+            },
+          ] as any,
+          availablePlayers: [],
+          picks: [],
+          liveState: { currentPick: 1, revision: 5 },
+          ts: Date.parse('2026-06-07T00:00:00.000Z'),
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Make the overdue pick' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
+    });
+    expect(fetchApi).toHaveBeenCalledWith('drafts/draft-1/auto-pick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedSchedulingVersion: 5 }),
+    });
   });
 
   it('loads persisted picks without a since cursor when a live draft opens after picks exist', async () => {

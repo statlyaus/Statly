@@ -1,9 +1,9 @@
 import React from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SocketProvider } from '../../src/providers/SocketProvider';
+import { SocketProvider, useSocketReconnectExhausted } from '../../src/providers/SocketProvider';
 
 type Handler = (...args: unknown[]) => void;
 type SocketAuth = (cb: (data: { token: string | null }) => void) => void;
@@ -72,6 +72,22 @@ async function renderConnectedProvider(): Promise<void> {
   );
   await waitFor(() => expect(io).toHaveBeenCalled());
 }
+
+function ExhaustedProbe() {
+  return <div data-testid="exhausted">{String(useSocketReconnectExhausted())}</div>;
+}
+
+async function renderProbedProvider(): Promise<void> {
+  authMock.currentUser = { getIdToken };
+  render(
+    <SocketProvider uid="abc">
+      <ExhaustedProbe />
+    </SocketProvider>
+  );
+  await waitFor(() => expect(io).toHaveBeenCalled());
+}
+
+const exhausted = () => screen.getByTestId('exhausted').textContent;
 
 const root = process.cwd();
 
@@ -254,5 +270,45 @@ describe('SocketProvider', () => {
       emit('connect_error', new Error('xhr poll error'));
     }
     expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports live updates as down when the runtime disables realtime transport', () => {
+    process.env.NEXT_PUBLIC_SOCKET_DISABLED = 'true';
+    render(
+      <SocketProvider uid="dev-user">
+        <ExhaustedProbe />
+      </SocketProvider>
+    );
+
+    expect(exhausted()).toBe('true');
+  });
+
+  it('reports live updates as down after repeated failures, and clears it on connect', async () => {
+    getIdToken.mockResolvedValue('token');
+    await renderProbedProvider();
+
+    act(() => emit('connect_error', new Error('xhr poll error')));
+    expect(exhausted()).toBe('false');
+
+    act(() => {
+      for (let attempt = 1; attempt < 5; attempt += 1) {
+        emit('connect_error', new Error('xhr poll error'));
+      }
+    });
+    expect(exhausted()).toBe('true');
+
+    act(() => emit('connect'));
+    expect(exhausted()).toBe('false');
+  });
+
+  it('reports live updates as down once an authentication rejection gives up', async () => {
+    getIdToken.mockResolvedValue('token');
+    await renderProbedProvider();
+
+    socketMock.active = false;
+    act(() => emit('connect_error', new Error('Authentication required')));
+    expect(exhausted()).toBe('false');
+    act(() => emit('connect_error', new Error('Authentication required')));
+    expect(exhausted()).toBe('true');
   });
 });
