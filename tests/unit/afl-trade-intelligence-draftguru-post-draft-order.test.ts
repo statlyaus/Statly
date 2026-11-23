@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseLocalExternalCaptureArguments } from '../../Scripts/capture-local-external-pages';
+import { parseSeasonSourceDecisionArguments } from '../../Scripts/record-season-source-decision';
 import {
   createDraftguruPostDraftOrderCaptureCommand,
   createLocalDraftguruPostDraftOrderTargets,
@@ -426,5 +427,56 @@ describe('Draftguru post-draft order capture', () => {
         fetchImpl,
       })
     ).rejects.toThrow(/outside the approved bounded paths/);
+  });
+
+  it('reads --from-capability only for a capability that may be derived from another', () => {
+    const env = {
+      AFL_OUTCOMES_DATABASE_URL: 'postgresql://statly:secret@127.0.0.1:5432/outcomes',
+    };
+    const args = (capability: string, extra: string[] = []) => [
+      '--capability',
+      capability,
+      '--season',
+      '2026',
+      '--from-season',
+      '2026',
+      '--approval-artifact',
+      `artifact:${digest('9')}`,
+      '--decided-at',
+      '2026-11-23T00:00:00.000Z',
+      '--revalidate-at',
+      '2027-05-23T00:00:00.000Z',
+      '--parser-version',
+      'draftguru-post-draft-order/v1',
+      ...extra,
+    ];
+    expect(
+      parseSeasonSourceDecisionArguments(
+        args('draftguru-post-draft-order', [
+          '--from-capability',
+          'draftguru-national-year-page',
+          '--apply',
+        ]),
+        env
+      )
+    ).toMatchObject({
+      capabilityId: 'draftguru-post-draft-order',
+      fromCapabilityId: 'draftguru-national-year-page',
+      season: 2026,
+      fromSeason: 2026,
+      parserVersion: 'draftguru-post-draft-order/v1',
+      apply: true,
+    });
+    expect(
+      parseSeasonSourceDecisionArguments(args('draftguru-post-draft-order'), env)
+    ).not.toHaveProperty('fromCapabilityId');
+    for (const bad of [
+      args('draftguru-trade-detail', ['--from-capability', 'draftguru-national-year-page']),
+      args('draftguru-post-draft-order', ['--from-capability', 'draftguru-post-draft-order']),
+      args('draftguru-post-draft-order', ['--season', '2026']),
+      args('draftguru-post-draft-order', ['--from-capability', 'unknown-capability']),
+    ]) {
+      expect(() => parseSeasonSourceDecisionArguments(bad, env)).toThrow(TypeError);
+    }
   });
 });

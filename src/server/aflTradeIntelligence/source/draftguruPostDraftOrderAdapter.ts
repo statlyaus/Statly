@@ -143,90 +143,140 @@ type ParsedSegment =
   | { part: 'bid_not_matched'; club: Entity }
   | { part: 'outcome'; outcome: OrderClaim['outcome'] };
 
-/** Reads one segment against the reviewed forms only; anything else is null. */
-function parseSegment(segment: Segment): ParsedSegment | null {
-  const { template, links } = segment;
-  const [link] = links;
-  if (links.length > 1) return null;
-  let match = /^([A-Za-z]+) R([1-9]\d*) pick \(([^)]+)\)$/.exec(template);
-  if (match && links.length === 0) {
-    const club = byAbbreviation.get(match[1]!);
-    const rank = ORDINAL_SUFFIX.exec(match[3]!);
-    if (!club || !rank) return null;
-    return {
-      part: 'origin',
-      origin: {
-        kind: 'entitlement',
-        club: entity(club),
-        roundNumber: Number(match[2]),
-        rank: Number(rank[1]),
-      },
-    };
-  }
-  if (/^Band [1-5] Free Agency Comp for <a>$/.test(template) && player(link)) {
-    return {
-      part: 'origin',
-      origin: { kind: 'compensation', label: template.replace('<a>', link!.text) },
-    };
-  }
-  if (template === 'Bidding compensation awarded after night one' && links.length === 0) {
-    return { part: 'origin', origin: { kind: 'compensation', label: template } };
-  }
-  match =
+type SegmentLink = Segment['links'][number] | undefined;
+
+/**
+ * One reviewed segment form: undefined when the segment is not that form, null when it is but
+ * names something unreviewed (refusing the segment), else the parsed part.
+ */
+type SegmentReader = (
+  template: string,
+  link: SegmentLink,
+  linkCount: number
+) => ParsedSegment | null | undefined;
+
+const readEntitlement: SegmentReader = (template, _link, linkCount) => {
+  const match = /^([A-Za-z]+) R([1-9]\d*) pick \(([^)]+)\)$/.exec(template);
+  if (!match || linkCount !== 0) return undefined;
+  const club = byAbbreviation.get(match[1]!);
+  const rank = ORDINAL_SUFFIX.exec(match[3]!);
+  if (!club || !rank) return null;
+  return {
+    part: 'origin',
+    origin: {
+      kind: 'entitlement',
+      club: entity(club),
+      roundNumber: Number(match[2]),
+      rank: Number(rank[1]),
+    },
+  };
+};
+
+const readFreeAgencyCompensation: SegmentReader = (template, link) =>
+  /^Band [1-5] Free Agency Comp for <a>$/.test(template) && player(link)
+    ? {
+        part: 'origin',
+        origin: { kind: 'compensation', label: template.replace('<a>', link!.text) },
+      }
+    : undefined;
+
+const readBiddingCompensation: SegmentReader = (template, _link, linkCount) =>
+  template === 'Bidding compensation awarded after night one' && linkCount === 0
+    ? { part: 'origin', origin: { kind: 'compensation', label: template } }
+    : undefined;
+
+const readBidMatched: SegmentReader = (template, link) => {
+  const match =
     /^([A-Za-z]+) bid for <a> matched \((Father-Son|Academy|Next Generation Academy)\) using picks ([1-9]\d*(?:, [1-9]\d*)*)$/.exec(
       template
     );
-  if (match) {
-    const club = byAbbreviation.get(match[1]!);
-    const nominee = player(link);
-    if (!club || !nominee) return null;
-    return {
-      part: 'origin',
-      origin: {
-        kind: 'bid_matched',
-        bidClub: entity(club),
-        basis: BASIS[match[2]!]!,
-        nominee,
-        usingPicks: match[3]!.split(', ').map(Number),
-      },
-    };
-  }
-  match = /^Created for ([A-Za-z]+) from leftover points after matching bid for <a>$/.exec(
+  if (!match) return undefined;
+  const club = byAbbreviation.get(match[1]!);
+  const nominee = player(link);
+  if (!club || !nominee) return null;
+  return {
+    part: 'origin',
+    origin: {
+      kind: 'bid_matched',
+      bidClub: entity(club),
+      basis: BASIS[match[2]!]!,
+      nominee,
+      usingPicks: match[3]!.split(', ').map(Number),
+    },
+  };
+};
+
+const readLeftoverPoints: SegmentReader = (template, link) => {
+  const match = /^Created for ([A-Za-z]+) from leftover points after matching bid for <a>$/.exec(
     template
   );
-  if (match) {
-    const club = byAbbreviation.get(match[1]!);
-    const nominee = player(link);
-    if (!club || !nominee) return null;
-    return { part: 'origin', origin: { kind: 'leftover_points', club: entity(club), nominee } };
-  }
-  match = /^To ([A-Za-z]+) in <a>$/.exec(template);
-  if (match) {
-    const club = byAbbreviation.get(match[1]!);
-    // The trade id is the link's path after /trades/, as the trade index derives it.
-    const nativeEventId = pathId(link?.href, '/trades/');
-    if (!club || nativeEventId === null || !/^\d{4}-[^/]+$/.test(nativeEventId)) return null;
-    return { part: 'hop', hop: { toClub: entity(club), nativeEventId } };
-  }
-  match = /^Bid not matched by ([A-Za-z ]+)$/.exec(template);
-  if (match && links.length === 0) {
-    const club = byName.get(match[1]!);
-    return club ? { part: 'bid_not_matched', club: entity(club) } : null;
-  }
-  if (template === 'Picked <a>') {
-    const selected = player(link);
-    return selected ? { part: 'outcome', outcome: { kind: 'selected', player: selected } } : null;
-  }
-  match = /^Used to match bid for <a> as pick ([1-9]\d*)$/.exec(template);
-  if (match) {
-    const nominee = player(link);
-    return nominee
-      ? { part: 'outcome', outcome: { kind: 'bid_spent', nominee, asPick: Number(match[1]) } }
-      : null;
-  }
-  match = /^Removed - ([a-z][a-z ]*[a-z])$/.exec(template);
-  if (match && links.length === 0) {
-    return { part: 'outcome', outcome: { kind: 'removed', note: match[1]! } };
+  if (!match) return undefined;
+  const club = byAbbreviation.get(match[1]!);
+  const nominee = player(link);
+  if (!club || !nominee) return null;
+  return { part: 'origin', origin: { kind: 'leftover_points', club: entity(club), nominee } };
+};
+
+const readHop: SegmentReader = (template, link) => {
+  const match = /^To ([A-Za-z]+) in <a>$/.exec(template);
+  if (!match) return undefined;
+  const club = byAbbreviation.get(match[1]!);
+  // The trade id is the link's path after /trades/, as the trade index derives it.
+  const nativeEventId = pathId(link?.href, '/trades/');
+  if (!club || nativeEventId === null || !/^\d{4}-[^/]+$/.test(nativeEventId)) return null;
+  return { part: 'hop', hop: { toClub: entity(club), nativeEventId } };
+};
+
+const readBidNotMatched: SegmentReader = (template, _link, linkCount) => {
+  const match = /^Bid not matched by ([A-Za-z ]+)$/.exec(template);
+  if (!match || linkCount !== 0) return undefined;
+  const club = byName.get(match[1]!);
+  return club ? { part: 'bid_not_matched', club: entity(club) } : null;
+};
+
+const readSelected: SegmentReader = (template, link) => {
+  if (template !== 'Picked <a>') return undefined;
+  const selected = player(link);
+  return selected ? { part: 'outcome', outcome: { kind: 'selected', player: selected } } : null;
+};
+
+const readBidSpent: SegmentReader = (template, link) => {
+  const match = /^Used to match bid for <a> as pick ([1-9]\d*)$/.exec(template);
+  if (!match) return undefined;
+  const nominee = player(link);
+  return nominee
+    ? { part: 'outcome', outcome: { kind: 'bid_spent', nominee, asPick: Number(match[1]) } }
+    : null;
+};
+
+const readRemoved: SegmentReader = (template, _link, linkCount) => {
+  const match = /^Removed - ([a-z][a-z ]*[a-z])$/.exec(template);
+  return match && linkCount === 0
+    ? { part: 'outcome', outcome: { kind: 'removed', note: match[1]! } }
+    : undefined;
+};
+
+/** The reviewed forms, in the order they are tried. */
+const SEGMENT_READERS: readonly SegmentReader[] = [
+  readEntitlement,
+  readFreeAgencyCompensation,
+  readBiddingCompensation,
+  readBidMatched,
+  readLeftoverPoints,
+  readHop,
+  readBidNotMatched,
+  readSelected,
+  readBidSpent,
+  readRemoved,
+];
+
+/** Reads one segment against the reviewed forms only; anything else is null. */
+function parseSegment(segment: Segment): ParsedSegment | null {
+  const { template, links } = segment;
+  if (links.length > 1) return null;
+  for (const read of SEGMENT_READERS) {
+    const parsed = read(template, links[0], links.length);
+    if (parsed !== undefined) return parsed;
   }
   return null;
 }
