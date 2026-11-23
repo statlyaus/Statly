@@ -5092,6 +5092,36 @@ The remaining work proceeds through these independently verifiable gates:
      hop unresolved. Nothing is
      inferred from the pick number alone: of 209 `Pick N` receipts, 31 do not sit at the AFL slot of
      that number.
+   - **Draftguru post-draft national order (2026 intake).** Owner approval 4 of the 2026 intake
+     (2026-11-23) added capability `draftguru-post-draft-order`, on the Draftguru national-year
+     page's terms, for the one page
+     `https://www.draftguru.com.au/years/2026/provisional-draft-order/post-draft`. Draftguru's trade
+     pages look a pick up by its old number after draft-night renumbering, so they can state "Pick
+     not used" for a pick that was used (Hawthorn's first-round pick in the Merrett trade, used at 17).
+     The order page states each pick as the draft left it. Parser `draftguru-post-draft-order/v1`
+     (`source/draftguruPostDraftOrderAdapter.ts`) emits one `draft_order_pick` per row of its "Full
+     Draft Order" table: round, final number, holder, origin, trade hops with their Draftguru trade
+     ids, and outcome (selected, spent matching a bid, or removed). Points and games are never read.
+     Migration 0292 admits the claim kind and the capability in a retained plan. Captured only by the
+     local runner, like the national-year page.
+     - **How reconciliation reads it** (`source/draftguruOrderReconciliation.ts`, gated to
+       `ORDER_ORIGIN_DRAFTS` = 2026 national). Every row is one `draftOrderPicks` record, so the
+       candidate conserves it (migration 0293 counts those records at finalization). Each hop ties to
+       the candidate transfer in its trade, to the hop's club, from the previous hop's club (the
+       original club for the first hop; any club when the row states none). Two picks on one pair in
+       one trade pair by stated round, else lowest stated number with the earliest row, only when the
+       counts match. A transfer two slots could take ties to neither, and nothing changes for an
+       untied transfer. A tied row's statement (its selected player, or not used) replaces the trade
+       page's. Its tied transfers are one pick, walked in hop order. A selected row takes the player's
+       pick id; any other row takes the entitlement its origin states. At the last hop, a selected row
+       makes the outcome `selected` (with `statedDisposition: 'not_used'` where the page said "not
+       used"), or `unresolved` when the candidate holds no such selection. A spent row is basis
+       `order_bid_spent`, and the ledger keeps it `matched_bid` pending `bid_unpriced`, since no 2026
+       price is published. A removed row is basis `order_pick_removed`, and the ledger reads it as
+       `passed` citing the order row. Earlier hops are `traded_on`. An untied "not used" pick whose
+       receiving club has no row that could be it is basis `order_not_listed`, and the ledger reads it
+       as `not_used` (rule R2 then decides its fate as for any not-used pick). Candidates without
+       order rows are byte-identical.
    - **Footyinfo national draft boards (issues 853 and 789).** The owner approved Footyinfo as a
      provider on 2026-10-12, as a source rights record shows. The capability is
      `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v3` (v1 until

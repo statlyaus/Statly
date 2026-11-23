@@ -32,8 +32,11 @@ import {
   approveNarrowAuthority,
   footyinfoDraftBoardAuthority,
   draftguruNationalYearAuthority,
+  draftguruPostDraftOrderAuthority,
   officialAflDraftSessionAuthority,
 } from '../testUtils/localNarrowCaptureAuthorityFixture';
+import { createLocalDraftguruPostDraftOrderTargets } from '@/server/aflTradeIntelligence/development/localDraftguruPostDraftOrderCapture';
+import { postDraftOrderPage, SYNTHETIC_ORDER_ROWS } from '../testUtils/draftguruPostDraftOrderPage';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
@@ -179,7 +182,7 @@ beforeAll(async () => {
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scoped.toString() });
   await sql.query(
     `INSERT INTO outcome_competition_season (competition,season_year)
-     VALUES ('AFLM',2019),('AFLM',2020),('AFLM',2021) ON CONFLICT DO NOTHING`
+     VALUES ('AFLM',2019),('AFLM',2020),('AFLM',2021),('AFLM',2026) ON CONFLICT DO NOTHING`
   );
   artifactRoot = await mkdtemp(join(tmpdir(), 'statly-local-external-capture-'));
   // One registered store holds the captured pages and the owner evidence their decisions cite, and a
@@ -351,7 +354,8 @@ async function recordOfficialDecision(
   evidenceIds: Parameters<typeof officialAflDraftSessionAuthority>[0]['evidenceIds'],
   buildAuthority:
     | typeof officialAflDraftSessionAuthority
-    | typeof draftguruNationalYearAuthority = officialAflDraftSessionAuthority
+    | typeof draftguruNationalYearAuthority
+    | typeof draftguruPostDraftOrderAuthority = officialAflDraftSessionAuthority
 ) {
   const authority = buildAuthority({
     season,
@@ -586,6 +590,54 @@ describe('local Footyinfo draft-board capture through the governed ingestion bou
       { kind: 'draft_board_bid_match', count: '1' },
       { kind: 'draft_board_pick', count: '8' },
       { kind: 'draft_selection', count: '5' },
+    ]);
+  }, 90_000);
+});
+
+describe('local Draftguru post-draft order capture through the governed ingestion boundary', () => {
+  it('stages one draft_order_pick per row under the order page’s own decision (migration 0292)', async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(postDraftOrderPage(SYNTHETIC_ORDER_ROWS), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    };
+    const options = { sql, artifactRootDirectory: artifactRoot, userAgent, fetchImpl };
+    const targets = createLocalDraftguruPostDraftOrderTargets([2026]);
+    await expect(runLocalExternalCapture(options, targets)).rejects.toThrow(
+      /draftguru-post-draft-order-issue579-private-2026-parser-v1/
+    );
+    expect(calls).toEqual([]);
+
+    const evidenceIds = {
+      productOwnerAuthorization: await retainEvidenceDocument('order authorization'),
+      boundedCapturePlan: await retainEvidenceDocument('order capture plan'),
+      publicAccessReview: await retainEvidenceDocument('order egress review'),
+      fieldBoundaryReview: await retainEvidenceDocument('order field review'),
+    };
+    await recordOfficialDecision(2026, evidenceIds, draftguruPostDraftOrderAuthority);
+    const [result] = await runLocalExternalCapture(options, targets);
+    expect(result).toMatchObject({
+      season: 2026,
+      status: 'staged',
+      evidenceCount: SYNTHETIC_ORDER_ROWS.length,
+      issueCount: 0,
+    });
+    expect(calls).toEqual([
+      'https://www.draftguru.com.au/years/2026/provisional-draft-order/post-draft',
+    ]);
+    const rows = await sql.query<{ kind: string; count: string }>(
+      `SELECT row.claim_kind AS kind, count(*)::text AS count
+         FROM outcome_external_evidence_row row
+         JOIN outcome_external_evidence_batch batch USING (batch_id)
+         JOIN outcome_source_capture capture ON capture.capture_id=batch.capture_id
+        WHERE capture.manifest_json->>'capabilityId'='draftguru-post-draft-order'
+        GROUP BY row.claim_kind`
+    );
+    expect(rows.rows).toEqual([
+      { kind: 'draft_order_pick', count: String(SYNTHETIC_ORDER_ROWS.length) },
     ]);
   }, 90_000);
 });
