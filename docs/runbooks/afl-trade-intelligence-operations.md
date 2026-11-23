@@ -1171,6 +1171,15 @@ rewritten in the rights and proposal text, both in full (`draftguru-national-yea
 rationale names both parsers. Read the dry run's proposal text before `--apply`: the rewrite changes
 the parser's name only, so a sentence describing what the old parser reads stays as written.
 
+`--from-capability <id>` derives a capability's first decision from another capability's effective
+decision of the same provider, on its terms (owner approval 4 of the 2026 intake: the post-draft order
+page on the national-year page's terms). `--from-season` may then be `--season` itself. The
+predecessor's capability id is rewritten wherever it is named, after its parser, and the rights name
+the new capability's own fields and dataset; every predecessor field must carry the same uses, which
+each new field takes. Only `draftguru-post-draft-order` may be derived so (`CROSS_CAPABILITY_SCOPES` in
+the script). The predecessor's prose, such as an `exact-field-boundary` condition describing selection
+leaves, stays as written: read it in the dry run.
+
 #### Recording reviewer and promoter grants
 
 ```sh
@@ -1315,6 +1324,26 @@ Prerequisites:
      "Recording a season's source decision"), then recapture the page. The 2026 `-parser-v3`
      decision of 2026-11-21 and its capture (`source-capture:16194feb…`, one issue) stay recorded;
      and
+   - `draftguru-post-draft-order-issue579-private-2026-parser-v1` for Draftguru's post-draft national
+     order, `https://www.draftguru.com.au/years/2026/provisional-draft-order/post-draft` (owner
+     approval 4 of the 2026 intake, on the national-year page's terms). Parser
+     `draftguru-post-draft-order/v1` (`source/draftguruPostDraftOrderAdapter.ts`) reads the one
+     "Full Draft Order" table as one `draft_order_pick` per row: the round, the final pick number (none
+     on the unnumbered rows after the numbered ones), the holder, the origin (the original club, round
+     and rank, a compensation label, a matched bid's bidding club, basis, nominee and the picks it
+     used, or a leftover-points pick's club and nominee), each trade hop's club and Draftguru trade id,
+     a declined bid's club, and the outcome (the selected player, the nominee a pick was spent on and
+     the number it was spent as, or a removal note). It never reads points or games. Any row outside
+     those forms, or a club outside the eighteen it names, refuses the whole page. The rights name
+     exactly `DRAFTGURU_POST_DRAFT_ORDER_FIELDS`; the cache, pacing and raw repository are the
+     national-year page's. Migration 0292 admits the claim kind and lets the capability join a
+     retained plan. Record the decision from the 2026 national-year decision with
+     `outcomes:sources:record-season-decision -- --capability draftguru-post-draft-order
+--from-capability draftguru-national-year-page --season 2026 --from-season 2026
+--parser-version draftguru-post-draft-order/v1` (see "Recording a season's source decision"), then
+     capture it with `--capability draftguru-post-draft-order --season 2026`. Reconcile an order batch
+     only on a database at migration 0293 or later, with code that carries `draftOrderPicks`; on an
+     earlier one the candidate is refused as unconserved; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the

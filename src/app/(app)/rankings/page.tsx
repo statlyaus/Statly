@@ -7,7 +7,8 @@ import { getCategoryRankings } from '@/server/rankings/getCategoryRankings';
 // Same five-minute freshness the rankings API advertises to the CDN.
 const getDefaultRankings = unstable_cache(
   async () => getCategoryRankings({ season: await resolveCurrentStatsSeason() }),
-  ['rankings:default:current-season'],
+  // v2: the nine real-data categories (camelCase keys, null for an unreported stat).
+  ['rankings:default:current-season:v2'],
   { revalidate: 300 }
 );
 
@@ -18,9 +19,7 @@ export default async function RankingsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <header className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
-        <p className="text-lg text-gray-600">
-          Player rankings based on 9 AFL statistical categories
-        </p>
+        <p className="text-lg text-gray-600">Player rankings across the nine league categories</p>
 
         {/* Legend */}
         <div className="mt-4 p-4 bg-gray-50">
@@ -58,8 +57,9 @@ export default async function RankingsPage() {
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            Numbers show per-game averages. Icons and colors indicate strength relative to league
-            average (Z-score).
+            Numbers show per-game averages over the games that reported the stat; a dash means the
+            stat was not reported. Icons and colors indicate strength relative to league average
+            (Z-score), adjusted for how many games the player has played.
           </p>
         </div>
       </header>

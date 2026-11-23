@@ -2,33 +2,42 @@ import 'server-only';
 
 import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { getPlayerPosition } from '@/lib/playerPositionMapping';
+import { normalizeCategoryDirections } from '@/server/leagues/categoryDirections';
+import type { CategoryDirection } from '@/server/leagues/scoringTypes';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
-// 9 Categories for Rankings
-export type RankingCategory =
-  | 'goals'
-  | 'goal_assists'
-  | 'tackles'
-  | 'clearances'
-  | 'inside_50s'
-  | 'rebound_50s'
-  | 'hitouts'
-  | 'intercepts'
-  | 'marks';
+/** The nine real-data league categories (the league default preset). */
+export type RankingCategory = (typeof REAL_DATA_NINE_CATEGORY_PRESET)[number];
 
-const RANKING_CATEGORIES: RankingCategory[] = [
-  'goals',
-  'goal_assists',
-  'tackles',
-  'clearances',
-  'inside_50s',
-  'rebound_50s',
-  'hitouts',
-  'intercepts',
-  'marks',
-];
+const RANKING_CATEGORIES: readonly RankingCategory[] = REAL_DATA_NINE_CATEGORY_PRESET;
+
+/**
+ * Each category's key under `stats` in a `player_match_stats` document (written by
+ * etl/processFootywireData.ts with the keys of etl/normalizePlayerRow.ts).
+ * Only this key is read: a stat the document does not report is missing, never estimated.
+ */
+export const RANKING_ETL_KEY: Record<RankingCategory, string> = {
+  goals: 'goals',
+  tackles: 'tackles',
+  inside50s: 'inside_50s',
+  intercepts: 'intercepts',
+  contestedMarks: 'contested_marks',
+  rebound50s: 'rebound_50s',
+  contestedPossessions: 'contested_possessions',
+  effectiveDisposals: 'effective_disposals',
+  scoreInvolvements: 'score_involvements',
+};
 
 // Player ownership status
 export type OwnershipStatus = 'OWNED' | 'AVAILABLE' | 'WAIVER';
+
+/** A category the player never reported is null in both fields. */
+export interface CategoryRanking {
+  /** The real per-game average over the games that reported the stat. */
+  perGame: number | null;
+  /** Sample-size adjusted strength; negated for a LOW_WINS category. */
+  zScore: number | null;
+}
 
 export interface PlayerRanking {
   playerId: string;
@@ -37,15 +46,10 @@ export interface PlayerRanking {
   position: string;
   games: number;
   ownership: OwnershipStatus;
-  overall: number; // Z-score sum
+  /** Sum of the reported categories' z-scores. */
+  overall: number;
   rank: number;
-  categories: Record<
-    RankingCategory,
-    {
-      perGame: number;
-      zScore: number;
-    }
-  >;
+  categories: Record<RankingCategory, CategoryRanking>;
 }
 
 export interface RankingsResponse {
@@ -56,8 +60,9 @@ export interface RankingsResponse {
     ownership?: string;
     sortBy: string;
     totalPlayers: number;
-    averages: Record<RankingCategory, number>;
-    stdDevs: Record<RankingCategory, number>;
+    /** Null for a category no ranked player reported. */
+    averages: Record<RankingCategory, number | null>;
+    stdDevs: Record<RankingCategory, number | null>;
   };
 }
 
@@ -72,6 +77,15 @@ function calculateZScore(value: number, mean: number, stdDev: number): number {
   if (stdDev === 0) return 0;
   return (value - mean) / stdDev;
 }
+
+function perCategory<T>(value: (category: RankingCategory) => T): Record<RankingCategory, T> {
+  return Object.fromEntries(
+    RANKING_CATEGORIES.map((category) => [category, value(category)])
+  ) as Record<RankingCategory, T>;
+}
+
+const finiteOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 // Get ownership status for a player in a league (mock implementation for now)
 async function getOwnershipStatus(_playerId: string, _leagueId?: string): Promise<OwnershipStatus> {
@@ -95,6 +109,8 @@ export interface RankingsOptions {
   /** 0 means no limit */
   limit?: number;
   search?: string | null;
+  /** Defaults to HIGH_WINS for every category; LOW_WINS negates that category's z-score. */
+  categoryDirections?: Partial<Record<RankingCategory, CategoryDirection>>;
 }
 
 /** Nine-category z-score rankings from player_match_stats. Shared by the API route and the page. */
@@ -108,11 +124,10 @@ export async function getCategoryRankings({
   sortDirection = 'desc',
   limit = 0,
   search = null,
+  categoryDirections,
 }: RankingsOptions): Promise<RankingsResponse> {
   if (firebaseAdminIsDisabled()) {
-    const emptyCategoryValues = Object.fromEntries(
-      RANKING_CATEGORIES.map((category) => [category, 0])
-    ) as Record<RankingCategory, number>;
+    const emptyCategoryValues = perCategory<number | null>(() => null);
 
     return {
       players: [],
@@ -129,6 +144,7 @@ export async function getCategoryRankings({
   }
 
   const db = adminDb;
+  const directions = normalizeCategoryDirections(RANKING_CATEGORIES, categoryDirections);
 
   console.log(
     `[Rankings API] Querying for season=${season}, period=${period}, position=${position}, ownership=${ownership}`
@@ -150,7 +166,7 @@ export async function getCategoryRankings({
   const snapshot = await query.get();
   console.log(`[Rankings API] Found ${snapshot.docs.length} player match records`);
 
-  // Aggregate data by player
+  // Aggregate data by player: per category, the total and the games that reported it.
   const playerAggregates = new Map<
     string,
     {
@@ -158,7 +174,8 @@ export async function getCategoryRankings({
       team: string;
       position: string;
       games: number;
-      stats: Record<RankingCategory, number>;
+      totals: Record<RankingCategory, number>;
+      gamesReported: Record<RankingCategory, number>;
     }
   >();
 
@@ -187,89 +204,50 @@ export async function getCategoryRankings({
       return;
     }
 
+    // The ETL writes the stats under `stats`; a document without them is not a counted game.
+    const stats: unknown = data.stats;
+    if (!stats || typeof stats !== 'object') {
+      console.warn(`Skipping player_match_stats/${doc.id}: no stats object`);
+      return;
+    }
+    const statValues = stats as Record<string, unknown>;
+
     // Clean up player name
     playerName = playerName.trim();
-
-    // Extract the 9 categories with improved data handling
-    const goals = data.goals || data.stats?.goals || data.raw_row?.goals || 0;
-    const goal_assists =
-      data.goal_assists ||
-      data.stats?.goal_assists ||
-      data.stats?.score_involvements ||
-      data.raw_row?.score_involvements ||
-      data.score_involvements ||
-      0;
-    const tackles = data.tackles || data.stats?.tackles || data.raw_row?.tackles || 0;
-    const clearances =
-      data.clearances ||
-      data.stats?.clearances ||
-      data.raw_row?.clearances ||
-      // Use contested_possessions as a substitute if clearances not available
-      (data.contested_possessions ||
-        data.stats?.contested_possessions ||
-        data.raw_row?.contested_possessions ||
-        0) * 0.3 ||
-      0;
-    const inside_50s = data.inside_50s || data.stats?.inside_50s || data.raw_row?.inside_50s || 0;
-    const rebound_50s =
-      data.rebound_50s || data.stats?.rebound_50s || data.raw_row?.rebound_50s || 0;
-    const hitouts =
-      data.hitouts || data.stats?.hit_outs || data.stats?.hitouts || data.raw_row?.hitouts || 0;
-    const intercepts = data.intercepts || data.stats?.intercepts || data.raw_row?.intercepts || 0;
-    const marks = data.marks || data.stats?.marks || data.raw_row?.marks || 0;
 
     // Use a combination of player name and team as the key to handle duplicates better
     const playerKey = `${playerName}_${data.team || 'Unknown'}`;
 
-    if (playerAggregates.has(playerKey)) {
-      const existing = playerAggregates.get(playerKey)!;
-      existing.games += 1;
-      existing.stats.goals += goals;
-      existing.stats.goal_assists += goal_assists;
-      existing.stats.tackles += tackles;
-      existing.stats.clearances += clearances;
-      existing.stats.inside_50s += inside_50s;
-      existing.stats.rebound_50s += rebound_50s;
-      existing.stats.hitouts += hitouts;
-      existing.stats.intercepts += intercepts;
-      existing.stats.marks += marks;
-    } else {
-      playerAggregates.set(playerKey, {
-        playerName,
-        team: data.team || 'Unknown',
-        position: getPlayerPosition(playerName), // Use smart position mapping
-        games: 1,
-        stats: {
-          goals,
-          goal_assists,
-          tackles,
-          clearances,
-          inside_50s,
-          rebound_50s,
-          hitouts,
-          intercepts,
-          marks,
-        },
-      });
+    const aggregate = playerAggregates.get(playerKey) ?? {
+      playerName,
+      team: data.team || 'Unknown',
+      position: getPlayerPosition(playerName), // Use smart position mapping
+      games: 0,
+      totals: perCategory(() => 0),
+      gamesReported: perCategory(() => 0),
+    };
+    aggregate.games += 1;
+    for (const category of RANKING_CATEGORIES) {
+      const value = finiteOrNull(statValues[RANKING_ETL_KEY[category]]);
+      if (value === null) continue;
+      aggregate.totals[category] += value;
+      aggregate.gamesReported[category] += 1;
     }
+    playerAggregates.set(playerKey, aggregate);
   });
 
-  // Filter by period (last N games)
-  let filteredPlayers = Array.from(playerAggregates.entries()).map(([playerKey, data]) => ({
-    playerId: playerKey, // Use the combined key as ID
-    ...data,
-    perGameStats: {
-      goals: data.stats.goals / data.games,
-      goal_assists: data.stats.goal_assists / data.games,
-      tackles: data.stats.tackles / data.games,
-      clearances: data.stats.clearances / data.games,
-      inside_50s: data.stats.inside_50s / data.games,
-      rebound_50s: data.stats.rebound_50s / data.games,
-      hitouts: data.stats.hitouts / data.games,
-      intercepts: data.stats.intercepts / data.games,
-      marks: data.stats.marks / data.games,
-    },
-  }));
+  // A player who reported none of the nine categories has nothing to rank.
+  let filteredPlayers = Array.from(playerAggregates.entries())
+    .filter(([, data]) => RANKING_CATEGORIES.some((category) => data.gamesReported[category] > 0))
+    .map(([playerKey, data]) => ({
+      playerId: playerKey, // Use the combined key as ID
+      ...data,
+      perGameStats: perCategory((category) =>
+        data.gamesReported[category] > 0
+          ? data.totals[category] / data.gamesReported[category]
+          : null
+      ),
+    }));
 
   // Apply last N games filter if needed
   if (period.startsWith('last')) {
@@ -282,44 +260,41 @@ export async function getCategoryRankings({
     filteredPlayers = filteredPlayers.filter((p) => p.position === position);
   }
 
-  // Calculate league averages for each category
+  // League average and spread per category, over the players who reported it.
   const categories = RANKING_CATEGORIES;
-  const leagueAverages: Record<RankingCategory, number> = {} as Record<RankingCategory, number>;
-  const stdDevs: Record<RankingCategory, number> = {} as Record<RankingCategory, number>;
+  const leagueAverages = perCategory<number | null>(() => null);
+  const stdDevs = perCategory<number | null>(() => null);
 
   categories.forEach((cat) => {
-    const values = filteredPlayers.map((p) => p.perGameStats[cat]);
-    leagueAverages[cat] = values.reduce((sum, val) => sum + val, 0) / values.length;
-
-    const variance =
-      values.reduce((sum, val) => sum + Math.pow(val - leagueAverages[cat], 2), 0) / values.length;
-    stdDevs[cat] = Math.sqrt(variance) || 0.01; // Prevent division by zero
+    const values = filteredPlayers
+      .map((p) => p.perGameStats[cat])
+      .filter((value): value is number => value !== null);
+    if (values.length === 0) return;
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    leagueAverages[cat] = mean;
+    stdDevs[cat] = Math.sqrt(variance);
   });
 
   // Apply shrinkage and calculate Z-scores
   const rankedPlayers: Omit<PlayerRanking, 'rank'>[] = await Promise.all(
     filteredPlayers.map(async (player) => {
-      const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> =
-        {} as Record<RankingCategory, { perGame: number; zScore: number }>;
       let overallScore = 0;
-      categories.forEach((cat) => {
-        // Apply shrinkage to handle small sample sizes
-        const adjustedRate = shrinkToLeagueAverage(
-          player.perGameStats[cat],
-          player.games,
-          leagueAverages[cat],
-          3
-        );
+      const categoryScores = perCategory<CategoryRanking>((cat) => {
+        const perGame = player.perGameStats[cat];
+        const mean = leagueAverages[cat];
+        const stdDev = stdDevs[cat];
+        if (perGame === null || mean === null || stdDev === null) {
+          return { perGame: null, zScore: null };
+        }
 
-        // Calculate Z-score
-        const zScore = calculateZScore(adjustedRate, leagueAverages[cat], stdDevs[cat]);
-
-        categoryScores[cat] = {
-          perGame: adjustedRate,
-          zScore,
-        };
+        // Shrink toward the league average for the z-score only; the shown figure stays real.
+        const adjustedRate = shrinkToLeagueAverage(perGame, player.gamesReported[cat], mean, 3);
+        const sign = directions[cat] === 'LOW_WINS' ? -1 : 1;
+        const zScore = sign * calculateZScore(adjustedRate, mean, stdDev);
 
         overallScore += zScore;
+        return { perGame, zScore };
       });
 
       const ownership = await getOwnershipStatus(player.playerId, leagueId || undefined);
@@ -376,11 +351,13 @@ export async function getCategoryRankings({
     );
   } else if (categories.includes(sortBy as RankingCategory)) {
     const cat = sortBy as RankingCategory;
-    finalPlayers.sort((a, b) =>
-      sortDirection === 'asc'
-        ? a.categories[cat].zScore - b.categories[cat].zScore
-        : b.categories[cat].zScore - a.categories[cat].zScore
-    );
+    // A player missing the category sorts last whichever way the column is sorted.
+    finalPlayers.sort((a, b) => {
+      const za = a.categories[cat].zScore;
+      const zb = b.categories[cat].zScore;
+      if (za === null || zb === null) return za === zb ? 0 : za === null ? 1 : -1;
+      return sortDirection === 'asc' ? za - zb : zb - za;
+    });
   }
 
   // Assign ranks
