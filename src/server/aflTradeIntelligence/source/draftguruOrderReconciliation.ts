@@ -51,6 +51,11 @@ export interface DraftguruOrderTieTransfer {
   /** The round or number the trade page states for the pick, when it states one. */
   statedRound: number | null;
   statedNumber: number | null;
+  /**
+   * The original club the transfer's pick has in the candidate (a future pick's stated club, or its
+   * custody pick's), when it has one.
+   */
+  statedOriginalClubId: string | null;
 }
 
 /** A transfer an order row ties: the row, the hop and whether it is the row's last hop. */
@@ -78,6 +83,22 @@ interface HopSlot {
   final: boolean;
   round: number;
   pickNumber: number | null;
+  /** The entitlement the row's origin states, resolved: its original club and round. */
+  originClubId: string | null;
+  originRound: number | null;
+}
+
+/**
+ * Whether a tie agrees with what the transfer itself says of its pick: the round and original club
+ * the row's origin states, where both sides state one.
+ */
+function tieAgrees(slot: HopSlot, transfer: DraftguruOrderTieTransfer): boolean {
+  const differs = (left: number | string | null, right: number | string | null) =>
+    left !== null && right !== null && left !== right;
+  return (
+    !differs(slot.originRound, transfer.statedRound) &&
+    !differs(slot.originClubId, transfer.statedOriginalClubId)
+  );
 }
 
 /** Whether a row's draft is one the order may settle. */
@@ -202,6 +223,8 @@ function addHopSlots(
       final: index === claim.hops.length - 1,
       round: claim.origin?.kind === 'entitlement' ? claim.origin.roundNumber : claim.roundNumber,
       pickNumber: claim.pickNumber,
+      originClubId: claim.origin?.kind === 'entitlement' ? route[0]! : null,
+      originRound: claim.origin?.kind === 'entitlement' ? claim.origin.roundNumber : null,
     });
   });
 }
@@ -247,7 +270,10 @@ function tieSlots(
   for (const [key, hops] of slots) {
     const found = candidates.get(key)!;
     if (found.some(({ transferId }) => claimedBy.get(transferId)! > 1)) continue;
-    for (const [slot, transfer] of pairSlot(hops, found)) {
+    const pairs = pairSlot(hops, found);
+    // A pair the transfer contradicts (another round or original club) leaves the whole slot untied.
+    if (pairs.some(([slot, transfer]) => !tieAgrees(slot, transfer))) continue;
+    for (const [slot, transfer] of pairs) {
       ties.set(transfer.transferId, {
         orderPickId: slot.orderPickId,
         hop: slot.hop,

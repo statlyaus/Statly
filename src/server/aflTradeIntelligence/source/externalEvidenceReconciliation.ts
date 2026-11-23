@@ -1186,8 +1186,12 @@ function pickStatements(
 /** The candidate pick transfers Draftguru's post-draft order may tie, with their stated slot. */
 function orderTieTransfers(
   resolvedTransfers: readonly ResolvedDirectedTransfer[],
-  transfers: readonly CanonicalTransfer[]
+  transfers: readonly CanonicalTransfer[],
+  pickCustody: readonly CanonicalPickCustody[]
 ): DraftguruOrderTieTransfer[] {
+  const custodyByPick = new Map(
+    pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)
+  );
   return transfers.flatMap((transfer, index) => {
     const { row } = resolvedTransfers[index]!;
     const claim = row.content.claim;
@@ -1207,9 +1211,12 @@ function orderTieTransfers(
           asset.kind === 'future_pick'
             ? asset.roundNumber
             : asset.kind === 'current_pick'
-              ? (asset.recordedRoundNumber ?? null)
+              ? (asset.recordedRoundNumber ??
+                custodyByPick.get(transfer.asset.pickId)?.roundNumber ??
+                null)
               : null,
         statedNumber: asset.kind === 'current_pick' ? asset.recordedPickNumber : null,
+        statedOriginalClubId: transfer.asset.originalClubId,
       },
     ];
   });
@@ -2020,6 +2027,14 @@ function joinEventualSelections(input: {
       custody === null
         ? (ordered?.entitlement ?? null)
         : `${custody.roundNumber ?? 'unknown'}|${custody.originalClubId}`;
+    // A custody pick the walk reaches that is another entitlement than the order row's origin is
+    // not that row's pick: its hops keep their ids.
+    if (
+      ordered?.entitlement != null &&
+      custody !== null &&
+      settledEntitlement !== ordered.entitlement
+    )
+      return;
     if (
       statedEntitlements.length > 1 ||
       (settledEntitlement !== null &&
@@ -2619,9 +2634,29 @@ function notUsedBoardPick(
 }
 
 /**
+ * Whether an order row could be the untied pick a club received: a row with a hop into that club
+ * (or into an unresolved club) that ties no transfer, since the pick may have reached the club
+ * there and moved on or been used; or a row the club holds that states no origin (the late rows
+ * print only "Picked"), which may be a pick traded in rather than the club's own.
+ */
+function orderRowCouldBe(
+  order: DraftguruOrderReconciliation,
+  record: AflTradeCanonicalDraftOrderPick,
+  receivingClubId: string
+): boolean {
+  const route = order.routes.get(record.orderPickId)!;
+  const untiedInto = record.hopTransferIds.some(
+    (transferId, hop) =>
+      transferId === null && (route[hop + 1] === null || route[hop + 1] === receivingClubId)
+  );
+  const holds = record.clubId === null || record.clubId === receivingClubId;
+  return untiedInto || (holds && order.rows.get(record.orderPickId)!.content.claim.origin === null);
+}
+
+/**
  * Whether Draftguru's post-draft order shows an untied pick was not used: its draft is an order
- * origin draft with order rows, and no row held by the receiving club (or by an unresolved club)
- * whose last hop ties no transfer could be it. A row with no hop is its holder's own pick.
+ * origin draft with order rows, and no row could be it (`orderRowCouldBe`). A row with no hop and a
+ * stated origin is its holder's own pick.
  */
 function orderShowsNotListed(
   order: DraftguruOrderReconciliation,
@@ -2633,13 +2668,7 @@ function orderShowsNotListed(
     ({ draftYear, draftType }) => draftYear === asset.draftYear && draftType === asset.draftType
   );
   return (
-    draft.length > 0 &&
-    !draft.some(
-      ({ clubId, hopTransferIds }) =>
-        (clubId === null || clubId === receivingClubId) &&
-        hopTransferIds.length > 0 &&
-        hopTransferIds.at(-1) === null
-    )
+    draft.length > 0 && !draft.some((record) => orderRowCouldBe(order, record, receivingClubId))
   );
 }
 
@@ -3343,7 +3372,7 @@ export function reconcileAflTradeExternalEvidence(input: {
   );
   // Draftguru's post-draft order (owner approval 4 of the 2026 intake): its rows, and the transfer
   // each hop of a row in ORDER_ORIGIN_DRAFTS ties to. Without order rows nothing changes.
-  const tieTransfers = orderTieTransfers(resolvedTransfers, transfers);
+  const tieTransfers = orderTieTransfers(resolvedTransfers, transfers, pickCustody);
   const order = reconcileDraftguruOrderPicks({
     evidence,
     transfers: tieTransfers,

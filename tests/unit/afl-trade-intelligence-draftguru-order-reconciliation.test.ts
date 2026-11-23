@@ -79,6 +79,8 @@ const PLAYERS = [
   'Zach Merrett',
   'Kai Coleman',
   'Other Player',
+  'Clancy Snell',
+  'Cooper Hodge',
 ];
 
 const resolution = (
@@ -291,12 +293,19 @@ function pages(year: number) {
   };
 }
 
-function reconcile(year: number, options: { order?: boolean; trades?: Claim[][] } = {}) {
+function reconcile(
+  year: number,
+  options: { order?: boolean; trades?: Claim[][]; orderRows?: Claim[]; selections?: Claim[] } = {}
+) {
   const source = pages(year);
   const batches = [
-    ...(options.trades ?? source.trades).map((claims, index) => batch('bcdef'[index]!, claims)),
-    batch('1', source.selections),
-    ...(options.order === false ? [] : [batch('7', source.order)]),
+    ...(options.trades ?? source.trades).map((claims, index) =>
+      batch('bcdef023456'[index]!, claims)
+    ),
+    batch('1', [...source.selections, ...(options.selections ?? [])]),
+    ...(options.order === false
+      ? []
+      : [batch('7', [...source.order, ...(options.orderRows ?? [])])]),
   ];
   return parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
@@ -455,6 +464,182 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
     expect(() =>
       createAflTradeExternalReconciliationCandidate({ ...content, pickOutcomes })
     ).toThrow(/order row that ties its transfer/);
+  });
+
+  it('does not settle a pick as not listed when a row has an untied hop into its club', () => {
+    // Brisbane → GWS → Port, used at 19 on Snell: the row's Brisbane → GWS hop names a trade the
+    // candidate does not hold, so the Brisbane → GWS transfer of the GWS trade page ties nothing.
+    const trades = [
+      ...pages(2026).trades,
+      trade(
+        '2026-picks-bris-gws',
+        2026,
+        'Brisbane',
+        'GWS',
+        [{ number: 20, stated: 'not_used' }],
+        'Other Player'
+      ),
+    ];
+    const orderRows = [
+      order(2026, {
+        roundNumber: 1,
+        pickNumber: 19,
+        club: cell('Port Adelaide'),
+        origin: entitlement('Brisbane', 1, 1),
+        hops: [
+          hop('GWS', '2026-picks-bris-gws-elsewhere'),
+          hop('Port Adelaide', '2026-picks-gws-port'),
+        ],
+        outcome: { kind: 'selected', player: person('Clancy Snell') },
+      }),
+    ];
+    const settled = reconcile(2026, { trades, orderRows });
+    const baseline = reconcile(2026, { trades, order: false });
+    expect(outcomeOf(settled, '2026-picks-bris-gws', 20)).toEqual(
+      outcomeOf(baseline, '2026-picks-bris-gws', 20)
+    );
+    expect(outcomeOf(settled, '2026-picks-bris-gws', 20).nominationBasis).not.toBe(
+      'order_not_listed'
+    );
+  });
+
+  it('does not settle a pick as not listed when its club holds a late row with no origin', () => {
+    // A late "Picked" row states no origin, so it may be the pick Essendon traded in at 75.
+    const trades = [
+      ...pages(2026).trades,
+      trade(
+        '2026-picks-ess-late',
+        2026,
+        'Richmond',
+        'Essendon',
+        [{ number: 75, stated: 'not_used' }],
+        'Other Player'
+      ),
+    ];
+    const orderRows = [
+      order(2026, {
+        roundNumber: 4,
+        pickNumber: 58,
+        club: cell('Essendon'),
+        origin: null,
+        hops: [],
+        outcome: { kind: 'selected', player: person('Cooper Hodge') },
+      }),
+    ];
+    const settled = reconcile(2026, { trades, orderRows });
+    expect(outcomeOf(settled, '2026-picks-ess-late', 75).nominationBasis).not.toBe(
+      'order_not_listed'
+    );
+    // Without the late row, the same pick is one no row could be.
+    expect(reconcile(2026, { trades }).pickOutcomes).toContainEqual(
+      expect.objectContaining({
+        transferId: transferOf(settled, '2026-picks-ess-late', 75).transferId,
+        nominationBasis: 'order_not_listed',
+      })
+    );
+  });
+
+  it('leaves a lone hop untied when the transfer states another original club', () => {
+    // The trade page states the pick as Hawthorn's; the row says it was GWS's.
+    const trades = [
+      trade(
+        '2026-zach-merrett',
+        2026,
+        'Hawthorn',
+        'Essendon',
+        [{ number: 15, stated: 'not_used' }],
+        'Zach Merrett'
+      ),
+      ...pages(2026).trades.slice(1),
+      [
+        {
+          kind: 'transaction',
+          nativeEventId: '2026-picks-gws-future',
+          seasonYear: 2026,
+          occurredOn: null,
+          transactionType: 'trade',
+          title: null,
+        },
+        ...(['Carlton', 'Richmond'] as const).map((club): Claim => ({
+          kind: 'transaction_party',
+          nativeEventId: '2026-picks-gws-future',
+          nativePartyId: CLUBS[club],
+          club: page(club),
+        })),
+        {
+          kind: 'directed_transfer',
+          nativeEventId: '2026-picks-gws-future',
+          nativeTransferId: 'future-pick:2026:national:3:hawthorn',
+          fromClub: page('Carlton'),
+          toClub: page('Richmond'),
+          asset: {
+            kind: 'future_pick',
+            draftYear: 2026,
+            draftType: 'national',
+            roundNumber: 3,
+            originalClub: page('Hawthorn'),
+          },
+        },
+        {
+          kind: 'directed_transfer',
+          nativeEventId: '2026-picks-gws-future',
+          nativeTransferId: 'player:Other Player',
+          fromClub: page('Richmond'),
+          toClub: page('Carlton'),
+          asset: { kind: 'player', player: { nativeId: null, recordedName: 'Other Player' } },
+        },
+      ] satisfies Claim[],
+    ];
+    const orderRows = [
+      order(2026, {
+        roundNumber: 3,
+        pickNumber: 45,
+        club: cell('Richmond'),
+        origin: entitlement('GWS', 3, 12),
+        hops: [hop('Carlton', '2025-earlier'), hop('Richmond', '2026-picks-gws-future')],
+        outcome: { kind: 'selected', player: person('Other Player') },
+      }),
+    ];
+    const settled = reconcile(2026, { trades, orderRows });
+    const row = settled.draftOrderPicks!.find(({ pickNumber }) => pickNumber === 45)!;
+    expect(row.hopTransferIds).toEqual([null, null]);
+  });
+
+  it('keeps a chain that joined by its stated player joined when the row ties only part of it', () => {
+    const eventual = (eventId: string, number: number): Claim => ({
+      kind: 'pick_eventual_selection',
+      nativeEventId: eventId,
+      nativeTransferId: pickKey(2026, number),
+      outcome: 'selected',
+      player: { nativeId: person('Archie Van Dyk').nativeId, recordedName: 'Archie Van Dyk' },
+    });
+    // Every hop of GWS's pick 28 states Van Dyk; the row's first hop names a trade the candidate
+    // does not hold, so only its later hops tie.
+    const source = pages(2026);
+    const trades = [
+      trade(
+        '2026-picks-gws-hawthorn',
+        2026,
+        'GWS',
+        'Hawthorn',
+        [{ number: 28, stated: 'traded_on' }],
+        'Other Player'
+      ),
+      [...source.trades[0]!, eventual('2026-zach-merrett', 28)],
+      [...source.trades[1]!, eventual('2026-kai-coleman', 28)],
+      ...source.trades.slice(2),
+    ];
+    trades[0]!.push(eventual('2026-picks-gws-hawthorn', 28));
+    const baseline = reconcile(2026, { trades, order: false });
+    const settled = reconcile(2026, { trades });
+    const ids = (content: Content) =>
+      new Set([
+        pickIdOf(content, '2026-picks-gws-hawthorn', 28),
+        pickIdOf(content, '2026-zach-merrett', 28),
+        pickIdOf(content, '2026-kai-coleman', 28),
+      ]);
+    expect(ids(baseline).size).toBe(1);
+    expect(ids(settled).size).toBe(1);
   });
 
   it('leaves a 2025-shaped candidate byte-identical: no order rows, no new key; order rows of another draft only recorded', () => {
