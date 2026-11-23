@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { clearSignInExpired, reportSignInExpired } from '@/lib/signInExpiry';
+
 import { TRADE_CATCH_UP_INTERVAL_MS, useTradeCentreLiveRefresh } from './useTradeCentreLiveRefresh';
 
 type Handler = (payload?: unknown) => void;
@@ -61,6 +63,7 @@ describe('useTradeCentreLiveRefresh', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    clearSignInExpired();
   });
 
   it('polls the trade revision without a socket and refreshes only when it changes', async () => {
@@ -102,6 +105,21 @@ describe('useTradeCentreLiveRefresh', () => {
     await tick();
     expect(onChange).not.toHaveBeenCalled();
     visibility.mockRestore();
+  });
+
+  it('stops polling while the sign-in has expired and resumes once it is restored', async () => {
+    const onChange = vi.fn();
+    authenticatedFetch.mockResolvedValue(revisionResponse('1.1.100'));
+    renderRefresh(onChange);
+
+    reportSignInExpired();
+    await tick();
+    await tick();
+    expect(authenticatedFetch).not.toHaveBeenCalled();
+
+    clearSignInExpired();
+    await tick();
+    expect(authenticatedFetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not poll while the league room is live, and refreshes on its trade events', async () => {

@@ -23,6 +23,7 @@ import {
   persistDevelopmentAuthUser,
   readStoredDevelopmentAuthUser,
 } from '@/lib/devAuth';
+import { clearSignInExpired } from '@/lib/signInExpiry';
 
 export interface AuthUser {
   uid: string;
@@ -98,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
         void ensureAuthServiceWorkerReady()
           .then(() => {
             if (!cancelled && version === authStateVersion) {
+              // A fresh sign-in ends any "sign in again" prompt left from the lapsed one.
+              clearSignInExpired();
               setUser(firebaseUser);
             }
           })
@@ -151,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       if (!auth) {
         if (isDevelopmentLogin(email, pass)) {
           persistDevelopmentAuthUser();
+          clearSignInExpired();
           setUser(toDevelopmentAuthUser());
           return;
         }
@@ -189,15 +193,19 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       await signInWithPopup(auth, provider);
       await prepareSignedInNavigation();
     },
+    // A deliberate sign-out is not an expired sign-in. The notice is cleared once signed out, so a
+    // request refused while signing out does not raise it again.
     logout: async () => {
       if (!auth && isDevelopmentAuthEnabled()) {
         clearDevelopmentAuthUser();
         setUser(null);
+        clearSignInExpired();
         return;
       }
       if (!auth) throw new Error('Firebase Auth not available');
       await clearLegacyServerSession();
-      return signOut(auth);
+      await signOut(auth);
+      clearSignInExpired();
     },
     refreshIdToken: async () => {
       if (!auth?.currentUser) return;

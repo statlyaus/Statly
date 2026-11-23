@@ -266,7 +266,8 @@ export default function LeagueWaiversContainer({
         playerId: includePlayers && !playersCursor ? initialPlayerId : null,
       });
 
-      const response = await fetch(url.toString(), { signal, cache: 'no-store' });
+      // A refused sign-in is refreshed once, then raises the app-wide "sign in again" prompt.
+      const response = await authenticatedFetch(url.toString(), { signal, cache: 'no-store' });
       const data = (await response.json().catch(() => ({}))) as WaiverBootstrapResponse;
       if (!response.ok) {
         throw new Error(data.error || `Waiver data failed with status ${response.status}`);
