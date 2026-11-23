@@ -147,7 +147,7 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
                     // A stat the player never reported is missing, not zero.
                     return (
                       <td key={cat} className="px-2 py-4 whitespace-nowrap text-center">
-                        <span className="text-xs text-gray-500" aria-hidden="true">
+                        <span className="text-xs text-muted-foreground" aria-hidden="true">
                           –
                         </span>
                         <span className="sr-only">{label} not reported</span>
