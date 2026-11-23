@@ -1800,6 +1800,8 @@ interface OrderGroup {
   fallbackPickId: string | null;
   entitlement: string | null;
   originalClubId: string | null;
+  /** The round the row's origin states; null when it states no entitlement. */
+  originRound: number | null;
   route: readonly string[] | null;
   evidenceIds: readonly string[];
 }
@@ -1809,6 +1811,23 @@ interface OrderGroup {
  * with, as a stated player's group is; any other row is the entitlement its origin states, the id
  * an Official AFL order row gives it, or nothing when it states none.
  */
+/**
+ * Whether a custody pick contradicts the entitlement an order row's origin states: both name a round
+ * and the rounds differ, or both name an original club and the clubs differ. A custody pick that
+ * names no round contradicts nothing by its round.
+ */
+export function aflTradeOrderEntitlementContradicts(
+  origin: Pick<OrderGroup, 'originRound' | 'originalClubId'>,
+  custody: Pick<CanonicalPickCustody, 'roundNumber' | 'originalClubId'>
+): boolean {
+  const differs = (left: number | string | null, right: number | string | null) =>
+    left !== null && right !== null && left !== right;
+  return (
+    differs(origin.originRound, custody.roundNumber) ||
+    differs(origin.originalClubId, custody.originalClubId)
+  );
+}
+
 function orderGroupOf(
   row: Evidence & { content: { claim: Extract<Claim, { kind: 'draft_order_pick' }> } },
   chain: readonly (string | null)[],
@@ -1838,6 +1857,7 @@ function orderGroupOf(
     entitlement:
       origin !== null && originalClubId !== null ? `${origin.roundNumber}|${originalClubId}` : null,
     originalClubId,
+    originRound: origin?.roundNumber ?? null,
     route: chain.every((club): club is string => club !== null) ? chain : null,
     evidenceIds: [row.evidenceId],
   };
@@ -2028,13 +2048,18 @@ function joinEventualSelections(input: {
         ? (ordered?.entitlement ?? null)
         : `${custody.roundNumber ?? 'unknown'}|${custody.originalClubId}`;
     // A custody pick the walk reaches that is another entitlement than the order row's origin is
-    // not that row's pick: its hops keep their ids.
+    // not that row's pick: its hops keep their ids, and the contradiction is recorded on the pick.
     if (
-      ordered?.entitlement != null &&
+      ordered !== undefined &&
       custody !== null &&
-      settledEntitlement !== ordered.entitlement
-    )
+      aflTradeOrderEntitlementContradicts(ordered, custody)
+    ) {
+      refused(
+        'Draftguru’s post-draft order states another entitlement than the custody pick its hops reach.',
+        [custody.pickId]
+      );
       return;
+    }
     if (
       statedEntitlements.length > 1 ||
       (settledEntitlement !== null &&

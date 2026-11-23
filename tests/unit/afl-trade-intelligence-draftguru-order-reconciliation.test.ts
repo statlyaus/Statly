@@ -9,6 +9,7 @@ import {
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
 import {
   AFL_TRADE_EXTERNAL_IDENTITY_RESOLUTION_SCHEMA_VERSION,
+  aflTradeOrderEntitlementContradicts,
   createAflTradeExternalIdentityResolution,
   reconcileAflTradeExternalEvidence,
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
@@ -22,7 +23,11 @@ type OrderClaim = Extract<Claim, { kind: 'draft_order_pick' }>;
 const digest = (character: string) => character.repeat(64);
 const capturedAt = '2026-11-23T00:00:00.000Z';
 
-function batch(suffix: string, claims: readonly Claim[]) {
+function batch(
+  suffix: string,
+  claims: readonly Claim[],
+  provider: 'draftguru' | 'official_afl' = 'draftguru'
+) {
   const capture = {
     captureId: `source-capture:${digest(suffix)}`,
     artifactId: `artifact:${digest(suffix)}`,
@@ -36,12 +41,12 @@ function batch(suffix: string, claims: readonly Claim[]) {
   };
   return createAflTradeExternalEvidenceBatch({
     schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_BATCH_SCHEMA_VERSION,
-    provider: 'draftguru',
+    provider,
     captureId: capture.captureId,
     evidence: claims.map((claim, index) =>
       createAflTradeExternalEvidenceEnvelope({
         schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
-        provider: 'draftguru',
+        provider,
         capture,
         sourceRow: { ordinal: index + 1, sourceKey: `draftguru:${suffix}:${index + 1}` },
         claim,
@@ -86,11 +91,12 @@ const PLAYERS = [
 const resolution = (
   entityKind: 'club' | 'player',
   sourceIdentity: { nativeId: string | null; recordedName: string },
-  canonicalId: string
+  canonicalId: string,
+  provider: 'draftguru' | 'official_afl' = 'draftguru'
 ) =>
   createAflTradeExternalIdentityResolution({
     schemaVersion: AFL_TRADE_EXTERNAL_IDENTITY_RESOLUTION_SCHEMA_VERSION,
-    provider: 'draftguru',
+    provider,
     entityKind,
     sourceIdentity,
     canonicalId,
@@ -295,7 +301,13 @@ function pages(year: number) {
 
 function reconcile(
   year: number,
-  options: { order?: boolean; trades?: Claim[][]; orderRows?: Claim[]; selections?: Claim[] } = {}
+  options: {
+    order?: boolean;
+    trades?: Claim[][];
+    orderRows?: Claim[];
+    selections?: Claim[];
+    custody?: Claim[];
+  } = {}
 ) {
   const source = pages(year);
   const batches = [
@@ -303,6 +315,7 @@ function reconcile(
       batch('bcdef023456'[index]!, claims)
     ),
     batch('1', [...source.selections, ...(options.selections ?? [])]),
+    ...(options.custody === undefined ? [] : [batch('8', options.custody, 'official_afl')]),
     ...(options.order === false
       ? []
       : [batch('7', [...source.order, ...(options.orderRows ?? [])])]),
@@ -313,7 +326,16 @@ function reconcile(
       competition: 'AFLM',
       anchorSeasonYear: year,
       sourceBatches: batches,
-      identityResolutions,
+      // Official AFL custody rows name clubs as the trade pages do; only a custody run reviews them.
+      identityResolutions:
+        options.custody === undefined
+          ? identityResolutions
+          : [
+              ...identityResolutions,
+              ...(Object.keys(CLUBS) as Club[]).map((club) =>
+                resolution('club', page(club), clubId(club), 'official_afl')
+              ),
+            ],
       reconciledAt: '2026-11-23T01:00:00.000Z',
     })
   ).content;
@@ -640,6 +662,57 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
       ]);
     expect(ids(baseline).size).toBe(1);
     expect(ids(settled).size).toBe(1);
+  });
+
+  it('counts a custody pick as contradicting a row only where both state a round or club and differ', () => {
+    const origin = { originRound: 1, originalClubId: clubId('Hawthorn') };
+    expect(
+      aflTradeOrderEntitlementContradicts(origin, {
+        roundNumber: 2,
+        originalClubId: clubId('Hawthorn'),
+      })
+    ).toBe(true);
+    expect(
+      aflTradeOrderEntitlementContradicts(origin, { roundNumber: 1, originalClubId: clubId('GWS') })
+    ).toBe(true);
+    // A custody pick with no round contradicts nothing by its round.
+    expect(
+      aflTradeOrderEntitlementContradicts(origin, {
+        roundNumber: null,
+        originalClubId: clubId('Hawthorn'),
+      })
+    ).toBe(false);
+    expect(
+      aflTradeOrderEntitlementContradicts(
+        { originRound: null, originalClubId: null },
+        { roundNumber: 2, originalClubId: clubId('GWS') }
+      )
+    ).toBe(false);
+  });
+
+  it('settles a row whose hop reaches a custody pick that states no round', () => {
+    // The pre-draft order places Hawthorn's own pick at 15 with no round: the same pick the row's
+    // origin states, so the row's hop keeps its tie, cites the row, and records no conflict.
+    const custody: Claim = {
+      kind: 'pick_custody',
+      observedAt: '2026-10-14T00:00:00.000Z',
+      draftYear: 2026,
+      draftType: 'national',
+      roundNumber: null,
+      recordedPickNumber: 15,
+      originalClub: page('Hawthorn'),
+      currentClub: page('Hawthorn'),
+    };
+    const settled = reconcile(2026, { custody: [custody] });
+    const transfer = transferOf(settled, '2026-zach-merrett', 15);
+    const row = settled.draftOrderPicks!.find(({ pickNumber }) => pickNumber === 17)!;
+    expect(row.hopTransferIds).toEqual([transfer.transferId]);
+    expect(transfer.evidenceIds).toEqual(expect.arrayContaining(row.evidenceIds));
+    expect(settled.issues.filter(({ code }) => code === 'pick_identity_conflict')).toEqual([]);
+    expect(outcomeOf(settled, '2026-zach-merrett', 15)).toMatchObject({
+      disposition: 'selected',
+      outcomeStatus: 'stated',
+    });
   });
 
   it('gives a 2025-shaped candidate without order rows the id the code before this change gave it', () => {
