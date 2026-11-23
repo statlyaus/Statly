@@ -71,12 +71,12 @@ export function LocalValuationReadinessNotice({
           </dt>
           <dd className="mt-1 text-sm font-semibold text-foreground">
             {readiness.privateEvaluationAuthorityState === 'authorized'
-              ? `Authorized · ${readiness.privateEvaluationDecisionId}`
+              ? `Authorised · ${readiness.privateEvaluationDecisionId}`
               : readiness.privateEvaluationAuthorityState === 'withdrawn'
                 ? `Withdrawn · ${readiness.privateEvaluationDecisionId}`
                 : readiness.privateEvaluationAuthorityState === 'evidence_invalid'
                   ? `Blocked · retained evidence is no longer current`
-                  : 'Not authorized'}
+                  : 'Not authorised'}
           </dd>
         </div>
         <div className="rounded-lg border border-border bg-background p-4">

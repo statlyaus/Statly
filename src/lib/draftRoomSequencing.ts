@@ -60,7 +60,7 @@ export type DraftRoomSequence = {
 };
 
 /**
- * How long after the deadline the room shows "Finalizing pick" while the server's expiry job runs.
+ * How long after the deadline the room shows "Finalising pick" while the server's expiry job runs.
  * Past it the pick is overdue: no job made it, so a person has to.
  */
 export const OVERDUE_GRACE_MS = 15_000;
@@ -238,7 +238,7 @@ export function getDraftRoomTimerState(input: {
       remainingSeconds: 0,
       percentRemaining: 0,
       tone: 'urgent',
-      label: 'Finalizing pick',
+      label: 'Finalising pick',
       isRunning: false,
     };
   }
@@ -309,7 +309,7 @@ export function getDraftRoomTimerState(input: {
       remainingSeconds,
       percentRemaining,
       tone: 'urgent',
-      label: 'Finalizing pick',
+      label: 'Finalising pick',
       isRunning: false,
     };
   }

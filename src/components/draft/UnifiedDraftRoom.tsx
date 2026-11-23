@@ -509,7 +509,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     activeDraft.name === `Draft ${activeDraft.id}`;
   const displayDraftTitle = hasPlaceholderDraftName ? 'League Draft' : activeDraft.name;
   const displayDraftSubtitle = isCompletedDraft
-    ? `${displayCurrentPick} of ${activeDraft.totalPicks} picks finalized. Review your roster and every team in the archive.`
+    ? `${displayCurrentPick} of ${activeDraft.totalPicks} picks finalised. Review your roster and every team in the archive.`
     : totalRounds && totalRounds > 0
       ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`
       : `Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`;
@@ -685,7 +685,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     Draft complete
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                    {displayDraftTitle} is finalized with {displayCurrentPick} of{' '}
+                    {displayDraftTitle} is finalised with {displayCurrentPick} of{' '}
                     {activeDraft.totalPicks} picks complete. Choose where to go next; the draft room
                     remains below as a read-only reference.
                   </p>

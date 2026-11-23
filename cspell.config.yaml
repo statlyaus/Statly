@@ -1,0 +1,87 @@
+# Spell check, style guide phase 4 (ticket 13d). Run with `npm run spell`.
+# A correct word cspell does not know (a name, a footy term) goes in cspell-words.txt.
+version: '0.2'
+language: en-AU
+import:
+  - '@cspell/dict-en-au/cspell-ext.json'
+dictionaryDefinitions:
+  - name: statly-words
+    path: ./cspell-words.txt
+    addWords: true
+dictionaries:
+  - statly-words
+useGitignore: true
+files:
+  - 'src/**/*.tsx'
+  - 'docs/**/*.md'
+ignorePaths:
+  - '**/*.test.tsx'
+  - '**/__tests__/**'
+patterns:
+  # Text between JSX tags, and quoted strings with a space in them. A string with no space
+  # ('finalized', 'bg-muted') is a code value, not copy. An opening quote follows a space or
+  # punctuation, so the gap between two strings ("', realized: '") is never read as one.
+  # A JSX tag's `>` follows a word, quote, `}` or `/`, or starts a line; `=>`, `a > b` and
+  # `Foo[]>` do not count, and text with `=` or a `;` outside an entity in it is code.
+  - name: jsx-text
+    pattern: '/(?<=(?:^[ \t]*|[\w"''}\/<])>)(?:[^<>{}=;]|&\w+;)*[A-Za-z](?:[^<>{}=;]|&\w+;)*(?=<|\{)/gm'
+  # Text after an expression on the same line: `{title} is finalised with`. Text with `;`, `(`
+  # or `=` in it is code (`} from '…';`, `} else if (`).
+  - name: jsx-text-after-expression
+    pattern: '/(?<=\})[ \t]+[A-Za-z][^<>{}=;()\n]*(?=<|\{|$)/gm'
+  - name: template-expression
+    pattern: '/\$\{[^}]*\}/g'
+  # `doesn&apos;t` would otherwise be read as "doesn" and "apos".
+  - name: html-entity
+    pattern: '/&\w+;/g'
+  - name: prose-string
+    pattern: '/(?<=^|[\s(\[{,:=?!&|+>])(["''`])(?:(?!\1)[^\\\n]|\\.)*?[ \t](?:(?!\1)[^\\\n]|\\.)*?\1/gm'
+  - name: markdown-code
+    pattern: '/```[\s\S]*?```|`[^`\n]*`/g'
+languageSettings:
+  # Components: check only what a reader sees, in Australian English.
+  - languageId: typescriptreact
+    includeRegExpList: [jsx-text, jsx-text-after-expression, prose-string]
+    ignoreRegExpList: [template-expression, html-entity]
+overrides:
+  # Engineering docs name tables, statuses and APIs spelt the US way (finalized, materialization),
+  # so they get a typo check that accepts both spellings. Code in backticks is skipped.
+  - filename: 'docs/**/*.md'
+    language: en-AU,en
+    ignoreRegExpList: [markdown-code]
+    words: [canonicalizer, finalizer, finalizers, materializer, materializers, rematerializing, reserialize, unfinalized, unpenalized]
+  # Code dictionaries (CSS, npm, software terms) stay on for class names, and they accept some
+  # US spellings. Flag the common ones in copy; none is a Tailwind class.
+  - filename: 'src/**/*.tsx'
+    flagWords:
+      - analyze
+      - analyzed
+      - authorize
+      - authorized
+      - behavior
+      - customize
+      - customized
+      - favorite
+      - favorites
+      - finalize
+      - finalized
+      - finalizing
+      - minimize
+      - minimized
+      - normalize
+      - normalized
+      - optimize
+      - optimized
+      - organize
+      - organized
+      - organization
+      - personalize
+      - personalized
+      - prioritize
+      - realize
+      - realized
+      - recognize
+      - recognized
+      - summarize
+      - summarized
+      - unauthorized

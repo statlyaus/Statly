@@ -361,7 +361,7 @@ export default function LivePickHeader({
     },
     COMPLETED: {
       title: 'Draft complete',
-      detail: 'All picks are finalized and the draft history is available for review.',
+      detail: 'All picks are finalised and the draft history is available for review.',
     },
     CANCELLED: {
       title: 'Draft cancelled',
@@ -406,7 +406,7 @@ export default function LivePickHeader({
       ? { title: 'Pick overdue', detail: overdueDetail }
       : timerState.phase === 'FINALIZING'
         ? {
-            title: 'Finalizing pick',
+            title: 'Finalising pick',
             detail: 'The deadline has passed. Waiting for the server to persist the selection.',
           }
         : timerState.phase === 'SYNCING'
@@ -420,7 +420,7 @@ export default function LivePickHeader({
     timerState.phase === 'SYNCING'
       ? 'Draft clock is syncing'
       : timerState.phase === 'FINALIZING'
-        ? 'Draft pick is being finalized'
+        ? 'Draft pick is being finalised'
         : timerState.phase === 'OVERDUE'
           ? 'Draft pick is overdue'
           : `Time remaining: ${formatTime(timeLeft)}`;

@@ -23,6 +23,7 @@ Run the narrowest check while editing, then the complete relevant set before pub
 
 ```sh
 npm run docs:check
+npm run spell
 npm run format:check
 npm run lint:ci
 npm run typecheck

@@ -388,8 +388,8 @@ export default function LeagueSocialWidget({
                 type="button"
                 onClick={handleMinimize}
                 className="inline-flex size-10 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-card hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Minimize league chat"
-                title="Minimize"
+                aria-label="Minimise league chat"
+                title="Minimise"
               >
                 <Minus className="size-5" aria-hidden="true" />
               </button>

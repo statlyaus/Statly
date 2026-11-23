@@ -13,7 +13,7 @@ type ValuationView = AflTradeValuationExplanationView['view'];
 
 const VIEW_LABELS: Record<ValuationView, string> = {
   at_trade: 'At trade',
-  realized: 'Realized',
+  realized: 'Realised',
   remaining: 'Remaining',
   current: 'Current',
 };
@@ -22,7 +22,7 @@ const VIEW_DEFINITIONS: Record<ValuationView, string> = {
   at_trade: 'What the deterministic fixture valued each package at when the trade occurred.',
   realized: 'The fabricated contribution already assigned to each asset in this rehearsal.',
   remaining: 'The fabricated contribution still projected after the assessment date.',
-  current: 'Realized contribution plus the remaining projection for each asset.',
+  current: 'Realised contribution plus the remaining projection for each asset.',
 };
 
 function formatScore(value: number): string {
@@ -74,7 +74,7 @@ function AssetLedger({
 
             {view === 'current' && asset.currentComponents ? (
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Realized {formatScore(asset.currentComponents.realizedMean)} + remaining{' '}
+                Realised {formatScore(asset.currentComponents.realizedMean)} + remaining{' '}
                 {formatScore(asset.currentComponents.remainingMean)} = current{' '}
                 {formatScore(asset.additiveMean)}
               </p>

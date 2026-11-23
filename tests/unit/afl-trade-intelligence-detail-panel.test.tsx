@@ -246,7 +246,7 @@ describe('AFL trade value detail panel', () => {
     expect(screen.getByText(/player · received by Fabricated Club A/i)).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'Fabricated player A' }).closest('article')
-    ).toHaveTextContent('6 realized + 4 remaining');
+    ).toHaveTextContent('6 realised + 4 remaining');
     expect(screen.getByRole('heading', { name: 'Why the model says this' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Methodology and limits' })).toHaveAttribute(
       'href',

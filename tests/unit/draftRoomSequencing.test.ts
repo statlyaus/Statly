@@ -184,7 +184,7 @@ describe('getDraftRoomTimerState', () => {
     ).toMatchObject({
       phase: 'FINALIZING',
       remainingSeconds: 0,
-      label: 'Finalizing pick',
+      label: 'Finalising pick',
       isRunning: false,
     });
   });
@@ -198,7 +198,7 @@ describe('getDraftRoomTimerState', () => {
         nowMs: Date.parse('2026-06-13T10:00:00.000Z') + seconds * 1000,
       });
 
-    expect(timer(14)).toMatchObject({ phase: 'FINALIZING', label: 'Finalizing pick' });
+    expect(timer(14)).toMatchObject({ phase: 'FINALIZING', label: 'Finalising pick' });
     expect(timer(16)).toMatchObject({
       phase: 'OVERDUE',
       remainingSeconds: 0,

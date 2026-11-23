@@ -110,8 +110,8 @@ describe('LivePickHeader', () => {
       />
     );
 
-    expect(screen.getAllByText('Finalizing pick')).toHaveLength(2);
-    expect(screen.getByRole('timer')).toHaveAccessibleName('Draft pick is being finalized');
+    expect(screen.getAllByText('Finalising pick')).toHaveLength(2);
+    expect(screen.getByRole('timer')).toHaveAccessibleName('Draft pick is being finalised');
   });
 
   describe('when no expiry job makes the pick', () => {
@@ -133,7 +133,7 @@ describe('LivePickHeader', () => {
           yourSlot={3}
         />
       );
-      expect(screen.getAllByText('Finalizing pick')).toHaveLength(2);
+      expect(screen.getAllByText('Finalising pick')).toHaveLength(2);
 
       act(() => {
         vi.advanceTimersByTime(11_000);

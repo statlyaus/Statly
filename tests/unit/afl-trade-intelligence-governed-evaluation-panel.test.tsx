@@ -23,7 +23,7 @@ describe('AFL trade package evaluation panel', () => {
       within(stKilda).getByLabelText(/St Kilda provisional package grade D/u)
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Realized' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Realised' }));
     expect(
       within(adelaide).getByText(/72 fixed_horizon_pav from 150 games at 0.48 per game/u)
     ).toBeInTheDocument();

@@ -364,7 +364,7 @@ describe('private local workbook trade evaluation page', () => {
       screen.getByText(`afl-men:2025-trades · retained for outcome-release:${'c'.repeat(64)}`)
     ).toBeVisible();
     expect(screen.getByText('Private non-production calculation authority')).toBeVisible();
-    expect(screen.getByText('Not authorized')).toBeVisible();
+    expect(screen.getByText('Not authorised')).toBeVisible();
     expect(screen.getByText('Private local calculation')).toBeVisible();
     const scenario = screen.getByRole('region', { name: 'Synthetic calculation scenario' });
     expect(
