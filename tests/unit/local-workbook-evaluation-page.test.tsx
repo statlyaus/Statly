@@ -203,7 +203,7 @@ describe('private local workbook evaluation archive page', () => {
     expect(screen.getByText('At trade')).toBeVisible();
     expect(screen.getByText('Carlton −10.00')).toBeVisible();
     expect(screen.getByText('Essendon +10.00')).toBeVisible();
-    expect(screen.getByText('Realized')).toBeVisible();
+    expect(screen.getByText('Realised')).toBeVisible();
     expect(screen.getByText('Carlton +3.00')).toBeVisible();
     expect(screen.getByText('Essendon −3.00')).toBeVisible();
     expect(screen.getByText('Remaining')).toBeVisible();

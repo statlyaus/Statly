@@ -102,7 +102,7 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
           <div>
             <h3 className="font-semibold text-foreground">Reviewed releases</h3>
             <p className="mt-1">
-              Normalized facts belong in the isolated public analytical PostgreSQL domain. Public
+              Normalised facts belong in the isolated public analytical PostgreSQL domain. Public
               reads select one exact approved release; staging rows and partial imports never leak.
             </p>
           </div>

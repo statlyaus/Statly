@@ -11,7 +11,7 @@ type Contribution = Asset['contributions'][number];
 
 const VIEW_LABELS: Record<View, string> = {
   at_trade: 'At trade',
-  realized: 'Realized',
+  realized: 'Realised',
   remaining: 'Remaining',
   current: 'Current',
 };

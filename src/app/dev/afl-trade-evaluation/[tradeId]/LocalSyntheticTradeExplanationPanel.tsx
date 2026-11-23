@@ -13,7 +13,7 @@ type ValuationView = AflTradeValuationExplanationView['view'];
 
 const VIEW_LABELS: Record<ValuationView, string> = {
   at_trade: 'At trade',
-  realized: 'Realized',
+  realized: 'Realised',
   remaining: 'Remaining',
   current: 'Current',
 };

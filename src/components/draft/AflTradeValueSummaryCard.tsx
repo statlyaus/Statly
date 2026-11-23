@@ -16,7 +16,7 @@ type AflTradeValueSummaryCardProps = {
 
 const viewLabels = {
   at_trade: 'At the trade',
-  realized: 'Realized',
+  realized: 'Realised',
   remaining: 'Remaining',
   current: 'Outcome today',
 } as const satisfies Record<AflTradeValueSummary['view'], string>;

@@ -685,7 +685,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     Draft complete
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                    {displayDraftTitle} is finalized with {displayCurrentPick} of{' '}
+                    {displayDraftTitle} is finalised with {displayCurrentPick} of{' '}
                     {activeDraft.totalPicks} picks complete. Choose where to go next; the draft room
                     remains below as a read-only reference.
                   </p>

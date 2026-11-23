@@ -38,7 +38,7 @@ export default function PrivacyPolicyPage() {
         <ul>
           <li>To provide, operate, and maintain the Statly service.</li>
           <li>To authenticate users and secure accounts.</li>
-          <li>To personalize content and improve user experience.</li>
+          <li>To personalise content and improve user experience.</li>
           <li>To communicate important updates and respond to inquiries.</li>
         </ul>
 

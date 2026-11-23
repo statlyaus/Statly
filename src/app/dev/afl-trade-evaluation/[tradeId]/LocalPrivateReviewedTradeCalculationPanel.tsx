@@ -8,7 +8,7 @@ type CalculationView = CalculatedAsset['atTrade'];
 
 const VIEW_LABELS = {
   atTrade: 'At trade',
-  realized: 'Realized',
+  realized: 'Realised',
   remaining: 'Remaining',
   current: 'Current',
 } as const;

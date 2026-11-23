@@ -94,7 +94,7 @@ function AssetValue({ value }: { value: AflTradeAssetValueResult }) {
       </p>
       {value.currentComponents ? (
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {formatValue(value.currentComponents.realizedValue)} realized +{' '}
+          {formatValue(value.currentComponents.realizedValue)} realised +{' '}
           {formatValue(value.currentComponents.remainingValue)} remaining
         </p>
       ) : null}
