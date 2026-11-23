@@ -1070,7 +1070,13 @@ export async function captureDraftguruSource(
   input: DraftguruCaptureInput
 ): Promise<DraftguruCaptureResult> {
   const url = exactDraftguruUrl(input.url);
-  if (!url || !/^\/(?:trades(?:\/.*)?|years\/\d{4})$/.test(url.pathname)) {
+  // The post-draft order page is the one reviewed path below a year (owner approval 4, 2026 intake).
+  if (
+    !url ||
+    !/^\/(?:trades(?:\/.*)?|years\/\d{4}(?:\/provisional-draft-order\/post-draft)?)$/.test(
+      url.pathname
+    )
+  ) {
     throw new TypeError('Draftguru capture URL is outside the approved bounded paths.');
   }
   if (!Number.isSafeInteger(input.maximumBytes) || input.maximumBytes <= 0) {
