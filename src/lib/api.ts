@@ -63,25 +63,33 @@ function withHttpStatus(error: Error, status: number): Error & { status: number 
 }
 
 /**
- * Attach the caller's credential to an outgoing request.
+ * Send a request with the caller's credential.
  *
- * A signed-in browser session supplies a Firebase ID token; local development without a signed-in
- * user falls back to the development credential. The auth helper is imported dynamically so this
- * module stays importable from the server, where there is no client credential to attach.
+ * In the browser the shared sign-in handler attaches the Firebase ID token (or the development
+ * credential), refreshes it once on a 401 and raises the "sign in again" prompt when that fails.
+ * It is imported dynamically so this module stays importable from the server, where there is no
+ * client credential to attach.
  */
-async function attachCredential(headers: Headers): Promise<void> {
-  if (headers.has('Authorization')) return;
-  if (typeof window === 'undefined') return;
+async function sendWithCredential(
+  url: string,
+  options: RequestInit,
+  headers: Headers
+): Promise<Response> {
+  const send = (sendHeaders: Headers) => fetch(url, { ...options, headers: sendHeaders });
+  if (typeof window === 'undefined') return send(headers);
 
+  let recovery: typeof import('@/lib/authenticatedFetch') | undefined;
   try {
-    const { getAuthHeader } = await import('@/lib/authenticatedFetch');
-    const authorization = await getAuthHeader(readStoredDevelopmentAuthUserId() ?? undefined);
-    if (authorization) {
-      headers.set('Authorization', authorization);
-    }
+    recovery = await import('@/lib/authenticatedFetch');
   } catch {
     // A credential is optional at this layer. A gated route answers 401 and the caller decides.
+    return send(headers);
   }
+  return recovery.fetchWithSignInRecovery(
+    send,
+    headers,
+    readStoredDevelopmentAuthUserId() ?? undefined
+  );
 }
 
 /**
@@ -110,12 +118,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  await attachCredential(headers);
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const response = await sendWithCredential(url, options, headers);
 
   if (!response.ok) {
     // Accept a variety of error shapes:

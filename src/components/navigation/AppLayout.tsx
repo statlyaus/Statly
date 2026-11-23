@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect } from 'react';
 import type React from 'react';
 import { usePathname } from 'next/navigation';
 
+import SignInExpiredPrompt from '@/components/auth/SignInExpiredPrompt';
 import { clearLoginAutoRedirect } from '@/lib/loginLoopGuard';
 import { SectionErrorBoundary } from '../ui/ErrorBoundary';
 import MainNavigation from './MainNavigation';
@@ -60,6 +61,7 @@ export default function AppLayout({
   return (
     <SectionErrorBoundary name="AppLayout">
       <AppLayoutContext.Provider value={{ showBasketball: basketballVisible }}>
+        <SignInExpiredPrompt />
         {content}
       </AppLayoutContext.Provider>
     </SectionErrorBoundary>
