@@ -15,6 +15,11 @@ import {
   deriveSeasonSourceDecision,
 } from '../src/server/aflTradeIntelligence/development/localSeasonSourceDecision';
 import {
+  DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY,
+  DRAFTGURU_POST_DRAFT_ORDER_FIELDS,
+  draftguruPostDraftOrderDataset,
+} from '../src/server/aflTradeIntelligence/development/localDraftguruPostDraftOrderCapture';
+import {
   AflTradeArtifactUnlocatedError,
   requireAflTradeEvidenceLocated,
 } from '../src/server/aflTradeIntelligence/artifacts/artifactStoreLocation';
@@ -37,11 +42,25 @@ import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
  * Usage:
  *   npm run outcomes:sources:record-season-decision -- --capability <id> --season <year> \
  *     --from-season <year> --approval-artifact <artifact:...> --decided-at <iso> \
- *     --revalidate-at <iso> [--parser-version <name>/v<n>] [--apply]
+ *     --revalidate-at <iso> [--parser-version <name>/v<n>] [--from-capability <id>] [--apply]
  *
  * `--parser-version` records the runner's parser for `--season` when it differs from the
  * predecessor's (for example `draftguru-national-year-page/v8` for 2026); any other value is refused.
+ * `--from-capability` derives a capability's first decision from another capability's decision of
+ * the same provider, on its terms; only the capabilities in `CROSS_CAPABILITY_SCOPES` may be derived
+ * so, because the rights must name the new capability's own fields.
  */
+
+/** The fields and dataset a capability derived from another capability's decision records. */
+const CROSS_CAPABILITY_SCOPES: Readonly<
+  Record<string, { fields: readonly string[]; dataset(season: number): string }>
+> = {
+  // Owner approval 4 of the 2026 intake: on the national-year page's terms.
+  [DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY]: {
+    fields: DRAFTGURU_POST_DRAFT_ORDER_FIELDS,
+    dataset: draftguruPostDraftOrderDataset,
+  },
+};
 
 const VALUE_OPTIONS = new Set([
   '--capability',
@@ -51,6 +70,7 @@ const VALUE_OPTIONS = new Set([
   '--decided-at',
   '--revalidate-at',
   '--parser-version',
+  '--from-capability',
 ]);
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -68,13 +88,13 @@ export interface SeasonSourceDecisionArguments {
   revalidateAt: string;
   /** The runner's parser for `season`, when it differs from the predecessor's. */
   parserVersion?: string;
+  /** The capability whose decision the new one is derived from, when it is another capability. */
+  fromCapabilityId?: LocalExternalCaptureCapability;
   apply: boolean;
 }
 
-export function parseSeasonSourceDecisionArguments(
-  argv: readonly string[],
-  env: Readonly<Record<string, string | undefined>>
-): SeasonSourceDecisionArguments {
+/** Each `--name value` option once, and whether `--apply` was given. */
+function readOptions(argv: readonly string[]): { values: Map<string, string>; apply: boolean } {
   const values = new Map<string, string>();
   let apply = false;
   for (let index = 0; index < argv.length; index += 1) {
@@ -91,39 +111,77 @@ export function parseSeasonSourceDecisionArguments(
     values.set(name, value);
     index += 1;
   }
-  const capabilityId = values.get('--capability');
-  if (!isLocalExternalCaptureCapability(capabilityId)) {
-    usage('--capability must name a local capture capability.');
+  return { values, apply };
+}
+
+function requireYear(values: ReadonlyMap<string, string>, name: string): number {
+  const value = Number(values.get(name));
+  if (!Number.isInteger(value) || value < 1897 || value > 2200) usage(`${name} must be a year.`);
+  return value;
+}
+
+function requireInstant(values: ReadonlyMap<string, string>, name: string): string {
+  const value = values.get(name);
+  if (value === undefined || !INSTANT.test(value) || Number.isNaN(Date.parse(value))) {
+    usage(`${name} must be a UTC millisecond instant.`);
   }
-  const year = (name: string) => {
-    const value = Number(values.get(name));
-    if (!Number.isInteger(value) || value < 1897 || value > 2200) usage(`${name} must be a year.`);
-    return value;
-  };
-  const instant = (name: string) => {
-    const value = values.get(name);
-    if (value === undefined || !INSTANT.test(value) || Number.isNaN(Date.parse(value))) {
-      usage(`${name} must be a UTC millisecond instant.`);
-    }
-    return value;
-  };
+  return value;
+}
+
+function requireApprovalArtifact(values: ReadonlyMap<string, string>): string {
   const approvalArtifactId = values.get('--approval-artifact');
   if (approvalArtifactId === undefined || !/^artifact:[0-9a-f]{64}$/u.test(approvalArtifactId)) {
     usage('--approval-artifact must be the stored approval record artifact ID.');
   }
+  return approvalArtifactId;
+}
+
+function optionalParserVersion(values: ReadonlyMap<string, string>): string | undefined {
   const parserVersion = values.get('--parser-version');
   if (parserVersion !== undefined && !/^[a-z0-9-]+\/v[1-9]\d*$/u.test(parserVersion)) {
     usage('--parser-version must be a parser version such as draftguru-national-year-page/v8.');
   }
+  return parserVersion;
+}
+
+/** `--from-capability`: another capability, only for a capability that may be derived so. */
+function optionalFromCapability(
+  values: ReadonlyMap<string, string>,
+  capabilityId: LocalExternalCaptureCapability
+): LocalExternalCaptureCapability | undefined {
+  const fromCapabilityId = values.get('--from-capability');
+  if (fromCapabilityId === undefined) return undefined;
+  if (!isLocalExternalCaptureCapability(fromCapabilityId) || fromCapabilityId === capabilityId) {
+    usage('--from-capability must name another local capture capability.');
+  }
+  if (!Object.hasOwn(CROSS_CAPABILITY_SCOPES, capabilityId)) {
+    usage(`${capabilityId} cannot be derived from another capability's decision.`);
+  }
+  return fromCapabilityId;
+}
+
+export function parseSeasonSourceDecisionArguments(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>
+): SeasonSourceDecisionArguments {
+  const { values, apply } = readOptions(argv);
+  const capabilityId = values.get('--capability');
+  if (!isLocalExternalCaptureCapability(capabilityId)) {
+    usage('--capability must name a local capture capability.');
+  }
+  const approvalArtifactId = requireApprovalArtifact(values);
+  const parserVersion = optionalParserVersion(values);
+  const fromCapabilityId = optionalFromCapability(values, capabilityId);
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),
     capabilityId,
-    season: year('--season'),
-    fromSeason: year('--from-season'),
+    season: requireYear(values, '--season'),
+    fromSeason: requireYear(values, '--from-season'),
     approvalArtifactId,
-    decidedAt: instant('--decided-at'),
-    revalidateAt: instant('--revalidate-at'),
+    decidedAt: requireInstant(values, '--decided-at'),
+    revalidateAt: requireInstant(values, '--revalidate-at'),
     ...(parserVersion === undefined ? {} : { parserVersion }),
+    ...(fromCapabilityId === undefined ? {} : { fromCapabilityId }),
     apply,
   };
 }
@@ -223,7 +281,7 @@ export async function recordSeasonSourceDecision(
   try {
     predecessor = await loadRecordedLocalCaptureAuthority(
       ledger,
-      parsed.capabilityId,
+      parsed.fromCapabilityId ?? parsed.capabilityId,
       parsed.fromSeason,
       evaluatedAt
     );
@@ -254,6 +312,16 @@ export async function recordSeasonSourceDecision(
       decidedAt: parsed.decidedAt,
       revalidateAt: parsed.revalidateAt,
       parserVersion: runnerParser,
+      ...(parsed.fromCapabilityId === undefined
+        ? {}
+        : {
+            capability: {
+              from: parsed.fromCapabilityId,
+              to: parsed.capabilityId,
+              fields: CROSS_CAPABILITY_SCOPES[parsed.capabilityId]!.fields,
+              dataset: CROSS_CAPABILITY_SCOPES[parsed.capabilityId]!.dataset(parsed.season),
+            },
+          }),
     });
   } catch (error) {
     return refused('DERIVATION_REFUSED', error);

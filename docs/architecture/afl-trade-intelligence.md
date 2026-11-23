@@ -5092,6 +5092,18 @@ The remaining work proceeds through these independently verifiable gates:
      hop unresolved. Nothing is
      inferred from the pick number alone: of 209 `Pick N` receipts, 31 do not sit at the AFL slot of
      that number.
+   - **Draftguru post-draft national order (2026 intake).** Owner approval 4 of the 2026 intake
+     (2026-11-23) added capability `draftguru-post-draft-order`, on the Draftguru national-year
+     page's terms, for the one page
+     `https://www.draftguru.com.au/years/2026/provisional-draft-order/post-draft`. Draftguru's trade
+     pages look a pick up by its old number after draft-night renumbering, so they can state "Pick
+     not used" for a pick that was used (Hawthorn's first-round pick in the Merrett trade, used at 17).
+     The order page states each pick as the draft left it. Parser `draftguru-post-draft-order/v1`
+     (`source/draftguruPostDraftOrderAdapter.ts`) emits one `draft_order_pick` per row of its "Full
+     Draft Order" table: round, final number, holder, origin, trade hops with their Draftguru trade
+     ids, and outcome (selected, spent matching a bid, or removed). Points and games are never read.
+     Migration 0292 admits the claim kind and the capability in a retained plan. Captured only by the
+     local runner, like the national-year page.
    - **Footyinfo national draft boards (issues 853 and 789).** The owner approved Footyinfo as a
      provider on 2026-10-12, as a source rights record shows. The capability is
      `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v3` (v1 until

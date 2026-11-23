@@ -42,6 +42,8 @@ import {
   FOOTYINFO_DRAFT_BOARD_PARSER_VERSION,
   parseFootyinfoDraftBoard,
 } from '../source/footyinfoDraftBoardAdapter';
+import { parseDraftguruPostDraftOrder } from '../source/draftguruPostDraftOrderAdapter';
+import { DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION } from '../source/externalDraftTradeEvidenceContracts';
 import { PostgresAflTradeExternalCaptureRegistry } from '../source/postgresExternalCaptureRegistry';
 import { PostgresAflTradeExternalEvidenceRepository } from '../source/postgresExternalEvidenceRepository';
 import {
@@ -60,6 +62,12 @@ import {
   draftguruNationalYearParserVersion,
   type LocalDraftguruNationalYearTarget,
 } from './localDraftguruNationalYearCapture';
+import {
+  createDraftguruPostDraftOrderCaptureCommand,
+  DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY,
+  draftguruPostDraftOrderDecisionKey,
+  type LocalDraftguruPostDraftOrderTarget,
+} from './localDraftguruPostDraftOrderCapture';
 import { createLocalFileCaptureAdmissionStore } from './localFileCaptureAdmissionStore';
 import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
 import { bindLocalAflTradeArtifactRepository } from './localArtifactStoreBinding';
@@ -145,6 +153,7 @@ const DRAFTGURU_TRADE_INDEX_URL = 'https://www.draftguru.com.au/trades';
 export type LocalExternalCaptureCapability =
   | DraftguruTradeCapability
   | typeof DRAFTGURU_NATIONAL_YEAR_CAPABILITY
+  | typeof DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY
   | typeof OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY
   | typeof OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY
   | typeof OFFICIAL_AFL_TRADE_PERIOD_CAPABILITY
@@ -189,6 +198,15 @@ const CAPABILITY_PROFILES: Record<
     policy: LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY,
     rawRepositoryId: 'draftguru-national-raw',
     decisionKey: draftguruNationalYearDecisionKey,
+  },
+  // Owner approval 4 of the 2026 intake: on the national-year page's terms, so the same pacing,
+  // cache and raw repository.
+  [DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY]: {
+    provider: 'draftguru',
+    parserVersion: () => DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION,
+    policy: LOCAL_DRAFTGURU_NATIONAL_YEAR_CAPTURE_POLICY,
+    rawRepositoryId: 'draftguru-national-raw',
+    decisionKey: draftguruPostDraftOrderDecisionKey,
   },
   [OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY]: {
     provider: 'official_afl',
@@ -340,6 +358,7 @@ export interface LocalDraftguruTradeCaptureTarget {
 export type LocalExternalCaptureTarget =
   | LocalDraftguruTradeCaptureTarget
   | LocalDraftguruNationalYearTarget
+  | LocalDraftguruPostDraftOrderTarget
   | LocalOfficialAflDraftSessionTarget
   | LocalOfficialAflDraftOrderTarget
   | LocalOfficialAflTradePeriodTarget
@@ -467,6 +486,13 @@ function createCommand(
       maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
     });
   }
+  if (target.capabilityId === DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY) {
+    return createDraftguruPostDraftOrderCaptureCommand(recorded.authority, {
+      target,
+      capturedAt,
+      maximumBytes: LOCAL_EXTERNAL_CAPTURE_MAXIMUM_BYTES,
+    });
+  }
   if (target.capabilityId === DRAFTGURU_NATIONAL_YEAR_CAPABILITY) {
     return createDraftguruNationalYearCaptureCommand(recorded.authority, {
       target,
@@ -507,6 +533,8 @@ function parsePage(
       });
     case DRAFTGURU_NATIONAL_YEAR_CAPABILITY:
       return parseDraftguruNationalYearSelections(html, { capture, draftYear: target.season });
+    case DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY:
+      return parseDraftguruPostDraftOrder(html, { capture, draftYear: target.season });
     case OFFICIAL_AFL_DRAFT_SESSION_CAPABILITY:
       return parseOfficialAflDraftSession(html, { capture, anchorSeasonYear: target.season });
     case OFFICIAL_AFL_DRAFT_ORDER_CAPABILITY: {

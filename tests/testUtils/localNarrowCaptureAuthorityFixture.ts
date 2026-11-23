@@ -10,6 +10,13 @@ import {
   draftguruNationalYearParserVersion,
 } from '@/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
 import {
+  DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY,
+  DRAFTGURU_POST_DRAFT_ORDER_FIELDS,
+  draftguruPostDraftOrderDataset,
+  draftguruPostDraftOrderDecisionKey,
+} from '@/server/aflTradeIntelligence/development/localDraftguruPostDraftOrderCapture';
+import { DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION } from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
+import {
   FOOTYINFO_DRAFT_BOARD_CAPABILITY,
   FOOTYINFO_DRAFT_BOARD_FIELDS,
   footyinfoDraftBoardDecisionKey,
@@ -190,6 +197,21 @@ export function draftguruNationalYearAuthority(
     capabilityId: DRAFTGURU_NATIONAL_YEAR_CAPABILITY,
     clientVersion: input.clientVersion ?? draftguruNationalYearParserVersion(input.season),
     fields: DRAFTGURU_NATIONAL_YEAR_FIELDS,
+  });
+}
+
+/** The shape of the recorded Draftguru post-draft order authority (2026 intake, approval 4). */
+export function draftguruPostDraftOrderAuthority(
+  input: NarrowAuthorityTiming & { season: number }
+): LocalNarrowCaptureAuthority {
+  return narrowSeasonAuthority({
+    ...input,
+    decisionKey: draftguruPostDraftOrderDecisionKey(input.season),
+    provider: 'draftguru',
+    dataset: draftguruPostDraftOrderDataset(input.season),
+    capabilityId: DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY,
+    clientVersion: DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION,
+    fields: DRAFTGURU_POST_DRAFT_ORDER_FIELDS,
   });
 }
 

@@ -448,4 +448,48 @@ describe('record-season-source-decision with a parser change', () => {
       clientVersion: V8,
     });
   });
+
+  it('records the post-draft order decision from the 2026 year-page decision, on its terms', async () => {
+    const args = seasonDecision({
+      capabilityId: 'draftguru-post-draft-order',
+      fromCapabilityId: 'draftguru-national-year-page',
+      season: 2026,
+      fromSeason: 2026,
+      parserVersion: 'draftguru-post-draft-order/v1',
+      decidedAt: instant(-0.005),
+    });
+    const recorded = await recordSeasonSourceDecision(sql, { ...args, apply: true });
+    if (recorded.status !== 'recorded') {
+      throw new Error(`Expected a recorded decision: ${JSON.stringify(recorded)}`);
+    }
+    const accepted = await loadRecordedLocalCaptureAuthority(
+      ledger,
+      'draftguru-post-draft-order',
+      2026,
+      new Date().toISOString()
+    );
+    expect(accepted.decisionId).toBe(recorded.decisionId);
+    expect(accepted.authority.proposal.content.decisionKey).toBe(
+      'draftguru-post-draft-order-issue579-private-2026-parser-v1'
+    );
+    expect(accepted.authority.sourceRights.content.acquisition).toMatchObject({
+      capabilityId: 'draftguru-post-draft-order',
+      clientVersion: 'draftguru-post-draft-order/v1',
+    });
+    // The year-page decision stays the one the runner reads for its own capability.
+    await expect(
+      loadRecordedLocalCaptureAuthority(
+        ledger,
+        'draftguru-national-year-page',
+        2026,
+        new Date().toISOString()
+      )
+    ).resolves.toMatchObject({
+      authority: {
+        proposal: {
+          content: { decisionKey: 'draftguru-national-year-page-issue579-private-2026-parser-v8' },
+        },
+      },
+    });
+  });
 });
