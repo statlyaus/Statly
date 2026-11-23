@@ -375,7 +375,10 @@ export function parseDraftguruPostDraftOrder(
         originCell.length !== 1 ||
         club === undefined
       ) {
-        unsupported(`Unreviewed round, pick or club cell: ${normalizeText($(row).text())}`);
+        // Only the cells the parser reads are quoted; the points and games cells never are.
+        unsupported(
+          `Unreviewed round, pick or club cell: ${[roundText, pickText, normalizeText(clubCell.text())].join(' | ')}`
+        );
         return;
       }
       const parts = segmentsOf(originCell).map(parseSegment);
