@@ -255,6 +255,8 @@ export function aflTradeAssetLedgerShareMatchedBid(
     boardPicks: [],
   }
 ): AflTradeAssetLedgerStatedPickOutcome {
+  // The order states the spend, not its price: no board prices a 2026 bid, so it stays pending.
+  if (outcome.basis === 'order_bid_spent') return outcome;
   const same = review.samePicks.find((row) => row.pickId === pick.pickId);
   const spends = bidMatches.flatMap((bid) =>
     bid.spentPicks

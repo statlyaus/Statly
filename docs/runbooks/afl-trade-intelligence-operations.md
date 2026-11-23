@@ -1341,7 +1341,9 @@ Prerequisites:
      `outcomes:sources:record-season-decision -- --capability draftguru-post-draft-order
 --from-capability draftguru-national-year-page --season 2026 --from-season 2026
 --parser-version draftguru-post-draft-order/v1` (see "Recording a season's source decision"), then
-     capture it with `--capability draftguru-post-draft-order --season 2026`; and
+     capture it with `--capability draftguru-post-draft-order --season 2026`. Reconcile an order batch
+     only on a database at migration 0293 or later, with code that carries `draftOrderPicks`; on an
+     earlier one the candidate is refused as unconserved; and
    - one `official-afl-completed-draft-session-issue579-private-<season>-session-v<parser>` decision
      per captured season, for example
      `official-afl-completed-draft-session-issue579-private-2020-session-v19`. The key names the

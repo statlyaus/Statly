@@ -175,6 +175,20 @@ function notUsed(outcome: PickOutcome): AflTradeAssetLedgerStatedPickOutcome {
       };
     case 'board_pick_passed_or_removed':
       return { kind: 'passed', boardPickId: outcome.boardPickId! };
+    // Draftguru's post-draft order (owner approval 4 of the 2026 intake): a spent pick waits on the
+    // year's bid price, a removed one was passed, and one no row lists was not used.
+    case 'order_bid_spent':
+      return {
+        kind: 'matched_bid',
+        status: 'pending',
+        basis: 'order_bid_spent',
+        matchedBidBoardPickIds: [],
+        pendingReason: 'bid_unpriced',
+      };
+    case 'order_pick_removed':
+      return { kind: 'passed', orderPickId: outcome.orderPickId! };
+    case 'order_not_listed':
+      return { kind: 'not_used', evidence: 'order_not_listed' };
     case 'club_took_no_nominated_player':
       return { kind: 'not_used' };
     default:
