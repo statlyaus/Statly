@@ -52,12 +52,29 @@ export async function expectNoAppErrorBoundary(page: Page) {
 }
 
 export async function expectNoPageLevelHorizontalOverflow(page: Page): Promise<void> {
-  const widths = await page.evaluate(() => ({
-    client: document.documentElement.clientWidth,
-    scroll: document.documentElement.scrollWidth,
-  }));
+  const widths = await page.evaluate(() => {
+    const client = document.documentElement.clientWidth;
+    // Name what sticks out past the viewport and is not inside a sideways scroller, so a failure says where.
+    const culprits = [...document.querySelectorAll('body *')]
+      .filter((element) => {
+        if (element.getBoundingClientRect().right <= client) return false;
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          if (getComputedStyle(parent).overflowX !== 'visible') return false;
+        }
+        return getComputedStyle(element).position !== 'fixed';
+      })
+      .slice(0, 5)
+      .map((element) => {
+        const right = element.getBoundingClientRect().right.toFixed(2);
+        return `${element.tagName.toLowerCase()}.${String(element.className).slice(0, 80)} (right ${right})`;
+      });
+    return { client, scroll: document.documentElement.scrollWidth, culprits };
+  });
 
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+  expect(
+    widths.scroll,
+    `wider than the page: ${widths.culprits.join('; ') || 'none found'}`
+  ).toBeLessThanOrEqual(widths.client);
 }
 
 function isExpectedDevelopmentNoise(message: string) {

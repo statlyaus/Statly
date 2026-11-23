@@ -13,6 +13,14 @@ export async function axeViolations(page: Page): Promise<string[]> {
     .exclude('[data-collage]')
     .analyze();
   return violations.flatMap((violation) =>
-    violation.nodes.map((node) => `${violation.id}: ${node.target.join(' ')}`)
+    violation.nodes.map((node) => {
+      // Contrast failures name both colours and the ratio, so the fix is visible in the report.
+      const data = node.any[0]?.data as
+        { fgColor?: string; bgColor?: string; contrastRatio?: number } | undefined;
+      const colours = data?.fgColor
+        ? ` (${data.fgColor} on ${data.bgColor}, ${data.contrastRatio})`
+        : '';
+      return `${violation.id}: ${node.target.join(' ')}${colours}`;
+    })
   );
 }
