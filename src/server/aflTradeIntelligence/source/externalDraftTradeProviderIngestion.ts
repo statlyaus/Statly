@@ -28,6 +28,11 @@ import {
   OFFICIAL_AFL_ISSUING_AWARD_PARSER_VERSION,
 } from './officialAflIssuingAwardAdapter';
 import { DRAFTGURU_YEAR_PARSER_VERSION } from './draftguruEventYear';
+import {
+  DRAFTGURU_POST_DRAFT_ORDER_SEASONS,
+  draftguruPostDraftOrderUrl,
+} from './draftguruPostDraftOrderAdapter';
+import { DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION } from './externalDraftTradeEvidenceContracts';
 import { FOOTYINFO_DRAFT_BOARD_PARSER_VERSION } from './footyinfoDraftBoardAdapter';
 import { reviewedFootyinfoDraftBoardSeason } from './footyinfoDraftBoardSourceScope';
 import {
@@ -150,6 +155,21 @@ export function validateAflTradeExternalCaptureScope(
       url.pathname !== `/years/${request.anchorSeasonYear}` ||
       url.search ||
       url.hash
+    )
+      invalid();
+    return;
+  }
+  if (request.capabilityId === 'draftguru-post-draft-order') {
+    // Parser v1 reads only the exact reviewed post-draft order page (owner approval 4 of the 2026
+    // intake). The page states no as-of date, so its claims are effective when captured.
+    if (
+      request.provider !== 'draftguru' ||
+      request.draftPathway !== 'national' ||
+      request.discoveryFromSeasonYear != null ||
+      request.parserVersion !== DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION ||
+      !DRAFTGURU_POST_DRAFT_ORDER_SEASONS.includes(request.anchorSeasonYear) ||
+      request.sourceUrl !== draftguruPostDraftOrderUrl(request.anchorSeasonYear) ||
+      request.effectiveAt !== request.capturedAt
     )
       invalid();
     return;

@@ -15,6 +15,11 @@ import {
   deriveSeasonSourceDecision,
 } from '../src/server/aflTradeIntelligence/development/localSeasonSourceDecision';
 import {
+  DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY,
+  DRAFTGURU_POST_DRAFT_ORDER_FIELDS,
+  draftguruPostDraftOrderDataset,
+} from '../src/server/aflTradeIntelligence/development/localDraftguruPostDraftOrderCapture';
+import {
   AflTradeArtifactUnlocatedError,
   requireAflTradeEvidenceLocated,
 } from '../src/server/aflTradeIntelligence/artifacts/artifactStoreLocation';
@@ -37,11 +42,25 @@ import { requireLoopbackDatabaseUrl } from './locate-local-artifact-custody';
  * Usage:
  *   npm run outcomes:sources:record-season-decision -- --capability <id> --season <year> \
  *     --from-season <year> --approval-artifact <artifact:...> --decided-at <iso> \
- *     --revalidate-at <iso> [--parser-version <name>/v<n>] [--apply]
+ *     --revalidate-at <iso> [--parser-version <name>/v<n>] [--from-capability <id>] [--apply]
  *
  * `--parser-version` records the runner's parser for `--season` when it differs from the
  * predecessor's (for example `draftguru-national-year-page/v8` for 2026); any other value is refused.
+ * `--from-capability` derives a capability's first decision from another capability's decision of
+ * the same provider, on its terms; only the capabilities in `CROSS_CAPABILITY_SCOPES` may be derived
+ * so, because the rights must name the new capability's own fields.
  */
+
+/** The fields and dataset a capability derived from another capability's decision records. */
+const CROSS_CAPABILITY_SCOPES: Readonly<
+  Record<string, { fields: readonly string[]; dataset(season: number): string }>
+> = {
+  // Owner approval 4 of the 2026 intake: on the national-year page's terms.
+  [DRAFTGURU_POST_DRAFT_ORDER_CAPABILITY]: {
+    fields: DRAFTGURU_POST_DRAFT_ORDER_FIELDS,
+    dataset: draftguruPostDraftOrderDataset,
+  },
+};
 
 const VALUE_OPTIONS = new Set([
   '--capability',
@@ -51,6 +70,7 @@ const VALUE_OPTIONS = new Set([
   '--decided-at',
   '--revalidate-at',
   '--parser-version',
+  '--from-capability',
 ]);
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -68,6 +88,8 @@ export interface SeasonSourceDecisionArguments {
   revalidateAt: string;
   /** The runner's parser for `season`, when it differs from the predecessor's. */
   parserVersion?: string;
+  /** The capability whose decision the new one is derived from, when it is another capability. */
+  fromCapabilityId?: LocalExternalCaptureCapability;
   apply: boolean;
 }
 
@@ -115,6 +137,15 @@ export function parseSeasonSourceDecisionArguments(
   if (parserVersion !== undefined && !/^[a-z0-9-]+\/v[1-9]\d*$/u.test(parserVersion)) {
     usage('--parser-version must be a parser version such as draftguru-national-year-page/v8.');
   }
+  const fromCapabilityId = values.get('--from-capability');
+  if (fromCapabilityId !== undefined) {
+    if (!isLocalExternalCaptureCapability(fromCapabilityId) || fromCapabilityId === capabilityId) {
+      usage('--from-capability must name another local capture capability.');
+    }
+    if (!Object.hasOwn(CROSS_CAPABILITY_SCOPES, capabilityId)) {
+      usage(`${capabilityId} cannot be derived from another capability's decision.`);
+    }
+  }
   return {
     databaseUrl: requireLoopbackDatabaseUrl(env.AFL_OUTCOMES_DATABASE_URL),
     capabilityId,
@@ -124,6 +155,7 @@ export function parseSeasonSourceDecisionArguments(
     decidedAt: instant('--decided-at'),
     revalidateAt: instant('--revalidate-at'),
     ...(parserVersion === undefined ? {} : { parserVersion }),
+    ...(fromCapabilityId === undefined ? {} : { fromCapabilityId }),
     apply,
   };
 }
@@ -223,7 +255,7 @@ export async function recordSeasonSourceDecision(
   try {
     predecessor = await loadRecordedLocalCaptureAuthority(
       ledger,
-      parsed.capabilityId,
+      parsed.fromCapabilityId ?? parsed.capabilityId,
       parsed.fromSeason,
       evaluatedAt
     );
@@ -254,6 +286,16 @@ export async function recordSeasonSourceDecision(
       decidedAt: parsed.decidedAt,
       revalidateAt: parsed.revalidateAt,
       parserVersion: runnerParser,
+      ...(parsed.fromCapabilityId === undefined
+        ? {}
+        : {
+            capability: {
+              from: parsed.fromCapabilityId,
+              to: parsed.capabilityId,
+              fields: CROSS_CAPABILITY_SCOPES[parsed.capabilityId]!.fields,
+              dataset: CROSS_CAPABILITY_SCOPES[parsed.capabilityId]!.dataset(parsed.season),
+            },
+          }),
     });
   } catch (error) {
     return refused('DERIVATION_REFUSED', error);
