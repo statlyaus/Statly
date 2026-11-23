@@ -51,11 +51,16 @@ export interface DraftguruOrderTieTransfer {
   /** The round or number the trade page states for the pick, when it states one. */
   statedRound: number | null;
   statedNumber: number | null;
-  /**
-   * The original club the transfer's pick has in the candidate (a future pick's stated club, or its
-   * custody pick's), when it has one.
-   */
+  /** The original club the trade page states for the pick (a future pick's), when it states one. */
   statedOriginalClubId: string | null;
+  /**
+   * `<round>|<original club>` of the usable custody pick the transfer joined, when it joined one. A
+   * custody pick joined by a trade-time number can be another entitlement after draft-night
+   * renumbering, so it only ever ties a hop by agreeing with it, never unties one.
+   */
+  custodyEntitlement: string | null;
+  /** What the transfer's own pages state the pick became (`pickStatements` keys), when they agree. */
+  statedPlayerKey: string | null;
 }
 
 /** A transfer an order row ties: the row, the hop and whether it is the row's last hop. */
@@ -83,14 +88,24 @@ interface HopSlot {
   final: boolean;
   round: number;
   pickNumber: number | null;
-  /** The entitlement the row's origin states, resolved: its original club and round. */
+  /** The entitlement the row's origin states, resolved: its original club, round and rank. */
   originClubId: string | null;
   originRound: number | null;
+  originRank: number | null;
+  /** A selected row's player, keyed as `pickStatements` keys it. */
+  playerKey: string | null;
+}
+
+/** `<round>|<original club>` of a hop's stated entitlement, when its origin states both. */
+function hopEntitlement(slot: HopSlot): string | null {
+  return slot.originRound === null || slot.originClubId === null
+    ? null
+    : `${slot.originRound}|${slot.originClubId}`;
 }
 
 /**
- * Whether a tie agrees with what the transfer itself says of its pick: the round and original club
- * the row's origin states, where both sides state one.
+ * Whether a tie agrees with what the transfer's own trade page says of its pick: the round and
+ * original club the row's origin states, where both sides state one.
  */
 function tieAgrees(slot: HopSlot, transfer: DraftguruOrderTieTransfer): boolean {
   const differs = (left: number | string | null, right: number | string | null) =>
@@ -132,17 +147,22 @@ function pairSlot(
       transfers.find(({ statedRound }) => statedRound === slot.round)!,
     ]);
   }
+  // Rows order by final number. A spent or removed row has none, so when one does, rows that all
+  // state an entitlement order by its rank within the round, as the pre-draft order is.
+  const byRank =
+    slots.some(({ pickNumber }) => pickNumber === null) &&
+    slots.every(({ originRank }) => originRank !== null);
+  const position = (slot: HopSlot) =>
+    byRank ? slot.originRank! : (slot.pickNumber ?? Number.MAX_SAFE_INTEGER);
   const ordered = [...slots].sort(
     (left, right) =>
-      left.round - right.round ||
-      (left.pickNumber ?? Number.MAX_SAFE_INTEGER) -
-        (right.pickNumber ?? Number.MAX_SAFE_INTEGER) ||
-      left.ordinal - right.ordinal
+      left.round - right.round || position(left) - position(right) || left.ordinal - right.ordinal
   );
   const sharedRound = ordered.some(
     (slot, index) =>
       index > 0 &&
       slot.round === ordered[index - 1]!.round &&
+      !byRank &&
       (slot.pickNumber === null || ordered[index - 1]!.pickNumber === null)
   );
   if (!distinct(transfers.map(({ statedNumber }) => statedNumber)) || sharedRound) return [];
@@ -196,6 +216,29 @@ function orderRecordOf(
   };
 }
 
+/** A selected row's player, keyed as `pickStatements` keys a stated player. */
+function rowPlayerKey(claim: OrderClaim, lookup: Lookup): string | null {
+  if (claim.outcome.kind !== 'selected') return null;
+  const canonical = lookup('player', claim.outcome.player);
+  if (canonical !== null) return `player:${canonical}`;
+  return claim.outcome.player.nativeId === null
+    ? null
+    : `player-native:${claim.outcome.player.nativeId}`;
+}
+
+/**
+ * The club a compensation pick's first hop came from: the trade's other club, when the trade moves
+ * assets between exactly two clubs; otherwise any club (`*`).
+ */
+function otherParty(
+  eventClubs: ReadonlyMap<string, readonly string[]>,
+  nativeEventId: string,
+  to: string
+): string {
+  const clubs = eventClubs.get(nativeEventId) ?? [];
+  return clubs.length === 2 && clubs.includes(to) ? clubs.find((club) => club !== to)! : '*';
+}
+
 /**
  * Adds each hop of a row in an order origin draft to its slot: trade, sending club (`*` when the
  * row states no original club) and receiving club. A hop naming a club that does not resolve is left
@@ -205,17 +248,21 @@ function addHopSlots(
   slots: Map<string, HopSlot[]>,
   row: DraftguruOrderEvidence,
   orderPickId: string,
-  route: readonly (string | null)[]
+  route: readonly (string | null)[],
+  context: { lookup: Lookup; eventClubs: ReadonlyMap<string, readonly string[]> }
 ): void {
   const claim = row.content.claim;
   if (!isDraftguruOrderOriginDraft(claim.draftYear, claim.draftType)) return;
   const statesOrigin =
     claim.origin?.kind === 'entitlement' || claim.origin?.kind === 'leftover_points';
+  const entitlement = claim.origin?.kind === 'entitlement' ? claim.origin : null;
+  const playerKey = rowPlayerKey(claim, context.lookup);
   claim.hops.forEach((hop, index) => {
     const to = route[index + 1];
     const from = route[index];
     if (to === null || (from === null && (index > 0 || statesOrigin))) return;
-    const key = `${hop.nativeEventId}|${from ?? '*'}|${to}`;
+    const sender = from ?? otherParty(context.eventClubs, hop.nativeEventId, to);
+    const key = `${hop.nativeEventId}|${sender}|${to}`;
     (slots.get(key) ?? slots.set(key, []).get(key)!).push({
       orderPickId,
       ordinal: row.content.sourceRow.ordinal,
@@ -223,8 +270,10 @@ function addHopSlots(
       final: index === claim.hops.length - 1,
       round: claim.origin?.kind === 'entitlement' ? claim.origin.roundNumber : claim.roundNumber,
       pickNumber: claim.pickNumber,
-      originClubId: claim.origin?.kind === 'entitlement' ? route[0]! : null,
-      originRound: claim.origin?.kind === 'entitlement' ? claim.origin.roundNumber : null,
+      originClubId: entitlement === null ? null : route[0]!,
+      originRound: entitlement?.roundNumber ?? null,
+      originRank: entitlement?.rank ?? null,
+      playerKey,
     });
   });
 }
@@ -249,6 +298,70 @@ function slotTransfers(
   );
 }
 
+/** The entitlements a transfer's evidence names: its stated one and its custody pick's, if known. */
+function transferEntitlements(transfer: DraftguruOrderTieTransfer): string[] {
+  const stated =
+    transfer.statedRound === null || transfer.statedOriginalClubId === null
+      ? null
+      : `${transfer.statedRound}|${transfer.statedOriginalClubId}`;
+  return [stated, transfer.custodyEntitlement].filter((value): value is string => value !== null);
+}
+
+/** Keeps the pairs whose transfer no other hop of the slot also chose. */
+function uniquelyChosen(
+  chosen: readonly [HopSlot, DraftguruOrderTieTransfer][]
+): [HopSlot, DraftguruOrderTieTransfer][] {
+  return chosen.filter(
+    ([, transfer]) => chosen.filter(([, other]) => other === transfer).length === 1
+  );
+}
+
+/**
+ * The hops a slot cannot pair by count (`pairSlot`), each tied to the one transfer that agrees with
+ * its row. First a selected row, to the one transfer whose own pages state the same player. Then,
+ * among the transfers left, a row to the transfer whose stated or custody entitlement is the row's
+ * origin, but only when every other transfer left positively names another entitlement: a custody
+ * pick joined by trade-time number may be another entitlement, so a transfer that names none could
+ * still be the row's. A transfer two hops would take ties to neither; any other hop stays untied.
+ */
+function agreeingPairs(
+  hops: readonly HopSlot[],
+  transfers: readonly DraftguruOrderTieTransfer[]
+): [HopSlot, DraftguruOrderTieTransfer][] {
+  const only = <T>(values: readonly T[]) => (values.length === 1 ? values[0]! : undefined);
+  const byPlayer = uniquelyChosen(
+    hops.flatMap((hop): [HopSlot, DraftguruOrderTieTransfer][] => {
+      if (hop.playerKey === null) return [];
+      const transfer = only(
+        transfers.filter(
+          (candidate) => tieAgrees(hop, candidate) && candidate.statedPlayerKey === hop.playerKey
+        )
+      );
+      return transfer === undefined ? [] : [[hop, transfer]];
+    })
+  );
+  const taken = new Set(byPlayer.flatMap(([hop, transfer]) => [hop, transfer] as const));
+  const left = transfers.filter((transfer) => !taken.has(transfer));
+  const byEntitlement = uniquelyChosen(
+    hops.flatMap((hop): [HopSlot, DraftguruOrderTieTransfer][] => {
+      const entitlement = hopEntitlement(hop);
+      if (taken.has(hop) || entitlement === null) return [];
+      const transfer = only(
+        left.filter(
+          (candidate) =>
+            tieAgrees(hop, candidate) && transferEntitlements(candidate).includes(entitlement)
+        )
+      );
+      const othersDiffer = left.every((other) => {
+        const named = transferEntitlements(other);
+        return other === transfer || (named.length > 0 && !named.includes(entitlement));
+      });
+      return transfer === undefined || !othersDiffer ? [] : [[hop, transfer]];
+    })
+  );
+  return [...byPlayer, ...byEntitlement];
+}
+
 /**
  * Pairs every slot with its transfers (`pairSlot`). A transfer two slots could take ties to
  * neither. Each tie is written on its row's record and returned by transfer id.
@@ -268,12 +381,13 @@ function tieSlots(
       claimedBy.set(transferId, (claimedBy.get(transferId) ?? 0) + 1);
   const ties = new Map<string, DraftguruOrderTie>();
   for (const [key, hops] of slots) {
-    const found = candidates.get(key)!;
-    if (found.some(({ transferId }) => claimedBy.get(transferId)! > 1)) continue;
-    const pairs = pairSlot(hops, found);
-    // A pair the transfer contradicts (another round or original club) leaves the whole slot untied.
-    if (pairs.some(([slot, transfer]) => !tieAgrees(slot, transfer))) continue;
-    for (const [slot, transfer] of pairs) {
+    // A transfer two slots could take ties to neither; the rest of the slot may still tie.
+    const found = candidates.get(key)!.filter(({ transferId }) => claimedBy.get(transferId) === 1);
+    const shared = found.length !== candidates.get(key)!.length;
+    const paired = shared ? [] : pairSlot(hops, found);
+    // Pairs the transfers' own pages contradict (another round or original club) are not used.
+    const pairs = paired.every(([slot, transfer]) => tieAgrees(slot, transfer)) ? paired : [];
+    for (const [slot, transfer] of pairs.length > 0 ? pairs : agreeingPairs(hops, found)) {
       ties.set(transfer.transferId, {
         orderPickId: slot.orderPickId,
         hop: slot.hop,
@@ -296,6 +410,8 @@ export function reconcileDraftguruOrderPicks(input: {
   evidence: readonly Evidence[];
   transfers: readonly DraftguruOrderTieTransfer[];
   lookup: Lookup;
+  /** The clubs each trade moves assets between, by Draftguru trade id. */
+  eventClubs: ReadonlyMap<string, readonly string[]>;
 }): DraftguruOrderReconciliation {
   const rows = new Map<string, DraftguruOrderEvidence>();
   const routes = new Map<string, (string | null)[]>();
@@ -313,7 +429,7 @@ export function reconcileDraftguruOrderPicks(input: {
     rows.set(orderPickId, orderRow);
     routes.set(orderPickId, route);
     records.set(orderPickId, orderRecordOf(orderRow, orderPickId, input.lookup));
-    addHopSlots(slots, orderRow, orderPickId, route);
+    addHopSlots(slots, orderRow, orderPickId, route, input);
   }
   const ties = tieSlots(slots, rows, records, input.transfers);
   return {

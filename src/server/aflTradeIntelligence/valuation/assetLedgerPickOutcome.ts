@@ -189,6 +189,8 @@ function notUsed(outcome: PickOutcome): AflTradeAssetLedgerStatedPickOutcome {
       return { kind: 'passed', orderPickId: outcome.orderPickId! };
     case 'order_not_listed':
       return { kind: 'not_used', evidence: 'order_not_listed' };
+    case 'order_ambiguous':
+      return unresolved('order_row_ambiguous');
     case 'club_took_no_nominated_player':
       return { kind: 'not_used' };
     default:

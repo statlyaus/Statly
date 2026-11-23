@@ -479,6 +479,13 @@ describe('asset ledger picks', () => {
       });
     });
 
+    it('never reads a pick the order cannot settle as a spend or as 0', () => {
+      expect(settled({ nominationBasis: 'order_ambiguous' })).toEqual({
+        kind: 'unresolved',
+        reason: 'order_row_ambiguous',
+      });
+    });
+
     it('reads a pick no order row lists as not used, which rule R2 then settles', () => {
       expect(settled({ nominationBasis: 'order_not_listed' })).toMatchObject({
         kind: 'not_used',
