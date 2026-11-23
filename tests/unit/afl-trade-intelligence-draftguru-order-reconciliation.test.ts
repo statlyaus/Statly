@@ -450,7 +450,7 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
     );
   });
 
-  it('ties nothing when a pair’s hops and transfers do not pair, and the outcomes stay the trade page’s', () => {
+  it('ties nothing when a pair’s hops and transfers neither pair nor agree, and leaves its picks unresolved', () => {
     // A third 2026 pick from Hawthorn to Essendon with no order row: three transfers, two hops.
     const source = pages(2026);
     const trades = [
@@ -469,13 +469,18 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
       ...source.trades.slice(1),
     ];
     const untied = reconcile(2026, { trades });
-    const baseline = reconcile(2026, { trades, order: false });
-    expect(outcomeOf(untied, '2026-zach-merrett', 15)).toEqual(
-      outcomeOf(baseline, '2026-zach-merrett', 15)
-    );
     expect(untied.draftOrderPicks!.find((row) => row.pickNumber === 17)!.hopTransferIds).toEqual([
       null,
     ]);
+    // No page states Elliott or Van Dyk for these picks, so no transfer agrees with either row; each
+    // "not used" pick of the trade could be either row, which the order cannot settle.
+    for (const number of [15, 50]) {
+      expect(outcomeOf(untied, '2026-zach-merrett', number)).toMatchObject({
+        disposition: 'not_used',
+        nominationBasis: 'order_ambiguous',
+      });
+      expect(outcomeOf(untied, '2026-zach-merrett', number).orderPickId).toBeUndefined();
+    }
   });
 
   it('refuses an outcome that cites an order row not tying its transfer', () => {
@@ -488,9 +493,9 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
     ).toThrow(/order row that ties its transfer/);
   });
 
-  it('does not settle a pick as not listed when a row has an untied hop into its club', () => {
+  it('settles a pick as not listed when a row’s untied hop into its club is in another trade', () => {
     // Brisbane → GWS → Port, used at 19 on Snell: the row's Brisbane → GWS hop names a trade the
-    // candidate does not hold, so the Brisbane → GWS transfer of the GWS trade page ties nothing.
+    // candidate does not hold, so it cannot be the Brisbane → GWS pick of this trade.
     const trades = [
       ...pages(2026).trades,
       trade(
@@ -516,13 +521,10 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
       }),
     ];
     const settled = reconcile(2026, { trades, orderRows });
-    const baseline = reconcile(2026, { trades, order: false });
-    expect(outcomeOf(settled, '2026-picks-bris-gws', 20)).toEqual(
-      outcomeOf(baseline, '2026-picks-bris-gws', 20)
-    );
-    expect(outcomeOf(settled, '2026-picks-bris-gws', 20).nominationBasis).not.toBe(
-      'order_not_listed'
-    );
+    expect(outcomeOf(settled, '2026-picks-bris-gws', 20)).toMatchObject({
+      disposition: 'not_used',
+      nominationBasis: 'order_not_listed',
+    });
   });
 
   it('does not settle a pick as not listed when its club holds a late row with no origin', () => {
@@ -690,28 +692,32 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
     ).toBe(false);
   });
 
-  it('settles a row whose hop reaches a custody pick that states no round', () => {
-    // The pre-draft order places Hawthorn's own pick at 15 with no round: the same pick the row's
-    // origin states, so the row's hop keeps its tie, cites the row, and records no conflict.
+  it('settles a spent row whose hop reaches a custody pick that states no round', () => {
+    // The pre-draft order places Richmond's own pick at 40 with no round: the same pick the spent
+    // row's origin states, so the row's hop keeps its tie, cites the row, and records no conflict.
     const custody: Claim = {
       kind: 'pick_custody',
       observedAt: '2026-10-14T00:00:00.000Z',
       draftYear: 2026,
       draftType: 'national',
       roundNumber: null,
-      recordedPickNumber: 15,
-      originalClub: page('Hawthorn'),
-      currentClub: page('Hawthorn'),
+      recordedPickNumber: 40,
+      originalClub: page('Richmond'),
+      currentClub: page('Port Adelaide'),
     };
     const settled = reconcile(2026, { custody: [custody] });
-    const transfer = transferOf(settled, '2026-zach-merrett', 15);
-    const row = settled.draftOrderPicks!.find(({ pickNumber }) => pickNumber === 17)!;
+    const transfer = transferOf(settled, '2026-picks-port-richmond', 40);
+    const row = settled.draftOrderPicks!.find(({ outcome }) => outcome === 'bid_spent')!;
     expect(row.hopTransferIds).toEqual([transfer.transferId]);
+    // The hop joined the custody pick, and the row keeps it.
+    expect(settled.pickCustody.map(({ pickId }) => pickId)).toContain(
+      pickIdOf(settled, '2026-picks-port-richmond', 40)
+    );
     expect(transfer.evidenceIds).toEqual(expect.arrayContaining(row.evidenceIds));
     expect(settled.issues.filter(({ code }) => code === 'pick_identity_conflict')).toEqual([]);
-    expect(outcomeOf(settled, '2026-zach-merrett', 15)).toMatchObject({
-      disposition: 'selected',
-      outcomeStatus: 'stated',
+    expect(outcomeOf(settled, '2026-picks-port-richmond', 40)).toMatchObject({
+      disposition: 'not_used',
+      nominationBasis: 'order_bid_spent',
     });
   });
 

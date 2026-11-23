@@ -78,6 +78,11 @@ export interface AflTradeAssetLedgerProjectedSlot {
 export type AflTradeAssetLedgerUnresolvedReason =
   | 'no_outcome_evidence'
   | 'not_used_no_access_evidence'
+  /**
+   * Draftguru's post-draft order could list the pick in a row it does not tie, so it may have been
+   * used, spent or not used (owner approval 4 of the 2026 intake): never read as 0 or as a spend.
+   */
+  | 'order_row_ambiguous'
   | 'outcome_conflict'
   | 'pick_outcome_unresolved'
   | 'selection_conflict'
