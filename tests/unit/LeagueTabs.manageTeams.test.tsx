@@ -25,10 +25,6 @@ vi.mock('@/lib/authenticatedFetch', () => ({
   authenticatedFetch: authenticatedFetchMock,
 }));
 
-vi.mock('@/components/MyTeamPanel', () => ({
-  default: () => <section aria-label="Mock team panel" />,
-}));
-
 const league: League = {
   id: 'league-1',
   name: 'Overfilled Fixture League',
