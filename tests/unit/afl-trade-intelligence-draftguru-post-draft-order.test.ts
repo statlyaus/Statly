@@ -220,6 +220,8 @@ describe('Draftguru post-draft order parser (v1)', () => {
     );
     expect(evidence).toEqual([]);
     expect(issues[0]?.code).toBe('unsupported_row');
+    // The refusal quotes only the round, pick and club cells, never the points or games cells.
+    expect(issues[0]?.detail).toBe('Unreviewed round, pick or club cell: 1 | 1 | Brisbane Lions');
   });
 
   it('refuses any season, page or parser other than the reviewed 2026 page', () => {
