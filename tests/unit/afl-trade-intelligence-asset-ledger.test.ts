@@ -454,6 +454,38 @@ describe('asset ledger picks', () => {
       reason: 'not_used_no_access_evidence',
     });
   });
+  // Owner approval 4 of the 2026 intake: Draftguru's post-draft order settles the pick.
+  describe('settled by a Draftguru post-draft order row', () => {
+    const ORDER_PICK = `external-draft-order-pick:${hex('a')}`;
+    const settled = (fields: Partial<Outcome>) =>
+      withOutcomes((rows) =>
+        rows.map((row) => (row.transferId === 'tr-4' ? outcome('tr-4', fields) : row))
+      ).pickOutcome(PICK_MATCHED);
+
+    it('keeps a pick the order says was spent on a bid pending, as the year is unpriced', () => {
+      expect(settled({ nominationBasis: 'order_bid_spent', orderPickId: ORDER_PICK })).toEqual({
+        kind: 'matched_bid',
+        status: 'pending',
+        basis: 'order_bid_spent',
+        matchedBidBoardPickIds: [],
+        pendingReason: 'bid_unpriced',
+      });
+    });
+
+    it('reads a removed pick as passed, citing its order row', () => {
+      expect(settled({ nominationBasis: 'order_pick_removed', orderPickId: ORDER_PICK })).toEqual({
+        kind: 'passed',
+        orderPickId: ORDER_PICK,
+      });
+    });
+
+    it('reads a pick no order row lists as not used, which rule R2 then settles', () => {
+      expect(settled({ nominationBasis: 'order_not_listed' })).toMatchObject({
+        kind: 'not_used',
+        evidence: 'order_not_listed',
+      });
+    });
+  });
 });
 
 describe('asset ledger picks without a clear outcome', () => {

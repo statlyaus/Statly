@@ -98,8 +98,10 @@ interface MatchedBidOutcomeBase {
    * `board_matched_bid`: a Footyinfo board records the receiving club's matched bid.
    * `nominee_count`: only that the club took a nominee in the draft, so the pick may have been spent
    * matching the bid.
+   * `order_bid_spent`: Draftguru's post-draft order states the pick was spent matching a bid (owner
+   * approval 4 of the 2026 intake); it waits on the year's bid price.
    */
-  readonly basis: 'board_matched_bid' | 'nominee_count';
+  readonly basis: 'board_matched_bid' | 'nominee_count' | 'order_bid_spent';
   readonly matchedBidBoardPickIds: readonly string[];
 }
 
@@ -196,8 +198,10 @@ export interface AflTradeAssetLedgerStatedNotUsed {
   /**
    * `board_not_spent`: Draftguru says not used and the club took a nominee, but the draft's boards
    * list the club's bid spends and this pick is not among them (owner, 2026-10-21).
+   * `order_not_listed`: Draftguru's post-draft order lists every pick its draft used and no row could
+   * be this one (owner approval 4 of the 2026 intake).
    */
-  readonly evidence?: 'board_not_spent';
+  readonly evidence?: 'board_not_spent' | 'order_not_listed';
 }
 
 /**
@@ -248,6 +252,8 @@ export type AflTradeAssetLedgerStatedPickOutcome =
   | AflTradeAssetLedgerStatedNotUsed
   | AflTradeAssetLedgerMatchedBidOutcome
   | { readonly kind: 'passed'; readonly boardPickId: string }
+  /** Removed at the draft, as Draftguru's post-draft order row states (2026 intake, approval 4). */
+  | { readonly kind: 'passed'; readonly orderPickId: string }
   | { readonly kind: 'future'; readonly projectedSlot: AflTradeAssetLedgerProjectedSlot | null }
   | { readonly kind: 'unresolved'; readonly reason: AflTradeAssetLedgerUnresolvedReason };
 
