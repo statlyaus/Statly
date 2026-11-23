@@ -14,6 +14,7 @@ import {
   type LocalExternalCaptureTarget,
 } from '../src/server/aflTradeIntelligence/development/localExternalPageCaptureRunner';
 import { createLocalDraftguruNationalYearTargets } from '../src/server/aflTradeIntelligence/development/localDraftguruNationalYearCapture';
+import { createLocalDraftguruPostDraftOrderTargets } from '../src/server/aflTradeIntelligence/development/localDraftguruPostDraftOrderCapture';
 import { createLocalOfficialAflDraftOrderTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflDraftOrderCapture';
 import { createLocalOfficialAflTradePeriodTargets } from '../src/server/aflTradeIntelligence/development/localOfficialAflTradePeriodCapture';
 import { createLocalFootyinfoDraftBoardTargets } from '../src/server/aflTradeIntelligence/development/localFootyinfoDraftBoardCapture';
@@ -35,6 +36,8 @@ import { createPgAflOutcomeSqlClient } from '../src/server/aflTradeIntelligence/
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability draftguru-national-year-page \
  *     --season 2022 [--season 2023 ...]
+ *   npm run outcomes:sources:capture-local-external -- \
+ *     --artifact-root <durable-absolute-dir> --capability draftguru-post-draft-order --season 2026
  *   npm run outcomes:sources:capture-local-external -- \
  *     --artifact-root <durable-absolute-dir> --capability official-afl-completed-draft-session \
  *     --season 2019 [--season 2020 ...] [--url <reviewed page of those seasons> ...]
@@ -183,6 +186,16 @@ function nationalYearTargets(values: OptionValues): LocalExternalCaptureTarget[]
   );
 }
 
+function postDraftOrderTargets(values: OptionValues): LocalExternalCaptureTarget[] {
+  if (values.has('--url') || values.has('--from-season')) {
+    usage('Post-draft order pages come from each --season.');
+  }
+  if (!values.has('--season')) usage('Post-draft order capture requires --season.');
+  return createLocalDraftguruPostDraftOrderTargets(
+    (values.get('--season') ?? []).map((value) => season(value, '--season'))
+  );
+}
+
 function officialSessionTargets(values: OptionValues): LocalExternalCaptureTarget[] {
   if (values.has('--from-season')) usage('Completed-session pages come from each --season.');
   if (!values.has('--season')) usage('Completed-session capture requires --season.');
@@ -233,7 +246,7 @@ export function parseLocalExternalCaptureArguments(
   const capability = single(values, '--capability');
   if (!isLocalExternalCaptureCapability(capability)) {
     usage(
-      '--capability must be draftguru-trade-index, draftguru-trade-detail, draftguru-national-year-page, official-afl-completed-draft-session, official-afl-indicative-draft-order, official-afl-trade-period-dates or footyinfo-national-draft-board.'
+      '--capability must be draftguru-trade-index, draftguru-trade-detail, draftguru-national-year-page, draftguru-post-draft-order, official-afl-completed-draft-session, official-afl-indicative-draft-order, official-afl-trade-period-dates or footyinfo-national-draft-board.'
     );
   }
   const targets =
@@ -243,13 +256,15 @@ export function parseLocalExternalCaptureArguments(
         ? detailTargets(values)
         : capability === 'draftguru-national-year-page'
           ? nationalYearTargets(values)
-          : capability === 'official-afl-indicative-draft-order'
-            ? officialOrderTargets(values)
-            : capability === 'official-afl-trade-period-dates'
-              ? officialTradePeriodTargets(values)
-              : capability === 'footyinfo-national-draft-board'
-                ? footyinfoBoardTargets(values)
-                : officialSessionTargets(values);
+          : capability === 'draftguru-post-draft-order'
+            ? postDraftOrderTargets(values)
+            : capability === 'official-afl-indicative-draft-order'
+              ? officialOrderTargets(values)
+              : capability === 'official-afl-trade-period-dates'
+                ? officialTradePeriodTargets(values)
+                : capability === 'footyinfo-national-draft-board'
+                  ? footyinfoBoardTargets(values)
+                  : officialSessionTargets(values);
   const storeId = single(values, '--store-id');
   if (storeId !== undefined && !/^[a-z][a-z0-9-]{2,62}$/u.test(storeId)) {
     usage('--store-id must be lowercase letters, digits and hyphens, starting with a letter.');

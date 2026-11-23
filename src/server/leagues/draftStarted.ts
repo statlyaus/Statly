@@ -13,8 +13,9 @@ export type DraftStartedFields = Prisma.DraftGetPayload<{ select: typeof DRAFT_S
 /**
  * The one test for "the draft has started", shared by member removal, joining and the settings
  * locks. A draft has started once it leaves SCHEDULED, starts, opens a live room or takes a pick.
- * Picks count on their own because rescheduling a LIVE draft puts it back to SCHEDULED with its
- * picks kept. A COUNTDOWN lobby is still forming (draft setup opens every lobby that way).
+ * Picks count on their own as a defence: no path should leave a SCHEDULED draft holding picks, but
+ * if one ever does, the draft still counts as started. A COUNTDOWN lobby is still forming (draft
+ * setup opens every lobby that way).
  */
 export function hasDraftStarted(draft: DraftStartedFields | null | undefined): boolean {
   if (!draft) return false;

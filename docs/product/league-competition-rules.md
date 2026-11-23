@@ -66,8 +66,9 @@ current value is accepted, so the commissioner can still save the rest of the fo
 - **Draft structure** (position limits and bench, so roster and bench size, draft type, pick order,
   the league format and the Bloodsucker member) locks once the league's draft has started: it has
   left `SCHEDULED`, has a start time, has opened a live room, or has any pick. Picks count on their
-  own because rescheduling a LIVE draft puts it back to `SCHEDULED` with its picks kept. The same
-  test (`hasDraftStarted`, `src/server/leagues/draftStarted.ts`) closes member removal and joining.
+  own as a defence: no path should leave a `SCHEDULED` draft holding picks, but one that does still
+  counts as started. The same test (`hasDraftStarted`, `src/server/leagues/draftStarted.ts`) closes
+  member removal and joining.
   Code `DRAFT_STRUCTURE_LOCKED`.
 - Every member removal (or a manager leaving) and every ownership transfer is written to the league
   audit (`LeagueCompetitionAudit`, `MEMBER_REMOVED` / `OWNERSHIP_TRANSFERRED`) in the same transaction

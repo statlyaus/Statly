@@ -4,7 +4,7 @@
 // competition is published: fixtures and every later result are computed from it.
 // Draft structure (roster and bench sizes, draft type, pick order, the league format and the
 // Bloodsucker member) locks once the draft has started (`hasDraftStarted`): picks already made were
-// made against it, including a LIVE draft rescheduled back to SCHEDULED with its picks kept.
+// made against it, including a SCHEDULED draft that somehow holds picks.
 
 export type LeagueSettingsLockCode = 'SCORING_SETTINGS_LOCKED' | 'DRAFT_STRUCTURE_LOCKED';
 

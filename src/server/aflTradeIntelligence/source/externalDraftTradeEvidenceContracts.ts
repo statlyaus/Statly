@@ -479,6 +479,106 @@ const draftBoardPickClaimSchema = z
     }
   });
 
+/**
+ * The parser of Draftguru's post-draft national order (`/years/<season>/provisional-draft-order/
+ * post-draft`, owner approval 4 of the 2026 intake): one `draft_order_pick` per row of its "Full
+ * Draft Order" table. Reviewed for the 2026 page only.
+ */
+export const DRAFTGURU_POST_DRAFT_ORDER_PARSER_VERSION = 'draftguru-post-draft-order/v1';
+
+const matchedBidBasisSchema = z.enum(['father_son', 'academy', 'next_generation_academy']);
+
+/**
+ * One row of Draftguru's post-draft national order (`draftguru-post-draft-order/v1`): the round,
+ * the final pick number (null on the unnumbered rows after the numbered ones), the holder, where the
+ * pick came from, each trade hop it took with the Draftguru trade id that moved it, and what became
+ * of it. `origin` is null when the row states none (the late picks). `origin.rank` is the pick's
+ * position within its round before the draft, as the row prints it (`Haw R1 pick (4th)`).
+ * `bidNotMatchedBy` is the club that declined to match a bid on the pick's player. Points, games and
+ * grades are never read. A provider statement, never an inference.
+ */
+const draftOrderPickClaimSchema = z
+  .object({
+    kind: z.literal('draft_order_pick'),
+    draftYear: yearSchema,
+    draftType: z.literal('national'),
+    roundNumber: positiveOrdinalSchema,
+    pickNumber: positiveOrdinalSchema.nullable(),
+    club: recordedEntitySchema,
+    origin: z
+      .discriminatedUnion('kind', [
+        z
+          .object({
+            kind: z.literal('entitlement'),
+            club: recordedEntitySchema,
+            roundNumber: positiveOrdinalSchema,
+            rank: positiveOrdinalSchema,
+          })
+          .strict(),
+        z.object({ kind: z.literal('compensation'), label: boundedText }).strict(),
+        z
+          .object({
+            kind: z.literal('bid_matched'),
+            bidClub: recordedEntitySchema,
+            basis: matchedBidBasisSchema,
+            nominee: recordedEntitySchema,
+            usingPicks: z.array(positiveOrdinalSchema).max(8),
+          })
+          .strict(),
+        z
+          .object({
+            kind: z.literal('leftover_points'),
+            club: recordedEntitySchema,
+            nominee: recordedEntitySchema,
+          })
+          .strict(),
+      ])
+      .nullable(),
+    hops: z
+      .array(z.object({ toClub: recordedEntitySchema, nativeEventId: boundedText }).strict())
+      .max(16),
+    bidNotMatchedBy: recordedEntitySchema.nullable(),
+    outcome: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('selected'), player: recordedEntitySchema }).strict(),
+      z
+        .object({
+          kind: z.literal('bid_spent'),
+          nominee: recordedEntitySchema,
+          asPick: positiveOrdinalSchema,
+        })
+        .strict(),
+      z.object({ kind: z.literal('removed'), note: boundedText }).strict(),
+    ]),
+  })
+  .strict()
+  .superRefine((claim, context) => {
+    if ((claim.outcome.kind === 'selected') !== (claim.pickNumber !== null)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['pickNumber'],
+        message: 'An order row has a pick number exactly when its pick was selected.',
+      });
+    }
+    const code = (club: { nativeId: string | null; recordedName: string }) =>
+      club.nativeId ?? club.recordedName;
+    const chain = claim.hops.map(({ toClub }) => code(toClub));
+    const first =
+      claim.origin?.kind === 'entitlement' || claim.origin?.kind === 'leftover_points'
+        ? code(claim.origin.club)
+        : null;
+    const holder = chain.at(-1) ?? first;
+    if (
+      chain.some((club, index) => club === (index === 0 ? first : chain[index - 1])) ||
+      (holder !== null && holder !== code(claim.club))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['hops'],
+        message: 'Each order hop moves the pick to another club, and the last reaches its holder.',
+      });
+    }
+  });
+
 const boardPointsSchema = z.number().int().min(0).max(10_000);
 const boardNativePickIdSchema = z.string().regex(/^[1-9]\d{0,9}$/);
 const boardClubCodeSchema = z.string().regex(/^[A-Z]{2,4}$/);
@@ -952,6 +1052,7 @@ const claimSchema = z.discriminatedUnion('kind', [
   pickCustodyClaimSchema,
   draftBoardPickClaimSchema,
   draftBoardBidMatchClaimSchema,
+  draftOrderPickClaimSchema,
   playerDraftDetailClaimSchema,
 ]);
 
@@ -988,6 +1089,7 @@ const allowedKindsByProvider = {
     'pick_disposition',
     'pick_eventual_selection',
     'draft_selection',
+    'draft_order_pick',
   ]),
   footywire: new Set(['draft_selection']),
   official_afl: new Set([

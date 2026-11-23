@@ -5,6 +5,13 @@ import {
 } from './officialAflDraftBoundarySessions';
 import { reviewedOfficialAflMiniDraft2011EffectiveYear } from './officialAflMiniDraft2011SessionFacts';
 import { AFL_TRADE_REVIEWED_DRAFT_RELISTINGS } from './reviewedDraftRelistings';
+import {
+  isDraftguruOrderOriginDraft,
+  reconcileDraftguruOrderPicks,
+  type AflTradeCanonicalDraftOrderPick,
+  type DraftguruOrderReconciliation,
+  type DraftguruOrderTieTransfer,
+} from './draftguruOrderReconciliation';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
 import { z } from 'zod';
 
@@ -389,7 +396,10 @@ interface CanonicalPickOutcome {
     | 'club_took_nominated_player'
     | 'club_took_no_nominated_player'
     | 'no_access_evidence'
-    | 'board_pick_passed_or_removed';
+    | 'board_pick_passed_or_removed'
+    | 'order_bid_spent'
+    | 'order_pick_removed'
+    | 'order_not_listed';
   receivingClubNominatedSelections?: number;
   /**
    * With `board_pick_passed_or_removed` only: the Footyinfo board pick that states this pick was
@@ -422,6 +432,15 @@ interface CanonicalPickOutcome {
    * stays auditable; it blocks nothing.
    */
   statedDisposition?: 'not_used';
+  /**
+   * Owner approval 4 of the 2026 intake: the Draftguru post-draft order row that ties this transfer
+   * (`draftOrderPicks`) and settles its outcome. Its row states the pick selected (`selected`, with
+   * `statedDisposition: 'not_used'` when the trade page said "not used"), moved on (`traded_on`),
+   * spent matching a bid (`order_bid_spent`) or removed (`order_pick_removed`). `order_not_listed`
+   * cites no row: the order lists every pick the draft used, and no row of the receiving club could
+   * be this one. Absent outside `ORDER_ORIGIN_DRAFTS`, so earlier outcomes are unchanged.
+   */
+  orderPickId?: string;
   evidenceIds: string[];
 }
 
@@ -489,6 +508,8 @@ export interface AflTradeExternalReconciliationContent {
    * one keep their ids.
    */
   draftBoardBidMatches?: AflTradeCanonicalDraftBoardBidMatch[];
+  /** Present only when a Draftguru post-draft order was reconciled, so earlier ids are unchanged. */
+  draftOrderPicks?: AflTradeCanonicalDraftOrderPick[];
   /**
    * The approved `reconciliation_scope` decision under which pick-side issues are `deferred`. Present
    * only when at least one issue was deferred, so a candidate without deferral keeps its id.
@@ -1162,6 +1183,75 @@ function pickStatements(
   );
 }
 
+/** The candidate pick transfers Draftguru's post-draft order may tie, with their stated slot. */
+function orderTieTransfers(
+  resolvedTransfers: readonly ResolvedDirectedTransfer[],
+  transfers: readonly CanonicalTransfer[],
+  pickCustody: readonly CanonicalPickCustody[]
+): DraftguruOrderTieTransfer[] {
+  const custodyByPick = new Map(
+    pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)
+  );
+  return transfers.flatMap((transfer, index) => {
+    const { row } = resolvedTransfers[index]!;
+    const claim = row.content.claim;
+    const asset = claim.asset;
+    if (row.content.provider !== 'draftguru' || transfer.asset.kind !== 'pick_entitlement')
+      return [];
+    return [
+      {
+        transferId: transfer.transferId,
+        key: `${claim.nativeEventId}|${claim.nativeTransferId}`,
+        nativeEventId: claim.nativeEventId,
+        fromClubId: transfer.fromClubId,
+        toClubId: transfer.toClubId,
+        draftYear: transfer.asset.draftYear,
+        draftType: transfer.asset.draftType,
+        statedRound:
+          asset.kind === 'future_pick'
+            ? asset.roundNumber
+            : asset.kind === 'current_pick'
+              ? (asset.recordedRoundNumber ??
+                custodyByPick.get(transfer.asset.pickId)?.roundNumber ??
+                null)
+              : null,
+        statedNumber: asset.kind === 'current_pick' ? asset.recordedPickNumber : null,
+        statedOriginalClubId: transfer.asset.originalClubId,
+      },
+    ];
+  });
+}
+
+/**
+ * Owner approval 4 of the 2026 intake: a transfer an order row ties states what that row states, a
+ * selected player or not used, whatever its trade page said. Without ties the statements are
+ * returned as they are.
+ */
+function withOrderStatements(
+  stated: ReadonlyMap<string, PickStatement>,
+  order: DraftguruOrderReconciliation,
+  tieTransfers: readonly DraftguruOrderTieTransfer[],
+  lookup: IdentityLookup
+): ReadonlyMap<string, PickStatement> {
+  if (order.ties.size === 0) return stated;
+  const result = new Map(stated);
+  for (const { transferId, key } of tieTransfers) {
+    const tie = order.ties.get(transferId);
+    if (tie === undefined) continue;
+    const outcome = order.rows.get(tie.orderPickId)!.content.claim.outcome;
+    if (outcome.kind !== 'selected') {
+      result.set(key, { key: 'not_used', native: null });
+      continue;
+    }
+    const canonical = lookup('draftguru', 'player', outcome.player);
+    const native = outcome.player.nativeId;
+    if (canonical !== null) result.set(key, { key: `player:${canonical}`, native });
+    else if (native !== null) result.set(key, { key: `player-native:${native}`, native });
+    else result.delete(key);
+  }
+  return result;
+}
+
 /**
  * How strongly a transfer's own evidence ties it to its custody pick: `stated` when it is a future
  * pick whose own round and original club form the entitlement, `exact` when its sender, receiver and
@@ -1701,6 +1791,78 @@ function violatesPickIdentityExchange(transfers: readonly CanonicalTransfer[]): 
   );
 }
 
+/**
+ * An order row's group: its tied transfers in hop order, the pick id it takes without a custody
+ * pick, the entitlement its origin states, its resolved route and its row.
+ */
+interface OrderGroup {
+  path: number[];
+  fallbackPickId: string | null;
+  entitlement: string | null;
+  originalClubId: string | null;
+  /** The round the row's origin states; null when it states no entitlement. */
+  originRound: number | null;
+  route: readonly string[] | null;
+  evidenceIds: readonly string[];
+}
+
+/**
+ * The group of an order row's tied transfers. A selected row is the pick its player was drafted
+ * with, as a stated player's group is; any other row is the entitlement its origin states, the id
+ * an Official AFL order row gives it, or nothing when it states none.
+ */
+/**
+ * Whether a custody pick contradicts the entitlement an order row's origin states: both name a round
+ * and the rounds differ, or both name an original club and the clubs differ. A custody pick that
+ * names no round contradicts nothing by its round.
+ */
+export function aflTradeOrderEntitlementContradicts(
+  origin: Pick<OrderGroup, 'originRound' | 'originalClubId'>,
+  custody: Pick<CanonicalPickCustody, 'roundNumber' | 'originalClubId'>
+): boolean {
+  const differs = (left: number | string | null, right: number | string | null) =>
+    left !== null && right !== null && left !== right;
+  return (
+    differs(origin.originRound, custody.roundNumber) ||
+    differs(origin.originalClubId, custody.originalClubId)
+  );
+}
+
+function orderGroupOf(
+  row: Evidence & { content: { claim: Extract<Claim, { kind: 'draft_order_pick' }> } },
+  chain: readonly (string | null)[],
+  members: readonly { index: number; hop: number }[]
+): OrderGroup {
+  const { claim } = row.content;
+  const origin = claim.origin?.kind === 'entitlement' ? claim.origin : null;
+  const originalClubId = origin === null ? null : chain[0]!;
+  const player = claim.outcome.kind === 'selected' ? claim.outcome.player.nativeId : null;
+  const draft = { draftYear: claim.draftYear, draftType: claim.draftType };
+  const fallbackPickId =
+    player !== null
+      ? createAflTradeContentAddress('draft-pick', {
+          ...draft,
+          eventualSelection: { provider: 'draftguru', playerNativeId: player },
+        })
+      : origin !== null && originalClubId !== null
+        ? createAflTradeContentAddress('draft-pick', {
+            ...draft,
+            roundNumber: origin.roundNumber,
+            originalClubId,
+          })
+        : null;
+  return {
+    path: [...members].sort((left, right) => left.hop - right.hop).map(({ index }) => index),
+    fallbackPickId,
+    entitlement:
+      origin !== null && originalClubId !== null ? `${origin.roundNumber}|${originalClubId}` : null,
+    originalClubId,
+    originRound: origin?.roundNumber ?? null,
+    route: chain.every((club): club is string => club !== null) ? chain : null,
+    evidenceIds: [row.evidenceId],
+  };
+}
+
 function joinEventualSelections(input: {
   statements: ReadonlyMap<string, PickStatement>;
   evidence: readonly Evidence[];
@@ -1715,6 +1877,11 @@ function joinEventualSelections(input: {
     draftType: string,
     playerNativeId: string
   ) => EventualSelectionRoute | null;
+  /**
+   * Draftguru's post-draft order (owner approval 4 of the 2026 intake): the transfers a row ties are
+   * one pick, walked in the row's hop order, instead of joining a group by a stated player.
+   */
+  order?: DraftguruOrderReconciliation;
 }): void {
   const eventualPlayers = new Map<string, string | null>();
   // Every staged row must be conserved by a record or an issue: each statement is cited on the
@@ -1733,8 +1900,9 @@ function joinEventualSelections(input: {
       eventualPlayers.has(key) && eventualPlayers.get(key) !== player ? null : player
     );
   }
-  if (eventualPlayers.size === 0) return;
+  if (eventualPlayers.size === 0 && (input.order?.ties.size ?? 0) === 0) return;
   const groups = new Map<string, number[]>();
+  const orderMembers = new Map<string, { index: number; hop: number }[]>();
   input.resolvedTransfers.forEach(({ row }, index) => {
     const claim = row.content.claim;
     const transfer = input.transfers[index]!;
@@ -1751,6 +1919,14 @@ function joinEventualSelections(input: {
       (claim.asset.kind !== 'current_pick' && claim.asset.kind !== 'future_pick')
     )
       return;
+    const tie = input.order?.ties.get(transfer.transferId);
+    if (tie !== undefined) {
+      const members =
+        orderMembers.get(tie.orderPickId) ??
+        orderMembers.set(tie.orderPickId, []).get(tie.orderPickId)!;
+      members.push({ index, hop: tie.hop });
+      return;
+    }
     const player = eventualPlayers.get(transferKey);
     if (!player) return;
     const key = `${asset.draftYear}|${asset.draftType}|${player}`;
@@ -1777,15 +1953,21 @@ function joinEventualSelections(input: {
     return claims.length === 1 ? claims[0]!.content.claim : null;
   };
   const inOrder = transfersInOrder(transactionOf);
-  groups.forEach((members, key) => {
+  const settle = (key: string, members: readonly number[], ordered?: OrderGroup) => {
     const [draftYear, draftType, player] = key.split('|');
     // The board route is read only where the Draftguru walk alone cannot settle the pick: a group it
-    // refuses (a loop, a merge, two orders) or one that reaches two custody picks.
-    let route: EventualSelectionRoute | null | undefined;
+    // refuses (a loop, a merge, two orders) or one that reaches two custody picks. An order row is
+    // its own route.
+    let route: EventualSelectionRoute | null | undefined =
+      ordered === undefined
+        ? undefined
+        : ordered.route === null
+          ? null
+          : { routeClubIds: ordered.route, evidenceIds: ordered.evidenceIds };
     const routeOf = () =>
       route === undefined ? (route = input.routeOf(Number(draftYear), draftType!, player!)) : route;
     let routed = false;
-    let path = eventualSelectionPath(members, input.transfers, inOrder);
+    let path = ordered?.path ?? eventualSelectionPath(members, input.transfers, inOrder);
     if (path === null) {
       const stated = routeOf();
       path =
@@ -1829,13 +2011,17 @@ function joinEventualSelections(input: {
         : custodyPickIds.length > 1
           ? usableCustody.get(earliest!)!
           : null;
-    const pickId =
-      custody?.pickId ??
-      createAflTradeContentAddress('draft-pick', {
-        draftYear: Number(draftYear),
-        draftType,
-        eventualSelection: { provider: 'draftguru', playerNativeId: player },
-      });
+    const fallbackPickId =
+      ordered === undefined
+        ? createAflTradeContentAddress('draft-pick', {
+            draftYear: Number(draftYear),
+            draftType,
+            eventualSelection: { provider: 'draftguru', playerNativeId: player },
+          })
+        : ordered.fallbackPickId;
+    const pickId = custody?.pickId ?? fallbackPickId;
+    // An order row with no custody pick and no entitlement or player to name it leaves its hops.
+    if (pickId === null) return;
     const refused = (detail: string, pickIds: readonly string[]) => {
       for (const id of sortedUnique(pickIds)) {
         recordPickIdentityConflict(
@@ -1858,7 +2044,22 @@ function joinEventualSelections(input: {
       })
     );
     const settledEntitlement =
-      custody === null ? null : `${custody.roundNumber ?? 'unknown'}|${custody.originalClubId}`;
+      custody === null
+        ? (ordered?.entitlement ?? null)
+        : `${custody.roundNumber ?? 'unknown'}|${custody.originalClubId}`;
+    // A custody pick the walk reaches that is another entitlement than the order row's origin is
+    // not that row's pick: its hops keep their ids, and the contradiction is recorded on the pick.
+    if (
+      ordered !== undefined &&
+      custody !== null &&
+      aflTradeOrderEntitlementContradicts(ordered, custody)
+    ) {
+      refused(
+        'Draftguru’s post-draft order states another entitlement than the custody pick its hops reach.',
+        [custody.pickId]
+      );
+      return;
+    }
     if (
       statedEntitlements.length > 1 ||
       (settledEntitlement !== null &&
@@ -1881,7 +2082,9 @@ function joinEventualSelections(input: {
     }
     const originalClubId =
       custody?.originalClubId ??
-      (statedEntitlements.length === 1 ? statedEntitlements[0]!.split('|')[1]! : null);
+      (statedEntitlements.length === 1
+        ? statedEntitlements[0]!.split('|')[1]!
+        : (ordered?.originalClubId ?? null));
     // Rules 1 and 3: the walk may not put this pick twice into one transaction's exchange, nor join a
     // pick whose other transfers state another eventual selection.
     const onPath = new Set(path);
@@ -1930,10 +2133,21 @@ function joinEventualSelections(input: {
         originalClubId,
       };
       if (custody && transfer.fromClubId && transfer.toClubId) transfer.status = 'single_source';
-      // The board row that ordered the walk or chose its custody pick is cited on every hop it keyed.
-      if (routed)
-        transfer.evidenceIds = sortedUnique([...transfer.evidenceIds, ...route!.evidenceIds]);
+      // The board row that ordered the walk or chose its custody pick is cited on every hop it keyed,
+      // as the order row is on every hop it ties.
+      if (routed || ordered !== undefined)
+        transfer.evidenceIds = sortedUnique([
+          ...transfer.evidenceIds,
+          ...(ordered?.evidenceIds ?? route!.evidenceIds),
+        ]);
     });
+  };
+  groups.forEach((members, key) => settle(key, members));
+  orderMembers.forEach((members, orderPickId) => {
+    const row = input.order!.rows.get(orderPickId)!;
+    const group = orderGroupOf(row, input.order!.routes.get(orderPickId)!, members);
+    const { draftYear, draftType } = row.content.claim;
+    settle(`${draftYear}|${draftType}|order:${orderPickId}`, group.path, group);
   });
 }
 
@@ -2445,6 +2659,175 @@ function notUsedBoardPick(
 }
 
 /**
+ * Whether an order row could be the untied pick a club received: a row with a hop into that club
+ * (or into an unresolved club) that ties no transfer, since the pick may have reached the club
+ * there and moved on or been used; or a row the club holds that states no origin (the late rows
+ * print only "Picked"), which may be a pick traded in rather than the club's own.
+ */
+function orderRowCouldBe(
+  order: DraftguruOrderReconciliation,
+  record: AflTradeCanonicalDraftOrderPick,
+  receivingClubId: string
+): boolean {
+  const route = order.routes.get(record.orderPickId)!;
+  const untiedInto = record.hopTransferIds.some(
+    (transferId, hop) =>
+      transferId === null && (route[hop + 1] === null || route[hop + 1] === receivingClubId)
+  );
+  const holds = record.clubId === null || record.clubId === receivingClubId;
+  return untiedInto || (holds && order.rows.get(record.orderPickId)!.content.claim.origin === null);
+}
+
+/**
+ * Whether Draftguru's post-draft order shows an untied pick was not used: its draft is an order
+ * origin draft with order rows, and no row could be it (`orderRowCouldBe`). A row with no hop and a
+ * stated origin is its holder's own pick.
+ */
+function orderShowsNotListed(
+  order: DraftguruOrderReconciliation,
+  asset: Extract<CanonicalTransferAsset, { kind: 'pick_entitlement' }>,
+  receivingClubId: string
+): boolean {
+  if (!isDraftguruOrderOriginDraft(asset.draftYear, asset.draftType)) return false;
+  const draft = order.records.filter(
+    ({ draftYear, draftType }) => draftYear === asset.draftYear && draftType === asset.draftType
+  );
+  return (
+    draft.length > 0 && !draft.some((record) => orderRowCouldBe(order, record, receivingClubId))
+  );
+}
+
+type OrderSettleInput = {
+  claim: Extract<Claim, { kind: 'pick_disposition' }>;
+  orderRow: Evidence & { content: { claim: Extract<Claim, { kind: 'draft_order_pick' }> } };
+  final: boolean;
+  asset: Extract<CanonicalTransferAsset, { kind: 'pick_entitlement' }>;
+  receivingClubId: string;
+  draftSelections: readonly CanonicalDraftSelection[];
+  resolve: IdentityResolver;
+};
+
+type OrderSettled = {
+  status: CanonicalPickOutcome['outcomeStatus'];
+  selection: CanonicalDraftSelection | null;
+  playerId: string | null;
+  facts: NominationFacts | Pick<CanonicalPickOutcome, 'disposition' | 'statedDisposition'>;
+  issue?: string;
+  evidenceIds: readonly string[];
+};
+
+const NOTHING_SELECTED = { selection: null, playerId: null, evidenceIds: [] } as const;
+
+/** A hop before the row's last: the club moved the pick on, which a named selection contradicts. */
+function orderHopMovedOn(input: OrderSettleInput): OrderSettled {
+  return input.claim.disposition === 'not_used'
+    ? {
+        status: 'stated',
+        ...NOTHING_SELECTED,
+        facts: { disposition: 'traded_on', statedDisposition: 'not_used' },
+      }
+    : {
+        status: 'unresolved',
+        ...NOTHING_SELECTED,
+        facts: {},
+        issue:
+          'Draftguru’s post-draft order moves this pick on, but its trade page names a selection.',
+      };
+}
+
+/** A spent or removed row's last hop: a not-used pick with that basis, unless a page names a player. */
+function orderPickNotSelected(input: OrderSettleInput, spent: boolean): OrderSettled {
+  return input.claim.disposition === 'not_used'
+    ? {
+        status: 'stated',
+        ...NOTHING_SELECTED,
+        facts: { nominationBasis: spent ? 'order_bid_spent' : 'order_pick_removed' },
+      }
+    : {
+        status: 'unresolved',
+        ...NOTHING_SELECTED,
+        facts: {},
+        issue:
+          'Draftguru’s post-draft order says this pick was not selected, but its trade page names a selection.',
+      };
+}
+
+/**
+ * A selected row's last hop: the receiving club's one undisputed selection of the row's player in
+ * the pick's draft. A page naming another player, or no such selection, is unresolved.
+ */
+function orderPickSelected(
+  input: OrderSettleInput,
+  player: Extract<Claim, { kind: 'draft_order_pick' }>['club']
+): OrderSettled {
+  const { claim, orderRow } = input;
+  const subject = `pick-outcome:${claim.nativeTransferId}`;
+  const playerId = input.resolve(
+    'draftguru',
+    'player',
+    player,
+    `${subject}:order-player`,
+    orderRow.evidenceId
+  );
+  const facts =
+    claim.disposition === 'not_used'
+      ? ({ disposition: 'selected', statedDisposition: 'not_used' } as const)
+      : ({ disposition: 'selected' } as const);
+  const unresolved = (issue: string, evidenceIds: readonly string[] = []): OrderSettled => ({
+    status: 'unresolved',
+    selection: null,
+    playerId,
+    facts,
+    issue,
+    evidenceIds,
+  });
+  const statedPlayerId =
+    claim.player === undefined
+      ? null
+      : input.resolve(
+          'draftguru',
+          'player',
+          claim.player,
+          `${subject}:player`,
+          orderRow.evidenceId
+        );
+  if (claim.disposition === 'selected' && (playerId === null || statedPlayerId !== playerId)) {
+    return unresolved('Draftguru’s post-draft order names another player than the trade page.');
+  }
+  const matches = input.draftSelections.filter(
+    (selection) =>
+      playerId !== null &&
+      selection.playerId === playerId &&
+      selection.clubId === input.receivingClubId &&
+      selection.draftYear === input.asset.draftYear &&
+      selection.draftType === input.asset.draftType &&
+      selection.status !== 'disputed'
+  );
+  if (matches.length !== 1) {
+    return unresolved(
+      'No one undisputed selection of the player Draftguru’s post-draft order names by the receiving club in the pick’s draft.',
+      matches.flatMap(({ evidenceIds }) => evidenceIds)
+    );
+  }
+  return { status: 'stated', selection: matches[0]!, playerId, facts, evidenceIds: [] };
+}
+
+/**
+ * The outcome an order row settles for a transfer it ties. A hop before the row's last moved the
+ * pick on. At the last hop, a selected row names the receiving club's one undisputed selection of
+ * its player in the pick's draft; a spent or removed row is a not-used pick with that basis. A trade
+ * page that names a selected player the row contradicts is unresolved, as is a selection the
+ * candidate does not hold.
+ */
+function settleOrderOutcome(input: OrderSettleInput): OrderSettled {
+  const outcome = input.orderRow.content.claim.outcome;
+  if (!input.final) return orderHopMovedOn(input);
+  return outcome.kind === 'selected'
+    ? orderPickSelected(input, outcome.player)
+    : orderPickNotSelected(input, outcome.kind === 'bid_spent');
+}
+
+/**
  * Binds each `pick_disposition` claim to its directed transfer and, for a selected pick, to the one
  * selection of the stated player by the receiving club in the pick's draft year. The disposition's
  * evidence id joins its transfer's evidence, so the candidate's child tables conserve it.
@@ -2459,6 +2842,8 @@ function reconcilePickDispositions(input: {
   boardPicks: readonly CanonicalDraftBoardPick[];
   resolve: IdentityResolver;
   issues: ReconciliationIssue[];
+  /** Draftguru's post-draft order (owner approval 4 of the 2026 intake). */
+  order?: DraftguruOrderReconciliation;
 }): CanonicalPickOutcome[] {
   const dispositions = input.evidence.filter(
     (row): row is PickDispositionEvidence =>
@@ -2518,7 +2903,9 @@ function reconcilePickDispositions(input: {
       outcomeStatus: CanonicalPickOutcome['outcomeStatus'],
       selection: CanonicalDraftSelection | null,
       playerId: string | null,
-      facts: NominationFacts | Pick<CanonicalPickOutcome, 'disposition' | 'statedDisposition'> = {},
+      facts:
+        | (NominationFacts & Pick<CanonicalPickOutcome, 'orderPickId'>)
+        | Pick<CanonicalPickOutcome, 'disposition' | 'statedDisposition' | 'orderPickId'> = {},
       supportingEvidenceIds: readonly string[] = []
     ) =>
       outcomes.push({
@@ -2550,6 +2937,30 @@ function reconcilePickDispositions(input: {
       record('stated', null, null);
       continue;
     }
+    const tie = input.order?.ties.get(transferId);
+    if (tie !== undefined) {
+      const orderRow = input.order!.rows.get(tie.orderPickId)!;
+      const settled = settleOrderOutcome({
+        claim,
+        orderRow,
+        final: tie.final,
+        asset,
+        receivingClubId,
+        draftSelections: input.draftSelections,
+        resolve: input.resolve,
+      });
+      if (settled.issue !== undefined) {
+        unresolved(settled.issue, [row.evidenceId, orderRow.evidenceId, ...settled.evidenceIds]);
+      }
+      record(
+        settled.status,
+        settled.selection,
+        settled.playerId,
+        { ...settled.facts, orderPickId: tie.orderPickId },
+        [orderRow.evidenceId]
+      );
+      continue;
+    }
     if (claim.disposition === 'not_used' && onwardTransfersOf(transfer).length > 0) {
       // The receiving club traded this pick on: the stated "not used" is the pick's final fate.
       record('stated', null, null, { disposition: 'traded_on', statedDisposition: 'not_used' });
@@ -2564,6 +2975,16 @@ function reconcilePickDispositions(input: {
       const outcome = classifyNotUsedPick(asset, draftPending, () =>
         nominatedSelections(asset.draftYear, asset.draftType, receivingClubId)
       );
+      // Owner approval 4 of the 2026 intake: the order lists every pick its draft used, so a pick no
+      // row ties, where no row of the receiving club could be it, was not used.
+      if (
+        outcome.status === 'stated' &&
+        input.order !== undefined &&
+        orderShowsNotListed(input.order, asset, receivingClubId)
+      ) {
+        record('stated', null, null, { nominationBasis: 'order_not_listed' });
+        continue;
+      }
       // The board's own passed or removed pick comes before a count the board's membership proved,
       // since it states this pick's fate directly; a count an official session proved is kept.
       const board =
@@ -2974,7 +3395,20 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transfers: CanonicalTransfer[] = resolvedTransfers.map((transfer) =>
     reconcileDirectedTransfer({ transfer, resolve, pickCustody, slotChainCustody })
   );
-  const statements = pickStatements(evidence, lookup);
+  // Draftguru's post-draft order (owner approval 4 of the 2026 intake): its rows, and the transfer
+  // each hop of a row in ORDER_ORIGIN_DRAFTS ties to. Without order rows nothing changes.
+  const tieTransfers = orderTieTransfers(resolvedTransfers, transfers, pickCustody);
+  const order = reconcileDraftguruOrderPicks({
+    evidence,
+    transfers: tieTransfers,
+    lookup: (entityKind, sourceIdentity) => lookup('draftguru', entityKind, sourceIdentity),
+  });
+  const statements = withOrderStatements(
+    pickStatements(evidence, lookup),
+    order,
+    tieTransfers,
+    lookup
+  );
   const routeOf = createEventualSelectionRouteFinder({
     evidence,
     boardPicks: draftBoard.records,
@@ -2999,6 +3433,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     pickCustody,
     issues,
     routeOf,
+    ...(order.ties.size === 0 ? {} : { order }),
   });
 
   const transactions: CanonicalTransaction[] = transactionClaims.map((row) => {
@@ -3668,6 +4103,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     boardPicks: draftBoard.records,
     resolve,
     issues,
+    ...(order.records.length === 0 ? {} : { order }),
   });
 
   if (pickLineageDeferral !== undefined && sourceAuthority?.kind !== 'historical_plan_completion') {
@@ -3737,6 +4173,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     ...(pickOutcomes.length === 0 ? {} : { pickOutcomes }),
     ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
     ...(draftBoard.bidMatches.length === 0 ? {} : { draftBoardBidMatches: draftBoard.bidMatches }),
+    ...(order.records.length === 0 ? {} : { draftOrderPicks: order.records }),
     // A candidate carries the decision when it deferred something, or when it deferred nothing but
     // lists records left to an earlier promotion or re-synced and writes no draft whole (#853, a
     // re-targeted draftee in a completion with no pick-side issue). Otherwise a candidate prepared
