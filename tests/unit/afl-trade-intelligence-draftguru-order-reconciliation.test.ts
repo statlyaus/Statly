@@ -642,12 +642,29 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
     expect(ids(settled).size).toBe(1);
   });
 
-  it('leaves a 2025-shaped candidate byte-identical: no order rows, no new key; order rows of another draft only recorded', () => {
-    const without = reconcile(2025, { order: false });
-    expect(without).not.toHaveProperty('draftOrderPicks');
-    const withRows = reconcile(2025);
-    const { draftOrderPicks, sourceBatchIds: _ids, ...rest } = withRows;
-    const { sourceBatchIds: _baseIds, ...baseline } = without;
+  it('gives a 2025-shaped candidate without order rows the id the code before this change gave it', () => {
+    // Pinned from origin/main before the order reconciliation (545852ef): the same fixture, prepared
+    // by the code that had no order rule, has this id. The grading VM's baseline proof is the full check.
+    const without = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [
+        ...pages(2025).trades.map((claims, index) => batch('bcdef023456'[index]!, claims)),
+        batch('1', pages(2025).selections),
+      ],
+      identityResolutions,
+      reconciledAt: '2026-11-23T01:00:00.000Z',
+    });
+    expect(without.candidateId).toBe(
+      'external-reconciliation:f708c8dcd4198f0c67a101478532cb460b2e06bb44dbd27bb9943667e43327fd'
+    );
+    expect(without.content).not.toHaveProperty('draftOrderPicks');
+  });
+
+  it('only records order rows outside the 2026 national draft, changing nothing else', () => {
+    const { draftOrderPicks, sourceBatchIds: _ids, ...rest } = reconcile(2025);
+    const { sourceBatchIds: _baseIds, ...baseline } = reconcile(2025, { order: false });
     expect(
       draftOrderPicks!.every(({ hopTransferIds }) => hopTransferIds.every((id) => id === null))
     ).toBe(true);
