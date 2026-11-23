@@ -866,6 +866,15 @@ export function LeagueSettingsPanel({
     createFallbackLeagueSettings(league)
   );
   const [isLoading, setIsLoading] = useState(false);
+  // Save stays off until the settings GET succeeds for this league, so the
+  // fallback defaults can never be written over the real settings.
+  const [loadState, setLoadState] = useState<{
+    status: 'loading' | 'loaded' | 'failed';
+    league: League;
+  }>(() => ({ status: 'loading', league }));
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const settingsLoaded = loadState.status === 'loaded' && loadState.league === league;
+  const settingsLoadFailed = loadState.status === 'failed' && loadState.league === league;
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<LeagueSettingsMessage | null>(null);
   const loadGenerationRef = useRef(0);
@@ -889,6 +898,7 @@ export function LeagueSettingsPanel({
     async function loadLeagueSettings() {
       try {
         setIsLoading(true);
+        setLoadState({ status: 'loading', league });
         setMessage(null);
         const response = await authenticatedFetch(
           `/api/leagues/${league.id}/settings`,
@@ -903,6 +913,7 @@ export function LeagueSettingsPanel({
 
         if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
         setSettings(normalizeLeagueSettingsPayload(payload.data, league));
+        setLoadState({ status: 'loaded', league });
       } catch (error) {
         if (
           controller.signal.aborted ||
@@ -911,10 +922,7 @@ export function LeagueSettingsPanel({
         ) {
           return;
         }
-        setMessage({
-          type: 'error',
-          text: error instanceof Error ? error.message : 'Failed to load league settings.',
-        });
+        setLoadState({ status: 'failed', league });
       } finally {
         if (!controller.signal.aborted && generation === loadGenerationRef.current) {
           setIsLoading(false);
@@ -929,7 +937,7 @@ export function LeagueSettingsPanel({
       saveAbortControllerRef.current?.abort();
       saveGenerationRef.current += 1;
     };
-  }, [currentUserId, isActive, isAdmin, league]);
+  }, [currentUserId, isActive, isAdmin, league, loadAttempt]);
 
   const updateLeagueSettings = (updates: Partial<LeagueSettingsResponse['league']>) => {
     setSettings((current) => ({
@@ -970,6 +978,7 @@ export function LeagueSettingsPanel({
 
   const handleSaveSettings = async () => {
     if (!isAdmin) return;
+    if (!settingsLoaded) return;
 
     const controller = new AbortController();
     const generation = saveGenerationRef.current + 1;
@@ -1018,6 +1027,7 @@ export function LeagueSettingsPanel({
     }
   };
 
+  const formDisabled = !isAdmin || isSaving || !settingsLoaded;
   const draftStructureLock = settings.locks.draftStructure;
   const teamFillPercent = Math.min(100, Math.round((memberCount / settings.league.maxTeams) * 100));
 
@@ -1045,21 +1055,52 @@ export function LeagueSettingsPanel({
     );
   }
 
+  const settingsHeader = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">League Settings</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {isAdmin ? 'Commissioner controls' : 'Read-only league settings'}
+        </p>
+      </div>
+      {isLoading && (
+        <span className="rounded-full border border-border px-3 py-1 text-sm text-muted-foreground">
+          Loading
+        </span>
+      )}
+    </div>
+  );
+
+  if (settingsLoadFailed) {
+    return (
+      <div className="flex flex-col gap-6">
+        {settingsHeader}
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-4"
+        >
+          <p className="text-sm font-semibold text-foreground">Settings could not load.</p>
+          <p className="text-sm text-muted-foreground">
+            Nothing has been changed. Try again to load this league&apos;s settings before editing
+            them.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">League Settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isAdmin ? 'Commissioner controls' : 'Read-only league settings'}
-          </p>
-        </div>
-        {isLoading && (
-          <span className="rounded-full border border-border px-3 py-1 text-sm text-muted-foreground">
-            Loading
-          </span>
-        )}
-      </div>
+      {settingsHeader}
 
       {message && (
         <div
@@ -1074,7 +1115,7 @@ export function LeagueSettingsPanel({
         </div>
       )}
 
-      <fieldset disabled={!isAdmin || isSaving} className="flex flex-col gap-6 disabled:opacity-75">
+      <fieldset disabled={formDisabled} className="flex flex-col gap-6 disabled:opacity-75">
         <section className="rounded-lg border border-border bg-card p-5">
           <h3 className="text-base font-semibold text-foreground">Basic Information</h3>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1133,7 +1174,7 @@ export function LeagueSettingsPanel({
         <ScoringSettingsPanel
           value={settings.scoring}
           lockReason={settings.locks.scoring}
-          disabled={!isAdmin || isSaving}
+          disabled={formDisabled}
           onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
           format={settings.format}
           formatLockReason={draftStructureLock}
@@ -1344,7 +1385,7 @@ export function LeagueSettingsPanel({
           <button
             type="button"
             onClick={() => void handleSaveSettings()}
-            disabled={isSaving}
+            disabled={formDisabled}
             className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
           >
             {isSaving ? 'Saving...' : 'Save league settings'}

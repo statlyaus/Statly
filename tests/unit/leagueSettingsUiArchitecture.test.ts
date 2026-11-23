@@ -81,7 +81,7 @@ describe('league settings UI architecture', () => {
     expect(tabsSource).toContain(
       "isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';"
     );
-    expect(settingsSource).toContain('<fieldset disabled={!isAdmin || isSaving}');
+    expect(settingsSource).toContain('<fieldset disabled={formDisabled}');
     expect(settingsSource).toContain('if (!isAdmin) return;');
     expect(settingsSource).toContain('Save league settings');
   });

@@ -66,11 +66,12 @@ describe('LeagueTabs co-commissioner competition access', () => {
     mocks.authenticatedFetch.mockReset();
     mocks.push.mockReset();
     mocks.tab = 'league-settings';
-    mocks.authenticatedFetch.mockResolvedValue({
+    // The settings form only renders once its own GET succeeds, so answer it with a settings payload.
+    mocks.authenticatedFetch.mockImplementation(async (url: string) => ({
       ok: true,
       status: 200,
-      json: async () => ({ trades: [] }),
-    });
+      json: async () => (url.endsWith('/settings') ? { success: true, data: {} } : { trades: [] }),
+    }));
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
