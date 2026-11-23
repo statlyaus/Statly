@@ -8,6 +8,7 @@ import { useNotification, NotificationToast } from '@/hooks/useNotification';
 import { alertStyles, buttonStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 import { toSafeRedirect } from '@/lib/safeRedirect';
+import { isEndedSessionError } from '@/lib/signInExpiry';
 import {
   clearLoginAutoRedirect,
   isRepeatLoginAutoRedirect,
@@ -83,13 +84,8 @@ const authErrorMessage = (err: unknown, isSignup: boolean): string | null => {
 
 // /login reached with a signed-in browser means the server rejected the credential. The cached ID
 // token can outlive a revoked or disabled account by up to an hour, so it is refreshed before any
-// redirect: these refresh failures mean the account itself is signed out.
-const ENDED_SESSION_ERROR_CODES = new Set([
-  'auth/user-token-expired',
-  'auth/user-disabled',
-  'auth/user-not-found',
-  'auth/invalid-user-token',
-]);
+// redirect: an ended-session refresh failure (`isEndedSessionError`) means the account itself is
+// signed out.
 const SESSION_ENDED_MESSAGE = 'Your session ended. Sign in again.';
 const SESSION_CHECK_FAILED_MESSAGE =
   "We couldn't check your session. Check your connection and try again.";
@@ -316,8 +312,7 @@ const AuthForm = ({
     try {
       await refreshIdToken();
     } catch (err: unknown) {
-      const code = (err as { code?: unknown } | null)?.code;
-      if (typeof code === 'string' && ENDED_SESSION_ERROR_CODES.has(code)) {
+      if (isEndedSessionError(err)) {
         await endSession();
       } else {
         setSessionCheck('failed');
