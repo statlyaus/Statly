@@ -411,7 +411,7 @@ describe('league format settings', () => {
       expect(mocks.createAudit).not.toHaveBeenCalled();
     });
   });
-  describe('a LIVE draft rescheduled back to SCHEDULED with its picks kept', () => {
+  describe('a SCHEDULED draft that holds picks', () => {
     beforeEach(() => {
       Object.assign(stored, { leagueFormat: 'BLOODSUCKER', bloodsuckerMemberId: 'member-2' });
       mocks.findDraft.mockResolvedValue(draftRow({ _count: { picks: 3 } }));

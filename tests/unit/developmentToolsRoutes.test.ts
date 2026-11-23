@@ -3,12 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const routeMocks = vi.hoisted(() => ({
   loadLobbySchemaDiagnostic: vi.fn(),
-  revalidatePlayersTags: vi.fn(),
 }));
 
-vi.mock('@/lib/cache', () => ({
-  revalidatePlayersTags: routeMocks.revalidatePlayersTags,
-}));
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -55,7 +51,6 @@ describe('disabled development tool routes', () => {
       error: { message: 'Not Found', code: 'NOT_FOUND' },
     });
     expect(routeMocks.loadLobbySchemaDiagnostic).not.toHaveBeenCalled();
-    expect(routeMocks.revalidatePlayersTags).not.toHaveBeenCalled();
   });
 });
 

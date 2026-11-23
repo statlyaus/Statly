@@ -17,14 +17,6 @@ const guardedRoutes = [
   },
 ] as const;
 
-const developmentPages = [
-  'infrastructure-test',
-  'sentry-test',
-  'test-myteam',
-  'test-socket',
-  'timer-test',
-] as const;
-
 describe('development tools architecture', () => {
   it.each(guardedRoutes)(
     'guards $path before route work begins',
@@ -39,23 +31,8 @@ describe('development tools architecture', () => {
     }
   );
 
-  it('hides the test-draft UI behind the same server gate', () => {
-    const source = read('src/app/(app)/test-draft/layout.tsx');
-
-    expect(source).toContain('if (!isDevelopmentToolsEnabled())');
-    expect(source).toContain('notFound()');
-  });
-
-  it('hides development and demo pages behind the same server gate', () => {
-    const layout = read('src/app/(app)/(development)/layout.tsx');
-
-    expect(layout).toContain('if (!isDevelopmentToolsEnabled())');
-    expect(layout).toContain('notFound()');
-
-    for (const route of developmentPages) {
-      expect(existsSync(join(process.cwd(), `src/app/(app)/(development)/${route}/page.tsx`))).toBe(
-        true
-      );
+  it('ships no development or demo pages', () => {
+    for (const route of ['(development)', 'test-draft']) {
       expect(existsSync(join(process.cwd(), `src/app/(app)/${route}`))).toBe(false);
     }
   });

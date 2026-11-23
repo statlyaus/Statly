@@ -77,13 +77,6 @@ export interface PlayerSearchResult {
   latestRound: number;
 }
 
-// Minimal Team shape used by MyTeamPanel
-export interface Team {
-  id: string;
-  name?: string;
-  players?: Array<string | number>; // ids of players on the team
-}
-
 // (Optional) super‑light version used in some tables
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
