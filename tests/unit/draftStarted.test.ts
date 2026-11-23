@@ -17,7 +17,7 @@ describe('hasDraftStarted', () => {
     expect(hasDraftStarted(scheduled)).toBe(false);
   });
 
-  it('is true for a LIVE draft rescheduled back to SCHEDULED with its picks kept', () => {
+  it('is true for a SCHEDULED draft that holds picks', () => {
     expect(hasDraftStarted({ ...scheduled, _count: { picks: 3 } })).toBe(true);
   });
 
