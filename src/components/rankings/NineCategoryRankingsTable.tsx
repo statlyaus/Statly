@@ -2,16 +2,9 @@
 
 import React from 'react';
 
-export type RankingCategory =
-  | 'goals'
-  | 'goal_assists'
-  | 'tackles'
-  | 'clearances'
-  | 'inside_50s'
-  | 'rebound_50s'
-  | 'hitouts'
-  | 'intercepts'
-  | 'marks';
+import { FANTASY_CATEGORIES, REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+
+type RankingCategory = (typeof REAL_DATA_NINE_CATEGORY_PRESET)[number];
 
 export interface PlayerCategoryRanking {
   playerId: string;
@@ -24,8 +17,9 @@ export interface PlayerCategoryRanking {
   categories: Record<
     RankingCategory,
     {
-      perGame: number;
-      zScore: number;
+      /** Null when the player never reported the stat. */
+      perGame: number | null;
+      zScore: number | null;
     }
   >;
 }
@@ -34,18 +28,12 @@ interface Props {
   players: PlayerCategoryRanking[];
 }
 
-// Hoisted category columns to avoid re-creating on each render
-export const CATEGORY_COLUMNS: ReadonlyArray<readonly [string, RankingCategory]> = [
-  ['G', 'goals'],
-  ['GA', 'goal_assists'],
-  ['T', 'tackles'],
-  ['CL', 'clearances'],
-  ['I50', 'inside_50s'],
-  ['R50', 'rebound_50s'],
-  ['HO', 'hitouts'],
-  ['I', 'intercepts'],
-  ['M', 'marks'],
-];
+// The league's nine categories, labelled from their definitions.
+const CATEGORY_COLUMNS = REAL_DATA_NINE_CATEGORY_PRESET.map((key) => ({
+  key,
+  label: FANTASY_CATEGORIES[key].label,
+  shortLabel: FANTASY_CATEGORIES[key].shortLabel ?? FANTASY_CATEGORIES[key].label,
+}));
 
 function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
   const getStatColor = (zScore: number) => {
@@ -109,13 +97,17 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
               >
                 Overall
               </th>
-              {CATEGORY_COLUMNS.map(([label, key]) => (
+              {CATEGORY_COLUMNS.map(({ key, label, shortLabel }) => (
                 <th
                   key={key}
                   scope="col"
                   className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0"
                 >
-                  <div>{label}</div>
+                  <div>
+                    <abbr title={label} className="no-underline">
+                      {shortLabel}
+                    </abbr>
+                  </div>
                   <div className="text-xs opacity-75">avg/z</div>
                 </th>
               ))}
@@ -148,9 +140,20 @@ function NineCategoryRankingsTable({ players }: Props): React.JSX.Element {
                   </span>
                 </td>
 
-                {CATEGORY_COLUMNS.map(([_, cat]) => {
-                  const perGame = player.categories?.[cat]?.perGame ?? 0;
-                  const z = player.categories?.[cat]?.zScore ?? 0;
+                {CATEGORY_COLUMNS.map(({ key: cat, label }) => {
+                  const perGame = player.categories?.[cat]?.perGame ?? null;
+                  const z = player.categories?.[cat]?.zScore ?? null;
+                  if (perGame === null || z === null) {
+                    // A stat the player never reported is missing, not zero.
+                    return (
+                      <td key={cat} className="px-2 py-4 whitespace-nowrap text-center">
+                        <span className="text-xs text-gray-500" aria-hidden="true">
+                          –
+                        </span>
+                        <span className="sr-only">{label} not reported</span>
+                      </td>
+                    );
+                  }
                   return (
                     <td key={cat} className="px-2 py-4 whitespace-nowrap text-center">
                       <div className={`text-xs px-1 py-1 rounded ${getStatColor(z)}`}>
