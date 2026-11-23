@@ -5108,20 +5108,31 @@ The remaining work proceeds through these independently verifiable gates:
        `ORDER_ORIGIN_DRAFTS` = 2026 national). Every row is one `draftOrderPicks` record, so the
        candidate conserves it (migration 0293 counts those records at finalization). Each hop ties to
        the candidate transfer in its trade, to the hop's club, from the previous hop's club (the
-       original club for the first hop; any club when the row states none). Two picks on one pair in
-       one trade pair by stated round, else lowest stated number with the earliest row, only when the
-       counts match. A transfer two slots could take ties to neither, and nothing changes for an
-       untied transfer. A tied row's statement (its selected player, or not used) replaces the trade
-       page's. Its tied transfers are one pick, walked in hop order. A selected row takes the player's
-       pick id; any other row takes the entitlement its origin states. At the last hop, a selected row
-       makes the outcome `selected` (with `statedDisposition: 'not_used'` where the page said "not
-       used"), or `unresolved` when the candidate holds no such selection. A spent row is basis
+       original club for the first hop; for a compensation pick, the trade's other club when the trade
+       is between two clubs). Hops and transfers of one slot pair when the counts match: by stated
+       round, else lowest stated number with the earliest row (final number, or rank within the round
+       when a spent row has none). Otherwise a hop ties only to the one transfer that agrees with its
+       row: for a selected row, the transfer whose own pages state the same player; else the transfer
+       whose stated entitlement, or custody pick's, is the row's origin, and only when every other
+       transfer left positively names another entitlement. Only the trade page's own
+       round and original club can refuse a tie: a custody pick joined by a trade-time number may be
+       another entitlement after draft-night renumbering (2026: Brisbane's first-rounder sat at 20 on
+       the earlier order, where Essendon's second-rounder was traded). A transfer two slots could take
+       ties to neither. A tied row's statement (its selected player, or not used) replaces the trade
+       page's. A selected row's tied transfers join its player's group, so its untied hops that state
+       the same player stay one pick; a tied transfer whose custody pick contradicts the row's origin
+       leaves that custody pick for its player's own id, so the custody pick stays with its own chain; a spent or removed row's tied transfers are one pick walked in hop
+       order, taking the entitlement its origin states. At the last hop, a selected row makes the
+       outcome `selected` (with `statedDisposition: 'not_used'` where the page said "not used"), or
+       `unresolved` when the candidate holds no such selection. A spent row is basis
        `order_bid_spent`, and the ledger keeps it `matched_bid` pending `bid_unpriced`, since no 2026
        price is published. A removed row is basis `order_pick_removed`, and the ledger reads it as
-       `passed` citing the order row. Earlier hops are `traded_on`. An untied "not used" pick whose
-       receiving club has no row that could be it is basis `order_not_listed`, and the ledger reads it
-       as `not_used` (rule R2 then decides its fate as for any not-used pick). Candidates without
-       order rows are byte-identical.
+       `passed` citing the order row. Earlier hops are `traded_on`. An untied "not used" pick is basis
+       `order_not_listed` (ledger `not_used`, rule R2 then deciding its fate) when no row could be it,
+       and `order_ambiguous` (ledger `unresolved`, never a spend or 0) when one could: a row with an
+       untied hop in the pick's own trade and direction, or a late row without origin (picks 54 to 65)
+       that the receiving club holds in the pick's stated round. Candidates without order rows are
+       byte-identical.
    - **Footyinfo national draft boards (issues 853 and 789).** The owner approved Footyinfo as a
      provider on 2026-10-12, as a source rights record shows. The capability is
      `footyinfo-national-draft-board`, and parser `footyinfo-draft-board-parser/v3` (v1 until

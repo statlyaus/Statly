@@ -7,11 +7,26 @@ import {
   persistDevelopmentAuthUser,
   resolveLocalDevelopmentAuthPhrase,
 } from '@/lib/devAuth';
+import { clearSignInExpired, isSignInExpired } from '@/lib/signInExpiry';
+
+const firebaseMocks = vi.hoisted(() => ({
+  currentUser: null as null | { getIdToken: (force?: boolean) => Promise<string> },
+}));
+
+vi.mock('@/lib/firebase/clientAuth', () => ({
+  auth: {
+    get currentUser() {
+      return firebaseMocks.currentUser;
+    },
+  },
+}));
 
 describe('fetchApi', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    firebaseMocks.currentUser = null;
+    clearSignInExpired();
   });
 
   it('uses same-origin API paths in the browser even when a local API base env is stale', async () => {
@@ -114,5 +129,47 @@ describe('fetchApi', () => {
     await expect(fetchJson('/api/leagues/missing', { fetcher })).rejects.toThrow(
       'League not found - code=NOT_FOUND'
     );
+  });
+
+  it('refreshes a refused Firebase token once and returns the retried result', async () => {
+    firebaseMocks.currentUser = {
+      getIdToken: vi.fn(async (force?: boolean) => (force ? 'fresh-token' : 'stale-token')),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{"error":"Unauthorized"}', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchApi('leagues/league-1/draft')).resolves.toEqual({ success: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/leagues/league-1/draft', expect.any(Object));
+    const [, init] = fetchMock.mock.calls[1];
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer fresh-token');
+    expect(isSignInExpired()).toBe(false);
+  });
+
+  it('reports an expired sign-in and keeps the 401 status when the retry is refused too', async () => {
+    firebaseMocks.currentUser = {
+      getIdToken: vi.fn(async (force?: boolean) => (force ? 'fresh-token' : 'stale-token')),
+    };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('{"error":"Unauthorized"}', {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchApi('leagues/league-1/draft')).rejects.toMatchObject({ status: 401 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(isSignInExpired()).toBe(true);
   });
 });

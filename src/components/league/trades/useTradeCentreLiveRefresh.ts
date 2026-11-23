@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { subscribeLeagueSocialRoom } from '@/components/league/social/leagueSocialRoom';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { isSignInExpired } from '@/lib/signInExpiry';
 import { useSocket } from '@/providers/SocketProvider';
 
 // Catch-up cadence while no live room is delivering events (no socket, a disconnected socket, or a
@@ -75,7 +76,8 @@ export function useTradeCentreLiveRefresh({
     let inFlight = false;
     const path = `/api/leagues/${encodeURIComponent(leagueId)}/trades/revision`;
     const intervalId = window.setInterval(() => {
-      if (inFlight || document.visibilityState !== 'visible') return;
+      // An expired sign-in raises the app-wide prompt; polling resumes once it is restored.
+      if (inFlight || document.visibilityState !== 'visible' || isSignInExpired()) return;
       inFlight = true;
       void (async () => {
         try {

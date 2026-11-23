@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DraftControls from '@/components/draft/DraftControls';
 
 vi.mock('@/lib/authenticatedFetch', () => ({
-  getAuthHeader: vi.fn(async () => 'Bearer test-token'),
+  fetchWithSignInRecovery: vi.fn(
+    async (send: (headers: Headers) => Promise<Response>, headers: Headers) => {
+      headers.set('Authorization', 'Bearer test-token');
+      return send(headers);
+    }
+  ),
 }));
 
 vi.mock('@/components/ui/Modal', () => ({

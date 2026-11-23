@@ -159,6 +159,7 @@ const nominationBasisSchema = z
     'order_bid_spent',
     'order_pick_removed',
     'order_not_listed',
+    'order_ambiguous',
   ])
   .optional();
 
@@ -167,16 +168,23 @@ type NominationBasis = NonNullable<z.infer<typeof nominationBasisSchema>>;
 /** The Draftguru post-draft order bases (owner approval 4 of the 2026 intake). */
 function isOrderBasis(basis: NominationBasis | undefined): boolean {
   return (
-    basis === 'order_bid_spent' || basis === 'order_pick_removed' || basis === 'order_not_listed'
+    basis === 'order_bid_spent' ||
+    basis === 'order_pick_removed' ||
+    basis === 'order_not_listed' ||
+    basis === 'order_ambiguous'
   );
 }
 
-/** An order row's spent or removed pick cites the row; a pick no row lists cites none. */
+/**
+ * An order row's spent or removed pick cites the row; a pick no row lists, or one the order cannot
+ * settle, cites none.
+ */
 function orderBasisCitesItsRow(
   basis: NominationBasis | undefined,
   orderPickId: string | undefined
 ): boolean {
-  return !isOrderBasis(basis) || (basis === 'order_not_listed') === (orderPickId === undefined);
+  const citesNoRow = basis === 'order_not_listed' || basis === 'order_ambiguous';
+  return !isOrderBasis(basis) || citesNoRow === (orderPickId === undefined);
 }
 
 /** Bases that carry no nominee count: unknown access, a board pick, or an order row's statement. */

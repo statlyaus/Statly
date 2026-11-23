@@ -42,6 +42,17 @@ signed-in app shell (`AppLayout`) clears that record when it renders, so only a 
 to `/login` before the destination page renders counts; a healthy user who opens `/login` twice in
 quick succession is redirected both times (`src/lib/loginLoopGuard.ts`).
 
+A sign-in that lapses while a page is open is recovered in the browser by one handler,
+`fetchWithSignInRecovery` (`src/lib/authenticatedFetch.ts`), which both `authenticatedFetch` and
+`fetchApi` use. On a 401 it forces a fresh Firebase ID token (requests refused together share one
+refresh) and sends the request exactly once more; routes authenticate before doing any work, so the
+refused request changed nothing. A second 401, a refresh Firebase refuses, or no signed-in user marks
+the sign-in as expired (`src/lib/signInExpiry.ts`). `AppLayout` then shows one notice, "Your sign-in
+has expired", whose "Sign in again" link goes to `/login?next=<current path and query>`. While it is
+expired a 401 is not retried and background polls such as the Trade Centre catch-up skip their
+ticks. A successful credentialed response, a fresh sign-in or a sign-out clears it. A caller that
+sets its own `Authorization` header is not retried.
+
 ## League roles
 
 `LeagueRole` has two values: `OWNER` and `MANAGER`. `MANAGER` is the ordinary participant, the team
