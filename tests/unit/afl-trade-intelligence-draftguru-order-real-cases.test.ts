@@ -246,9 +246,15 @@ const selection = (number: number, name: Player, club: Club): Claim => ({
   accessCategory: name === 'Cody Walker' ? 'father_son' : 'open',
 });
 
-const custody = (number: number, round: number, original: Club, holder: Club): Claim => ({
+const custody = (
+  number: number,
+  round: number,
+  original: Club,
+  holder: Club,
+  observedAt = '2026-10-14T00:00:00.000Z'
+): Claim => ({
   kind: 'pick_custody',
-  observedAt: '2026-10-14T00:00:00.000Z',
+  observedAt,
   draftYear: 2026,
   draftType: 'national',
   roundNumber: round,
@@ -321,6 +327,13 @@ const pickOf = (content: Content, eventId: string, pick: TradedPick) => {
   };
 };
 
+/** The usable custody pick of a club's entitlement in a round. */
+const custodyPickId = (content: Content, original: Club, round: number) =>
+  content.pickCustody.find(
+    ({ originalClubId, roundNumber }) =>
+      originalClubId === clubId(original) && roundNumber === round
+  )!.pickId;
+
 describe('Draftguru post-draft order on the shapes the genuine 2026 data showed', () => {
   it('keeps a selected pick one id when its last hop joined custody of another entitlement (Malady)', () => {
     const coleman = { number: 21, stated: 'traded_on', eventual: 'Wil Malady' } as const;
@@ -354,10 +367,127 @@ describe('Draftguru post-draft order on the shapes the genuine 2026 data showed'
       last.transfer.transferId,
     ]);
     expect(first.pickId).toBe(last.pickId);
+    // The custody pick slot 20 joined is Brisbane's first-rounder, not the row's Essendon R2.
+    expect(first.pickId).not.toBe(custodyPickId(content, 'Brisbane', 1));
     expect(last.outcome).toMatchObject({
       disposition: 'selected',
       outcomeStatus: 'stated',
       playerId: playerId('Wil Malady'),
+    });
+  });
+
+  it('leaves Brisbane’s first-rounder to Snell’s chain when Malady’s pick joined its custody slot by number', () => {
+    const coleman = { number: 21, stated: 'traded_on', eventual: 'Wil Malady' } as const;
+    const malady = { number: 20, stated: 'Wil Malady', eventual: 'Wil Malady' } as const;
+    const toGws = { number: 20, stated: 'traded_on', eventual: 'Clancy Snell' } as const;
+    const toPort = { number: 19, stated: 'Clancy Snell', eventual: 'Clancy Snell' } as const;
+    const content = reconcile({
+      trades: [
+        trade('2026-keidean-coleman', 'Essendon', 'Brisbane', [coleman]),
+        trade('2026-picks-brisbane-port_adelaide-31', 'Brisbane', 'Port Adelaide', [malady]),
+        trade('2026-picks-brisbane-greater_western_sydney-16', 'Brisbane', 'GWS', [toGws]),
+        trade('2026-picks-greater_western_sydney-port_adelaide-26', 'GWS', 'Port Adelaide', [
+          toPort,
+        ]),
+      ],
+      selections: [
+        selection(19, 'Clancy Snell', 'Port Adelaide'),
+        selection(20, 'Wil Malady', 'Port Adelaide'),
+      ],
+      order: [
+        row({
+          roundNumber: 1,
+          pickNumber: 19,
+          club: 'Port Adelaide',
+          origin: entitlement('Brisbane', 1, 1),
+          hops: [
+            hop('GWS', '2026-picks-brisbane-greater_western_sydney-16'),
+            hop('Port Adelaide', '2026-picks-greater_western_sydney-port_adelaide-26'),
+          ],
+          outcome: picked('Clancy Snell'),
+        }),
+        row({
+          roundNumber: 2,
+          pickNumber: 20,
+          club: 'Port Adelaide',
+          origin: entitlement('Essendon', 2, 18),
+          hops: [
+            hop('Brisbane', '2026-keidean-coleman'),
+            hop('Port Adelaide', '2026-picks-brisbane-port_adelaide-31'),
+          ],
+          outcome: picked('Wil Malady'),
+        }),
+      ],
+      // Slot 20 is Brisbane's first-rounder: held by GWS before the draft and by Port after night
+      // one, when Port's draft-night swap for Essendon's second-rounder also read "Pick 20".
+      custody: [
+        custody(20, 1, 'Brisbane', 'GWS'),
+        custody(20, 1, 'Brisbane', 'Port Adelaide', '2026-11-19T12:00:00.000Z'),
+      ],
+    });
+    const brisbaneFirst = custodyPickId(content, 'Brisbane', 1);
+    const maladyIds = new Set([
+      pickOf(content, '2026-keidean-coleman', coleman).pickId,
+      pickOf(content, '2026-picks-brisbane-port_adelaide-31', malady).pickId,
+    ]);
+    expect(maladyIds.size).toBe(1);
+    expect(maladyIds.has(brisbaneFirst)).toBe(false);
+    const snell = pickOf(content, '2026-picks-greater_western_sydney-port_adelaide-26', toPort);
+    expect(pickOf(content, '2026-picks-brisbane-greater_western_sydney-16', toGws).pickId).toBe(
+      snell.pickId
+    );
+    expect(snell.pickId).toBe(brisbaneFirst);
+    expect(snell.outcome).toMatchObject({
+      disposition: 'selected',
+      outcomeStatus: 'stated',
+      playerId: playerId('Clancy Snell'),
+    });
+    expect(pickOf(content, '2026-picks-brisbane-port_adelaide-31', malady).outcome).toMatchObject({
+      disposition: 'selected',
+      playerId: playerId('Wil Malady'),
+    });
+  });
+
+  it('pairs two current picks on one pair by number in order (Port to Melbourne, Maginness)', () => {
+    const event = "2026-finn-maginness-hudson-o'keeffe";
+    const harris = { number: 4, stated: 'not_used' } as const;
+    const forster = { number: 46, stated: 'not_used' } as const;
+    const content = reconcile({
+      trades: [trade(event, 'Port Adelaide', 'Melbourne', [harris, forster])],
+      selections: [
+        selection(7, 'Kodah Edwards', 'Melbourne'),
+        selection(49, 'Ben Forster', 'Melbourne'),
+      ],
+      order: [
+        row({
+          roundNumber: 1,
+          pickNumber: 7,
+          club: 'Melbourne',
+          origin: entitlement('Port Adelaide', 1, 15),
+          hops: [hop('Melbourne', event)],
+          outcome: picked('Kodah Edwards'),
+        }),
+        row({
+          roundNumber: 3,
+          pickNumber: 49,
+          club: 'Melbourne',
+          origin: entitlement('Port Adelaide', 3, 15),
+          hops: [hop('Melbourne', event)],
+          outcome: picked('Ben Forster'),
+        }),
+      ],
+    });
+    const byNumber = (number: number) =>
+      content.draftOrderPicks!.find(({ pickNumber }) => pickNumber === number)!.hopTransferIds;
+    expect(byNumber(7)).toEqual([pickOf(content, event, harris).transfer.transferId]);
+    expect(byNumber(49)).toEqual([pickOf(content, event, forster).transfer.transferId]);
+    expect(pickOf(content, event, harris).outcome).toMatchObject({
+      disposition: 'selected',
+      playerId: playerId('Kodah Edwards'),
+    });
+    expect(pickOf(content, event, forster).outcome).toMatchObject({
+      disposition: 'selected',
+      playerId: playerId('Ben Forster'),
     });
   });
 
@@ -492,7 +622,8 @@ describe('Draftguru post-draft order on the shapes the genuine 2026 data showed'
           outcome: picked('Clancy Snell'),
         }),
       ],
-      custody: [custody(20, 1, 'Brisbane', 'GWS')],
+      // Pick 59's custody names another entitlement, so pick 20's agreeing custody may tie the hop.
+      custody: [custody(20, 1, 'Brisbane', 'GWS'), custody(59, 3, 'Brisbane', 'GWS')],
     });
     const tied = pickOf(content, '2026-picks-brisbane-greater_western_sydney-16', snellsPick);
     const last = pickOf(content, '2026-picks-greater_western_sydney-port_adelaide-26', toPort);
@@ -514,62 +645,81 @@ describe('Draftguru post-draft order on the shapes the genuine 2026 data showed'
     });
   });
 
-  it('ties a live swap’s spent pick and compensation pick among three transfers (Adelaide to Carlton, trade 27)', () => {
+  describe('a live swap with three transfers against a spent hop and a compensation hop (Adelaide to Carlton, trade 27)', () => {
     const event = '2026-picks-adelaide-carlton-27';
     const spent = { number: 15, stated: 'not_used' } as const;
     const watkins = { number: 34, stated: 'Jackson Watkins', eventual: 'Jackson Watkins' } as const;
     const unused = { number: 53, stated: 'not_used' } as const;
     const krasna = { number: 13, stated: 'Toby Krasna', eventual: 'Toby Krasna' } as const;
-    const content = reconcile({
-      trades: [trade(event, 'Adelaide', 'Carlton', [spent, watkins, unused], [krasna])],
-      selections: [
-        selection(3, 'Cody Walker', 'Carlton'),
-        selection(14, 'Toby Krasna', 'Adelaide'),
-        selection(37, 'Jackson Watkins', 'Carlton'),
-      ],
-      order: [
-        row({
-          roundNumber: 1,
-          pickNumber: 14,
-          club: 'Adelaide',
-          origin: entitlement('Carlton', 1, 8),
-          hops: [hop('Adelaide', event)],
-          outcome: picked('Toby Krasna'),
-        }),
-        row({
-          roundNumber: 1,
-          pickNumber: null,
-          club: 'Carlton',
-          origin: entitlement('Adelaide', 1, 6),
-          hops: [hop('Carlton', event)],
-          outcome: { kind: 'bid_spent', nominee: person('Cody Walker'), asPick: 15 },
-        }),
-        row({
-          roundNumber: 2,
-          pickNumber: 37,
-          club: 'Carlton',
-          origin: { kind: 'compensation', label: 'Band 3 Free Agency Comp for Trade Player' },
-          hops: [hop('Carlton', event)],
-          outcome: picked('Jackson Watkins'),
-        }),
-      ],
-      custody: [custody(15, 1, 'Adelaide', 'Carlton')],
+    const swap = (extraCustody: Claim[]) =>
+      reconcile({
+        trades: [trade(event, 'Adelaide', 'Carlton', [spent, watkins, unused], [krasna])],
+        selections: [
+          selection(3, 'Cody Walker', 'Carlton'),
+          selection(14, 'Toby Krasna', 'Adelaide'),
+          selection(37, 'Jackson Watkins', 'Carlton'),
+        ],
+        order: [
+          row({
+            roundNumber: 1,
+            pickNumber: 14,
+            club: 'Adelaide',
+            origin: entitlement('Carlton', 1, 8),
+            hops: [hop('Adelaide', event)],
+            outcome: picked('Toby Krasna'),
+          }),
+          row({
+            roundNumber: 1,
+            pickNumber: null,
+            club: 'Carlton',
+            origin: entitlement('Adelaide', 1, 6),
+            hops: [hop('Carlton', event)],
+            outcome: { kind: 'bid_spent', nominee: person('Cody Walker'), asPick: 15 },
+          }),
+          row({
+            roundNumber: 2,
+            pickNumber: 37,
+            club: 'Carlton',
+            origin: { kind: 'compensation', label: 'Band 3 Free Agency Comp for Trade Player' },
+            hops: [hop('Carlton', event)],
+            outcome: picked('Jackson Watkins'),
+          }),
+        ],
+        custody: [custody(15, 1, 'Adelaide', 'Carlton'), ...extraCustody],
+      });
+
+    it('ties the compensation hop by its player and the spent hop by its entitlement when the third pick names another', () => {
+      const content = swap([custody(53, 3, 'Adelaide', 'Carlton')]);
+      expect(pickOf(content, event, spent).outcome).toMatchObject({
+        disposition: 'not_used',
+        nominationBasis: 'order_bid_spent',
+      });
+      expect(pickOf(content, event, watkins).outcome).toMatchObject({
+        disposition: 'selected',
+        playerId: playerId('Jackson Watkins'),
+      });
+      expect(pickOf(content, event, unused).outcome).toMatchObject({
+        disposition: 'not_used',
+        nominationBasis: 'order_not_listed',
+      });
+      expect(pickOf(content, event, krasna).outcome).toMatchObject({
+        disposition: 'selected',
+        playerId: playerId('Toby Krasna'),
+      });
     });
-    expect(pickOf(content, event, spent).outcome).toMatchObject({
-      disposition: 'not_used',
-      nominationBasis: 'order_bid_spent',
-    });
-    expect(pickOf(content, event, watkins).outcome).toMatchObject({
-      disposition: 'selected',
-      playerId: playerId('Jackson Watkins'),
-    });
-    expect(pickOf(content, event, unused).outcome).toMatchObject({
-      disposition: 'not_used',
-      nominationBasis: 'order_not_listed',
-    });
-    expect(pickOf(content, event, krasna).outcome).toMatchObject({
-      disposition: 'selected',
-      playerId: playerId('Toby Krasna'),
+
+    it('leaves the spent hop untied, and both picks it could be unresolved, when the third pick names no entitlement', () => {
+      const content = swap([]);
+      expect(pickOf(content, event, watkins).outcome).toMatchObject({
+        disposition: 'selected',
+        playerId: playerId('Jackson Watkins'),
+      });
+      for (const pick of [spent, unused]) {
+        expect(pickOf(content, event, pick).outcome).toMatchObject({
+          disposition: 'not_used',
+          nominationBasis: 'order_ambiguous',
+        });
+      }
     });
   });
 

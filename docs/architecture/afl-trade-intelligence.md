@@ -5113,13 +5113,15 @@ The remaining work proceeds through these independently verifiable gates:
        round, else lowest stated number with the earliest row (final number, or rank within the round
        when a spent row has none). Otherwise a hop ties only to the one transfer that agrees with its
        row: for a selected row, the transfer whose own pages state the same player; else the transfer
-       whose stated entitlement, or custody pick's, is the row's origin. Only the trade page's own
+       whose stated entitlement, or custody pick's, is the row's origin, and only when every other
+       transfer left positively names another entitlement. Only the trade page's own
        round and original club can refuse a tie: a custody pick joined by a trade-time number may be
        another entitlement after draft-night renumbering (2026: Brisbane's first-rounder sat at 20 on
        the earlier order, where Essendon's second-rounder was traded). A transfer two slots could take
        ties to neither. A tied row's statement (its selected player, or not used) replaces the trade
        page's. A selected row's tied transfers join its player's group, so its untied hops that state
-       the same player stay one pick; a spent or removed row's tied transfers are one pick walked in hop
+       the same player stay one pick; a tied transfer whose custody pick contradicts the row's origin
+       leaves that custody pick for its player's own id, so the custody pick stays with its own chain; a spent or removed row's tied transfers are one pick walked in hop
        order, taking the entitlement its origin states. At the last hop, a selected row makes the
        outcome `selected` (with `statedDisposition: 'not_used'` where the page said "not used"), or
        `unresolved` when the candidate holds no such selection. A spent row is basis

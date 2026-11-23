@@ -1953,6 +1953,42 @@ function orderGroupOf(
   };
 }
 
+/**
+ * A selected row's tied transfer whose pick joined a custody pick of another entitlement than the
+ * row's origin states (both state a round or club, and they differ) is not that custody pick: a
+ * trade-time number can name another entitlement after draft-night renumbering. It leaves the
+ * custody pick for the row's player's own id, unresolved until a custody pick of the row's own
+ * entitlement settles it, so the custody pick stays with the chain that is that entitlement.
+ */
+function releaseContradictedCustody(
+  order: DraftguruOrderReconciliation,
+  tie: { orderPickId: string },
+  transfer: CanonicalTransfer,
+  playerNativeId: string,
+  joinedCustody: ReadonlyMap<string, CanonicalPickCustody>
+): void {
+  const asset = transfer.asset;
+  if (asset.kind !== 'pick_entitlement') return;
+  const custody = joinedCustody.get(asset.pickId);
+  const origin = order.rows.get(tie.orderPickId)!.content.claim.origin;
+  if (custody === undefined || origin?.kind !== 'entitlement') return;
+  const row = {
+    originRound: origin.roundNumber,
+    originalClubId: order.routes.get(tie.orderPickId)![0] ?? null,
+  };
+  if (!aflTradeOrderEntitlementContradicts(row, custody)) return;
+  transfer.asset = {
+    ...asset,
+    pickId: createAflTradeContentAddress('draft-pick', {
+      draftYear: asset.draftYear,
+      draftType: asset.draftType,
+      eventualSelection: { provider: 'draftguru', playerNativeId },
+    }),
+    originalClubId: null,
+  };
+  transfer.status = 'unresolved';
+}
+
 /** The Draftguru player id of a tie's row when that row was selected, else null. */
 function orderSelectedPlayer(
   order: DraftguruOrderReconciliation,
@@ -2002,6 +2038,9 @@ function joinEventualSelections(input: {
   if (eventualPlayers.size === 0 && (input.order?.ties.size ?? 0) === 0) return;
   const groups = new Map<string, number[]>();
   const orderMembers = new Map<string, { index: number; hop: number }[]>();
+  const joinedCustody = new Map(
+    input.pickCustody.filter(isUsableCustody).map((custody) => [custody.pickId, custody] as const)
+  );
   input.resolvedTransfers.forEach(({ row }, index) => {
     const claim = row.content.claim;
     const transfer = input.transfers[index]!;
@@ -2029,6 +2068,8 @@ function joinEventualSelections(input: {
       members.push({ index, hop: tie.hop });
       return;
     }
+    if (tie !== undefined && tiedPlayer !== null)
+      releaseContradictedCustody(input.order!, tie, transfer, tiedPlayer, joinedCustody);
     const player = tiedPlayer ?? eventualPlayers.get(transferKey);
     if (!player) return;
     const key = `${asset.draftYear}|${asset.draftType}|${player}`;

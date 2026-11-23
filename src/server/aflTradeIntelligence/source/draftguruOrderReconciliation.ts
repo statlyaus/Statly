@@ -298,41 +298,68 @@ function slotTransfers(
   );
 }
 
+/** The entitlements a transfer's evidence names: its stated one and its custody pick's, if known. */
+function transferEntitlements(transfer: DraftguruOrderTieTransfer): string[] {
+  const stated =
+    transfer.statedRound === null || transfer.statedOriginalClubId === null
+      ? null
+      : `${transfer.statedRound}|${transfer.statedOriginalClubId}`;
+  return [stated, transfer.custodyEntitlement].filter((value): value is string => value !== null);
+}
+
+/** Keeps the pairs whose transfer no other hop of the slot also chose. */
+function uniquelyChosen(
+  chosen: readonly [HopSlot, DraftguruOrderTieTransfer][]
+): [HopSlot, DraftguruOrderTieTransfer][] {
+  return chosen.filter(
+    ([, transfer]) => chosen.filter(([, other]) => other === transfer).length === 1
+  );
+}
+
 /**
  * The hops a slot cannot pair by count (`pairSlot`), each tied to the one transfer that agrees with
- * its row: for a selected row, the one transfer whose own pages state the same player; otherwise
- * the one transfer whose stated or custody entitlement is the row's origin. A transfer two hops
- * would take ties to neither, and a hop with no single agreeing transfer stays untied.
+ * its row. First a selected row, to the one transfer whose own pages state the same player. Then,
+ * among the transfers left, a row to the transfer whose stated or custody entitlement is the row's
+ * origin, but only when every other transfer left positively names another entitlement: a custody
+ * pick joined by trade-time number may be another entitlement, so a transfer that names none could
+ * still be the row's. A transfer two hops would take ties to neither; any other hop stays untied.
  */
 function agreeingPairs(
   hops: readonly HopSlot[],
   transfers: readonly DraftguruOrderTieTransfer[]
 ): [HopSlot, DraftguruOrderTieTransfer][] {
   const only = <T>(values: readonly T[]) => (values.length === 1 ? values[0]! : undefined);
-  const chosen = hops.flatMap((hop): [HopSlot, DraftguruOrderTieTransfer][] => {
-    const agreeing = transfers.filter((transfer) => tieAgrees(hop, transfer));
-    const byPlayer =
-      hop.playerKey === null
-        ? undefined
-        : only(agreeing.filter(({ statedPlayerKey }) => statedPlayerKey === hop.playerKey));
-    const entitlement = hopEntitlement(hop);
-    const byEntitlement =
-      entitlement === null
-        ? undefined
-        : only(
-            agreeing.filter(
-              (transfer) =>
-                transfer.custodyEntitlement === entitlement ||
-                (transfer.statedRound === hop.originRound &&
-                  transfer.statedOriginalClubId === hop.originClubId)
-            )
-          );
-    const transfer = byPlayer ?? byEntitlement;
-    return transfer === undefined ? [] : [[hop, transfer]];
-  });
-  return chosen.filter(
-    ([, transfer]) => chosen.filter(([, other]) => other === transfer).length === 1
+  const byPlayer = uniquelyChosen(
+    hops.flatMap((hop): [HopSlot, DraftguruOrderTieTransfer][] => {
+      if (hop.playerKey === null) return [];
+      const transfer = only(
+        transfers.filter(
+          (candidate) => tieAgrees(hop, candidate) && candidate.statedPlayerKey === hop.playerKey
+        )
+      );
+      return transfer === undefined ? [] : [[hop, transfer]];
+    })
   );
+  const taken = new Set(byPlayer.flatMap(([hop, transfer]) => [hop, transfer] as const));
+  const left = transfers.filter((transfer) => !taken.has(transfer));
+  const byEntitlement = uniquelyChosen(
+    hops.flatMap((hop): [HopSlot, DraftguruOrderTieTransfer][] => {
+      const entitlement = hopEntitlement(hop);
+      if (taken.has(hop) || entitlement === null) return [];
+      const transfer = only(
+        left.filter(
+          (candidate) =>
+            tieAgrees(hop, candidate) && transferEntitlements(candidate).includes(entitlement)
+        )
+      );
+      const othersDiffer = left.every((other) => {
+        const named = transferEntitlements(other);
+        return other === transfer || (named.length > 0 && !named.includes(entitlement));
+      });
+      return transfer === undefined || !othersDiffer ? [] : [[hop, transfer]];
+    })
+  );
+  return [...byPlayer, ...byEntitlement];
 }
 
 /**
