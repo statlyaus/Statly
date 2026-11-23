@@ -249,18 +249,6 @@ export function getPerformanceMonitor(): PerformanceMonitor | null {
   return performanceMonitor;
 }
 
-// React hook for performance monitoring
-export function usePerformanceMonitor() {
-  const monitor = getPerformanceMonitor();
-
-  return {
-    measureCustomMetric: monitor?.measureCustomMetric.bind(monitor) || (() => {}),
-    startTimer: monitor?.startTimer.bind(monitor) || (() => () => {}),
-    getMetrics: monitor?.getMetrics.bind(monitor) || (() => new Map()),
-    getMetricsSummary: monitor?.getMetricsSummary.bind(monitor) || (() => ({})),
-  };
-}
-
 // Utility functions for common measurements
 export function measurePageLoad(): () => void {
   const monitor = getPerformanceMonitor();

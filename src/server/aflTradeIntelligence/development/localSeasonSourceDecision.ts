@@ -29,6 +29,13 @@ export interface SeasonSourceDecisionInput {
    * `draftguru-national-year-page/v8` for 2026 from a v3 predecessor). Omitted, the parser is kept.
    */
   parserVersion?: string;
+  /**
+   * A decision for another capability of the predecessor's provider, on the predecessor's terms (for
+   * example `draftguru-post-draft-order` from the `draftguru-national-year-page` decision, owner
+   * approval 4 of the 2026 intake): the capability id is rewritten wherever the predecessor names it,
+   * and the rights name exactly `fields` and `dataset`. Omitted, the capability is kept.
+   */
+  capability?: Readonly<{ from: string; to: string; fields: readonly string[]; dataset: string }>;
 }
 
 // A four-digit year that is not part of an id, a date (2025-10-12) or a hyphenated key (...-2025).
@@ -76,6 +83,42 @@ function parserChange(rights: AflTradeSourceRightsProposal, to: string | undefin
     from,
     to,
     rewrite: (text: string) => text.split(from).join(to).replace(short, `$1${toShort}`),
+  };
+}
+
+type RightsField = AflTradeSourceRightsProposal['content']['fields'][number];
+
+/**
+ * The predecessor's capability and the field list that replaces its fields, when the derived
+ * decision is for another capability. Every predecessor field must carry the same uses, attribution
+ * and notes, which each new field takes; the field names themselves are the new capability's.
+ */
+function capabilityChange(
+  rights: AflTradeSourceRightsProposal,
+  to: SeasonSourceDecisionInput['capability']
+) {
+  const { acquisition } = rights.content;
+  const from = 'capabilityId' in acquisition ? acquisition.capabilityId : null;
+  if (to === undefined || to.to === from) return null;
+  if (from === null || to.from !== from || to.fields.length === 0) {
+    throw new TypeError(
+      `The predecessor's capability is ${from ?? 'not a provider capability'}, not ${to.from}.`
+    );
+  }
+  const terms = new Set(
+    rights.content.fields.map(({ uses, attributionRequired, notes }) =>
+      JSON.stringify({ uses, attributionRequired, notes })
+    )
+  );
+  if (terms.size !== 1) {
+    throw new TypeError('The predecessor fields carry different terms; record reviewed rights.');
+  }
+  return {
+    from,
+    to: to.to,
+    dataset: to.dataset,
+    fields: (rewritten: readonly RightsField[]): RightsField[] =>
+      to.fields.map((field) => ({ ...rewritten[0]!, sourceField: field, normalizedField: field })),
   };
 }
 
@@ -148,17 +191,25 @@ export function deriveSeasonSourceDecision(
     throw new TypeError('The predecessor source rights must record exactly one season range.');
   }
   const range = ranges[0]!;
-  if (season >= range.from && season <= range.to) {
+  const capability = capabilityChange(predecessor.sourceRights, input.capability);
+  // Another capability's decision may be derived from the same season's: its key is its own.
+  if (capability === null && season >= range.from && season <= range.to) {
     throw new TypeError(`The predecessor already covers ${season}.`);
   }
   const parser = parserChange(predecessor.sourceRights, input.parserVersion);
+  // The parser first: its full version names the predecessor's capability.
   const rewrite = (text: string) => {
     const seasonText = rewriteSeasonText(text, range.from, range.to, season);
-    return parser === null ? seasonText : parser.rewrite(seasonText);
+    const parserText = parser === null ? seasonText : parser.rewrite(seasonText);
+    return capability === null ? parserText : parserText.split(capability.from).join(capability.to);
   };
 
+  const rewrittenRights = rewriteStrings(predecessor.sourceRights.content, rewrite);
   const rightsContent = {
-    ...rewriteStrings(predecessor.sourceRights.content, rewrite),
+    ...rewrittenRights,
+    ...(capability === null
+      ? {}
+      : { dataset: capability.dataset, fields: capability.fields(rewrittenRights.fields) }),
     scope: {
       ...predecessor.sourceRights.content.scope,
       seasonRanges: [{ from: season, to: season }],
@@ -245,7 +296,7 @@ export function deriveSeasonSourceDecision(
         explanation: `Satisfied for ${season} on the evidence decision ${predecessor.decision.decisionId} cited, under owner approval ${input.approvalArtifactId}.`,
       };
     }),
-    rationale: `Owner approval ${input.approvalArtifactId} extends the ${predecessor.decision.content.decisionKey} authority to ${season} as its own version-1 decision${parser === null ? '' : ` at parser ${parser.to} (the predecessor's was ${parser.from})`}.`,
+    rationale: `Owner approval ${input.approvalArtifactId} extends the ${predecessor.decision.content.decisionKey} authority to ${season} as its own version-1 decision${capability === null ? '' : ` for capability ${capability.to}`}${parser === null ? '' : ` at parser ${parser.to} (the predecessor's was ${parser.from})`}.`,
     limitations: [...proposal.content.scope.exclusions],
     decidedAt: input.decidedAt,
     effectiveAt: input.decidedAt,

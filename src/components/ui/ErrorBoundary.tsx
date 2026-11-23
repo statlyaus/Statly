@@ -245,12 +245,4 @@ export function SectionErrorBoundary({ children, ...props }: Omit<Props, 'level'
   );
 }
 
-export function ComponentErrorBoundary({ children, ...props }: Omit<Props, 'level'>) {
-  return (
-    <ErrorBoundary level="component" {...props}>
-      {children}
-    </ErrorBoundary>
-  );
-}
-
 export default ErrorBoundary;
