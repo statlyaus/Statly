@@ -393,7 +393,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
 
     render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
 
-    expect(screen.getByRole('link', { name: 'Review completed draft' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^Review completed draft/ })).toHaveAttribute(
       'href',
       '/drafts/history/draft-1?leagueId=league-1'
     );
@@ -407,22 +407,23 @@ describe('UnifiedDraftRoom live shell composition', () => {
     const nextSteps = screen.getByRole('region', { name: 'Draft complete next steps' });
     expect(nextSteps).toHaveTextContent('Draft complete');
 
-    expect(screen.getByRole('link', { name: 'Go back to league hub' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^Go back to league hub/ })).toHaveAttribute(
       'href',
       '/leagues/league-1'
     );
-    expect(screen.getByRole('link', { name: 'Review completed draft' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^Review completed draft/ })).toHaveAttribute(
       'href',
       '/drafts/history/draft-1?leagueId=league-1'
     );
-    expect(screen.getByRole('link', { name: 'Review my roster' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^Review my roster/ })).toHaveAttribute(
       'href',
       '/leagues/league-1?tab=roster'
     );
 
     const background = screen.getByRole('region', { name: 'Completed draft background' });
     expect(background).toHaveAttribute('inert');
-    expect(background).toHaveClass('opacity-45');
+    // Readable, not faded: the finished board must keep text contrast (WCAG 1.4.3).
+    expect(background).not.toHaveClass('opacity-45');
   });
 
   it('builds left-rail roster slots from draft settings and current user picks', () => {

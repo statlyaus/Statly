@@ -584,13 +584,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           onReload={() => window.location.reload()}
         />
 
-        <div
-          className={
-            isCompletedDraft
-              ? 'mx-auto max-w-[2100px] space-y-4 pb-4 opacity-45'
-              : 'mx-auto max-w-[2100px] space-y-4 pb-4'
-          }
-        >
+        <div className="mx-auto max-w-[2100px] space-y-4 pb-4">
           {/* Draft Controls (for league owners) */}
           <DraftControls
             draftId={draftId}
@@ -702,7 +696,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Link
                     href={leagueHubHref}
-                    aria-label="Go back to league hub"
                     className="rounded-cut border border-foreground bg-card p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold text-foreground">
@@ -714,7 +707,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   </Link>
                   <Link
                     href={historyHref}
-                    aria-label="Review completed draft"
                     className="rounded-cut border border-brand-bar bg-brand-bar p-4 text-left text-brand-bar-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <span className="block text-sm font-semibold">Review completed draft</span>
@@ -724,7 +716,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   </Link>
                   <Link
                     href={rosterHref}
-                    aria-label="Review my roster"
                     className="rounded-cut border border-border bg-muted p-4 text-left transition-colors hover:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold text-foreground">
@@ -867,7 +858,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           <section
             aria-label={isCompletedDraft ? 'Completed draft background' : undefined}
-            className={isCompletedDraft ? 'opacity-45 pointer-events-none select-none' : undefined}
+            // The finished board stays readable (WCAG 1.4.3) but inert: the completion panel above is the way on.
+            className={isCompletedDraft ? 'pointer-events-none select-none' : undefined}
             inert={isCompletedDraft ? true : undefined}
           >
             <section
@@ -926,11 +918,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           </section>
         </main>
 
-        {/* Mobile Pick Feed Toggle */}
+        {/* Mobile pick feed toggle. It floats bottom-left: the league chat launcher owns bottom-right. */}
         <button
           type="button"
           onClick={() => setIsPickFeedOpen(true)}
-          className="fixed bottom-4 right-4 z-40 rounded-cut border-[2.5px] border-foreground bg-brand-bar p-3 text-brand-bar-foreground shadow-hard transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="fixed bottom-6 left-6 z-40 inline-flex size-14 items-center justify-center rounded-cut-float border-[2.5px] border-foreground bg-brand-bar text-brand-bar-foreground shadow-hard transition-colors hover:bg-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card lg:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

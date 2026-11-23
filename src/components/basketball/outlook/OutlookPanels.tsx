@@ -98,7 +98,8 @@ export function OutlookPanels({ panels, stale }: { panels: Panels; stale: boolea
   const minutes = (player: OutlookPlayer) =>
     `${player.teamCode} · ${n1(player.role.minutesLast5)} → ${n1(player.role.minutesNext5)} min`;
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    // grid-cols-1 is minmax(0, 1fr): without it the column grows to the longest untruncated line on a phone.
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Panel
         id="outlook-minutes"
         title="Biggest minute changes"
