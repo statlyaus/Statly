@@ -1,8 +1,7 @@
-import type { Prisma } from '@prisma/client';
 import { NextResponse, type NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { inActiveSeason, requireActiveSeasonId } from '@/server/leagues/activeSeason';
+import { inActiveSeason } from '@/server/leagues/activeSeason';
 import {
   findBiteFreeze,
   holdsUnexecutedBite,
@@ -13,11 +12,7 @@ import {
   LeagueBusyError,
   lockLeagueRowOrBusy,
 } from '@/server/leagues/leagueRowLock';
-import {
-  describeLockedPlayers,
-  findPlayersLockedForMove,
-  removePlayersFromOpenLineups,
-} from '@/server/leagues/playerMoveLock';
+import { describeLockedPlayers, findPlayersLockedForMove } from '@/server/leagues/playerMoveLock';
 import { prisma } from '@/lib/prisma';
 import {
   getTransactionWindow,
@@ -26,6 +21,7 @@ import {
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
+import { dropRosterPlayerInTransaction } from '@/server/rosters/rosterDrop';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -147,7 +143,6 @@ export async function POST(
 
     // Dropped players leave the roster now, then stay on waivers before free agency. The roster
     // delete and the waiver hold commit together, so a reported drop always has its hold.
-    const processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const playerId = String(canonicalDetails.playerId);
 
     // A player whose game has started this round stays until the round ends.
@@ -157,7 +152,6 @@ export async function POST(
       return errorResponse(describeLockedPlayers(lock.lockedPlayers), 409);
     }
 
-    const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const dropped = await prisma.$transaction(async (tx) => {
       // BR-30, E12: a member with a Bloodsucker bite waiting, or whose matchup against the
       // Bloodsucker has ended and is not final, cannot drop. Checked under the League row lock the
@@ -172,33 +166,13 @@ export async function POST(
       ) {
         return 'LAST_PLAYER_BITE_HELD' as const;
       }
-      const removed = await tx.leagueRosterPlayer.deleteMany({
-        where: { leagueId, memberId: member.id, playerId },
-      });
-      if (removed.count === 0) return false;
-      await removePlayersFromOpenLineups(tx, {
+      return dropRosterPlayerInTransaction(tx, {
         leagueId,
         memberId: member.id,
-        playerIds: [playerId],
+        playerId,
+        details: canonicalDetails,
       });
-      await tx.teamAction.create({
-        data: {
-          id: actionId,
-          leagueId,
-          seasonId: await requireActiveSeasonId(tx, leagueId),
-          memberId: member.id,
-          actionType: 'DROP_PLAYER',
-          // The details came from the parsed JSON request body, so they are JSON values.
-          details: canonicalDetails as Prisma.InputJsonObject,
-          processingAt,
-        },
-      });
-      return true;
     }, INTERACTIVE_LEAGUE_LOCK.transaction);
-    if (typeof dropped === 'object') {
-      // Same flat shape as the window refusal, so clients read one `code` field.
-      return NextResponse.json({ error: dropped.message, code: dropped.code }, { status: 409 });
-    }
     if (dropped === 'LAST_PLAYER_BITE_HELD') {
       return NextResponse.json(
         { error: LAST_PLAYER_BITE_HELD_MESSAGE, code: 'LAST_PLAYER_BITE_HELD' },
@@ -208,6 +182,11 @@ export async function POST(
     if (!dropped) {
       return errorResponse('Player is no longer in your roster', 409);
     }
+    if (!('actionId' in dropped)) {
+      // Same flat shape as the window refusal, so clients read one `code` field.
+      return NextResponse.json({ error: dropped.message, code: dropped.code }, { status: 409 });
+    }
+    const { actionId, processingAt } = dropped;
 
     const action = {
       id: actionId,
