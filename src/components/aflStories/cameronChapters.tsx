@@ -24,32 +24,32 @@ export interface StoryChapter {
 
 /** Confetti for the grand final: [left %, top %, width %, height %, colour, rotation]. */
 const CONFETTI: readonly (readonly [number, number, number, number, string, number])[] = [
-  [57, 19, 0.9, 2.6, '#0D2A52', 45],
-  [55, 66, 1.2, 3.9, '#0D2A52', 36],
-  [78, 56, 1.4, 3.6, '#0D2A52', 155],
-  [44, 44, 0.9, 3.2, '#0D2A52', 170],
-  [65, 74, 1.2, 2.9, '#8FB3E3', 100],
-  [58, 35, 1.5, 2.3, '#FBFAF6', 109],
-  [94, 34, 1.0, 3.9, '#FBFAF6', 135],
-  [59, 89, 0.9, 3.1, '#FBFAF6', 7],
-  [32, 45, 1.5, 2.3, '#0D2A52', 114],
-  [39, 59, 1.1, 2.4, '#0D2A52', 36],
-  [82, 5, 1.0, 2.7, '#0D2A52', 149],
-  [38, 90, 1.2, 2.3, '#FBFAF6', 109],
-  [57, 9, 0.9, 2.5, '#FBFAF6', 74],
-  [91, 85, 1.1, 3.1, '#FBFAF6', 152],
-  [38, 79, 0.9, 2.3, '#8FB3E3', 2],
-  [85, 32, 1.1, 2.8, '#0D2A52', 69],
-  [84, 51, 0.9, 2.3, '#8FB3E3', 130],
-  [56, 43, 1.0, 3.4, '#8FB3E3', 19],
-  [75, 30, 1.4, 3.5, '#FBFAF6', 69],
-  [59, 92, 1.5, 3.0, '#8FB3E3', 13],
-  [49, 66, 1.1, 3.1, '#FBFAF6', 167],
-  [47, 85, 1.1, 3.4, '#FBFAF6', 51],
-  [75, 58, 1.6, 3.4, '#0D2A52', 35],
-  [52, 19, 0.8, 2.8, '#8FB3E3', 174],
-  [43, 64, 0.9, 3.4, '#0D2A52', 134],
-  [87, 22, 1.5, 2.8, '#0D2A52', 1],
+  [57, 19, 0.9, 2.6, 'var(--sc-navy)', 45],
+  [55, 66, 1.2, 3.9, 'var(--sc-navy)', 36],
+  [78, 56, 1.4, 3.6, 'var(--sc-navy)', 155],
+  [44, 44, 0.9, 3.2, 'var(--sc-navy)', 170],
+  [65, 74, 1.2, 2.9, 'var(--sc-sky)', 100],
+  [58, 35, 1.5, 2.3, 'var(--sc-paper)', 109],
+  [94, 34, 1.0, 3.9, 'var(--sc-paper)', 135],
+  [59, 89, 0.9, 3.1, 'var(--sc-paper)', 7],
+  [32, 45, 1.5, 2.3, 'var(--sc-navy)', 114],
+  [39, 59, 1.1, 2.4, 'var(--sc-navy)', 36],
+  [82, 5, 1.0, 2.7, 'var(--sc-navy)', 149],
+  [38, 90, 1.2, 2.3, 'var(--sc-paper)', 109],
+  [57, 9, 0.9, 2.5, 'var(--sc-paper)', 74],
+  [91, 85, 1.1, 3.1, 'var(--sc-paper)', 152],
+  [38, 79, 0.9, 2.3, 'var(--sc-sky)', 2],
+  [85, 32, 1.1, 2.8, 'var(--sc-navy)', 69],
+  [84, 51, 0.9, 2.3, 'var(--sc-sky)', 130],
+  [56, 43, 1.0, 3.4, 'var(--sc-sky)', 19],
+  [75, 30, 1.4, 3.5, 'var(--sc-paper)', 69],
+  [59, 92, 1.5, 3.0, 'var(--sc-sky)', 13],
+  [49, 66, 1.1, 3.1, 'var(--sc-paper)', 167],
+  [47, 85, 1.1, 3.4, 'var(--sc-paper)', 51],
+  [75, 58, 1.6, 3.4, 'var(--sc-navy)', 35],
+  [52, 19, 0.8, 2.8, 'var(--sc-sky)', 174],
+  [43, 64, 0.9, 3.4, 'var(--sc-navy)', 134],
+  [87, 22, 1.5, 2.8, 'var(--sc-navy)', 1],
 ];
 
 const noteLine = { margin: 0, fontSize: 'clamp(18px, 1.9vw, 26px)', lineHeight: 1.3 } as const;
@@ -73,7 +73,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     kicker: 'Chapter 01: Home',
     when: '2010',
     slip: ['2010', 'Dartmoor'],
-    slipColour: '#FBFAF6',
+    slipColour: 'var(--sc-paper)',
     slipRotate: -3,
     title: (
       <>
@@ -110,7 +110,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
             ...place({ right: '3%', top: '8%', width: '33%', rotate: 5, z: 3 }),
             boxSizing: 'border-box',
             padding: '4% 4% 4% 7%',
-            borderLeft: '3px dashed rgba(22,22,22,0.55)',
+            borderLeft: '3px dashed color-mix(in srgb, var(--sc-ink) 55%, transparent)',
           }}
         >
           <p
@@ -147,7 +147,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     kicker: 'Chapter 02: The Giants',
     when: '2012–2019',
     slip: ['2012–19', 'The Giants'],
-    slipColour: '#F7C9B3',
+    slipColour: 'var(--sc-slip-peach)',
     slipRotate: 2,
     title: (
       <>
@@ -204,7 +204,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     kicker: 'Chapter 03: The trade',
     when: '2020',
     slip: ['2020', 'The trade'],
-    slipColour: '#FBFAF6',
+    slipColour: 'var(--sc-paper)',
     slipRotate: -1.5,
     title: (
       <>
@@ -220,7 +220,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
             ...place({ left: '3%', top: '3%', width: '55%', height: '92%', rotate: -1.5, z: 1 }),
             boxSizing: 'border-box',
             padding: '5% 6%',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+            boxShadow: '0 1px 3px color-mix(in srgb, var(--sc-ink) 18%, transparent)',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.2rem',
@@ -298,7 +298,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     kicker: 'Chapter 04: New stripes',
     when: '2021',
     slip: ['2021', 'New stripes'],
-    slipColour: '#C9D6E8',
+    slipColour: 'var(--sc-slip-blue)',
     slipRotate: 3,
     title: (
       <>
@@ -322,12 +322,12 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
             boxSizing: 'border-box',
             padding: '4% 5% 4% 12%',
             background: 'var(--sc-paper)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            boxShadow: '0 1px 3px color-mix(in srgb, var(--sc-ink) 20%, transparent)',
           }}
         >
           <p
             className="sc-label"
-            style={{ margin: 0, fontSize: 'clamp(12px, 1.1vw, 15px)', color: '#555' }}
+            style={{ margin: 0, fontSize: 'clamp(12px, 1.1vw, 15px)', color: 'var(--sc-grey)' }}
           >
             Price paid
           </p>
@@ -370,7 +370,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     kicker: 'Chapter 05: The season',
     when: '2022',
     slip: ['2022', 'The season'],
-    slipColour: '#FBFAF6',
+    slipColour: 'var(--sc-paper)',
     slipRotate: -2,
     title: (
       <>
@@ -415,7 +415,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
     kicker: 'Chapter 06: Grand final',
     when: '24.09.22',
     slip: ['24.09.22', 'Premiers'],
-    slipColour: '#C9D6E8',
+    slipColour: 'var(--sc-slip-blue)',
     slipRotate: 2.5,
     title: (
       <>
@@ -449,8 +449,8 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
             ...place({ left: '34%', top: '8%', width: '42%', rotate: -2, z: 3 }),
             boxSizing: 'border-box',
             padding: '4% 5%',
-            background: '#141414',
-            color: '#F4F1EA',
+            background: 'var(--sc-ink)',
+            color: 'var(--sc-paper)',
           }}
         >
           <p
@@ -458,7 +458,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
               margin: 0,
               fontWeight: 500,
               fontSize: 'clamp(11px, 1vw, 14px)',
-              color: '#CFCBC2',
+              color: 'var(--brand-hairline)',
             }}
           >
             Grand final · MCG · 24.09.22
@@ -486,7 +486,7 @@ export const CAMERON_CHAPTERS: readonly StoryChapter[] = [
               fontWeight: 500,
               fontSize: 'clamp(18px, 2vw, 30px)',
               lineHeight: 1.1,
-              color: '#A9A59D',
+              color: 'color-mix(in srgb, var(--sc-paper) 62%, var(--sc-ink))',
             }}
           >
             <span>Sydney</span>

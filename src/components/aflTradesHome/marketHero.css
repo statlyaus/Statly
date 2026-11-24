@@ -2,10 +2,12 @@
  * The top of the home page (owner's concept E, 2026-11-16): "Every October, footy goes to market."
  * The desktop layout is the owner's 1440 by 820 artboard; every size is a share of the stage's width
  * (cqw), so it keeps its proportions at any desktop width. Below 1024px it stacks.
+ * Colours are the brand's tokens (src/index.css), except the slip's ticket stub.
  */
 .mh {
-  background: #fff;
-  color: #161616;
+  /* A white sheet on the paper surface, so --card, not --background (paper there). */
+  background: var(--card);
+  color: var(--card-foreground);
   font-family: var(--font-sc-serif), Georgia, serif;
   overflow: hidden;
 }
@@ -205,7 +207,7 @@
   display: flex;
   justify-content: space-between;
   padding-bottom: 0.83cqw;
-  border-bottom: 1px solid #161616;
+  border-bottom: 1px solid var(--foreground);
   letter-spacing: 0.14em;
   font-size: max(11px, 0.9cqw);
   font-weight: 500;
@@ -223,7 +225,7 @@
 .mh-kicker {
   letter-spacing: 0.16em;
   font-size: max(11px, 0.9cqw);
-  color: #555;
+  color: var(--muted-foreground);
 }
 .mh-title {
   margin: 0;
@@ -235,7 +237,7 @@
   max-width: 32.64cqw;
   font-size: max(15px, 1.32cqw);
   line-height: 1.5;
-  color: #333;
+  color: var(--foreground);
 }
 @media (max-width: 1023px) {
   .mh-stage::before {
@@ -315,8 +317,8 @@
   text-decoration: none;
   transform: rotate(-0.8deg);
   box-shadow:
-    0 2px 0 rgba(0, 0, 0, 0.06),
-    0 14px 30px -18px rgba(0, 0, 0, 0.45);
+    0 2px 0 color-mix(in srgb, var(--foreground) 6%, transparent),
+    0 14px 30px -18px color-mix(in srgb, var(--foreground) 45%, transparent);
   transition: transform 0.2s ease;
 }
 .sc a.mh-slip:hover {
@@ -333,11 +335,11 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  background: #f1ead9;
-  border-bottom: 2px dashed rgba(22, 22, 22, 0.25);
+  background: #f1ead9; /* The ticket stub: the slip's one art colour. */
+  border-bottom: 2px dashed color-mix(in srgb, var(--foreground) 25%, transparent);
   font-size: 12px;
   letter-spacing: 0.2em;
-  color: rgba(22, 22, 22, 0.6);
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
 }
 .mh-slip-no {
   font-size: 36px;
@@ -363,7 +365,7 @@
   flex-direction: column;
   gap: 2px;
   padding-bottom: 0.5rem;
-  border-bottom: 1px dashed rgba(22, 22, 22, 0.3);
+  border-bottom: 1px dashed color-mix(in srgb, var(--foreground) 30%, transparent);
 }
 .mh-slip-wide {
   grid-column: 1 / -1;
@@ -372,7 +374,7 @@
   display: block;
   font-size: 11px;
   letter-spacing: 0.18em;
-  color: rgba(22, 22, 22, 0.55);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 .mh-slip-entry {
   font-size: clamp(28px, 2.4vw, 34px);
@@ -405,7 +407,7 @@
   justify-content: space-between;
   gap: 1.5rem;
   padding: 1.5rem;
-  border-top: 2px dashed rgba(22, 22, 22, 0.25);
+  border-top: 2px dashed color-mix(in srgb, var(--foreground) 25%, transparent);
 }
 .mh-slip-stamp {
   position: absolute;
@@ -439,7 +441,7 @@
   min-height: 48px;
   padding: 0 20px;
   background: var(--sc-ink);
-  color: #f4f1ea;
+  color: var(--brand-paper);
   font-size: 15px;
   letter-spacing: 0.12em;
 }
@@ -456,7 +458,7 @@
     width: 10rem;
     padding: 2rem 1rem;
     border-bottom: 0;
-    border-right: 2px dashed rgba(22, 22, 22, 0.25);
+    border-right: 2px dashed color-mix(in srgb, var(--foreground) 25%, transparent);
   }
   .mh-slip-no {
     font-size: 48px;
@@ -468,7 +470,7 @@
     width: 340px;
     padding: 2rem 2.25rem;
     border-top: 0;
-    border-left: 2px dashed rgba(22, 22, 22, 0.25);
+    border-left: 2px dashed color-mix(in srgb, var(--foreground) 25%, transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {

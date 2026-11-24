@@ -16,7 +16,8 @@
 // Scripts/design/raw-colour-baseline.json holds each file's count; tests/unit/designTokenColours
 // fails when a file goes above it or a new file adds raw colours. Lower it, never raise it.
 //
-// Test files and stylesheets are skipped: src/index.css is where the tokens are defined.
+// Component stylesheets are counted too (ticket 13a3). Test files and src/index.css are skipped:
+// src/index.css is where the tokens are defined.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +37,8 @@ export const HEX_LITERAL =
 export const FUNCTION_LITERAL = /(?<![a-zA-Z-])(?:rgba?|hsla?)\(/g;
 
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
-const SOURCE_FILE = /\.(?:tsx?|jsx?|mjs|cjs)$/;
+const SOURCE_FILE = /\.(?:tsx?|jsx?|mjs|cjs|css)$/;
+const TOKEN_SHEET = join('src', 'index.css');
 const TEST_FILE = /\.(?:test|spec)\.[^.]+$/;
 
 /** Counts raw colours in one file's source, ignoring whole-line comments. */
@@ -61,7 +63,11 @@ export function listSourceFiles(dir) {
         ? []
         : listSourceFiles(path);
     }
-    return SOURCE_FILE.test(entry.name) && !TEST_FILE.test(entry.name) ? [path] : [];
+    return SOURCE_FILE.test(entry.name) &&
+      !TEST_FILE.test(entry.name) &&
+      relative(process.cwd(), path) !== TOKEN_SHEET
+      ? [path]
+      : [];
   });
 }
 
