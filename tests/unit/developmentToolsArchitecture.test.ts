@@ -37,6 +37,23 @@ describe('development tools architecture', () => {
     }
   });
 
+  it('serves the style guide only with development tools on', () => {
+    const source = read('src/app/dev/styleguide/page.tsx');
+    const guard = /if \(!isDevelopmentToolsEnabled\(\)\)\s*notFound\(\);/u.exec(source);
+    expect(guard).not.toBeNull();
+    expect(source.indexOf('return (')).toBeGreaterThan(guard!.index);
+  });
+
+  it('shows every colour token on :root in the style guide', () => {
+    const page = read('src/app/dev/styleguide/page.tsx');
+    const root = /^:root \{([\s\S]*?)^\}/mu.exec(read('src/index.css'))![1]!;
+    const tokens = [...root.matchAll(/^\s*(--[a-z0-9-]+):/gmu)]
+      .map(([, name]) => name!)
+      .filter((name) => !['--radius', '--app-shell-max-width'].includes(name));
+    expect(tokens.length).toBeGreaterThan(40);
+    expect(tokens.filter((name) => !page.includes(`name: '${name}'`))).toEqual([]);
+  });
+
   it('opts in only the canonical local and Playwright harnesses', () => {
     const localStack = read('Scripts/dev/full-local-stack.sh');
     const playwrightConfig = read('playwright.config.ts');
