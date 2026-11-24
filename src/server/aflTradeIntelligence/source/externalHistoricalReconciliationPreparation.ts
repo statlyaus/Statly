@@ -5,6 +5,7 @@ import {
   parseAflTradeExternalIdentityResolution,
   reconcileAflTradeExternalEvidence,
 } from './externalEvidenceReconciliation';
+import { aflTradeBidLadderSchema } from './draftguruOrderBidMatchReconciliation';
 import { buildAflTradeExternalIdentityReviewPackage } from './externalIdentityReviewWorkBuilder';
 import { parseAflTradeExternalReconciliationCandidate } from './externalReconciliationCandidateContracts';
 import type { AflTradeHistoricalCompletionReconciliationAuthority } from './externalReconciliationSourceAuthorityContracts';
@@ -28,6 +29,11 @@ const inputSchema = z
       .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
       .strict()
       .optional(),
+    /**
+     * `--bid-ladder`: the owner's ladder for the order's matched bids (owner, 2026-11-24), recorded on
+     * each bid it prices. Without it every such bid records no position; a candidate with no order bid is unchanged.
+     */
+    bidLadder: aflTradeBidLadderSchema.optional(),
   })
   .strict();
 
@@ -235,6 +241,7 @@ export async function prepareAflTradeHistoricalReconciliation(
       identityResolutions,
       sourceAuthority: source.sourceAuthority,
       reconciledAt,
+      ...(input.bidLadder === undefined ? {} : { bidLadder: input.bidLadder }),
       ...(input.pickLineageDeferral === undefined
         ? {}
         : {

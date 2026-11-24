@@ -1092,6 +1092,32 @@ supersede production Gate authority, and production execution cannot reuse non-p
    slot is not re-keyed never fits (re-keying it alone would retire that sibling) and stays on its
    number-only id.
 
+   **The bid ladder (2026 matched bids, owner 2026-11-24).** A candidate over a Draftguru post-draft
+   order with matched bids needs the owner's ladder to price them: each matching club's final ranking
+   that season, finals included, keyed by the Draftguru club id the order rows name. Add
+   `--bid-ladder <absolute-path.json>` to the prepare command (with or without
+   `--defer-pick-lineage`); the file is:
+
+   ```json
+   {
+     "schemaVersion": "afl-trade-bid-ladder/v1",
+     "season": 2026,
+     "basis": "final_ranking_including_finals",
+     "source": "<where the owner read the ladder>",
+     "positions": {
+       "port-adelaide": 0,
+       "carlton": 0,
+       "greater-western-sydney": 0,
+       "western-bulldogs": 0
+     }
+   }
+   ```
+
+   with each `0` replaced by the club's position (1 to 18; no two clubs share one). Preparation records
+   the position on each bid (`draftOrderBidMatches[].ladderPosition`); a club the file leaves out is
+   recorded as null and its bid is refused (`ladder_position_missing`). Without the option every order
+   bid records no position (a candidate with no order bid is unchanged). A wrong position is corrected by preparing again with a corrected file.
+
 8. Register each immutable reviewed URL schedule once with
    `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
    schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This

@@ -1041,6 +1041,276 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     };
     expect(buildAflTradeStructure(withBids)).toEqual(buildAflTradeStructure(base));
   });
+
+  // Owner, 2026-11-24: the 2026 bids the Draftguru post-draft order states, priced by the 2026 DVI at
+  // the owner's ladder. Synthetic: GWS matched Ethan Matthews' bid at 6 with its own pick 8 and pick
+  // 13 (Melbourne's, via Port Adelaide); the leftover became pick 13, Jake Eime.
+  describe('Draftguru order bids (2026)', () => {
+    type OrderBid = NonNullable<Candidate['draftOrderBidMatches']>[number];
+    type OrderRow = NonNullable<Candidate['draftOrderPicks']>[number];
+    const PICK_G13 = `draft-pick:${hex('e')}`;
+    const PICK_N26 = `draft-pick:${hex('f')}`;
+    const ORDER = (digit: string) => `external-draft-order-pick:${hex(digit)}`;
+    const BID = `external-draft-order-bid-match:${hex('a')}`;
+    const evidenceIds = [`external-evidence:${hex('e')}`];
+    const orderRow = (orderPickId: string, fields: Partial<OrderRow>): OrderRow => ({
+      orderPickId,
+      draftYear: 2026,
+      draftType: 'national',
+      roundNumber: 1,
+      pickNumber: null,
+      clubId: 'gws',
+      outcome: 'bid_spent',
+      playerId: 'matthews',
+      asPick: null,
+      hopTransferIds: [],
+      evidenceIds,
+      ...fields,
+    });
+    const matthewsBid = (fields: Partial<OrderBid> = {}): OrderBid => ({
+      bidMatchId: BID,
+      draftYear: 2026,
+      draftType: 'national',
+      roundNumber: 1,
+      selectionNumber: 6,
+      clubId: 'gws',
+      playerId: 'matthews',
+      bidClubId: 'essendon',
+      basis: 'next_generation_academy',
+      spentPicks: [
+        { asPick: 8, orderPickId: ORDER('1'), routeClubIds: ['gws'], originKind: 'entitlement' },
+        {
+          asPick: 13,
+          orderPickId: ORDER('2'),
+          routeClubIds: ['melbourne', 'port_adelaide', 'gws'],
+          originKind: 'entitlement',
+        },
+      ],
+      leftoverPicks: [{ orderPickId: ORDER('3'), pickNumber: 13, playerId: 'eime' }],
+      ladderPosition: 12,
+      evidenceIds,
+      ...fields,
+    });
+    /** The fixture plus the 2026 trade of pick 13 to GWS, its order rows and, when given, the bid. */
+    const with2026 = (
+      bid: OrderBid | null,
+      extra: { hop?: string | null; nomineeCountPick?: boolean; board?: boolean } = {}
+    ) => {
+      const base = inputs();
+      const candidate = base.candidate;
+      return createAflTradeAssetLedger(
+        {
+          ...base,
+          candidate: {
+            ...candidate,
+            transactions: [...candidate.transactions, trade('tx-g', 2026)],
+            transfers: [
+              ...candidate.transfers,
+              pick('tr-g13', 'tx-g', 'melbourne', 'gws', PICK_G13, 2026),
+              ...(extra.nomineeCountPick
+                ? [pick('tr-n26', 'tx-g', 'melbourne', 'gws', PICK_N26, 2026)]
+                : []),
+            ],
+            pickOutcomes: [
+              ...candidate.pickOutcomes!,
+              outcome('tr-g13', { nominationBasis: 'order_bid_spent', orderPickId: ORDER('2') }),
+              ...(extra.nomineeCountPick
+                ? [
+                    outcome('tr-n26', {
+                      nominationBasis: 'club_took_nominated_player',
+                      receivingClubNominatedSelections: 1,
+                    }),
+                  ]
+                : []),
+            ],
+            draftSelections: [
+              ...candidate.draftSelections!,
+              {
+                ...selection('sel-m', `draft-pick:${hex('d')}`, 'matthews', 'gws', 6),
+                draftYear: 2026,
+              },
+            ],
+            ...(extra.board ? { draftBoardBidMatches: [darcyBid()] } : {}),
+            pickCustody: [
+              ...candidate.pickCustody!,
+              ...(extra.board
+                ? [{ ...custody('cu-3', PICK_MATCHED, 2021, 34), originalClubId: 'essendon' }]
+                : []),
+            ],
+            draftOrderPicks: [
+              orderRow(ORDER('1'), { asPick: 8 }),
+              orderRow(ORDER('2'), {
+                asPick: 13,
+                hopTransferIds: [extra.hop === undefined ? 'tr-g13' : extra.hop],
+              }),
+              orderRow(ORDER('3'), {
+                outcome: 'selected',
+                pickNumber: 13,
+                playerId: 'eime',
+              }),
+            ],
+            ...(bid === null ? {} : { draftOrderBidMatches: [bid] }),
+          },
+        },
+        labels
+      );
+    };
+
+    it('gives GWS’s pick 13 its share of Matthews: 50.1 of the 1,493.1 price', () => {
+      expect(with2026(matthewsBid()).pickOutcome(PICK_G13)).toEqual({
+        kind: 'matched_bid',
+        status: 'shared',
+        basis: 'order_bid_spent',
+        matchedBidBoardPickIds: [],
+        bidMatchId: BID,
+        nomineePlayerId: 'matthews',
+        countedPoints: 50.1,
+        share: 501 / 14931,
+        use: 'partial',
+        // Matthews has played no season at GWS yet: his first stint so far is worth 0.
+        value: 0,
+      });
+    });
+
+    it('lists the bid with its 2026 price, the leftover and each spent pick by its order row', () => {
+      const bid = with2026(matthewsBid()).ledger.content.bidMatches.at(-1)!;
+      expect(bid).toMatchObject({
+        bidMatchId: BID,
+        source: 'draftguru_order',
+        ladderPosition: 12,
+        nominee: { selectionId: 'sel-m', playerId: 'matthews' },
+        pricing: {
+          status: 'shared',
+          ruleId: 'afl-bid-price-2026-ladder',
+          pricePoints: 1493.1,
+          leftover: {
+            spentNativePickId: ORDER('2'),
+            remainderPoints: 1029.9,
+            boardLeftoverPickIds: [ORDER('3')],
+          },
+          deficit: null,
+        },
+        orderLeftovers: [{ orderPickId: ORDER('3'), pickNumber: 13, playerId: 'eime' }],
+      });
+      expect(
+        bid.spentPicks.map(({ label, pointsUsed, link, pickId, countedPoints, viaClubIds }) => [
+          label,
+          pointsUsed,
+          link,
+          pickId,
+          countedPoints,
+          viaClubIds,
+        ])
+      ).toEqual([
+        // GWS's own pick 8 was never traded, so no candidate pick is it.
+        ['Pick 8', 1443, 'order_row_untied', null, 1443, []],
+        ['Pick 13', 1080, 'order_row', PICK_G13, 50.1, ['port_adelaide']],
+      ]);
+      expect(bid.spentPicks[1]).toMatchObject({
+        originalClubId: 'melbourne',
+        originKind: 'entitlement',
+      });
+    });
+
+    it('leaves the pick as it was when the bid cannot be priced, as with no ladder position', () => {
+      const ledger = with2026(matthewsBid({ ladderPosition: null }));
+      expect(ledger.pickOutcome(PICK_G13)).toEqual({
+        kind: 'matched_bid',
+        status: 'pending',
+        basis: 'order_bid_spent',
+        matchedBidBoardPickIds: [],
+        pendingReason: 'bid_unpriced',
+      });
+      expect(ledger.ledger.content.bidMatches.at(-1)!.pricing).toMatchObject({
+        status: 'refused',
+        reason: 'ladder_position_missing',
+      });
+      // A deficit over the 412 points the AFL allows is refused too (Port at 1 with 6 and 22, 5th-10th).
+      const port = with2026(
+        matthewsBid({
+          selectionNumber: 1,
+          ladderPosition: 7,
+          spentPicks: [
+            {
+              asPick: 6,
+              orderPickId: ORDER('1'),
+              routeClubIds: ['gws'],
+              originKind: 'entitlement',
+            },
+            {
+              asPick: 22,
+              orderPickId: ORDER('2'),
+              routeClubIds: ['gws'],
+              originKind: 'entitlement',
+            },
+          ],
+          leftoverPicks: [],
+        })
+      );
+      expect(port.pickOutcome(PICK_G13)).toMatchObject({
+        status: 'pending',
+        pendingReason: 'bid_unpriced',
+      });
+      expect(port.ledger.content.bidMatches.at(-1)!.pricing).toMatchObject({
+        reason: 'deficit_over_limit',
+      });
+    });
+
+    it('never joins an order spend by number: a row whose last hop ties nothing names no pick', () => {
+      const ledger = with2026(matthewsBid(), { hop: null });
+      expect(ledger.pickOutcome(PICK_G13)).toMatchObject({
+        status: 'pending',
+        pendingReason: 'bid_unpriced',
+      });
+      expect(ledger.ledger.content.bidMatches.at(-1)!.spentPicks[1]).toMatchObject({
+        link: 'order_row_untied',
+        pickId: null,
+        countedPoints: 50.1,
+      });
+    });
+
+    it('keeps every 2026 nominee-count pick pending, the same before and after the order’s bids', () => {
+      // The order's bids are not a board: they never turn a nominee-count pick into "not used".
+      const nomineeCount = (ledger: ReturnType<typeof with2026>) =>
+        ledger.ledger.content.picks
+          .filter(
+            ({ draftYear, outcome }) =>
+              draftYear === 2026 &&
+              outcome.kind === 'matched_bid' &&
+              outcome.basis === 'nominee_count'
+          )
+          .map(({ pickId, outcome }) => [pickId, outcome]);
+      const before = nomineeCount(with2026(null, { nomineeCountPick: true }));
+      const after = nomineeCount(with2026(matthewsBid(), { nomineeCountPick: true }));
+      expect(before).toEqual([
+        [
+          PICK_N26,
+          {
+            kind: 'matched_bid',
+            status: 'pending',
+            basis: 'nominee_count',
+            matchedBidBoardPickIds: [],
+            pendingReason: 'no_bid_spend',
+          },
+        ],
+      ]);
+      expect(after).toEqual(before);
+    });
+
+    it('leaves every 2019-2025 bid and pick exactly as it was without the order’s bids', () => {
+      const without = with2026(null, { board: true }).ledger.content;
+      const withOrder = with2026(matthewsBid(), { board: true }).ledger.content;
+      const before2026 = (content: typeof without) => ({
+        bidMatches: content.bidMatches.filter(({ draftYear }) => draftYear < 2026),
+        picks: content.picks.filter(({ draftYear }) => draftYear < 2026),
+      });
+      expect(before2026(withOrder)).toEqual(before2026(without));
+      // Darcy's 2021 board bid still shares pick 34, and its record carries no order field.
+      expect(withOrder.bidMatches[0]).toEqual(without.bidMatches[0]);
+      expect(withOrder.bidMatches[0]).not.toHaveProperty('source');
+      expect(withOrder.bidMatches).toHaveLength(2);
+    });
+  });
 });
 
 describe('asset ledger not-used picks (#1050, rules R1 and R2)', () => {

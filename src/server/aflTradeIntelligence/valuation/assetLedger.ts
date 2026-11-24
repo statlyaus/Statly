@@ -14,6 +14,7 @@ import {
 } from './assetLedgerContracts';
 import {
   aflTradeAssetLedgerBidMatches,
+  aflTradeAssetLedgerOrderBidMatches,
   aflTradeAssetLedgerShareMatchedBid,
   type AflTradeAssetLedgerTradedEntitlement,
 } from './assetLedgerBidMatches';
@@ -180,7 +181,7 @@ function picksOf(
         draftYear: pick.draftYear,
         draftType: pick.draftType,
         trail,
-        // A pick a board lists as spent on a bid takes its share of the nominee (issue 789).
+        // A pick a board or the order lists as spent on a bid takes its share of the nominee.
         outcome:
           outcome.kind === 'matched_bid' && outcome.status === 'pending'
             ? aflTradeAssetLedgerShareMatchedBid(
@@ -249,12 +250,17 @@ export function createAflTradeAssetLedger(
 ): AflTradeAssetLedgerReadModel {
   const stintValue = createAflTradeAssetLedgerStintValue(inputs);
   const players = playersOf(inputs, labels, stintValue);
-  const bidMatches = aflTradeAssetLedgerBidMatches(
-    inputs.candidate,
-    stintValue,
-    tradedEntitlementsOf(inputs),
-    holdersAtDraftOf(inputs)
-  );
+  // The boards' bids first, then the order's (2026 on, owner 2026-11-24), so a ledger without order
+  // bids lists exactly what it did before them.
+  const bidMatches = [
+    ...aflTradeAssetLedgerBidMatches(
+      inputs.candidate,
+      stintValue,
+      tradedEntitlementsOf(inputs),
+      holdersAtDraftOf(inputs)
+    ),
+    ...aflTradeAssetLedgerOrderBidMatches(inputs.candidate, stintValue),
+  ];
   const picks = picksOf(inputs, stintValue, bidMatches);
   const content: AflTradeAssetLedgerContent = {
     schemaVersion: AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION,

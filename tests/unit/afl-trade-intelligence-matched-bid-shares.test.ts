@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parseFootyinfoDraftBoard } from '@/server/aflTradeIntelligence/source/footyinfoDraftBoardAdapter';
 import {
   aflTradeMatchedBidPrice,
+  aflTradeMatchedBidSlotPoints,
   AFL_TRADE_MATCHED_BID_PRICE_RULES,
 } from '@/server/aflTradeIntelligence/valuation/matchedBidPriceRules';
 import {
@@ -112,16 +113,17 @@ describe('matched-bid prices by draft year (issue 789)', () => {
       status: 'refused',
       reason: 'rule_missing',
     });
-    // 2026 on: the ladder rule's 19-club values are not published, and no 2026 bid exists yet.
+    // A rule whose values are not published refuses every bid.
+    const unpublished = AFL_TRADE_MATCHED_BID_PRICE_RULES.map((rule) =>
+      rule.ruleId === 'afl-bid-price-2026-ladder' ? { ...rule, valuesPublished: false } : rule
+    );
     expect(
-      aflTradeMatchedBidPrice({
-        draftYear: 2026,
-        selectionNumber: 3,
-        roundNumber: 1,
-        points: 2234,
-        ladderPosition: 1,
-      })
+      aflTradeMatchedBidPrice(
+        { draftYear: 2026, selectionNumber: 3, roundNumber: 1, points: 2178, ladderPosition: 1 },
+        unpublished
+      )
     ).toMatchObject({ status: 'refused', reason: 'rule_values_missing' });
+    expect(aflTradeMatchedBidSlotPoints(2026, 6, unpublished)).toBeNull();
     // 2019 to 2024 need the round, and a bid after pick 56 follows a rule no board needs.
     expect(
       aflTradeMatchedBidPrice({
@@ -145,25 +147,191 @@ describe('matched-bid prices by draft year (issue 789)', () => {
     });
   });
 
-  it('keeps the 2026 ladder bands as data, refused until their values are published', () => {
-    const published = AFL_TRADE_MATCHED_BID_PRICE_RULES.map((rule) =>
-      rule.ruleId === 'afl-bid-price-2026-ladder' ? { ...rule, valuesPublished: true } : rule
+  it('prices 2026 bids by the ladder bands the AFL states, and nothing it does not', () => {
+    const bid = { draftYear: 2026, selectionNumber: 10, roundNumber: 1, points: 1276 };
+    const at = (ladderPosition: number | null, selectionNumber = 10) =>
+      aflTradeMatchedBidPrice({ ...bid, selectionNumber, ladderPosition });
+    // 1st-2nd: 20% loading to 18; 3rd-4th: 10%; 5th-10th: none; 11th-18th: 10% off to 36.
+    expect(at(1)).toMatchObject({ ruleId: 'afl-bid-price-2026-ladder', priceTenths: 15312 });
+    expect(at(4)).toMatchObject({ priceTenths: 14036 });
+    expect(at(7)).toMatchObject({ priceTenths: 12760 });
+    expect(at(12)).toMatchObject({ priceTenths: 11484 });
+    // From 19 a top-four club pays the DVI, as a 5th-10th club does to 36; 11th-18th stays 10% off.
+    expect(at(2, 20)).toMatchObject({ priceTenths: 12760 });
+    expect(at(9, 36)).toMatchObject({ priceTenths: 12760 });
+    expect(at(18, 36)).toMatchObject({ priceTenths: 11484 });
+    // From 37 the club's next pick pays, whatever its ladder position, even an unknown one.
+    expect(at(null, 37)).toMatchObject({ status: 'priced', priceTenths: null });
+    expect(at(null)).toMatchObject({ reason: 'ladder_position_missing' });
+    // A 19th club (from 2027) has no band yet.
+    expect(at(19)).toMatchObject({ reason: 'band_missing' });
+    expect(AFL_TRADE_MATCHED_BID_PRICE_RULES.at(-1)).toMatchObject({
+      maximumSpentPicks: 2,
+      maximumDeficitPoints: 412,
+    });
+  });
+
+  it('reads 2026 slot points from the AFL DVI, and none outside it or before 2026', () => {
+    expect(
+      [1, 6, 8, 13, 22, 33, 43, 53, 54].map((slot) => aflTradeMatchedBidSlotPoints(2026, slot))
+    ).toEqual([3000, 1659, 1443, 1080, 686, 382, 184, 28, 14]);
+    expect(aflTradeMatchedBidSlotPoints(2026, 55)).toBeNull();
+    expect(aflTradeMatchedBidSlotPoints(2026, 0)).toBeNull();
+    // Earlier years' bids state their own points (the boards); no DVI is stored for them.
+    expect(aflTradeMatchedBidSlotPoints(2025, 6)).toBeNull();
+    const dvi = AFL_TRADE_MATCHED_BID_PRICE_RULES.at(-1)!.dvi!;
+    expect(dvi).toHaveLength(54);
+    expect(dvi.every((points, index) => index === 0 || points < dvi[index - 1]!)).toBe(true);
+  });
+});
+
+/**
+ * The four 2026 bids as Draftguru's post-draft order states them (synthetic: slots only, points from
+ * the AFL 2026 DVI), at the owner's 2026 ladder (final ranking including finals): Western Bulldogs
+ * 7th, Carlton 8th, GWS 12th, Port Adelaide 15th.
+ */
+describe('2026 matched-bid shares (owner, 2026-11-24)', () => {
+  const LADDER_2026 = { bulldogs: 7, carlton: 8, gws: 12, port: 15 };
+  const dvi = (slot: number) => aflTradeMatchedBidSlotPoints(2026, slot)!;
+  const bid2026 = (
+    selectionNumber: number,
+    usingPicks: readonly number[],
+    ladderPosition: number | null,
+    leftoverPicks: AflTradeMatchedBidShareInput['leftoverPicks'] = []
+  ): AflTradeMatchedBidShareInput => ({
+    draftYear: 2026,
+    selectionNumber,
+    roundNumber: 1,
+    points: dvi(selectionNumber),
+    ladderPosition,
+    consumedPicks: usingPicks.map((slot) => spent(`as-${slot}`, dvi(slot))),
+    leftoverPicks,
+  });
+
+  it('prices Port Adelaide’s match for Dougie Cochrane at 1 with picks 6 and 22', () => {
+    // 1,659 + 686 = 2,345. At no adjustment the deficit would be 655, over the 412 the AFL allows.
+    expect(aflTradeMatchedBidShares(bid2026(1, [6, 22], 7))).toMatchObject({
+      status: 'refused',
+      reason: 'deficit_over_limit',
+    });
+    expect(aflTradeMatchedBidShares(bid2026(1, [6, 22], LADDER_2026.port))).toEqual({
+      status: 'shared',
+      ruleId: 'afl-bid-price-2026-ladder',
+      pricePoints: 2700,
+      picks: [
+        {
+          nativePickId: 'as-6',
+          pointsUsed: 1659,
+          countedPoints: 1659,
+          share: 1659 / 2700,
+          use: 'full',
+        },
+        {
+          nativePickId: 'as-22',
+          pointsUsed: 686,
+          countedPoints: 686,
+          share: 686 / 2700,
+          use: 'full',
+        },
+      ],
+      leftover: null,
+      deficit: { points: 355, against: 'next_draft_first_pick' },
+    });
+  });
+
+  it('prices Carlton’s match for Cody Walker at 3 with picks 15 and 18', () => {
+    // 973 + 836 = 1,809 against 2,178 (8th: no adjustment), 369 short.
+    expect(aflTradeMatchedBidShares(bid2026(3, [15, 18], LADDER_2026.carlton))).toMatchObject({
+      status: 'shared',
+      pricePoints: 2178,
+      picks: [
+        { countedPoints: 973, share: 973 / 2178, use: 'full' },
+        { countedPoints: 836, share: 836 / 2178, use: 'full' },
+      ],
+      leftover: null,
+      deficit: { points: 369, against: 'next_draft_first_pick' },
+    });
+    // At 11th-18th it would be 10% off, 1,960.2.
+    const shares = aflTradeMatchedBidShares(bid2026(3, [15, 18], 12));
+    expect(shares).toMatchObject({
+      pricePoints: 1960.2,
+      picks: [
+        { countedPoints: 973, share: 973 / 1960.2, use: 'full' },
+        { countedPoints: 836, share: 836 / 1960.2, use: 'full' },
+      ],
+      leftover: null,
+    });
+    if (shares.status !== 'shared') throw new Error('unreachable');
+    expect(shares.deficit!.points).toBeCloseTo(151.2, 10);
+  });
+
+  it('prices GWS’s match for Ethan Matthews at 6: pick 13 partly used, its rest Jake Eime’s pick 13', () => {
+    const shares = aflTradeMatchedBidShares(
+      bid2026(6, [8, 13], LADDER_2026.gws, [{ nativePickId: 'eime-13', points: null }])
     );
-    const bid = { draftYear: 2026, selectionNumber: 10, roundNumber: 1, points: 1000 };
-    expect(aflTradeMatchedBidPrice({ ...bid, ladderPosition: 1 }, published)).toMatchObject({
-      priceTenths: 12000,
+    // 10% off 1,659 is 1,493.1: pick 8 counts its 1,443, pick 13 the 50.1 still owed of its 1,080.
+    expect(shares).toMatchObject({
+      status: 'shared',
+      pricePoints: 1493.1,
+      picks: [
+        { nativePickId: 'as-8', countedPoints: 1443, use: 'full' },
+        { nativePickId: 'as-13', countedPoints: 50.1, use: 'partial' },
+      ],
+      leftover: {
+        spentNativePickId: 'as-13',
+        remainderPoints: 1029.9,
+        boardLeftoverPickIds: ['eime-13'],
+      },
+      deficit: null,
     });
-    expect(aflTradeMatchedBidPrice({ ...bid, ladderPosition: 12 }, published)).toMatchObject({
-      priceTenths: 9000,
+    expect(sumShares(shares)).toBeCloseTo(1, 12);
+  });
+
+  it('prices the Bulldogs’ match for Khaled El Souki at 33 with picks 43 and 53', () => {
+    // 184 + 28 = 212 against 382 (7th: no adjustment): a deficit of 170, within the 412 allowed.
+    expect(aflTradeMatchedBidShares(bid2026(33, [43, 53], LADDER_2026.bulldogs))).toEqual({
+      status: 'shared',
+      ruleId: 'afl-bid-price-2026-ladder',
+      pricePoints: 382,
+      picks: [
+        {
+          nativePickId: 'as-43',
+          pointsUsed: 184,
+          countedPoints: 184,
+          share: 184 / 382,
+          use: 'full',
+        },
+        { nativePickId: 'as-53', pointsUsed: 28, countedPoints: 28, share: 28 / 382, use: 'full' },
+      ],
+      leftover: null,
+      deficit: { points: 170, against: 'next_draft_first_pick' },
     });
-    expect(aflTradeMatchedBidPrice({ ...bid, ladderPosition: null }, published)).toMatchObject({
+    // At 11th-18th it would be 343.8, 131.8 short.
+    const shares = aflTradeMatchedBidShares(bid2026(33, [43, 53], 16));
+    expect(shares).toMatchObject({
+      pricePoints: 343.8,
+      picks: [
+        { countedPoints: 184, share: 184 / 343.8 },
+        { countedPoints: 28, share: 28 / 343.8 },
+      ],
+    });
+    if (shares.status !== 'shared') throw new Error('unreachable');
+    expect(shares.deficit!.points).toBeCloseTo(131.8, 10);
+  });
+
+  it('refuses a 2026 bid with no ladder position, more than two picks, or a deficit over the cap', () => {
+    expect(aflTradeMatchedBidShares(bid2026(6, [8, 13], null))).toMatchObject({
       reason: 'ladder_position_missing',
     });
-    // What a top-two club pays from 19 is not stated: no band, no price.
-    expect(
-      aflTradeMatchedBidPrice({ ...bid, selectionNumber: 20, ladderPosition: 1 }, published)
-    ).toMatchObject({
-      reason: 'band_missing',
+    expect(aflTradeMatchedBidShares(bid2026(1, [6, 22, 30], 14))).toMatchObject({
+      reason: 'spent_picks_over_limit',
+    });
+    // The cap is a rule field: a corrected cap changes what is refused, nothing else.
+    const capped = AFL_TRADE_MATCHED_BID_PRICE_RULES.map((rule) =>
+      rule.ruleId === 'afl-bid-price-2026-ladder' ? { ...rule, maximumDeficitPoints: 300 } : rule
+    );
+    expect(aflTradeMatchedBidShares(bid2026(1, [6, 22], 14), capped)).toMatchObject({
+      reason: 'deficit_over_limit',
     });
   });
 });

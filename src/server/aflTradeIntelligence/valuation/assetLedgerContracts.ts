@@ -104,7 +104,8 @@ interface MatchedBidOutcomeBase {
    * `nominee_count`: only that the club took a nominee in the draft, so the pick may have been spent
    * matching the bid.
    * `order_bid_spent`: Draftguru's post-draft order states the pick was spent matching a bid (owner
-   * approval 4 of the 2026 intake); it waits on the year's bid price.
+   * approval 4 of the 2026 intake); it takes its share once the order's matched bid is priced (owner,
+   * 2026-11-24), and stays pending until then.
    */
   readonly basis: 'board_matched_bid' | 'nominee_count' | 'order_bid_spent';
   readonly matchedBidBoardPickIds: readonly string[];
@@ -143,7 +144,17 @@ export type AflTradeAssetLedgerBidSpendLink =
   | 'unnumbered'
   | 'club_unresolved'
   | 'no_custody'
-  | 'ambiguous_custody';
+  | 'ambiguous_custody'
+  /**
+   * A Draftguru order bid (owner, 2026-11-24): the spent order row's last hop ties the transfer of this
+   * pick, so the pick is the row's own, never joined by number.
+   */
+  | 'order_row'
+  /**
+   * The spent order row ties no traded pick: the club's own pick, a row whose last hop is untied, or
+   * spent rows that are not exactly the numbers the bid row lists.
+   */
+  | 'order_row_untied';
 
 export interface AflTradeAssetLedgerBidSpentPick {
   readonly nativePickId: string;
@@ -159,11 +170,31 @@ export interface AflTradeAssetLedgerBidSpentPick {
   readonly use: 'full' | 'partial' | null;
   /** `share` × the nominee's first-stint value; null when either is missing. */
   readonly value: number | null;
+  /**
+   * A Draftguru order bid's spent pick only: the live slot it was spent as (its points are the year's
+   * DVI there), the clubs it passed through between its original club and the holder, and its origin.
+   */
+  readonly asPick?: number;
+  readonly viaClubIds?: readonly (string | null)[];
+  readonly originKind?: 'entitlement' | 'compensation' | 'leftover_points' | null;
 }
 
-/** One board matched bid: its price by the year's AFL rule and each spent pick's share. */
+/** One matched bid: its price by the year's AFL rule and each spent pick's share. */
 export interface AflTradeAssetLedgerBidMatch {
   readonly bidMatchId: string;
+  /**
+   * `draftguru_order`: stated by a Draftguru post-draft order (2026 on, owner 2026-11-24). Absent for
+   * a Footyinfo board's bid, so those records are unchanged.
+   */
+  readonly source?: 'draftguru_order';
+  /** An order bid only: the matching club's position on the owner's recorded ladder, or null. */
+  readonly ladderPosition?: number | null;
+  /** An order bid only: the leftover-points rows the match created, with their number and player. */
+  readonly orderLeftovers?: readonly {
+    readonly orderPickId: string;
+    readonly pickNumber: number | null;
+    readonly playerId: string | null;
+  }[];
   readonly draftYear: number;
   readonly draftType: string;
   readonly selectionNumber: number;

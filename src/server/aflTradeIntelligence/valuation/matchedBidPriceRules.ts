@@ -10,8 +10,14 @@
  *   a later bid is 197 points off (the 20% discount at pick 18). AFL 42435, 526342, 1428548.
  * - 2025: a new DVI (points to pick 54); 10% off selections 1 to 18, 84 points off 19 to 36, and from
  *   37 the club's next selection. AFL 1185312.
- * - 2026 on: a ladder-based loading or discount, at most two picks to match a bid up to 36, on a DVI
- *   adjusted for 19 clubs whose values are not published. AFL 1508308.
+ * - 2026: a loading or discount by the matching club's finishing position that season (final ranking
+ *   including finals): 1st-2nd 20% loading and 3rd-4th 10% loading on bids 1 to 18, no adjustment for
+ *   them from 19 to 36; 5th-10th no adjustment on 1 to 36; 11th-18th 10% off 1 to 36; at most two
+ *   current-draft picks for a bid up to 36; from 37 the club's next pick; a deficit of up to 412 DVI
+ *   points off the club's next first-round pick. The 2026 DVI (54 slots) is the AFL's draft order page.
+ *   AFL 1508240 (rules), AFL 1508308 (examples), https://www.afl.com.au/draft/draft-order (DVI);
+ *   owner-approved 2026-11-24. The rule also needs the club to hold a first-round pick in the next
+ *   draft for any deficit; that is not modelled (no 2026 bid is refused or priced by it).
  */
 
 /** How a band turns the bid's DVI points into a price. */
@@ -49,6 +55,16 @@ export interface AflTradeMatchedBidPriceRule {
   readonly valuesPublished: boolean;
   /** The most picks a club may spend; null when the rule sets no limit. */
   readonly maximumSpentPicks: number | null;
+  /**
+   * The largest deficit the rule allows, in DVI points; a bigger one is refused, never priced. Null
+   * when the rule sets no limit. A field so it can be corrected once the AFL text is verified.
+   */
+  readonly maximumDeficitPoints: number | null;
+  /**
+   * The year's DVI points by slot (index 0 is pick 1), when the bid's evidence does not state them and
+   * the rule's source publishes them. Absent when every bid states its own points (a Footyinfo board).
+   */
+  readonly dvi?: readonly number[];
   /** Bands in order: the first that matches prices the bid. */
   readonly bands: readonly AflTradeMatchedBidPriceBand[];
 }
@@ -61,6 +77,7 @@ export const AFL_TRADE_MATCHED_BID_PRICE_RULES: readonly AflTradeMatchedBidPrice
     source: 'AFL 42435 (2015 rules); 20% confirmed for 2020 (AFL 526342) and 2022 (AFL 1428548)',
     valuesPublished: true,
     maximumSpentPicks: null,
+    maximumDeficitPoints: null,
     bands: [
       { rounds: { from: 1, through: 1 }, price: { kind: 'percent_off', percent: 20 } },
       {
@@ -80,6 +97,7 @@ export const AFL_TRADE_MATCHED_BID_PRICE_RULES: readonly AflTradeMatchedBidPrice
     source: 'AFL 1185312 (2025 rules)',
     valuesPublished: true,
     maximumSpentPicks: null,
+    maximumDeficitPoints: null,
     bands: [
       { selections: { from: 1, through: 18 }, price: { kind: 'percent_off', percent: 10 } },
       { selections: { from: 19, through: 36 }, price: { kind: 'points_off', points: 84 } },
@@ -87,15 +105,22 @@ export const AFL_TRADE_MATCHED_BID_PRICE_RULES: readonly AflTradeMatchedBidPrice
     ],
   },
   {
-    // The ladder bands as the AFL states them. The 19-club DVI is not published, nor is what a top
-    // club pays from 19 to 36 or any club after 36, so every bid is refused until they are.
+    // The ladder bands as the AFL states them; a club 19th or lower (from 2027) has no band yet.
     ruleId: 'afl-bid-price-2026-ladder',
     fromDraftYear: 2026,
     throughDraftYear: null,
-    source: 'AFL 1508308 (2026 rules)',
-    valuesPublished: false,
+    source:
+      'AFL 1508240 (2026 rules); AFL 1508308 examples; afl.com.au/draft/draft-order (2026 DVI)',
+    valuesPublished: true,
     maximumSpentPicks: 2,
+    maximumDeficitPoints: 412,
+    dvi: [
+      3000, 2481, 2178, 1962, 1795, 1659, 1543, 1443, 1355, 1276, 1205, 1140, 1080, 1024, 973, 924,
+      879, 836, 796, 757, 721, 686, 653, 621, 590, 561, 533, 505, 479, 454, 429, 405, 382, 360, 338,
+      317, 297, 277, 257, 238, 220, 202, 184, 167, 150, 134, 118, 102, 86, 71, 57, 42, 28, 14,
+    ],
     bands: [
+      { selections: { from: 37, through: null }, price: { kind: 'next_pick' } },
       {
         ladder: { from: 1, through: 2 },
         selections: { from: 1, through: 18 },
@@ -107,8 +132,13 @@ export const AFL_TRADE_MATCHED_BID_PRICE_RULES: readonly AflTradeMatchedBidPrice
         price: { kind: 'percent_off', percent: -10 },
       },
       {
+        ladder: { from: 1, through: 4 },
+        selections: { from: 19, through: 36 },
+        price: { kind: 'percent_off', percent: 0 },
+      },
+      {
         ladder: { from: 5, through: 10 },
-        selections: { from: 1, through: 18 },
+        selections: { from: 1, through: 36 },
         price: { kind: 'percent_off', percent: 0 },
       },
       {
@@ -135,7 +165,7 @@ export interface AflTradeMatchedBidPriceInput {
   readonly roundNumber: number | null;
   /** The bid slot's DVI points, as the board states them. */
   readonly points: number;
-  /** The matching club's ladder position, which only the 2026 rule reads. */
+  /** The matching club's finishing position that season, which only the 2026 rule reads. */
   readonly ladderPosition?: number | null;
 }
 
@@ -146,6 +176,7 @@ export type AflTradeMatchedBidPrice =
       readonly ruleId: string;
       readonly band: AflTradeMatchedBidPriceBand;
       readonly maximumSpentPicks: number | null;
+      readonly maximumDeficitPoints: number | null;
       /** Null for `next_pick`: the club's next selection pays in full. */
       readonly priceTenths: number | null;
     }
@@ -190,16 +221,34 @@ function priceTenths(adjustment: AflTradeMatchedBidPriceAdjustment, points: numb
   return null;
 }
 
+/** The year's rule for a draft, if one is recorded. */
+function ruleOf(draftYear: number, rules: readonly AflTradeMatchedBidPriceRule[]) {
+  return rules.find(
+    ({ fromDraftYear, throughDraftYear }) =>
+      draftYear >= fromDraftYear && (throughDraftYear === null || draftYear <= throughDraftYear)
+  );
+}
+
+/**
+ * A slot's DVI points from the year's rule, for evidence that states the slot but not its points (a
+ * Draftguru post-draft order row). Null when the rule publishes no DVI or none for that slot.
+ */
+export function aflTradeMatchedBidSlotPoints(
+  draftYear: number,
+  slot: number,
+  rules: readonly AflTradeMatchedBidPriceRule[] = AFL_TRADE_MATCHED_BID_PRICE_RULES
+): number | null {
+  const rule = ruleOf(draftYear, rules);
+  if (!rule?.valuesPublished || !Number.isInteger(slot) || slot < 1) return null;
+  return rule.dvi?.[slot - 1] ?? null;
+}
+
 /** The year's rule applied to one bid, or the reason it cannot be priced. Never a guess. */
 export function aflTradeMatchedBidPrice(
   bid: AflTradeMatchedBidPriceInput,
   rules: readonly AflTradeMatchedBidPriceRule[] = AFL_TRADE_MATCHED_BID_PRICE_RULES
 ): AflTradeMatchedBidPrice {
-  const rule = rules.find(
-    ({ fromDraftYear, throughDraftYear }) =>
-      bid.draftYear >= fromDraftYear &&
-      (throughDraftYear === null || bid.draftYear <= throughDraftYear)
-  );
+  const rule = ruleOf(bid.draftYear, rules);
   if (!rule)
     return refused('rule_missing', `No AFL bid-matching rule is recorded for ${bid.draftYear}.`);
   if (!rule.valuesPublished)
@@ -225,6 +274,7 @@ export function aflTradeMatchedBidPrice(
       ruleId: rule.ruleId,
       band,
       maximumSpentPicks: rule.maximumSpentPicks,
+      maximumDeficitPoints: rule.maximumDeficitPoints,
       priceTenths: tenths,
     };
   }

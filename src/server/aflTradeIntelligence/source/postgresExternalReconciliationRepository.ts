@@ -161,6 +161,7 @@ async function requireSourceEvidenceMembership(
     ...(candidate.content.draftBoardPicks ?? []),
     ...(candidate.content.draftBoardBidMatches ?? []),
     ...(candidate.content.draftOrderPicks ?? []),
+    ...(candidate.content.draftOrderBidMatches ?? []),
     ...candidate.content.issues,
   ];
   const evidenceIds = [

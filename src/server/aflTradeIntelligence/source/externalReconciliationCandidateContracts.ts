@@ -313,6 +313,61 @@ const draftOrderPickSchema = z
     'An order row has a number exactly when selected, a spent number exactly when spent, and no player when removed.'
   );
 
+const orderClubIdSchema = z.string().trim().min(1).max(240).nullable();
+
+/**
+ * One matched bid a Draftguru post-draft order states (owner, 2026-11-24), clubs and nominee
+ * resolved; see `draftguruOrderBidMatchReconciliation.ts`. Statements and the owner's recorded ladder
+ * position only: the price and shares are computed from it in valuation, never stored on it.
+ */
+const draftOrderBidMatchSchema = z
+  .object({
+    bidMatchId: aflTradeContentAddressedIdSchema('external-draft-order-bid-match'),
+    draftYear: z.number().int().min(1897).max(2200),
+    draftType: z.string().trim().min(1).max(80),
+    roundNumber: z.number().int().positive(),
+    selectionNumber: z.number().int().positive(),
+    clubId: orderClubIdSchema,
+    playerId: z.string().trim().min(1).max(240).nullable(),
+    bidClubId: orderClubIdSchema,
+    basis: z.enum(['father_son', 'academy', 'next_generation_academy']),
+    spentPicks: z
+      .array(
+        z
+          .object({
+            asPick: z.number().int().positive(),
+            orderPickId: aflTradeContentAddressedIdSchema('external-draft-order-pick').nullable(),
+            routeClubIds: z.array(orderClubIdSchema).max(17),
+            originKind: z.enum(['entitlement', 'compensation', 'leftover_points']).nullable(),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(16),
+    leftoverPicks: z
+      .array(
+        z
+          .object({
+            orderPickId: aflTradeContentAddressedIdSchema('external-draft-order-pick'),
+            pickNumber: z.number().int().positive().nullable(),
+            playerId: z.string().trim().min(1).max(240).nullable(),
+          })
+          .strict()
+      )
+      .max(8),
+    ladderPosition: z.number().int().min(1).max(19).nullable(),
+    evidenceIds: evidenceIdsSchema,
+  })
+  .strict()
+  .refine(
+    (record) =>
+      record.spentPicks.every(
+        ({ orderPickId, routeClubIds, originKind }) =>
+          orderPickId !== null || (routeClubIds.length === 0 && originKind === null)
+      ),
+    'Only a spent pick tied to its order row states a route.'
+  );
+
 /** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
 const draftBoardPickSchema = z
   .object({
@@ -527,6 +582,8 @@ const contentFieldsSchema = z
     draftBoardBidMatches: z.array(draftBoardBidMatchSchema).min(1).optional(),
     /** Present only when a Draftguru post-draft order was reconciled (2026 intake, approval 4). */
     draftOrderPicks: z.array(draftOrderPickSchema).min(1).optional(),
+    /** Present only when a Draftguru order states a matched bid (owner, 2026-11-24). */
+    draftOrderBidMatches: z.array(draftOrderBidMatchSchema).min(1).optional(),
     /**
      * The approved owner `reconciliation_scope` decision under which pick-side issues are `deferred`
      * (statlyaus/Statly#869). Present exactly when the candidate holds a deferred issue.
@@ -1033,6 +1090,10 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
       (content.draftBoardBidMatches ?? []).map(({ bidMatchId }) => bidMatchId),
     ],
     ['draftOrderPicks', (content.draftOrderPicks ?? []).map(({ orderPickId }) => orderPickId)],
+    [
+      'draftOrderBidMatches',
+      (content.draftOrderBidMatches ?? []).map(({ bidMatchId }) => bidMatchId),
+    ],
   ] as const;
   const relevantSeasonYears = new Set([
     ...content.transactions.map(({ seasonYear }) => seasonYear),
@@ -1052,6 +1113,25 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
   collections.forEach(([path, values]) => {
     if (duplicate(values))
       context.addIssue({ code: 'custom', path: [path], message: 'IDs must be unique.' });
+  });
+  // An order bid match names only order rows the candidate carries; each spent pick a spent row.
+  const orderRows = new Map(
+    (content.draftOrderPicks ?? []).map((row) => [row.orderPickId, row] as const)
+  );
+  (content.draftOrderBidMatches ?? []).forEach((bid, index) => {
+    const spentRowsAgree = bid.spentPicks.every(
+      ({ orderPickId, asPick }) =>
+        orderPickId === null ||
+        (orderRows.get(orderPickId)?.outcome === 'bid_spent' &&
+          orderRows.get(orderPickId)?.asPick === asPick)
+    );
+    if (!spentRowsAgree || bid.leftoverPicks.some(({ orderPickId }) => !orderRows.has(orderPickId)))
+      context.addIssue({
+        code: 'custom',
+        path: ['draftOrderBidMatches', index],
+        message:
+          'An order bid match cites only order rows the candidate carries, each spent pick a row spent as it.',
+      });
   });
   content.transfers.forEach((transfer, index) => {
     if (!transactionIds.has(transfer.transactionId)) {
