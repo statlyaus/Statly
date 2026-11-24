@@ -6,6 +6,9 @@ import type {
   AflDraftHistoryYearResponse,
 } from '@/server/aflTradeIntelligence/outcomes/draftHistoryReadService';
 
+import { tableStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
+
 import { DraftTeamLogo } from './DraftHubState';
 import { draftHubSectionPillClass, draftHubSubtlePanelClass } from './draftHubChrome';
 
@@ -312,33 +315,36 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                 ))}
               </div>
               <div className={`${draftHubSubtlePanelClass} hidden overflow-x-auto md:block`}>
-                <table className="w-full border-collapse text-left text-sm">
+                <table className={tableStyles.table}>
                   <caption className="sr-only">
                     Released AFL draft selections for {query.year}
                   </caption>
-                  <thead className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 font-semibold">
+                  <thead>
+                    <tr className={tableStyles.headRow}>
+                      <th scope="col" className={tableStyles.th}>
                         Pick
                       </th>
-                      <th scope="col" className="px-4 py-3 font-semibold">
+                      <th scope="col" className={tableStyles.th}>
                         Player
                       </th>
-                      <th scope="col" className="px-4 py-3 font-semibold">
+                      <th scope="col" className={tableStyles.th}>
                         Selected by
                       </th>
-                      <th scope="col" className="px-4 py-3 font-semibold">
+                      <th scope="col" className={tableStyles.th}>
                         Original club
                       </th>
-                      <th scope="col" className="px-4 py-3 font-semibold">
+                      <th scope="col" className={tableStyles.th}>
                         Pick movement
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {response.selections.map((selection) => (
-                      <tr key={selection.selectionId} className="align-top">
-                        <th scope="row" className="whitespace-nowrap px-4 py-4">
+                      <tr key={selection.selectionId} className={tableStyles.row}>
+                        <th
+                          scope="row"
+                          className={cn(tableStyles.td, 'whitespace-nowrap align-top')}
+                        >
                           <span className="text-base font-bold text-foreground">
                             #{selection.selectionNumber}
                           </span>
@@ -347,7 +353,7 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                             {draftKindLabel[selection.draftKind]}
                           </span>
                         </th>
-                        <td className="px-4 py-4">
+                        <td className={cn(tableStyles.td, 'align-top')}>
                           <span className="font-semibold text-foreground">
                             {selection.player.displayName}
                           </span>
@@ -357,17 +363,17 @@ export function AflDraftHistoryExplorer({ response, query, filterNotice = null }
                               : 'Player identity pending'}
                           </span>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className={cn(tableStyles.td, 'align-top')}>
                           <Club name={selection.club.name} />
                         </td>
-                        <td className="px-4 py-4">
+                        <td className={cn(tableStyles.td, 'align-top')}>
                           {selection.originalClub ? (
                             <Club name={selection.originalClub.name} />
                           ) : (
                             <span className="text-muted-foreground">Not recorded</span>
                           )}
                         </td>
-                        <td className="max-w-xs px-4 py-4">
+                        <td className={cn(tableStyles.td, 'max-w-xs align-top')}>
                           <Lineage selection={selection} />
                         </td>
                       </tr>

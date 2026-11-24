@@ -18,6 +18,7 @@ import {
   buttonStyles,
   fieldLabelStyles,
   fieldStyles,
+  tableStyles,
   textLinkStyles,
 } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
@@ -292,39 +293,36 @@ export function DraftClubTradeHistory({
             <p>No rows match your search.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto border border-border bg-card">
-            <table
-              aria-describedby="statly-trade-grade-note"
-              className="table w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"
-            >
+          <div className={tableStyles.frame}>
+            <table aria-describedby="statly-trade-grade-note" className={tableStyles.table}>
               <thead>
-                <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:text-muted-foreground">
-                  <th scope="col" className="text-left">
+                <tr className={tableStyles.headRow}>
+                  <th scope="col" className={tableStyles.th}>
                     Year
                   </th>
-                  <th scope="col" className="text-left tabular-nums">
+                  <th scope="col" className={cn(tableStyles.th, tableStyles.number)}>
                     #
                   </th>
-                  <th scope="col" className="text-left">
+                  <th scope="col" className={tableStyles.th}>
                     Trade
                   </th>
-                  <th scope="col" className="text-left">
+                  <th scope="col" className={tableStyles.th}>
                     Club return (raw)
                   </th>
-                  <th scope="col" className="text-right leading-tight tabular-nums">
+                  <th scope="col" className={cn(tableStyles.th, tableStyles.number)}>
                     At-trade grade
                   </th>
-                  <th scope="col" className="text-right leading-tight tabular-nums">
+                  <th scope="col" className={cn(tableStyles.th, tableStyles.number)}>
                     Current grade
                   </th>
                 </tr>
               </thead>
-              <tbody className="[&>tr]:border-b [&>tr]:border-border [&>tr:last-child]:border-b-0">
+              <tbody>
                 {filtered.map((ref) => (
-                  <tr key={ref.tradeId} className="hover:bg-muted">
-                    <td className="tabular-nums text-foreground">{ref.year}</td>
-                    <td className="tabular-nums text-foreground">{ref.seqInYear}</td>
-                    <td className="max-w-[min(28rem,40vw)]">
+                  <tr key={ref.tradeId} className={tableStyles.linkRow}>
+                    <td className={cn(tableStyles.td, 'tabular-nums')}>{ref.year}</td>
+                    <td className={cn(tableStyles.td, tableStyles.number)}>{ref.seqInYear}</td>
+                    <td className={cn(tableStyles.td, 'max-w-[min(28rem,40vw)]')}>
                       <Link
                         href={`/draft/trades/${ref.tradeId}`}
                         className={cn(textLinkStyles, 'font-medium')}
@@ -333,15 +331,15 @@ export function DraftClubTradeHistory({
                         {ref.title}
                       </Link>
                     </td>
-                    <td className="min-w-48 text-sm text-muted-foreground">
+                    <td className={cn(tableStyles.td, 'min-w-48 text-muted-foreground')}>
                       {ref.assetsRaw || 'No raw club return recorded'}
                     </td>
-                    <td className="text-right tabular-nums text-foreground">
+                    <td className={cn(tableStyles.td, tableStyles.number)}>
                       <StatlyGradeValue
                         grade={clubGrade(statlyValuesByTradeId[ref.tradeId]?.atTrade, clubName)}
                       />
                     </td>
-                    <td className="text-right tabular-nums text-foreground">
+                    <td className={cn(tableStyles.td, tableStyles.number)}>
                       <StatlyGradeValue
                         grade={clubGrade(statlyValuesByTradeId[ref.tradeId]?.current, clubName)}
                       />

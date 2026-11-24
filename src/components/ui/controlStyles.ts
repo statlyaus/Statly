@@ -156,6 +156,20 @@ export const fieldLabelStyles = 'flex flex-col gap-1 text-sm font-medium text-fo
 export const kbdStyles =
   'rounded-sm border border-border bg-muted px-1 font-sans text-[11px] font-semibold text-foreground';
 
+// Tables (style guide, "Tables"): one frame, a stone header row, hairline rules between rows and
+// never stripes, body rows at least 44px (py-3 around text-sm's 20px line), nothing centred. A number column puts
+// `number` on its header and its cells, so both sit right in tabular figures.
+export const tableStyles = {
+  frame: 'overflow-x-auto border border-border bg-card',
+  table: 'w-full border-collapse text-left text-sm',
+  headRow: 'border-b border-border bg-muted/50',
+  th: 'px-4 py-3 align-bottom text-xs font-semibold text-muted-foreground',
+  row: 'border-b border-border last:border-b-0',
+  linkRow: 'border-b border-border transition-colors last:border-b-0 hover:bg-muted/50',
+  td: 'px-4 py-3 align-middle',
+  number: 'text-right tabular-nums',
+} as const;
+
 export const textLinkStyles = `font-semibold text-foreground underline decoration-transparent underline-offset-4 hover:decoration-current ${focusOutline}`;
 
 // Floating things (menus, dialogs, sheets, popovers, toasts, tooltips) share the floating cut and
