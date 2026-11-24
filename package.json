@@ -139,7 +139,7 @@
     "dev:down": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*enhancedDraftWorker\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.1169.0",
+    "@aws-sdk/client-s3": "3.1175.0",
     "@clickhouse/client": "^1.25.0",
     "@giphy/js-analytics": "5.0.0",
     "@giphy/js-fetch-api": "5.8.0",
@@ -148,7 +148,7 @@
     "@heroicons/react": "^2.2.0",
     "@netlify/blobs": "11.1.9",
     "@prisma/client": "^6.19.3",
-    "@sentry/nextjs": "^11.12.0",
+    "@sentry/nextjs": "^11.16.0",
     "@socket.io/redis-adapter": "8.3.0",
     "bullmq": "^5.81.5",
     "chart.js": "^4.6.1",
