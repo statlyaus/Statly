@@ -265,7 +265,8 @@ One primitive per job, in `src/components/ui/`.
   on phones with a fade at the edge.
 - **Cards:** one card, one thing, square and flat. Edges say whose: a 4px top edge for a side, the 6px
   sun left edge for yours.
-- **Tables (target, phase 5: `DataTable`):** 44px rows, 32px compact on desktop; numbers
+- **Tables (phase 5: `tableStyles` in `controlStyles.ts`; the public draft hub tables since
+  2026-11-24, the fantasy and compact chart tables next):** 44px rows, 32px compact on desktop; numbers
   right-aligned in Saira with matching headers and nothing centred (done 2026-11-21 for the ladder,
   the standings race and the matchup score column); fixed decimals per column; a
   sticky header past one screen and a sticky identity column on sideways scroll; a visible overflow

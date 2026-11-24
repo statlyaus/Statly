@@ -10,6 +10,7 @@ import {
   floatingStyles,
   kbdStyles,
   menuItemStyles,
+  tableStyles,
   textLinkStyles,
 } from '@/components/ui/controlStyles';
 import StatlyIcon, { type StatlyIconName } from '@/components/ui/StatlyIcon';
@@ -63,6 +64,12 @@ const ICON_NAMES: Record<StatlyIconName, true> = {
 const ICONS = Object.keys(ICON_NAMES) as StatlyIconName[];
 
 /** The control recipes in controlStyles.ts and the shared brand components, on the white ground. */
+const SAMPLE_ROWS = [
+  ['Geelong', 41, '+18.4'],
+  ['GWS Giants', 37, '−6.1'],
+  ['Hawthorn', 29, '+2.0'],
+] as const;
+
 export function ControlSpecimens() {
   return (
     <>
@@ -166,6 +173,39 @@ export function ControlSpecimens() {
             </a>
             .
           </p>
+        </div>
+      </Section>
+
+      <Section
+        title="Tables"
+        note="tableStyles: hairline rules, no stripes, 44px rows, numbers right in tabular figures."
+      >
+        <div className={tableStyles.frame}>
+          <table className={tableStyles.table}>
+            <caption className="sr-only">Sample table</caption>
+            <thead>
+              <tr className={tableStyles.headRow}>
+                <th scope="col" className={tableStyles.th}>
+                  Club
+                </th>
+                <th scope="col" className={`${tableStyles.th} ${tableStyles.number}`}>
+                  Trades
+                </th>
+                <th scope="col" className={`${tableStyles.th} ${tableStyles.number}`}>
+                  Net PAV
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {SAMPLE_ROWS.map(([club, trades, net]) => (
+                <tr key={club} className={tableStyles.row}>
+                  <td className={tableStyles.td}>{club}</td>
+                  <td className={`${tableStyles.td} ${tableStyles.number}`}>{trades}</td>
+                  <td className={`${tableStyles.td} ${tableStyles.number}`}>{net}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Section>
 

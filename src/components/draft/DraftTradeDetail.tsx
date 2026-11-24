@@ -11,7 +11,7 @@ import type {
   AflTradeValueDetailResponse,
   AflTradeValueSummary,
 } from '@/types/aflTradeIntelligence';
-import { badgeStyles, buttonStyles } from '@/components/ui/controlStyles';
+import { badgeStyles, buttonStyles, tableStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 
 export type DraftTradeHeaderView = {
@@ -452,7 +452,7 @@ export function DraftTradeDetail({
               </div>
               {!isInline ? (
                 <div className="hidden overflow-x-auto pb-1 sm:block">
-                  <table className="table w-full table-fixed border-collapse text-base [&_td]:px-5 [&_td]:py-3.5 [&_th]:px-5 [&_th]:py-3.5 [&_thead]:whitespace-normal">
+                  <table className={cn(tableStyles.table, 'table-fixed')}>
                     <caption className="sr-only">Trade parties grade comparison</caption>
                     <colgroup>
                       <col className="w-46" />
@@ -461,25 +461,25 @@ export function DraftTradeDetail({
                       <col className="w-24 sm:w-28" />
                     </colgroup>
                     <thead>
-                      <tr className="border-b border-border bg-muted/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:text-muted-foreground">
-                        <th scope="col" className="whitespace-nowrap text-left">
+                      <tr className={tableStyles.headRow}>
+                        <th scope="col" className={cn(tableStyles.th, 'whitespace-nowrap')}>
                           Club
                         </th>
-                        <th scope="col" className="min-w-0 text-left">
+                        <th scope="col" className={cn(tableStyles.th, 'min-w-0')}>
                           Assets (raw)
                         </th>
-                        <th scope="col" className="text-right leading-tight tabular-nums">
+                        <th scope="col" className={cn(tableStyles.th, tableStyles.number)}>
                           At-trade grade
                         </th>
-                        <th scope="col" className="text-right leading-tight tabular-nums">
+                        <th scope="col" className={cn(tableStyles.th, tableStyles.number)}>
                           Current grade
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="[&>tr]:border-b [&>tr]:border-border/80 [&>tr:last-child]:border-b-0">
+                    <tbody>
                       {partyGrades.map(({ party, atTradeGrade, currentGrade }) => (
-                        <tr key={party.id} className="transition-colors hover:bg-muted/25">
-                          <td className="align-top text-left text-base font-medium leading-snug">
+                        <tr key={party.id} className={tableStyles.row}>
+                          <td className={cn(tableStyles.td, 'align-top font-medium leading-snug')}>
                             <div className="flex items-start gap-2.5">
                               <DraftTeamLogo
                                 team={party.clubName}
@@ -491,13 +491,18 @@ export function DraftTradeDetail({
                               <span className="min-w-0">{party.clubName}</span>
                             </div>
                           </td>
-                          <td className="wrap-break-word min-w-0 align-top whitespace-pre-wrap text-left text-base leading-relaxed text-foreground/90">
+                          <td
+                            className={cn(
+                              tableStyles.td,
+                              'wrap-break-word min-w-0 align-top whitespace-pre-wrap leading-relaxed'
+                            )}
+                          >
                             {party.assetsRaw}
                           </td>
-                          <td className="align-top text-right text-base tabular-nums">
+                          <td className={cn(tableStyles.td, tableStyles.number, 'align-top')}>
                             <StatlyGradeValue grade={atTradeGrade} />
                           </td>
-                          <td className="align-top text-right text-base tabular-nums">
+                          <td className={cn(tableStyles.td, tableStyles.number, 'align-top')}>
                             <StatlyGradeValue grade={currentGrade} />
                           </td>
                         </tr>
