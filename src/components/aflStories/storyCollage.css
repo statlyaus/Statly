@@ -1,14 +1,23 @@
 /*
  * The story pages' paper collage (owner's design, 2026-11-16): torn paper, masking tape, ink
  * sketches and handwriting. Everything is scoped under .sc so it cannot leak into the trade pages.
+ * Paper, ink and grey text are the brand's own (src/index.css). The rest is the collage's art,
+ * named once here and frozen in the raw-colour baseline: newsprint, the stamp red, the notebook
+ * rule and the tape, plus GWS orange and Geelong navy for Jeremy Cameron's two clubs.
  */
 .sc {
   --sc-bg: #f9f4e9;
-  --sc-paper: #fbfaf6;
-  --sc-ink: #161616;
+  --sc-paper: var(--brand-paper);
+  --sc-ink: var(--brand-ink);
+  --sc-grey: var(--brand-secondary-text);
   --sc-red: #c21f33;
   --sc-orange: #f15a22;
   --sc-navy: #0d2a52;
+  --sc-tape: rgba(222, 210, 172, 0.82);
+  --sc-rule: #afc0d6;
+  --sc-sky: #8fb3e3;
+  --sc-slip-peach: #f7c9b3;
+  --sc-slip-blue: #c9d6e8;
   width: 100%;
   overflow: hidden;
   color: var(--sc-ink);
@@ -59,8 +68,8 @@
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  background: #141414;
-  color: #f4f1ea;
+  background: var(--sc-ink);
+  color: var(--sc-paper);
   padding: 0.7rem 1.1rem;
   font-size: 17px;
 }
@@ -91,7 +100,7 @@
 .sc-tape {
   position: absolute;
   height: 28px;
-  background: rgba(222, 210, 172, 0.82);
+  background: var(--sc-tape);
   clip-path: polygon(
     3.2% 0%,
     3.3% 20%,
@@ -113,7 +122,7 @@
   z-index: 7;
   background: var(--sc-paper);
   padding: 0.7rem 0.9rem 0.8rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sc-ink) 18%, transparent);
 }
 .sc-note b {
   position: relative;
@@ -124,24 +133,30 @@
 .sc-note p {
   margin: 0.3rem 0 0;
   font-weight: 600;
-  color: #333;
+  color: var(--sc-ink);
 }
 .sc-halftone-o {
   background-color: var(--sc-orange);
-  background-image: radial-gradient(rgba(22, 22, 22, 0.22) 1.3px, transparent 1.8px);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--sc-ink) 22%, transparent) 1.3px,
+    transparent 1.8px
+  );
   background-size: 9px 9px;
 }
 .sc-halftone-n {
   background-color: var(--sc-navy);
-  background-image: radial-gradient(rgba(255, 255, 255, 0.22) 1.3px, transparent 1.8px);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--sc-paper) 22%, transparent) 1.3px,
+    transparent 1.8px
+  );
   background-size: 9px 9px;
 }
 .sc-hoops {
-  background: repeating-linear-gradient(180deg, #0d2a52 0 22px, #fbfaf6 22px 40px);
+  background: repeating-linear-gradient(180deg, var(--sc-navy) 0 22px, var(--sc-paper) 22px 40px);
 }
 .sc-lined {
   background-color: var(--sc-paper);
-  background-image: repeating-linear-gradient(180deg, transparent 0 37px, #afc0d6 37px 38px);
+  background-image: repeating-linear-gradient(180deg, transparent 0 37px, var(--sc-rule) 37px 38px);
 }
 .sc-pricetag {
   clip-path: polygon(9% 0, 100% 0, 100% 100%, 9% 100%, 0 50%);
@@ -155,7 +170,7 @@
   margin: 0 0 1rem;
   font-size: 18px;
   line-height: 1.65;
-  color: #222;
+  color: var(--sc-ink);
 }
 .sc-cols p:first-child::first-letter {
   float: left;
@@ -172,8 +187,8 @@
   gap: 10px;
   min-height: 44px;
   padding: 0 18px;
-  background: #141414;
-  color: #f4f1ea;
+  background: var(--sc-ink);
+  color: var(--sc-paper);
   border: 0;
   font-size: 14px;
   cursor: pointer;
@@ -182,7 +197,7 @@
 }
 .sc a.sc-more,
 .sc a.sc-more:hover {
-  color: #f4f1ea;
+  color: var(--sc-paper);
 }
 .sc-more:hover {
   background: var(--sc-red);
@@ -199,7 +214,7 @@
   padding: 14px 18px 16px;
   min-width: 130px;
   text-decoration: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sc-ink) 15%, transparent);
 }
 .sc-slip:hover {
   filter: brightness(0.97);
@@ -211,7 +226,7 @@
   font-family: var(--font-sc-hand), cursive;
   font-weight: 700;
   font-size: 24px;
-  color: #333;
+  color: var(--sc-ink);
 }
 /*
  * On a phone a collage cannot keep its desktop arrangement without the pieces landing on each other,
@@ -626,7 +641,7 @@
 .tape {
   position: absolute;
   height: 28px;
-  background: rgba(222, 210, 172, 0.82);
+  background: var(--sc-tape);
   clip-path: polygon(
     3.2% 0%,
     3.3% 20%,
@@ -675,13 +690,13 @@
   align-self: center;
   justify-self: center;
   padding: 0 0.12em;
-  color: #fff;
+  color: var(--sc-paper);
   font-size: clamp(2.4rem, 4.2vw, 4.2rem);
   line-height: 1.05;
   letter-spacing: 0;
 }
 .sc-line-year-boxed {
-  background: #141414;
+  background: var(--sc-ink);
 }
 .sc-line-slot {
   position: relative;
@@ -732,7 +747,7 @@
   margin-top: 0.35rem;
   font-size: clamp(1rem, 1.3vw, 1.2rem);
   line-height: 1.35;
-  color: #444;
+  color: var(--sc-grey);
 }
 .sc-line-read {
   margin-top: 1.1rem;
@@ -863,7 +878,10 @@ a.sc-line-slot:focus-visible {
   justify-content: center;
   min-height: 4.5rem;
   border-block: 4px solid;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1.3px, transparent 1.8px);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--sc-paper) 16%, transparent) 1.3px,
+    transparent 1.8px
+  );
   background-size: 9px 9px;
   font-size: clamp(1.6rem, 2.6vw, 2.4rem);
   letter-spacing: 0;
@@ -877,6 +895,6 @@ a.sc-line-slot:focus-visible {
 }
 .tc-boxed {
   padding: 0 0.3em;
-  background: #141414;
-  color: #fff;
+  background: var(--sc-ink);
+  color: var(--sc-paper);
 }

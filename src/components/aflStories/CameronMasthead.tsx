@@ -60,7 +60,7 @@ export function CameronHeroCollage() {
         className="sc-tornD"
         style={{
           ...place({ left: '5%', top: '6%', width: '88%', height: '86%', rotate: 1.5, z: 0 }),
-          background: '#F7F5EF',
+          background: 'var(--sc-paper)',
         }}
       />
       <Sketch name="route" left="10%" top="3%" width="80%" z={1} />

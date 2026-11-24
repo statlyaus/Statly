@@ -58,7 +58,7 @@ export function CameronStoryPage({ tradeHref }: { tradeHref: string | null }) {
                 fontStyle: 'italic',
                 fontSize: 23,
                 lineHeight: 1.45,
-                color: '#2A2A2A',
+                color: 'var(--sc-ink)',
               }}
             >
               {CAMERON_STANDFIRST}
@@ -146,7 +146,7 @@ export function CameronStoryPage({ tradeHref }: { tradeHref: string | null }) {
                   >
                     {chapter.title}
                   </h2>
-                  <p style={{ margin: 0, fontSize: 20, lineHeight: 1.5, color: '#333' }}>
+                  <p style={{ margin: 0, fontSize: 20, lineHeight: 1.5, color: 'var(--sc-ink)' }}>
                     {chapter.standfirst}
                   </p>
                   <button
@@ -194,7 +194,12 @@ export function CameronStoryPage({ tradeHref }: { tradeHref: string | null }) {
                     </p>
                     <p
                       className="sc-label"
-                      style={{ margin: '0.6rem 0 0', fontWeight: 500, fontSize: 13, color: '#555' }}
+                      style={{
+                        margin: '0.6rem 0 0',
+                        fontWeight: 500,
+                        fontSize: 13,
+                        color: 'var(--sc-grey)',
+                      }}
                     >
                       {chapter.quote.by}
                     </p>
@@ -237,7 +242,7 @@ export function CameronStoryPage({ tradeHref }: { tradeHref: string | null }) {
             Every trade →
           </a>
         </p>
-        <p style={{ margin: '1.5rem 0 0', fontSize: 14, lineHeight: 1.6, color: '#444' }}>
+        <p style={{ margin: '1.5rem 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--sc-grey)' }}>
           {CAMERON_SOURCES}
         </p>
       </footer>

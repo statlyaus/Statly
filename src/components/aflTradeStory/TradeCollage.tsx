@@ -92,9 +92,9 @@ function LeadBand({ story }: { story: AflTradeStory }) {
             <span
               className="tc-stop-year sc-label"
               style={{
-                background: stop.style?.fill ?? '#8a8a86',
-                borderColor: stop.style?.trim ?? '#8a8a86',
-                color: stop.style?.ink ?? '#ffffff',
+                background: stop.style?.fill ?? 'var(--sc-grey)',
+                borderColor: stop.style?.trim ?? 'var(--sc-grey)',
+                color: stop.style?.ink ?? 'var(--sc-paper)',
               }}
             >
               <b className={stop.boxed ? 'tc-boxed' : undefined}>{stop.year}</b>
