@@ -9,6 +9,8 @@ import { join } from 'node:path';
 // and draw badge tones are used only where a real W, L or D is shown
 // (docs/product/style-guide.md, "Colour roles").
 const RECIPES = 'src/components/ui/controlStyles.ts';
+// The development style guide lists every colour token by name and shows each as a swatch.
+const STYLE_GUIDE = 'src/app/dev/styleguide/page.tsx';
 const RESULT_BADGES = new Set([RECIPES, 'src/components/MatchLogTable.tsx']);
 const RESULT_TOKEN = /(?:--|-)result-(?:win|loss|draw)\b/;
 const RESULT_BADGE_TONE = /\btone:[^,}\n]*'(?:win|loss|draw)'/;
@@ -26,7 +28,9 @@ const sources = sourceFiles('src').map((file) => ({ file, text: readFileSync(fil
 describe('result token usage', () => {
   it('spells result tokens only in the result recipes', () => {
     const offenders = sources
-      .filter(({ file, text }) => file !== RECIPES && RESULT_TOKEN.test(text))
+      .filter(
+        ({ file, text }) => file !== RECIPES && file !== STYLE_GUIDE && RESULT_TOKEN.test(text)
+      )
       .map(({ file }) => file);
     expect(offenders).toEqual([]);
   });
