@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
+  aflTradeStoryLeftoverLabels,
+  aflTradeStoryOrderSpentLabel,
   aflTradeStoryPickLabel,
   createAflTradeStoryBundle,
   createAflTradeStoryBundleSource,
@@ -13,13 +15,23 @@ import {
   cameronChainNames,
 } from '@/server/aflTradeIntelligence/development/tradeStorySampleChain';
 import { aflTradeStorySamples } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
-import type { AflTradeAssetLedger } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
+import type {
+  AflTradeAssetLedger,
+  AflTradeAssetLedgerBidMatch,
+  AflTradeAssetLedgerBidSpentPick,
+} from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/serverAuth', () => ({ getExplicitAuthenticatedUserIdFromServerContext: vi.fn() }));
 
 /** The sample chain as the export command would see it: names as labels, each pick its own label. */
-function sampleBundle() {
+function sampleBundle(
+  extra: {
+    bidMatches?: AflTradeAssetLedgerBidMatch[];
+    clubs?: [string, string][];
+    players?: [string, string][];
+  } = {}
+) {
   const transfers: AflTradeStoryBundleTransfer[] =
     cameronChainLines.structure.content.trades.flatMap((trade) =>
       trade.legs.map((leg) => ({
@@ -42,15 +54,43 @@ function sampleBundle() {
     valueLines: cameronChainLines.valueLines,
     ledger: {
       ledgerId: 'asset-ledger:sample',
-      content: { bidMatches: [] },
+      content: { bidMatches: extra.bidMatches ?? [] },
     } as unknown as AflTradeAssetLedger,
     labels: {
-      clubs: [...cameronChainNames.clubs].map(([clubId, name]) => ({ clubId, name })),
-      players: [...cameronChainNames.players].map(([playerId, name]) => ({ playerId, name })),
+      clubs: [...cameronChainNames.clubs, ...(extra.clubs ?? [])].map(([clubId, name]) => ({
+        clubId,
+        name,
+      })),
+      players: [...cameronChainNames.players, ...(extra.players ?? [])].map(([playerId, name]) => ({
+        playerId,
+        name,
+      })),
     },
     transfers,
   });
 }
+
+/** A spent pick of a Draftguru order bid (owner, 2026-11-24), as the ledger lists it. */
+const orderSpent = (
+  asPick: number,
+  fields: Partial<AflTradeAssetLedgerBidSpentPick> = {}
+): AflTradeAssetLedgerBidSpentPick => ({
+  nativePickId: `order-${asPick}`,
+  label: `Pick ${asPick}`,
+  originalNumber: null,
+  originalClubId: 'gws',
+  pointsUsed: 0,
+  pickId: null,
+  link: 'order_row_untied',
+  countedPoints: null,
+  share: null,
+  use: null,
+  value: null,
+  asPick,
+  viaClubIds: [],
+  originKind: 'entitlement',
+  ...fields,
+});
 
 describe('trade story bundle (#1052)', () => {
   it('lists each club’s result and what it received, matching the trade’s own page', () => {
@@ -237,5 +277,97 @@ describe('trade story bundle (#1052)', () => {
     source.list();
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith('/private/bundle.json');
+  });
+});
+
+describe('trade story bundle: Draftguru order bids (owner, 2026-11-24)', () => {
+  const names = new Map([
+    ['gws', 'GWS'],
+    ['melbourne', 'Melbourne'],
+    ['port', 'Port Adelaide'],
+    ['footscray', 'Western Bulldogs'],
+  ]);
+  const name = (clubId: string) => names.get(clubId);
+
+  it('names a spent pick by its live slot and where it came from', () => {
+    expect(
+      aflTradeStoryOrderSpentLabel(
+        orderSpent(13, { originalClubId: 'melbourne', viaClubIds: ['port'] }),
+        'gws',
+        name
+      )
+    ).toBe('Pick 13 (from Melbourne via Port Adelaide)');
+    expect(
+      aflTradeStoryOrderSpentLabel(orderSpent(22, { originalClubId: 'melbourne' }), 'port', name)
+    ).toBe('Pick 22 (from Melbourne)');
+    // The club's own pick, a compensation pick and a leftover-points pick.
+    expect(aflTradeStoryOrderSpentLabel(orderSpent(8), 'gws', name)).toBe('Pick 8');
+    expect(
+      aflTradeStoryOrderSpentLabel(
+        orderSpent(43, { originalClubId: null, originKind: 'compensation' }),
+        'footscray',
+        name
+      )
+    ).toBe('Pick 43 (compensation pick)');
+    expect(
+      aflTradeStoryOrderSpentLabel(orderSpent(30, { originKind: 'leftover_points' }), 'gws', name)
+    ).toBe('Pick 30 (from leftover points)');
+    // A club with no name leaves the slot alone; a board's spent pick keeps the board's label.
+    expect(
+      aflTradeStoryOrderSpentLabel(orderSpent(13, { originalClubId: 'unknown' }), 'gws', name)
+    ).toBe('Pick 13');
+    const board = { ...orderSpent(34), label: 'R3 - Pick 34' };
+    delete (board as { asPick?: number }).asPick;
+    expect(aflTradeStoryOrderSpentLabel(board, 'gws', name)).toBe('R3 - Pick 34');
+  });
+
+  it('carries an order bid with route labels and its leftover pick by number and player', () => {
+    const match: AflTradeAssetLedgerBidMatch = {
+      bidMatchId: 'external-draft-order-bid-match:test',
+      source: 'draftguru_order',
+      draftYear: 2026,
+      draftType: 'national',
+      selectionNumber: 6,
+      clubId: 'gws',
+      bidClubId: 'essendon',
+      basis: 'next_generation_academy',
+      ladderPosition: 12,
+      nominee: { selectionId: 'sel-m', playerId: 'matthews', firstStint: null },
+      pricing: {
+        status: 'shared',
+        ruleId: 'afl-bid-price-2026-ladder',
+        pricePoints: 1493.1,
+        leftover: {
+          spentNativePickId: 'order-13',
+          remainderPoints: 1029.9,
+          boardLeftoverPickIds: ['order-eime'],
+        },
+        deficit: null,
+      },
+      spentPicks: [
+        orderSpent(8),
+        orderSpent(13, { originalClubId: 'melbourne', viaClubIds: ['port'] }),
+      ],
+      orderLeftovers: [{ orderPickId: 'order-eime', pickNumber: 13, playerId: 'eime' }],
+    };
+    const bundle = sampleBundle({
+      bidMatches: [match],
+      clubs: [...names],
+      players: [
+        ['matthews', 'Ethan Matthews'],
+        ['eime', 'Jake Eime'],
+      ],
+    });
+    const [carried] = bundle.content.bidMatches;
+    expect(carried!.match.spentPicks.map(({ label }) => label)).toEqual([
+      'Pick 8',
+      'Pick 13 (from Melbourne via Port Adelaide)',
+    ]);
+    expect(carried!.leftoverLabels).toEqual(['Pick 13 (Jake Eime)']);
+    expect(carried!.nomineeName).toBe('Ethan Matthews');
+    // A board's bid keeps its leftover label by points, as before.
+    expect(
+      aflTradeStoryLeftoverLabels({ ...match, orderLeftovers: undefined }, () => undefined)
+    ).toEqual(['Leftover-points pick (1029.9 points)']);
   });
 });

@@ -218,6 +218,7 @@ export function TradeDetails({
                 label={label}
                 share={share}
                 value={value}
+                checkpoint={story.checkpoint}
               />
             ))}
           </div>

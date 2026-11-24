@@ -13,6 +13,11 @@ import {
   type DraftguruOrderTieTransfer,
 } from './draftguruOrderReconciliation';
 import type { SpecialDraftEntitlement } from './specialDraftEntitlement';
+import {
+  aflTradeBidLadderSchema,
+  reconcileDraftguruOrderBidMatches,
+  type AflTradeCanonicalDraftOrderBidMatch,
+} from './draftguruOrderBidMatchReconciliation';
 import { z } from 'zod';
 
 import {
@@ -511,6 +516,11 @@ export interface AflTradeExternalReconciliationContent {
   draftBoardBidMatches?: AflTradeCanonicalDraftBoardBidMatch[];
   /** Present only when a Draftguru post-draft order was reconciled, so earlier ids are unchanged. */
   draftOrderPicks?: AflTradeCanonicalDraftOrderPick[];
+  /**
+   * Present only when a Draftguru post-draft order states a matched bid in a draft it settles (owner,
+   * 2026-11-24), so candidates without one keep their ids.
+   */
+  draftOrderBidMatches?: AflTradeCanonicalDraftOrderBidMatch[];
   /**
    * The approved `reconciliation_scope` decision under which pick-side issues are `deferred`. Present
    * only when at least one issue was deferred, so a candidate without deferral keeps its id.
@@ -3254,6 +3264,12 @@ export function reconcileAflTradeExternalEvidence(input: {
    * per session root as keep its re-sync version additive.
    */
   promotedSelectionPicks?: AflTradePromotedSelectionPickState;
+  /**
+   * The owner's ladder for the season whose draft the order's matched bids were in
+   * (`afl-trade-bid-ladder/v1`, owner 2026-11-24): recorded on each such bid as the matching club's
+   * position. Without it every such bid records none, and valuation refuses to price it.
+   */
+  bidLadder?: unknown;
 }): AflTradeExternalReconciliationCandidate {
   const environment = z
     .enum(['test_fixture', 'non_production', 'production'])
@@ -3265,6 +3281,8 @@ export function reconcileAflTradeExternalEvidence(input: {
           .object({ decisionId: aflTradeContentAddressedIdSchema('review-decision') })
           .strict()
           .parse(input.pickLineageDeferral);
+  const bidLadder =
+    input.bidLadder === undefined ? undefined : aflTradeBidLadderSchema.parse(input.bidLadder);
   // Each row requires its player: without it a draft whose draftee an identity repair re-targeted
   // would be listed as promoted and the new player never written (#853).
   const currentDraftSelections =
@@ -3577,6 +3595,12 @@ export function reconcileAflTradeExternalEvidence(input: {
     eventClubs: orderEventClubs(resolvedTransfers),
   });
   const statements = withOrderStatements(pageStatements, order, tieTransfers, lookup);
+  // The order's matched bids (owner, 2026-11-24), from the same rows; spent picks by their row.
+  const orderBidMatches = reconcileDraftguruOrderBidMatches({
+    order,
+    lookup: (entityKind, sourceIdentity) => lookup('draftguru', entityKind, sourceIdentity),
+    ...(bidLadder === undefined ? {} : { ladder: bidLadder }),
+  });
   const routeOf = createEventualSelectionRouteFinder({
     evidence,
     boardPicks: draftBoard.records,
@@ -4342,6 +4366,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     ...(draftBoard.records.length === 0 ? {} : { draftBoardPicks: draftBoard.records }),
     ...(draftBoard.bidMatches.length === 0 ? {} : { draftBoardBidMatches: draftBoard.bidMatches }),
     ...(order.records.length === 0 ? {} : { draftOrderPicks: order.records }),
+    ...(orderBidMatches.length === 0 ? {} : { draftOrderBidMatches: orderBidMatches }),
     // A candidate carries the decision when it deferred something, or when it deferred nothing but
     // lists records left to an earlier promotion or re-synced and writes no draft whole (#853, a
     // re-targeted draftee in a completion with no pick-side issue). Otherwise a candidate prepared

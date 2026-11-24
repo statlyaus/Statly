@@ -773,6 +773,32 @@ describe('computeAflTradeValueLines', () => {
     expect(point.produced).toBeCloseTo(0.6 * 36, 6);
   });
 
+  it('leaves every line as it was when the ledger also lists a 2026 Draftguru order bid', () => {
+    // Owner, 2026-11-24: the order's bids are appended to the ledger; earlier lines never read them.
+    const base = inputs();
+    const content = base.ledger.ledger.content;
+    const orderBid = {
+      ...content.bidMatches[0]!,
+      bidMatchId: 'external-draft-order-bid-match:test',
+      source: 'draftguru_order' as const,
+      draftYear: 2026,
+      selectionNumber: 6,
+    };
+    const withOrder = {
+      ...base,
+      ledger: {
+        ...base.ledger,
+        ledger: {
+          ...base.ledger.ledger,
+          content: { ...content, bidMatches: [...content.bidMatches, orderBid] },
+        },
+      },
+    };
+    const { inputs: _inputs, ...lines } = computeAflTradeValueLines(withOrder).content;
+    const { inputs: _baseInputs, ...baseline } = computeAflTradeValueLines(base).content;
+    expect(lines).toEqual(baseline);
+  });
+
   it('values a pick not used at its slot until the draft, then 0', () => {
     const l7 = trade(lines, 't3').legs.find(({ transferId: id }) => id === transferId('l7'))!;
     expect(l7.atTrade.value).toBeCloseTo(V(40), 6);

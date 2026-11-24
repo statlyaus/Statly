@@ -1,4 +1,7 @@
-import type { AflTradeStoryValue } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
+import type {
+  AflTradeStory,
+  AflTradeStoryValue,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 import {
   formatPav,
@@ -14,24 +17,31 @@ export const bidShareAnchor = (assetId: string) =>
 /**
  * A pick spent matching a bid, shown as a swap: the pick bought a share of the nominee, in
  * proportion to the points it covered of the AFL price. The price, points and shares come from the
- * asset ledger; the pick's value is its value line (the share of the nominee's line).
+ * asset ledger; the pick's value is its value line (the share of the nominee's line). A nominee who
+ * has not played a season yet is valued from his draft slot, so his value reads as projected, as an
+ * unplayed draftee's does. A shortfall the club owes is charged to its next first-round pick.
  */
 export function BidMatchShareCard({
   assetId,
   label,
   share: { bid, spentIndex },
   value,
+  checkpoint,
 }: {
   assetId: string;
   label: string;
   share: AflTradePageBidShare;
   /** The pick's value line at the story's checkpoint. */
   value: AflTradeStoryValue;
+  /** The story's checkpoint: before the end of the season after the draft, the nominee is unplayed. */
+  checkpoint: AflTradeStory['checkpoint'];
 }) {
   const { match, nomineeName, clubName, leftoverLabels } = bid;
   const spent = match.spentPicks[spentIndex]!;
   const price = match.pricing.status === 'shared' ? match.pricing.pricePoints : null;
   const leftover = match.pricing.status === 'shared' ? match.pricing.leftover : null;
+  const deficit = match.pricing.status === 'shared' ? match.pricing.deficit : null;
+  const projected = checkpoint.season <= match.draftYear;
   const headingId = `${bidShareAnchor(assetId)}-title`;
 
   return (
@@ -54,15 +64,40 @@ export function BidMatchShareCard({
           : `The price was ${formatPoints(price)} points, paid with ${match.spentPicks.length} picks.`}
       </p>
 
+      {deficit !== null &&
+      deficit.points !== null &&
+      deficit.against === 'next_draft_first_pick' ? (
+        <p className="mt-1 ts-body text-muted-foreground">
+          {clubName} were {formatPoints(deficit.points)} points short. Those points come off their
+          first-round pick in the {match.draftYear + 1} draft.
+        </p>
+      ) : null}
+
       {spent.share !== null && value.kind === 'known' ? (
-        <p className="mt-3 flex flex-wrap items-baseline gap-x-2">
-          <span className="ts-head font-semibold tabular-nums">{formatPav(value.pav, 2)}</span>
-          <span className="ts-body text-muted-foreground">
-            {label}&rsquo;s share: {formatPercent(spent.share)} of {nomineeName}&rsquo;s value
-          </span>
+        <>
+          <p className="mt-3 flex flex-wrap items-baseline gap-x-2">
+            <span className="ts-head font-semibold tabular-nums">{formatPav(value.pav, 2)}</span>
+            <span className="ts-body text-muted-foreground">
+              {label}&rsquo;s share: {formatPercent(spent.share)} of {nomineeName}&rsquo;s{' '}
+              {projected ? 'projected value' : 'value'}
+            </span>
+          </p>
+          {projected ? (
+            <p className="mt-1 ts-small text-muted-foreground">
+              {nomineeName} has not played a season yet, so his value is projected from pick{' '}
+              {match.selectionNumber}.
+            </p>
+          ) : null}
+        </>
+      ) : spent.share !== null ? (
+        <p className="mt-3 ts-body font-semibold">
+          {label}&rsquo;s share is {formatPercent(spent.share)} of {nomineeName}. His value is not
+          in yet.
         </p>
       ) : (
-        <p className="mt-3 ts-body font-semibold">Value pending: the price is not known yet.</p>
+        <p className="mt-3 ts-body font-semibold">
+          This bid has no price yet, so the pick&rsquo;s share is not in yet.
+        </p>
       )}
 
       {price !== null ? (

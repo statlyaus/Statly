@@ -17,7 +17,7 @@ import {
  *   for what was still owed; its remainder is the leftover pick, an asset of its own valued by its own
  *   outcome, never part of the nominee.
  * - A shortfall is a deficit against the club's first pick of the next draft. It is recorded, never
- *   valued here.
+ *   valued here; one larger than the year's rule allows (2026: 412 points) is refused.
  * - A spent pick's share is its counted points over the price.
  */
 
@@ -52,7 +52,11 @@ export type AflTradeMatchedBidShareRefusal =
   | 'spend_order_not_descending'
   | 'spent_beyond_price'
   | 'spent_picks_over_limit'
-  | 'leftover_mismatch';
+  | 'leftover_mismatch'
+  /** The spent picks fell short of the price by more than the rule allows a club to owe. */
+  | 'deficit_over_limit'
+  /** The evidence states a slot the year's DVI gives no points for. */
+  | 'slot_points_missing';
 
 export type AflTradeMatchedBidShares =
   | {
@@ -149,6 +153,16 @@ export function aflTradeMatchedBidShares(
     price.priceTenths === null
       ? nextPickShares(price.ruleId, picks)
       : pointsShares(bid, price.ruleId, price.priceTenths);
+  const deficit = shares.status === 'shared' ? (shares.deficit?.points ?? null) : null;
+  if (
+    deficit !== null &&
+    price.maximumDeficitPoints !== null &&
+    deficit > price.maximumDeficitPoints
+  )
+    return refused(
+      'deficit_over_limit',
+      `${price.ruleId} allows a deficit of ${price.maximumDeficitPoints} points; the spent picks fall ${deficit} short.`
+    );
   // A board leftover pick that carries points says the match left points over. When the rule leaves
   // none, its points would count twice: in the last spent pick's share and in the leftover's outcome.
   if (

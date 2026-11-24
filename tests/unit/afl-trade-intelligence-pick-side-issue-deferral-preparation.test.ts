@@ -196,6 +196,27 @@ describe('historical reconciliation preparation with a pick-side deferral (#869)
     expect(candidate.content.issues.every((issue) => issue.severity === 'blocking')).toBe(true);
   });
 
+  it('takes the owner’s bid ladder, which changes nothing for a candidate with no order bid', async () => {
+    const plain = dependencies(null);
+    await prepareAflTradeHistoricalReconciliation({ completionId }, plain.built);
+    const laddered = dependencies(null);
+    const bidLadder = {
+      schemaVersion: 'afl-trade-bid-ladder/v1',
+      season: 2026,
+      basis: 'final_ranking_including_finals',
+      source: 'Synthetic ladder for tests',
+      positions: { carlton: 12 },
+    };
+    await prepareAflTradeHistoricalReconciliation({ completionId, bidLadder }, laddered.built);
+    expect(laddered.persisted[0]!.candidate).toEqual(plain.persisted[0]!.candidate);
+    await expect(
+      prepareAflTradeHistoricalReconciliation(
+        { completionId, bidLadder: { ...bidLadder, basis: 'home_and_away' } },
+        dependencies(null).built
+      )
+    ).rejects.toThrow();
+  });
+
   it('defers the pick-side issues under the approved decision and keeps player-side issues blocking', async () => {
     const { built, persisted } = dependencies(approved);
     const result = await prepareAflTradeHistoricalReconciliation(
