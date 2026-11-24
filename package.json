@@ -139,7 +139,7 @@
     "dev:down": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*enhancedDraftWorker\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.1169.0",
+    "@aws-sdk/client-s3": "3.1175.0",
     "@clickhouse/client": "^1.25.0",
     "@giphy/js-analytics": "5.0.0",
     "@giphy/js-fetch-api": "5.8.0",
