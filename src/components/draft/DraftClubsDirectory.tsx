@@ -11,7 +11,7 @@ import {
   draftHubSlatePillSmClass,
 } from '@/components/draft/draftHubChrome';
 import type { DraftClubListItem } from '@/lib/draftTrades/contracts';
-import { buttonStyles, textLinkStyles } from '@/components/ui/controlStyles';
+import { buttonStyles, tableStyles, textLinkStyles } from '@/components/ui/controlStyles';
 import { cn } from '@/lib/utils';
 
 type ViewMode = 'cards' | 'table';
@@ -66,7 +66,7 @@ function clubLinkLabel(club: DraftClubListItem): string {
 }
 
 const sortThBtnClass =
-  'inline-flex min-h-10 w-full items-center justify-end gap-1 rounded-cut px-2 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:min-h-0';
+  'inline-flex min-h-10 w-full items-center justify-end gap-1 rounded-cut px-4 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:min-h-0';
 
 export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
   const [view, setView] = useState<ViewMode>('table');
@@ -197,11 +197,11 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
       ) : (
         <div
           id={tablePanelId}
-          className="overflow-x-auto border border-border bg-card"
+          className={tableStyles.frame}
           role="region"
           aria-label="Club directory as a table"
         >
-          <table className="table w-full table-fixed border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3">
+          <table className={cn(tableStyles.table, 'table-fixed')}>
             <caption className="sr-only">
               AFL clubs with draft trade counts and year coverage. {sortSummaryLine(tableSort)} Use
               Trades and Assets column headers to change sort.
@@ -213,13 +213,13 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
               <col className="w-36" />
             </colgroup>
             <thead>
-              <tr className="border-b border-border bg-muted/50 [&>th]:text-sm [&>th]:font-semibold [&>th]:text-muted-foreground">
-                <th scope="col" className="text-left">
+              <tr className={tableStyles.headRow}>
+                <th scope="col" className={tableStyles.th}>
                   Club
                 </th>
                 <th
                   scope="col"
-                  className="p-0 text-right align-bottom tabular-nums"
+                  className={cn(tableStyles.th, tableStyles.number, 'p-0')}
                   aria-sort={
                     tableSort.key === 'trades'
                       ? tableSort.dir === 'asc'
@@ -248,7 +248,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                 </th>
                 <th
                   scope="col"
-                  className="p-0 text-right align-bottom tabular-nums"
+                  className={cn(tableStyles.th, tableStyles.number, 'p-0')}
                   aria-sort={
                     tableSort.key === 'assets'
                       ? tableSort.dir === 'asc'
@@ -275,15 +275,15 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                     ) : null}
                   </button>
                 </th>
-                <th scope="col" className="text-right tabular-nums">
+                <th scope="col" className={cn(tableStyles.th, tableStyles.number)}>
                   Years
                 </th>
               </tr>
             </thead>
-            <tbody className="[&>tr]:border-b [&>tr]:border-border/80 [&>tr:last-child]:border-b-0">
+            <tbody>
               {sortedClubs.map((club) => (
-                <tr key={club.clubSlug} className="hover">
-                  <td className="min-w-0 align-middle">
+                <tr key={club.clubSlug} className={tableStyles.linkRow}>
+                  <td className={cn(tableStyles.td, 'min-w-0')}>
                     <div className="flex items-center gap-2">
                       <DraftTeamLogo team={club.clubName} size={16} withCircle />
                       <Link
@@ -295,17 +295,17 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                       </Link>
                     </div>
                   </td>
-                  <td className="align-middle">
+                  <td className={cn(tableStyles.td, tableStyles.number)}>
                     <div className="flex justify-end">
                       <span className={draftHubSkyPillSmClass}>{club.tradeCount}</span>
                     </div>
                   </td>
-                  <td className="align-middle">
+                  <td className={cn(tableStyles.td, tableStyles.number)}>
                     <div className="flex justify-end">
                       <span className={draftHubSlatePillSmClass}>{club.assetCount}</span>
                     </div>
                   </td>
-                  <td className="align-middle">
+                  <td className={cn(tableStyles.td, tableStyles.number)}>
                     <div className="flex justify-end">
                       {club.firstYear && club.lastYear ? (
                         <span className={draftHubSkyPillSmClass}>
