@@ -307,6 +307,7 @@ function reconcile(
     orderRows?: Claim[];
     selections?: Claim[];
     custody?: Claim[];
+    bidLadder?: unknown;
   } = {}
 ) {
   const source = pages(year);
@@ -337,6 +338,7 @@ function reconcile(
               ),
             ],
       reconciledAt: '2026-11-23T01:00:00.000Z',
+      ...(options.bidLadder === undefined ? {} : { bidLadder: options.bidLadder }),
     })
   ).content;
 }
@@ -719,6 +721,72 @@ describe('Draftguru post-draft order reconciliation (owner approval 4, 2026 inta
       disposition: 'not_used',
       nominationBasis: 'order_bid_spent',
     });
+  });
+
+  it('records the order’s matched bid with its spent row and the owner’s ladder position', () => {
+    // Port's nominee row: "Ess bid for Dougie Cochrane matched (Academy) using picks 22".
+    const bidRow = order(2026, {
+      roundNumber: 1,
+      pickNumber: 1,
+      club: cell('Port Adelaide'),
+      origin: {
+        kind: 'bid_matched',
+        bidClub: cell('Essendon'),
+        basis: 'academy',
+        nominee: person('Dougie Cochrane'),
+        usingPicks: [22],
+      },
+      hops: [],
+      outcome: { kind: 'selected', player: person('Dougie Cochrane') },
+    });
+    const ladder = {
+      schemaVersion: 'afl-trade-bid-ladder/v1',
+      season: 2026,
+      basis: 'final_ranking_including_finals',
+      source: 'Synthetic ladder for tests',
+      positions: { 'port-adelaide': 15 },
+    };
+    const priced = reconcile(2026, { orderRows: [bidRow], bidLadder: ladder });
+    const spentRow = priced.draftOrderPicks!.find(({ outcome }) => outcome === 'bid_spent')!;
+    expect(priced.draftOrderBidMatches).toEqual([
+      expect.objectContaining({
+        selectionNumber: 1,
+        clubId: clubId('Port Adelaide'),
+        playerId: playerId('Dougie Cochrane'),
+        bidClubId: clubId('Essendon'),
+        basis: 'academy',
+        spentPicks: [
+          {
+            asPick: 22,
+            orderPickId: spentRow.orderPickId,
+            routeClubIds: [clubId('Richmond'), clubId('Port Adelaide')],
+            originKind: 'entitlement',
+          },
+        ],
+        leftoverPicks: [],
+        ladderPosition: 15,
+      }),
+    ]);
+    // The bid changes nothing else the order settles; without a ladder it records no position.
+    const { draftOrderBidMatches: _bids, ...rest } = priced;
+    const { draftOrderBidMatches: unladdered, ...plain } = reconcile(2026, {
+      orderRows: [bidRow],
+    });
+    expect(rest).toEqual(plain);
+    expect(unladdered!.map(({ ladderPosition }) => ladderPosition)).toEqual([null]);
+    // A bid that cites a row the candidate lacks, or a spent row as another number, is refused.
+    const [bid] = priced.draftOrderBidMatches!;
+    const citing = (spentPicks: (typeof bid)['spentPicks']) => () =>
+      createAflTradeExternalReconciliationCandidate({
+        ...priced,
+        draftOrderBidMatches: [{ ...bid!, spentPicks }],
+      });
+    expect(citing(bid!.spentPicks)).not.toThrow();
+    expect(citing([{ ...bid!.spentPicks[0]!, asPick: 23 }])).toThrow(/spent as it/);
+    expect(content).not.toHaveProperty('draftOrderBidMatches');
+    expect(() =>
+      reconcile(2026, { orderRows: [bidRow], bidLadder: { ...ladder, season: 'x' } })
+    ).toThrow();
   });
 
   it('gives a 2025-shaped candidate without order rows the id the code before this change gave it', () => {

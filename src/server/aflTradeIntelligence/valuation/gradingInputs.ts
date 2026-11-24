@@ -12,14 +12,20 @@ export interface AflTradeGradingInputs {
   candidateId: string;
   /**
    * The candidate's trades, transfers and provider-stated pick outcomes, with the draft selections,
-   * reviewed Footyinfo board picks and matched bids, and the Official AFL pick custody (orders) that
-   * place a pick's slot and its draftee.
+   * reviewed Footyinfo board picks and matched bids, the Draftguru post-draft order rows and the
+   * matched bids they state, and the Official AFL pick custody (orders) that place a pick's slot and
+   * its draftee.
    */
   candidate: Pick<CandidateContent, 'transactions' | 'transfers' | 'pickOutcomes'> &
     Partial<
       Pick<
         CandidateContent,
-        'draftSelections' | 'draftBoardPicks' | 'draftBoardBidMatches' | 'pickCustody'
+        | 'draftSelections'
+        | 'draftBoardPicks'
+        | 'draftBoardBidMatches'
+        | 'draftOrderPicks'
+        | 'draftOrderBidMatches'
+        | 'pickCustody'
       >
     >;
   /** One pinned HPN PAV calculation per season, and whether that season is official. */

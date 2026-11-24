@@ -17,12 +17,22 @@ import {
   type AflTradeAssetLedgerReviewedSamePick,
 } from './assetLedgerReviewedPickLinks';
 import type { AflTradeAssetLedgerStintValue } from './assetLedgerStints';
-import { aflTradeMatchedBidShares } from './matchedBidShares';
+import {
+  AFL_TRADE_MATCHED_BID_PRICE_RULES,
+  aflTradeMatchedBidSlotPoints,
+  type AflTradeMatchedBidPriceRule,
+} from './matchedBidPriceRules';
+import { aflTradeMatchedBidShares, type AflTradeMatchedBidShares } from './matchedBidShares';
 import type { AflTradeGradingInputs } from './gradingInputs';
 
 type Candidate = AflTradeGradingInputs['candidate'];
 type BidMatchRecord = NonNullable<Candidate['draftBoardBidMatches']>[number];
 type ConsumedPick = BidMatchRecord['consumedPicks'][number];
+type OrderBidMatchRecord = NonNullable<Candidate['draftOrderBidMatches']>[number];
+type NomineeBid = Pick<
+  BidMatchRecord,
+  'draftYear' | 'draftType' | 'selectionNumber' | 'clubId' | 'playerId'
+>;
 
 /** A pick that changed hands in exactly one trade, with the number that trade stated for it. */
 export interface AflTradeAssetLedgerTradedEntitlement {
@@ -106,7 +116,7 @@ function linkSpentPick(
  * because its pick has no custody slot (the bid created it), which says nothing of who was drafted.
  * Only a `disputed` selection, whose providers disagree on the player or club, names no nominee.
  */
-function nomineeOf(candidate: Candidate, bid: BidMatchRecord) {
+function nomineeOf(candidate: Candidate, bid: NomineeBid) {
   const selections = (candidate.draftSelections ?? []).filter(
     (selection) =>
       selection.status !== 'disputed' &&
@@ -177,17 +187,125 @@ export function aflTradeAssetLedgerBidMatches(
       bidClubId: bid.bidClubId,
       basis: bid.basis,
       nominee,
-      pricing:
-        shares.status === 'shared'
-          ? {
-              status: 'shared',
-              ruleId: shares.ruleId,
-              pricePoints: shares.pricePoints,
-              leftover: shares.leftover,
-              deficit: shares.deficit,
-            }
-          : shares,
+      pricing: pricingOf(shares),
       spentPicks,
+    };
+  });
+}
+
+/** The pricing a ledger bid match records: the shares' price, leftover and deficit, or the refusal. */
+function pricingOf(shares: AflTradeMatchedBidShares): AflTradeAssetLedgerBidMatch['pricing'] {
+  return shares.status === 'shared'
+    ? {
+        status: 'shared',
+        ruleId: shares.ruleId,
+        pricePoints: shares.pricePoints,
+        leftover: shares.leftover,
+        deficit: shares.deficit,
+      }
+    : shares;
+}
+
+/**
+ * Each matched bid a Draftguru post-draft order states (owner, 2026-11-24), priced by the year's AFL
+ * rule at the owner's recorded ladder position, with each spent pick's share of the nominee's first
+ * stint at the matching club. The order states slots, not points: the bid and every spent pick are
+ * valued at the year's DVI, a spent pick at the live slot it was spent as. A spent pick is the
+ * candidate pick whose transfer its order row's last hop ties (`order_row`); a row that ties none
+ * names no pick (`order_row_untied`), so nothing is joined by a number.
+ */
+export function aflTradeAssetLedgerOrderBidMatches(
+  candidate: Candidate,
+  stintValue: AflTradeAssetLedgerStintValue,
+  rules: readonly AflTradeMatchedBidPriceRule[] = AFL_TRADE_MATCHED_BID_PRICE_RULES
+): AflTradeAssetLedgerBidMatch[] {
+  const rows = new Map((candidate.draftOrderPicks ?? []).map((row) => [row.orderPickId, row]));
+  const pickOfTransfer = new Map(
+    candidate.transfers.flatMap(({ transferId, asset }) =>
+      asset.kind === 'pick_entitlement' ? [[transferId, asset.pickId] as const] : []
+    )
+  );
+  const pickIdOf = (orderPickId: string | null) => {
+    const lastHop = orderPickId === null ? null : rows.get(orderPickId)?.hopTransferIds.at(-1);
+    return lastHop ? (pickOfTransfer.get(lastHop) ?? null) : null;
+  };
+  return (candidate.draftOrderBidMatches ?? []).map((bid: OrderBidMatchRecord) => {
+    const slotPoints = (slot: number) => aflTradeMatchedBidSlotPoints(bid.draftYear, slot, rules);
+    const points = slotPoints(bid.selectionNumber);
+    const spent = bid.spentPicks.map((pick, index) => ({
+      ...pick,
+      nativePickId: pick.orderPickId ?? `order-spent:${index}:${pick.asPick}`,
+      pointsUsed: slotPoints(pick.asPick),
+    }));
+    const missing = [bid.selectionNumber, ...bid.spentPicks.map(({ asPick }) => asPick)].filter(
+      (slot) => slotPoints(slot) === null
+    );
+    const shares: AflTradeMatchedBidShares =
+      points === null || missing.length > 0
+        ? {
+            status: 'refused',
+            reason: 'slot_points_missing',
+            detail: `The ${bid.draftYear} DVI gives no points for pick ${missing.join(', ')}.`,
+          }
+        : aflTradeMatchedBidShares(
+            {
+              draftYear: bid.draftYear,
+              selectionNumber: bid.selectionNumber,
+              roundNumber: bid.roundNumber,
+              points,
+              ladderPosition: bid.ladderPosition,
+              consumedPicks: spent.map(({ nativePickId, pointsUsed }) => ({
+                nativePickId,
+                pointsUsed: pointsUsed!,
+              })),
+              leftoverPicks: bid.leftoverPicks.map(({ orderPickId }) => ({
+                nativePickId: orderPickId,
+                points: null,
+              })),
+            },
+            rules
+          );
+    const found = nomineeOf(candidate, bid);
+    const nominee = found && {
+      ...found,
+      firstStint: stintValue(found.playerId, bid.clubId!, bid.draftYear + 1),
+    };
+    const stintWorth = nominee?.firstStint?.value ?? null;
+    return {
+      bidMatchId: bid.bidMatchId,
+      source: 'draftguru_order' as const,
+      draftYear: bid.draftYear,
+      draftType: bid.draftType,
+      selectionNumber: bid.selectionNumber,
+      clubId: bid.clubId,
+      bidClubId: bid.bidClubId,
+      basis: bid.basis,
+      ladderPosition: bid.ladderPosition,
+      nominee,
+      pricing: pricingOf(shares),
+      spentPicks: spent.map((pick, index): AflTradeAssetLedgerBidSpentPick => {
+        const share = shares.status === 'shared' ? shares.picks[index]! : null;
+        const pickId = pickIdOf(pick.orderPickId);
+        const stated = pick.originKind === 'entitlement' || pick.originKind === 'leftover_points';
+        return {
+          nativePickId: pick.nativePickId,
+          label: `Pick ${pick.asPick}`,
+          originalNumber: null,
+          originalClubId: stated ? (pick.routeClubIds[0] ?? null) : null,
+          pointsUsed: pick.pointsUsed ?? 0,
+          pickId,
+          link: pickId === null ? 'order_row_untied' : 'order_row',
+          countedPoints: share?.countedPoints ?? null,
+          share: share?.share ?? null,
+          use: share?.use ?? null,
+          value: share && stintWorth !== null ? share.share * stintWorth : null,
+          asPick: pick.asPick,
+          // The route is the original club, each hop's club, then the holder: the clubs between.
+          viaClubIds: pick.routeClubIds.slice(1, -1),
+          originKind: pick.originKind,
+        };
+      }),
+      orderLeftovers: bid.leftoverPicks,
     };
   });
 }
@@ -255,10 +373,17 @@ export function aflTradeAssetLedgerShareMatchedBid(
     boardPicks: [],
   }
 ): AflTradeAssetLedgerStatedPickOutcome {
-  // The order states the spend, not its price: no board prices a 2026 bid, so it stays pending.
-  if (outcome.basis === 'order_bid_spent') return outcome;
+  // A pick the order says was spent takes its share from the order's bid alone (owner, 2026-11-24).
+  if (outcome.basis === 'order_bid_spent')
+    return orderBidShare(
+      outcome,
+      pick,
+      bidMatches.filter(({ source }) => source === 'draftguru_order')
+    );
+  // Every other pick reads the boards only, as before the order's bids were priced.
+  const boards = bidMatches.filter(({ source }) => source === undefined);
   const same = review.samePicks.find((row) => row.pickId === pick.pickId);
-  const spends = bidMatches.flatMap((bid) =>
+  const spends = boards.flatMap((bid) =>
     bid.spentPicks
       .filter(
         (spent) =>
@@ -282,13 +407,46 @@ export function aflTradeAssetLedgerShareMatchedBid(
     return { kind: 'passed', boardPickId: passed.boardPickId };
   }
   if (spends.length === 0)
-    return boardShowsNotSpent(outcome, pick, bidMatches)
+    return boardShowsNotSpent(outcome, pick, boards)
       ? { kind: 'not_used', evidence: 'board_not_spent' }
       : pending('no_bid_spend');
   if (spends.length > 1) return pending('spent_twice');
   const { bid, pick: spent } = spends[0]!;
   if (bid.pricing.status === 'refused' || spent.share === null) return pending('bid_unpriced');
   if (bid.nominee === null) return pending('nominee_unresolved');
+  return {
+    kind: 'matched_bid',
+    status: 'shared',
+    basis: outcome.basis,
+    matchedBidBoardPickIds: outcome.matchedBidBoardPickIds,
+    bidMatchId: bid.bidMatchId,
+    nomineePlayerId: bid.nominee.playerId,
+    countedPoints: spent.countedPoints!,
+    share: spent.share,
+    use: spent.use!,
+    value: spent.value,
+  };
+}
+
+/**
+ * A pick the order says was spent, with its share of the nominee when exactly one order bid lists it
+ * spent by its holder, prices the bid and names its nominee. Otherwise it stays as it was (pending,
+ * `bid_unpriced`), or pending with the reason when the bid is priced but cannot share it.
+ */
+function orderBidShare(
+  outcome: Extract<AflTradeAssetLedgerMatchedBidOutcome, { status: 'pending' }>,
+  pick: AflTradeAssetLedgerBidPick,
+  orderBids: readonly AflTradeAssetLedgerBidMatch[]
+): AflTradeAssetLedgerStatedPickOutcome {
+  const spends = orderBids.flatMap((bid) =>
+    bid.spentPicks.filter((spent) => spent.pickId === pick.pickId).map((spent) => ({ bid, spent }))
+  );
+  if (spends.length === 0) return outcome;
+  if (spends.length > 1) return { ...outcome, pendingReason: 'spent_twice' };
+  const { bid, spent } = spends[0]!;
+  if (bid.pricing.status === 'refused' || spent.share === null) return outcome;
+  if (bid.nominee === null || bid.clubId !== pick.holderClubId)
+    return { ...outcome, pendingReason: 'nominee_unresolved' };
   return {
     kind: 'matched_bid',
     status: 'shared',

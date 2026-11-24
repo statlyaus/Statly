@@ -4139,11 +4139,18 @@ priced matched-bid pick is valued and counted in the trade's nets.
   | ------------ | ------------------------------------------------------------------------------------------------------------ |
   | 2019 to 2024 | 2015 DVI. A first-round bid (the whole round) is 20% off; a later bid 197 points off; after pick 56, refused |
   | 2025         | 2025 DVI. 10% off selections 1 to 18, 84 points off 19 to 36, and from 37 the club's next selection          |
-  | 2026 on      | Ladder bands (AFL 1508308) kept as data; refused until the 19-club values are published                      |
+  | 2026 on      | 2026 DVI (54 slots). By the matching club's ladder position: see below                                       |
 
-  A year with no rule, a band the rule does not state, a missing round or ladder position, or a price
-  that is not positive is a refusal, never a guess. Arithmetic is in tenths of a point, so every price
-  and share is exact.
+  The 2026 rule (AFL 1508240, examples AFL 1508308, DVI from afl.com.au/draft/draft-order; owner-approved
+  2026-11-24) reads the matching club's final ranking that season, finals included: 1st-2nd pay a 20%
+  loading and 3rd-4th a 10% loading on bids 1 to 18, and the DVI from 19 to 36; 5th-10th pay the DVI on
+  1 to 36; 11th-18th get 10% off 1 to 36; from 37 every club's next pick pays. At most two picks match a
+  bid up to 36, and a deficit over 412 DVI points (`maximumDeficitPoints`, a rule field) is refused. A
+  19th club (from 2027) has no band. The rule's further condition, that a club owing a deficit holds a
+  first-round pick in the next draft, is not modelled. A year with no rule, a band the rule does not
+  state, a missing round or ladder position, a deficit over the rule's limit, or a price that is not
+  positive is a refusal, never a guess. Arithmetic is in tenths of a point, so every price and share is
+  exact.
 
 - **Order and shares** (`valuation/matchedBidShares.ts`). The club spends its next pick first, so the
   board's spent picks must never rise in points. Each counts at its points when spent (the board's
@@ -4178,6 +4185,22 @@ priced matched-bid pick is valued and counted in the trade's nets.
   status: a matched-bid selection is `unresolved` when its pick has no custody slot (the bid created
   it), as all 54 are on candidate `984689fa`, and that says nothing of who was drafted. A `disputed`
   selection, whose providers disagree on the player or club, names no nominee.
+- **2026 bids, from Draftguru's post-draft order** (owner, 2026-11-24). Footyinfo has no 2026 board,
+  so the order's own rows state each bid (`draftOrderBidMatches`, from the rows post-draft order
+  reconciliation already read, `source/draftguruOrderBidMatchReconciliation.ts`): the nominee row
+  ("Ess bid for Dougie Cochrane matched (Next Generation Academy) using picks 6, 22"), each spent row
+  ("Used to match bid for Dougie Cochrane as pick 22") and any leftover row ("Created for GWS from
+  leftover points after matching bid for Ethan Matthews"). A listed number ties the club's one spent
+  row for that nominee spent as it; when the spent rows are not exactly the listed numbers none is
+  tied. The order states slots, never points: the bid and each spent pick are valued at the 2026 DVI,
+  a spent pick at the live slot it was spent as. The matching club's ladder position is the owner's
+  input, recorded on the bid at preparation (`--bid-ladder`, below); without it the bid is refused
+  (`ladder_position_missing`). In the ledger an order bid is `source: 'draftguru_order'`, listed after
+  the boards' bids. A spent pick is the candidate pick whose transfer its order row's last hop ties
+  (`order_row`); a row that ties no traded pick (the club's own pick) is `order_row_untied`, and no
+  number joins anything. A pick with `basis: 'order_bid_spent'` takes its share only from an order bid;
+  unpriced, it stays pending as before. Every other pick reads the boards only, so an order bid never
+  turns a `nominee_count` pick into `not_used`. 2019 to 2025 records and lines are unchanged.
 
 **Lookups.** `stintValue(playerId, clubId, fromSeason)` returns any player's first stint at any club
 from a season, by the shared stint rule and arrival check (`valuation/stints.ts`; a reviewed arrival in the season
@@ -4398,7 +4421,10 @@ code change. Top to bottom:
   were read at (the end of a season, or a draft or trade period of the last season).
 - **Matched bids:** a pick spent matching a bid is shown as a swap. Its card gives the AFL price, a
   points bar and table of the points and share of the price each spent pick covered, the pick's value
-  (its value line: its share of the nominee's line) and any leftover pick. The share is in the totals.
+  (its value line: its share of the nominee's line), any leftover pick, and any deficit, which comes off
+  the club's first-round pick in the next draft. Before the nominee's first season ends his value is
+  read as projected from the bid slot, as an unplayed draftee's is. A 2026 spent pick is named by its
+  live slot and route ("Pick 13 (from Melbourne via Port Adelaide)"). The share is in the totals.
 - **Players:** what each club ended up with, then the ones that got away, each with a still-at-club
   marker.
 - **Lineage:** each asset of the trade followed through every later trade to what it became, with a

@@ -2,9 +2,14 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AflTradeStoryPage, headline } from '@/components/aflTradeStory/AflTradeStoryPage';
+import { BidMatchShareCard } from '@/components/aflTradeStory/BidMatchShareCard';
 import { TradeTree } from '@/components/aflTradeStory/TradeTree';
 import { aflTradeStorySamples } from '@/server/aflTradeIntelligence/development/tradeStorySamples';
-import type { AflTradePageModel } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
+import type { AflTradeAssetLedgerBidMatch } from '@/server/aflTradeIntelligence/valuation/assetLedgerContracts';
+import type {
+  AflTradePageBidMatch,
+  AflTradePageModel,
+} from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
 
 import { TRADE } from '../fixtures/aflTradeStoryCameronChainFixture';
 
@@ -436,5 +441,134 @@ describe('private trade page: this trade over time (#789 step 7)', () => {
     expect(rows).toHaveLength(geelong.line.length);
     expect(textOf(rows[0]!)).toBe('At the trade, 2020 +28.1* −28.1*');
     expect(textOf(rows.at(-1)!)).toBe('End of 2026 +50.9 −50.9');
+  });
+});
+
+describe('bid match card: a 2026 Draftguru order bid (owner, 2026-11-24)', () => {
+  const spent = (asPick: number, label: string, countedPoints: number | null) => ({
+    nativePickId: `order-${asPick}`,
+    label,
+    originalNumber: null,
+    originalClubId: null,
+    pointsUsed: 0,
+    pickId: `pick-${asPick}`,
+    link: 'order_row' as const,
+    countedPoints,
+    share: countedPoints === null ? null : countedPoints / 2700,
+    use: countedPoints === null ? null : ('full' as const),
+    value: null,
+    asPick,
+  });
+  /** Port Adelaide matched Dougie Cochrane's bid at 1 with picks 6 and 22, 355 points short. */
+  const portBid = (fields: Partial<AflTradeAssetLedgerBidMatch> = {}): AflTradePageBidMatch => ({
+    match: {
+      bidMatchId: 'external-draft-order-bid-match:test',
+      source: 'draftguru_order',
+      draftYear: 2026,
+      draftType: 'national',
+      selectionNumber: 1,
+      clubId: 'port',
+      bidClubId: 'essendon',
+      basis: 'next_generation_academy',
+      ladderPosition: 15,
+      nominee: {
+        selectionId: 'sel-c',
+        playerId: 'cochrane',
+        firstStint: {
+          clubId: 'port',
+          startSeason: 2027,
+          endSeason: null,
+          status: 'open',
+          arrivalReviewed: false,
+          beganBeforeCoverage: false,
+          seasons: [],
+          seasonsMissingPav: [],
+          total: 0,
+          value: 0,
+        },
+      },
+      pricing: {
+        status: 'shared',
+        ruleId: 'afl-bid-price-2026-ladder',
+        pricePoints: 2700,
+        leftover: null,
+        deficit: { points: 355, against: 'next_draft_first_pick' },
+      },
+      spentPicks: [spent(6, 'Pick 6', 1659), spent(22, 'Pick 22 (from Richmond)', 686)],
+      ...fields,
+    },
+    nomineeName: 'Dougie Cochrane',
+    clubName: 'Port Adelaide',
+    leftoverLabels: [],
+  });
+  const renderCard = (
+    bid: AflTradePageBidMatch,
+    value: Parameters<typeof BidMatchShareCard>[0]['value'] = { kind: 'known', pav: 21.3 },
+    season = 2026,
+    kind: 'season_end' | 'draft' = 'season_end'
+  ) =>
+    render(
+      <BidMatchShareCard
+        assetId="pick-22"
+        label="Pick 22 (from Richmond)"
+        share={{ bid, spentIndex: 1 }}
+        value={value}
+        checkpoint={{ kind, season }}
+      />
+    ).container;
+
+  it('says the deficit comes off next year’s first-round pick, and the value is projected', () => {
+    const card = renderCard(portBid());
+    expect(textOf(card)).toContain(
+      'Port Adelaide matched a bid for Dougie Cochrane at pick 1 in 2026. The price was 2,700 points, paid with 2 picks.'
+    );
+    expect(textOf(card)).toContain(
+      'Port Adelaide were 355 points short. Those points come off their first-round pick in the 2027 draft.'
+    );
+    expect(textOf(card)).toContain(
+      '21.30 Pick 22 (from Richmond)’s share: 25.4% of Dougie Cochrane’s projected value'
+    );
+    expect(textOf(card)).toContain(
+      'Dougie Cochrane has not played a season yet, so his value is projected from pick 1.'
+    );
+    expect(textOf(card)).not.toContain('price is not known');
+  });
+
+  it('drops the projection once the nominee has played, and the deficit line with no deficit', () => {
+    const card = renderCard(
+      portBid({
+        pricing: {
+          status: 'shared',
+          ruleId: 'afl-bid-price-2026-ladder',
+          pricePoints: 2345,
+          leftover: null,
+          deficit: null,
+        },
+      }),
+      { kind: 'known', pav: 21.3 },
+      2027
+    );
+    expect(textOf(card)).toContain('of Dougie Cochrane’s value');
+    expect(textOf(card)).not.toContain('projected');
+    expect(textOf(card)).not.toContain('points short');
+    // A story read at the next draft comes after that season's end: still played, not projected.
+    const atDraft = renderCard(portBid(), { kind: 'known', pav: 21.3 }, 2027, 'draft');
+    expect(textOf(atDraft)).not.toContain('projected');
+    // At the bid's own draft the nominee has not played.
+    const atBid = renderCard(portBid(), { kind: 'known', pav: 21.3 }, 2026, 'draft');
+    expect(textOf(atBid)).toContain('projected value');
+  });
+
+  it('says why a share is not in: an unpriced bid, or a nominee value not in yet', () => {
+    const unpriced = portBid({
+      pricing: { status: 'refused', reason: 'ladder_position_missing', detail: 'no ladder' },
+      spentPicks: [spent(6, 'Pick 6', null), spent(22, 'Pick 22 (from Richmond)', null)],
+    });
+    expect(textOf(renderCard(unpriced, { kind: 'pending', pending: 'matched_bid' }))).toContain(
+      'This bid has no price yet, so the pick’s share is not in yet.'
+    );
+    expect(textOf(renderCard(portBid(), { kind: 'pending', pending: 'unavailable' }))).toContain(
+      'Pick 22 (from Richmond)’s share is 25.4% of Dougie Cochrane. His value is not in yet.'
+    );
   });
 });
