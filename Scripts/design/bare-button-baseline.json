@@ -34,6 +34,7 @@
   "src/components/draft/PlayerGrid.tsx": 3,
   "src/components/draft/UnifiedDraftRoom.tsx": 13,
   "src/components/DraftWatchlist.tsx": 3,
+  "src/components/league/social/GiphyPicker.tsx": 1,
   "src/components/league/social/MessageBoardPanel.tsx": 1,
   "src/components/league/standings/StandingsLadder.tsx": 1,
   "src/components/league/standings/StandingsRace.tsx": 1,

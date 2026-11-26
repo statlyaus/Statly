@@ -836,7 +836,7 @@ export function CompetitionSettingsPanel({
                               </select>
                             </label>
                             {canManage && !matchup?.bracketKey ? (
-                              <div className="flex h-10 items-center gap-2">
+                              <div className="flex min-h-11 items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => void saveFixture(competitionRound.round, key)}
@@ -860,10 +860,7 @@ export function CompetitionSettingsPanel({
                                       void deleteFixture(competitionRound.round, matchup.id)
                                     }
                                     disabled={isSaving || isRoundReadOnly}
-                                    className={cn(
-                                      buttonStyles({ variant: 'danger' }),
-                                      'size-11 px-0'
-                                    )}
+                                    className={cn(buttonStyles(), 'size-11 px-0')}
                                   >
                                     <Trash2 aria-hidden="true" className="size-5" />
                                   </button>

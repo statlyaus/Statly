@@ -862,7 +862,7 @@ export default function LeagueTabs({
                                         type="button"
                                         onClick={() => setPendingRemoveUserId(member.userId)}
                                         aria-label={`Remove ${member.teamName}`}
-                                        className={buttonStyles({ variant: 'danger', size: 'sm' })}
+                                        className={buttonStyles({ variant: 'outline', size: 'sm' })}
                                       >
                                         Remove
                                       </button>

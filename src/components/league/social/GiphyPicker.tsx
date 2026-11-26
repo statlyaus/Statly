@@ -284,7 +284,7 @@ export default function GiphyPicker({
                       disabled={selectionPending}
                       aria-label={`Choose ${label}`}
                       onClick={() => void selectGif(gif)}
-                      className={cn(buttonStyles(), 'group relative min-h-24 overflow-hidden px-0')}
+                      className="group relative min-h-24 overflow-hidden rounded-cut bg-card text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
                     >
                       <img
                         src={preview.url}
