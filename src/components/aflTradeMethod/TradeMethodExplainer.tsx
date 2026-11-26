@@ -2,6 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
+import { buttonStyles, chipStyles } from '@/components/ui/controlStyles';
+
 import { DAWSON_SEASONS } from './dawsonExample';
 import { StepVisual } from './ExplainerVisuals';
 import { REFERENCES, STAGES, STEPS } from './explainerSteps';
@@ -178,9 +180,6 @@ const LAYOUT = {
   },
 } as const;
 
-const control =
-  'rounded-cut cursor-pointer border-2 border-foreground font-display font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
 export function TradeMethodExplainer() {
   const [season, setSeason] = useState(2025);
   const [step, setStep] = useState(0);
@@ -231,7 +230,7 @@ export function TradeMethodExplainer() {
                   type="button"
                   aria-pressed={season === y}
                   onClick={() => setSeason(y)}
-                  className={`${control} px-3.5 py-1.5 text-[14px] ${season === y ? 'bg-warning text-warning-foreground' : 'bg-card hover:bg-accent'}`}
+                  className={chipStyles({ picked: season === y })}
                 >
                   {y}
                 </button>
@@ -242,7 +241,7 @@ export function TradeMethodExplainer() {
 
         <section
           ref={sectionRef}
-          className="flex min-h-0 flex-1 scroll-mt-28 flex-col border-2 border-foreground bg-card"
+          className="ground-white flex min-h-0 flex-1 scroll-mt-28 flex-col border-2 border-foreground"
           aria-label="How PAV is calculated, step by step"
         >
           <Progress step={step} onPick={go} />
@@ -276,7 +275,7 @@ export function TradeMethodExplainer() {
               type="button"
               onClick={() => go(step - 1)}
               disabled={step === 0}
-              className={`${control} bg-card px-5 py-2 text-[15px] disabled:invisible`}
+              className={buttonStyles({ className: 'disabled:invisible' })}
             >
               ← Back
             </button>
@@ -287,7 +286,7 @@ export function TradeMethodExplainer() {
             <button
               type="button"
               onClick={() => go(last ? 0 : step + 1)}
-              className={`${control} bg-warning px-5 py-2 text-[15px] text-warning-foreground`}
+              className={buttonStyles({ variant: 'primary' })}
             >
               {last || !next ? (
                 'Start again'

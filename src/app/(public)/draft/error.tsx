@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { captureError } from '@/lib/sentry-utils';
 
 // Renders inside the draft hub layout, so the public header and section navigation stay usable
@@ -41,7 +42,7 @@ export default function DraftRouteError({
         <button
           type="button"
           onClick={() => retry()}
-          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className={buttonStyles({ variant: 'primary', className: 'mt-6' })}
         >
           Try again
         </button>

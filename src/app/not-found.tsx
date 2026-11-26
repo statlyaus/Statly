@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
+
 export const metadata: Metadata = {
   title: 'Page not found - Statly',
 };
@@ -14,10 +16,7 @@ export default function NotFound() {
         <p className="mb-6 text-muted-foreground">
           This page does not exist, or you do not have access to it.
         </p>
-        <Link
-          href="/"
-          className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
+        <Link href="/" className={buttonStyles({ variant: 'primary' })}>
           Go home
         </Link>
       </div>

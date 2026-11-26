@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import {
   draftHubHeaderKickerClass,
   draftHubHeroShellClass,
@@ -75,10 +76,7 @@ export default async function AflTradeMethodologyPage() {
             <span className={draftHubSectionPillClass}>
               {published ? 'Published methodology' : 'Valuation not yet published'}
             </span>
-            <Link
-              href="/draft/trades"
-              className="inline-flex min-h-11 items-center justify-center rounded-cut border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
+            <Link href="/draft/trades" className={buttonStyles()}>
               Return to trade explorer
             </Link>
           </div>

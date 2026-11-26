@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
+
 /** Shown on every public trade page while no owner-approved trade data is being served. */
 export function TradesUnavailable() {
   return (
@@ -9,10 +11,7 @@ export function TradesUnavailable() {
         Trade records are unavailable. This page cannot load until they are back.
       </p>
       <p className="mt-6">
-        <Link
-          href="/afl"
-          className="inline-flex min-h-11 items-center rounded-cut border border-border bg-card px-4 text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <Link href="/afl" className={buttonStyles()}>
           Back to AFL
         </Link>
       </p>
