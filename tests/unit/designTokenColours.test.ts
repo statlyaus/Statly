@@ -84,6 +84,18 @@ describe('design token colours', () => {
     expect(offenders).toEqual([]);
   });
 
+  // Tailwind's default palette is switched off (ticket 13b), so only the brand roles exist as colour
+  // utilities; turning it back on would let text-gray-500 and friends render again.
+  it("switches off Tailwind's default palette", () => {
+    const css = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
+
+    const reset = css.search(/@theme\s*\{\s*--color-\*:\s*initial;\s*\}/u);
+
+    // The reset must come before the brand roles in `@theme inline`, or it would wipe them too.
+    expect(reset).toBeGreaterThan(-1);
+    expect(reset).toBeLessThan(css.indexOf('@theme inline'));
+  });
+
   // The drift freeze: no file may hold more raw colours than the committed baseline, and a file
   // missing from it may hold none. After a clean-up, lower the baseline with
   // `node Scripts/design/count-raw-colours.mjs --write-baseline`.

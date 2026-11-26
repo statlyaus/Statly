@@ -6,6 +6,14 @@
    documentation. */
 @plugin '@tailwindcss/typography';
 
+/* Tailwind's default palette is off (ticket 13b, 2026-11-26): only the brand roles below exist as
+   colour utilities, so a class like text-gray-500 or bg-red-50 now emits nothing. An unknown class
+   fails silently, so Scripts/design/count-raw-colours.mjs stays the gate. Typography's prose colours
+   are its own literal values and are unaffected. */
+@theme {
+  --color-*: initial;
+}
+
 @theme inline {
   --font-sans: var(--font-saira), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
