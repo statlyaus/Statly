@@ -286,6 +286,8 @@ describe('trade story bundle: Draftguru order bids (owner, 2026-11-24)', () => {
     ['melbourne', 'Melbourne'],
     ['port', 'Port Adelaide'],
     ['footscray', 'Western Bulldogs'],
+    ['gold-coast', 'Gold Coast'],
+    ['sydney', 'Sydney'],
   ]);
   const name = (clubId: string) => names.get(clubId);
 
@@ -309,6 +311,29 @@ describe('trade story bundle: Draftguru order bids (owner, 2026-11-24)', () => {
         name
       )
     ).toBe('Pick 43 (compensation pick)');
+    // A compensation pick whose row says whose compensation it was (2026-11-26).
+    expect(
+      aflTradeStoryOrderSpentLabel(
+        orderSpent(43, {
+          originalClubId: null,
+          originKind: 'compensation',
+          compensationLabel: 'Band 3 Free Agency Comp for Trade Player',
+        }),
+        'footscray',
+        name
+      )
+    ).toBe('Pick 43 (compensation for losing Trade Player in free agency)');
+    // Three clubs in between read as a list, not "and ... and".
+    expect(
+      aflTradeStoryOrderSpentLabel(
+        orderSpent(8, {
+          originalClubId: 'gold-coast',
+          viaClubIds: ['melbourne', 'port', 'sydney'],
+        }),
+        'gws',
+        name
+      )
+    ).toBe('Pick 8 (from Gold Coast via Melbourne, Port Adelaide and Sydney)');
     expect(
       aflTradeStoryOrderSpentLabel(orderSpent(30, { originKind: 'leftover_points' }), 'gws', name)
     ).toBe('Pick 30 (from leftover points)');
@@ -341,12 +366,31 @@ describe('trade story bundle: Draftguru order bids (owner, 2026-11-24)', () => {
           spentNativePickId: 'order-13',
           remainderPoints: 1029.9,
           boardLeftoverPickIds: ['order-eime'],
+          use: {
+            status: 'selected',
+            leftoverPickId: 'order-eime',
+            selectionId: 'sel-e',
+            selectionNumber: 13,
+            playerId: 'eime',
+            firstStint: {
+              clubId: 'gws',
+              startSeason: 2027,
+              endSeason: null,
+              status: 'open',
+              arrivalReviewed: false,
+              beganBeforeCoverage: false,
+              seasons: [],
+              seasonsMissingPav: [],
+              total: 0,
+              value: 0,
+            },
+          },
         },
         deficit: null,
       },
       spentPicks: [
         orderSpent(8),
-        orderSpent(13, { originalClubId: 'melbourne', viaClubIds: ['port'] }),
+        orderSpent(13, { originalClubId: 'melbourne', viaClubIds: ['port'], use: 'partial' }),
       ],
       orderLeftovers: [{ orderPickId: 'order-eime', pickNumber: 13, playerId: 'eime' }],
     };
@@ -363,11 +407,26 @@ describe('trade story bundle: Draftguru order bids (owner, 2026-11-24)', () => {
       'Pick 8',
       'Pick 13 (from Melbourne via Port Adelaide)',
     ]);
-    expect(carried!.leftoverLabels).toEqual(['Pick 13 (Jake Eime)']);
+    // A new pick, used on a player: never "pick 13 became pick 13".
+    expect(carried!.leftoverLabels).toEqual(['a new pick 13, used on Jake Eime']);
+    expect(carried!.leftoverPlayers).toEqual([{ name: 'Jake Eime', whole: true }]);
     expect(carried!.nomineeName).toBe('Ethan Matthews');
-    // A board's bid keeps its leftover label by points, as before.
-    expect(
-      aflTradeStoryLeftoverLabels({ ...match, orderLeftovers: undefined }, () => undefined)
-    ).toEqual(['Leftover-points pick (1029.9 points)']);
+    // The leftover's player is named in the bundle, as every player its lines carry is.
+    expect(new Map(bundle.content.names.players).get('eime')).toBe('Jake Eime');
+    // A leftover the evidence does not tie says only that it became a new pick, once.
+    const pricing = match.pricing as Extract<typeof match.pricing, { status: 'shared' }>;
+    const untied = {
+      ...match,
+      orderLeftovers: undefined,
+      pricing: {
+        ...pricing,
+        leftover: {
+          ...pricing.leftover!,
+          boardLeftoverPickIds: ['6174', '6181'],
+          use: { status: 'untied' as const, reason: 'leftover_pick_unclear' as const },
+        },
+      },
+    };
+    expect(aflTradeStoryLeftoverLabels(untied, () => undefined)).toEqual(['a new pick']);
   });
 });

@@ -225,6 +225,12 @@ interface Options {
   relay?: boolean;
   /** Rule R2: p4's fate; `lapsed` unless set. */
   notUsedFate?: 'lapsed' | 'unknown' | 'unknown_bid';
+  /**
+   * The matched bid p3 was spent on leaves points over from p3, its last spent pick (owner,
+   * 2026-11-26), at p3's `share`: `selected` became C's pick 13 (E), `spent` was spent on C's later
+   * bid at 30 for M (a 25% share), `untied` the evidence does not say.
+   */
+  leftover?: { use: 'selected' | 'spent' | 'untied'; share: number };
 }
 /** Rule R2: p4 (C to A, "#40", 2021) by its fate; lapsed at a 48-selection draft, unknown at 65. */
 const notUsedP4 = (fate: Options['notUsedFate']) => ({
@@ -341,6 +347,19 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
       value: Math.max(0, total),
     };
   };
+  const leftoverUse = (use: NonNullable<Options['leftover']>['use']) =>
+    use === 'selected'
+      ? {
+          status: 'selected',
+          leftoverPickId: 'native-leftover',
+          selectionId: 'se',
+          selectionNumber: 13,
+          playerId: 'e',
+          firstStint: stint('e', 'c', 2022),
+        }
+      : use === 'spent'
+        ? { status: 'spent', leftoverPickId: 'native-leftover', bidMatchId: 'bid-2' }
+        : { status: 'untied', reason: 'leftover_not_in_evidence' };
   const stints: Record<string, AflTradeAssetLedgerStint> = {
     'x|a|2020': stint('x', 'a', 2020),
     'y|b|2021': stint('y', 'b', 2021, 2023),
@@ -381,7 +400,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
         bidMatchId: 'bid-1',
         nomineePlayerId: 'n',
         countedPoints: 600,
-        share: 0.6,
+        share: options.leftover?.share ?? 0.6,
         use: 'partial',
         value: null,
       },
@@ -434,7 +453,33 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
             selectionNumber: 3,
             clubId: 'c',
             nominee: { selectionId: 'sn', playerId: 'n', firstStint: stint('n', 'c', 2022) },
+            pricing: {
+              status: 'shared',
+              leftover:
+                options.leftover === undefined
+                  ? null
+                  : {
+                      spentNativePickId: 'native-p3',
+                      remainderPoints: 1029.9,
+                      boardLeftoverPickIds: ['native-leftover'],
+                      use: leftoverUse(options.leftover.use),
+                    },
+            },
+            spentPicks: [{ nativePickId: 'native-p3', pickId: pickId('p3'), share: 0.6 }],
           },
+          ...(options.leftover?.use === 'spent'
+            ? [
+                {
+                  bidMatchId: 'bid-2',
+                  draftYear: 2021,
+                  selectionNumber: 30,
+                  clubId: 'c',
+                  nominee: { selectionId: 'sm', playerId: 'm', firstStint: stint('m', 'c', 2022) },
+                  pricing: { status: 'shared', leftover: null },
+                  spentPicks: [{ nativePickId: 'native-leftover', pickId: null, share: 0.25 }],
+                },
+              ]
+            : []),
         ],
       },
     },
@@ -771,6 +816,97 @@ describe('computeAflTradeValueLines', () => {
     const point = pointOf(lines, P('p3'), at('season_end', 2024));
     expect(point.value).toBeCloseTo(0.6 * nominee.value, 6);
     expect(point.produced).toBeCloseTo(0.6 * 36, 6);
+  });
+
+  describe('a leftover pick (owner, 2026-11-26: the last spent pick’s remainder is its own pick)', () => {
+    // GWS 2026: pick 13 (1,080 points) covered 50.1 of Ethan Matthews' 1,493.1 and had 1,029.9 left
+    // over, which became GWS pick 13, used on Jake Eime. Here p3 is that pick, N the nominee, E Eime.
+    const share = 50.1 / 1493.1;
+    const LEFTOVER_ROWS: Row[] = [
+      ...BASE_ROWS,
+      ...range(2022, 2024).map((season) => ({
+        season,
+        playerId: 'e',
+        clubId: 'c',
+        games: 18,
+        pav: 7,
+      })),
+      ...range(2022, 2024).map((season) => ({
+        season,
+        playerId: 'm',
+        clubId: 'c',
+        games: 10,
+        pav: 3,
+      })),
+    ];
+    const linesOf = (leftover?: Options['leftover']) =>
+      computeAflTradeValueLines(inputs({ rows: LEFTOVER_ROWS, ...(leftover ? { leftover } : {}) }));
+    const played = (slot: number, games: number, pav: number) =>
+      aflTradeValueLinePointAt(
+        aflTradeValueLineSlotCurve(PARAMETERS, slot),
+        PARAMETERS,
+        range(2022, 2024).map((season) => ({ tenure: season - 2021, games, pav })),
+        3
+      ).value;
+    const zeroSum = (result: AflTradeValueLines) => {
+      for (const { clubs } of result.content.trades) {
+        const sum = (pick: (club: (typeof clubs)[number]) => number) =>
+          clubs.reduce((total, club) => total + pick(club), 0);
+        expect(sum((club) => club.atTrade.net)).toBeCloseTo(0, 6);
+        clubs[0]!.points.forEach((_, index) =>
+          expect(sum((club) => club.points[index]!.net)).toBeCloseTo(0, 6)
+        );
+      }
+    };
+    const withoutInputs = (result: AflTradeValueLines) => {
+      const { inputs: _inputs, ...content } = result.content;
+      return content;
+    };
+
+    it('values the last spent pick at its share of the nominee plus the whole leftover pick', () => {
+      const lines = linesOf({ use: 'selected', share });
+      expect(pointOf(lines, P('p3'), at('draft', 2021)).value).toBeCloseTo(share * V(3) + V(13), 6);
+      expect(pointOf(lines, P('p3'), at('season_end', 2024)).value).toBeCloseTo(
+        share * played(3, 22, 12) + played(13, 18, 7),
+        6
+      );
+      expect(pointOf(lines, P('p3'), at('season_end', 2024)).produced).toBeCloseTo(
+        share * 36 + 21,
+        6
+      );
+      // The line is still the nominee's share line; the slot and tenure are his.
+      expect(asset(lines, P('p3'))).toMatchObject({
+        basis: 'pick_matched_bid_share',
+        playerId: 'n',
+        share,
+      });
+      expect(pointOf(lines, P('p3'), at('draft', 2021)).slot).toEqual({
+        selectionNumber: 3,
+        source: 'bid_selection',
+      });
+      zeroSum(lines);
+    });
+
+    it('values a leftover spent on a later bid at its share of that bid’s nominee', () => {
+      const lines = linesOf({ use: 'spent', share });
+      expect(pointOf(lines, P('p3'), at('season_end', 2024)).value).toBeCloseTo(
+        share * played(3, 22, 12) + 0.25 * played(30, 10, 3),
+        6
+      );
+      zeroSum(lines);
+    });
+
+    it('keeps every line byte-identical when a leftover is untied, and every other asset when it is tied', () => {
+      const base = linesOf();
+      expect(withoutInputs(linesOf({ use: 'untied', share: 0.6 }))).toEqual(withoutInputs(base));
+      const tied = linesOf({ use: 'selected', share: 0.6 });
+      const others = (result: AflTradeValueLines) =>
+        result.content.assets.filter(({ assetKey }) => assetKey !== P('p3'));
+      expect(others(tied)).toEqual(others(base));
+      const away = (result: AflTradeValueLines) =>
+        result.content.trades.filter(({ transactionId }) => transactionId !== 't3');
+      expect(away(tied)).toEqual(away(base));
+    });
   });
 
   it('leaves every line as it was when the ledger also lists a 2026 Draftguru order bid', () => {

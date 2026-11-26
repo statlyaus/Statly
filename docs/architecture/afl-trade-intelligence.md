@@ -4156,7 +4156,7 @@ priced matched-bid pick is valued and counted in the trade's nets.
   board's spent picks must never rise in points. Each counts at its points when spent (the board's
   per-pick `pointsUsed`, its live slot), in full, until the price is met; the last counts only for what
   was still owed. Its remainder is the leftover pick, an asset of its own valued by its own outcome,
-  listed with the board's leftover-points picks for that match. A spent pick listed after the price is
+  listed with the board's leftover-points picks for that match (see "Leftover picks" below). A spent pick listed after the price is
   met is refused, and so is a board leftover pick that carries points when the rule leaves none over
   (its points would count twice). A shortfall is a deficit against the club's first pick of the next draft, recorded
   and never valued; under the 2025 next-selection rule a club that spent no pick owes its next
@@ -4165,6 +4165,22 @@ priced matched-bid pick is valued and counted in the trade's nets.
   boards captured with parser v2 on 2026-10-17 every one of the 54 bids is priced: three 2019 bids fall short (Liam Henry by 265.2,
   the AFL's 265), five 2025 bids owe a next selection, and the rest leave a remainder (Jamarra
   Ugle-Hagan 89, the AFL's pick 61).
+- **Leftover picks** (`valuation/assetLedgerBidLeftovers.ts`; owner, 2026-11-26). The leftover pick
+  has no trade of its own, so no line carries it: the bid's last spent pick carries it instead, at its
+  whole value. The ledger records on each leftover what it became (`pricing.leftover.use`), only as the
+  stored evidence states it. A Footyinfo leftover is the one listed pick that carries points, or the
+  only one listed; it was spent on a later bid of the same club when that bid lists it as a spent pick
+  (`spent`), else the board's own row of it (`leftoverPicks[].boardPickId`, the board pick of the same
+  capture keyed `<year>:<type>:pick:<board id>`) says it was selected (`selected`, at the one candidate
+  selection of that number by the matching club) or passed or removed (`not_used`). A Draftguru
+  leftover is its one leftover row: spent on a later order bid, selected at the row's number by the
+  row's player, or removed. Anything else is `untied` with the reason: no leftover pick listed (the
+  2019 boards), two that could carry it, held or used by another club (`leftover_traded`), no row of
+  it, no one selection, a selection a traded ledger pick already values (so nothing counts twice), or
+  a later bid with no price or nominee. The value line of the last spent pick is its share of the
+  nominee's line plus the leftover's selected player's whole line, or its share of the later nominee
+  (and that bid's own leftover, in turn); an untied leftover adds nothing, so that line is as before.
+  The ledger summary counts each leftover by what it became (`matchedBidLeftovers`).
 - **Which ledger pick a spent pick was.** By its custody slot only: the board label's pre-draft number
   and the original club, on a usable Official AFL custody row of the same draft, naming exactly one pick
   id. The holder is not compared, because a club may acquire a pick on draft night to spend it. With
@@ -5140,7 +5156,13 @@ The remaining work proceeds through these independently verifiable gates:
        when a spent row has none). Otherwise a hop ties only to the one transfer that agrees with its
        row: for a selected row, the transfer whose own pages state the same player; else the transfer
        whose stated entitlement, or custody pick's, is the row's origin, and only when every other
-       transfer left positively names another entitlement. Only the trade page's own
+       transfer left positively names another entitlement. Last (owner, 2026-11-26), a spent row whose
+       chain is one traded leg ties to the one transfer left that names its origin and states the very
+       number it was spent as, when every other transfer left states another number and names another
+       entitlement or none (Carlton's pick 15, Adelaide's first-rounder that came to Carlton in a live pick
+       swap and was used to match the bid for Cody Walker as pick 15, beside a pick 53 with no
+       custody); a second transfer
+       that could be the row's leaves it untied. Only the trade page's own
        round and original club can refuse a tie: a custody pick joined by a trade-time number may be
        another entitlement after draft-night renumbering (2026: Brisbane's first-rounder sat at 20 on
        the earlier order, where Essendon's second-rounder was traded). A transfer two slots could take

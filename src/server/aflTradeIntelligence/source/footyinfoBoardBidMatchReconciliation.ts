@@ -42,8 +42,17 @@ export interface AflTradeCanonicalDraftBoardBidMatch {
     holdingClubId: string | null;
     pointsUsed: number;
   }[];
-  /** The leftover-points picks the board says the match created. */
-  leftoverPicks: { nativePickId: string; holdingClubId: string | null; points: number | null }[];
+  /**
+   * The leftover-points picks the board says the match created. `boardPickId` is the board's own
+   * row for the pick (selected, passed or removed) when the same capture states one; a leftover pick
+   * spent on a later bid has no row, so it has none (owner, 2026-11-26).
+   */
+  leftoverPicks: {
+    nativePickId: string;
+    holdingClubId: string | null;
+    points: number | null;
+    boardPickId?: string;
+  }[];
   evidenceIds: string[];
 }
 
@@ -107,9 +116,24 @@ function createBoardCodeResolver(
 }
 
 /**
+ * The board's own row of each pick, by capture and source key: the adapter keys a board pick
+ * `<year>:<type>:pick:<board id>` (`parseFootyinfoDraftBoard`). Two rows with one key name neither.
+ */
+function boardPickRows(evidence: readonly Evidence[]): Map<string, string | null> {
+  const rows = new Map<string, string | null>();
+  for (const { evidenceId, content } of evidence) {
+    if (content.provider !== 'footyinfo' || content.claim.kind !== 'draft_board_pick') continue;
+    const key = `${content.capture.captureId}|${content.sourceRow.sourceKey}`;
+    rows.set(key, rows.has(key) ? null : evidenceId);
+  }
+  return rows;
+}
+
+/**
  * One record per Footyinfo `draft_board_bid_match` row: the matching and bidding clubs and the
  * nominee through their own resolutions, and each spent and leftover pick's clubs by board code. A
- * club with no resolution is reported through `noteUnresolved`, as the board picks report theirs.
+ * club with no resolution is reported through `noteUnresolved`, as the board picks report theirs. A
+ * leftover pick names its own board row when the bid's capture states one.
  */
 export function reconcileFootyinfoBoardBidMatches(input: {
   evidence: readonly Evidence[];
@@ -117,12 +141,13 @@ export function reconcileFootyinfoBoardBidMatches(input: {
   noteUnresolved: (club: RecordedEntity, evidenceId: string, detail?: string) => void;
 }): AflTradeCanonicalDraftBoardBidMatch[] {
   const resolveCode = createBoardCodeResolver(input.evidence, input.lookup, input.noteUnresolved);
+  const boardRows = boardPickRows(input.evidence);
   return input.evidence
     .filter(
       (row): row is BidMatchEvidence =>
         row.content.provider === 'footyinfo' && row.content.claim.kind === 'draft_board_bid_match'
     )
-    .map(({ evidenceId, content: { claim } }) => {
+    .map(({ evidenceId, content: { claim, capture } }) => {
       const clubOf = (club: RecordedEntity) => {
         const clubId = input.lookup('club', club);
         if (clubId === null) input.noteUnresolved(club, evidenceId);
@@ -151,11 +176,23 @@ export function reconcileFootyinfoBoardBidMatches(input: {
           holdingClubId: code(pick.holdingClubCode),
           pointsUsed: pick.pointsUsed,
         })),
-        leftoverPicks: claim.leftoverPicks.map((pick) => ({
-          nativePickId: pick.nativePickId,
-          holdingClubId: code(pick.holdingClubCode),
-          points: pick.points,
-        })),
+        leftoverPicks: claim.leftoverPicks.map((pick) => {
+          const row = boardRows.get(
+            `${capture.captureId}|${claim.draftYear}:${claim.draftType}:pick:${pick.nativePickId}`
+          );
+          return {
+            nativePickId: pick.nativePickId,
+            holdingClubId: code(pick.holdingClubCode),
+            points: pick.points,
+            ...(row
+              ? {
+                  boardPickId: createAflTradeContentAddress('external-draft-board-pick', {
+                    evidenceId: row,
+                  }),
+                }
+              : {}),
+          };
+        }),
         evidenceIds: [evidenceId],
       };
     })

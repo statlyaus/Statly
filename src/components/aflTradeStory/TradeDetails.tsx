@@ -16,6 +16,7 @@ import {
   formatPav,
   formatSigned,
   netText,
+  shareSubject,
   type AflTradePageAudience,
   type AflTradePageBidShare,
 } from './tradePageModel';
@@ -57,7 +58,7 @@ function AssetRow({
                 href={`#${bidShareAnchor(asset.assetId)}`}
                 className="text-primary underline underline-offset-2"
               >
-                share of {outcome.playerName}
+                share of {shareSubject(outcome.playerName, share)}
               </a>
             ) : (
               `share of ${outcome.playerName}`

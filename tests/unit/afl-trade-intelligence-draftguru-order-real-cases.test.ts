@@ -708,12 +708,34 @@ describe('Draftguru post-draft order on the shapes the genuine 2026 data showed'
       });
     });
 
-    it('leaves the spent hop untied, and both picks it could be unresolved, when the third pick names no entitlement', () => {
+    it('ties the spent hop of one traded leg by the number it was spent as when the third pick names no entitlement but states another number (owner, 2026-11-26)', () => {
+      // The genuine Carlton pick 15: "Adel R1 pick (6th) | To Carl in live pick swap | Used to
+      // match bid for Cody Walker as pick 15", and the trade states pick 15.
       const content = swap([]);
       expect(pickOf(content, event, watkins).outcome).toMatchObject({
         disposition: 'selected',
         playerId: playerId('Jackson Watkins'),
       });
+      const tied = pickOf(content, event, spent);
+      expect(tied.outcome).toMatchObject({
+        disposition: 'not_used',
+        nominationBasis: 'order_bid_spent',
+      });
+      const orderRow = (content.draftOrderPicks ?? []).find(
+        ({ orderPickId }) => orderPickId === tied.outcome!.orderPickId
+      );
+      expect(orderRow).toMatchObject({ outcome: 'bid_spent', asPick: 15 });
+      expect(orderRow!.hopTransferIds).toEqual([tied.transfer.transferId]);
+      expect(pickOf(content, event, unused).outcome).toMatchObject({
+        disposition: 'not_used',
+        nominationBasis: 'order_not_listed',
+      });
+    });
+
+    it('leaves the spent hop untied, and both picks it could be unresolved, when a second leg names the same entitlement', () => {
+      // A second candidate leg: the third pick's custody is Adelaide's first-rounder too, so the
+      // number the row was spent as does not settle which leg it was.
+      const content = swap([custody(53, 1, 'Adelaide', 'Carlton')]);
       for (const pick of [spent, unused]) {
         expect(pickOf(content, event, pick).outcome).toMatchObject({
           disposition: 'not_used',

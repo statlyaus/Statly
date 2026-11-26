@@ -303,6 +303,9 @@ export function aflTradeAssetLedgerOrderBidMatches(
           // The route is the original club, each hop's club, then the holder: the clubs between.
           viaClubIds: pick.routeClubIds.slice(1, -1),
           originKind: pick.originKind,
+          ...(pick.compensationLabel === undefined
+            ? {}
+            : { compensationLabel: pick.compensationLabel }),
         };
       }),
       orderLeftovers: bid.leftoverPicks,

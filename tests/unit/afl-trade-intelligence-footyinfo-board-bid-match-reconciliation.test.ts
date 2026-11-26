@@ -23,7 +23,7 @@ type Claim = AflTradeExternalEvidenceContent['claim'];
 const digest = (character: string) => character.repeat(64);
 const capturedAt = '2026-10-17T00:00:00.000Z';
 
-function board(claims: Claim[]) {
+function board(claims: Claim[], sourceKeys: readonly (string | undefined)[] = []) {
   const capture = {
     captureId: `source-capture:${digest('7')}`,
     artifactId: `artifact:${digest('7')}`,
@@ -44,7 +44,10 @@ function board(claims: Claim[]) {
         schemaVersion: AFL_TRADE_EXTERNAL_EVIDENCE_SCHEMA_VERSION,
         provider: 'footyinfo',
         capture,
-        sourceRow: { ordinal: index + 1, sourceKey: `2021:national:${index + 1}` },
+        sourceRow: {
+          ordinal: index + 1,
+          sourceKey: sourceKeys[index] ?? `2021:national:${index + 1}`,
+        },
         claim,
         publicationEligible: false,
       })
@@ -148,8 +151,12 @@ const identities = [
   identity('player', darcy, 'player-sam-darcy'),
 ];
 
-function reconcile(claims: Claim[], resolutions = identities) {
-  const source = board(claims);
+function reconcile(
+  claims: Claim[],
+  resolutions = identities,
+  sourceKeys: readonly (string | undefined)[] = []
+) {
+  const source = board(claims, sourceKeys);
   const candidate = parseAflTradeExternalReconciliationCandidate(
     reconcileAflTradeExternalEvidence({
       environment: 'test_fixture',
@@ -233,6 +240,40 @@ describe('Footyinfo matched bids in reconciliation (issue 789)', () => {
     expect(candidate.issues).toEqual([
       expect.objectContaining({ code: 'identity_unresolved', subjectKey: 'board-pick:club:ZZZ' }),
     ]);
+  });
+
+  it('names the board’s own row of a leftover pick, keyed as the board keys its picks (2026-11-26)', () => {
+    // The leftover pick 5792 is a board row of its own, `2021:national:pick:5792`: here passed.
+    const leftoverRow: Claim = {
+      ...hawthornPick,
+      club: WBD,
+      status: 'passed',
+      routeLabel: 'leftover_points',
+    } as Claim;
+    const claims = [selection, boardPick(WBD), hawthornPick, leftoverRow, bidMatch()];
+    const { candidate, rows } = reconcile(claims, identities, [
+      undefined,
+      undefined,
+      undefined,
+      '2021:national:pick:5792',
+    ]);
+    const row = rows[3]!;
+    const boardPick5792 = candidate.draftBoardPicks!.find(({ evidenceIds }) =>
+      evidenceIds.includes(row.evidenceId)
+    )!;
+    expect(boardPick5792).toMatchObject({ status: 'passed', clubId: 'club-western-bulldogs' });
+    expect(candidate.draftBoardBidMatches?.[0]?.leftoverPicks).toEqual([
+      {
+        nativePickId: '5792',
+        holdingClubId: 'club-western-bulldogs',
+        points: 135,
+        boardPickId: boardPick5792.boardPickId,
+      },
+    ]);
+    // A leftover with no row of its own (spent on a later bid) names none.
+    expect(
+      reconcile(claims).candidate.draftBoardBidMatches?.[0]?.leftoverPicks[0]
+    ).not.toHaveProperty('boardPickId');
   });
 
   it('adds no draftBoardBidMatches key without a matched bid, so candidate ids are unchanged', () => {

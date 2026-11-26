@@ -1,4 +1,5 @@
 import type { AflTradeAssetLedgerReadModel } from './assetLedger';
+import { aflTradeAssetLedgerLeftoverParts } from './assetLedgerBidLeftovers';
 import type { AflTradeAssetLedgerPick } from './assetLedgerContracts';
 import { aflTradePickLatestOrderNumber, type AflTradePickCustody } from './pickSlots';
 import type { AflTradeStructureLeg, AflTradeStructureTrade } from './tradeStructureContracts';
@@ -64,6 +65,29 @@ const scaled = (raw: AflTradeValueLineRawPoint, share: number): AflTradeValueLin
     value: by(raw.value),
     produced: by(raw.produced),
     expectedRemaining: by(raw.expectedRemaining),
+  };
+};
+
+/**
+ * Several player lines as one point: the first point's slot and tenure, the values summed, open while
+ * any is open, and pending (as the first pending point) when any is. One point is returned as it is.
+ */
+const summed = ([
+  first,
+  ...rest
+]: readonly AflTradeValueLineRawPoint[]): AflTradeValueLineRawPoint => {
+  if (rest.length === 0) return first!;
+  const all = [first!, ...rest];
+  const pendingPoint = all.find(({ state }) => state === 'pending');
+  if (pendingPoint !== undefined) return pendingPoint;
+  const sum = (field: 'value' | 'produced' | 'expectedRemaining') =>
+    all.reduce((total, point) => total + (point[field] ?? 0), 0);
+  return {
+    ...first!,
+    state: all.some(({ state }) => state === 'open') ? 'open' : first!.state,
+    value: sum('value'),
+    produced: sum('produced'),
+    expectedRemaining: sum('expectedRemaining'),
   };
 };
 
@@ -161,19 +185,39 @@ function pickSpec(
       if (!match || !nominee?.firstStint || match.clubId === null || match.draftYear !== draftYear)
         return line('pick_pending', () => pending('matched_bid'));
       const stint = nominee.firstStint;
+      // The bid's last spent pick also carries the pick its leftover points became (owner,
+      // 2026-11-26): only it is partly used, and only a tied leftover adds a line.
+      const leftover =
+        outcome.use === 'partial'
+          ? aflTradeAssetLedgerLeftoverParts(sources.ledger.ledger.content.bidMatches, match)
+          : [];
       return line(
         'pick_matched_bid_share',
         (checkpoint) =>
-          scaled(
-            reader.drafted(
-              { selectionNumber: match.selectionNumber, source: 'bid_selection' },
-              draftYear,
-              nominee.playerId,
-              stint,
-              checkpoint
+          summed([
+            scaled(
+              reader.drafted(
+                { selectionNumber: match.selectionNumber, source: 'bid_selection' },
+                draftYear,
+                nominee.playerId,
+                stint,
+                checkpoint
+              ),
+              outcome.share
             ),
-            outcome.share
-          ),
+            ...leftover.map((part) =>
+              scaled(
+                reader.drafted(
+                  { selectionNumber: part.selectionNumber, source: part.source },
+                  part.draftYear,
+                  part.playerId,
+                  part.firstStint,
+                  checkpoint
+                ),
+                part.share
+              )
+            ),
+          ]),
         { playerId: nominee.playerId, clubId: match.clubId, share: outcome.share }
       );
     }

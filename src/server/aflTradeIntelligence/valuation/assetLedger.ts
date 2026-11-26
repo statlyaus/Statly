@@ -18,6 +18,7 @@ import {
   aflTradeAssetLedgerShareMatchedBid,
   type AflTradeAssetLedgerTradedEntitlement,
 } from './assetLedgerBidMatches';
+import { aflTradeAssetLedgerBidLeftoverUses } from './assetLedgerBidLeftovers';
 import {
   aflTradeAssetLedgerSettleNotUsedPicks,
   type AflTradeAssetLedgerNotUsedRow,
@@ -217,8 +218,14 @@ function picksOf(
 
 function summaryOf(
   players: readonly AflTradeAssetLedgerPlayer[],
-  picks: readonly AflTradeAssetLedgerPick[]
+  picks: readonly AflTradeAssetLedgerPick[],
+  bidMatches: readonly AflTradeAssetLedgerBidMatch[]
 ): AflTradeAssetLedgerContent['summary'] {
+  const leftovers = { selected: 0, spent: 0, not_used: 0, untied: 0 };
+  for (const { pricing } of bidMatches) {
+    const use = pricing.status === 'shared' ? pricing.leftover?.use : undefined;
+    if (use !== undefined) leftovers[use.status]++;
+  }
   const outcomes: Record<AflTradeAssetLedgerOutcomeKind, number> = {
     selected: 0,
     not_used: 0,
@@ -240,6 +247,7 @@ function summaryOf(
     matchedBidPicksShared: picks.filter(
       ({ outcome }) => outcome.kind === 'matched_bid' && outcome.status === 'shared'
     ).length,
+    matchedBidLeftovers: leftovers,
   };
 }
 
@@ -252,7 +260,7 @@ export function createAflTradeAssetLedger(
   const players = playersOf(inputs, labels, stintValue);
   // The boards' bids first, then the order's (2026 on, owner 2026-11-24), so a ledger without order
   // bids lists exactly what it did before them.
-  const bidMatches = [
+  const priced = [
     ...aflTradeAssetLedgerBidMatches(
       inputs.candidate,
       stintValue,
@@ -261,7 +269,14 @@ export function createAflTradeAssetLedger(
     ),
     ...aflTradeAssetLedgerOrderBidMatches(inputs.candidate, stintValue),
   ];
-  const picks = picksOf(inputs, stintValue, bidMatches);
+  const picks = picksOf(inputs, stintValue, priced);
+  // What each leftover pick became, once the picks are settled (owner, 2026-11-26).
+  const bidMatches = aflTradeAssetLedgerBidLeftoverUses(
+    inputs.candidate,
+    stintValue,
+    priced,
+    picks
+  );
   const content: AflTradeAssetLedgerContent = {
     schemaVersion: AFL_TRADE_ASSET_LEDGER_SCHEMA_VERSION,
     environment: 'non_production',
@@ -279,7 +294,7 @@ export function createAflTradeAssetLedger(
     players,
     picks,
     bidMatches,
-    summary: summaryOf(players, picks),
+    summary: summaryOf(players, picks, bidMatches),
     publicationEligible: false,
     publicationProhibited: true,
     limitation: AFL_TRADE_ASSET_LEDGER_LIMITATION,

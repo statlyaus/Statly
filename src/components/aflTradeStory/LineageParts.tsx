@@ -2,7 +2,13 @@ import { chipStyles } from '@/components/ui/controlStyles';
 import type { AflTradeStoryLineageAsset } from '@/server/aflTradeIntelligence/valuation/realizedTradeStory';
 
 import { bidShareAnchor } from './BidMatchShareCard';
-import { formatPav, knownPav, PENDING_TEXT, type AflTradePageBidShare } from './tradePageModel';
+import {
+  formatPav,
+  knownPav,
+  PENDING_TEXT,
+  shareSubject,
+  type AflTradePageBidShare,
+} from './tradePageModel';
 
 /** The longest outcome bar, in pixels: every row's bar is on the same scale. */
 const BAR_WIDTH = 240;
@@ -74,7 +80,7 @@ export function Outcome({
               href={`#${bidShareAnchor(asset.assetId)}`}
               className="text-primary underline underline-offset-2"
             >
-              Share of {outcome.playerName}: {formatPav(value, 2)}
+              Share of {shareSubject(outcome.playerName, share)}: {formatPav(value, 2)}
             </a>
           ) : (
             <span>

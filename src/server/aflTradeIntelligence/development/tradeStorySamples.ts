@@ -76,7 +76,7 @@ function darcyBidMatch(): AflTradePageBidMatch {
     match,
     nomineeName: 'Sam Darcy',
     clubName: 'Western Bulldogs',
-    leftoverLabels: ['Pick 61'],
+    leftoverLabels: ['a new pick 61'],
   };
 }
 

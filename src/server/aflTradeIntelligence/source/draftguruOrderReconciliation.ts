@@ -94,6 +94,8 @@ interface HopSlot {
   originRank: number | null;
   /** A selected row's player, keyed as `pickStatements` keys it. */
   playerKey: string | null;
+  /** The number a spent row was spent as ("Used to match bid for X as pick 15"). */
+  spentAs: number | null;
 }
 
 /** `<round>|<original club>` of a hop's stated entitlement, when its origin states both. */
@@ -274,6 +276,7 @@ function addHopSlots(
       originRound: entitlement?.roundNumber ?? null,
       originRank: entitlement?.rank ?? null,
       playerKey,
+      spentAs: claim.outcome.kind === 'bid_spent' ? claim.outcome.asPick : null,
     });
   });
 }
@@ -322,7 +325,8 @@ function uniquelyChosen(
  * among the transfers left, a row to the transfer whose stated or custody entitlement is the row's
  * origin, but only when every other transfer left positively names another entitlement: a custody
  * pick joined by trade-time number may be another entitlement, so a transfer that names none could
- * still be the row's. A transfer two hops would take ties to neither; any other hop stays untied.
+ * still be the row's. Last, a spent row of one traded leg by the number it was spent as
+ * (`bySpentNumber`). A transfer two hops would take ties to neither; any other hop stays untied.
  */
 function agreeingPairs(
   hops: readonly HopSlot[],
@@ -359,7 +363,46 @@ function agreeingPairs(
       return transfer === undefined || !othersDiffer ? [] : [[hop, transfer]];
     })
   );
-  return [...byPlayer, ...byEntitlement];
+  const tied = [...byPlayer, ...byEntitlement];
+  return [...tied, ...bySpentNumber(hops, left, tied)];
+}
+
+/**
+ * A spent row whose chain is one traded leg, left untied by the passes before (owner, 2026-11-26:
+ * Carlton's pick 15, "Adel R1 pick (6th) | To Carl in live pick swap | Used to match bid for Cody
+ * Walker as pick 15"): its hop ties to the one transfer left whose evidence names the row's
+ * entitlement and whose trade states the very number the row was spent as, when every other transfer
+ * left states another number and names another entitlement or none. A second transfer that could be
+ * the row's (stating no number, the same number, or the same entitlement) leaves it untied.
+ */
+function bySpentNumber(
+  hops: readonly HopSlot[],
+  left: readonly DraftguruOrderTieTransfer[],
+  tied: readonly [HopSlot, DraftguruOrderTieTransfer][]
+): [HopSlot, DraftguruOrderTieTransfer][] {
+  const taken = new Set(tied.flatMap(([hop, transfer]) => [hop, transfer] as const));
+  const rest = left.filter((transfer) => !taken.has(transfer));
+  return uniquelyChosen(
+    hops.flatMap((hop): [HopSlot, DraftguruOrderTieTransfer][] => {
+      const entitlement = hopEntitlement(hop);
+      if (taken.has(hop) || hop.spentAs === null || hop.hop !== 0 || !hop.final) return [];
+      if (entitlement === null) return [];
+      const names = (transfer: DraftguruOrderTieTransfer) =>
+        transferEntitlements(transfer).includes(entitlement);
+      const found = rest.filter(
+        (candidate) =>
+          tieAgrees(hop, candidate) && candidate.statedNumber === hop.spentAs && names(candidate)
+      );
+      if (found.length !== 1) return [];
+      const [transfer] = found;
+      const othersDiffer = rest.every(
+        (other) =>
+          other === transfer ||
+          (other.statedNumber !== null && other.statedNumber !== hop.spentAs && !names(other))
+      );
+      return othersDiffer ? [[hop, transfer!]] : [];
+    })
+  );
 }
 
 /**

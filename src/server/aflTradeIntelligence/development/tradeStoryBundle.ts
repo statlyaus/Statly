@@ -1,4 +1,5 @@
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
+import { aflTradeAssetLedgerLeftoverParts } from '../valuation/assetLedgerBidLeftovers';
 import type {
   AflTradeAssetLedger,
   AflTradeAssetLedgerBidMatch,
@@ -104,10 +105,24 @@ export function aflTradeStoryPickLabel(
   return `${pick.draftYear} ${slot}${club}`;
 }
 
+/** Names in a sentence: "Melbourne", "Melbourne and Sydney", "Melbourne, Port Adelaide and Sydney". */
+export function aflTradeStoryNameList(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+/** Whose compensation a pick was, from its order row's origin; null when the row does not say. */
+function compensationText(label: string | undefined): string | null {
+  const freeAgency =
+    label === undefined ? null : /^Band [1-5] Free Agency Comp for (.+)$/u.exec(label);
+  return freeAgency ? `compensation for losing ${freeAgency[1]} in free agency` : null;
+}
+
 /**
  * How the page names a pick a Draftguru order row spent on a bid (owner, 2026-11-24): its live slot,
  * then where it came from, "Pick 13 (from Melbourne via Port Adelaide)". A club's own pick is just
- * "Pick 6". A board's spent pick keeps the board's label. Any club without a name leaves the slot alone.
+ * "Pick 6", and a compensation pick says whose compensation it was when its row says (2026-11-26). A
+ * board's spent pick keeps the board's label. Any club without a name leaves the slot alone.
  */
 export function aflTradeStoryOrderSpentLabel(
   pick: AflTradeAssetLedgerBidSpentPick,
@@ -116,7 +131,8 @@ export function aflTradeStoryOrderSpentLabel(
 ): string {
   if (pick.asPick === undefined) return pick.label;
   const slot = `Pick ${pick.asPick}`;
-  if (pick.originKind === 'compensation') return `${slot} (compensation pick)`;
+  if (pick.originKind === 'compensation')
+    return `${slot} (${compensationText(pick.compensationLabel) ?? 'compensation pick'})`;
   if (pick.originKind === 'leftover_points') return `${slot} (from leftover points)`;
   if (pick.originKind !== 'entitlement' || pick.originalClubId === null) return slot;
   const via = pick.viaClubIds ?? [];
@@ -126,25 +142,42 @@ export function aflTradeStoryOrderSpentLabel(
   );
   if (names.some((name) => name === undefined)) return slot;
   const [from, ...through] = names as string[];
-  return `${slot} (from ${from}${through.length > 0 ? ` via ${through.join(' and ')}` : ''})`;
+  return `${slot} (from ${from}${through.length > 0 ? ` via ${aflTradeStoryNameList(through)}` : ''})`;
 }
 
-/** The leftover-points picks a matched bid created, as the page names them. */
+/**
+ * What a matched bid's leftover points became, as a phrase the page puts after "which became"
+ * (2026-11-26): "a new pick 13, used on Jake Eime", "a new pick, used to match the bid for Jaspa
+ * Fletcher", "a new pick that was not used", or "a new pick" when the evidence does not say. Empty
+ * when no leftover pick is listed.
+ */
 export function aflTradeStoryLeftoverLabels(
   match: AflTradeAssetLedgerBidMatch,
-  playerName: (playerId: string) => string | undefined
+  playerName: (playerId: string) => string | undefined,
+  bidMatches: readonly AflTradeAssetLedgerBidMatch[] = [match]
 ): string[] {
   const leftover = match.pricing.status === 'shared' ? match.pricing.leftover : null;
   if (leftover === null) return [];
-  if (match.orderLeftovers === undefined)
-    return leftover.boardLeftoverPickIds.map(
-      () => `Leftover-points pick (${leftover.remainderPoints} points)`
-    );
-  return match.orderLeftovers.map(({ pickNumber, playerId }) => {
-    const name = playerId === null ? undefined : playerName(playerId);
-    const pick = pickNumber === null ? 'A leftover-points pick' : `Pick ${pickNumber}`;
-    return name === undefined ? pick : `${pick} (${name})`;
-  });
+  const use = leftover.use;
+  if (use?.status === 'selected') {
+    const name = playerName(use.playerId);
+    const pick = `a new pick ${use.selectionNumber}`;
+    return [name === undefined ? pick : `${pick}, used on ${name}`];
+  }
+  if (use?.status === 'spent') {
+    const later = bidMatches.find(({ bidMatchId }) => bidMatchId === use.bidMatchId);
+    const name = later?.nominee ? playerName(later.nominee.playerId) : undefined;
+    return [name === undefined ? 'a new pick' : `a new pick, used to match the bid for ${name}`];
+  }
+  if (use?.status === 'not_used') return ['a new pick that was not used'];
+  const listed = match.orderLeftovers ?? leftover.boardLeftoverPickIds.map(() => null);
+  if (listed.length === 0) return [];
+  const [only] = listed;
+  return [
+    listed.length === 1 && only?.pickNumber != null
+      ? `a new pick ${only.pickNumber}`
+      : 'a new pick',
+  ];
 }
 
 /**
@@ -225,6 +258,13 @@ export function createAflTradeStoryBundle(input: {
     if (match.nominee === null || match.clubId === null) continue;
     players.set(match.nominee.playerId, playerName(match.nominee.playerId));
     clubs.set(match.clubId, clubName(match.clubId));
+    // The players the last spent pick also carries through its leftover pick (2026-11-26).
+    const leftoverPlayers = aflTradeAssetLedgerLeftoverParts(ledger.content.bidMatches, match).map(
+      ({ playerId, whole }) => {
+        players.set(playerId, playerName(playerId));
+        return { name: playerName(playerId), whole };
+      }
+    );
     bidMatches.push({
       // An order bid's spent picks are named by their slot and route; a board's keep its labels.
       match:
@@ -239,7 +279,12 @@ export function createAflTradeStoryBundle(input: {
           : match,
       nomineeName: playerName(match.nominee.playerId),
       clubName: clubName(match.clubId),
-      leftoverLabels: aflTradeStoryLeftoverLabels(match, (id) => playerNames.get(id)),
+      leftoverLabels: aflTradeStoryLeftoverLabels(
+        match,
+        (id) => playerNames.get(id),
+        ledger.content.bidMatches
+      ),
+      ...(leftoverPlayers.length > 0 ? { leftoverPlayers } : {}),
     });
   }
 

@@ -339,6 +339,8 @@ const draftOrderBidMatchSchema = z
             orderPickId: aflTradeContentAddressedIdSchema('external-draft-order-pick').nullable(),
             routeClubIds: z.array(orderClubIdSchema).max(17),
             originKind: z.enum(['entitlement', 'compensation', 'leftover_points']).nullable(),
+            /** A compensation pick's origin as its row states it (2026-11-26). */
+            compensationLabel: z.string().trim().min(1).max(1_000).optional(),
           })
           .strict()
       )
@@ -366,6 +368,14 @@ const draftOrderBidMatchSchema = z
           orderPickId !== null || (routeClubIds.length === 0 && originKind === null)
       ),
     'Only a spent pick tied to its order row states a route.'
+  )
+  .refine(
+    (record) =>
+      record.spentPicks.every(
+        ({ originKind, compensationLabel }) =>
+          compensationLabel === undefined || originKind === 'compensation'
+      ),
+    'Only a compensation pick states a compensation label.'
   );
 
 /** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
@@ -440,6 +450,8 @@ const draftBoardBidMatchSchema = z
             nativePickId: boardNativePickIdSchema,
             holdingClubId: boardClubIdSchema,
             points: boardPointsSchema.nullable(),
+            /** The board's own row of the leftover pick, when its capture states one (2026-11-26). */
+            boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
           })
           .strict()
       )
