@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchApi } from '@/lib/api';
-import { LoadingSpinner } from './ui';
+import { Spinner } from './ui/Spinner';
 import { getTeamLogo } from '@/lib/teamLogos';
 import Image from 'next/image';
 import { isAbortError } from '@/lib/utils';
@@ -75,13 +75,8 @@ export const RoundMatches = ({ round, season, initialMatches }: RoundMatchesProp
 
   if (loading) {
     return (
-      <div
-        className="flex justify-center items-center h-48"
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-      >
-        <LoadingSpinner />
+      <div className="flex justify-center items-center h-48">
+        <Spinner label="Loading matches" />
       </div>
     );
   }

@@ -5,7 +5,6 @@ import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import { Loader2 } from 'lucide-react';
 
 import { floatingStyles, menuItemStyles } from '@/components/ui/controlStyles';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -13,6 +12,7 @@ import { fetchApi } from '@/lib/api';
 import { ClubSquare } from '@/components/ui/ClubSquare';
 import { cn } from '@/lib/utils';
 import type { PlayerSearchResult } from '@/types/players';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface PlayerSearchProps {
   placeholder?: string;
@@ -267,7 +267,7 @@ export default function PlayerSearch({
             <div id={listboxId} role="listbox">
               {isLoading ? (
                 <div className="px-4 py-3 text-center text-muted-foreground" role="status">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
+                  <Spinner size="sm" />
                   <span className="ml-2">Searching...</span>
                 </div>
               ) : players.length > 0 ? (

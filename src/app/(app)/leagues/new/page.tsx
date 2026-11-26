@@ -6,11 +6,11 @@ import {
   AlertCircle,
   CalendarClock,
   ChevronLeft,
-  Loader2,
   Settings2,
   ShieldCheck,
   Trophy,
 } from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
 
 import { useAuth } from '@/AuthContext';
 import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
@@ -416,7 +416,7 @@ export default function NewLeaguePage() {
                   disabled={isLoading}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {isLoading && <Spinner size="sm" inherit />}
                   {isLoading ? 'Creating league' : 'Create league'}
                 </button>
                 <button

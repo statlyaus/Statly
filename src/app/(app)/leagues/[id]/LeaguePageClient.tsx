@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/AuthContext';
 import Alert from '@/components/ui/Alert';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { Spinner } from '@/components/ui/Spinner';
 import LeagueTabs from '@/components/league/LeagueTabs';
 import type {
   LeagueTradeCentreSnapshot,
@@ -75,7 +75,7 @@ export default function LeaguePageClient({
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <LoadingSpinner />
+        <Spinner label="Loading the league" />
       </div>
     );
   }

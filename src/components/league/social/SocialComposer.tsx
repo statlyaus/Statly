@@ -1,6 +1,6 @@
 'use client';
 
-import { LoaderCircle, RotateCcw, SendHorizontal, X } from 'lucide-react';
+import { RotateCcw, SendHorizontal, X } from 'lucide-react';
 import {
   useEffect,
   useId,
@@ -20,6 +20,7 @@ import {
   writeSocialComposerDraft,
   type SocialComposerDraftScope,
 } from './socialComposerDraft';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface SocialComposerProps {
   label: string;
@@ -288,7 +289,7 @@ export default function SocialComposer({
         >
           {compact ? (
             isSubmitting ? (
-              <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+              <Spinner size="sm" inherit />
             ) : hasFailure ? (
               <RotateCcw className="size-4" aria-hidden="true" />
             ) : (

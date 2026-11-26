@@ -9,7 +9,6 @@ import {
   ArrowUpRight,
   CalendarClock,
   ChevronLeft,
-  Loader2,
   Search,
   Trophy,
   Users,
@@ -28,6 +27,7 @@ import type {
   DraftHistorySummary,
 } from '@/server/draft/readModels/draftHistoryReadModel';
 import { alertStyles } from '@/components/ui/controlStyles';
+import { Spinner } from '@/components/ui/Spinner';
 
 function formatDate(dateString: string | null) {
   if (!dateString) return 'Not recorded';
@@ -245,7 +245,7 @@ export default function DraftHistoryPage() {
 
         {isLoading && (
           <section className="border border-border bg-card p-8 text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+            <Spinner />
             <p className="mt-4 text-sm font-semibold">Loading draft history</p>
           </section>
         )}

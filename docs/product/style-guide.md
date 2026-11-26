@@ -273,7 +273,8 @@ One primitive per job, in `src/components/ui/`.
   cue; hairline rules, never stripes; abbreviated headers in `<abbr title="…">`; default sort by the
   most important value; leaders tinted, not bold; your row on sun.
 - **Numbers, empty states, loading, dialogs (target, phase 5):** `StatValue`, `EmptyState` (one
-  sentence, one way forward, a cartoon), one `Spinner` and `Skeleton`, and a `ConfirmDialog` whose
+  sentence, one way forward, a cartoon), one `Spinner` (done 2026-11-26: `src/components/ui/Spinner.tsx`,
+  a cobalt ring that names what is loading; `tests/unit/oneSpinner.test.ts` keeps it the only one) and `Skeleton`, and a `ConfirmDialog` whose
   props carry the destructive-copy rules.
 - **Charts:** two series at most, cobalt and ink, labelled directly; a key only for two-series bars.
   Sun marks the moment that matters; tint and a dashed line mark what is still provisional, with the

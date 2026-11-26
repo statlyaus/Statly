@@ -20,6 +20,7 @@ import type { MatchLog } from '@/types/matchLogs';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { badgeStyles, buttonStyles, fieldLabelStyles } from '@/components/ui/controlStyles';
 import Modal from '@/components/ui/Modal';
+import { Spinner } from '@/components/ui/Spinner';
 
 type SortDirection = 'asc' | 'desc';
 type SortField = keyof MatchLog;
@@ -353,7 +354,7 @@ const MatchLogTable = ({
       <div className={`border border-border bg-card ${className}`}>
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
-            <ArrowPathIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-muted-foreground" />
+            <Spinner className="mb-4" />
             <p className="text-sm text-muted-foreground">Loading match logs...</p>
           </div>
         </div>

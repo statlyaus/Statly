@@ -25,8 +25,8 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   ShieldCheckIcon,
-  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface AuthFormProps {
   initialMode?: 'login' | 'signup';
@@ -687,7 +687,7 @@ const AuthForm = ({
           >
             {isSubmitting ? (
               <>
-                <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                <Spinner size="sm" inherit />
                 <span>{isSignup ? 'Creating Account...' : 'Signing In...'}</span>
               </>
             ) : (
@@ -725,7 +725,7 @@ const AuthForm = ({
             >
               {isGoogleLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <Spinner size="sm" inherit />
                   <span>Signing in with Google...</span>
                 </>
               ) : (
@@ -762,7 +762,7 @@ const AuthForm = ({
             >
               {isGithubLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <Spinner size="sm" inherit />
                   <span>Signing in with Facebook...</span>
                 </>
               ) : (
@@ -784,7 +784,7 @@ const AuthForm = ({
             >
               {isAppleLoading ? (
                 <>
-                  <ArrowPathIcon className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <Spinner size="sm" inherit />
                   <span>Signing in with Apple...</span>
                 </>
               ) : (

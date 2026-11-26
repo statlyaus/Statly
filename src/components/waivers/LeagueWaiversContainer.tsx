@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/AuthContext';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { Spinner } from '@/components/ui/Spinner';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import WaiverFAABSystem, {
   type WaiverNoLosersClub,
@@ -606,7 +606,12 @@ export default function LeagueWaiversContainer({
     }
   };
 
-  if (loading && !effectiveUserId) return <LoadingSpinner />;
+  if (loading && !effectiveUserId)
+    return (
+      <div className="flex justify-center py-12">
+        <Spinner label="Loading waivers" />
+      </div>
+    );
   if (!effectiveUserId) {
     return (
       <div

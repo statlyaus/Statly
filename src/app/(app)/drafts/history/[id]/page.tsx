@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   CalendarClock,
   Clock3,
-  Loader2,
   Search,
   TableProperties,
   Trophy,
@@ -24,6 +23,7 @@ import type {
   DraftHistoryPick,
 } from '@/server/draft/readModels/draftHistoryReadModel';
 import { alertStyles } from '@/components/ui/controlStyles';
+import { Spinner } from '@/components/ui/Spinner';
 
 type DetailTab = 'rounds' | 'rosters' | 'timeline';
 
@@ -186,7 +186,7 @@ export default function DraftHistoryDetailPage() {
 
         {isLoading && (
           <section className="border border-border bg-card p-8 text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+            <Spinner />
             <p className="mt-4 text-sm font-semibold">Loading completed draft</p>
           </section>
         )}
