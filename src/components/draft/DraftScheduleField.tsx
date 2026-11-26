@@ -83,7 +83,7 @@ function ScheduleCalendarPane({
   return (
     <div className="min-w-0 rounded-xl border border-brand-bar/30 bg-accent/65 p-2 sm:p-3">
       <div className="mb-3 flex items-start gap-3 rounded-lg bg-card px-3 py-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-bar text-xs font-bold text-white">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-bar text-xs font-bold text-brand-bar-foreground">
           1
         </span>
         <div>

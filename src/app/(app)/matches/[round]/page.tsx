@@ -22,7 +22,9 @@ export default async function RoundMatchesPage({
   if (roundNumber === null) {
     return (
       <div className="mx-auto max-w-5xl p-4">
-        <h1 className="mb-4 text-2xl font-semibold text-red-600">Invalid round parameter.</h1>
+        <h1 className="mb-4 text-2xl font-semibold text-destructive-text">
+          Invalid round parameter.
+        </h1>
       </div>
     );
   }
@@ -32,7 +34,9 @@ export default async function RoundMatchesPage({
   if (season === null) {
     return (
       <div className="mx-auto max-w-5xl p-4">
-        <h1 className="mb-4 text-2xl font-semibold text-red-600">Invalid season parameter.</h1>
+        <h1 className="mb-4 text-2xl font-semibold text-destructive-text">
+          Invalid season parameter.
+        </h1>
       </div>
     );
   }
@@ -68,14 +72,14 @@ export default async function RoundMatchesPage({
         ) : (
           <Link
             href={`/matches/${prevRound}${seasonQuery}`}
-            className="rounded border px-3 py-1 text-sm hover:bg-gray-50"
+            className="rounded border px-3 py-1 text-sm hover:bg-muted"
           >
             ← Previous
           </Link>
         )}
         <Link
           href={`/matches/${nextRound}${seasonQuery}`}
-          className="px-3 py-1 rounded border text-sm hover:bg-gray-50"
+          className="px-3 py-1 rounded border text-sm hover:bg-muted"
         >
           Next →
         </Link>

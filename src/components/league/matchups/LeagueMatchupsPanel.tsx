@@ -249,7 +249,7 @@ export function LeagueMatchupsPanel({
       </div>
 
       {message && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-md border border-destructive-text/30 bg-destructive-soft p-3 text-sm text-destructive-text">
           {message}
         </div>
       )}
@@ -641,7 +641,9 @@ function BoxScoreSlot({ slot }: { slot: string }) {
   return (
     <span
       className={`inline-flex h-6 w-11 items-center justify-center rounded-sm text-[11px] font-bold ${
-        isInterchange ? 'border border-border text-foreground' : 'bg-brand-bar text-white'
+        isInterchange
+          ? 'border border-border text-foreground'
+          : 'bg-brand-bar text-brand-bar-foreground'
       }`}
     >
       {label}

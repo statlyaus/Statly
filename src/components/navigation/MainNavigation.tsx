@@ -454,7 +454,7 @@ export default function MainNavigation({
                   type="button"
                   ref={accountButtonRef}
                   onClick={() => setIsAccountMenuOpen((open) => !open)}
-                  className="inline-flex items-center gap-3 rounded-md border border-border px-2.5 py-1.5 text-sm font-semibold text-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center gap-3 rounded-md border border-border px-2.5 py-1.5 text-sm font-semibold text-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-expanded={isAccountMenuOpen}
                   aria-controls="account-menu"
                 >
@@ -532,7 +532,7 @@ export default function MainNavigation({
             onClick={() => setIsMobileOpen((open) => !open)}
             // Player search and the league switcher join the bar only at 2xl, so signed-in
             // managers keep this toggle (and its quick actions) until then.
-            className={`ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border p-2 text-foreground transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            className={`ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-border p-2 text-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               user ? '2xl:hidden' : 'lg:hidden'
             }`}
             aria-expanded={isMobileOpen}
@@ -646,7 +646,7 @@ export default function MainNavigation({
 
                     <div className="rounded-lg border border-border bg-muted p-4 lg:hidden">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-bar text-sm font-semibold text-white">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-bar text-sm font-semibold text-brand-bar-foreground">
                           {accountInitial}
                         </span>
                         <div className="min-w-0">
@@ -671,7 +671,7 @@ export default function MainNavigation({
                             void handleLogout();
                           }}
                           disabled={isLoggingOut || loading}
-                          className="rounded-md bg-brand-bar px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-bar-hover disabled:opacity-50"
+                          className="rounded-md bg-brand-bar px-4 py-3 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover disabled:opacity-50"
                         >
                           {isLoggingOut ? 'Signing out…' : 'Sign out'}
                         </button>
@@ -715,7 +715,7 @@ export default function MainNavigation({
                       <Link
                         href="/login"
                         onClick={() => setIsMobileOpen(false)}
-                        className="block rounded-md bg-brand-bar px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-brand-bar-hover"
+                        className="block rounded-md bg-brand-bar px-4 py-3 text-center text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover"
                       >
                         Sign in
                       </Link>

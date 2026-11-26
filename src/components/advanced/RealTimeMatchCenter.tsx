@@ -113,13 +113,13 @@ export default function RealTimeMatchCenter({
         layout
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+        className="bg-card rounded-lg border border-border p-4 hover:shadow-md transition-shadow cursor-pointer"
         onClick={handleClick}
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="font-semibold text-gray-900">{p.name}</div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="font-semibold text-foreground">{p.name}</div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>{p.team}</span>
               {p.position && (
                 <Badge variant="outline" size="sm">
@@ -133,15 +133,15 @@ export default function RealTimeMatchCenter({
         <div className="grid grid-cols-5 gap-2 text-sm">
           {REAL_DATA_NINE_CATEGORY_PRESET.map((key) => (
             <div key={key} className="text-center">
-              <div className="font-medium text-gray-900">{p.categories[key] ?? '-'}</div>
-              <div className="text-gray-500" title={FANTASY_CATEGORIES[key].label}>
+              <div className="font-medium text-foreground">{p.categories[key] ?? '-'}</div>
+              <div className="text-muted-foreground" title={FANTASY_CATEGORIES[key].label}>
                 {FANTASY_CATEGORIES[key].shortLabel}
               </div>
             </div>
           ))}
           <div className="text-center">
-            <div className="font-medium text-gray-900">{p.hitouts ?? '-'}</div>
-            <div className="text-gray-500" title="Hit-outs">
+            <div className="font-medium text-foreground">{p.hitouts ?? '-'}</div>
+            <div className="text-muted-foreground" title="Hit-outs">
               HO
             </div>
           </div>
@@ -163,33 +163,33 @@ export default function RealTimeMatchCenter({
     >
       {liveMatches.length > 0 ? (
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Live Now</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">Live Now</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {liveMatches.map((m) => (
               <motion.div
                 key={`${m.home_team}-${m.away_team}-${m.start_time_utc}`}
                 layout
-                className="bg-white rounded-lg border-2 p-4"
+                className="bg-card rounded-lg border-2 p-4"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Badge variant="success" className="animate-pulse">
                       LIVE
                     </Badge>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {formatInTimezone(new Date(m.start_time_utc), timeZone)}
                     </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 items-center gap-4">
                   <div className="text-right">
-                    <div className="font-semibold text-gray-900">{m.home_team}</div>
+                    <div className="font-semibold text-foreground">{m.home_team}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-gray-400 text-sm">vs</div>
+                    <div className="text-muted-foreground text-sm">vs</div>
                   </div>
                   <div className="text-left">
-                    <div className="font-semibold text-gray-900">{m.away_team}</div>
+                    <div className="font-semibold text-foreground">{m.away_team}</div>
                   </div>
                 </div>
               </motion.div>
@@ -198,8 +198,10 @@ export default function RealTimeMatchCenter({
         </div>
       ) : (
         <div className="text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">No live matches</div>
-          <div className="text-gray-500">Check back during the AFL season for live updates</div>
+          <div className="text-muted-foreground text-lg mb-2">No live matches</div>
+          <div className="text-muted-foreground">
+            Check back during the AFL season for live updates
+          </div>
         </div>
       )}
     </motion.div>
@@ -232,10 +234,10 @@ export default function RealTimeMatchCenter({
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Live Match Centre</h2>
-          <p className="text-gray-600 mt-1">Real-time scores and fantasy updates</p>
+          <h2 className="text-3xl font-bold text-foreground">Live Match Centre</h2>
+          <p className="text-muted-foreground mt-1">Real-time scores and fantasy updates</p>
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           {isLoading ? (
             'Loading…'
           ) : error ? (
@@ -258,7 +260,7 @@ export default function RealTimeMatchCenter({
       </div>
 
       <div
-        className="flex max-w-full space-x-1 overflow-x-auto overscroll-x-contain rounded-lg bg-gray-100 p-1 mb-6"
+        className="flex max-w-full space-x-1 overflow-x-auto overscroll-x-contain rounded-lg bg-muted p-1 mb-6"
         role="tablist"
         aria-label="Live sections"
       >
@@ -278,7 +280,7 @@ export default function RealTimeMatchCenter({
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-warning text-warning-foreground'
-                : 'text-gray-600 hover:text-gray-900'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <span>{tab.label}</span>

@@ -91,14 +91,14 @@ export function FieldOval(): React.JSX.Element {
       className="absolute inset-0 overflow-hidden rounded-[50%] ring-4 ring-[#256328]"
       style={GRASS}
     >
-      <div className="absolute inset-[3%] overflow-hidden rounded-[50%] border-2 border-white/85">
-        <div className="absolute left-1/2 top-[-42%] aspect-square w-[84%] -translate-x-1/2 rounded-full border-2 border-white/60" />
-        <div className="absolute bottom-[-42%] left-1/2 aspect-square w-[84%] -translate-x-1/2 rounded-full border-2 border-white/60" />
-        <div className="absolute left-1/2 top-1/2 aspect-square w-[38%] -translate-x-1/2 -translate-y-1/2 border-2 border-white/60" />
-        <div className="absolute left-1/2 top-1/2 aspect-square w-[17%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
-        <div className="absolute left-1/2 top-1/2 aspect-square w-[5%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
-        <div className="absolute left-1/2 top-0 h-[5%] w-[12%] -translate-x-1/2 border-2 border-t-0 border-white/85" />
-        <div className="absolute bottom-0 left-1/2 h-[5%] w-[12%] -translate-x-1/2 border-2 border-b-0 border-white/85" />
+      <div className="absolute inset-[3%] overflow-hidden rounded-[50%] border-2 border-background/85">
+        <div className="absolute left-1/2 top-[-42%] aspect-square w-[84%] -translate-x-1/2 rounded-full border-2 border-background/60" />
+        <div className="absolute bottom-[-42%] left-1/2 aspect-square w-[84%] -translate-x-1/2 rounded-full border-2 border-background/60" />
+        <div className="absolute left-1/2 top-1/2 aspect-square w-[38%] -translate-x-1/2 -translate-y-1/2 border-2 border-background/60" />
+        <div className="absolute left-1/2 top-1/2 aspect-square w-[17%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background/60" />
+        <div className="absolute left-1/2 top-1/2 aspect-square w-[5%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background/60" />
+        <div className="absolute left-1/2 top-0 h-[5%] w-[12%] -translate-x-1/2 border-2 border-t-0 border-background/85" />
+        <div className="absolute bottom-0 left-1/2 h-[5%] w-[12%] -translate-x-1/2 border-2 border-b-0 border-background/85" />
       </div>
     </div>
   );

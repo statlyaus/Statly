@@ -87,11 +87,13 @@ export const RoundMatches = ({ round, season, initialMatches }: RoundMatchesProp
   }
 
   if (error) {
-    return <p className="text-red-500 text-center">{error}</p>;
+    return <p className="text-destructive-text text-center">{error}</p>;
   }
 
   if (!matches.length) {
-    return <p className="text-center text-gray-500">No matches scheduled for this round.</p>;
+    return (
+      <p className="text-center text-muted-foreground">No matches scheduled for this round.</p>
+    );
   }
 
   return (
@@ -101,7 +103,7 @@ export const RoundMatches = ({ round, season, initialMatches }: RoundMatchesProp
           match.id ?? `${match.homeTeam}-${match.awayTeam}-${match.matchDate ?? match.round}`;
         const hasScores = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
         return (
-          <div key={key} className="bg-white border border-gray-200 p-6">
+          <div key={key} className="bg-card border border-border p-6">
             <div className="text-center text-lg mb-4">
               <div className="flex justify-around items-center">
                 <span className="flex items-center gap-2">
@@ -131,12 +133,12 @@ export const RoundMatches = ({ round, season, initialMatches }: RoundMatchesProp
                   {match.scoreHome} - {match.scoreAway}
                 </p>
               ) : (
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   {STATUS_LABELS[match.status ?? 'scheduled'] ?? 'Scheduled'}
                 </p>
               )}
               {match.matchDate && (
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   {new Date(match.matchDate).toLocaleString()}
                 </p>
               )}

@@ -626,7 +626,7 @@ export function TeamSettingsPanel({
           className={`rounded-lg border px-4 py-3 text-sm ${
             teamSettingsMessage.type === 'success'
               ? 'border-border bg-muted text-foreground'
-              : 'border-red-200 bg-red-50 text-red-700'
+              : 'border-destructive-text/30 bg-destructive-soft text-destructive-text'
           }`}
         >
           {teamSettingsMessage.text}
@@ -707,7 +707,7 @@ export function TeamSettingsPanel({
             />
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-4 rounded-xl border border-white/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]"
+              className="pointer-events-none absolute inset-4 rounded-xl border border-background/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]"
             />
           </div>
         </div>
@@ -729,7 +729,7 @@ export function TeamSettingsPanel({
                 className={`rounded-lg border px-4 py-3 text-sm ${
                   teamSymbolMessage.type === 'success'
                     ? 'border-border bg-muted text-foreground'
-                    : 'border-red-200 bg-red-50 text-red-700'
+                    : 'border-destructive-text/30 bg-destructive-soft text-destructive-text'
                 }`}
               >
                 {teamSymbolMessage.text}
