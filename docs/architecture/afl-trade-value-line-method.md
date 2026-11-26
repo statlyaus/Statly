@@ -443,7 +443,10 @@ the spec above is applied; it changes none of the owner's rules.
   (by year, then trade id).
 - **Picks from the draft.** A used pick is `V(used slot)` at the draft, then the drafted player's first
   stint at the drafting club. A passed pick is 0. A pick not used, including one the boards show was not spent on a bid (owner, 2026-10-21), is 0 when the ledger says it lapsed (rule R2: its latest Official AFL order number under its id, else its last trade's stated number, within `notUsedLateWindow` of the draft's last selection, or no number stated) and pending from the draft (`not_used_holder_matched_bid` when its holder matched a bid that draft, else `not_used_mid_draft`) when it stood mid-draft; one the ledger relays (rule R1) is never a line of its own: the structure's `pick_relay` link carries its legs onto the next pick id's line, and a relayed pick the structure does not link is refused. A matched-bid spent pick is its share of
-  the nominee's line (at the bid slot) from the bid; before it, its own slot. A pick whose draft is not in
+  the nominee's line (at the bid slot) from the bid; before it, its own slot. The bid's last spent
+  pick, the one partly used, also carries the whole line of the pick its leftover points became
+  (owner, 2026-11-26): the player that pick was used on, or its share of the later bid it was spent
+  on; a leftover the evidence does not tie adds nothing. While either line is pending, the pick is. A pick whose draft is not in
   evidence stays at its slot, and an unresolved outcome is pending.
 - **One evaluator.** A drafted player's point is `aflTradeValueLinePointAt` in `modeling/valueLineFit.ts`,
   the evaluator the fit's back-test uses, on curves rebuilt from the stored fit's published parameters.

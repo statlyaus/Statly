@@ -45,8 +45,13 @@ export const AFL_TRADE_VALUE_LINE_RULES = {
    * pick id follows the structure's `pick_relay` link, so it is that pick's line in every trade.
    */
   notUsedRelay: 'follows_structure_pick_relay_link',
-  /** A matched-bid spent pick is worth its own slot until the bid, then share × the nominee's line. */
-  matchedBid: 'own_slot_until_bid_then_share_of_nominee_line',
+  /**
+   * A matched-bid spent pick is worth its own slot until the bid, then share × the nominee's line. The
+   * bid's last spent pick, partly used, also carries the whole line of the pick its leftover points
+   * became (owner, 2026-11-26): the player it was used on, or its share of the later bid it was spent
+   * on; an untied leftover adds nothing.
+   */
+  matchedBid: 'own_slot_until_bid_then_share_of_nominee_line_plus_leftover_pick_line',
   /** A stint closes at the ledger's end, or after this many consecutive in-stint seasons with no game. */
   inactivityClosureSeasons: 3,
   /** A closed stint is worth exactly what it produced; values are signed, never floored. */
@@ -218,7 +223,8 @@ export interface AflTradeValueLineTrade {
 export const AFL_TRADE_VALUE_LINES_LIMITATION: string =
   'Private, non-production value lines. Each asset has one line, in signed first-stint HPN PAV at ' +
   'the club that holds it: a pick by its at-trade slot until the draft, then the drafted player; a ' +
-  "matched-bid spent pick by its own slot until the bid, then its share of the nominee's line; a " +
+  "matched-bid spent pick by its own slot until the bid, then its share of the nominee's line (the " +
+  'last spent pick also the line of the pick its leftover points became, when the evidence ties it); a ' +
   'traded player by what he has produced at the receiving club plus what the traded-player fit ' +
   'expects, pending while no such fit is stored. Lines use only seasons through each checkpoint. ' +
   'Trades, legs and onward links come from the trade structure, with no realized grade read. Each ' +

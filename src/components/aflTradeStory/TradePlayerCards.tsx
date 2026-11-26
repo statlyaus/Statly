@@ -10,6 +10,7 @@ import {
   inSentence,
   knownPav,
   PENDING_TEXT,
+  shareSubject,
   valueText,
   type AflTradePageBidShare,
 } from './tradePageModel';
@@ -83,7 +84,7 @@ function PlayerCard({
                 href={`#${bidShareAnchor(player.assetId)}`}
                 className="text-primary underline underline-offset-2"
               >
-                PAV, share of {outcome.playerName}
+                PAV, share of {shareSubject(outcome.playerName, share)}
               </a>
             ) : (
               `PAV, share of ${outcome.playerName}`

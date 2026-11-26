@@ -339,6 +339,8 @@ const draftOrderBidMatchSchema = z
             orderPickId: aflTradeContentAddressedIdSchema('external-draft-order-pick').nullable(),
             routeClubIds: z.array(orderClubIdSchema).max(17),
             originKind: z.enum(['entitlement', 'compensation', 'leftover_points']).nullable(),
+            /** A compensation pick's origin as its row states it (2026-11-26). */
+            compensationLabel: z.string().trim().min(1).max(1_000).optional(),
           })
           .strict()
       )
@@ -366,6 +368,14 @@ const draftOrderBidMatchSchema = z
           orderPickId !== null || (routeClubIds.length === 0 && originKind === null)
       ),
     'Only a spent pick tied to its order row states a route.'
+  )
+  .refine(
+    (record) =>
+      record.spentPicks.every(
+        ({ originKind, compensationLabel }) =>
+          compensationLabel === undefined || originKind === 'compensation'
+      ),
+    'Only a compensation pick states a compensation label.'
   );
 
 /** One Footyinfo draft-board pick as reconciled (issues 853 and 789); see the reconciliation. */
@@ -440,6 +450,8 @@ const draftBoardBidMatchSchema = z
             nativePickId: boardNativePickIdSchema,
             holdingClubId: boardClubIdSchema,
             points: boardPointsSchema.nullable(),
+            /** The board's own row of the leftover pick, when its capture states one (2026-11-26). */
+            boardPickId: aflTradeContentAddressedIdSchema('external-draft-board-pick').optional(),
           })
           .strict()
       )
@@ -689,6 +701,124 @@ function orderPickTying(
     ({ orderPickId, hopTransferIds }) =>
       orderPickId === outcome.orderPickId && hopTransferIds.includes(outcome.transferId)
   );
+}
+
+type CandidatePickOutcome = NonNullable<CandidateContent['pickOutcomes']>[number];
+type CandidateTransfer = CandidateContent['transfers'][number];
+type CandidatePickAsset = Extract<CandidateTransfer['asset'], { kind: 'pick_entitlement' }>;
+type CandidateBoardPick = NonNullable<CandidateContent['draftBoardPicks']>[number];
+
+/** A selected outcome names the receiving club's selection of its player in the pick's draft. */
+function outcomeSelectionMatches(
+  outcome: CandidatePickOutcome,
+  transfer: CandidateTransfer | undefined,
+  selection: CandidateContent['draftSelections'][number] | undefined
+): boolean {
+  return (
+    outcome.selectionId === null ||
+    (selection !== undefined &&
+      transfer?.asset.kind === 'pick_entitlement' &&
+      selection.draftYear === transfer.asset.draftYear &&
+      selection.draftType === transfer.asset.draftType &&
+      selection.clubId === transfer.toClubId &&
+      selection.playerId !== null &&
+      selection.playerId === outcome.playerId)
+  );
+}
+
+/** The receiving club's selections in the pick's draft, which a nomination basis may cite. */
+function outcomeNominationEvidenceIds(
+  content: CandidateContent,
+  outcome: CandidatePickOutcome,
+  transfer: CandidateTransfer | undefined,
+  asset: CandidatePickAsset | null
+): string[] {
+  if (outcome.nominationBasis === undefined || !transfer || !asset) return [];
+  return content.draftSelections
+    .filter(
+      (candidate) =>
+        candidate.draftYear === asset.draftYear &&
+        candidate.draftType === asset.draftType &&
+        candidate.clubId === transfer.toClubId
+    )
+    .flatMap(({ evidenceIds }) => evidenceIds);
+}
+
+/** A selected matched-bid board pick the receiving club held in the pick's draft (issue 789). */
+function matchedBidBoardPickFits(
+  matched: CandidateBoardPick | undefined,
+  asset: CandidatePickAsset | null,
+  transfer: CandidateTransfer | undefined
+): boolean {
+  return (
+    matched !== undefined &&
+    asset !== null &&
+    matched.matchedBidBasis !== undefined &&
+    matched.status === 'selected' &&
+    matched.draftYear === asset.draftYear &&
+    matched.draftType === asset.draftType &&
+    matched.clubId === transfer?.toClubId
+  );
+}
+
+/**
+ * The board pick that states the pick passed or removed: held by the receiving club in the pick's
+ * draft and round, its route handing it over from the sender.
+ */
+function passedBoardPickFits(
+  board: CandidateBoardPick | undefined,
+  asset: CandidatePickAsset | null,
+  transfer: CandidateTransfer | undefined
+): boolean {
+  const route = board?.routeClubIds ?? [];
+  return (
+    board !== undefined &&
+    asset !== null &&
+    board.status !== 'selected' &&
+    board.draftYear === asset.draftYear &&
+    board.draftType === asset.draftType &&
+    board.roundNumber === asset.nominalRound &&
+    board.clubId === transfer?.toClubId &&
+    route.some(
+      (club, at) => at > 0 && route[at - 1] === transfer.fromClubId && club === transfer.toClubId
+    )
+  );
+}
+
+/** A pending or unresolved pick outcome's status is borne out by the candidate's evidence. */
+function validateOutcomeStatus(
+  content: CandidateContent,
+  outcome: CandidatePickOutcome,
+  asset: CandidatePickAsset | null,
+  index: number,
+  context: z.RefinementCtx
+): void {
+  // Pending is decided by the evidence: only a pick whose draft the candidate holds no selection
+  // or board pick in, at or after its anchor season, may wait on that draft.
+  if (
+    outcome.outcomeStatus === 'pending' &&
+    (!asset || !isAflTradeDraftPending(content, content.anchorSeasonYear, asset))
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickOutcomes', index, 'outcomeStatus'],
+      message: 'A pending pick outcome needs a draft the candidate holds no selection in.',
+    });
+  }
+  if (
+    outcome.outcomeStatus === 'unresolved' &&
+    !content.issues.some(
+      ({ code, evidenceIds }) =>
+        code === 'pick_outcome_unresolved' &&
+        outcome.evidenceIds.some((evidenceId) => evidenceIds.includes(evidenceId))
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['pickOutcomes', index, 'outcomeStatus'],
+      message: 'An unresolved pick outcome requires its blocking issue.',
+    });
+  }
 }
 
 /**
@@ -1201,29 +1331,11 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     const selection = content.draftSelections.find(
       ({ selectionId }) => selectionId === outcome.selectionId
     );
-    const selectedPlayerMatches =
-      outcome.selectionId === null ||
-      (selection !== undefined &&
-        transfer?.asset.kind === 'pick_entitlement' &&
-        selection.draftYear === transfer.asset.draftYear &&
-        selection.draftType === transfer.asset.draftType &&
-        selection.clubId === transfer.toClubId &&
-        selection.playerId !== null &&
-        selection.playerId === outcome.playerId);
+    const selectedPlayerMatches = outcomeSelectionMatches(outcome, transfer, selection);
     // A nomination basis may also cite the receiving club's selections in the pick's draft: the
     // year-page rows its count was read from.
     const asset = transfer?.asset.kind === 'pick_entitlement' ? transfer.asset : null;
-    const nominationEvidenceIds =
-      outcome.nominationBasis !== undefined && transfer && asset
-        ? content.draftSelections
-            .filter(
-              (candidate) =>
-                candidate.draftYear === asset.draftYear &&
-                candidate.draftType === asset.draftType &&
-                candidate.clubId === transfer.toClubId
-            )
-            .flatMap(({ evidenceIds }) => evidenceIds)
-        : [];
+    const nominationEvidenceIds = outcomeNominationEvidenceIds(content, outcome, transfer, asset);
     // A board basis cites the one board pick that states this pick passed or removed: held by the
     // receiving club in the pick's draft and round, its route handing it over from the sender.
     const board =
@@ -1237,30 +1349,11 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
     const matchedBids = (outcome.matchedBidBoardPickIds ?? []).map((id) =>
       (content.draftBoardPicks ?? []).find(({ boardPickId }) => boardPickId === id)
     );
-    const matchedBidsMatch = matchedBids.every(
-      (matched) =>
-        matched !== undefined &&
-        asset !== null &&
-        matched.matchedBidBasis !== undefined &&
-        matched.status === 'selected' &&
-        matched.draftYear === asset.draftYear &&
-        matched.draftType === asset.draftType &&
-        matched.clubId === transfer?.toClubId
+    const matchedBidsMatch = matchedBids.every((matched) =>
+      matchedBidBoardPickFits(matched, asset, transfer)
     );
-    const route = board?.routeClubIds ?? [];
     const boardMatches =
-      outcome.boardPickId === undefined ||
-      (board !== undefined &&
-        asset !== null &&
-        board.status !== 'selected' &&
-        board.draftYear === asset.draftYear &&
-        board.draftType === asset.draftType &&
-        board.roundNumber === asset.nominalRound &&
-        board.clubId === transfer?.toClubId &&
-        route.some(
-          (club, at) =>
-            at > 0 && route[at - 1] === transfer.fromClubId && club === transfer.toClubId
-        ));
+      outcome.boardPickId === undefined || passedBoardPickFits(board, asset, transfer);
     const citable = new Set([
       ...(transfer?.evidenceIds ?? []),
       ...(selection?.evidenceIds ?? []),
@@ -1284,32 +1377,7 @@ const contentSchema = contentFieldsSchema.superRefine((content, context) => {
           'A pick outcome must bind a pick transfer, and a selected outcome the receiving club’s selection of the stated player.',
       });
     }
-    // Pending is decided by the evidence: only a pick whose draft the candidate holds no selection
-    // or board pick in, at or after its anchor season, may wait on that draft.
-    if (
-      outcome.outcomeStatus === 'pending' &&
-      (!asset || !isAflTradeDraftPending(content, content.anchorSeasonYear, asset))
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['pickOutcomes', index, 'outcomeStatus'],
-        message: 'A pending pick outcome needs a draft the candidate holds no selection in.',
-      });
-    }
-    if (
-      outcome.outcomeStatus === 'unresolved' &&
-      !content.issues.some(
-        ({ code, evidenceIds }) =>
-          code === 'pick_outcome_unresolved' &&
-          outcome.evidenceIds.some((evidenceId) => evidenceIds.includes(evidenceId))
-      )
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['pickOutcomes', index, 'outcomeStatus'],
-        message: 'An unresolved pick outcome requires its blocking issue.',
-      });
-    }
+    validateOutcomeStatus(content, outcome, asset, index, context);
   });
   content.pickLineage.forEach((lineage, index) => {
     const transfer = content.transfers.find(({ transferId }) => transferId === lineage.transferId);

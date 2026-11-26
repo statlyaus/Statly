@@ -65,6 +65,8 @@ export interface AflTradeCanonicalDraftOrderBidMatch {
     /** The row's origin: its stated original club first (null when none), then each hop's club. */
     routeClubIds: (string | null)[];
     originKind: 'entitlement' | 'compensation' | 'leftover_points' | null;
+    /** A compensation pick's origin as the row states it ("Band 3 Free Agency Comp for X"). */
+    compensationLabel?: string;
   }[];
   /** The leftover-points rows the match created: their number and player, as the order states. */
   leftoverPicks: { orderPickId: string; pickNumber: number | null; playerId: string | null }[];
@@ -165,6 +167,7 @@ export function reconcileDraftguruOrderBidMatches(input: {
             orderPickId: tied?.[0] ?? null,
             routeClubIds: tied ? [...input.order.routes.get(tied[0])!] : [],
             originKind: origin === null || origin.kind === 'bid_matched' ? null : origin.kind,
+            ...(origin?.kind === 'compensation' ? { compensationLabel: origin.label } : {}),
           };
         }),
         leftoverPicks: leftover.map(([orderPickId, row]) => {

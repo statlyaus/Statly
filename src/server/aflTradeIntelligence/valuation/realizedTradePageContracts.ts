@@ -32,6 +32,14 @@ export interface AflTradePageBidMatch {
   readonly nomineeName: string;
   /** The matching club's name. */
   readonly clubName: string;
-  /** The leftover-points picks the match created, as labels such as "Pick 61". */
+  /**
+   * What the leftover points became, as phrases that follow "which became": "a new pick 13, used on
+   * Jake Eime". Empty when the match left none, or the evidence lists no leftover pick.
+   */
   readonly leftoverLabels: readonly string[];
+  /**
+   * The players the bid's last spent pick also carries through its leftover pick (2026-11-26): the
+   * player it was used on (`whole`), or a later nominee it bought a share of. Absent when none.
+   */
+  readonly leftoverPlayers?: readonly { readonly name: string; readonly whole: boolean }[];
 }

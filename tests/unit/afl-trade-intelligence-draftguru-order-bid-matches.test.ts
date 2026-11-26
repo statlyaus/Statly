@@ -246,12 +246,19 @@ describe('Draftguru order matched bids (owner, 2026-11-24)', () => {
         playerId: playerId('Jake Eime'),
       },
     ]);
-    // The Bulldogs' pick 43 states no original club: a compensation pick.
+    // The Bulldogs' pick 43 states no original club: a compensation pick, whose row says whose.
     expect(byNominee(matches, 'Khaled El Souki').spentPicks[0]).toMatchObject({
       asPick: 43,
       routeClubIds: [null],
       originKind: 'compensation',
+      compensationLabel: 'Band 3 Free Agency Comp for A Player',
     });
+    // Only a compensation pick carries a label, so every other record keeps its bytes.
+    expect(
+      byNominee(matches, 'Ethan Matthews').spentPicks.every(
+        (pick) => !Object.hasOwn(pick, 'compensationLabel')
+      )
+    ).toBe(true);
   });
 
   it('cites the nominee, spent and leftover rows, and stores no points', () => {

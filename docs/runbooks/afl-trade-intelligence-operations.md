@@ -3799,7 +3799,11 @@ AFL_OUTCOMES_DATABASE_URL=postgresql://<user>:<password>@127.0.0.1:<port>/<datab
   every other `matched_bid` outcome is pending with its `pendingReason`. `bidMatches` lists each
   board matched bid with its price by the year's AFL rule, leftover and deficit, and each spent pick's
   custody join (`link`). A candidate reconciled before migration 0288, or over v1 boards only, holds
-  no bid matches, so all its matched-bid picks stay `no_bid_spend`.
+  no bid matches, so all its matched-bid picks stay `no_bid_spend`. `matchedBidLeftovers` counts each
+  leftover pick by what it became (`selected`, `spent`, `not_used`, `untied`); each untied one names
+  its reason on its bid (`pricing.leftover.use.reason`). A candidate reconciled before 2026-11-26
+  names no board row for a leftover pick, so its selected or passed Footyinfo leftovers stay
+  `leftover_not_in_evidence` until the candidate is prepared again.
 - Each run is a different ledger (its build time and spell cutoff are the run's start), even on
   unchanged data. Cite it by `artifactId` and `ledgerId`. It is private and nothing in it is publishable.
 

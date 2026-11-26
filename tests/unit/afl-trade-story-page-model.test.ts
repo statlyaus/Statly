@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { clampLines, wrapText } from '@/components/aflTradeStory/scarfTimeline';
+import type { AflTradePageBidShare } from '@/components/aflTradeStory/tradePageModel';
 import {
   clubSquare,
   clubStyle,
@@ -11,6 +12,9 @@ import {
   formatSigned,
   inSentence,
   inkOn,
+  nameList,
+  ordinal,
+  shareSubject,
   tradeHash,
   tradeIdFromHash,
   tradeStoryHref,
@@ -93,6 +97,46 @@ describe('trade page model helpers', () => {
     expect(inSentence('Pick 20 → pick 25')).toBe('pick 20 → pick 25');
     expect(inSentence('2021 4th round')).toBe('2021 4th round');
     expect(inSentence('Pickett')).toBe('Pickett');
+  });
+
+  it('writes lists and ladder positions as a footy fan reads them', () => {
+    expect(nameList(['Melbourne'])).toBe('Melbourne');
+    expect(nameList(['Melbourne', 'Sydney'])).toBe('Melbourne and Sydney');
+    expect(nameList(['Melbourne', 'Port Adelaide', 'Sydney'])).toBe(
+      'Melbourne, Port Adelaide and Sydney'
+    );
+    expect([1, 2, 3, 4, 8, 11, 12, 13, 15, 21, 22].map(ordinal)).toEqual([
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '8th',
+      '11th',
+      '12th',
+      '13th',
+      '15th',
+      '21st',
+      '22nd',
+    ]);
+  });
+
+  it('names a leftover pick’s player beside the nominee on the last spent pick only', () => {
+    // GWS 2026: pick 13 carries Jake Eime, the player its leftover points became; pick 8 does not.
+    const bid = {
+      match: {
+        pricing: {
+          status: 'shared',
+          leftover: { spentNativePickId: 'order-13', remainderPoints: 1029.9 },
+        },
+        spentPicks: [{ nativePickId: 'order-8' }, { nativePickId: 'order-13' }],
+      },
+      leftoverPlayers: [{ name: 'Jake Eime', whole: true }],
+    } as unknown as AflTradePageBidShare['bid'];
+    expect(shareSubject('Ethan Matthews', { bid, spentIndex: 1 })).toBe(
+      'Ethan Matthews, plus Jake Eime'
+    );
+    expect(shareSubject('Ethan Matthews', { bid, spentIndex: 0 })).toBe('Ethan Matthews');
+    expect(shareSubject('Ethan Matthews', null)).toBe('Ethan Matthews');
   });
 
   it('wraps scarf callouts and marks cut text with an ellipsis', () => {

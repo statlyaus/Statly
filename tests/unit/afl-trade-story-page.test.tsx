@@ -166,7 +166,9 @@ describe('private trade page: Geelong ⇄ Western Bulldogs, 2021', () => {
       ['Pick 44', '362', '18.0%'],
       ['Pick 45 · part used', '336.6', '16.7%'],
     ]);
-    expect(textOf(card)).toContain('Pick 45 had 10.4 points left over. They became pick 61.');
+    expect(textOf(card)).toContain(
+      'Pick 45 had 10.4 points left over, which became a new pick 61.'
+    );
     expect(textOf(card)).not.toContain('not in the totals');
   });
 
@@ -520,11 +522,21 @@ describe('bid match card: a 2026 Draftguru order bid (owner, 2026-11-24)', () =>
   it('says the deficit comes off next year’s first-round pick, and the value is projected', () => {
     const card = renderCard(portBid());
     expect(textOf(card)).toContain(
-      'Port Adelaide matched a bid for Dougie Cochrane at pick 1 in 2026. The price was 2,700 points, paid with 2 picks.'
+      'Port Adelaide matched a bid for Dougie Cochrane at pick 1 in 2026. The price was 2,700 points (3,000 for pick 1, less 10% because Port Adelaide finished 15th). They paid with 2 picks.'
     );
     expect(textOf(card)).toContain(
       'Port Adelaide were 355 points short. Those points come off their first-round pick in the 2027 draft.'
     );
+    // The shortfall is a row of its own, so the shares add up with the bar's pale segment.
+    const rows = within(card)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => [...row.querySelectorAll('th, td')].map(textOf));
+    expect(rows).toEqual([
+      ['Pick 6', '1,659', '61.4%'],
+      ['Pick 22 (from Richmond) (this pick)', '686', '25.4%'],
+      ['Points short (off the 2027 first-round pick)', '355', '13.1%'],
+    ]);
     expect(textOf(card)).toContain(
       '21.30 Pick 22 (from Richmond)’s share: 25.4% of Dougie Cochrane’s projected value'
     );
@@ -532,6 +544,94 @@ describe('bid match card: a 2026 Draftguru order bid (owner, 2026-11-24)', () =>
       'Dougie Cochrane has not played a season yet, so his value is projected from pick 1.'
     );
     expect(textOf(card)).not.toContain('price is not known');
+  });
+
+  it('names the leftover pick and its player, and says the card’s pick is the one traded as another number', () => {
+    // GWS matched Ethan Matthews at 6 (1,493.1) with pick 8 and pick 13, traded as Melbourne's
+    // pick 12; pick 13 had 1,029.9 points left over, which became GWS pick 13, used on Jake Eime.
+    const gws = portBid({
+      selectionNumber: 6,
+      clubId: 'gws',
+      ladderPosition: 12,
+      pricing: {
+        status: 'shared',
+        ruleId: 'afl-bid-price-2026-ladder',
+        pricePoints: 1493.1,
+        leftover: {
+          spentNativePickId: 'order-13',
+          remainderPoints: 1029.9,
+          boardLeftoverPickIds: ['order-eime'],
+        },
+        deficit: null,
+      },
+      spentPicks: [
+        {
+          ...spent(8, 'Pick 8 (from Gold Coast via Melbourne, Port Adelaide and Sydney)', 1443),
+          share: 1443 / 1493.1,
+        },
+        {
+          ...spent(13, 'Pick 13 (from Melbourne via Port Adelaide)', 50.1),
+          pointsUsed: 1080,
+          share: 50.1 / 1493.1,
+          use: 'partial',
+        },
+      ],
+    });
+    const card = render(
+      <BidMatchShareCard
+        assetId="pick-13"
+        label="2026 pick 12 (Melbourne)"
+        share={{
+          bid: {
+            ...gws,
+            nomineeName: 'Ethan Matthews',
+            clubName: 'GWS',
+            leftoverLabels: ['a new pick 13, used on Jake Eime'],
+            leftoverPlayers: [{ name: 'Jake Eime', whole: true }],
+          },
+          spentIndex: 1,
+        }}
+        value={{ kind: 'known', pav: 4.1 }}
+        checkpoint={{ kind: 'draft', season: 2026 }}
+      />
+    ).container;
+    expect(textOf(card)).toContain(
+      'The price was 1,493.1 points (1,659 for pick 6, less 10% because GWS finished 12th). They paid with 2 picks.'
+    );
+    const rows = within(card)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => [...row.querySelectorAll('th, td')].map(textOf));
+    expect(rows).toEqual([
+      ['Pick 8 (from Gold Coast via Melbourne, Port Adelaide and Sydney)', '1,443', '96.6%'],
+      ['Pick 13 on the night (traded as pick 12) · this pick · part used', '50.1', '3.4%'],
+    ]);
+    expect(textOf(card)).toContain(
+      'Pick 13 (from Melbourne via Port Adelaide) had 1,029.9 points left over, which became a new pick 13, used on Jake Eime.'
+    );
+    expect(textOf(card)).toContain(
+      '4.10 2026 pick 12 (Melbourne)’s share: 3.4% of Ethan Matthews’s projected value, plus all of Jake Eime’s'
+    );
+    expect(textOf(card)).toContain(
+      'Ethan Matthews and Jake Eime have not played a season yet, so their values are projected from their draft picks.'
+    );
+  });
+
+  it('says a club that finished in the middle paid the full value, with no discount', () => {
+    const carlton = portBid({
+      selectionNumber: 3,
+      ladderPosition: 8,
+      pricing: {
+        status: 'shared',
+        ruleId: 'afl-bid-price-2026-ladder',
+        pricePoints: 2178,
+        leftover: null,
+        deficit: { points: 369, against: 'next_draft_first_pick' },
+      },
+    });
+    expect(textOf(renderCard({ ...carlton, clubName: 'Carlton' }))).toContain(
+      'The price was 2,178 points, the full value of pick 3 with no discount because Carlton finished 8th. They paid with 2 picks.'
+    );
   });
 
   it('drops the projection once the nominee has played, and the deficit line with no deficit', () => {

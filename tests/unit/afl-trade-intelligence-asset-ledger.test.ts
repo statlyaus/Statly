@@ -723,6 +723,163 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     expect(bid!.spentPicks.at(-1)).toMatchObject({ countedPoints: 336.6, use: 'partial' });
   });
 
+  describe('the leftover pick (owner, 2026-11-26: the last spent pick’s remainder is its own pick)', () => {
+    const BOARD_LEFT = `external-draft-board-pick:${hex('0')}`;
+    const LATER = `external-draft-board-bid-match:${hex('e')}`;
+    type BoardPick = NonNullable<Candidate['draftBoardPicks']>[number];
+    const boardRow = (fields: Partial<BoardPick> = {}) =>
+      ({
+        boardPickId: BOARD_LEFT,
+        draftYear: 2021,
+        draftType: 'national',
+        roundNumber: 4,
+        recordedPickNumber: 61,
+        status: 'selected',
+        clubId: 'western_bulldogs',
+        routeClubIds: [],
+        evidenceIds: [],
+        ...fields,
+      }) as BoardPick;
+    const leftover = (fields: Partial<BidMatch['leftoverPicks'][number]> = {}) => ({
+      nativePickId: '5792',
+      holdingClubId: 'western_bulldogs',
+      points: 135,
+      boardPickId: BOARD_LEFT,
+      ...fields,
+    });
+    /** Darcy's bid with its leftover pick 5792, and the board's row of it when given. */
+    const withLeftover = (
+      leftoverPicks: BidMatch['leftoverPicks'],
+      extra: Partial<Candidate> = {},
+      more: (candidate: Candidate) => Candidate = (candidate) => candidate
+    ) =>
+      withCandidate((candidate) =>
+        more({
+          ...candidate,
+          draftBoardBidMatches: [darcyBid({ leftoverPicks })],
+          draftSelections: [
+            ...candidate.draftSelections!,
+            selection('sel-61', `draft-pick:${hex('0')}`, 'p61', 'western_bulldogs', 61),
+          ],
+          draftBoardPicks: [boardRow()],
+          ...extra,
+        })
+      );
+    const leftoverUseOf = (ledger: ReturnType<typeof withCandidate>) => {
+      const pricing = ledger.ledger.content.bidMatches[0]!.pricing;
+      return pricing.status === 'shared' ? pricing.leftover?.use : undefined;
+    };
+
+    it('ties the leftover to the player the board’s own row says it was used on', () => {
+      // Sam Darcy 2021: pick 45 covered 336.6 and had 10.4 left over; the board's leftover pick 61.
+      const ledger = withLeftover([leftover()]);
+      expect(leftoverUseOf(ledger)).toMatchObject({
+        status: 'selected',
+        leftoverPickId: '5792',
+        selectionId: 'sel-61',
+        selectionNumber: 61,
+        playerId: 'p61',
+        firstStint: { clubId: 'western_bulldogs', startSeason: 2022 },
+      });
+      expect(ledger.ledger.content.summary.matchedBidLeftovers).toEqual({
+        selected: 1,
+        spent: 0,
+        not_used: 0,
+        untied: 0,
+      });
+    });
+
+    it('ties a leftover spent on a later bid of the same club to that bid', () => {
+      const later: BidMatch = darcyBid({
+        bidMatchId: LATER,
+        nativePickId: '5800',
+        selectionNumber: 40,
+        roundNumber: 3,
+        playerId: 'p9',
+        points: 300,
+        pointsUsed: 103,
+        consumedPicks: [
+          {
+            nativePickId: '5792',
+            label: 'R4 (WBD)',
+            originalNumber: null,
+            originalClubId: 'western_bulldogs',
+            holdingClubId: 'western_bulldogs',
+            pointsUsed: 135,
+          },
+        ],
+        leftoverPicks: [],
+      });
+      const ledger = withLeftover([leftover({ boardPickId: undefined })], {}, (candidate) => ({
+        ...candidate,
+        draftBoardBidMatches: [...candidate.draftBoardBidMatches!, later],
+        draftSelections: [
+          ...candidate.draftSelections!,
+          selection('sel-40', `draft-pick:${hex('b')}`, 'p9', 'western_bulldogs', 40),
+        ],
+      }));
+      expect(leftoverUseOf(ledger)).toEqual({
+        status: 'spent',
+        leftoverPickId: '5792',
+        bidMatchId: LATER,
+      });
+    });
+
+    it('reads a passed or removed leftover as not used, and leaves the rest untied with the reason', () => {
+      expect(
+        leftoverUseOf(
+          withLeftover([leftover()], {
+            draftBoardPicks: [boardRow({ status: 'passed', recordedPickNumber: null })],
+          })
+        )
+      ).toEqual({
+        status: 'not_used',
+        leftoverPickId: '5792',
+      });
+      const reasons: [BidMatch['leftoverPicks'], Partial<Candidate>, string][] = [
+        [[], {}, 'no_leftover_pick'],
+        // 2023's boards list a second, pointless pick beside each: with neither carrying points,
+        // which one is the remainder's is not stated.
+        [
+          [leftover({ points: null }), leftover({ nativePickId: '5793', points: null })],
+          {},
+          'leftover_pick_unclear',
+        ],
+        [[leftover({ holdingClubId: 'richmond' })], {}, 'leftover_traded'],
+        [[leftover({ boardPickId: undefined })], {}, 'leftover_not_in_evidence'],
+        [[leftover()], { draftBoardPicks: [boardRow({ clubId: 'st_kilda' })] }, 'leftover_traded'],
+        [
+          [leftover()],
+          { draftBoardPicks: [boardRow({ recordedPickNumber: 62 })] },
+          'leftover_selection_unresolved',
+        ],
+        // A row at a nominee's own selection: his bid's spent picks already share him.
+        [
+          [leftover()],
+          { draftBoardPicks: [boardRow({ recordedPickNumber: 2 })] },
+          'leftover_already_valued',
+        ],
+      ];
+      for (const [listed, extra, reason] of reasons)
+        expect(leftoverUseOf(withLeftover(listed, extra))).toEqual({ status: 'untied', reason });
+    });
+
+    it('never ties a selection another ledger pick already values, so nothing counts twice', () => {
+      const ledger = withLeftover([leftover()], {}, (candidate) => ({
+        ...candidate,
+        pickOutcomes: candidate.pickOutcomes!.map((row) =>
+          row.transferId === 'tr-5'
+            ? outcome('tr-5', { disposition: 'selected', selectionId: 'sel-61', playerId: 'p61' })
+            : row
+        ),
+      }));
+      expect(leftoverUseOf(ledger)).toEqual({
+        status: 'untied',
+        reason: 'leftover_already_valued',
+      });
+    });
+  });
+
   it('stays pending, with the reason, when the bid cannot be priced or its nominee is not one selection', () => {
     expect(withBid(darcyBid({ roundNumber: null })).pickOutcome(PICK_MATCHED)).toMatchObject({
       status: 'pending',
@@ -1094,7 +1251,13 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
     /** The fixture plus the 2026 trade of pick 13 to GWS, its order rows and, when given, the bid. */
     const with2026 = (
       bid: OrderBid | null,
-      extra: { hop?: string | null; nomineeCountPick?: boolean; board?: boolean } = {}
+      extra: {
+        hop?: string | null;
+        nomineeCountPick?: boolean;
+        board?: boolean;
+        eime?: Selection;
+        eimeClub?: string;
+      } = {}
     ) => {
       const base = inputs();
       const candidate = base.candidate;
@@ -1129,6 +1292,7 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
                 ...selection('sel-m', `draft-pick:${hex('d')}`, 'matthews', 'gws', 6),
                 draftYear: 2026,
               },
+              ...(extra.eime ? [extra.eime] : []),
             ],
             ...(extra.board ? { draftBoardBidMatches: [darcyBid()] } : {}),
             pickCustody: [
@@ -1147,6 +1311,7 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
                 outcome: 'selected',
                 pickNumber: 13,
                 playerId: 'eime',
+                ...(extra.eimeClub ? { clubId: extra.eimeClub } : {}),
               }),
             ],
             ...(bid === null ? {} : { draftOrderBidMatches: [bid] }),
@@ -1209,6 +1374,46 @@ describe('asset ledger matched-bid shares (issue 789)', () => {
       expect(bid.spentPicks[1]).toMatchObject({
         originalClubId: 'melbourne',
         originKind: 'entitlement',
+      });
+    });
+
+    it('ties the leftover pick to Jake Eime, the player its order row says it was used on', () => {
+      // "Created for GWS from leftover points after matching bid for Ethan Matthews | Picked Jake
+      // Eime": pick 13's 1,029.9 points left over became GWS's pick 13.
+      const eime = {
+        ...selection('sel-e', `draft-pick:${hex('c')}`, 'eime', 'gws', 13),
+        draftYear: 2026,
+      };
+      const ledger = with2026(matthewsBid(), { eime });
+      const bid = ledger.ledger.content.bidMatches.at(-1)!;
+      expect(bid.pricing).toMatchObject({
+        leftover: {
+          spentNativePickId: ORDER('2'),
+          remainderPoints: 1029.9,
+          use: {
+            status: 'selected',
+            leftoverPickId: ORDER('3'),
+            selectionId: 'sel-e',
+            selectionNumber: 13,
+            playerId: 'eime',
+            firstStint: { clubId: 'gws', startSeason: 2027 },
+          },
+        },
+      });
+      // The spent pick's own outcome is unchanged: its share is 50.1 of 1,493.1.
+      expect(ledger.pickOutcome(PICK_G13)).toMatchObject({ share: 501 / 14931, use: 'partial' });
+      // Without the selection, or with the row at another club, it stays untied.
+      const leftoverUse = (ledger: ReturnType<typeof with2026>) => {
+        const pricing = ledger.ledger.content.bidMatches.at(-1)!.pricing;
+        return pricing.status === 'shared' ? pricing.leftover?.use : undefined;
+      };
+      expect(leftoverUse(with2026(matthewsBid()))).toEqual({
+        status: 'untied',
+        reason: 'leftover_selection_unresolved',
+      });
+      expect(leftoverUse(with2026(matthewsBid(), { eime, eimeClub: 'port_adelaide' }))).toEqual({
+        status: 'untied',
+        reason: 'leftover_traded',
       });
     });
 

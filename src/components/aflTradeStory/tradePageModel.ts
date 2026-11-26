@@ -5,6 +5,10 @@ import type {
   AflTradePageBidMatch,
   AflTradePageModel,
 } from '@/server/aflTradeIntelligence/valuation/realizedTradePageContracts';
+import {
+  aflTradeMatchedBidPrice,
+  aflTradeMatchedBidSlotPoints,
+} from '@/server/aflTradeIntelligence/valuation/matchedBidPriceRules';
 import type {
   AflTradeStory,
   AflTradeStoryAsset,
@@ -156,6 +160,80 @@ export function valueText(value: AflTradeStoryValue, outcome?: AflTradeStoryAsse
 
 /** A pick label inside a sentence: "pick 13", capitalised only where a label starts a line. */
 export const inSentence = (label: string) => label.replace(/^Pick\b/u, 'pick');
+
+/** Names in a sentence: "Ethan Matthews", "A and B", "A, B and C". */
+export function nameList(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+/** 1st, 2nd, 3rd, 11th, 15th, 22nd. */
+export function ordinal(position: number): string {
+  const tens = position % 100;
+  const suffix =
+    tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[position % 10] ?? 'th');
+  return `${position}${suffix}`;
+}
+
+/**
+ * The players a spent pick also carries through its bid's leftover pick (2026-11-26): only the bid's
+ * last spent pick, the one partly used, carries them. Empty for every other pick.
+ */
+export function leftoverPlayersOf(share: AflTradePageBidShare | null) {
+  if (share === null) return [];
+  const { bid, spentIndex } = share;
+  const leftover = bid.match.pricing.status === 'shared' ? bid.match.pricing.leftover : null;
+  const spent = bid.match.spentPicks[spentIndex];
+  return leftover !== null && spent?.nativePickId === leftover.spentNativePickId
+    ? (bid.leftoverPlayers ?? [])
+    : [];
+}
+
+/** "Ethan Matthews", or "Ethan Matthews, plus Jake Eime" when the pick also carries its leftover. */
+export function shareSubject(playerName: string, share: AflTradePageBidShare | null): string {
+  const more = leftoverPlayersOf(share).map(({ name }) => name);
+  return more.length === 0 ? playerName : `${playerName}, plus ${nameList(more)}`;
+}
+
+/**
+ * The bid's price in a sentence. Under a ladder rule (2026 on) it says how the price was set: "The
+ * price was 2,700 points (3,000 for pick 1, less 10% because Port Adelaide finished 15th)."
+ */
+export function bidPriceText(bid: AflTradePageBidMatch): string {
+  const { match, clubName } = bid;
+  const price = match.pricing.status === 'shared' ? match.pricing.pricePoints : null;
+  if (price === null) return 'Their next pick paid for him.';
+  const count = match.spentPicks.length;
+  const paid = `paid with ${count} ${count === 1 ? 'pick' : 'picks'}`;
+  const position = match.ladderPosition ?? null;
+  const points =
+    position === null ? null : aflTradeMatchedBidSlotPoints(match.draftYear, match.selectionNumber);
+  const priced =
+    points === null
+      ? null
+      : aflTradeMatchedBidPrice({
+          draftYear: match.draftYear,
+          selectionNumber: match.selectionNumber,
+          roundNumber: null,
+          points,
+          ladderPosition: position,
+        });
+  const band = priced?.status === 'priced' ? priced.band : null;
+  if (
+    band?.ladder === undefined ||
+    band.price.kind !== 'percent_off' ||
+    priced?.status !== 'priced' ||
+    priced.priceTenths !== price * 10
+  )
+    return `The price was ${formatPoints(price)} points, ${paid}.`;
+  const finished = `${clubName} finished ${ordinal(position!)}`;
+  const slot = `${formatPoints(points!)} for pick ${match.selectionNumber}`;
+  const { percent } = band.price;
+  if (percent === 0)
+    return `The price was ${formatPoints(price)} points, the full value of pick ${match.selectionNumber} with no discount because ${finished}. They ${paid}.`;
+  const how = `${slot}, ${percent > 0 ? 'less' : 'plus'} ${Math.abs(percent)}% because ${finished}`;
+  return `The price was ${formatPoints(price)} points (${how}). They ${paid}.`;
+}
 
 /** "Geelong ⇄ GWS". */
 export const tradeName = (clubs: readonly { clubName: string }[]) =>

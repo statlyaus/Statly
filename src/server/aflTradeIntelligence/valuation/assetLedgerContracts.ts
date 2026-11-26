@@ -177,7 +177,56 @@ export interface AflTradeAssetLedgerBidSpentPick {
   readonly asPick?: number;
   readonly viaClubIds?: readonly (string | null)[];
   readonly originKind?: 'entitlement' | 'compensation' | 'leftover_points' | null;
+  /** A compensation pick's origin as its order row states it ("Band 3 Free Agency Comp for X"). */
+  readonly compensationLabel?: string;
 }
+
+/**
+ * Why a matched bid's leftover pick is not tied to what it became, so the last spent pick keeps only
+ * its share (owner, 2026-11-26). `no_leftover_pick`: the evidence lists none for the remainder (the
+ * 2019 boards track none). `leftover_pick_unclear`: more than one listed pick could carry it.
+ * `leftover_traded`: another club held or used it, so what the matching club got for it is not in
+ * evidence. `leftover_not_in_evidence`: no row says what it became. `leftover_selection_unresolved`:
+ * it was used, but not on one candidate selection of a resolved player at the matching club.
+ * `leftover_already_valued`: its selection or spend is already another ledger pick's, so adding it
+ * would count it twice. `leftover_bid_unpriced`: it was spent on a bid that has no price or nominee.
+ */
+export type AflTradeAssetLedgerBidLeftoverUntiedReason =
+  | 'no_leftover_pick'
+  | 'leftover_pick_unclear'
+  | 'leftover_traded'
+  | 'leftover_not_in_evidence'
+  | 'leftover_selection_unresolved'
+  | 'leftover_already_valued'
+  | 'leftover_bid_unpriced';
+
+/**
+ * What a matched bid's leftover pick became (owner, 2026-11-26; value-line spec #964: the last spent
+ * pick's remainder is its own pick). `selected`: used on a player, whose whole first stint at the
+ * matching club the last spent pick also carries. `spent`: spent on a later bid of the same club, so
+ * the last spent pick also carries that pick's share of the later nominee (and its own leftover).
+ * `not_used`: passed or removed, worth 0. `untied`: the evidence does not say, so the last spent pick
+ * keeps only its share, as before.
+ */
+export type AflTradeAssetLedgerBidLeftoverUse =
+  | {
+      readonly status: 'selected';
+      /** The board's or order's id of the leftover pick. */
+      readonly leftoverPickId: string;
+      readonly selectionId: string;
+      readonly selectionNumber: number;
+      readonly playerId: string;
+      /** The player's first stint at the matching club, from the season after the draft. */
+      readonly firstStint: AflTradeAssetLedgerStint;
+    }
+  | {
+      readonly status: 'spent';
+      readonly leftoverPickId: string;
+      /** The later bid the leftover pick was spent on; its spent pick of that id holds the share. */
+      readonly bidMatchId: string;
+    }
+  | { readonly status: 'not_used'; readonly leftoverPickId: string }
+  | { readonly status: 'untied'; readonly reason: AflTradeAssetLedgerBidLeftoverUntiedReason };
 
 /** One matched bid: its price by the year's AFL rule and each spent pick's share. */
 export interface AflTradeAssetLedgerBidMatch {
@@ -218,6 +267,8 @@ export interface AflTradeAssetLedgerBidMatch {
           readonly spentNativePickId: string;
           readonly remainderPoints: number;
           readonly boardLeftoverPickIds: readonly string[];
+          /** What the leftover pick became; set by the ledger on every leftover (2026-11-26). */
+          readonly use?: AflTradeAssetLedgerBidLeftoverUse;
         } | null;
         readonly deficit: {
           readonly points: number | null;
@@ -355,6 +406,10 @@ export interface AflTradeAssetLedgerContent {
     readonly outcomes: Readonly<Record<AflTradeAssetLedgerOutcomeKind, number>>;
     /** Matched-bid picks that took a share of their nominee. */
     readonly matchedBidPicksShared: number;
+    /** Every matched bid's leftover pick by what it became (`untied`: kept at the share alone). */
+    readonly matchedBidLeftovers: Readonly<
+      Record<AflTradeAssetLedgerBidLeftoverUse['status'], number>
+    >;
   };
   readonly publicationEligible: false;
   readonly publicationProhibited: true;
