@@ -123,10 +123,10 @@ export function BidMatchShareCard({
             <th scope="col" className="py-1 font-medium">
               Pick
             </th>
-            <th scope="col" className="py-1 text-right font-medium">
+            <th scope="col" className="py-1 pl-4 text-right font-medium">
               Points covered
             </th>
-            <th scope="col" className="py-1 text-right font-medium">
+            <th scope="col" className="py-1 pl-4 text-right font-medium">
               Share
             </th>
           </tr>
@@ -138,15 +138,15 @@ export function BidMatchShareCard({
               className={`border-t border-border ${index === spentIndex ? 'font-semibold' : ''}`}
               aria-current={index === spentIndex ? 'true' : undefined}
             >
-              <th scope="row" className="py-1.5 text-left font-[inherit]">
+              <th scope="row" className="py-1.5 pr-2 text-left font-[inherit]">
                 {pick.label}
                 {index === spentIndex ? ' (this pick)' : ''}
                 {pick.use === 'partial' ? ' · part used' : ''}
               </th>
-              <td className="py-1.5 text-right tabular-nums">
+              <td className="whitespace-nowrap py-1.5 pl-4 text-right tabular-nums">
                 {pick.countedPoints === null ? '—' : formatPoints(pick.countedPoints)}
               </td>
-              <td className="py-1.5 text-right tabular-nums">
+              <td className="whitespace-nowrap py-1.5 pl-4 text-right tabular-nums">
                 {pick.share === null ? '—' : formatPercent(pick.share)}
               </td>
             </tr>
