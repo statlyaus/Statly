@@ -9,12 +9,14 @@ import {
   tradesListHref,
   tradeYearSummaries,
 } from '@/components/aflTradeStory/tradesListQuery';
+import { generalManagerLadder } from '@/components/aflGeneralManagers/generalManagerLadder';
 import {
   CAMERON_STANDFIRST,
   CAMERON_STORY_PATH,
   CameronTitle,
   STORY_COLLAGE_CLASS,
 } from '@/components/aflStories/CameronMasthead';
+import { GeneralManagerBoard } from './GeneralManagerBoard';
 import { TradeLadder } from './TradeLadder';
 import { RecordBanner } from './RecordBanner';
 import { TradeMarketHero } from './TradeMarketHero';
@@ -37,6 +39,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
   const ladderYears = tradeLadderByYear(stories);
   const years = tradeYearSummaries(stories);
   const nextWins = biggestWins(stories, 6);
+  const generalManagers = generalManagerLadder(stories);
   // The trade the lead story is about: the one that sent Jeremy Cameron to Geelong.
   const received = stories.flatMap((story) =>
     (story.results ?? []).map((result) => ({ story, result }))
@@ -97,6 +100,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
 
       <div className={`${container} grid grid-cols-[minmax(0,1fr)] gap-14 py-12 lg:py-16`}>
         {ladderYears.length > 0 ? <TradeLadder years={ladderYears} /> : null}
+        <GeneralManagerBoard ladder={generalManagers} titleClassName={sectionTitle} />
         {nextWins.length > 0 ? (
           <section aria-labelledby="next-wins">
             <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 border-b-4 border-foreground pb-3">

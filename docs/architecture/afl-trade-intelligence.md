@@ -4501,7 +4501,7 @@ Putting fantasy back in the public navigation is an owner decision at fantasy go
 
 **Pages.** `/afl` (hub), `/afl/trades` (every trade by year and club, with one open beside the list),
 `/afl/trades/<trade>`,
-`/afl/trades/clubs/<club>` and `/afl/trades/method`. The trade and club pages are the private pages'
+`/afl/trades/clubs/<club>`, `/afl/trades/method` and `/afl/trades/general-managers`. The trade and club pages are the private pages'
 components: the bundle source marks its models `audience: public`, which swaps the private notice for
 the public one, points every link at `/afl/trades`, and drops the component's own `<main>` (the public
 layout has one). While the reader is unavailable every page says so; an unknown trade or club is not
@@ -4523,6 +4523,17 @@ references below it. It is laid out at a fixed 1180 × 880 and scaled to fit the
 header; phones get a stacked layout. Its numbers are fixed in `dawsonExample.ts`: his season working
 from `hpnPavCore.ts` over the genuine AFL Tables rows, and his trade from bundle 1e9e6025, so they match
 the trade page exactly. The design is first cut; the owner is iterating on it.
+
+**General managers.** `/afl/trades/general-managers` (owner, 2026-11-26) ranks every club's head of
+football since 2019 by the net PAV of the trades made while they held the role, and the home page shows
+the five furthest ahead and behind. `components/aflGeneralManagers/generalManagerLadder.ts` credits each club side from the list
+results (the net the trade pages show) to the person in the role in that trade period (October,
+November in 2020); two people at once split it, the one leaving keeps a handover month, a side with
+nobody in the role is counted apart, and a projected side waits for a season, as on the trade ladder.
+The tenures are reference data in `components/aflGeneralManagers/generalManagers.ts`, researched from club releases and news reports
+with the sources on every row and reviewed in the pull request that changes them; a row resting on one
+source or an inferred month is `confirmed: false` and its person carries an asterisk. The list
+managers and recruiters stay private: on 2019-2026 trades neither shows a person effect above chance.
 
 **List filters and preview.** `/afl/trades?year=2024&club=geelong&sort=biggest&trade=<id>`
 (`tradesListQuery.ts`): the year, club, order and the trade open in the preview live in the address,

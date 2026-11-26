@@ -35,6 +35,7 @@ describe('trades-only mode', () => {
     '/afl/trades/external-transaction:abc/share-card',
     '/afl/trades/clubs/club:abc',
     '/afl/trades/method',
+    '/afl/trades/general-managers',
     '/draft/trades',
     '/privacy',
     '/terms',

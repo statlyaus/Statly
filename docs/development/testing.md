@@ -657,7 +657,7 @@ pick. The full 12-team by
 22-player, 264-pick contract runs through the persisted application boundary in integration tests so
 browser, dev-server, and database transport pressure cannot masquerade as a product failure.
 
-The server also serves the public trade pages (`/`, `/afl/trades`) from the synthetic sample bundle
+The server also serves the public trade pages (`/`, `/afl/trades`, `/afl/trades/general-managers`) from the synthetic sample bundle
 (`tests/fixtures/aflTradeStorySampleBundle.ts`), written to `test-results/` when the config loads.
 `tests/e2e/public-trades-brand.test.ts` audits those pages element by element against the style
 guide at 1280, 1024, 768 and 390px (SVG text at its rendered size), skipping `[data-collage]`. Locally, `PLAYWRIGHT_TRADE_BUNDLE_PATH` points

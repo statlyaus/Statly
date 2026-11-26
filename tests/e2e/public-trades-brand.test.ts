@@ -42,7 +42,14 @@ for (const viewport of [
         .getAttribute('href');
       expect(club, 'a club chains link on the trade page').toBeTruthy();
 
-      for (const path of ['/', '/afl/trades', trade!, club!, '/afl/trades/method']) {
+      for (const path of [
+        '/',
+        '/afl/trades',
+        trade!,
+        club!,
+        '/afl/trades/method',
+        '/afl/trades/general-managers',
+      ]) {
         await test.step(path, () => expectConformant(page, path));
       }
     });
