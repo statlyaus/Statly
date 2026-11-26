@@ -7,7 +7,7 @@ import { useAuth } from '@/AuthContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { cn } from '@/lib/utils';
-import { LoadingSpinner } from './ui';
+import { Spinner } from './ui/Spinner';
 import { alertStyles } from '@/components/ui/controlStyles';
 
 type AvailabilityStatus = 'owned' | 'your-roster' | 'waiver' | 'free-agent';
@@ -298,7 +298,7 @@ export function PlayerLeagueAvailabilityPanel({
 
       {loading ? (
         <div className="flex h-48 items-center justify-center">
-          <LoadingSpinner />
+          <Spinner label="Loading league availability" />
         </div>
       ) : error ? (
         <div role="alert" className={`m-5 p-4 text-sm ${alertStyles({ tone: 'error' })}`}>

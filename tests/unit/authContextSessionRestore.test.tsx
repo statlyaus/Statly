@@ -40,10 +40,6 @@ vi.mock('@/lib/devAuth', () => ({
   readStoredDevelopmentAuthUser: () => null,
 }));
 
-vi.mock('@/components/ui/LoadingSpinner', () => ({
-  default: () => <div>Restoring session</div>,
-}));
-
 import { AuthProvider, useAuth } from '@/AuthContext';
 
 let latestAuth: ReturnType<typeof useAuth> | undefined;
@@ -100,7 +96,7 @@ describe('AuthProvider authenticated navigation readiness', () => {
     await waitFor(() => expect(authListener).toBeTypeOf('function'));
     act(() => authListener?.(firebaseUser));
 
-    expect(screen.getByText('Restoring session')).toBeInTheDocument();
+    expect(screen.getByText('Restoring your session')).toBeInTheDocument();
     expect(screen.queryByText('firebase-user-1')).not.toBeInTheDocument();
     await waitFor(() => expect(mocks.ensureAuthServiceWorkerReady).toHaveBeenCalledTimes(1));
 

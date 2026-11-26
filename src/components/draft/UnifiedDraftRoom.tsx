@@ -30,6 +30,7 @@ import DraftQueue from './DraftQueue';
 import DraftStatusBanner from './DraftStatusBanner';
 import PlayerGrid from './PlayerGrid';
 import { sortDraftPlayers, type PlayerSortKey } from './sortDraftPlayers';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface UnifiedDraftRoomProps {
   draftId: string;
@@ -427,11 +428,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div
-            className="mx-auto mb-6 h-16 w-16 animate-spin rounded-full border-4 border-muted border-t-primary"
-            role="status"
-            aria-label="Loading"
-          />
+          <Spinner size="lg" label="Loading the draft room" className="mb-6" />
           <h2 className="mb-2 text-2xl font-semibold text-foreground">Loading Draft Room</h2>
           <p className="text-muted-foreground">Preparing your draft experience...</p>
         </div>

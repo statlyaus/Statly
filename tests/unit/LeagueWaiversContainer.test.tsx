@@ -15,10 +15,6 @@ vi.mock('@/AuthContext', () => ({
   useAuth: () => authState,
 }));
 
-vi.mock('@/components/ui/LoadingSpinner', () => ({
-  default: () => <div role="status">Loading</div>,
-}));
-
 vi.mock('@/components/waivers/WaiverFAABSystem', () => ({
   default: function MockWaiverSystem(props: {
     availablePlayers: Array<{ id: string; name: string }>;

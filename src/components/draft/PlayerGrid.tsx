@@ -13,6 +13,7 @@ import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCate
 import type { DraftPlayer } from '@/types/draft';
 
 import type { CategoryDirections } from './sortDraftPlayers';
+import { Spinner } from '@/components/ui/Spinner';
 
 type PlayerGridSortKey =
   'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
@@ -915,10 +916,7 @@ function PlayerGridTable({
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-card/85">
           <div className="text-center">
-            <div
-              className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"
-              aria-hidden="true"
-            />
+            <Spinner className="mb-2" />
             <p className="text-sm text-foreground">Processing...</p>
           </div>
         </div>

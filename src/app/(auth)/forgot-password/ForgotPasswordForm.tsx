@@ -9,8 +9,8 @@ import {
   EnvelopeIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { Spinner } from '@/components/ui/Spinner';
 
 function toResetErrorMessage(err: unknown): string {
   const code = typeof err === 'object' && err && 'code' in err ? String(err.code) : '';
@@ -103,7 +103,7 @@ export default function ForgotPasswordForm() {
         >
           {submitting ? (
             <>
-              <ArrowPathIcon aria-hidden="true" className="h-5 w-5 animate-spin" />
+              <Spinner size="sm" inherit />
               Sending reset link...
             </>
           ) : (

@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { auth, authEmulatorReady } from '@/lib/firebase/clientAuth';
 import { ensureAuthServiceWorkerReady } from '@/lib/authServiceWorker';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { Spinner } from '@/components/ui/Spinner';
 import {
   clearDevelopmentAuthUser,
   createDevelopmentAuthUser,
@@ -217,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
     <AuthContext.Provider value={value}>
       {loading ? (
         <div className="flex h-screen w-full items-center justify-center">
-          <LoadingSpinner />
+          <Spinner label="Restoring your session" />
         </div>
       ) : (
         children

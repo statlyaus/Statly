@@ -41,6 +41,7 @@ import {
 } from '@/lib/draftSettings';
 import type { League, LeagueMember } from '@/types/leagues';
 import { isConnectivityError, getConnectivityErrorMessage } from '@/utils/errorHandling';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface DraftParticipant {
   userId: string;
@@ -975,7 +976,7 @@ export default function DraftManager({
               >
                 {savingDraft ? (
                   <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                    <Spinner size="sm" inherit />
                     <span>Creating...</span>
                   </>
                 ) : (

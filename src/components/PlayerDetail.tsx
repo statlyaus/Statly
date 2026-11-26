@@ -13,7 +13,7 @@ import MatchLogTable from './MatchLogTable';
 import PlayerChart from './PlayerChart';
 import { PlayerLeagueAvailabilityPanel } from './PlayerLeagueAvailabilityPanel';
 import { LeagueSocialDiscussButton } from './league/LeagueSocialDiscussButton';
-import { LoadingSpinner } from './ui';
+import { Spinner } from './ui/Spinner';
 import { alertStyles, badgeStyles } from '@/components/ui/controlStyles';
 
 type PlayerDetailProps = {
@@ -474,7 +474,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
           <section className="min-w-0">
             {loading ? (
               <div className="flex h-64 items-center justify-center border border-border bg-card">
-                <LoadingSpinner />
+                <Spinner label="Loading the chart" />
               </div>
             ) : error ? (
               <div role="alert" className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>
@@ -493,7 +493,7 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
           <section className="min-w-0">
             {loading ? (
               <div className="flex h-64 items-center justify-center border border-border bg-card">
-                <LoadingSpinner />
+                <Spinner label="Loading the match log" />
               </div>
             ) : error ? (
               <div role="alert" className={`p-5 text-sm ${alertStyles({ tone: 'error' })}`}>

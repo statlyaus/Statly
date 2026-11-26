@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CalendarPlus, CheckCircle2, ChevronLeft, KeyRound, Loader2, UserPlus } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, ChevronLeft, KeyRound, UserPlus } from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
 
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
@@ -253,7 +254,7 @@ export default function JoinLeaguePage() {
                 disabled={loading || !code.trim()}
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {loading && <Spinner size="sm" inherit />}
                 {loading ? 'Joining league' : 'Join league'}
               </button>
             </form>

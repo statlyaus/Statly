@@ -1,14 +1,9 @@
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { Spinner } from '@/components/ui/Spinner';
 
 export default function Loading() {
   return (
-    <div
-      className="flex min-h-[60vh] items-center justify-center"
-      role="status"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <LoadingSpinner />
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <Spinner label="Loading waivers" />
     </div>
   );
 }
