@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-// One spinner (style guide, "Numbers, empty states, loading, dialogs"; ticket 14c): only
+// One spinner (style guide, "Numbers, empty states, loading"; ticket 14c): only
 // src/components/ui/Spinner.tsx turns, so every loading state looks the same and can name what is
 // loading.
 const SPINNER = join('src', 'components', 'ui', 'Spinner.tsx');

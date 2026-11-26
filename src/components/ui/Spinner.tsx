@@ -17,7 +17,7 @@ interface SpinnerProps {
 }
 
 /**
- * The one spinner (style guide, "Numbers, empty states, loading, dialogs"): a cobalt ring that turns
+ * The one spinner (style guide, "Numbers, empty states, loading"): a cobalt ring that turns
  * only when motion is allowed, and names the thing loading.
  */
 export function Spinner({
