@@ -6,6 +6,7 @@ import { unstable_rethrow } from 'next/navigation';
 import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { logger } from '@/lib/logger';
 import { captureError } from '@/lib/sentry-utils';
+import { buttonStyles } from './controlStyles';
 
 export interface ErrorFallbackContext {
   error?: Error;
@@ -199,11 +200,8 @@ function DefaultErrorFallback({
 
         <div className="space-y-2">
           {canRetry && (
-            <button
-              onClick={resetError}
-              className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <ArrowPathIcon aria-hidden="true" className="mr-2 h-4 w-4" />
+            <button onClick={resetError} className={buttonStyles({ variant: 'primary' })}>
+              <ArrowPathIcon aria-hidden="true" className="size-4" />
               Try again {retryCount > 0 && `(${maxRetries - retryCount} attempts left)`}
             </button>
           )}
@@ -211,7 +209,7 @@ function DefaultErrorFallback({
           {isPageLevel && (
             <button
               onClick={() => window.location.reload()}
-              className="block min-h-11 w-full rounded-md border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={buttonStyles({ className: 'w-full' })}
             >
               Reload page
             </button>

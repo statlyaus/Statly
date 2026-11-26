@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { captureError } from '@/lib/sentry-utils';
 
 export interface RouteErrorStateProps {
@@ -45,18 +46,11 @@ export function RouteErrorState({
           <p className="mb-4 font-mono text-xs text-muted-foreground">Reference: {error.digest}</p>
         )}
         <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
-          <button
-            type="button"
-            onClick={reset}
-            className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <ArrowPathIcon aria-hidden="true" className="mr-2 h-4 w-4" />
+          <button type="button" onClick={reset} className={buttonStyles({ variant: 'primary' })}>
+            <ArrowPathIcon aria-hidden="true" className="size-4" />
             Try again
           </button>
-          <Link
-            href={homeHref}
-            className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
+          <Link href={homeHref} className={buttonStyles()}>
             {homeLabel}
           </Link>
         </div>

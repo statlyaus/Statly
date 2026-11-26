@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 // global-error replaces the root layout, so it must load the global styles and tokens itself.
 import '@/index.css';
 import { captureException } from '@/lib/sentry-utils';
@@ -39,16 +40,13 @@ export default function GlobalError({
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className={buttonStyles({ variant: 'primary' })}
               >
-                <ArrowPathIcon aria-hidden="true" className="mr-2 h-4 w-4" />
+                <ArrowPathIcon aria-hidden="true" className="size-4" />
                 Try again
               </button>
               {/* A full page load, because the root layout itself failed. */}
-              <a
-                href="/"
-                className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
+              <a href="/" className={buttonStyles()}>
                 Go home
               </a>
             </div>
