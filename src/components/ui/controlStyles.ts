@@ -26,7 +26,7 @@ const tilt =
   'motion-safe:not-disabled:not-aria-disabled:hover:-rotate-[1.5deg] motion-safe:not-disabled:not-aria-disabled:hover:scale-[1.03]';
 
 export const buttonStyles = cva(
-  `inline-flex items-center justify-center gap-2 rounded-cut font-display font-extrabold transition ${focusOutline} ${pressable} ${buttonDisabled}`,
+  `inline-flex cursor-pointer items-center justify-center gap-2 rounded-cut font-display font-extrabold transition ${focusOutline} ${pressable} ${buttonDisabled}`,
   {
     variants: {
       variant: {
@@ -113,7 +113,7 @@ export const badgeStyles = cva(
  * ink line, a quiet fill on hover, and sun with ink text when picked. 44px tall for phones.
  */
 export const chipStyles = cva(
-  `inline-flex min-h-11 items-center gap-2 rounded-cut border-2 border-foreground px-4 font-display text-sm font-bold transition ${focusOutline}`,
+  `inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-cut border-2 border-foreground px-4 font-display text-sm font-bold transition ${focusOutline}`,
   {
     variants: {
       picked: {

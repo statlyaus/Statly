@@ -47,7 +47,7 @@ export function RouteErrorState({
         )}
         <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
           <button type="button" onClick={reset} className={buttonStyles({ variant: 'primary' })}>
-            <ArrowPathIcon aria-hidden="true" className="size-4" />
+            <ArrowPathIcon aria-hidden="true" className="size-5" />
             Try again
           </button>
           <Link href={homeHref} className={buttonStyles()}>

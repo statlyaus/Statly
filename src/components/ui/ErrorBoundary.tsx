@@ -200,14 +200,19 @@ function DefaultErrorFallback({
 
         <div className="space-y-2">
           {canRetry && (
-            <button onClick={resetError} className={buttonStyles({ variant: 'primary' })}>
-              <ArrowPathIcon aria-hidden="true" className="size-4" />
+            <button
+              type="button"
+              onClick={resetError}
+              className={buttonStyles({ variant: 'primary' })}
+            >
+              <ArrowPathIcon aria-hidden="true" className="size-5" />
               Try again {retryCount > 0 && `(${maxRetries - retryCount} attempts left)`}
             </button>
           )}
 
           {isPageLevel && (
             <button
+              type="button"
               onClick={() => window.location.reload()}
               className={buttonStyles({ className: 'w-full' })}
             >

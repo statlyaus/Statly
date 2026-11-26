@@ -42,7 +42,7 @@ export default function GlobalError({
                 onClick={reset}
                 className={buttonStyles({ variant: 'primary' })}
               >
-                <ArrowPathIcon aria-hidden="true" className="size-4" />
+                <ArrowPathIcon aria-hidden="true" className="size-5" />
                 Try again
               </button>
               {/* A full page load, because the root layout itself failed. */}

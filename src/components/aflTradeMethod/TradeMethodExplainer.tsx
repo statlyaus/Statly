@@ -241,7 +241,7 @@ export function TradeMethodExplainer() {
 
         <section
           ref={sectionRef}
-          className="flex min-h-0 flex-1 scroll-mt-28 flex-col border-2 border-foreground bg-card"
+          className="ground-white flex min-h-0 flex-1 scroll-mt-28 flex-col border-2 border-foreground"
           aria-label="How PAV is calculated, step by step"
         >
           <Progress step={step} onPick={go} />

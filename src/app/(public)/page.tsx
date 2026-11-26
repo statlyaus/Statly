@@ -6,6 +6,7 @@ import { ArrowRight } from 'lucide-react';
 
 import { StatlyWordmark } from '@/components/brand/StatlyWordmark';
 import { TradesFrontPage } from '@/components/aflTradesHome/TradesFrontPage';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { publicTradeStoryReads } from '@/server/aflTradeIntelligence/publication/publicTradeStoryReads';
 
 export const dynamic = 'force-dynamic';
@@ -98,12 +99,9 @@ export default async function HomePage(): Promise<ReactElement> {
               the club that got them.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <Link
-                href="/afl/trades"
-                className={`inline-flex min-h-11 items-center gap-2 rounded-cut bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar/90 ${focusRing}`}
-              >
+              <Link href="/afl/trades" className={buttonStyles({ variant: 'primary' })}>
                 See every trade
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <ArrowRight className="size-5" aria-hidden="true" />
               </Link>
               <Link
                 href="/afl/trades/method"
