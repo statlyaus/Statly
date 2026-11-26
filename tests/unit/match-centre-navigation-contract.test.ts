@@ -35,7 +35,7 @@ describe('live scoring and AFL match route ownership', () => {
 
     expect(matchesPage).toContain('<h1 className="text-2xl font-semibold">Match Centre</h1>');
     expect(realTimeMatchCenter).toContain(
-      '<h2 className="text-3xl font-bold text-gray-900">Live Match Centre</h2>'
+      '<h2 className="text-3xl font-bold text-foreground">Live Match Centre</h2>'
     );
     expect(realTimeMatchCenter).not.toContain('<h1');
   });

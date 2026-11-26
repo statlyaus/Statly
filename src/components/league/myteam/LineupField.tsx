@@ -190,7 +190,7 @@ export function LineupField(props: LineupFieldProps): React.JSX.Element {
               if (zoneSpots.length === 0) return null;
               return (
                 <div key={zone} className="flex items-end gap-1.5">
-                  <span className="pb-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                  <span className="pb-1 text-[11px] font-bold uppercase tracking-wide text-background">
                     {ZONE_SHORT[zone]}
                   </span>
                   <ul className="flex gap-1">
@@ -325,8 +325,8 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
       ? 'bg-card text-foreground ring-2 ring-brand-bar'
       : onGrass
         ? view.player
-          ? 'bg-white text-foreground'
-          : 'bg-foreground text-white'
+          ? 'bg-card text-foreground'
+          : 'bg-foreground text-background'
         : 'text-foreground';
   return (
     <button
@@ -336,7 +336,7 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
       disabled={view.disabled}
       onClick={view.onClick}
       className={`group relative flex w-full flex-col items-center rounded-md pt-2.5 transition-opacity focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default ${
-        onGrass ? 'focus-visible:ring-white' : 'focus-visible:ring-brand-bar'
+        onGrass ? 'focus-visible:ring-background' : 'focus-visible:ring-brand-bar'
       } ${dimmed ? 'opacity-40' : ''}`}
     >
       {/* The Swap/Here badge and the empty spot's line letters repeat what the button's label already
@@ -364,8 +364,8 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
             className={`flex size-8 items-center justify-center rounded-full border-2 border-dashed text-[11px] font-bold before:content-[attr(data-glyph)] ${
               onGrass
                 ? view.target
-                  ? 'border-white bg-primary text-primary-foreground'
-                  : 'border-white bg-foreground text-white'
+                  ? 'border-background bg-primary text-primary-foreground'
+                  : 'border-background bg-foreground text-background'
                 : view.target
                   ? 'border-brand-bar text-foreground'
                   : 'border-border text-muted-foreground'
@@ -376,7 +376,7 @@ function Token({ view, surface, dimmed }: { view: TokenView; surface: Surface; d
           <span
             aria-hidden="true"
             className={`absolute -right-1.5 top-0 size-2.5 rounded-full ring-2 ${
-              onGrass ? 'ring-white' : 'ring-card'
+              onGrass ? 'ring-background' : 'ring-card'
             } ${view.flagged === 'bad' ? 'bg-destructive' : 'bg-warning-text'}`}
           />
         ) : null}

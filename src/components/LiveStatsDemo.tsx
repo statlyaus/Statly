@@ -54,7 +54,7 @@ export default function LiveStatsDemo() {
         <h1 className="text-3xl font-bold mb-4">Live AFL Player Statistics</h1>
 
         {/* Controls */}
-        <div className="bg-gray-50 p-4 mb-6 space-y-4">
+        <div className="bg-muted p-4 mb-6 space-y-4">
           <div className="flex gap-4 items-center">
             <label htmlFor="match-uid" className="font-medium">
               Match UID:
@@ -72,7 +72,7 @@ export default function LiveStatsDemo() {
             <button
               onClick={onRefreshClick}
               disabled={isLoading || inputUid.trim() === ''}
-              className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
               aria-busy={isLoading}
             >
               {isLoading ? 'Loading...' : inputUid.trim() !== matchUid ? 'Load' : 'Refresh'}
@@ -98,11 +98,11 @@ export default function LiveStatsDemo() {
         </div>
 
         {/* Status */}
-        <div className="bg-white border p-4 mb-6" aria-live="polite" aria-busy={isLoading}>
+        <div className="bg-card border p-4 mb-6" aria-live="polite" aria-busy={isLoading}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
-                className={`w-3 h-3 rounded-full ${isLoading ? 'bg-yellow-400' : hasData ? 'bg-green-400' : 'bg-gray-400'}`}
+                className={`w-3 h-3 rounded-full ${isLoading ? 'bg-warning' : hasData ? 'bg-success' : 'bg-muted-foreground'}`}
               />
               <span className="font-medium">
                 {isLoading ? 'Loading...' : hasData ? 'Live Data Connected' : 'No Data'}
@@ -110,14 +110,14 @@ export default function LiveStatsDemo() {
             </div>
 
             {timeSinceText && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 Last updated {timeSinceText} • Source: Footywire via fitzRoy
               </div>
             )}
           </div>
 
           {hasData && (
-            <div className="text-sm text-gray-600 mt-2">
+            <div className="text-sm text-muted-foreground mt-2">
               {playerCount} players • Match: {data?.matchUid}
             </div>
           )}
@@ -126,9 +126,9 @@ export default function LiveStatsDemo() {
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 border border-red-200 p-4 mb-6">
-          <h3 className="font-medium text-red-800 mb-2">Error</h3>
-          <p className="text-red-700">{error}</p>
+        <div className="bg-destructive-soft border border-destructive-text/30 p-4 mb-6">
+          <h3 className="font-medium text-destructive-text mb-2">Error</h3>
+          <p className="text-destructive-text">{error}</p>
         </div>
       )}
 
@@ -144,12 +144,12 @@ export default function LiveStatsDemo() {
 
       {/* Empty State */}
       {isEmpty && !isLoading && (
-        <div className="bg-yellow-50 border border-yellow-200 p-4 mb-6">
-          <h3 className="font-medium text-yellow-800 mb-2">No Data Available</h3>
-          <p className="text-yellow-700">
+        <div className="bg-warning-soft border border-warning p-4 mb-6">
+          <h3 className="font-medium text-warning-text mb-2">No Data Available</h3>
+          <p className="text-warning-text">
             No player statistics found for match &quot;{matchUid}&quot;. This could mean:
           </p>
-          <ul className="list-disc list-inside text-yellow-700 mt-2 space-y-1">
+          <ul className="list-disc list-inside text-warning-text mt-2 space-y-1">
             <li>The match hasn&apos;t started yet</li>
             <li>The match UID is incorrect</li>
             <li>The ETL pipeline hasn&apos;t collected data for this match</li>
@@ -164,12 +164,12 @@ export default function LiveStatsDemo() {
 
           <div className="grid gap-4">
             {players.map((player) => (
-              <div key={player.player_uid} className="bg-white border p-4">
+              <div key={player.player_uid} className="bg-card border p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-lg">
                     {player.player_uid.replace('ply_', '').replace(/_/g, ' ')}
                   </h3>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-muted-foreground">
                     {formatInTimezone(new Date(player.last_seen_at), timeZone, 'p')}
                   </span>
                 </div>
@@ -177,7 +177,7 @@ export default function LiveStatsDemo() {
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {Object.entries(player.stats).map(([stat, value]) => (
                     <div key={stat} className="text-center">
-                      <div className="text-xs text-gray-500 uppercase tracking-wider">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider">
                         {stat.replace(/_/g, ' ')}
                       </div>
                       <div className="text-lg font-semibold">{value ?? '-'}</div>

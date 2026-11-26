@@ -639,7 +639,7 @@ export default function LeagueWaiversContainer({
       )}
       {submitError && (
         <div
-          className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-sm"
+          className="mb-4 rounded-md border border-destructive-text/30 bg-destructive-soft p-3 text-destructive-text text-sm"
           role="alert"
         >
           {submitError}
@@ -674,7 +674,7 @@ export default function LeagueWaiversContainer({
             type="button"
             onClick={handleLoadMoreActivity}
             disabled={loadingMoreActivity}
-            className={`px-4 py-2 rounded-md text-sm font-medium border ${loadingMoreActivity ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+            className={`px-4 py-2 rounded-md text-sm font-medium border ${loadingMoreActivity ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted'}`}
           >
             {loadingMoreActivity ? 'Loading…' : 'Load older activity'}
           </button>

@@ -38,12 +38,12 @@ const SIZE_CONFIG = {
 // Color configurations
 const COLOR_CONFIG = {
   blue: 'text-primary border-primary',
-  green: 'text-green-600 border-green-600',
-  red: 'text-red-600 border-red-600',
-  yellow: 'text-yellow-600 border-yellow-600',
-  purple: 'text-purple-600 border-purple-600',
-  gray: 'text-gray-600 border-gray-600',
-  white: 'text-white border-white',
+  green: 'text-success border-success',
+  red: 'text-destructive-text border-destructive-text',
+  yellow: 'text-warning-text border-warning-text',
+  purple: 'text-secondary-foreground border-secondary-foreground',
+  gray: 'text-muted-foreground border-muted-foreground',
+  white: 'text-background border-background',
 };
 
 // Circular spinner component
@@ -244,7 +244,7 @@ export default function LoadingSpinner({
       className={`flex flex-col items-center justify-center ${sizeConfig.container} ${className}`}
     >
       <Spinner type={type} size={size} color={color} />
-      {text && <p className={`${sizeConfig.text} text-gray-600 text-center`}>{text}</p>}
+      {text && <p className={`${sizeConfig.text} text-muted-foreground text-center`}>{text}</p>}
       {children}
     </div>
   );
@@ -252,7 +252,7 @@ export default function LoadingSpinner({
   if (overlay) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black bg-opacity-50" />
+        <div className="absolute inset-0 bg-overlay" />
         <div className={`relative p-8 ${floatingStyles()}`}>{content}</div>
       </div>
     );
@@ -278,7 +278,7 @@ export function InlineLoading({
   return (
     <div className={`inline-flex items-center space-x-2 ${className}`}>
       <CircularSpinner size={size} color={color} />
-      {text && <span className="text-sm text-gray-600">{text}</span>}
+      {text && <span className="text-sm text-muted-foreground">{text}</span>}
     </div>
   );
 }
@@ -300,11 +300,11 @@ export function PageLoading({
   className = '',
 }: PageLoadingProps) {
   return (
-    <div className={`min-h-screen flex items-center justify-center bg-gray-50 ${className}`}>
+    <div className={`min-h-screen flex items-center justify-center bg-muted ${className}`}>
       <div className="text-center">
         <LoadingSpinner type={type} size="xl" color={color} />
-        <h2 className="mt-6 text-2xl font-semibold text-gray-900">{title}</h2>
-        {subtitle && <p className="mt-2 text-gray-600">{subtitle}</p>}
+        <h2 className="mt-6 text-2xl font-semibold text-foreground">{title}</h2>
+        {subtitle && <p className="mt-2 text-muted-foreground">{subtitle}</p>}
       </div>
     </div>
   );
@@ -328,7 +328,7 @@ export function SectionLoading({
 }: SectionLoadingProps) {
   return (
     <div
-      className={`${height} flex items-center justify-center bg-white border border-gray-200 ${className}`}
+      className={`${height} flex items-center justify-center bg-card border border-border ${className}`}
     >
       <LoadingSpinner type={type} size="lg" color={color} text={title} />
     </div>
@@ -383,7 +383,7 @@ export function Skeleton({
 }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse bg-gray-200 ${width} ${height} ${
+      className={`animate-pulse bg-muted ${width} ${height} ${
         rounded ? 'rounded-full' : 'rounded'
       } ${className}`}
     />
@@ -409,7 +409,7 @@ export function SkeletonText({ lines = 3, className = '' }: SkeletonTextProps) {
 // Card skeleton component
 export function SkeletonCard({ className = '' }: { className?: string }) {
   return (
-    <div className={`bg-white border border-gray-200 p-6 ${className}`}>
+    <div className={`bg-card border border-border p-6 ${className}`}>
       <div className="flex items-center space-x-4 mb-4">
         <Skeleton width="w-12" height="h-12" rounded />
         <div className="flex-1">
