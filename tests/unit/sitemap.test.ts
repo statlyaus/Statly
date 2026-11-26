@@ -35,6 +35,7 @@ describe('/sitemap.xml', () => {
       'https://statly.com.au/afl/stories/jeremy-cameron',
       'https://statly.com.au/afl/trades',
       'https://statly.com.au/afl/trades/method',
+      'https://statly.com.au/afl/trades/general-managers',
       'https://statly.com.au/afl/trades/external-transaction%3A40cb6950',
       'https://statly.com.au/afl/trades/external-transaction%3Aa1',
       'https://statly.com.au/afl/trades/clubs/gws',

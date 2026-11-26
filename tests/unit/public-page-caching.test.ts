@@ -28,6 +28,7 @@ describe('public page CDN caching', () => {
     '/afl',
     '/afl/trades',
     '/afl/trades/method',
+    '/afl/trades/general-managers',
     '/afl/trades/external-transaction:40cb6950',
     '/afl/trades/clubs/fremantle',
     '/afl/trades/external-transaction:40cb6950/share-card',

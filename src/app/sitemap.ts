@@ -23,6 +23,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     paths.push(
       '/afl/trades',
       '/afl/trades/method',
+      '/afl/trades/general-managers',
       ...stories.map((story) => tradeStoryHref(story.tradeId, 'public')),
       ...[...clubIds].map((clubId) => clubChainsHref(clubId, 'public'))
     );
