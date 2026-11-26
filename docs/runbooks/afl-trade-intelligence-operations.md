@@ -87,9 +87,13 @@ owner's word. See "Public trade pages" in
    shell and never on the command line or in a file:
 
    ```sh
-   gzip -c bundle.json | curl --fail-with-body -X POST --data-binary @- \
+   gzip -c bundle.json > bundle.json.gz
+   curl --fail-with-body -X POST --data-binary @bundle.json.gz -H "Content-Type: application/gzip" \
      -H "Authorization: Bearer $CRON_SECRET" https://<site>/api/admin/afl-trade-story-bundle
    ```
+
+   Send the file, not a pipe: on 2026-11-26 the piped form (`gzip -c bundle.json | curl ... @-`) was
+   refused as `not_a_valid_bundle` while the same bytes from a file were stored.
 
    `{"ok":true,"stored":true,...}` means it is stored. `not_the_approved_bundle` means step 1 names a
    different id; `not_a_valid_bundle` means the file is damaged; `storage_unavailable` means the site is
