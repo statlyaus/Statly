@@ -1,3 +1,4 @@
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { LeagueTradeDto, TradeActionName } from '@/server/leagues/trades/tradeContracts';
 
 const ACTION_LABELS: Record<Exclude<TradeActionName, 'counter'>, string> = {
@@ -33,7 +34,7 @@ export function TradeOfferActions({
             type="button"
             disabled={isPending}
             onClick={() => onCounter(trade)}
-            className={secondaryButtonClasses}
+            className={buttonStyles()}
           >
             Counter
           </button>
@@ -43,11 +44,9 @@ export function TradeOfferActions({
             type="button"
             disabled={isPending}
             onClick={() => onAction(trade, action)}
-            className={
-              action === 'accept' || action === 'approve'
-                ? primaryButtonClasses
-                : secondaryButtonClasses
-            }
+            className={buttonStyles({
+              variant: action === 'accept' || action === 'approve' ? 'primary' : 'outline',
+            })}
           >
             {isPending ? 'Working…' : ACTION_LABELS[action]}
           </button>
@@ -56,8 +55,3 @@ export function TradeOfferActions({
     </div>
   );
 }
-
-const primaryButtonClasses =
-  'inline-flex h-11 items-center justify-center rounded-cut bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
-const secondaryButtonClasses =
-  'inline-flex h-11 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import {
   loadMemberLeagueOptions,
@@ -59,16 +60,10 @@ export async function LeagueToolPage({
             Join a league with an invite code or create your own to see this page.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link
-              href="/leagues/join"
-              className="inline-flex h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground hover:bg-brand-bar/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
+            <Link href="/leagues/join" className={buttonStyles({ variant: 'primary' })}>
               Join a league
             </Link>
-            <Link
-              href="/leagues/new"
-              className="inline-flex h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
+            <Link href="/leagues/new" className={buttonStyles()}>
               Create a league
             </Link>
           </div>

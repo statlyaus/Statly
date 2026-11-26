@@ -2,6 +2,8 @@
 
 import type React from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
+
 import { VERDICT_TONE_CLASS } from './TradeVerdictStrip';
 import type { TradeVerdict } from './tradeVerdict';
 
@@ -52,7 +54,7 @@ export function TradeSelectionTray({
             aria-label="Clear selected players"
             disabled={selectedCount === 0 || disabled}
             onClick={onClear}
-            className="inline-flex h-11 w-full items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+            className={buttonStyles({ className: 'w-full sm:w-auto' })}
           >
             Clear
           </button>
@@ -61,7 +63,7 @@ export function TradeSelectionTray({
             type="button"
             disabled={!selectionComplete || disabled}
             onClick={onReview}
-            className="inline-flex h-11 w-full items-center justify-center rounded-cut bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:border-2 disabled:border-dashed disabled:border-muted-foreground disabled:bg-transparent disabled:text-muted-foreground sm:w-auto"
+            className={buttonStyles({ variant: 'primary', className: 'w-full sm:w-auto' })}
           >
             Review trade
           </button>

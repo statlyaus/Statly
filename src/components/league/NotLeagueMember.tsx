@@ -1,9 +1,7 @@
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { MemberLeagueOption } from '@/server/leagues/memberLeagueOptions';
-
-const actionClass =
-  'inline-flex min-h-10 items-center justify-center rounded-cut px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
  * Shown when a signed-in viewer opens a league they have no active team in. A league that does not
@@ -40,10 +38,7 @@ export function NotLeagueMember({ leagues }: { leagues: MemberLeagueOption[] }) 
             </ul>
           </div>
         ) : (
-          <Link
-            href="/leagues"
-            className={`${actionClass} mt-6 bg-primary text-primary-foreground`}
-          >
+          <Link href="/leagues" className={buttonStyles({ variant: 'primary', className: 'mt-6' })}>
             Go to your leagues
           </Link>
         )}
@@ -56,14 +51,11 @@ export function NotLeagueMember({ leagues }: { leagues: MemberLeagueOption[] }) 
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               href="/leagues/join"
-              className={`${actionClass} ${leagues.length > 0 ? 'bg-primary text-primary-foreground' : 'border border-border bg-background'}`}
+              className={buttonStyles({ variant: leagues.length > 0 ? 'primary' : 'outline' })}
             >
               Enter a league code
             </Link>
-            <Link
-              href="/leagues/new"
-              className={`${actionClass} border border-border bg-background`}
-            >
+            <Link href="/leagues/new" className={buttonStyles()}>
               Start a new league
             </Link>
           </div>

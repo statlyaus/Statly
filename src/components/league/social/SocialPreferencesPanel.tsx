@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { SocialNotificationPreferences } from '@/types/social';
 
 const preferenceLabels: Array<{
@@ -124,16 +125,11 @@ export default function SocialPreferencesPanel({
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex min-h-10 items-center justify-center rounded-cut border border-brand-bar bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
+          className={buttonStyles({ variant: 'primary' })}
         >
           {saving ? 'Saving…' : 'Save preferences'}
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={saving}
-          className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-        >
+        <button type="button" onClick={onClose} disabled={saving} className={buttonStyles()}>
           Cancel
         </button>
       </div>

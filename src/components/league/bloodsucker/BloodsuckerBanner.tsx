@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
+
 import { biteStatusLabel, isBiteOpen } from './bloodsuckerDisplay';
 import type { BloodsuckerSummaryView } from './useBloodsuckerSummary';
 
@@ -93,7 +95,7 @@ export function BloodsuckerBanner({
           <Link
             key={bite.biteId}
             href={biteHref(bite)}
-            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-destructive-text px-4 text-sm font-semibold text-destructive-foreground ${FOCUS}`}
+            className={buttonStyles({ variant: 'danger', className: 'shrink-0' })}
           >
             Bite {bite.victim.teamName} (round {bite.round})
           </Link>

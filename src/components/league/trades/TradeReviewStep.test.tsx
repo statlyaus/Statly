@@ -96,7 +96,7 @@ describe('TradeReviewStep', () => {
     expect(
       screen.getByRole('heading', { level: 5, name: 'Category comparison' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send offer to AFL Legends' })).toHaveClass('h-11');
+    expect(screen.getByRole('button', { name: 'Send offer to AFL Legends' })).toHaveClass('min-h-11');
     expect(screen.queryByText(/injur|available to play/i)).not.toBeInTheDocument();
   });
 
@@ -243,8 +243,8 @@ describe('TradeReviewStep', () => {
     expect(screen.getByRole('heading', { name: 'Send to AFL Legends?' })).toBeInTheDocument();
     const submit = screen.getByRole('button', { name: 'Send counter to AFL Legends' });
     const cancel = screen.getByRole('button', { name: 'Cancel counter' });
-    expect(back).toHaveClass('h-11');
-    expect(submit).toHaveClass('h-11');
+    expect(back).toHaveClass('min-h-11');
+    expect(submit).toHaveClass('min-h-11');
     await user.click(back);
     await user.click(submit);
     await user.click(cancel);
@@ -288,7 +288,7 @@ describe('TradeReviewStep', () => {
       name: 'Sending counter to AFL Legends…',
     });
     expect(sending).toBeDisabled();
-    expect(sending).toHaveClass('h-11');
+    expect(sending).toHaveClass('min-h-11');
     expect(screen.getByRole('region', { name: 'Send to AFL Legends?' })).toHaveAttribute(
       'aria-busy',
       'true'

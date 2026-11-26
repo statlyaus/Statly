@@ -10,6 +10,7 @@ import { copyText } from '@/lib/copyText';
 import { StandingsLadderCompact } from '@/components/league/standings/StandingsLadderCompact';
 import type { StandingsData } from '@/components/league/standings/standingsFormat';
 import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import {
   CategoryBoxScore,
   MatchupScoreLine,
@@ -470,8 +471,7 @@ function SetupChecklist({
     navigator.share({ title: `Join ${league.name} on Statly`, url: inviteUrl() }).catch(() => {});
   }
 
-  const buttonClass =
-    'min-h-11 shrink-0 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar';
+  const buttonClass = buttonStyles({ className: 'shrink-0' });
   const rowClass = 'flex flex-wrap items-center justify-between gap-3 px-4 py-3';
 
   return (

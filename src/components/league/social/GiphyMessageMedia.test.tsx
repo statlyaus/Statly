@@ -47,7 +47,7 @@ describe('GiphyMessageMedia', () => {
       'https://media.giphy.com/celebration.gif'
     );
     expect(container.querySelector('.max-h-60')).toBeInTheDocument();
-    expect(expand).toHaveClass('bg-card', 'hover:bg-secondary', 'active:bg-accent');
+    expect(expand).toHaveClass('bg-background', 'hover:bg-muted');
 
     await user.click(expand);
     expect(screen.getByRole('dialog', { name: 'GIF preview' })).toHaveClass(

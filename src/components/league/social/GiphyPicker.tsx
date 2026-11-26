@@ -11,7 +11,9 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import type { SocialGif } from '@/types/social';
 
 import { GIPHY_WEB_SDK_KEY, getGiphyClient, type GiphyGif, registerGiphySent } from './giphyClient';
@@ -203,10 +205,10 @@ export default function GiphyPicker({
           className={
             compact
               ? 'inline-flex size-11 items-center justify-center rounded-cut text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
-              : 'inline-flex min-h-10 items-center gap-2 rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:border-brand-bar hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground'
+              : buttonStyles()
           }
         >
-          <ImagePlus className="size-4" aria-hidden="true" />
+          <ImagePlus className={compact ? 'size-4' : 'size-5'} aria-hidden="true" />
           {compact ? <span className="sr-only">GIF</span> : 'GIF'}
         </PopoverTrigger>
         <PopoverContent
@@ -234,9 +236,9 @@ export default function GiphyPicker({
               type="button"
               aria-label="Search GIFs"
               onClick={handleSearch}
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-cut border border-brand-bar bg-brand-bar text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              className={cn(buttonStyles({ variant: 'primary' }), 'size-11 shrink-0 px-0')}
             >
-              <Search className="size-4" aria-hidden="true" />
+              <Search className="size-5" aria-hidden="true" />
             </button>
             {searchTerm ? (
               <button
@@ -250,9 +252,9 @@ export default function GiphyPicker({
                   setError(null);
                   searchRef.current?.focus();
                 }}
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-cut border border-border text-muted-foreground transition-colors hover:border-muted-foreground hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn(buttonStyles(), 'size-11 shrink-0 px-0')}
               >
-                <X className="size-4" aria-hidden="true" />
+                <X className="size-5" aria-hidden="true" />
               </button>
             ) : null}
           </div>
@@ -282,7 +284,7 @@ export default function GiphyPicker({
                       disabled={selectionPending}
                       aria-label={`Choose ${label}`}
                       onClick={() => void selectGif(gif)}
-                      className="group relative min-h-24 overflow-hidden rounded-cut bg-card text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
+                      className={cn(buttonStyles(), 'group relative min-h-24 overflow-hidden px-0')}
                     >
                       <img
                         src={preview.url}
@@ -301,7 +303,7 @@ export default function GiphyPicker({
                     type="button"
                     disabled={loadingMore || selectionPending}
                     onClick={() => void loadMore()}
-                    className="col-span-full min-h-10 rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:text-muted-foreground"
+                    className={buttonStyles({ className: 'col-span-full' })}
                   >
                     {loadingMore ? 'Loading more GIFs…' : 'Load more GIFs'}
                   </button>

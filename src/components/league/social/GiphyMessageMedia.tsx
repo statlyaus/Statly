@@ -3,6 +3,7 @@
 import { Expand, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { SocialGif } from '@/types/social';
 
 import { getGiphyClient, type GiphyGif } from './giphyClient';
@@ -90,10 +91,13 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
               ref={expandButtonRef}
               type="button"
               onClick={() => setExpanded(true)}
-              className="ground-white absolute bottom-2 right-2 inline-flex min-h-9 items-center gap-1.5 rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={buttonStyles({
+                size: 'sm',
+                className: 'ground-white absolute bottom-2 right-2',
+              })}
               aria-label="Expand GIF"
             >
-              <Expand className="size-3.5" aria-hidden="true" />
+              <Expand className="size-4" aria-hidden="true" />
               Expand
             </button>
           </div>
@@ -147,7 +151,7 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
           href={giphyUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="ground-white inline-flex min-h-10 items-center rounded-cut border border-border bg-accent px-3 text-sm font-semibold text-foreground underline-offset-4 transition-colors hover:bg-secondary hover:underline active:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={buttonStyles({ className: 'ground-white' })}
         >
           View GIF on GIPHY
         </a>

@@ -3,6 +3,7 @@
 import { Flag } from 'lucide-react';
 import { useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { SocialReportReason } from '@/types/social';
 
 export default function SocialReportButton({
@@ -90,7 +91,7 @@ export default function SocialReportButton({
               type="button"
               disabled={submitting}
               onClick={() => void submit()}
-              className="inline-flex min-h-9 items-center rounded-cut border border-destructive bg-destructive px-3 text-xs font-semibold text-destructive-foreground transition-colors hover:bg-destructive-soft hover:text-destructive-text active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
+              className={buttonStyles({ variant: 'primary', size: 'sm' })}
             >
               {submitting ? 'Submitting…' : 'Submit report'}
             </button>
@@ -98,7 +99,7 @@ export default function SocialReportButton({
               type="button"
               disabled={submitting}
               onClick={() => setOpen(false)}
-              className="inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+              className={buttonStyles({ size: 'sm' })}
             >
               Cancel
             </button>

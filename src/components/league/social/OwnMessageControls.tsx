@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-const secondaryButton =
-  'inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground';
-const primaryButton =
-  'inline-flex min-h-9 items-center rounded-cut border border-brand-bar bg-brand-bar px-3 text-xs font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground';
-const dangerButton =
-  'inline-flex min-h-9 items-center rounded-cut border border-destructive bg-destructive px-3 text-xs font-semibold text-destructive-foreground transition-colors hover:bg-destructive-soft hover:text-destructive-text active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground';
+import { buttonStyles } from '@/components/ui/controlStyles';
 
 /** Inline editor for the member's own message. Enter saves, Shift+Enter breaks, Escape cancels. */
 export function MessageEditForm({
@@ -86,10 +81,19 @@ export function MessageEditForm({
         </p>
       ) : null}
       <div className="mt-2 flex justify-end gap-2">
-        <button type="button" disabled={saving} onClick={onCancel} className={secondaryButton}>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onCancel}
+          className={buttonStyles({ size: 'sm' })}
+        >
           Cancel
         </button>
-        <button type="submit" disabled={saving || !trimmed} className={primaryButton}>
+        <button
+          type="submit"
+          disabled={saving || !trimmed}
+          className={buttonStyles({ variant: 'primary', size: 'sm' })}
+        >
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
@@ -150,7 +154,7 @@ export function MessageDeleteConfirm({
           disabled={deleting}
           onClick={onCancel}
           onKeyDown={cancelOnEscape}
-          className={secondaryButton}
+          className={buttonStyles({ size: 'sm' })}
         >
           Cancel
         </button>
@@ -159,7 +163,7 @@ export function MessageDeleteConfirm({
           disabled={deleting}
           onClick={() => void confirm()}
           onKeyDown={cancelOnEscape}
-          className={dangerButton}
+          className={buttonStyles({ variant: 'danger', size: 'sm' })}
         >
           {deleting ? 'Deleting…' : 'Delete'}
         </button>

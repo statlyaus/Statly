@@ -77,7 +77,7 @@ describe('MessageBoardPanel colour hierarchy', () => {
     renderBoard({ canPublish: false });
 
     expect(screen.getByRole('button', { name: 'New post' })).toHaveClass(
-      'disabled:bg-muted',
+      'disabled:bg-transparent',
       'disabled:text-muted-foreground'
     );
   });

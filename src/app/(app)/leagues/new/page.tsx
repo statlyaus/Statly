@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Trophy,
 } from 'lucide-react';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { Spinner } from '@/components/ui/Spinner';
 
 import { useAuth } from '@/AuthContext';
@@ -154,323 +155,297 @@ export default function NewLeaguePage() {
   };
 
   return (
-      <div className="min-h-screen bg-muted text-foreground">
-        <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
-          <section className="rounded-[28px] border border-border bg-card p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard#leagues')}
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-muted px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              Dashboard leagues
-            </button>
+    <div className="min-h-screen bg-muted text-foreground">
+      <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
+        <section className="rounded-[28px] border border-border bg-card p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard#leagues')}
+            className={buttonStyles({ size: 'sm' })}
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            Dashboard leagues
+          </button>
 
-            <header className="mt-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Commissioner setup
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                Create a new league
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Define the competition format, draft controls, and waiver defaults before you invite
-                managers.
-              </p>
-            </header>
+          <header className="mt-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Commissioner setup
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Create a new league
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Define the competition format, draft controls, and waiver defaults before you invite
+              managers.
+            </p>
+          </header>
 
-            <form ref={formRef} onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
-              <div>
-                <label
-                  htmlFor="leagueName"
-                  className="flex items-center gap-2 text-sm font-semibold text-foreground"
-                >
-                  League name
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Required
-                  </span>
-                </label>
-                <input
-                  ref={leagueNameInputRef}
-                  id="leagueName"
-                  type="text"
-                  value={leagueName}
-                  onChange={(e) => {
-                    const nextName = e.target.value;
-                    setLeagueName(nextName);
-                    if (validationIssue === 'leagueName' && !getLeagueNameError(nextName)) {
-                      setValidationIssue(null);
-                    }
-                  }}
-                  onBlur={() => setHasTouchedLeagueName(true)}
-                  required
-                  minLength={3}
-                  maxLength={LEAGUE_NAME_MAX_LENGTH}
-                  aria-invalid={Boolean(visibleLeagueNameError)}
-                  aria-describedby={
-                    visibleLeagueNameError ? 'leagueName-help leagueName-error' : 'leagueName-help'
-                  }
-                  placeholder="e.g. Statly Premier League"
-                  className={cn(
-                    'mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20',
-                    visibleLeagueNameError &&
-                      'border-destructive-text focus:border-destructive-text focus:ring-destructive-text/20'
-                  )}
-                />
-                <p
-                  id="leagueName-help"
-                  className="mt-2 text-xs leading-5 text-muted-foreground"
-                >
-                  Use 3 to {LEAGUE_NAME_MAX_LENGTH} characters so managers can recognise the league.
-                </p>
-                {visibleLeagueNameError && (
-                  <p
-                    id="leagueName-error"
-                    role="alert"
-                    className="mt-1 text-sm font-medium text-destructive-text"
-                  >
-                    {visibleLeagueNameError}
-                  </p>
-                )}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="teamCount"
-                    className="text-sm font-semibold text-foreground"
-                  >
-                    Number of teams
-                  </label>
-                  <select
-                    id="teamCount"
-                    value={String(teamCount)}
-                    onChange={(e) => setTeamCount(Number(e.target.value))}
-                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
-                  >
-                    {teamCounts.map((count) => (
-                      <option key={count} value={String(count)}>
-                        {count} teams
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="scoringFormat"
-                    className="text-sm font-semibold text-foreground"
-                  >
-                    Scoring format
-                  </label>
-                  <select
-                    id="scoringFormat"
-                    value={scoringFormat}
-                    onChange={(e) => setScoringFormat(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
-                  >
-                    <option value="nine-category">9-category head-to-head</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="leagueFormat"
-                  className="text-sm font-semibold text-foreground"
-                >
-                  League format
-                </label>
-                <select
-                  id="leagueFormat"
-                  value={leagueFormat}
-                  aria-describedby="leagueFormat-help"
-                  onChange={(e) => {
-                    const nextFormat = parseLeagueFormat(e.target.value);
-                    setLeagueFormat(nextFormat);
-                    // A Bloodsucker league runs rolling waivers with no FAAB.
-                    if (nextFormat === 'BLOODSUCKER') setWaiverRule('rolling');
-                  }}
-                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
-                >
-                  {selectableLeagueFormatOptions().map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <p
-                  id="leagueFormat-help"
-                  className="mt-2 text-xs leading-5 text-muted-foreground"
-                >
-                  {leagueFormat === 'BLOODSUCKER'
-                    ? 'One manager skips the draft and takes a player from each team it beats. Needs at least 8 teams (12 recommended) and rolling waivers. Choose the Bloodsucker in league settings once managers join.'
-                    : leagueFormat === 'NO_LOSERS'
-                      ? NO_LOSERS_EXPLANATION
-                      : 'Every manager drafts. Works with either scoring mode.'}
-                </p>
-              </div>
-
-              <DraftScheduleField
-                value={draftSchedule}
-                onChange={(nextSchedule) => {
-                  setDraftSchedule(nextSchedule);
-                  if (
-                    validationIssue === 'draftSchedule' &&
-                    resolveDraftSchedule(nextSchedule).status !== 'invalid'
-                  ) {
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
+            <div>
+              <label
+                htmlFor="leagueName"
+                className="flex items-center gap-2 text-sm font-semibold text-foreground"
+              >
+                League name
+                <span className="text-xs font-medium text-muted-foreground">Required</span>
+              </label>
+              <input
+                ref={leagueNameInputRef}
+                id="leagueName"
+                type="text"
+                value={leagueName}
+                onChange={(e) => {
+                  const nextName = e.target.value;
+                  setLeagueName(nextName);
+                  if (validationIssue === 'leagueName' && !getLeagueNameError(nextName)) {
                     setValidationIssue(null);
                   }
                 }}
-                heading="Draft date and time"
-                description="Schedule the draft now, or leave it open and choose a time after managers join."
+                onBlur={() => setHasTouchedLeagueName(true)}
+                required
+                minLength={3}
+                maxLength={LEAGUE_NAME_MAX_LENGTH}
+                aria-invalid={Boolean(visibleLeagueNameError)}
+                aria-describedby={
+                  visibleLeagueNameError ? 'leagueName-help leagueName-error' : 'leagueName-help'
+                }
+                placeholder="e.g. Statly Premier League"
+                className={cn(
+                  'mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20',
+                  visibleLeagueNameError &&
+                    'border-destructive-text focus:border-destructive-text focus:ring-destructive-text/20'
+                )}
               />
+              <p id="leagueName-help" className="mt-2 text-xs leading-5 text-muted-foreground">
+                Use 3 to {LEAGUE_NAME_MAX_LENGTH} characters so managers can recognise the league.
+              </p>
+              {visibleLeagueNameError && (
+                <p
+                  id="leagueName-error"
+                  role="alert"
+                  className="mt-1 text-sm font-medium text-destructive-text"
+                >
+                  {visibleLeagueNameError}
+                </p>
+              )}
+            </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label
-                    htmlFor="draftType"
-                    className="text-sm font-semibold text-foreground"
-                  >
-                    Draft type
-                  </label>
-                  <select
-                    id="draftType"
-                    value={draftType}
-                    onChange={(e) => setDraftType(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
-                  >
-                    <option value="snake">Snake</option>
-                    <option value="linear">Linear</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="pickOrder"
-                    className="text-sm font-semibold text-foreground"
-                  >
-                    Pick order
-                  </label>
-                  <select
-                    id="pickOrder"
-                    value={pickOrder}
-                    onChange={(e) => setPickOrder(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
-                  >
-                    <option value="random">Random</option>
-                    <option value="manual">Manual</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="waiverRule"
-                    className="text-sm font-semibold text-foreground"
-                  >
-                    Waiver rule
-                  </label>
-                  <select
-                    id="waiverRule"
-                    value={waiverRule}
-                    onChange={(e) => setWaiverRule(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
-                  >
-                    <option value="weekly" disabled={leagueFormat === 'BLOODSUCKER'}>
-                      Weekly reset
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="teamCount" className="text-sm font-semibold text-foreground">
+                  Number of teams
+                </label>
+                <select
+                  id="teamCount"
+                  value={String(teamCount)}
+                  onChange={(e) => setTeamCount(Number(e.target.value))}
+                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
+                >
+                  {teamCounts.map((count) => (
+                    <option key={count} value={String(count)}>
+                      {count} teams
                     </option>
-                    <option value="rolling">Rolling</option>
-                  </select>
-                </div>
+                  ))}
+                </select>
               </div>
 
-              {validationIssue && (
-                <div
-                  role="alert"
-                  className="flex items-start gap-3 rounded-2xl border border-destructive-text/30 bg-destructive-soft px-4 py-3 text-sm text-destructive-text"
+              <div>
+                <label htmlFor="scoringFormat" className="text-sm font-semibold text-foreground">
+                  Scoring format
+                </label>
+                <select
+                  id="scoringFormat"
+                  value={scoringFormat}
+                  onChange={(e) => setScoringFormat(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
                 >
-                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                  <option value="nine-category">9-category head-to-head</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="leagueFormat" className="text-sm font-semibold text-foreground">
+                League format
+              </label>
+              <select
+                id="leagueFormat"
+                value={leagueFormat}
+                aria-describedby="leagueFormat-help"
+                onChange={(e) => {
+                  const nextFormat = parseLeagueFormat(e.target.value);
+                  setLeagueFormat(nextFormat);
+                  // A Bloodsucker league runs rolling waivers with no FAAB.
+                  if (nextFormat === 'BLOODSUCKER') setWaiverRule('rolling');
+                }}
+                className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
+              >
+                {selectableLeagueFormatOptions().map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p id="leagueFormat-help" className="mt-2 text-xs leading-5 text-muted-foreground">
+                {leagueFormat === 'BLOODSUCKER'
+                  ? 'One manager skips the draft and takes a player from each team it beats. Needs at least 8 teams (12 recommended) and rolling waivers. Choose the Bloodsucker in league settings once managers join.'
+                  : leagueFormat === 'NO_LOSERS'
+                    ? NO_LOSERS_EXPLANATION
+                    : 'Every manager drafts. Works with either scoring mode.'}
+              </p>
+            </div>
+
+            <DraftScheduleField
+              value={draftSchedule}
+              onChange={(nextSchedule) => {
+                setDraftSchedule(nextSchedule);
+                if (
+                  validationIssue === 'draftSchedule' &&
+                  resolveDraftSchedule(nextSchedule).status !== 'invalid'
+                ) {
+                  setValidationIssue(null);
+                }
+              }}
+              heading="Draft date and time"
+              description="Schedule the draft now, or leave it open and choose a time after managers join."
+            />
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label htmlFor="draftType" className="text-sm font-semibold text-foreground">
+                  Draft type
+                </label>
+                <select
+                  id="draftType"
+                  value={draftType}
+                  onChange={(e) => setDraftType(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
+                >
+                  <option value="snake">Snake</option>
+                  <option value="linear">Linear</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="pickOrder" className="text-sm font-semibold text-foreground">
+                  Pick order
+                </label>
+                <select
+                  id="pickOrder"
+                  value={pickOrder}
+                  onChange={(e) => setPickOrder(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
+                >
+                  <option value="random">Random</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="waiverRule" className="text-sm font-semibold text-foreground">
+                  Waiver rule
+                </label>
+                <select
+                  id="waiverRule"
+                  value={waiverRule}
+                  onChange={(e) => setWaiverRule(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-2xl border border-border bg-field px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand-bar focus:ring-2 focus:ring-brand-bar/20"
+                >
+                  <option value="weekly" disabled={leagueFormat === 'BLOODSUCKER'}>
+                    Weekly reset
+                  </option>
+                  <option value="rolling">Rolling</option>
+                </select>
+              </div>
+            </div>
+
+            {validationIssue && (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-2xl border border-destructive-text/30 bg-destructive-soft px-4 py-3 text-sm text-destructive-text"
+              >
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                <div>
+                  <p className="font-semibold">Complete the highlighted field</p>
+                  <p className="mt-1">
+                    {validationIssue === 'leagueName'
+                      ? `Enter a league name with 3 to ${LEAGUE_NAME_MAX_LENGTH} characters.`
+                      : 'Review the draft date, time, and time zone before continuing.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div
+                role="alert"
+                className="rounded-2xl border border-destructive-text/30 bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive-text"
+              >
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={buttonStyles({ variant: 'primary' })}
+              >
+                {isLoading && <Spinner size="sm" inherit />}
+                {isLoading ? 'Creating league' : 'Create league'}
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard#leagues')}
+                className={buttonStyles()}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          {[
+            { icon: Trophy, label: 'League size', value: `${teamCount} teams` },
+            { icon: Settings2, label: 'Scoring', value: scoringFormat.replace('-', ' ') },
+            {
+              icon: CalendarClock,
+              label: 'Draft',
+              value: formatDraftScheduleSummary(draftSchedule) ?? 'Unscheduled',
+              preserveCase: true,
+            },
+            { icon: ShieldCheck, label: 'Waivers', value: waiverRule },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.label}
+                className="rounded-[24px] border border-border bg-card p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-brand-bar">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </div>
                   <div>
-                    <p className="font-semibold">Complete the highlighted field</p>
-                    <p className="mt-1">
-                      {validationIssue === 'leagueName'
-                        ? `Enter a league name with 3 to ${LEAGUE_NAME_MAX_LENGTH} characters.`
-                        : 'Review the draft date, time, and time zone before continuing.'}
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {item.label}
+                    </p>
+                    <p
+                      className={cn(
+                        'mt-1 text-sm font-semibold text-foreground',
+                        !item.preserveCase && 'capitalize'
+                      )}
+                    >
+                      {item.value}
                     </p>
                   </div>
                 </div>
-              )}
-
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-2xl border border-destructive-text/30 bg-destructive-soft px-4 py-3 text-sm font-medium text-destructive-text"
-                >
-                  {error}
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-brand-bar px-5 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isLoading && <Spinner size="sm" inherit />}
-                  {isLoading ? 'Creating league' : 'Create league'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push('/dashboard#leagues')}
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-border bg-muted px-5 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
-                >
-                  Cancel
-                </button>
               </div>
-            </form>
-          </section>
-
-          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-            {[
-              { icon: Trophy, label: 'League size', value: `${teamCount} teams` },
-              { icon: Settings2, label: 'Scoring', value: scoringFormat.replace('-', ' ') },
-              {
-                icon: CalendarClock,
-                label: 'Draft',
-                value: formatDraftScheduleSummary(draftSchedule) ?? 'Unscheduled',
-                preserveCase: true,
-              },
-              { icon: ShieldCheck, label: 'Waivers', value: waiverRule },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.label}
-                  className="rounded-[24px] border border-border bg-card p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-brand-bar">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        {item.label}
-                      </p>
-                      <p
-                        className={cn(
-                          'mt-1 text-sm font-semibold text-foreground',
-                          !item.preserveCase && 'capitalize'
-                        )}
-                      >
-                        {item.value}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </aside>
-        </div>
+            );
+          })}
+        </aside>
       </div>
+    </div>
   );
 }

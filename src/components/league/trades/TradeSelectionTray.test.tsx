@@ -45,8 +45,8 @@ describe('TradeSelectionTray', () => {
     expect(reviewButton).toBeDisabled();
     expect(clearButton).toHaveAttribute('type', 'button');
     expect(reviewButton).toHaveAttribute('type', 'button');
-    expect(clearButton).toHaveClass('h-11');
-    expect(reviewButton).toHaveClass('h-11');
+    expect(clearButton).toHaveClass('min-h-11');
+    expect(reviewButton).toHaveClass('min-h-11');
   });
 
   it('enables and routes both actions for a complete two-player selection', async () => {
