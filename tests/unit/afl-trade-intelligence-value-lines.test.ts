@@ -311,6 +311,64 @@ const NO_RELAY: { [K in keyof typeof RELAY]: never[] } = {
   pickRelays: [],
 };
 
+type Stint = (playerId: string, clubId: string, fromSeason: number) => AflTradeAssetLedgerStint;
+type Leftover = NonNullable<Options['leftover']>;
+
+/** p3's share of N: the leftover case's, else 0.6. */
+const p3Share = (options: Options) => options.leftover?.share ?? 0.6;
+
+/** What p3's leftover became, per `Options.leftover`. */
+function leftoverUse(use: Leftover['use'], stint: Stint) {
+  if (use === 'selected')
+    return {
+      status: 'selected',
+      leftoverPickId: 'native-leftover',
+      selectionId: 'se',
+      selectionNumber: 13,
+      playerId: 'e',
+      firstStint: stint('e', 'c', 2022),
+    };
+  if (use === 'spent')
+    return { status: 'spent', leftoverPickId: 'native-leftover', bidMatchId: 'bid-2' };
+  return { status: 'untied', reason: 'leftover_not_in_evidence' };
+}
+
+/** The ledger's bids: p3's at 3 for N, and C's later bid at 30 for M when the leftover was spent. */
+function bidMatchesOf(leftover: Leftover | undefined, stint: Stint) {
+  const later = {
+    bidMatchId: 'bid-2',
+    draftYear: 2021,
+    selectionNumber: 30,
+    clubId: 'c',
+    nominee: { selectionId: 'sm', playerId: 'm', firstStint: stint('m', 'c', 2022) },
+    pricing: { status: 'shared', leftover: null },
+    spentPicks: [{ nativePickId: 'native-leftover', pickId: null, share: 0.25 }],
+  };
+  return [
+    {
+      bidMatchId: 'bid-1',
+      draftYear: 2021,
+      selectionNumber: 3,
+      clubId: 'c',
+      nominee: { selectionId: 'sn', playerId: 'n', firstStint: stint('n', 'c', 2022) },
+      pricing: {
+        status: 'shared',
+        leftover:
+          leftover === undefined
+            ? null
+            : {
+                spentNativePickId: 'native-p3',
+                remainderPoints: 1029.9,
+                boardLeftoverPickIds: ['native-leftover'],
+                use: leftoverUse(leftover.use, stint),
+              },
+      },
+      spentPicks: [{ nativePickId: 'native-p3', pickId: pickId('p3'), share: 0.6 }],
+    },
+    ...(leftover?.use === 'spent' ? [later] : []),
+  ];
+}
+
 function inputs(options: Options = {}): AflTradeValueLineInputs {
   const rows = options.rows ?? BASE_ROWS;
   const relay = options.relay ? RELAY : NO_RELAY;
@@ -347,19 +405,6 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
       value: Math.max(0, total),
     };
   };
-  const leftoverUse = (use: NonNullable<Options['leftover']>['use']) =>
-    use === 'selected'
-      ? {
-          status: 'selected',
-          leftoverPickId: 'native-leftover',
-          selectionId: 'se',
-          selectionNumber: 13,
-          playerId: 'e',
-          firstStint: stint('e', 'c', 2022),
-        }
-      : use === 'spent'
-        ? { status: 'spent', leftoverPickId: 'native-leftover', bidMatchId: 'bid-2' }
-        : { status: 'untied', reason: 'leftover_not_in_evidence' };
   const stints: Record<string, AflTradeAssetLedgerStint> = {
     'x|a|2020': stint('x', 'a', 2020),
     'y|b|2021': stint('y', 'b', 2021, 2023),
@@ -400,7 +445,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
         bidMatchId: 'bid-1',
         nomineePlayerId: 'n',
         countedPoints: 600,
-        share: options.leftover?.share ?? 0.6,
+        share: p3Share(options),
         use: 'partial',
         value: null,
       },
@@ -446,41 +491,7 @@ function inputs(options: Options = {}): AflTradeValueLineInputs {
           })),
         },
         picks,
-        bidMatches: [
-          {
-            bidMatchId: 'bid-1',
-            draftYear: 2021,
-            selectionNumber: 3,
-            clubId: 'c',
-            nominee: { selectionId: 'sn', playerId: 'n', firstStint: stint('n', 'c', 2022) },
-            pricing: {
-              status: 'shared',
-              leftover:
-                options.leftover === undefined
-                  ? null
-                  : {
-                      spentNativePickId: 'native-p3',
-                      remainderPoints: 1029.9,
-                      boardLeftoverPickIds: ['native-leftover'],
-                      use: leftoverUse(options.leftover.use),
-                    },
-            },
-            spentPicks: [{ nativePickId: 'native-p3', pickId: pickId('p3'), share: 0.6 }],
-          },
-          ...(options.leftover?.use === 'spent'
-            ? [
-                {
-                  bidMatchId: 'bid-2',
-                  draftYear: 2021,
-                  selectionNumber: 30,
-                  clubId: 'c',
-                  nominee: { selectionId: 'sm', playerId: 'm', firstStint: stint('m', 'c', 2022) },
-                  pricing: { status: 'shared', leftover: null },
-                  spentPicks: [{ nativePickId: 'native-leftover', pickId: null, share: 0.25 }],
-                },
-              ]
-            : []),
-        ],
+        bidMatches: bidMatchesOf(options.leftover, stint),
       },
     },
     stintValue: (playerId: string, clubId: string, fromSeason: number) =>
