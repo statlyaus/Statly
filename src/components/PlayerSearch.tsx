@@ -235,7 +235,7 @@ export default function PlayerSearch({
     <div ref={rootRef} className={`relative ${className}`}>
       <div className="relative">
         <MagnifyingGlassIcon
-          className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${variant === 'minimal' ? 'text-gray-300' : 'text-gray-400'}`}
+          className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-field-placeholder`}
         />
         <input
           ref={inputRef}
@@ -253,7 +253,7 @@ export default function PlayerSearch({
           aria-label={ariaLabel}
           className={`
             w-full pl-10 pr-4 border rounded-cut focus:ring-2 focus:ring-ring focus:border-transparent
-            ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
+            border-border bg-field text-field-foreground placeholder-field-placeholder
             ${sizeClasses[size]} ${inputClassName}
           `}
         />

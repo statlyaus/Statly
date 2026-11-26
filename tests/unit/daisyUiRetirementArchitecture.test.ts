@@ -19,8 +19,9 @@ const migratedFiles = [
   'src/app/(public)/data-deletion/page.tsx',
 ];
 
+// `success` is not listed: it is a Statly role in src/index.css (--color-success), not DaisyUI's.
 const daisyClass =
-  /(?<![\w-])(btn(-(primary|outline|ghost|sm|xs|lg|circle))?|badge(-(primary|outline|ghost|success|error|warning|info|accent|neutral|xs|sm|md))?|form-control|label-text|input-bordered|select-bordered|kbd-xs|link-hover|join-item|alert-(success|error|info)|modal(-(open|box|action))?|stat-(title|value)|(text|bg|border)-base-(content|100|200|300)|(text|bg|border)-(error|info|success)(\/\d+)?)(?![\w-])/;
+  /(?<![\w-])(btn(-(primary|outline|ghost|sm|xs|lg|circle))?|badge(-(primary|outline|ghost|success|error|warning|info|accent|neutral|xs|sm|md))?|form-control|label-text|input-bordered|select-bordered|kbd-xs|link-hover|join-item|alert-(success|error|info)|modal(-(open|box|action))?|stat-(title|value)|(text|bg|border)-base-(content|100|200|300)|(text|bg|border)-(error|info)(\/\d+)?)(?![\w-])/;
 
 function classStrings(source: string): string[] {
   return [...source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})|'([^'\n]*)'/g)].map(

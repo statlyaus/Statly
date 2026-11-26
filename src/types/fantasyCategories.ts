@@ -430,39 +430,9 @@ export function formatCategoryValue(value: number | null | undefined, category: 
 }
 
 /**
- * Get color class for a category
- */
-export function getCategoryColorClass(color?: string): string {
-  switch (color) {
-    case 'red':
-      return 'text-red-600';
-    case 'green':
-      return 'text-green-600';
-    case 'blue':
-      return 'text-primary';
-    case 'orange':
-      return 'text-orange-600';
-    case 'purple':
-      return 'text-purple-600';
-    case 'yellow':
-      return 'text-yellow-600';
-    default:
-      return 'text-gray-600';
-  }
-}
-
-/**
  * Get stat value from PlayerStats object
  */
 export function getStatValue(stats: PlayerStats | undefined, category: FantasyCategoryKey): number {
   if (!stats) return 0;
   return stats[category] || 0;
-}
-
-/**
- * Get color class based on stat value and category
- */
-export function getStatColor(value: number | undefined, category: FantasyCategoryKey): string {
-  const categoryData = FANTASY_CATEGORIES[category];
-  return getCategoryColorClass(categoryData.color);
 }

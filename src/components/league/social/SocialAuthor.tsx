@@ -110,7 +110,7 @@ export function SocialAvatar({
 }): React.JSX.Element {
   return (
     <span
-      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden text-xs font-bold tracking-wide text-white`}
+      className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden text-xs font-bold tracking-wide text-background`}
       style={
         author?.avatarUrl
           ? undefined

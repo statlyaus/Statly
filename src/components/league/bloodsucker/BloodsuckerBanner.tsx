@@ -93,7 +93,7 @@ export function BloodsuckerBanner({
           <Link
             key={bite.biteId}
             href={biteHref(bite)}
-            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-destructive-text px-4 text-sm font-semibold text-white ${FOCUS}`}
+            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-destructive-text px-4 text-sm font-semibold text-destructive-foreground ${FOCUS}`}
           >
             Bite {bite.victim.teamName} (round {bite.round})
           </Link>

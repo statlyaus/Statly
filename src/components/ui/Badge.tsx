@@ -7,14 +7,7 @@ import { motion } from 'framer-motion';
 
 // Badge variants
 export type BadgeVariant =
-  | 'default'
-  | 'secondary'
-  | 'success'
-  | 'danger'
-  | 'warning'
-  | 'info'
-  | 'outline'
-  | 'ghost';
+  'default' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'outline' | 'ghost';
 
 // Badge sizes
 export type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -44,34 +37,34 @@ interface BadgeProps {
 // Variant configurations
 const VARIANT_CONFIG = {
   default: {
-    background: 'bg-gray-100',
-    text: 'text-gray-800',
-    border: 'border-gray-200',
-    hover: 'hover:bg-gray-200',
+    background: 'bg-muted',
+    text: 'text-foreground',
+    border: 'border-border',
+    hover: 'hover:brightness-95',
   },
   secondary: {
-    background: 'bg-gray-600',
-    text: 'text-white',
-    border: 'border-gray-600',
-    hover: 'hover:bg-gray-700',
+    background: 'bg-foreground',
+    text: 'text-background',
+    border: 'border-foreground',
+    hover: 'hover:bg-foreground/85',
   },
   success: {
-    background: 'bg-green-100',
-    text: 'text-green-800',
-    border: 'border-green-200',
-    hover: 'hover:bg-green-200',
+    background: 'bg-success-soft',
+    text: 'text-success',
+    border: 'border-success/30',
+    hover: 'hover:brightness-95',
   },
   danger: {
-    background: 'bg-red-100',
-    text: 'text-red-800',
-    border: 'border-red-200',
-    hover: 'hover:bg-red-200',
+    background: 'bg-destructive-soft',
+    text: 'text-destructive-text',
+    border: 'border-destructive-text/30',
+    hover: 'hover:brightness-95',
   },
   warning: {
-    background: 'bg-yellow-100',
-    text: 'text-yellow-800',
-    border: 'border-yellow-200',
-    hover: 'hover:bg-yellow-200',
+    background: 'bg-warning-soft',
+    text: 'text-warning-text',
+    border: 'border-warning',
+    hover: 'hover:brightness-95',
   },
   info: {
     background: 'bg-secondary',
@@ -81,15 +74,15 @@ const VARIANT_CONFIG = {
   },
   outline: {
     background: 'bg-transparent',
-    text: 'text-gray-700',
-    border: 'border-gray-300 border',
-    hover: 'hover:bg-gray-50',
+    text: 'text-foreground',
+    border: 'border-border border',
+    hover: 'hover:bg-muted',
   },
   ghost: {
     background: 'bg-transparent',
-    text: 'text-gray-600',
+    text: 'text-muted-foreground',
     border: 'border-transparent',
-    hover: 'hover:bg-gray-100',
+    hover: 'hover:bg-muted',
   },
 };
 

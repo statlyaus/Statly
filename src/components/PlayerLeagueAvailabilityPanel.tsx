@@ -101,10 +101,10 @@ function formatProcessingAt(value?: string, timeZone?: string): string | null {
 }
 
 function getStatusClass(status: AvailabilityStatus): string {
-  if (status === 'owned') return 'text-amber-700';
+  if (status === 'owned') return 'text-warning-text';
   if (status === 'your-roster') return 'text-primary';
-  if (status === 'waiver') return 'text-violet-700';
-  return 'text-emerald-700';
+  if (status === 'waiver') return 'text-foreground';
+  return 'text-success';
 }
 
 function getActionClass(type: AvailabilityActionType): string {
@@ -112,15 +112,15 @@ function getActionClass(type: AvailabilityActionType): string {
   if (type === 'waiver')
     return 'border-primary/30 bg-primary text-primary-foreground hover:bg-primary/90';
   if (type === 'add')
-    return 'border-emerald-200 bg-background text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50';
+    return 'border-success/30 bg-background text-success hover:border-success/40 hover:bg-success-soft';
   return 'border-border bg-background text-foreground hover:bg-muted';
 }
 
 function getStatusDotClass(status: AvailabilityStatus): string {
-  if (status === 'owned') return 'bg-amber-500';
+  if (status === 'owned') return 'bg-warning';
   if (status === 'your-roster') return 'bg-primary';
-  if (status === 'waiver') return 'bg-violet-500';
-  return 'bg-emerald-500';
+  if (status === 'waiver') return 'bg-foreground';
+  return 'bg-success';
 }
 
 function getActionLabel(type: AvailabilityActionType, fallback: string): string {

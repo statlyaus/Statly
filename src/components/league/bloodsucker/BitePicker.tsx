@@ -291,7 +291,7 @@ export function BitePicker({
             <button
               type="submit"
               disabled={disabled}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-destructive-text px-5 font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-destructive-text px-5 font-semibold text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {submitLabel(
                 command.status === 'saving',

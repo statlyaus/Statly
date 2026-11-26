@@ -284,9 +284,9 @@ const MatchLogTable = ({
 
   const getValueColor = (value: number | undefined, averageValue: number | null) => {
     if (typeof value !== 'number' || averageValue === null) return 'text-muted-foreground';
-    if (value >= averageValue + 0.35) return 'text-emerald-700 font-semibold';
+    if (value >= averageValue + 0.35) return 'text-success font-semibold';
     if (value >= averageValue - 0.35) return 'text-foreground';
-    return 'text-amber-700';
+    return 'text-warning-text';
   };
 
   const formatVenue = (venue: string | undefined): string => {

@@ -842,7 +842,7 @@ export default function LeagueTabs({
                                           onClick={() => void handleRemoveMember(member)}
                                           disabled={removingUserId === member.userId}
                                           aria-label={`Confirm remove ${member.teamName}`}
-                                          className="inline-flex h-9 items-center justify-center rounded-md bg-destructive-text px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text disabled:cursor-not-allowed disabled:opacity-60"
+                                          className="inline-flex h-9 items-center justify-center rounded-md bg-destructive-text px-3 text-xs font-semibold text-destructive-foreground transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                           {removingUserId === member.userId
                                             ? 'Removing'
@@ -932,13 +932,13 @@ export default function LeagueTabs({
               {activeTab === 'draft' && (
                 <div className="space-y-4">
                   {draftReadiness && (
-                    <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="rounded-lg border border-border bg-card p-4">
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <h2 className="text-lg font-semibold text-gray-900">
+                          <h2 className="text-lg font-semibold text-foreground">
                             {draftRoomPath ? 'Draft room ready' : 'Draft setup status'}
                           </h2>
-                          <p className="mt-1 text-sm text-gray-600">
+                          <p className="mt-1 text-sm text-muted-foreground">
                             {draftRoomPath
                               ? draftReadiness.lifecycle.isRunning
                                 ? 'The draft is live now.'
@@ -951,14 +951,14 @@ export default function LeagueTabs({
                           <button
                             type="button"
                             onClick={() => router.push(draftRoomPath)}
-                            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                           >
                             Enter draft room
                           </button>
                         )}
                       </div>
                       {!draftRoomPath && draftReadiness.blockers.length > 1 && (
-                        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                           {draftReadiness.blockers.slice(1).map((blocker) => (
                             <li key={blocker.id ?? `${blocker.code}:${blocker.message}`}>
                               {blocker.message}
