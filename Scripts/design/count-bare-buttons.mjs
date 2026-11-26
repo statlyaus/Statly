@@ -5,6 +5,7 @@
 // (buttonStyles, chipStyles, menuItemStyles). Class strings held in a same-file constant count as
 // the tag's own. Hover-only fills (icon buttons), plain text links and whole-card links (a link
 // not sized like a button: no inline-flex or min-h) are not counted.
+// Classes built by a function or imported from another file are invisible to it.
 //
 // Usage:
 //   node Scripts/design/count-bare-buttons.mjs                   # every file, worst first

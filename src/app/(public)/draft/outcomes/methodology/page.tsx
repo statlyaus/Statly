@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { buttonStyles } from '@/components/ui/controlStyles';
+
 export const metadata: Metadata = {
   title: 'AFL Draft & Trade Outcome Check Methodology | Statly',
   description:

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { buttonStyles } from '@/components/ui/controlStyles';
+
 /** Shown on every public trade page while no owner-approved trade data is being served. */
 export function TradesUnavailable() {
   return (
