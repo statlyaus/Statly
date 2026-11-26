@@ -191,6 +191,8 @@ describe('publication boundary', () => {
     // The home page leads into them with the same reader's list.
     /^app\/\(public\)\/page\.tsx$/u,
     /^components\/aflTradesHome\//u,
+    // The general managers ladder ranks heads of football from the same reader's list.
+    /^components\/aflGeneralManagers\//u,
     // The sitemap lists the same reader's trades and clubs, using the pages' own address helpers.
     /^app\/sitemap\.ts$/u,
   ];
