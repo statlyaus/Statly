@@ -3,6 +3,9 @@
 import { X } from 'lucide-react';
 import { useEffect, useId } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
+import { cn } from '@/lib/utils';
+
 import LeagueSocialShell, { type LeagueSocialView } from './LeagueSocialShell';
 
 interface SocialDrawerProps {
@@ -45,7 +48,7 @@ export default function SocialDrawer({
       <button
         type="button"
         onClick={onClose}
-        className="absolute right-16 top-3 z-20 inline-flex size-10 items-center justify-center rounded-cut border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(buttonStyles(), 'absolute right-16 top-3 z-20 size-11 px-0')}
         aria-label="Close league social"
       >
         <X className="size-5" aria-hidden="true" />

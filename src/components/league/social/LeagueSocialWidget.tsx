@@ -5,8 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { useSocket } from '@/contexts/SocketContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { cn } from '@/lib/utils';
 import type { LeagueSocialSummary, SocialMessage, SocialRealtimeEnvelope } from '@/types/social';
 
 import { subscribeLeagueSocialRoom } from './leagueSocialRoom';
@@ -333,7 +335,10 @@ export default function LeagueSocialWidget({
           }
           aria-expanded="false"
           title="League chat"
-          className="fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-cut-float border-[2.5px] border-foreground bg-brand-bar text-brand-bar-foreground shadow-hard transition-colors hover:bg-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+          className={cn(
+            buttonStyles({ variant: 'primary' }),
+            'fixed bottom-6 right-6 z-[55] size-14 rounded-cut-float px-0 shadow-hard'
+          )}
         >
           <MessageCircle className="size-7" aria-hidden="true" />
           {totalUnread > 0 ? (

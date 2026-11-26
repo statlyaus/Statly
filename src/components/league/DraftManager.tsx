@@ -14,7 +14,12 @@ import {
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
-import { alertStyles, badgeStyles, floatingStyles } from '@/components/ui/controlStyles';
+import {
+  alertStyles,
+  badgeStyles,
+  buttonStyles,
+  floatingStyles,
+} from '@/components/ui/controlStyles';
 import { fetchApi } from '@/lib/api';
 import { formatLeagueTime } from '@/lib/leagueTime';
 import { cn } from '@/lib/utils';
@@ -567,10 +572,11 @@ export default function DraftManager({
               </p>
             </div>
             <button
+              type="button"
               onClick={joinDraftRoom}
-              className="flex items-center space-x-2 rounded-cut bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={buttonStyles({ variant: 'primary' })}
             >
-              <PlayIcon className="h-4 w-4" />
+              <PlayIcon className="size-5" />
               <span>Join Draft Room</span>
             </button>
           </div>
@@ -641,10 +647,11 @@ export default function DraftManager({
             {/* Create Draft Button */}
             {canCreateDraft && (
               <button
+                type="button"
                 onClick={() => setShowDraftSettings(true)}
-                className="mt-4 flex w-full items-center justify-center space-x-2 rounded-cut bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={buttonStyles({ variant: 'primary', className: 'mt-4 w-full' })}
               >
-                <CalendarIcon className="h-5 w-5" />
+                <CalendarIcon className="size-5" />
                 <span>Prepare draft settings</span>
               </button>
             )}
@@ -777,12 +784,8 @@ export default function DraftManager({
                       Randomise the order or fine-tune the queue before creating the room.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={randomizeDraftOrder}
-                    className="inline-flex items-center justify-center gap-1 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <ArrowPathIcon className="h-4 w-4" />
+                  <button type="button" onClick={randomizeDraftOrder} className={buttonStyles()}>
+                    <ArrowPathIcon className="size-5" />
                     Randomise
                   </button>
                 </div>
@@ -832,18 +835,18 @@ export default function DraftManager({
                           onClick={() => moveDraftOrderMember(member.id, -1)}
                           disabled={index === 0}
                           aria-label={`Move ${member.teamName} up in draft order`}
-                          className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          className={cn(buttonStyles({ size: 'sm' }), 'size-9 px-0')}
                         >
-                          <ArrowUpIcon className="h-4 w-4" />
+                          <ArrowUpIcon className="size-4" />
                         </button>
                         <button
                           type="button"
                           onClick={() => moveDraftOrderMember(member.id, 1)}
                           disabled={index === draftOrderMembers.length - 1}
                           aria-label={`Move ${member.teamName} down in draft order`}
-                          className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          className={cn(buttonStyles({ size: 'sm' }), 'size-9 px-0')}
                         >
-                          <ArrowDownIcon className="h-4 w-4" />
+                          <ArrowDownIcon className="size-4" />
                         </button>
                       </div>
                     </div>
@@ -963,16 +966,18 @@ export default function DraftManager({
 
             <div className="flex flex-col gap-3 border-t border-border bg-card p-6 sm:flex-row">
               <button
+                type="button"
                 onClick={() => setShowDraftSettings(false)}
                 disabled={savingDraft}
-                className="flex-1 rounded-cut border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className={buttonStyles({ className: 'flex-1' })}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={createDraft}
                 disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-cut bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className={buttonStyles({ variant: 'primary', className: 'flex-1' })}
               >
                 {savingDraft ? (
                   <>
@@ -981,7 +986,7 @@ export default function DraftManager({
                   </>
                 ) : (
                   <>
-                    <PlayIcon className="h-4 w-4" />
+                    <PlayIcon className="size-5" />
                     <span>Create Draft</span>
                   </>
                 )}

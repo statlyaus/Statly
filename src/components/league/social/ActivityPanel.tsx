@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { SocialMessage } from '@/types/social';
 
 import SafeSocialText from './SafeSocialText';
@@ -35,14 +36,7 @@ interface ActivityPanelProps {
 const BOTTOM_THRESHOLD_PX = 72;
 
 type ActivityKind =
-  | 'draft'
-  | 'addition'
-  | 'removal'
-  | 'trade'
-  | 'waiver'
-  | 'error'
-  | 'commissioner'
-  | 'general';
+  'draft' | 'addition' | 'removal' | 'trade' | 'waiver' | 'error' | 'commissioner' | 'general';
 
 interface ActivityPresentation {
   kind: ActivityKind;
@@ -213,16 +207,10 @@ export default function ActivityPanel({
     <section
       aria-labelledby="league-activity-heading"
       className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
-        compact
-          ? 'bg-muted text-foreground'
-          : ' border border-border bg-muted text-foreground'
+        compact ? 'bg-muted text-foreground' : ' border border-border bg-muted text-foreground'
       }`}
     >
-      <header
-        className={
-          compact ? 'sr-only' : 'border-b border-border bg-card px-4 py-3'
-        }
-      >
+      <header className={compact ? 'sr-only' : 'border-b border-border bg-card px-4 py-3'}>
         <h2 id="league-activity-heading" className="text-base font-semibold text-foreground">
           League activity
         </h2>
@@ -250,7 +238,7 @@ export default function ActivityPanel({
                 type="button"
                 onClick={handleLoadEarlier}
                 disabled={loadingEarlier}
-                className="inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                className={buttonStyles({ size: 'sm' })}
               >
                 {loadingEarlier ? 'Loading…' : 'Load earlier activity'}
               </button>
@@ -269,7 +257,7 @@ export default function ActivityPanel({
               <button
                 type="button"
                 onClick={() => void onRetry()}
-                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={buttonStyles({ size: 'sm', className: 'mt-3' })}
               >
                 Retry
               </button>
@@ -315,9 +303,9 @@ export default function ActivityPanel({
                           <button
                             type="button"
                             onClick={() => onDiscuss(item)}
-                            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className={buttonStyles({ size: 'sm', className: 'shrink-0' })}
                           >
-                            <MessageCircle className="size-3.5" aria-hidden="true" />
+                            <MessageCircle className="size-4" aria-hidden="true" />
                             Discuss
                           </button>
                         ) : null}
@@ -334,7 +322,11 @@ export default function ActivityPanel({
           <button
             type="button"
             onClick={jumpToLatest}
-            className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-cut border-[2.5px] border-foreground bg-brand-bar px-4 py-2 text-sm font-semibold text-brand-bar-foreground shadow-hard transition-colors hover:bg-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted"
+            className={buttonStyles({
+              variant: 'primary',
+              size: 'sm',
+              className: 'absolute bottom-3 left-1/2 z-10 -translate-x-1/2 shadow-hard',
+            })}
           >
             {newActivityCount === 1
               ? '1 new activity item'

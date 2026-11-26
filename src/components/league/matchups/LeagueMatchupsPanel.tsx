@@ -12,6 +12,7 @@ import {
 import { NoLosersResultBadge } from '@/components/league/noLosers/NoLosersResultBadge';
 import type { NoLosersPlayerResult } from '@/components/league/noLosers/noLosersDisplay';
 import { CategoryPreviewScore } from '@/components/scores/CategoryPreviewScore';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import {
   MatchupScoreLine,
   ResultChip,
@@ -303,11 +304,7 @@ export function LeagueMatchupsPanel({
           </p>
           <CategoryPreviewScore categories={categories} />
           {data?.permissions?.canManage && onOpenSettings ? (
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="min-h-11 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
-            >
+            <button type="button" onClick={onOpenSettings} className={buttonStyles()}>
               Open league settings
             </button>
           ) : null}

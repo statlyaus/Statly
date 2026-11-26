@@ -12,6 +12,7 @@ import type { League, LeagueMember } from '@/types/leagues';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { logger } from '@/lib/logger';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { SectionErrorBoundary } from '@/components/ui/ErrorBoundary';
 import {
   formatLeagueMemberJoinedAt,
@@ -103,15 +104,11 @@ function LeaguePanelError({
         <button
           type="button"
           onClick={requiresReload ? () => window.location.reload() : resetError}
-          className="inline-flex h-10 items-center justify-center rounded-full bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 focus-visible:ring-offset-destructive-soft"
+          className={buttonStyles({ variant: 'primary' })}
         >
           {requiresReload ? 'Reload page' : 'Try section again'}
         </button>
-        <button
-          type="button"
-          onClick={onReturnToOverview}
-          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 focus-visible:ring-offset-destructive-soft"
-        >
+        <button type="button" onClick={onReturnToOverview} className={buttonStyles()}>
           Return to overview
         </button>
       </div>
@@ -842,7 +839,10 @@ export default function LeagueTabs({
                                           onClick={() => void handleRemoveMember(member)}
                                           disabled={removingUserId === member.userId}
                                           aria-label={`Confirm remove ${member.teamName}`}
-                                          className="inline-flex h-9 items-center justify-center rounded-md bg-destructive-text px-3 text-xs font-semibold text-destructive-foreground transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text disabled:cursor-not-allowed disabled:opacity-60"
+                                          className={buttonStyles({
+                                            variant: 'danger',
+                                            size: 'sm',
+                                          })}
                                         >
                                           {removingUserId === member.userId
                                             ? 'Removing'
@@ -852,7 +852,7 @@ export default function LeagueTabs({
                                           type="button"
                                           onClick={() => setPendingRemoveUserId(null)}
                                           disabled={removingUserId === member.userId}
-                                          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:cursor-not-allowed disabled:opacity-60"
+                                          className={buttonStyles({ size: 'sm' })}
                                         >
                                           Cancel
                                         </button>
@@ -862,7 +862,7 @@ export default function LeagueTabs({
                                         type="button"
                                         onClick={() => setPendingRemoveUserId(member.userId)}
                                         aria-label={`Remove ${member.teamName}`}
-                                        className="inline-flex h-9 items-center justify-center rounded-md border border-destructive-text/30 bg-card px-3 text-xs font-semibold text-destructive-text transition-colors hover:bg-destructive-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text"
+                                        className={buttonStyles({ variant: 'outline', size: 'sm' })}
                                       >
                                         Remove
                                       </button>
@@ -951,7 +951,7 @@ export default function LeagueTabs({
                           <button
                             type="button"
                             onClick={() => router.push(draftRoomPath)}
-                            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                            className={buttonStyles({ variant: 'primary' })}
                           >
                             Enter draft room
                           </button>

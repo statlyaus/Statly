@@ -20,8 +20,10 @@ import {
 import { TeamMark } from '@/components/scores/MatchupScore';
 import { formatRefusal, readRefusal } from '@/components/league/bloodsucker/bloodsuckerDisplay';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
+import { cn } from '@/lib/utils';
 import { autoFillLineup, scorePlayersByStats } from '@/lib/leagues/lineupAutoFill';
 import { ClubSquare } from '@/components/ui/ClubSquare';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
@@ -721,9 +723,9 @@ export function LeagueMyTeamPanel({
               aria-label="Previous round"
               disabled={roundIndex <= 0 || isLoading}
               onClick={() => goToRound(String(rounds[roundIndex - 1].round))}
-              className="inline-flex size-11 items-center justify-center rounded-md border border-border bg-card text-foreground hover:bg-muted disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+              className={cn(buttonStyles(), 'size-11 px-0')}
             >
-              <ChevronLeft aria-hidden="true" className="size-4" />
+              <ChevronLeft aria-hidden="true" className="size-5" />
             </button>
             <label className="sr-only" htmlFor="my-team-round">
               Round
@@ -746,9 +748,9 @@ export function LeagueMyTeamPanel({
               aria-label="Next round"
               disabled={roundIndex < 0 || roundIndex >= rounds.length - 1 || isLoading}
               onClick={() => goToRound(String(rounds[roundIndex + 1].round))}
-              className="inline-flex size-11 items-center justify-center rounded-md border border-border bg-card text-foreground hover:bg-muted disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+              className={cn(buttonStyles(), 'size-11 px-0')}
             >
-              <ChevronRight aria-hidden="true" className="size-4" />
+              <ChevronRight aria-hidden="true" className="size-5" />
             </button>
           </div>
         ) : null}
@@ -760,7 +762,7 @@ export function LeagueMyTeamPanel({
           <button
             type="button"
             onClick={() => setReloadKey((key) => key + 1)}
-            className="mt-2 inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted"
+            className={buttonStyles({ className: 'mt-2' })}
           >
             Try again
           </button>
@@ -1091,7 +1093,7 @@ export function LeagueMyTeamPanel({
                   type="button"
                   onClick={handleDiscard}
                   disabled={saveState.kind === 'saving'}
-                  className="inline-flex min-h-11 items-center rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+                  className={buttonStyles()}
                 >
                   Discard
                 </button>
@@ -1099,7 +1101,7 @@ export function LeagueMyTeamPanel({
                   type="button"
                   onClick={() => void save(assignments)}
                   disabled={saveState.kind === 'saving'}
-                  className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground hover:bg-brand-bar/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+                  className={buttonStyles({ variant: 'primary' })}
                 >
                   {saveState.kind === 'saving' ? 'Saving…' : 'Confirm lineup'}
                 </button>
@@ -1350,11 +1352,11 @@ function ActionButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`inline-flex min-h-9 min-w-16 items-center justify-center rounded-md px-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-1 ${
-        tone === 'target'
-          ? 'bg-brand-bar text-brand-bar-foreground hover:bg-brand-bar/90'
-          : 'border border-border bg-card text-foreground hover:bg-muted'
-      }`}
+      className={buttonStyles({
+        variant: tone === 'target' ? 'primary' : 'outline',
+        size: 'sm',
+        className: 'min-w-16',
+      })}
     >
       {label}
     </button>
@@ -1538,11 +1540,7 @@ function ReadinessRow({
             </p>
           ) : null}
           {editable && canFill ? (
-            <button
-              type="button"
-              onClick={onFill}
-              className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground hover:bg-brand-bar/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
-            >
+            <button type="button" onClick={onFill} className={buttonStyles({ variant: 'primary' })}>
               Fill empty spots
             </button>
           ) : null}
@@ -1552,7 +1550,7 @@ function ReadinessRow({
             <button
               type="button"
               onClick={() => onGoToRound(firstEditableRound)}
-              className="inline-flex min-h-11 items-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground hover:bg-brand-bar/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2"
+              className={buttonStyles({ variant: 'primary' })}
             >
               Set Round {firstEditableRound} team
             </button>

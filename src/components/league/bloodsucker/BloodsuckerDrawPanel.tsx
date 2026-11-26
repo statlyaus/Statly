@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 
 import { revealFrame, type RevealDraw } from './bloodsuckerDisplay';
@@ -262,7 +263,7 @@ function DrawControls({
             type="button"
             onClick={onDraw}
             disabled={saving}
-            className="inline-flex min-h-11 items-center justify-center rounded-cut bg-foreground px-5 font-semibold text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive-text focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+            className={buttonStyles({ variant: 'primary' })}
           >
             {saving ? 'Drawing…' : 'Draw the Bloodsucker'}
           </button>

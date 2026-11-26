@@ -3,7 +3,9 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { cn } from '@/lib/utils';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { LeagueFixtureGenerationMode } from '@/types/leagues';
 
@@ -613,7 +615,7 @@ export function CompetitionSettingsPanel({
             type="button"
             onClick={() => void saveRules()}
             disabled={isSaving}
-            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+            className={buttonStyles()}
           >
             Save rules
           </button>
@@ -623,7 +625,7 @@ export function CompetitionSettingsPanel({
             type="button"
             onClick={() => void publish()}
             disabled={isSaving}
-            className="rounded-md bg-brand-bar px-4 py-2 text-sm font-semibold text-brand-bar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar focus-visible:ring-offset-2 disabled:opacity-60"
+            className={buttonStyles({ variant: 'primary' })}
           >
             Publish competition
           </button>
@@ -669,7 +671,7 @@ export function CompetitionSettingsPanel({
                 type="button"
                 onClick={() => void saveFallbackDeadline()}
                 disabled={isSaving || !fallbackRound || !fallbackLockAt}
-                className="h-10 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                className={buttonStyles()}
               >
                 Set deadline
               </button>
@@ -834,7 +836,7 @@ export function CompetitionSettingsPanel({
                               </select>
                             </label>
                             {canManage && !matchup?.bracketKey ? (
-                              <div className="flex h-10 items-center gap-2">
+                              <div className="flex min-h-11 items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => void saveFixture(competitionRound.round, key)}
@@ -844,9 +846,9 @@ export function CompetitionSettingsPanel({
                                     (!draft.byeMemberId &&
                                       (!draft.homeMemberId || !draft.awayMemberId))
                                   }
-                                  className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-bar px-3 font-semibold text-brand-bar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                                  className={buttonStyles({ variant: 'primary' })}
                                 >
-                                  {matchup ? null : <Plus aria-hidden="true" className="h-4 w-4" />}
+                                  {matchup ? null : <Plus aria-hidden="true" className="size-5" />}
                                   {matchup ? 'Save' : 'Add'}
                                 </button>
                                 {matchup && !matchup.bracketKey ? (
@@ -858,9 +860,9 @@ export function CompetitionSettingsPanel({
                                       void deleteFixture(competitionRound.round, matchup.id)
                                     }
                                     disabled={isSaving || isRoundReadOnly}
-                                    className="inline-flex size-10 items-center justify-center rounded-md border border-border text-destructive-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                                    className={cn(buttonStyles(), 'size-11 px-0')}
                                   >
-                                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                                    <Trash2 aria-hidden="true" className="size-5" />
                                   </button>
                                 ) : null}
                               </div>

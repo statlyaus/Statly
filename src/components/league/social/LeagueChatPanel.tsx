@@ -3,6 +3,7 @@
 import { MessageCircle } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type {
   CreateSocialMessageInput,
   SocialDiscussionContext,
@@ -205,7 +206,7 @@ export default function LeagueChatPanel({
                 type="button"
                 onClick={handleLoadEarlier}
                 disabled={loadingEarlier}
-                className="inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                className={buttonStyles({ size: 'sm' })}
               >
                 {loadingEarlier ? 'Loading…' : 'Load earlier messages'}
               </button>
@@ -224,7 +225,7 @@ export default function LeagueChatPanel({
               <button
                 type="button"
                 onClick={() => void onRetry()}
-                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={buttonStyles({ size: 'sm', className: 'mt-3' })}
               >
                 Retry
               </button>
@@ -269,7 +270,11 @@ export default function LeagueChatPanel({
           <button
             type="button"
             onClick={jumpToLatest}
-            className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-cut border-[2.5px] border-foreground bg-brand-bar px-4 py-2 text-sm font-semibold text-brand-bar-foreground shadow-hard transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted"
+            className={buttonStyles({
+              variant: 'primary',
+              size: 'sm',
+              className: 'absolute bottom-3 left-1/2 z-10 -translate-x-1/2 shadow-hard',
+            })}
           >
             {newMessageCount === 1 ? '1 new message' : `${newMessageCount} new messages`}
           </button>

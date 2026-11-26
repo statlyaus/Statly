@@ -13,6 +13,7 @@ import {
 } from '@/server/leagues/trades/tradeContracts';
 
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { buttonStyles } from '@/components/ui/controlStyles';
 
 import { TradeCards } from './TradeCards';
 import { TradeComposer, type TradeComposerSubmission } from './TradeComposer';
@@ -301,7 +302,7 @@ export function LeagueTradeCentrePanel({
             <button
               type="button"
               onClick={() => router.refresh()}
-              className={secondaryButtonClasses}
+              className={buttonStyles({ className: 'mt-3' })}
             >
               Try again
             </button>
@@ -332,7 +333,11 @@ export function LeagueTradeCentrePanel({
             <TradeRuleSummary rules={snapshot.rules} />
           </div>
           {workspaceMode === 'offers' && (
-            <button type="button" onClick={openComposer} className={workspacePrimaryButtonClasses}>
+            <button
+              type="button"
+              onClick={openComposer}
+              className={buttonStyles({ variant: 'primary' })}
+            >
               Propose trade
             </button>
           )}
@@ -366,7 +371,7 @@ export function LeagueTradeCentrePanel({
                 <button
                   type="button"
                   onClick={showOffers}
-                  className={workspaceSecondaryButtonClasses}
+                  className={buttonStyles({ className: 'shrink-0' })}
                 >
                   Back to offers
                 </button>
@@ -449,7 +454,7 @@ export function LeagueTradeCentrePanel({
                 onClick={() =>
                   navigateToView(snapshot.activeView, snapshot.nextCursor ?? undefined)
                 }
-                className={secondaryButtonClasses}
+                className={buttonStyles({ className: 'mt-3' })}
               >
                 Next page
               </button>
@@ -534,10 +539,3 @@ function describeTradeOutcome(action: TradeActionName | 'propose', status?: stri
       return 'Request saved. The offers list is updating.';
   }
 }
-
-const secondaryButtonClasses =
-  'mt-3 inline-flex h-11 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
-const workspacePrimaryButtonClasses =
-  'inline-flex h-11 items-center justify-center rounded-cut bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
-const workspaceSecondaryButtonClasses =
-  'inline-flex h-11 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';

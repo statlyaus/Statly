@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { formatLeagueTime } from '@/lib/leagueTime';
 
@@ -291,7 +292,7 @@ export function BitePicker({
             <button
               type="submit"
               disabled={disabled}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-destructive-text px-5 font-semibold text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className={buttonStyles({ variant: 'danger', className: 'w-full sm:w-auto' })}
             >
               {submitLabel(
                 command.status === 'saving',

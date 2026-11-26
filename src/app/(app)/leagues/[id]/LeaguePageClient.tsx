@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/AuthContext';
 import Alert from '@/components/ui/Alert';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { Spinner } from '@/components/ui/Spinner';
 import LeagueTabs from '@/components/league/LeagueTabs';
 import type {
@@ -116,9 +117,10 @@ export default function LeaguePageClient({
           title="Failed to load league"
           actions={
             <button
+              type="button"
               onClick={() => void retryFetch()}
               disabled={loading}
-              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+              className={buttonStyles({ variant: 'primary', size: 'sm', className: 'mt-2' })}
             >
               {loading ? 'Retrying…' : 'Retry'}
             </button>
@@ -138,9 +140,10 @@ export default function LeaguePageClient({
           title="League not found"
           actions={
             <button
+              type="button"
               onClick={() => void retryFetch()}
               disabled={loading}
-              className="mt-2 inline-flex items-center px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+              className={buttonStyles({ variant: 'primary', size: 'sm', className: 'mt-2' })}
             >
               {loading ? 'Retrying…' : 'Retry'}
             </button>

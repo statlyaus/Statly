@@ -5,6 +5,7 @@ import { useId } from 'react';
 import type React from 'react';
 
 import { GuernseyIcon } from '@/components/league/myteam/FieldArt';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { guernseyFor } from '@/lib/clubGuernseys';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 import type { TradePlayerDto, TradeRulesDto } from '@/server/leagues/trades/tradeContracts';
@@ -117,7 +118,7 @@ export function TradeSendCheckpoint({
             type="button"
             disabled={isSubmitting}
             onClick={onBack}
-            className={secondaryButtonClasses}
+            className={buttonStyles({ className: 'min-w-0 text-center' })}
           >
             Edit
           </button>
@@ -125,7 +126,10 @@ export function TradeSendCheckpoint({
             type="button"
             disabled={isSubmitting}
             onClick={onSubmit}
-            className="order-first inline-flex h-11 min-w-0 items-center justify-center rounded-cut bg-brand-bar px-4 text-center text-sm font-bold text-brand-bar-foreground transition-colors hover:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:border-2 disabled:border-dashed disabled:border-muted-foreground disabled:bg-transparent disabled:text-muted-foreground"
+            className={buttonStyles({
+              variant: 'primary',
+              className: 'order-first min-w-0 text-center',
+            })}
           >
             {actionLabel}
           </button>
@@ -134,7 +138,7 @@ export function TradeSendCheckpoint({
               type="button"
               disabled={isSubmitting}
               onClick={onCancelCounter}
-              className={secondaryButtonClasses}
+              className={buttonStyles({ className: 'min-w-0 text-center' })}
             >
               Cancel counter
             </button>
@@ -185,6 +189,3 @@ function PlayerList({
     </section>
   );
 }
-
-const secondaryButtonClasses =
-  'inline-flex h-11 min-w-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-center text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';

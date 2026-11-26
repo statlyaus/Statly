@@ -104,7 +104,7 @@ describe('LeagueSocialWidget', () => {
       'shadow-hard',
       'bottom-6',
       'right-6',
-      'bg-brand-bar'
+      'bg-primary'
     );
     expect(launcher.querySelector('svg')).toHaveClass('size-7');
     await waitFor(() =>

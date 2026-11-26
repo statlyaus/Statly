@@ -4,6 +4,7 @@ import { ArrowLeft, Link as LinkIcon, Lock, Megaphone, MessageSquare, Pin } from
 import Link from 'next/link';
 import { useLayoutEffect, useRef, useState } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { SocialPost, SocialReply, SocialReportReason } from '@/types/social';
 
 import SafeSocialText from './SafeSocialText';
@@ -171,7 +172,7 @@ export default function PostThread({
                 onClick={() =>
                   void handleModeration(() => onUpdatePost({ isPinned: !post.isPinned }))
                 }
-                className="inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                className={buttonStyles({ size: 'sm' })}
               >
                 {post.isPinned ? 'Unpin' : 'Pin'} discussion
               </button>
@@ -181,7 +182,7 @@ export default function PostThread({
                 onClick={() =>
                   void handleModeration(() => onUpdatePost({ isLocked: !post.isLocked }))
                 }
-                className="inline-flex min-h-9 items-center rounded-cut border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                className={buttonStyles({ size: 'sm' })}
               >
                 {post.isLocked ? 'Unlock' : 'Lock'} discussion
               </button>
@@ -239,7 +240,7 @@ export default function PostThread({
               <button
                 type="button"
                 onClick={() => void onRetry()}
-                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={buttonStyles({ size: 'sm', className: 'mt-3' })}
               >
                 Retry
               </button>
@@ -299,7 +300,7 @@ export default function PostThread({
                 type="button"
                 onClick={() => void onLoadMore()}
                 disabled={loading}
-                className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                className={buttonStyles()}
               >
                 {loading ? 'Loading…' : 'Load more replies'}
               </button>

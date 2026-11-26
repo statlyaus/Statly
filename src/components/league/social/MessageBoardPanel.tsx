@@ -3,6 +3,7 @@
 import { Lock, Megaphone, MessageSquare, Pin } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { CreateSocialPostInput, SocialBoardCategory, SocialPost } from '@/types/social';
 
 import SocialAuthor from './SocialAuthor';
@@ -139,9 +140,7 @@ export default function MessageBoardPanel({
           disabled={!canPublish || muted}
           aria-expanded={showForm}
           aria-controls="create-social-post"
-          className={`inline-flex items-center justify-center rounded-cut border border-brand-bar bg-brand-bar text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground ${
-            compact ? 'min-h-9 px-3' : 'min-h-10 px-4'
-          }`}
+          className={buttonStyles({ variant: 'primary', size: compact ? 'sm' : 'md' })}
         >
           New post
         </button>
@@ -235,15 +234,11 @@ export default function MessageBoardPanel({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex min-h-10 items-center justify-center rounded-cut border border-brand-bar bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition-colors hover:border-brand-bar-hover hover:bg-brand-bar-hover active:border-brand-bar-hover active:bg-brand-bar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
+              className={buttonStyles({ variant: 'primary' })}
             >
               {creating ? 'Publishing…' : 'Publish post'}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
+            <button type="button" onClick={() => setShowForm(false)} className={buttonStyles()}>
               Cancel
             </button>
             {submitError ? (
@@ -285,7 +280,7 @@ export default function MessageBoardPanel({
             <button
               type="button"
               onClick={() => void onRetry()}
-              className="mt-3 inline-flex min-h-9 items-center justify-center rounded-cut border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={buttonStyles({ size: 'sm', className: 'mt-3' })}
             >
               Retry
             </button>
@@ -379,7 +374,7 @@ export default function MessageBoardPanel({
               type="button"
               onClick={() => void onLoadMore()}
               disabled={loadingMore}
-              className="inline-flex min-h-10 items-center justify-center rounded-cut border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:border-muted-foreground hover:bg-secondary active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+              className={buttonStyles()}
             >
               {loadingMore ? 'Loading…' : 'Load more discussions'}
             </button>

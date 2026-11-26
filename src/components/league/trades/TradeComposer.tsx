@@ -5,6 +5,7 @@ import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import type React from 'react';
 
 import { TeamMark } from '@/components/scores/MatchupScore';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import type { TradeRulesDto, TradeTeamDto } from '@/server/leagues/trades/tradeContracts';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
@@ -261,7 +262,7 @@ export function TradeComposer({
             type="button"
             disabled={isSubmitting}
             onClick={onCancelCounter}
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+            className={buttonStyles({ className: 'shrink-0' })}
           >
             Cancel counter
           </button>
@@ -322,7 +323,7 @@ export function TradeComposer({
               type="button"
               disabled={isSubmitting}
               onClick={onCancelCounter}
-              className="inline-flex h-11 shrink-0 items-center justify-center rounded-cut border border-foreground bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              className={buttonStyles({ className: 'shrink-0' })}
             >
               Cancel counter
             </button>

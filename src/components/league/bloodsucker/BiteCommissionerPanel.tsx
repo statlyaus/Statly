@@ -4,6 +4,7 @@ import { useId, useRef, useState } from 'react';
 
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import type { BiteCommissionerAction } from '@/server/leagues/biteCommissionerActions';
 
@@ -239,7 +240,7 @@ export function BiteCommissionerPanel({
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-destructive-text px-5 font-semibold text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className={buttonStyles({ variant: 'danger', className: 'w-full sm:w-auto' })}
           >
             {saving ? 'Saving…' : chosen === 'cancel' ? 'Cancel the bite' : 'Redo the bite'}
           </button>

@@ -21,6 +21,7 @@ import {
   type DraftPositionLimits,
   type PositionLimitKey,
 } from '@/lib/draftSettings';
+import { buttonStyles } from '@/components/ui/controlStyles';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { parseLeagueFormat } from '@/lib/leagueFormatOptions';
 import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
@@ -675,7 +676,7 @@ export function TeamSettingsPanel({
                   type="button"
                   onClick={() => void saveTeamSettings()}
                   disabled={isSavingTeamSettings}
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                  className={buttonStyles({ variant: 'primary' })}
                 >
                   {isSavingTeamSettings ? 'Saving...' : 'Save team settings'}
                 </button>
@@ -766,7 +767,7 @@ export function TeamSettingsPanel({
                     type="button"
                     onClick={() => void saveTeamSymbol(teamSymbolUrl)}
                     disabled={isSavingTeamSymbol}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                    className={buttonStyles({ variant: 'primary' })}
                   >
                     {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
                   </button>
@@ -774,7 +775,7 @@ export function TeamSettingsPanel({
                     type="button"
                     onClick={() => void saveTeamSymbol('')}
                     disabled={isSavingTeamSymbol}
-                    className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-muted px-4 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+                    className={buttonStyles()}
                   >
                     Clear
                   </button>
@@ -1088,7 +1089,7 @@ export function LeagueSettingsPanel({
             <button
               type="button"
               onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-              className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar"
+              className={buttonStyles()}
             >
               Try again
             </button>
@@ -1386,7 +1387,7 @@ export function LeagueSettingsPanel({
             type="button"
             onClick={() => void handleSaveSettings()}
             disabled={formDisabled}
-            className="inline-flex h-10 items-center justify-center rounded-md bg-brand-bar px-4 text-sm font-semibold text-brand-bar-foreground transition hover:bg-brand-bar-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-bar disabled:opacity-60"
+            className={buttonStyles({ variant: 'primary' })}
           >
             {isSaving ? 'Saving...' : 'Save league settings'}
           </button>
