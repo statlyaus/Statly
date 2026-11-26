@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buttonStyles } from '@/components/ui/controlStyles';
+
 export const metadata: Metadata = {
   title: 'AFL Draft & Trade Outcome Check Methodology | Statly',
   description:
@@ -124,16 +126,10 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Link
-          href="/draft/outcomes"
-          className="inline-flex min-h-11 items-center justify-center rounded-cut bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
+        <Link href="/draft/outcomes" className={buttonStyles({ variant: 'primary' })}>
           Return to outcome checks
         </Link>
-        <Link
-          href="/draft/trades/methodology"
-          className="inline-flex min-h-11 items-center justify-center rounded-cut border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <Link href="/draft/trades/methodology" className={buttonStyles()}>
           Read trade-value methodology
         </Link>
       </div>
