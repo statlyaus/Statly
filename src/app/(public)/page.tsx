@@ -42,8 +42,9 @@ const draftRecord = [
  * descender clears the promise at every width. Behind them sits the MCG scene the owner chose on
  * 2026-11-27 (`public/brand/masthead-mcg.svg`): faint sun-yellow outlines of the ground, the city
  * and the suburb roofline that runs behind the letters. It is a drawing, so it sits in
- * `data-illustration`, cropped from the bottom centre. Phones leave it out: there the promise sits
- * over the scene and the lines make it harder to read.
+ * `data-illustration`, cropped from the bottom centre. On phones the whole scene would sit under the
+ * promise, so they show its right end (the city and the MCG) behind the wordmark alone (owner,
+ * 2026-11-27).
  */
 function Masthead() {
   return (
@@ -60,9 +61,20 @@ function Masthead() {
         className="pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-bottom sm:block"
       />
       <div className="relative mx-auto grid max-w-6xl gap-4 py-8">
-        <p className="m-0 justify-self-start pt-[0.3em]">
-          <StatlyWordmark size="mast" className="mb-[0.12em]" />
-        </p>
+        {/* Phones get the scene's right end (the city and the MCG) behind the wordmark only, so
+            the promise below stays on plain cobalt. */}
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element -- a decorative SVG cropped by CSS */}
+          <img
+            src="/brand/masthead-mcg.svg"
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-8 bottom-0 -right-4 -left-4 h-[calc(100%+2rem)] w-[calc(100%+2rem)] max-w-none object-cover object-right-bottom sm:hidden"
+          />
+          <p className="relative m-0 justify-self-start pt-[0.3em]">
+            <StatlyWordmark size="mast" className="mb-[0.12em]" />
+          </p>
+        </div>
         <p className="m-0 max-w-[56ch] font-sans text-base leading-normal">
           Every AFL trade, valued by what the players and picks went on to do for the club that got
           them.
