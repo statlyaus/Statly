@@ -138,7 +138,8 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
                         className={`row-span-2 self-start font-display text-7xl font-extrabold leading-[0.8] tabular-nums sm:row-span-1 sm:self-center sm:text-8xl ${
                           index === 0
                             ? 'text-primary'
-                            : 'text-transparent [-webkit-text-stroke:2px_var(--foreground)]'
+                            : // Ink outline, hollow: the colour stays ink so the stroke reads.
+                              'text-foreground [-webkit-text-fill-color:transparent] [-webkit-text-stroke:2px_currentColor]'
                         }`}
                       >
                         {index + 1}
