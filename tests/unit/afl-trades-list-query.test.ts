@@ -187,7 +187,10 @@ describe('trade list query', () => {
       year: 2026,
       trades: 1,
       biggest: null,
+      projectedBiggest: { clubName: 'Sydney', net: 500 },
     });
+    // A settled year has no projection to fall back on.
+    expect(tradeYearSummaries(withProjection)[1]!.projectedBiggest).toBeNull();
     expect(
       filterTrades(withProjection, { year: null, club: null, sort: 'biggest' })[0]!.tradeId
     ).toBe('t5');

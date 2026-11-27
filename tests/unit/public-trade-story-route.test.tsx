@@ -275,7 +275,16 @@ describe('public trade pages', () => {
     expect(rows).toHaveLength(clubs.size);
     for (const row of rows)
       expect(row.getAttribute('href')).toMatch(/^\/afl\/trades\?year=all&club=[a-z0-9-]+$/u);
-    expect(screen.getByRole('heading', { name: 'Season by season' })).toBeVisible();
+    // The biggest wins are a ranked scoreboard, each row opening its trade.
+    const wins = screen.getByRole('heading', { name: 'The next biggest wins' }).closest('section')!;
+    for (const row of wins.querySelectorAll('ol > li > a'))
+      expect(row.getAttribute('href')).toMatch(/^\/afl\/trades\//u);
+    // The season chart has one bar per trade year, oldest first.
+    const seasons = screen.getByRole('heading', { name: 'Season by season' }).closest('section')!;
+    const years = [...new Set(list.stories.map(({ year }) => year))].sort((a, b) => a - b);
+    expect([...seasons.querySelectorAll('ol > li > a')].map((a) => a.getAttribute('href'))).toEqual(
+      years.map((year) => `/afl/trades?year=${year}`)
+    );
     const latest = Math.max(...list.stories.map(({ year }) => year));
     expect(
       screen
