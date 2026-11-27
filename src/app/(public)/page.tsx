@@ -39,14 +39,26 @@ const draftRecord = [
  * The brand masthead: a cobalt band with the giant wordmark and the promise. Adapted from the design
  * system (`ds2/a-core.html`, owner 2026-11-21); the owner dropped its sun disc and hand note on
  * 2026-11-27 (abstract, no job to do). The wordmark keeps a bottom margin in its own em so the y's
- * descender clears the promise at every width.
+ * descender clears the promise at every width. Behind them sits the MCG scene the owner chose on
+ * 2026-11-27 (`public/brand/masthead-mcg.svg`): faint sun-yellow outlines of the ground, the city
+ * and the suburb roofline that runs behind the letters. It is a drawing, so it sits in
+ * `data-illustration`, cropped from the bottom centre. Phones leave it out: there the promise sits
+ * over the scene and the lines make it harder to read.
  */
 function Masthead() {
   return (
     <section
       aria-label="Statly"
+      data-illustration
       className="ground-cobalt relative overflow-hidden px-4 sm:px-6 lg:px-10"
     >
+      {/* eslint-disable-next-line @next/next/no-img-element -- a decorative SVG cropped by CSS */}
+      <img
+        src="/brand/masthead-mcg.svg"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 hidden h-full w-full object-cover object-bottom sm:block"
+      />
       <div className="relative mx-auto grid max-w-6xl gap-4 py-8">
         <p className="m-0 justify-self-start pt-[0.3em]">
           <StatlyWordmark size="mast" className="mb-[0.12em]" />
