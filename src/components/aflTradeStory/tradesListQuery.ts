@@ -220,13 +220,36 @@ interface TradeYearSummary {
   readonly trades: number;
   /** The year's biggest settled-so-far win, when it has one. */
   readonly biggest: TradeWin | null;
+  /**
+   * A year with no settled win yet (no season played since): its biggest projected win, so the home
+   * page can draw it as a projection. Null whenever `biggest` is set.
+   */
+  readonly projectedBiggest: TradeWin | null;
 }
 
-/** Each trade year, newest first: how many trades, and its biggest win. */
+/** The biggest projected win among some trades: one per trade, its best club. */
+const biggestProjectedWin = (stories: readonly AflTradeStorySampleSummary[]): TradeWin | null =>
+  stories
+    .filter(projected)
+    .map((story) => {
+      const best = (story.results ?? []).reduce((top, result) =>
+        result.net > top.net ? result : top
+      );
+      return { story, clubName: best.clubName, net: best.net, received: best.received };
+    })
+    .reduce<TradeWin | null>((top, win) => (top === null || win.net > top.net ? win : top), null);
+
+/** Each trade year, newest first: how many trades, and its biggest win (or projected win). */
 export const tradeYearSummaries = (
   stories: readonly AflTradeStorySampleSummary[]
 ): TradeYearSummary[] =>
   tradesListYears(stories).map((year) => {
     const inYear = stories.filter((story) => story.year === year);
-    return { year, trades: inYear.length, biggest: biggestWins(inYear, 1)[0] ?? null };
+    const biggest = biggestWins(inYear, 1)[0] ?? null;
+    return {
+      year,
+      trades: inYear.length,
+      biggest,
+      projectedBiggest: biggest === null ? biggestProjectedWin(inYear) : null,
+    };
   });
