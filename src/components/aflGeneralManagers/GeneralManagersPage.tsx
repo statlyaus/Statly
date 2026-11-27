@@ -1,14 +1,12 @@
 import Link from 'next/link';
 
-import { formatSigned } from '@/components/aflTradeStory/tradePageModel';
 import type { GeneralManagerLadder } from './generalManagerLadder';
-import { clubSquareBackground } from '@/lib/clubGuernseys';
-import { getTeamAbbreviation } from '@/lib/teamLogos';
+import { GeneralManagersTable } from './GeneralManagersTable';
 
 /**
  * The general managers page (/afl/trades/general-managers, owner 2026-11-26): every club's head of
  * football since 2019, ranked by the net PAV of the trades made while they ran the football
- * department. An asterisk marks a person whose dates in the role are not confirmed yet.
+ * department, or by per trade when the reader picks it. An asterisk marks a person whose dates in the role are not confirmed yet.
  */
 
 const focusRing =
@@ -42,74 +40,7 @@ export function GeneralManagersPage({ ladder }: { ladder: GeneralManagerLadder }
         </p>
       </header>
 
-      <table className="w-full border-collapse text-left tabular-nums">
-        <caption className="sr-only">General managers of football, highest net PAV first</caption>
-        <thead>
-          <tr className="border-b-2 border-foreground font-display text-xs font-bold text-muted-foreground">
-            <th scope="col" className="w-[3ch] px-1 py-2 text-right">
-              #
-            </th>
-            <th scope="col" className="px-2 py-2">
-              General manager
-            </th>
-            <th scope="col" className="px-2 py-2">
-              Club
-            </th>
-            <th scope="col" className="hidden px-2 py-2 sm:table-cell">
-              Trade years
-            </th>
-            <th scope="col" className="px-2 py-2 text-right">
-              Trades
-            </th>
-            <th scope="col" className="hidden px-2 py-2 text-right sm:table-cell">
-              Per trade
-            </th>
-            <th scope="col" className="px-2 py-2 text-right">
-              PAV +/−
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={`${row.person}|${row.club}`} className="border-b border-foreground/15">
-              <td className="px-1 py-2 text-right text-muted-foreground">{index + 1}</td>
-              <th scope="row" className="px-2 py-2 font-display font-bold">
-                {row.person}
-                {row.unconfirmed ? (
-                  <>
-                    <span aria-hidden="true">*</span>
-                    <span className="sr-only"> (dates in the role not confirmed yet)</span>
-                  </>
-                ) : null}
-              </th>
-              <td className="px-2 py-2">
-                <span className="flex items-center gap-2 whitespace-nowrap">
-                  <span
-                    aria-hidden="true"
-                    data-club-square=""
-                    className="size-[13px] flex-none border border-foreground"
-                    style={{ background: clubSquareBackground(row.club) }}
-                  />
-                  <span className="hidden sm:inline">{row.club}</span>
-                  <abbr title={row.club} className="no-underline sm:hidden">
-                    {getTeamAbbreviation(row.club)}
-                  </abbr>
-                </span>
-              </td>
-              <td className="hidden px-2 py-2 whitespace-nowrap sm:table-cell">
-                {row.firstYear === row.lastYear
-                  ? row.firstYear
-                  : `${row.firstYear}–${row.lastYear}`}
-              </td>
-              <td className="px-2 py-2 text-right">{row.deals}</td>
-              <td className="hidden px-2 py-2 text-right sm:table-cell">
-                {formatSigned(row.perDeal)}
-              </td>
-              <td className="px-2 py-2 text-right font-semibold">{formatSigned(row.net)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <GeneralManagersTable rows={rows} />
 
       <div className="flex max-w-3xl flex-col gap-2 text-sm leading-6 text-muted-foreground">
         {anyUnconfirmed ? (

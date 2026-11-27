@@ -4525,7 +4525,8 @@ from `hpnPavCore.ts` over the genuine AFL Tables rows, and his trade from bundle
 the trade page exactly. The design is first cut; the owner is iterating on it.
 
 **General managers.** `/afl/trades/general-managers` (owner, 2026-11-26) ranks every club's head of
-football since 2019 by the net PAV of the trades made while they held the role, and the home page shows
+football since 2019 by the net PAV of the trades made while they held the role (the reader can re-sort
+the table by per trade, either way round), and the home page shows
 the five furthest ahead and behind. `components/aflGeneralManagers/generalManagerLadder.ts` credits each club side from the list
 results (the net the trade pages show) to the person in the role in that trade period (October,
 November in 2020); two people at once split it, the one leaving keeps a handover month, a side with
