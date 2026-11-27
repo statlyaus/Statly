@@ -126,14 +126,13 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
                       className={`flex h-full flex-col overflow-hidden border border-border bg-card transition hover:bg-muted ${focusRing}`}
                     >
                       <span className="flex flex-1 flex-col gap-2 px-4 py-4">
-                        <span className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-                          <span className="font-display text-3xl font-bold leading-none">
-                            {win.clubName}
-                          </span>
-                          <b className="font-display text-5xl font-extrabold leading-none tabular-nums text-foreground">
-                            {formatSigned(win.net)}
-                          </b>
+                        {/* Club over value in every card, however long the club's name. */}
+                        <span className="font-display text-2xl font-bold leading-none">
+                          {win.clubName}
                         </span>
+                        <b className="font-display text-5xl font-extrabold leading-none tabular-nums text-foreground">
+                          {formatSigned(win.net)}
+                        </b>
                         <span className="text-sm font-semibold text-muted-foreground">
                           over{' '}
                           {others
@@ -155,7 +154,7 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
           <h2 id="by-season" className={`border-b-4 border-foreground pb-3 ${sectionTitle}`}>
             Season by season
           </h2>
-          <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {years.map(({ year, trades, biggest }) => {
               return (
                 <li key={year} className="last:odd:col-span-2 sm:last:odd:col-span-1">
@@ -175,7 +174,11 @@ export function TradesFrontPage({ list }: { list: AflTradeStorySampleList }) {
                             {formatSigned(biggest.net)}
                           </b>
                         </span>
-                      ) : null}
+                      ) : (
+                        <span className="mt-auto text-sm font-semibold text-muted-foreground">
+                          Not played yet
+                        </span>
+                      )}
                     </span>
                   </Link>
                 </li>
