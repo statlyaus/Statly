@@ -40,7 +40,7 @@ const FULL: Layout = {
   TREE_X: 150,
   LANE_X: 250,
   COL_X0: 320,
-  COL_X1: 830,
+  COL_X1: 810,
   BECAME_X: 860,
   notes: true,
 };
@@ -50,7 +50,7 @@ const COMPACT: Layout = {
   TREE_X: 92,
   LANE_X: 200,
   COL_X0: 230,
-  COL_X1: 448,
+  COL_X1: 436,
   BECAME_X: 474,
   notes: false,
 };
@@ -73,6 +73,28 @@ function fitNote(main: string, extra: string, { BECAME_X, LANE_X }: Layout): str
   if (fits(main + extra)) return main + extra;
   if (fits(main)) return main;
   return `${main.slice(0, Math.floor(NOTE_ROOM / (14 * 0.55)) - 1)}…`;
+}
+
+/** A 14-unit label's estimated width: Geist about 0.58em a letter bold, 0.52em regular. */
+const textWidth = (text: string, bold = false, size = 14) =>
+  text.length * size * (bold ? 0.58 : 0.52);
+/** The text, cut short with an ellipsis where it would run past `room`. */
+function clip(text: string, room: number, bold = false, size = 14): string {
+  if (textWidth(text, bold, size) <= room) return text;
+  return `${text.slice(0, Math.max(1, Math.floor(room / (size * (bold ? 0.58 : 0.52))) - 1))}…`;
+}
+
+/**
+ * A lane's label as drawn over its start, kept clear of the Became column: the pick and how it
+ * came, else the pick alone, else the pick cut short.
+ */
+function laneLabel(lane: TreeLane, { LANE_X, BECAME_X }: Layout) {
+  const room = BECAME_X - 12 - LANE_X;
+  const via = lane.via ? `  ${lane.via}` : '';
+  if (textWidth(lane.label, true) + textWidth(via) <= room)
+    return { label: lane.label, via, width: textWidth(lane.label, true) + textWidth(via) };
+  const label = clip(lane.label, room, true);
+  return { label, via: '', width: textWidth(label, true) };
 }
 
 /** A club label's size, and the room for it between the left edge and the knot's branches. */
@@ -185,6 +207,7 @@ function LaneMarks({
   const took = lane.player
     ? `; ${lane.player.clubName} took ${lane.player.name}${lane.drafted?.selection ? ` at ${lane.drafted.selection}` : ''}`
     : '';
+  const endNote = lane.endReason === 'not_used' ? 'not used' : 'stint ended';
   const onwardNote = lane.onward
     ? fitNote(`traded to ${lane.onward.clubNames.join(', then ')}`, took, layout)
     : '';
@@ -212,9 +235,11 @@ function LaneMarks({
       {lane.endColumn !== null ? (
         <>
           <line x1={stop} y1={y - 7} x2={stop} y2={y + 7} stroke={INK} strokeWidth="1.5" />
-          {layout.notes ? (
+          {/* Left out where it would meet the lane's label: the Became column says it too. */}
+          {layout.notes &&
+          stop - 4 - textWidth(endNote) >= layout.LANE_X + laneLabel(lane, layout).width + 12 ? (
             <text x={stop - 4} y={y - 12} textAnchor="end" fontSize="14" fill={MUTED}>
-              {lane.endReason === 'not_used' ? 'not used' : 'stint ended'}
+              {endNote}
             </text>
           ) : null}
         </>
@@ -228,20 +253,30 @@ function BecameCell({ lane, y, layout }: { lane: TreeLane; y: number; layout: La
   const { BECAME_X, W } = layout;
   const away = lane.player?.away ?? false;
   const name = lane.player?.name ?? (lane.endReason === 'not_used' ? 'Not used' : 'Value pending');
+  const valueSize = lane.value === null ? 15 : 30;
+  // The room left of the PAV, which sits level with the name and the club.
+  const room = W - valueText(lane).length * valueSize * 0.6 - 12 - BECAME_X;
+  const club = lane.player?.clubName ?? '';
+  const ended = lane.endReason === 'closed';
+  const oneLine = ended && textWidth(`${club}, stint ended`) <= room;
   return (
     <>
       <text x={BECAME_X} y={y - 1} fontSize="14" fontWeight="700" fill={away ? MUTED : INK}>
-        {name}
+        {clip(name, room, true)}
       </text>
       <text x={BECAME_X} y={y + 15} fontSize="14" fill={MUTED}>
-        {lane.player?.clubName ?? ''}
-        {lane.endReason === 'closed' ? ', stint ended' : ''}
+        {clip(oneLine ? `${club}, stint ended` : club, room)}
       </text>
+      {ended && !oneLine ? (
+        <text x={BECAME_X} y={y + 31} fontSize="14" fill={MUTED}>
+          stint ended
+        </text>
+      ) : null}
       <text
         x={W}
         y={y + 10}
         textAnchor="end"
-        fontSize={lane.value === null ? 15 : 30}
+        fontSize={valueSize}
         fontWeight="600"
         fill={away || lane.value === null ? MUTED : INK}
         className="tt-svg-num"
@@ -272,14 +307,14 @@ function TreeLaneRow({
   outlined: (span: Span) => boolean;
   layout: Layout;
 }) {
+  const shown = laneLabel(lane, layout);
   return (
     <g>
       <text x={layout.LANE_X} y={y - 12} fontSize="14" fontWeight="600" fill={INK}>
-        {lane.label}
-        {lane.via ? (
+        {shown.label}
+        {shown.via ? (
           <tspan fontWeight="400" fill={MUTED}>
-            {'  '}
-            {lane.via}
+            {shown.via}
           </tspan>
         ) : null}
       </text>
