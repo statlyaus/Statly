@@ -55,8 +55,8 @@ const COMPACT: Layout = {
   notes: false,
 };
 const HEAD = 56;
-const ROW = 56;
-const GAP = 26;
+const ROW = 72;
+const GAP = 36;
 const INK = 'var(--foreground)';
 const MUTED = 'var(--muted-foreground)';
 const PAPER = 'var(--card)';
@@ -66,9 +66,9 @@ const RULE = 'var(--border)';
  * A note that fits under its lane (Geist is about 0.55em a letter at 14 units): the
  * whole note, else without its "took" clause (the Became column names the player), else cut short.
  */
-function fitNote(main: string, extra: string, { BECAME_X, LANE_X }: Layout): string {
-  // Room for a note under a lane, from the lane's start to the "Became" column.
-  const NOTE_ROOM = BECAME_X - 24 - LANE_X;
+function fitNote(main: string, extra: string, { BECAME_X }: Layout, from: number): string {
+  // Room for a note under a lane, from where it starts to the "Became" column.
+  const NOTE_ROOM = BECAME_X - 24 - from;
   const fits = (text: string) => text.length * 14 * 0.55 <= NOTE_ROOM;
   if (fits(main + extra)) return main + extra;
   if (fits(main)) return main;
@@ -209,7 +209,7 @@ function LaneMarks({
     : '';
   const endNote = lane.endReason === 'not_used' ? 'not used' : 'stint ended';
   const onwardNote = lane.onward
-    ? fitNote(`traded to ${lane.onward.clubNames.join(', then ')}`, took, layout)
+    ? fitNote(`traded to ${lane.onward.clubNames.join(', then ')}`, took, layout, onwardX - 11)
     : '';
   return (
     <>
@@ -226,7 +226,7 @@ function LaneMarks({
             ⇄
           </text>
           {layout.notes ? (
-            <text x={layout.LANE_X} y={y + Math.max(w / 2, 11) + 16} fontSize="14" fill={MUTED}>
+            <text x={onwardX - 11} y={y + Math.max(w / 2, 11) + 16} fontSize="14" fill={MUTED}>
               {onwardNote}
             </text>
           ) : null}
@@ -238,7 +238,7 @@ function LaneMarks({
           {/* Left out where it would meet the lane's label: the Became column says it too. */}
           {layout.notes &&
           stop - 4 - textWidth(endNote) >= layout.LANE_X + laneLabel(lane, layout).width + 12 ? (
-            <text x={stop - 4} y={y - 12} textAnchor="end" fontSize="14" fill={MUTED}>
+            <text x={stop - 4} y={y - 18} textAnchor="end" fontSize="14" fill={MUTED}>
               {endNote}
             </text>
           ) : null}
@@ -259,9 +259,12 @@ function BecameCell({ lane, y, layout }: { lane: TreeLane; y: number; layout: La
   const club = lane.player?.clubName ?? '';
   const ended = lane.endReason === 'closed';
   const oneLine = ended && textWidth(`${club}, stint ended`) <= room;
+  // A name with no club under it sits level with the lane; "not in yet" shares the name's line.
+  const nameY = club ? y - 1 : y + 5;
+  const valueY = lane.value === null ? nameY : y + 10;
   return (
     <>
-      <text x={BECAME_X} y={y - 1} fontSize="14" fontWeight="700" fill={away ? MUTED : INK}>
+      <text x={BECAME_X} y={nameY} fontSize="14" fontWeight="700" fill={away ? MUTED : INK}>
         {clip(name, room, true)}
       </text>
       <text x={BECAME_X} y={y + 15} fontSize="14" fill={MUTED}>
@@ -274,7 +277,7 @@ function BecameCell({ lane, y, layout }: { lane: TreeLane; y: number; layout: La
       ) : null}
       <text
         x={W}
-        y={y + 10}
+        y={valueY}
         textAnchor="end"
         fontSize={valueSize}
         fontWeight="600"
@@ -310,7 +313,7 @@ function TreeLaneRow({
   const shown = laneLabel(lane, layout);
   return (
     <g>
-      <text x={layout.LANE_X} y={y - 12} fontSize="14" fontWeight="600" fill={INK}>
+      <text x={layout.LANE_X} y={y - 18} fontSize="14" fontWeight="600" fill={INK}>
         {shown.label}
         {shown.via ? (
           <tspan fontWeight="400" fill={MUTED}>
