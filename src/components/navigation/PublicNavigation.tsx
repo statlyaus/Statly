@@ -14,7 +14,8 @@ const publicLinks = [
     phoneLabel: 'Managers',
     section: '/afl/trades/general-managers',
   },
-  { href: '/draft/trades', label: 'Draft record', section: '/draft' },
+  // "Draft record" (/draft/trades, section /draft) is hidden while no reviewed factual release is
+  // active: its pages are empty. It returns when one is published (runbook, "Publishing the draft record").
 ] as const;
 
 function inSection(pathname: string, section: string): boolean {

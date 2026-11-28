@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   title: 'AFL Draft & Trade Outcomes | Statly',
   description:
     'Explore public AFL draft and trade records, club movement, and the status of checked numerical outcome publications.',
+  // Kept out of search while no reviewed factual release is active and every page is empty. Drop this
+  // when one is published (runbook, "Publishing the draft record"). Links are still followed.
+  robots: { index: false, follow: true },
 };
 
 export default function DraftLayout({ children }: { children: ReactNode }) {

@@ -138,6 +138,30 @@ with the server function by `outputFileTracingIncludes` in `next.config.mjs`.
 **Local run:** set `AFL_TRADE_STORY_PUBLIC_ENABLED=true`, `AFL_TRADE_STORY_PUBLIC_BUNDLE_ID` and
 `AFL_TRADE_STORY_PUBLIC_BUNDLE_PATH` (the absolute path of the exported file) and start the dev server.
 
+## Publishing the draft record
+
+The `/draft` pages read the outcomes database through an active reviewed factual release. While none
+is active they are empty, so since 2026-11-28 (owner) their entry points are hidden and the section is
+kept out of search. The routes still answer direct links. Once a reviewed factual release is active in
+production and `/draft/trades`, `/draft/drafts`, `/draft/clubs` and `/draft/outcomes` show its records,
+make these changes in one pull request, then deploy:
+
+1. Restore the "Draft record" tab (`/draft/trades`, section `/draft`) in
+   `src/components/navigation/PublicNavigation.tsx`.
+2. Restore the "Draft record" card (`/draft`) on `src/app/(public)/afl/page.tsx` and its mention in
+   that page's description.
+3. Restore the home page's "The draft and trade record" section (Trade archive, Draft history, Club
+   histories) in `src/app/(public)/page.tsx`, and the footer's "Outcomes methodology" link
+   (`/draft/outcomes/methodology`) in `src/app/(public)/layout.tsx`.
+4. Drop `robots: { index: false, follow: true }` from `src/app/(public)/draft/layout.tsx`, and add the
+   `/draft` pages to `src/app/sitemap.ts` if they should be listed.
+5. Update `tests/unit/public-navigation.test.tsx`, `tests/unit/public-draft-trade-routing.test.tsx`,
+   `tests/unit/public-trade-story-route.test.tsx` and
+   `tests/unit/dashboard-production-recovery-contract.test.ts`, which pin the hidden state.
+
+Each removal carries a comment pointing here. The pull request that added this section holds the
+removed code.
+
 ## Non-production infrastructure plan validation
 
 `infrastructure/afl-trade-nonproduction` defines the isolated Stage 2A foundation only. It does not

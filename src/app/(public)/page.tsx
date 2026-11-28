@@ -17,23 +17,9 @@ export const metadata: Metadata = {
     'Every AFL trade Statly has graded: what each club gave and got, valued by what the players and picks went on to do.',
 };
 
-const draftRecord = [
-  {
-    href: '/draft/trades',
-    title: 'Trade archive',
-    description: 'Historical trades and what moved between clubs.',
-  },
-  {
-    href: '/draft/drafts',
-    title: 'Draft history',
-    description: 'Every draft class, pick by pick.',
-  },
-  {
-    href: '/draft/clubs',
-    title: 'Club histories',
-    description: 'Each club’s trades and selections over time.',
-  },
-] as const;
+// "The draft and trade record" section (Trade archive, Draft history, Club histories under /draft) is
+// hidden while no reviewed factual release is active: those pages are empty. It returns when one is
+// published (runbook, "Publishing the draft record").
 
 /**
  * The brand masthead: a cobalt band with the giant wordmark and the promise. Adapted from the design
@@ -90,7 +76,7 @@ const focusRing =
 /**
  * The public home page. Statly is AFL trades for now; the fantasy app is not linked from here. While
  * the trade pages are being served it is their front page: the trade ladder, the biggest win and each
- * season. Otherwise it is a plain heading and the links that still work.
+ * season. Otherwise it is a plain heading and the links to the trade pages.
  */
 export default async function HomePage(): Promise<ReactElement> {
   const trades = await publicTradeStoryReads.listStories();
@@ -102,9 +88,10 @@ export default async function HomePage(): Promise<ReactElement> {
       data-surface={trades.available ? 'paper' : undefined}
     >
       <Masthead />
-      {trades.available ? <TradesFrontPage list={trades.value} /> : null}
-      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
-        {trades.available ? null : (
+      {trades.available ? (
+        <TradesFrontPage list={trades.value} />
+      ) : (
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
           <header className="max-w-3xl">
             <h1 className="text-balance font-display text-4xl font-bold leading-tight text-foreground sm:text-5xl">
               AFL trades, valued by what happened next
@@ -126,29 +113,8 @@ export default async function HomePage(): Promise<ReactElement> {
               </Link>
             </div>
           </header>
-        )}
-
-        <section aria-labelledby="draft-record-heading">
-          <h2 id="draft-record-heading" className="font-display text-xl font-bold text-foreground">
-            The draft and trade record
-          </h2>
-          <ul className="mt-3 grid gap-3 sm:grid-cols-3">
-            {draftRecord.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={`block h-full border border-border bg-card px-4 py-4 transition hover:bg-accent ${focusRing}`}
-                >
-                  <span className="font-semibold text-foreground">{item.title}</span>
-                  <span className="mt-1 block text-sm leading-6 text-muted-foreground">
-                    {item.description}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

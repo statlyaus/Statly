@@ -11,7 +11,8 @@ const footerGroups = [
     label: 'Methods',
     links: [
       { href: '/afl/trades/method', label: 'How trades are valued' },
-      { href: '/draft/outcomes/methodology', label: 'Outcomes methodology' },
+      // "Outcomes methodology" (/draft/outcomes/methodology) is hidden with the rest of the draft
+      // record until a reviewed factual release is published (runbook, "Publishing the draft record").
     ],
   },
   {
