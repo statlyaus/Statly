@@ -31,7 +31,7 @@ interface Layout {
   readonly BECAME_X: number;
   /**
    * "Traded to …" notes and "not used" or "stint ended" over a lane's end. The compact preview leaves
-   * them out: on its shorter lanes they meet the lane labels, and the Became column says how it ended.
+   * them out: on its shorter lanes they meet the lane labels, and the Player column says how it ended.
    */
   readonly notes: boolean;
 }
@@ -64,10 +64,10 @@ const RULE = 'var(--border)';
 
 /**
  * A note that fits under its lane (Geist is about 0.55em a letter at 14 units): the
- * whole note, else without its "took" clause (the Became column names the player), else cut short.
+ * whole note, else without its "took" clause (the Player column names the player), else cut short.
  */
 function fitNote(main: string, extra: string, { BECAME_X }: Layout, from: number): string {
-  // Room for a note under a lane, from where it starts to the "Became" column.
+  // Room for a note under a lane, from where it starts to the "Player" column.
   const NOTE_ROOM = BECAME_X - 24 - from;
   const fits = (text: string) => text.length * 14 * 0.55 <= NOTE_ROOM;
   if (fits(main + extra)) return main + extra;
@@ -85,7 +85,7 @@ function clip(text: string, room: number, bold = false, size = 14): string {
 }
 
 /**
- * A lane's label as drawn over its start, kept clear of the Became column: the pick and how it
+ * A lane's label as drawn over its start, kept clear of the Player column: the pick and how it
  * came, else the pick alone, else the pick cut short.
  */
 function laneLabel(lane: TreeLane, { LANE_X, BECAME_X }: Layout) {
@@ -235,7 +235,7 @@ function LaneMarks({
       {lane.endColumn !== null ? (
         <>
           <line x1={stop} y1={y - 7} x2={stop} y2={y + 7} stroke={INK} strokeWidth="1.5" />
-          {/* Left out where it would meet the lane's label: the Became column says it too. */}
+          {/* Left out where it would meet the lane's label: the Player column says it too. */}
           {layout.notes &&
           stop - 4 - textWidth(endNote) >= layout.LANE_X + laneLabel(lane, layout).width + 12 ? (
             <text x={stop - 4} y={y - 18} textAnchor="end" fontSize="14" fill={MUTED}>
@@ -249,7 +249,7 @@ function LaneMarks({
 }
 
 /** The player the lane became, his club, and its PAV. */
-function BecameCell({ lane, y, layout }: { lane: TreeLane; y: number; layout: Layout }) {
+function PlayerCell({ lane, y, layout }: { lane: TreeLane; y: number; layout: Layout }) {
   const { BECAME_X, W } = layout;
   const away = lane.player?.away ?? false;
   const name = lane.player?.name ?? (lane.endReason === 'not_used' ? 'Not used' : 'Value pending');
@@ -323,7 +323,7 @@ function TreeLaneRow({
       </text>
       <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} fill={fill} outlined={outlined} />
       <LaneMarks lane={lane} y={y} w={w} colX={colX} stop={stop} layout={layout} />
-      <BecameCell lane={lane} y={y} layout={layout} />
+      <PlayerCell lane={lane} y={y} layout={layout} />
     </g>
   );
 }
@@ -515,7 +515,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
             );
           })}
           <text x={BECAME_X} y={HEAD - 4} fontSize="14" fontWeight="600" fill={INK}>
-            Became
+            Player
           </text>
           <text x={W} y={HEAD - 4} textAnchor="end" fontSize="14" fontWeight="600" fill={INK}>
             PAV

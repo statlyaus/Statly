@@ -57,4 +57,28 @@ describe('trade tree', () => {
       for (const value of values) expect(value).toBeLessThanOrEqual(tree.scale.top);
     }
   });
+
+  it("plays the margin as the upper club's net on the trade, ending on the page's net", () => {
+    let checked = 0;
+    for (const summary of stories) {
+      const { story } = source.load(summary.tradeId)!;
+      const tree = tradeTree(story);
+      if (tree.groups.length !== 2 || story.trade.clubs.length !== 2) {
+        expect(tree.margin).toBeNull();
+        continue;
+      }
+      const margin = tree.margin!;
+      const [upper, lower] = tree.groups;
+      expect([margin.upper, margin.lower]).toEqual([upper!.clubName, lower!.clubName]);
+      const net = story.nets.tradeAlone.find(({ clubId }) => clubId === upper!.clubId)!;
+      expect(margin.points.at(-1)!.value).toBe(net.net);
+      expect(margin.points).toHaveLength(net.line.length);
+      // One point per checkpoint, oldest first, each named.
+      const labels = margin.points.map(({ label }) => label);
+      expect(new Set(labels).size).toBe(labels.length);
+      for (const label of labels) expect(label).toMatch(/^(Trade|Draft|End of) \d{4}$/u);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
 });
