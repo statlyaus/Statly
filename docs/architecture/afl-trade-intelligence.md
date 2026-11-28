@@ -4582,7 +4582,12 @@ facts of its own. The private page keeps the plain header.
 per asset, running through time to the player it became. A lane is the receiving club's colour, an
 outline while still a pick, and hatched ink at another club; its thickness and end number are PAV.
 Each lineage asset carries its leg's value line (`line`, at-trade view then every checkpoint) for this.
-Below 1024px it is a list, which is also the screen-reader text. It sits directly under the hero
+It is drawn three times, one per screen (owner, 2026-11-28): the full chart from 1024px, the trade
+list's preview-size chart (680 units, its 14-unit text 11.6px or more) from 640px, and below 640px
+the phone tree (`TradeTreePhone.tsx`), the same knot, branches and lanes redrawn 303 units wide with
+each club's name as a heading over its lanes, the player over each lane, the pick and its path in a
+note under it and the PAV at the right. A list of every lane is the screen-reader text at every
+width and is never shown. It sits directly under the hero
 collage, before the club summary and the scarf (owner, 2026-11-22). The private page keeps the lineage
 map at the foot of the page.
 
@@ -4593,8 +4598,8 @@ sun copy of each sits in the chart's `tt-halo` layer, shown by the stylesheet fo
 the chart stays server-rendered. A two-club trade's full tree also gets the margin rail
 (`TradeTreeRail.tsx`, `marginMotion.ts`): the upper club's `nets.tradeAlone` line, the same net the
 rest of the page gives, drawn as a knob on a rail beside the PAV column. It shows from 1440px, where
-the tree card grows past the page column so the chart's text stays 13px or more; phones get it as a
-strip above the list; between the two the tree shows without it. On the first view the rail plays the
+the tree card grows past the page column so the chart's text stays 13px or more; below 1024px it is a
+strip above the tree; between the two the tree shows without it. On the first view the rail plays the
 trade season by season while the lanes open column by column, then the players fade in; a tree
 already in view, and reduced motion, keep the drawn final state.
 
