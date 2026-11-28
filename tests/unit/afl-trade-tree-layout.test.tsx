@@ -62,8 +62,12 @@ describe('trade tree layout', () => {
     const story = aflTradeStorySamples.load(tradeId)!.story;
     const { container, unmount } = render(<TradeTree story={story} />);
     const svg = container.querySelector('.tt-chart svg')!;
-    const rings = [...svg.querySelectorAll('circle[r="11"]')].map((ring) => Number(ring.getAttribute('cx')));
-    const notes = [...svg.querySelectorAll('text')].filter((n) => n.textContent?.startsWith('traded to'));
+    const rings = [...svg.querySelectorAll('circle[r="11"]')].map((ring) =>
+      Number(ring.getAttribute('cx'))
+    );
+    const notes = [...svg.querySelectorAll('text')].filter((n) =>
+      n.textContent?.startsWith('traded to')
+    );
     expect(notes.length).toBe(rings.length);
     notes.forEach((note, at) => expect(Number(note.getAttribute('x'))).toBe(rings[at]! - 11));
     unmount();

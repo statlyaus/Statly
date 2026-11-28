@@ -7,6 +7,7 @@ import { getTeamAbbreviation } from '@/lib/teamLogos';
 import './tradeTree.css';
 
 import { ClubBadge } from './ClubBadge';
+import { TradeTreeKey } from './TradeTreeKey';
 import { checkpointText, clubSquare, formatPav } from './tradePageModel';
 import { tradeTree, type TreeColumn, type TreeLane } from './tradeTreeModel';
 
@@ -133,6 +134,20 @@ function valueText(lane: TreeLane): string {
 
 type Span = TreeLane['spans'][number];
 
+/** Who holds a span: the club that received it, the other club in the trade, or a club outside it. */
+export type HeldBy = 'received' | 'other' | 'away';
+/** Every kind of mark the key can point at. */
+export type MarkKind = HeldBy | 'pick' | 'traded';
+
+/** The sun copy of a mark that the key lights up: the mark's shape, 6 units wider all round. */
+const HALO = 'var(--warning)';
+const haloPaint = (strokeWidth: number) => ({
+  fill: HALO,
+  stroke: HALO,
+  strokeWidth: strokeWidth + 12,
+  strokeLinejoin: 'round' as const,
+});
+
 /** The lane's bars: an outline while a pick, then a bar as thick as its PAV. */
 function LaneBars({
   lane,
@@ -140,17 +155,20 @@ function LaneBars({
   w,
   colX,
   stop,
-  fill,
-  outlined,
+  heldBy,
+  hatch,
+  halo = false,
 }: {
   lane: TreeLane;
   y: number;
   w: number;
   colX: (at: number) => number;
   stop: number;
-  fill: (span: Span) => string;
-  outlined: (span: Span) => boolean;
+  heldBy: (span: Span) => HeldBy;
+  hatch: string;
+  halo?: boolean;
 }) {
+  const fillOf = { received: INK, other: MUTED, away: `url(#${hatch})` } as const;
   const xOf = (at: number) => colX(at) + (at === lane.onward?.beforeColumn ? -18 : 0);
   return (
     <>
@@ -159,27 +177,32 @@ function LaneBars({
         const next = lane.spans[at + 1];
         const to = Math.min(next ? xOf(next.from) : stop, stop);
         if (to <= from) return null;
+        const held = heldBy(span);
         return span.pick ? (
           <rect
             key={span.from}
+            data-key="pick"
             x={from}
             y={y - 2.5}
             width={to - from}
             height="5"
-            fill={PAPER}
-            stroke={INK}
-            strokeWidth="1.2"
+            {...(halo ? haloPaint(1.2) : { fill: PAPER, stroke: INK, strokeWidth: 1.2 })}
           />
         ) : (
           <rect
             key={span.from}
+            data-key={`${held} bar`}
             x={from}
             y={y - w / 2}
             width={to - from}
             height={w}
-            fill={fill(span)}
-            stroke={outlined(span) ? INK : 'none'}
-            strokeWidth="0.8"
+            {...(halo
+              ? haloPaint(0)
+              : {
+                  fill: fillOf[held],
+                  stroke: held === 'away' ? INK : 'none',
+                  strokeWidth: 0.8,
+                })}
           />
         );
       })}
@@ -221,10 +244,19 @@ function LaneMarks({
       ) : null}
       {lane.onward ? (
         <>
-          <circle cx={onwardX} cy={y} r="11" fill={PAPER} stroke={INK} strokeWidth="1.5" />
-          <text x={onwardX} y={y + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill={INK}>
-            ⇄
-          </text>
+          <g data-key="traded">
+            <circle cx={onwardX} cy={y} r="11" fill={PAPER} stroke={INK} strokeWidth="1.5" />
+            <text
+              x={onwardX}
+              y={y + 5}
+              textAnchor="middle"
+              fontSize="14"
+              fontWeight="700"
+              fill={INK}
+            >
+              ⇄
+            </text>
+          </g>
           {layout.notes ? (
             <text x={onwardX - 11} y={y + Math.max(w / 2, 11) + 16} fontSize="14" fill={MUTED}>
               {onwardNote}
@@ -297,8 +329,8 @@ function TreeLaneRow({
   w,
   colX,
   stop,
-  fill,
-  outlined,
+  heldBy,
+  hatch,
   layout,
 }: {
   lane: TreeLane;
@@ -306,13 +338,13 @@ function TreeLaneRow({
   w: number;
   colX: (at: number) => number;
   stop: number;
-  fill: (span: Span) => string;
-  outlined: (span: Span) => boolean;
+  heldBy: (span: Span) => HeldBy;
+  hatch: string;
   layout: Layout;
 }) {
   const shown = laneLabel(lane, layout);
   return (
-    <g>
+    <g className="tt-lane">
       <text x={layout.LANE_X} y={y - 18} fontSize="14" fontWeight="600" fill={INK}>
         {shown.label}
         {shown.via ? (
@@ -321,9 +353,11 @@ function TreeLaneRow({
           </tspan>
         ) : null}
       </text>
-      <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} fill={fill} outlined={outlined} />
+      <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} heldBy={heldBy} hatch={hatch} />
       <LaneMarks lane={lane} y={y} w={w} colX={colX} stop={stop} layout={layout} />
-      <PlayerCell lane={lane} y={y} layout={layout} />
+      <g className="tt-player">
+        <PlayerCell lane={lane} y={y} layout={layout} />
+      </g>
     </g>
   );
 }
@@ -366,8 +400,35 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
   const height = y - GAP + 8;
   const mid = (FIRST + height - 8 - ROW) / 2;
 
-  const fillFor = (clubId: string, receiverId: string) =>
-    clubId === receiverId ? INK : clubIds.has(clubId) ? MUTED : `url(#${hatch})`;
+  const heldBy =
+    ({ receiverId }: TreeLane) =>
+    ({ clubId }: Span): HeldBy =>
+      clubId === receiverId ? 'received' : clubIds.has(clubId) ? 'other' : 'away';
+  // Every lane once, with where it is drawn; and every branch from a club's joint to a lane.
+  const jx = TREE_X + 60;
+  const laneRows = rows.flatMap(({ lanes }) =>
+    lanes.map(({ lane, y: laneY }) => ({
+      lane,
+      y: laneY,
+      w: widthOf(lane.value, scale.top),
+      stop: lane.endColumn === null ? endX : colX(lane.endColumn),
+    }))
+  );
+  const branches = rows.flatMap(({ lanes }) => {
+    const groupMid = (lanes[0]!.y + lanes.at(-1)!.y) / 2;
+    return lanes.map(({ lane, y: laneY }) => ({
+      id: lane.asset.transferId,
+      pick: lane.spans[0]!.pick,
+      w: widthOf(lane.value, scale.top),
+      d: `M${jx},${groupMid} C${jx + 22},${groupMid} ${LANE_X - 22},${laneY} ${LANE_X},${laneY}`,
+    }));
+  });
+  // The kinds of mark this trade draws, so the key shows only those.
+  const kinds = new Set<MarkKind>();
+  for (const { lane } of laneRows) {
+    for (const span of lane.spans) kinds.add(span.pick ? 'pick' : heldBy(lane)(span));
+    if (lane.onward) kinds.add('traded');
+  }
 
   const kept = groups
     .map(({ clubName, kept: value }) => `${clubName} kept ${formatPav(value)}`)
@@ -392,77 +453,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
           </p>
         </>
       )}
-      <ul className="tt-key" aria-label="Key">
-        <li>
-          <svg aria-hidden="true" width="26" height="10">
-            <rect width="26" height="10" fill={INK} />
-          </svg>
-          held by the club that received it
-        </li>
-        <li>
-          <svg aria-hidden="true" width="26" height="10">
-            <rect width="26" height="10" fill={MUTED} />
-          </svg>
-          held by another club in the trade
-        </li>
-        <li>
-          <svg aria-hidden="true" width="26" height="10">
-            <defs>
-              <pattern
-                id={`${hatch}-key`}
-                width="5"
-                height="5"
-                patternUnits="userSpaceOnUse"
-                patternTransform="rotate(45)"
-              >
-                <rect width="5" height="5" fill={PAPER} />
-                <line x1="0" y1="0" x2="0" y2="5" stroke={INK} strokeWidth="2" />
-              </pattern>
-            </defs>
-            <rect width="26" height="10" fill={`url(#${hatch}-key)`} />
-          </svg>
-          another club
-        </li>
-        <li>
-          <svg aria-hidden="true" width="26" height="10">
-            <rect
-              x="0.6"
-              y="2.6"
-              width="24.8"
-              height="4.8"
-              fill={PAPER}
-              stroke={INK}
-              strokeWidth="1.2"
-            />
-          </svg>
-          still a pick
-        </li>
-        <li>
-          <svg aria-hidden="true" width="18" height="18">
-            <circle cx="9" cy="9" r="8" fill={PAPER} stroke={INK} strokeWidth="1.5" />
-            <text x="9" y="13" textAnchor="middle" fontSize="11" fontWeight="700" fill={INK}>
-              ⇄
-            </text>
-          </svg>
-          traded
-        </li>
-        <li className="tt-thickness">
-          Thickness is PAV:
-          {[scale.ticks[0]!, scale.top].map((value) => (
-            <span key={value} className="tt-thickness-sample">
-              <svg aria-hidden="true" width="26" height="16">
-                <rect
-                  y={8 - widthOf(value, scale.top) / 2}
-                  width="26"
-                  height={widthOf(value, scale.top)}
-                  fill={INK}
-                />
-              </svg>
-              {scaleText(value)} PAV
-            </span>
-          ))}
-        </li>
-      </ul>
+      <TradeTreeKey kinds={[...kinds]} />
 
       <div className="tt-chart">
         <svg aria-hidden="true" viewBox={`0 0 ${W} ${height}`}>
@@ -478,6 +469,44 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
               <line x1="0" y1="0" x2="0" y2="5" stroke={INK} strokeWidth="2" />
             </pattern>
           </defs>
+          {/* The key's highlighter: a sun copy of every mark, drawn under the chart and shown by the
+              stylesheet only for the kind the key points at. */}
+          <g className="tt-halo" aria-hidden="true">
+            {branches.map(({ id, pick, w, d }) => (
+              <path
+                key={id}
+                data-key={pick ? 'pick' : 'received'}
+                d={d}
+                fill="none"
+                stroke={HALO}
+                strokeWidth={(pick ? 5 : w) + 12}
+                strokeLinecap="round"
+              />
+            ))}
+            {laneRows.map(({ lane, y: laneY, w, stop }) => (
+              <Fragment key={lane.asset.transferId}>
+                <LaneBars
+                  lane={lane}
+                  y={laneY}
+                  w={w}
+                  colX={colX}
+                  stop={stop}
+                  heldBy={heldBy(lane)}
+                  hatch={hatch}
+                  halo
+                />
+                {lane.onward ? (
+                  <circle
+                    data-key="traded"
+                    cx={colX(lane.onward.beforeColumn) - 18}
+                    cy={laneY}
+                    r="17"
+                    fill={HALO}
+                  />
+                ) : null}
+              </Fragment>
+            ))}
+          </g>
           {/* The time axis. */}
           {columns.map((column, at) => {
             const [kicker, year] = columnLabel(column);
@@ -534,7 +563,6 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
               18,
               lanes.reduce((total, { lane }) => total + widthOf(lane.value, scale.top), 0) * 0.6
             );
-            const jx = TREE_X + 60;
             return (
               <g key={group.clubId}>
                 {/* Two short lines in Geist left of the knot; a name too long for the space is
@@ -570,25 +598,25 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
                   strokeWidth={trunk}
                   strokeLinecap="round"
                 />
-                {lanes.map(({ lane, y: laneY }) => {
-                  const pick = lane.spans[0]!.pick;
-                  const w = widthOf(lane.value, scale.top);
-                  const d = `M${jx},${groupMid} C${jx + 22},${groupMid} ${LANE_X - 22},${laneY} ${LANE_X},${laneY}`;
-                  return pick ? (
-                    <Fragment key={lane.asset.transferId}>
-                      <path d={d} fill="none" stroke={INK} strokeWidth="5" />
-                      <path d={d} fill="none" stroke={PAPER} strokeWidth="2.6" />
-                    </Fragment>
-                  ) : (
-                    <path
-                      key={lane.asset.transferId}
-                      d={d}
-                      fill="none"
-                      stroke={INK}
-                      strokeWidth={w}
-                    />
-                  );
-                })}
+                {branches
+                  .filter(({ id }) => lanes.some(({ lane }) => lane.asset.transferId === id))
+                  .map(({ id, pick, w, d }) =>
+                    pick ? (
+                      <g key={id} data-key="pick">
+                        <path d={d} fill="none" stroke={INK} strokeWidth="5" />
+                        <path d={d} fill="none" stroke={PAPER} strokeWidth="2.6" />
+                      </g>
+                    ) : (
+                      <path
+                        key={id}
+                        data-key="received"
+                        d={d}
+                        fill="none"
+                        stroke={INK}
+                        strokeWidth={w}
+                      />
+                    )
+                  )}
               </g>
             );
           })}
@@ -613,21 +641,19 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
           </text>
 
           {/* Each lane through time. */}
-          {rows.flatMap(({ lanes }) =>
-            lanes.map(({ lane, y: laneY }) => (
-              <TreeLaneRow
-                key={lane.asset.transferId}
-                lane={lane}
-                y={laneY}
-                w={widthOf(lane.value, scale.top)}
-                colX={colX}
-                stop={lane.endColumn === null ? endX : colX(lane.endColumn)}
-                fill={(span) => fillFor(span.clubId, lane.receiverId)}
-                outlined={(span) => span.clubId !== lane.receiverId && !clubIds.has(span.clubId)}
-                layout={layout}
-              />
-            ))
-          )}
+          {laneRows.map(({ lane, y: laneY, w, stop }) => (
+            <TreeLaneRow
+              key={lane.asset.transferId}
+              lane={lane}
+              y={laneY}
+              w={w}
+              colX={colX}
+              stop={stop}
+              heldBy={heldBy(lane)}
+              hatch={hatch}
+              layout={layout}
+            />
+          ))}
         </svg>
       </div>
 

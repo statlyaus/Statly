@@ -266,7 +266,6 @@ function lane(columns: readonly TreeColumn[], asset: AflTradeStoryLineageAsset):
   };
 }
 
-
 const CHECKPOINT_WORD = { trade: 'Trade', draft: 'Draft', season_end: 'End of' } as const;
 
 /**

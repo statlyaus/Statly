@@ -18,9 +18,8 @@
   padding: 0;
   border: 0;
 }
-.tt-compact .tt-key {
+.tt-compact .ttk {
   margin-top: 0;
-  font-size: 12px;
 }
 .tt-compact .tt-chart {
   margin-top: 0.5rem;
@@ -44,21 +43,82 @@
   line-height: 1.5;
   color: var(--muted-foreground);
 }
-.tt-key {
+/* The key (owner, 2026-11-28): icon tiles with sun edges; the one in use turns ink with the
+   hand-cut edge, an ink marker slides under it, and its meaning shows below. */
+.ttk {
+  margin: 1.25rem 0 0;
+}
+.ttk-row {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 1.25rem;
-  margin: 1.25rem 0 0;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+.ttk-btn {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 44px;
   padding: 0;
-  list-style: none;
-  font-size: 13px;
+  border: 2px solid var(--warning);
+  background: var(--card);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+@media (hover: hover) {
+  .ttk-btn:hover {
+    border-color: var(--foreground);
+  }
+}
+.ttk-btn:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+.ttk-btn[aria-pressed='true'] {
+  border-color: var(--foreground);
+  border-radius: var(--radius-cut);
+}
+.ttk-marker {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 52px;
+  height: 4px;
+  background: var(--foreground);
+  transform: translateX(calc(var(--ttk-at) * 58px));
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ttk-says {
+  min-height: 3em;
+  max-width: 44rem;
+  margin: 0.25rem 0 0;
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--muted-foreground);
 }
-.tt-key li {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
+/* The chart's highlighter: hidden until the key points at its kind. */
+.tt-halo [data-key] {
+  visibility: hidden;
+}
+.tt:has(.ttk[data-active='received']) .tt-halo [data-key~='received'],
+.tt:has(.ttk[data-active='other']) .tt-halo [data-key~='other'],
+.tt:has(.ttk[data-active='away']) .tt-halo [data-key~='away'],
+.tt:has(.ttk[data-active='pick']) .tt-halo [data-key~='pick'],
+.tt:has(.ttk[data-active='traded']) .tt-halo [data-key~='traded'] {
+  visibility: visible;
+}
+/* The phone list has two of the kinds: its bars get the same sun edge. */
+.tt:has(.ttk[data-active='received']) .tt-weight:not(.tt-weight-away),
+.tt:has(.ttk[data-active='away']) .tt-weight-away {
+  box-shadow: 0 0 0 4px var(--warning);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ttk-marker,
+  .ttk-btn {
+    transition: none;
+  }
 }
 .tt-chart {
   display: none;
