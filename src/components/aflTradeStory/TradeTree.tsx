@@ -11,7 +11,7 @@ import { TradeTreeKey } from './TradeTreeKey';
 import { TradeTreeMarginStrip, TradeTreeRail } from './TradeTreeRail';
 import { sideStrokes } from './valueLineChart';
 import { checkpointText, clubSquare, formatPav } from './tradePageModel';
-import { tradeTree, type TreeColumn, type TreeLane } from './tradeTreeModel';
+import { tradeTree, type TreeColumn, type TreeLane, type TreeMargin } from './tradeTreeModel';
 
 /**
  * "Where the trade went" (owner's design, 2026-11-17): the trade at the left branches to each club,
@@ -367,6 +367,103 @@ function TreeLaneRow({
   );
 }
 
+/** Where each lane is drawn, shared by the chart and its highlighter. */
+interface LaneRow {
+  readonly lane: TreeLane;
+  readonly y: number;
+  readonly w: number;
+  readonly stop: number;
+}
+
+/** A branch from a club's joint to one lane. */
+interface Branch {
+  readonly id: string;
+  readonly pick: boolean;
+  readonly w: number;
+  readonly d: string;
+}
+
+type HeldByOf = (lane: TreeLane) => (span: Span) => HeldBy;
+
+/** The kinds of mark this trade draws, so the key shows only those. */
+function markKinds(laneRows: readonly LaneRow[], heldBy: HeldByOf): MarkKind[] {
+  const kinds = new Set<MarkKind>();
+  for (const { lane } of laneRows) {
+    for (const span of lane.spans) kinds.add(span.pick ? 'pick' : heldBy(lane)(span));
+    if (lane.onward) kinds.add('traded');
+  }
+  return [...kinds];
+}
+
+/** The rail's two clubs in the page's own two-side colours (cobalt first by name, then ink). */
+function railColours(story: AflTradeStory, margin: TreeMargin | null) {
+  const sides = sideStrokes(story.nets.tradeAlone);
+  return {
+    upper: (margin && sides?.get(margin.upperId)) ?? 'var(--primary)',
+    lower: (margin && sides?.get(margin.lowerId)) ?? 'var(--foreground)',
+  };
+}
+
+const sectionClass = (compact: boolean, rail: boolean) =>
+  compact ? 'tt tt-compact' : rail ? 'tt tt-wide' : 'tt';
+
+/**
+ * The key's highlighter: a sun copy of every mark, drawn under the chart and shown by the
+ * stylesheet only for the kind the key points at.
+ */
+function HaloLayer({
+  branches,
+  laneRows,
+  colX,
+  heldBy,
+  hatch,
+}: {
+  branches: readonly Branch[];
+  laneRows: readonly LaneRow[];
+  colX: (at: number) => number;
+  heldBy: HeldByOf;
+  hatch: string;
+}) {
+  return (
+    <g className="tt-halo" aria-hidden="true">
+      {branches.map(({ id, pick, w, d }) => (
+        <path
+          key={id}
+          data-key={pick ? 'pick' : 'received'}
+          d={d}
+          fill="none"
+          stroke={HALO}
+          strokeWidth={(pick ? 5 : w) + 12}
+          strokeLinecap="round"
+        />
+      ))}
+      {laneRows.map(({ lane, y: laneY, w, stop }) => (
+        <Fragment key={lane.asset.transferId}>
+          <LaneBars
+            lane={lane}
+            y={laneY}
+            w={w}
+            colX={colX}
+            stop={stop}
+            heldBy={heldBy(lane)}
+            hatch={hatch}
+            halo
+          />
+          {lane.onward ? (
+            <circle
+              data-key="traded"
+              cx={colX(lane.onward.beforeColumn) - 18}
+              cy={laneY}
+              r="17"
+              fill={HALO}
+            />
+          ) : null}
+        </Fragment>
+      ))}
+    </g>
+  );
+}
+
 /**
  * `compact` is the trade list's preview: the chart alone, 680 units wide, with no heading, lede, notes
  * or footer (the preview writes its own heading and basis line).
@@ -428,22 +525,13 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
       d: `M${jx},${groupMid} C${jx + 22},${groupMid} ${LANE_X - 22},${laneY} ${LANE_X},${laneY}`,
     }));
   });
-  // The kinds of mark this trade draws, so the key shows only those.
   // The margin rail, on the full tree of a two-club trade: who is ahead on the trade's net, in the
   // page's own two-side colours, its zero level with the trade knot.
   const margin = compact ? null : tree.margin;
-  const sides = sideStrokes(story.nets.tradeAlone);
-  const colours = {
-    upper: (margin && sides?.get(margin.upperId)) ?? 'var(--primary)',
-    lower: (margin && sides?.get(margin.lowerId)) ?? 'var(--foreground)',
-  };
+  const colours = railColours(story, margin);
   const laneYs = laneRows.map(({ y: laneY }) => laneY);
   const half = Math.max(mid - Math.min(...laneYs), Math.max(...laneYs) - mid) + 10;
-  const kinds = new Set<MarkKind>();
-  for (const { lane } of laneRows) {
-    for (const span of lane.spans) kinds.add(span.pick ? 'pick' : heldBy(lane)(span));
-    if (lane.onward) kinds.add('traded');
-  }
+  const kinds = markKinds(laneRows, heldBy);
 
   const kept = groups
     .map(({ clubName, kept: value }) => `${clubName} kept ${formatPav(value)}`)
@@ -454,7 +542,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
     <section
       // The compact tree sits under its host's own heading.
       aria-labelledby={compact ? undefined : 'lineage-title'}
-      className={compact ? 'tt tt-compact' : margin ? 'tt tt-wide' : 'tt'}
+      className={sectionClass(compact, margin !== null)}
     >
       {compact ? null : (
         <>
@@ -468,7 +556,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
           </p>
         </>
       )}
-      <TradeTreeKey kinds={[...kinds]} />
+      <TradeTreeKey kinds={kinds} />
 
       <div className={margin ? 'tt-chart tt-has-rail' : 'tt-chart'}>
         <svg className="tt-chart-tree" aria-hidden="true" viewBox={`0 0 ${W} ${height}`}>
@@ -487,44 +575,13 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
               <rect className="tt-reveal-rect" x="0" y="0" width={W} height={height} />
             </clipPath>
           </defs>
-          {/* The key's highlighter: a sun copy of every mark, drawn under the chart and shown by the
-              stylesheet only for the kind the key points at. */}
-          <g className="tt-halo" aria-hidden="true">
-            {branches.map(({ id, pick, w, d }) => (
-              <path
-                key={id}
-                data-key={pick ? 'pick' : 'received'}
-                d={d}
-                fill="none"
-                stroke={HALO}
-                strokeWidth={(pick ? 5 : w) + 12}
-                strokeLinecap="round"
-              />
-            ))}
-            {laneRows.map(({ lane, y: laneY, w, stop }) => (
-              <Fragment key={lane.asset.transferId}>
-                <LaneBars
-                  lane={lane}
-                  y={laneY}
-                  w={w}
-                  colX={colX}
-                  stop={stop}
-                  heldBy={heldBy(lane)}
-                  hatch={hatch}
-                  halo
-                />
-                {lane.onward ? (
-                  <circle
-                    data-key="traded"
-                    cx={colX(lane.onward.beforeColumn) - 18}
-                    cy={laneY}
-                    r="17"
-                    fill={HALO}
-                  />
-                ) : null}
-              </Fragment>
-            ))}
-          </g>
+          <HaloLayer
+            branches={branches}
+            laneRows={laneRows}
+            colX={colX}
+            heldBy={heldBy}
+            hatch={hatch}
+          />
           {/* The time axis. */}
           {columns.map((column, at) => {
             const [kicker, year] = columnLabel(column);
