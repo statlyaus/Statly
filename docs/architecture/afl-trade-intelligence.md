@@ -4582,9 +4582,21 @@ facts of its own. The private page keeps the plain header.
 per asset, running through time to the player it became. A lane is the receiving club's colour, an
 outline while still a pick, and hatched ink at another club; its thickness and end number are PAV.
 Each lineage asset carries its leg's value line (`line`, at-trade view then every checkpoint) for this.
-Below 768px it is a list, which is also the screen-reader text. It sits directly under the hero
+Below 1024px it is a list, which is also the screen-reader text. It sits directly under the hero
 collage, before the club summary and the scarf (owner, 2026-11-22). The private page keeps the lineage
 map at the foot of the page.
+
+Its key (`TradeTreeKey.tsx`, owner, 2026-11-28) is a row of icon buttons, one per kind of mark the
+trade draws. Hovering with a mouse or focusing one previews it and a press pins it: its meaning shows
+under the row and its marks light up. Every bar, branch and trade ring carries a `data-key`, and a
+sun copy of each sits in the chart's `tt-halo` layer, shown by the stylesheet for the kind in use, so
+the chart stays server-rendered. A two-club trade's full tree also gets the margin rail
+(`TradeTreeRail.tsx`, `marginMotion.ts`): the upper club's `nets.tradeAlone` line, the same net the
+rest of the page gives, drawn as a knob on a rail beside the PAV column. It shows from 1440px, where
+the tree card grows past the page column so the chart's text stays 13px or more; phones get it as a
+strip above the list; between the two the tree shows without it. On the first view the rail plays the
+trade season by season while the lanes open column by column, then the players fade in; a tree
+already in view, and reduced motion, keep the drawn final state.
 
 **Sources shown to readers.** AFL Tables is the primary player-statistics source for every HPN PAV
 season; Footywire (or Official AFL) only corroborates it. Trades, drafts and pick custody come from

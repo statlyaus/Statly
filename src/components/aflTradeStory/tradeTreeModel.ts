@@ -74,6 +74,31 @@ export interface TradeTree {
   readonly groups: readonly TreeGroup[];
   /** One PAV scale for every club of the trade: bar lengths and line thickness read against it. */
   readonly scale: PavScale;
+  /** Who is ahead on the trade over time; null unless it is a two-club trade. */
+  readonly margin: TreeMargin | null;
+}
+
+/** A point of the margin: the upper club's net on the trade at one checkpoint. */
+export interface TreeMarginPoint {
+  /** "Trade 2019", "Draft 2019", "End of 2026". */
+  readonly label: string;
+  /** Known values only; `pendingCount` legs are left out until they are in. */
+  readonly value: number;
+  readonly pendingCount: number;
+  /** The tree column the point sits at; -1 is the trade itself. */
+  readonly column: number;
+}
+
+/**
+ * The margin rail's series (owner, 2026-11-28): who is ahead on the trade, checkpoint by checkpoint.
+ * `upper` is the club drawn first, so "ahead" points the same way as its lanes.
+ */
+export interface TreeMargin {
+  readonly upper: string;
+  readonly lower: string;
+  readonly upperId: string;
+  readonly lowerId: string;
+  readonly points: readonly TreeMarginPoint[];
 }
 
 export interface PavScale {
@@ -245,6 +270,35 @@ function lane(columns: readonly TreeColumn[], asset: AflTradeStoryLineageAsset):
   };
 }
 
+const CHECKPOINT_WORD = { trade: 'Trade', draft: 'Draft', season_end: 'End of' } as const;
+
+/**
+ * The rail's series is the trade's own net (`nets.tradeAlone`), the number the rest of the trade page
+ * gives, read from the upper club's side: for two clubs one club's net is the other's, negated.
+ */
+function marginOf(
+  story: AflTradeStory,
+  groups: readonly TreeGroup[],
+  columns: readonly TreeColumn[]
+): TreeMargin | null {
+  if (story.trade.clubs.length !== 2 || groups.length !== 2) return null;
+  const [upper, lower] = groups as readonly [TreeGroup, TreeGroup];
+  const net = story.nets.tradeAlone.find(({ clubId }) => clubId === upper.clubId);
+  if (!net || net.line.length === 0) return null;
+  return {
+    upper: upper.clubName,
+    lower: lower.clubName,
+    upperId: upper.clubId,
+    lowerId: lower.clubId,
+    points: net.line.map(({ checkpoint, net: value, pendingCount }) => ({
+      label: `${CHECKPOINT_WORD[checkpoint.kind]} ${checkpoint.season}`,
+      value,
+      pendingCount,
+      column: checkpoint.kind === 'trade' ? -1 : columnAt(columns, checkpoint),
+    })),
+  };
+}
+
 /** The tree: a group per club of the trade, its lanes biggest value first. */
 export function tradeTree(story: AflTradeStory): TradeTree {
   const columns = columnsOf(story);
@@ -263,9 +317,11 @@ export function tradeTree(story: AflTradeStory): TradeTree {
       elsewhere: sum(own.filter(({ player }) => player?.away)),
     };
   });
+  const shown = groups.filter(({ lanes: rows }) => rows.length > 0);
   return {
     columns,
-    groups: groups.filter(({ lanes: rows }) => rows.length > 0),
+    groups: shown,
     scale: pavScale(Math.max(1, ...lanes.map(({ value }) => value ?? 0))),
+    margin: marginOf(story, shown, columns),
   };
 }
