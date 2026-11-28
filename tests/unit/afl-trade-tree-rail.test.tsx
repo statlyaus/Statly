@@ -39,10 +39,17 @@ describe('trade tree margin rail', () => {
     unmount();
   });
 
-  it('leaves the rail off the compact preview', () => {
+  it('gives the compact preview the strip below the graph, never the side rail', () => {
     const story = aflTradeStorySamples.load(trades[0]!)!.story;
     const { container } = render(<TradeTree story={story} compact />);
-    expect(container.querySelector('.tt-rail, .tt-strip')).toBeNull();
+    expect(container.querySelector('.tt-rail')).toBeNull();
     expect(container.querySelector('.tt')).not.toHaveClass('tt-wide');
+    if (tradeTree(story).margin) {
+      const strip = container.querySelector('.tt-strip-wide')!;
+      // After the chart, before the phone list's scale.
+      expect(container.querySelector('.tt-chart')!.compareDocumentPosition(strip)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    }
   });
 });

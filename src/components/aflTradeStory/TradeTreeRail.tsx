@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
-import { getTeamAbbreviation } from '@/lib/teamLogos';
-
 import {
   ARRIVE,
   INTRO_MS,
@@ -323,17 +321,19 @@ export function TradeTreeRail({
 }
 
 /** The strip's own width and baseline, in its units. */
-const STRIP_W = 343;
+/** The phone strip's width in its units; on a wider screen the strip takes the tree's own width. */
+export const PHONE_STRIP_W = 343;
 const STRIP_Y = 78;
+/** The phone strip sits 16 units in from the card's edge; the wide strip runs flush with the tree. */
 const STRIP_L = 16;
 
 /** The line along the strip, dipping under the knob so the knob sits clear of it. */
-function stripPath(cx: number) {
+function stripPath(cx: number, width: number, inset: number) {
   const cy = STRIP_Y - 8;
   const g = 11 + 5;
   const reach = g + 14;
   const low = cy + g + 6;
-  return `M${STRIP_L},${STRIP_Y} L${cx - reach},${STRIP_Y} C${cx - reach + 8},${STRIP_Y} ${cx - g},${low} ${cx},${low} C${cx + g},${low} ${cx + reach - 8},${STRIP_Y} ${cx + reach},${STRIP_Y} L${STRIP_W - STRIP_L},${STRIP_Y}`;
+  return `M${inset},${STRIP_Y} L${cx - reach},${STRIP_Y} C${cx - reach + 8},${STRIP_Y} ${cx - g},${low} ${cx},${low} C${cx + g},${low} ${cx + reach - 8},${STRIP_Y} ${cx + reach},${STRIP_Y} L${width - inset},${STRIP_Y}`;
 }
 
 /**
@@ -343,9 +343,12 @@ function stripPath(cx: number) {
 export function TradeTreeMarginStrip({
   margin,
   colours,
+  width = PHONE_STRIP_W,
 }: {
   margin: TreeMargin;
   colours: Colours;
+  /** The tree's width in its units, so the strip runs the tree's full length at its text size. */
+  width?: number;
 }) {
   const holder = useRef<SVGSVGElement>(null);
   const line = useRef<SVGPathElement>(null);
@@ -358,22 +361,22 @@ export function TradeTreeMarginStrip({
   const values = margin.points.map(({ value }) => value);
   const last = margin.points.at(-1)!;
   const top = railTop(margin.points);
-  const mid = STRIP_W / 2;
+  const mid = width / 2;
+  const inset = width === PHONE_STRIP_W ? STRIP_L : 0;
   const x = useCallback(
-    (value: number) => mid - (Math.max(-top, Math.min(top, value)) / top) * (mid - STRIP_L - 24),
+    (value: number) => mid - (Math.max(-top, Math.min(top, value)) / top) * (mid - 40),
     [mid, top]
   );
   const scale = [top, top / 2, 0, -top / 2, -top];
-  // Room for "Western Bulldogs · End of 2026" either side of its centre.
-  const labelX = (cx: number) => Math.max(130, Math.min(STRIP_W - 130, cx));
+  // Room for "End of 2026" either side of its centre.
+  const labelX = (cx: number) => Math.max(70, Math.min(width - 70, cx));
   const tickHidden = (tick: number, cx: number) => Math.abs(x(tick) - cx) < 26;
 
   const draw = useCallback(
     (value: number, { label, pendingCount }: TreeMarginPoint) => {
       const cx = x(value);
-      const leader = leaderOf(value, margin.upper, margin.lower);
       const colour = value >= 0 ? colours.upper : colours.lower;
-      line.current?.setAttribute('d', stripPath(cx));
+      line.current?.setAttribute('d', stripPath(cx, width, inset));
       knob.current?.setAttribute('cx', String(cx));
       dot.current?.setAttribute('cx', String(cx));
       dot.current?.setAttribute('fill', colour);
@@ -384,7 +387,7 @@ export function TradeTreeMarginStrip({
       }
       if (when.current) {
         when.current.setAttribute('x', String(labelX(cx)));
-        when.current.textContent = leader ? `${leader} · ${label}` : label;
+        when.current.textContent = label;
       }
       ticks.current.forEach((tick, at) => {
         if (tick) tick.style.opacity = tickHidden(scale[at]!, cx) ? '0' : '1';
@@ -397,7 +400,7 @@ export function TradeTreeMarginStrip({
   useEffect(() => {
     const strip = holder.current;
     if (!strip || strip.getBoundingClientRect().width === 0) return;
-    if (!canAnimate('(max-width: 1023.98px)')) return;
+    if (!canAnimate('(min-width: 0px)')) return;
     const box = strip.getBoundingClientRect();
     if (box.top < window.innerHeight && box.bottom > 0) return;
     draw(values[0] ?? 0, margin.points[0]!);
@@ -428,10 +431,15 @@ export function TradeTreeMarginStrip({
 
   const cx = x(last.value);
   const colour = last.value >= 0 ? colours.upper : colours.lower;
-  const lastLeader = leaderOf(last.value, margin.upper, margin.lower);
-  const stripWhen = lastLeader ? `${lastLeader} · ${last.label}` : last.label;
+  // Only the checkpoint above the number: the clubs sit at the strip's two ends (owner, 2026-11-28).
+  const stripWhen = last.label;
   return (
-    <svg ref={holder} className="tt-strip" aria-hidden="true" viewBox={`0 0 ${STRIP_W} 146`}>
+    <svg
+      ref={holder}
+      className={width === PHONE_STRIP_W ? 'tt-strip tt-strip-phone' : 'tt-strip tt-strip-wide'}
+      aria-hidden="true"
+      viewBox={`0 0 ${width} 146`}
+    >
       {scale.map((tick, at) => (
         <g
           key={tick}
@@ -459,20 +467,26 @@ export function TradeTreeMarginStrip({
           </text>
         </g>
       ))}
-      <text x={STRIP_L} y="140" fontSize="15" fontWeight="700" fill={colours.upper}>
-        {getTeamAbbreviation(margin.upper)} ahead
+      <text x={inset} y="140" fontSize="15" fontWeight="700" fill={colours.upper}>
+        {margin.upper}
       </text>
       <text
-        x={STRIP_W - STRIP_L}
+        x={width - inset}
         y="140"
         textAnchor="end"
         fontSize="15"
         fontWeight="700"
         fill={colours.lower}
       >
-        {getTeamAbbreviation(margin.lower)} ahead
+        {margin.lower}
       </text>
-      <path ref={line} d={stripPath(cx)} fill="none" stroke="var(--foreground)" strokeWidth="2" />
+      <path
+        ref={line}
+        d={stripPath(cx, width, inset)}
+        fill="none"
+        stroke="var(--foreground)"
+        strokeWidth="2"
+      />
       <circle
         ref={knob}
         cx={cx}
