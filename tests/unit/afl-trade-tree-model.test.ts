@@ -12,6 +12,9 @@ describe('trade tree', () => {
   it('names a pick by whose it was', () => {
     expect(laneLabel('2024 pick 11 (Collingwood)')).toBe('Collingwood’s 2024 pick 11');
     expect(laneLabel('Shai Bolton')).toBe('Shai Bolton');
+    // A club name ending in s takes the apostrophe alone (owner, 2026-11-28).
+    expect(laneLabel('2020 round 3 (Brisbane Lions)')).toBe('Brisbane Lions’ 2020 round 3');
+    expect(laneLabel('2024 pick 13 (Western Bulldogs)')).toBe('Western Bulldogs’ 2024 pick 13');
   });
 
   it('gives every asset of the trade one lane, under the club that received it', () => {

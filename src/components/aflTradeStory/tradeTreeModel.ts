@@ -131,10 +131,13 @@ const ORDER = { season_end: 0, trade: 1, draft: 2 } as const;
 const orderOf = ({ kind, season }: AflTradeStoryAssetPoint['checkpoint']) =>
   season * 3 + ORDER[kind];
 
-/** "2024 pick 11 (Collingwood)" reads as "Collingwood’s 2024 pick 11". */
+/** "2024 pick 11 (Collingwood)" reads as "Collingwood’s 2024 pick 11"; a club ending in s takes the
+ * apostrophe alone ("Brisbane Lions’ 2020 round 3"). */
 export function laneLabel(label: string): string {
   const match = /^(.*) \((.+)\)$/u.exec(label);
-  return match ? `${match[2]}’s ${match[1]}` : label;
+  if (!match) return label;
+  const [, pick, club] = match;
+  return `${club}${club!.endsWith('s') ? '’' : '’s'} ${pick}`;
 }
 
 /** The draft point where a pick became a player: its first point after a `pick` point. */
