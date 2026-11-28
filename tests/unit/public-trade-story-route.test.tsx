@@ -311,5 +311,9 @@ describe('public trade pages', () => {
   it('links the AFL hub to the trade pages', () => {
     render(AflHubPage());
     expect(screen.getByRole('link', { name: /Trades/u })).toHaveAttribute('href', '/afl/trades');
+    // The draft record card is hidden until a reviewed factual release is published.
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/afl/trades',
+    ]);
   });
 });

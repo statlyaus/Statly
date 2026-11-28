@@ -28,7 +28,6 @@ describe('PublicNavigation', () => {
       'Home',
       'Trades',
       'General managers',
-      'Draft record',
     ]);
     expect(screen.getByRole('link', { name: 'General managers' })).toHaveAttribute(
       'href',
@@ -47,5 +46,16 @@ describe('PublicNavigation', () => {
     expect(current('/afl/trades/method')).toEqual(['Trades']);
     expect(current('/afl/stories/jeremy-cameron')).toEqual(['Trades']);
     expect(current('/')).toEqual(['Home']);
+  });
+
+  it('hides the draft record until a reviewed factual release is published', () => {
+    navigation.pathname = '/draft/trades';
+    render(<PublicNavigation />);
+    expect(screen.queryByRole('link', { name: 'Draft record' })).toBeNull();
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href')).not.toMatch(/^\/draft(\/|$)/);
+      // A /draft page still resolves, but no tab claims it.
+      expect(link).not.toHaveAttribute('aria-current');
+    }
   });
 });

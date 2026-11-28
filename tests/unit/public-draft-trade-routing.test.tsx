@@ -56,7 +56,7 @@ vi.mock('next/navigation', () => ({
 
 import PublicRouteLayout from '../../src/app/(public)/layout';
 import HomePage from '../../src/app/(public)/page';
-import DraftLayout from '../../src/app/(public)/draft/layout';
+import DraftLayout, { metadata as draftMetadata } from '../../src/app/(public)/draft/layout';
 import AflTradeMethodologyPage, {
   metadata as methodologyMetadata,
 } from '../../src/app/(public)/draft/trades/methodology/page';
@@ -66,8 +66,8 @@ describe('public AFL draft trade routing', () => {
     navigation.pathname = '/draft/trades';
   });
 
-  it('leads the homepage with the valued trades and the draft record', async () => {
-    render(await HomePage());
+  it('leads the homepage with the valued trades and hides the draft record', async () => {
+    const { container } = render(await HomePage());
 
     const promise = screen.getByRole('heading', {
       level: 1,
@@ -84,16 +84,10 @@ describe('public AFL draft trade routing', () => {
       'href',
       '/afl/trades/method'
     );
-    const archiveLink = screen.getByRole('link', { name: /Trade archive/ });
-    expect(archiveLink).toHaveAttribute('href', '/draft/trades');
-    expect(screen.getByRole('link', { name: /Draft history/ })).toHaveAttribute(
-      'href',
-      '/draft/drafts'
-    );
-    expect(screen.getByRole('link', { name: /Club histories/ })).toHaveAttribute(
-      'href',
-      '/draft/clubs'
-    );
+    // Hidden until a reviewed factual release is published: the /draft pages are empty.
+    expect(screen.queryByRole('heading', { name: 'The draft and trade record' })).toBeNull();
+    const hrefs = [...container.querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    expect(hrefs.filter((href) => href?.startsWith('/draft'))).toEqual([]);
   });
 
   it('keeps the fantasy app out of the public home page, header and footer', async () => {
@@ -106,7 +100,7 @@ describe('public AFL draft trade routing', () => {
     }
   });
 
-  it('provides one public main landmark, skip navigation, and an active draft record destination', async () => {
+  it('provides one public main landmark and skip navigation, and hides the draft record', async () => {
     render(<PublicRouteLayout>{await HomePage()}</PublicRouteLayout>);
 
     expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveAttribute(
@@ -117,14 +111,13 @@ describe('public AFL draft trade routing', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
 
     const primaryNavigation = screen.getByRole('navigation', { name: 'Primary' });
-    const draftRecordLink = within(primaryNavigation).getByRole('link', { name: 'Draft record' });
-    expect(draftRecordLink).toHaveAttribute('href', '/draft/trades');
-    expect(draftRecordLink).toHaveAttribute('aria-current', 'page');
+    expect(within(primaryNavigation).queryByRole('link', { name: 'Draft record' })).toBeNull();
     const tradesLink = within(primaryNavigation).getByRole('link', { name: 'Trades' });
     expect(tradesLink).toHaveAttribute('href', '/afl/trades');
     expect(tradesLink).not.toHaveAttribute('aria-current');
 
     const footer = screen.getByRole('contentinfo');
+    expect(within(footer).queryByRole('link', { name: 'Outcomes methodology' })).toBeNull();
     expect(within(footer).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
       'href',
       '/privacy'
@@ -133,6 +126,10 @@ describe('public AFL draft trade routing', () => {
       'href',
       '/terms'
     );
+  });
+
+  it('keeps the empty /draft pages out of search but lets crawlers follow their links', () => {
+    expect(draftMetadata.robots).toEqual({ index: false, follow: true });
   });
 
   it('keeps /tradecentre owned by the public AFL archive', () => {

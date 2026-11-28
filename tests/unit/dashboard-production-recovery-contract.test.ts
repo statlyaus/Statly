@@ -36,7 +36,8 @@ describe('dashboard production recovery route contract', () => {
 
     const publicHome = readRepoFile('src/app/(public)/page.tsx');
     expect(publicHome).toContain('href="/afl/trades"');
-    expect(publicHome).toContain("href: '/draft/trades'");
+    // The draft record is hidden until a reviewed factual release is published.
+    expect(publicHome).not.toContain("href: '/draft/trades'");
     expect(publicHome).not.toContain('/dashboard');
     expect(publicHome).not.toContain('Draft & Trade Hub');
 
@@ -44,7 +45,7 @@ describe('dashboard production recovery route contract', () => {
     const publicNavigation = readRepoFile('src/components/navigation/PublicNavigation.tsx');
     expect(publicLayout).toContain('PublicNavigation');
     expect(publicNavigation).toContain("href: '/afl/trades'");
-    expect(publicNavigation).toContain("href: '/draft/trades'");
+    expect(publicNavigation).not.toContain("href: '/draft/trades'");
     expect(publicNavigation).not.toContain('/dashboard');
     expect(publicLayout).not.toContain('Draft & Trade Hub');
     expect(publicNavigation).not.toContain('Draft & Trade Hub');
