@@ -31,8 +31,8 @@ describe('margin rail motion', () => {
   });
 
   it('rounds the scale to twenties and names who is ahead', () => {
-    expect(railTop([{ label: 'End of 2026', value: -55, pendingCount: 0 }])).toBe(60);
-    expect(railTop([{ label: 'Trade 2026', value: 0, pendingCount: 0 }])).toBe(20);
+    expect(railTop([{ label: 'End of 2026', value: -55, pendingCount: 0, column: 7 }])).toBe(60);
+    expect(railTop([{ label: 'Trade 2026', value: 0, pendingCount: 0, column: -1 }])).toBe(20);
     expect(marginText(-55.04)).toBe('+55.0');
     expect(marginText(26.2, 2)).toBe('+26.2*');
     expect(marginText(0.01)).toBe('Level');
