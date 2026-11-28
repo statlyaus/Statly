@@ -305,16 +305,30 @@ section.tt svg text {
 /* The margin rail (owner, 2026-11-28, layout A). Phones get it lying on its side above the list;
    from 1440px the tree card grows past the page column so the rail fits beside the chart and the
    chart's 14-unit text stays 13px or more. Between the two the tree shows without it. */
-.tt-rail,
-.tt-strip {
+.tt-rail {
   display: none;
 }
-@media (max-width: 1023.98px) {
-  .tt-strip {
+/* The strip wherever the side rail does not fit: the trade list's preview at every width, and the
+   full tree under 1440px. Phones get the phone strip; from 1024px the strip takes the tree's own
+   width in the tree's units, so it runs the chart's full length at the chart's text size. */
+.tt-strip {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 1.5rem 0 0.75rem;
+}
+.tt-strip-wide {
+  display: none;
+}
+.tt-compact .tt-strip-wide {
+  max-width: 680px;
+}
+@media (min-width: 1024px) {
+  .tt-strip-phone {
+    display: none;
+  }
+  .tt-strip-wide {
     display: block;
-    width: 100%;
-    height: auto;
-    margin-top: 1rem;
   }
 }
 @media (min-width: 1440px) {
@@ -329,6 +343,9 @@ section.tt svg text {
   }
   .tt-rail {
     display: block;
+  }
+  .tt-wide .tt-strip-wide {
+    display: none;
   }
 }
 .tt-replay {
