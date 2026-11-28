@@ -116,7 +116,9 @@ export function TradeTreeKey({ kinds }: { kinds: readonly MarkKind[] }) {
   useEffect(() => {
     if (pinned === null) return;
     const clear = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPinned(null);
+      if (event.key !== 'Escape') return;
+      setPinned(null);
+      setPreview(null);
     };
     document.addEventListener('keydown', clear);
     return () => document.removeEventListener('keydown', clear);
@@ -148,7 +150,11 @@ export function TradeTreeKey({ kinds }: { kinds: readonly MarkKind[] }) {
               if (event.currentTarget.matches(':focus-visible')) setPreview(kind);
             }}
             onBlur={() => setPreview(null)}
-            onClick={() => setPinned((now) => (now === kind ? null : kind))}
+            onClick={() => {
+              // Unpinning also ends the preview the focus left behind.
+              if (pinned === kind) setPreview(null);
+              setPinned((now) => (now === kind ? null : kind));
+            }}
           >
             <KeyIcon kind={kind} hatch={`${id}-hatch`} />
             <span className="sr-only">{MEANING[kind].name}</span>

@@ -8,6 +8,8 @@ import './tradeTree.css';
 
 import { ClubBadge } from './ClubBadge';
 import { TradeTreeKey } from './TradeTreeKey';
+import { TradeTreeMarginStrip, TradeTreeRail } from './TradeTreeRail';
+import { sideStrokes } from './valueLineChart';
 import { checkpointText, clubSquare, formatPav } from './tradePageModel';
 import { tradeTree, type TreeColumn, type TreeLane } from './tradeTreeModel';
 
@@ -345,16 +347,19 @@ function TreeLaneRow({
   const shown = laneLabel(lane, layout);
   return (
     <g className="tt-lane">
-      <text x={layout.LANE_X} y={y - 18} fontSize="14" fontWeight="600" fill={INK}>
-        {shown.label}
-        {shown.via ? (
-          <tspan fontWeight="400" fill={MUTED}>
-            {shown.via}
-          </tspan>
-        ) : null}
-      </text>
-      <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} heldBy={heldBy} hatch={hatch} />
-      <LaneMarks lane={lane} y={y} w={w} colX={colX} stop={stop} layout={layout} />
+      {/* The margin rail's intro opens this part column by column; the player arrives after. */}
+      <g clipPath={`url(#${hatch}-reveal)`}>
+        <text x={layout.LANE_X} y={y - 18} fontSize="14" fontWeight="600" fill={INK}>
+          {shown.label}
+          {shown.via ? (
+            <tspan fontWeight="400" fill={MUTED}>
+              {shown.via}
+            </tspan>
+          ) : null}
+        </text>
+        <LaneBars lane={lane} y={y} w={w} colX={colX} stop={stop} heldBy={heldBy} hatch={hatch} />
+        <LaneMarks lane={lane} y={y} w={w} colX={colX} stop={stop} layout={layout} />
+      </g>
       <g className="tt-player">
         <PlayerCell lane={lane} y={y} layout={layout} />
       </g>
@@ -424,6 +429,16 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
     }));
   });
   // The kinds of mark this trade draws, so the key shows only those.
+  // The margin rail, on the full tree of a two-club trade: who is ahead on the trade's net, in the
+  // page's own two-side colours, its zero level with the trade knot.
+  const margin = compact ? null : tree.margin;
+  const sides = sideStrokes(story.nets.tradeAlone);
+  const colours = {
+    upper: (margin && sides?.get(margin.upperId)) ?? 'var(--primary)',
+    lower: (margin && sides?.get(margin.lowerId)) ?? 'var(--foreground)',
+  };
+  const laneYs = laneRows.map(({ y: laneY }) => laneY);
+  const half = Math.max(mid - Math.min(...laneYs), Math.max(...laneYs) - mid) + 10;
   const kinds = new Set<MarkKind>();
   for (const { lane } of laneRows) {
     for (const span of lane.spans) kinds.add(span.pick ? 'pick' : heldBy(lane)(span));
@@ -439,7 +454,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
     <section
       // The compact tree sits under its host's own heading.
       aria-labelledby={compact ? undefined : 'lineage-title'}
-      className={compact ? 'tt tt-compact' : 'tt'}
+      className={compact ? 'tt tt-compact' : margin ? 'tt tt-wide' : 'tt'}
     >
       {compact ? null : (
         <>
@@ -455,8 +470,8 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
       )}
       <TradeTreeKey kinds={[...kinds]} />
 
-      <div className="tt-chart">
-        <svg aria-hidden="true" viewBox={`0 0 ${W} ${height}`}>
+      <div className={margin ? 'tt-chart tt-has-rail' : 'tt-chart'}>
+        <svg className="tt-chart-tree" aria-hidden="true" viewBox={`0 0 ${W} ${height}`}>
           <defs>
             <pattern
               id={hatch}
@@ -468,6 +483,9 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
               <rect width="5" height="5" fill={PAPER} />
               <line x1="0" y1="0" x2="0" y2="5" stroke={INK} strokeWidth="2" />
             </pattern>
+            <clipPath id={`${hatch}-reveal`}>
+              <rect className="tt-reveal-rect" x="0" y="0" width={W} height={height} />
+            </clipPath>
           </defs>
           {/* The key's highlighter: a sun copy of every mark, drawn under the chart and shown by the
               stylesheet only for the kind the key points at. */}
@@ -655,8 +673,22 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
             />
           ))}
         </svg>
+        {margin ? (
+          <TradeTreeRail
+            margin={margin}
+            colours={colours}
+            height={height}
+            mid={mid}
+            half={half}
+            reveal={margin.points.map(({ column }) =>
+              column < 0 ? LANE_X + 30 : colX(column) + 4
+            )}
+            width={W}
+          />
+        ) : null}
       </div>
 
+      {margin ? <TradeTreeMarginStrip margin={margin} colours={colours} /> : null}
       <div className="tt-scale" aria-hidden="true">
         <span className="tt-scale-axis">
           <span>0</span>

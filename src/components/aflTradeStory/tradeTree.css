@@ -302,3 +302,56 @@ section.tt svg text {
 .tt-scale + .tt-list {
   margin-top: 0.25rem;
 }
+/* The margin rail (owner, 2026-11-28, layout A). Phones get it lying on its side above the list;
+   from 1440px the tree card grows past the page column so the rail fits beside the chart and the
+   chart's 14-unit text stays 13px or more. Between the two the tree shows without it. */
+.tt-rail,
+.tt-strip {
+  display: none;
+}
+@media (max-width: 1023.98px) {
+  .tt-strip {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 1rem;
+  }
+}
+@media (min-width: 1440px) {
+  .tt.tt-wide {
+    width: min(1360px, calc(100vw - 48px));
+    margin-left: calc((100% - min(1360px, calc(100vw - 48px))) / 2);
+  }
+  .tt-has-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1100fr) minmax(0, 260fr);
+    align-items: start;
+  }
+  .tt-rail {
+    display: block;
+  }
+}
+.tt-replay {
+  display: block;
+  min-height: 44px;
+  margin: 0.75rem 0 0 auto;
+  padding: 0 16px;
+  font:
+    600 14px var(--font-geist),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  background: var(--card);
+  color: var(--foreground);
+  border: 2px solid var(--foreground);
+  cursor: pointer;
+}
+.tt-replay:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-replay {
+    display: none;
+  }
+}

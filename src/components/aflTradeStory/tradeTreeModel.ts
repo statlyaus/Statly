@@ -85,6 +85,8 @@ export interface TreeMarginPoint {
   /** Known values only; `pendingCount` legs are left out until they are in. */
   readonly value: number;
   readonly pendingCount: number;
+  /** The tree column the point sits at; -1 is the trade itself. */
+  readonly column: number;
 }
 
 /**
@@ -94,6 +96,8 @@ export interface TreeMarginPoint {
 export interface TreeMargin {
   readonly upper: string;
   readonly lower: string;
+  readonly upperId: string;
+  readonly lowerId: string;
   readonly points: readonly TreeMarginPoint[];
 }
 
@@ -272,7 +276,11 @@ const CHECKPOINT_WORD = { trade: 'Trade', draft: 'Draft', season_end: 'End of' }
  * The rail's series is the trade's own net (`nets.tradeAlone`), the number the rest of the trade page
  * gives, read from the upper club's side: for two clubs one club's net is the other's, negated.
  */
-function marginOf(story: AflTradeStory, groups: readonly TreeGroup[]): TreeMargin | null {
+function marginOf(
+  story: AflTradeStory,
+  groups: readonly TreeGroup[],
+  columns: readonly TreeColumn[]
+): TreeMargin | null {
   if (story.trade.clubs.length !== 2 || groups.length !== 2) return null;
   const [upper, lower] = groups as readonly [TreeGroup, TreeGroup];
   const net = story.nets.tradeAlone.find(({ clubId }) => clubId === upper.clubId);
@@ -280,10 +288,13 @@ function marginOf(story: AflTradeStory, groups: readonly TreeGroup[]): TreeMargi
   return {
     upper: upper.clubName,
     lower: lower.clubName,
+    upperId: upper.clubId,
+    lowerId: lower.clubId,
     points: net.line.map(({ checkpoint, net: value, pendingCount }) => ({
       label: `${CHECKPOINT_WORD[checkpoint.kind]} ${checkpoint.season}`,
       value,
       pendingCount,
+      column: checkpoint.kind === 'trade' ? -1 : columnAt(columns, checkpoint),
     })),
   };
 }
@@ -311,6 +322,6 @@ export function tradeTree(story: AflTradeStory): TradeTree {
     columns,
     groups: shown,
     scale: pavScale(Math.max(1, ...lanes.map(({ value }) => value ?? 0))),
-    margin: marginOf(story, shown),
+    margin: marginOf(story, shown, columns),
   };
 }

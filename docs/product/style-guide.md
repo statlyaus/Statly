@@ -389,6 +389,8 @@ heading, empty state and story paragraph for these:
 - **Kicker endings:** a closing maxim or metaphor. End on the last concrete sentence.
 - **Em dashes:** none in UI strings. Use a full stop, colon or comma. En dashes stay for ranges.
 - **Vague claims:** "better value", "a big win". Give the number and its basis, or cut the claim.
+- **Bold run-ins:** a bold phrase ending in a full stop ahead of the sentence ("**Still a pick.** An
+  outline…"), in copy or in replies. Write one plain sentence (owner, 2026-11-28).
 
 Portability test: if a sentence would still fit on another product's page, replace it with a fact
 that holds only for Statly, or delete it.
