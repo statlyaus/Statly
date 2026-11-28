@@ -4598,8 +4598,10 @@ sun copy of each sits in the chart's `tt-halo` layer, shown by the stylesheet fo
 the chart stays server-rendered. A two-club trade's full tree also gets the margin rail
 (`TradeTreeRail.tsx`, `marginMotion.ts`): the upper club's `nets.tradeAlone` line, the same net the
 rest of the page gives, drawn as a knob on a rail beside the PAV column. It shows from 1440px, where
-the tree card grows past the page column so the chart's text stays 13px or more; below 1024px it is a
-strip above the tree; between the two the tree shows without it. On the first view the rail plays the
+the tree card grows past the page column so the chart's text stays 13px or more. Wherever it does not
+fit (the trades list preview at every width, trade pages under 1440px and phones) the same margin is
+a strip below the graph, running the tree's full width at its text size, the two clubs named at its
+ends and the checkpoint over the number (owner, 2026-11-28). On the first view the rail plays the
 trade season by season while the lanes open column by column, then the players fade in; a tree
 already in view, and reduced motion, keep the drawn final state.
 

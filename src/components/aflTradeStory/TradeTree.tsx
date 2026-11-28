@@ -460,7 +460,7 @@ function chartGeometry(tree: TreeModel, layout: Layout) {
 
   // Rows: every group's lanes, top to bottom, with a gap between groups.
   // The first lane's label clears the column heads above it.
-  const FIRST = HEAD + 38;
+  const FIRST = HEAD + 56;
   let y = FIRST;
   const rows = groups.map((group) => {
     const lanes = group.lanes.map((lane) => {
@@ -708,7 +708,9 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
   const { colX, height, mid, laneRows } = geometry;
   // The margin rail, on the full tree of a two-club trade: who is ahead on the trade's net, in the
   // page's own two-side colours, its zero level with the trade knot.
-  const margin = compact ? null : tree.margin;
+  const margin = tree.margin;
+  // The side rail needs the full tree's width; the preview gets the strip only.
+  const rail = compact ? null : margin;
   const colours = railColours(story, margin);
   const laneYs = laneRows.map(({ y: laneY }) => laneY);
   const half = Math.max(mid - Math.min(...laneYs), Math.max(...laneYs) - mid) + 10;
@@ -723,7 +725,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
     <section
       // The compact tree sits under its host's own heading.
       aria-labelledby={compact ? undefined : 'lineage-title'}
-      className={sectionClass(compact, margin !== null)}
+      className={sectionClass(compact, rail !== null)}
     >
       {compact ? null : (
         <>
@@ -739,7 +741,7 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
       )}
       <TradeTreeKey kinds={kinds} />
 
-      <div className={margin ? 'tt-chart tt-has-rail' : 'tt-chart'}>
+      <div className={rail ? 'tt-chart tt-has-rail' : 'tt-chart'}>
         <TreeChart
           story={story}
           tree={tree}
@@ -749,22 +751,25 @@ export function TradeTree({ story, compact = false }: { story: AflTradeStory; co
           hatch={hatch}
           className="tt-chart-tree"
         />
-        {margin ? (
+        {rail ? (
           <TradeTreeRail
-            margin={margin}
+            margin={rail}
             colours={colours}
             height={height}
             mid={mid}
             half={half}
-            reveal={margin.points.map(({ column }) =>
-              column < 0 ? LANE_X + 30 : colX(column) + 4
-            )}
+            reveal={rail.points.map(({ column }) => (column < 0 ? LANE_X + 30 : colX(column) + 4))}
             width={W}
           />
         ) : null}
       </div>
 
-      {margin ? <TradeTreeMarginStrip margin={margin} colours={colours} /> : null}
+      {margin ? (
+        <>
+          <TradeTreeMarginStrip margin={margin} colours={colours} />
+          <TradeTreeMarginStrip margin={margin} colours={colours} width={W} />
+        </>
+      ) : null}
       {compact ? null : (
         <TreeChart
           story={story}

@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'AFL | Statly',
-  description: 'Statly on the AFL: every trade valued by what happened next, and the draft record.',
+  description: 'Statly on the AFL: every trade valued by what happened next.',
 };
 
 const products = [
@@ -13,11 +13,8 @@ const products = [
     description:
       'Every trade Statly has graded, valued by what the players and picks went on to do for the club that got them.',
   },
-  {
-    href: '/draft',
-    title: 'Draft record',
-    description: 'Draft classes, clubs and outcomes from the public record.',
-  },
+  // The "Draft record" card (/draft) is hidden while no reviewed factual release is active: its pages
+  // are empty. It returns when one is published (runbook, "Publishing the draft record").
 ] as const;
 
 /** The AFL hub. Addresses are sport first, product second: /afl/trades, later /afl/draft, /afl/fantasy. */
